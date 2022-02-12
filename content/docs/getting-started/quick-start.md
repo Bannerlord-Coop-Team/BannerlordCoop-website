@@ -9,86 +9,67 @@ sort_by = "weight"
 template = "docs/page.html"
 
 [extra]
-lead = "One page summary of how to start a new AdiDoks project."
+lead = "One page summary of how to start a developing."
 toc = true
 top = false
 +++
 
 ## Requirements
 
-Before using the theme, you need to install the [Zola](https://www.getzola.org/documentation/getting-started/installation/) ≥ 0.15.0.
+Before getting started with modding we need to install some software.
 
-## Run the Theme Directly
+- [Visual Studio](https://docs.microsoft.com/en-us/visualstudio/releases/2019/release-notes) *2019*
+- [Github Desktop](https://desktop.github.com/) *(optional)*
+- [dnSpy](https://github.com/0xd4d/dnSpy/releases)
+- [.NET Framework](https://dotnet.microsoft.com/download/dotnet-framework/net472) *4.7.2*
+ 
+
+## Download repository
 
 ```bash
-git clone https://github.com/aaranxu/adidoks.git
-cd adidoks
-zola serve
+git clone https://github.com/Bannerlord-Coop-Team/BannerlordCoop.git
+cd BannerlordCoop
+git submodule init && git submodule update --recursive --force
 ```
-
-Visit `http://127.0.0.1:1111/` in the browser.
 
 ## Installation
 
-Just earlier we showed you how to run the theme directly. Now we start to
-install the theme in an existing site step by step.
+To work properly with Bannerlord, you will need to dynamically attach your Bannerlord path and resolve references.
 
-### Step 1: Create a new zola site
+### Attach Bannerlord path & resolve refs
 
-```bash
-zola init mysite
-```
+To do this, run the file ``runmefirst.cmd``
 
-### Step 2: Install AdiDoks
 
-Download this theme to your themes directory:
+#### In case of issue
 
-```bash
-cd mysite/themes
-git clone https://github.com/aaranxu/adidoks.git
-```
+If references in projects did not resolved automatically do the following. 
 
-Or install as a submodule:
+1. This can be done in Visual Studio by right-clicking references, going to browse, navigating to your Bannerlord directory through the mb2 shortcut, and selecting all TaleWorld.* .dlls. There are additional .dlls in the Modules folder, being the Native and StoryMode.
+2. Click start external program and browse to your Bannerlord path. You should select the executable for Bannerlord normally located at ``bin\Win64_Shipping_Client\Bannerlord.exe``
+3. For the command line arguments enter this ``/singleplayer /server _MODULES_*Native*SandBoxCore*CustomBattle*SandBox*StoryMode*Coop*_MODULES_``
+4. Now we need to enter the working directory. NOTE: This will select a folder, not a file. The folder you need to select for this is ``bin\Win64_Shipping_Client``. The same path that ``Bannerlord.exe`` is located.
 
-```bash
-cd mysite
-git init  # if your project is a git repository already, ignore this command
-git submodule add https://github.com/aaranxu/adidoks.git themes/adidoks
-```
 
-### Step 3: Configuration
+### Setup a second client 
 
-Enable the theme in your `config.toml` in the site derectory:
+If you want two clients (one that acts as a server, and a simple client) follow the instructions below:
 
-```toml
-theme = "adidoks"
-```
+1. Open the ClientDebug properties
+    1. Go to debug 
+    2. External program: ``bin\Win64_Shipping_Client\Bannerlord.exe`` 
+    2. Command line arguments: ``/singleplayer /client _MODULES_*Native*SandBoxCore*CustomBattle*SandBox*StoryMode*Coop*_MODULES_.``
+<br/>
+2. Open the Solution 'Coop' properties 
+    1. Select the Startup Projects tab
+    2. Select "Multiple startup projects" and make sure Coop and ClientDebug are set to start.
 
-Or copy the `config.toml.example` from the theme directory to your project's
-root directory:
 
-```bash
-cp themes/adidoks/config.toml.example config.toml
-```
+### Start a game server
 
-### Step 4: Add new content
+For the moment, it is not possible to select a backup to play on, the one used by default by the mod is the backup named ``MP``.
+If you do not have one, follow these instructions:
 
-You can copy the content from the theme directory to your project:
+1. Create a new game and save it as "MP"
+2. Click on "host game" at the menu and the game will load the "MP" save file on the host.
 
-```bash
-cp -r themes/adidoks/content .
-```
-
-You can modify or add new posts in the `content/blog`, `content/docs` or other
-content directories as needed.
-
-### Step 5: Run the project
-
-Just run `zola serve` in the root path of the project:
-
-```bash
-zola serve
-```
-
-AdiDoks will start the Zola development web server accessible by default at 
-`http://127.0.0.1:1111`. Saved changes will live reload in the browser.

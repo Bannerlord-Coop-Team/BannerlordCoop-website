@@ -18,18 +18,12 @@ generate_feed = true
 minify_html = false
 
 # The taxonomies to be rendered for the site and their configuration.
-taxonomies = [
-  {name = "authors"}, # Basic definition: no feed or pagination
-]
+taxonomies = []
 
 # Whether to build a search index to be used later on by a JavaScript library
 # When set to "true", a search index is built from the pages and section
 # content for `default_language`.
 build_search_index = true
-
-[languages.fi]
-title="AdiDoks"
-
 
 [search]
 # Whether to include the title of the page/section in the index
@@ -82,7 +76,7 @@ weight = 10
 
 # Footer contents
 [extra.footer]
-info = 'Powered by <a href="https://www.netlify.com/">Netlify</a>, <a href="https://www.getzola.org/">Zola</a>, and <a href="https://github.com/aaranxu/adidoks">AdiDoks</a>'
+info = 'Powered by <a href="https://www.getzola.org/">Zola</a>, and <a href="https://github.com/aaranxu/adidoks">AdiDoks</a>'
 
 [[extra.footer.nav]]
 name = "Privacy"
