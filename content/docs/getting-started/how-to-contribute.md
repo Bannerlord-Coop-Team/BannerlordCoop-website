@@ -22,6 +22,7 @@ The Bannerlord Coop mod code lives in the [`Bannerlord-Coop-Team/BannerlordCoop`
 
 - Follow the [GitHub flow](https://guides.github.com/introduction/flow/).
 - Follow the [Conventional Commits Specification](https://www.conventionalcommits.org/en/v1.0.0/)
+- Check the [Project board](https://github.com/Bannerlord-Coop-Team/BannerlordCoop/projects)
 
 ### Create an issue
 
