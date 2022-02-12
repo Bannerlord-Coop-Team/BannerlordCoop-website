@@ -18,15 +18,15 @@ As you can guess, we work on a git environment and hosted on Github.
 
 ## Contribute to Bannerlord Coop
 
-The AdiDoks code lives in the [`Bannerlord-Coop-Team/BannerlordCoop` repository](https://github.com/Bannerlord-Coop-Team/BannerlordCoop)
+The Bannerlord Coop mod code lives in the [`Bannerlord-Coop-Team/BannerlordCoop` repository](https://github.com/Bannerlord-Coop-Team/BannerlordCoop)
 
 - Follow the [GitHub flow](https://guides.github.com/introduction/flow/).
 - Follow the [Conventional Commits Specification](https://www.conventionalcommits.org/en/v1.0.0/)
 
 ### Create an issue
 
-- [Bug report](https://github.com/aaranxu/adidoks/issues/new?template=bug-report---.md)
-- [Feature request](https://github.com/aaranxu/adidoks/issues/new?template=feature-request---.md)
+- [Bug report](https://github.com/Bannerlord-Coop-Team/BannerlordCoop/issues/new)
+- [Feature request](https://github.com/Bannerlord-Coop-Team/BannerlordCoop/issues/new?template=pull_request_template.md)
 
 ### Improve documentation
 
