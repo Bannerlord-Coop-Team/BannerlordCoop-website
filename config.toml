@@ -1,5 +1,5 @@
 # The URL the site will be built for
-base_url = "https://adidoks.netlify.com"
+base_url = "https://thomasdelaporte.github.io/BannerlordCoop-website/"
 
 title = "Bannerlord Coop"
 description = "The Bannerlord Coop Campaign will bring you a truly sandbox campaign, allowing every player to be on their own and act on their own."
