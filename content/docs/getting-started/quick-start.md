@@ -53,7 +53,7 @@ If references in projects did not resolved automatically do the following.
 
 ### Setup a second client 
 
-If you want two clients (one that acts as a server, and a simple client) follow the instructions below:
+If you want two clients (one that acts as a server/client and a simple client) follow the instructions below:
 
 1. Open the ClientDebug properties
     1. Go to debug 
