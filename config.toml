@@ -82,8 +82,3 @@ info = 'Powered by <a href="https://www.getzola.org/">Zola</a>, and <a href="htt
 name = "Privacy"
 url = "/privacy-policy/"
 weight = 10
-
-[[extra.footer.nav]]
-name = "Code of Conduct"
-url = "/docs/contributing/code-of-conduct/"
-weight = 20
