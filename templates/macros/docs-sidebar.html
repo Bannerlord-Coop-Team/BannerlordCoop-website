@@ -15,8 +15,8 @@
 			{% for s in index.subsections %}
 				{% set subsection = get_section(path=s) %}
 				{% if subsection.pages %}
-					<h3>{{ subsection.title }}</h3>
-					<ul class="list-unstyled">
+					<h3 class="docs-sidebar__title{% if subsection.extra.collapse and subsection.extra.collapse == 'show' %} docs-sidebar__title--open{% endif %}" role="button">{{ subsection.title }}</h3>
+					<ul class="collapse list-unstyled{% if subsection.extra.collapse %} {{ subsection.extra.collapse }}{% endif %} ">
 						{% for page in subsection.pages %}                           
 							<li><a class="docs-link{% if current_url == page.permalink %} active{% endif %}" href="{{ page.permalink | safe }}">{{ page.title }}</a></li>
 						{% endfor %}
