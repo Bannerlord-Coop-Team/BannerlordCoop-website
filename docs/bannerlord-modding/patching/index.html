@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <link rel="preload" as="font" href="https://thomasdelaporte.github.io/BannerlordCoop-website/fonts/vendor/jost/jost-v4-latin-regular.woff2" type="font/woff2" crossorigin>
+  <link rel="preload" as="font" href="https://thomasdelaporte.github.io/BannerlordCoop-website/fonts/vendor/jost/jost-v4-latin-700.woff2"  type="font/woff2" crossorigin>
+
+
+<link rel="stylesheet" href="https://thomasdelaporte.github.io/BannerlordCoop-website/main.css">
+
+
+
+  
+  
+    
+  
+
+  
+  
+    
+    
+  
+  
+  
+    
+  
+  
+  
+  
+    
+  
+  
+  
+
+
+  <meta name="robots" content="index, follow">
+  <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+  <meta name="bingbot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+
+
+	
+
+
+	
+
+<title>Patching (Harmony) | Bannerlord Coop</title>
+<meta name="description" content="The Bannerlord Coop Campaign will bring you a truly sandbox campaign, allowing every player to be on their own and act on their own.">
+<link rel="canonical" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/patching/">
+
+
+
+
+
+
+
+
+
+
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BreadcrumbList",
+    
+      
+      
+        
+        
+        
+        
+        
+        
+        
+        
+          {
+            "@type": "ListItem",
+            "position":  1 ,
+            "name": "Home",
+            "item": "https://thomasdelaporte.github.io/BannerlordCoop-website/"
+          },
+          
+          
+          {
+            "@type": "ListItem",
+            "position":  2 ,
+            "name": "Docs",
+            "item": "https://thomasdelaporte.github.io/BannerlordCoop-website/docs/"
+          },
+        
+      
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+          
+          
+          {
+            "@type": "ListItem",
+            "position":  3 ,
+            "name": "Bannerlord Modding",
+            "item": "https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/"
+          },
+        
+      
+        
+        
+        
+        
+        
+        
+        
+        
+          
+          
+          {
+            "@type": "ListItem",
+            "position":  4 ,
+            "name": "Patching",
+            "item": "https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/patching/"
+          },
+        
+      
+    
+  }
+</script>
+
+
+
+
+
+
+  <meta name="theme-color" content="#fff">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://thomasdelaporte.github.io/BannerlordCoop-website/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="https://thomasdelaporte.github.io/BannerlordCoop-website/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="https://thomasdelaporte.github.io/BannerlordCoop-website/favicon-16x16.png">
+  
+    <link rel="manifest" href="https://thomasdelaporte.github.io/BannerlordCoop-website/site.webmanifest" crossorigin>
+  
+
+
+  
+
+</head>
+
+  
+
+<body class="docs single">
+  
+  
+  
+  
+<div class="header-bar fixed-top"></div>
+<header class="navbar fixed-top navbar-expand-md navbar-light">
+	<div class="container">
+		<input class="menu-btn order-0" type="checkbox" id="menu-btn">
+		<label class="menu-icon d-md-none" for="menu-btn"><span class="navicon"></span></label>
+		<a class="navbar-brand order-1 order-md-0 me-auto" href="https://thomasdelaporte.github.io/BannerlordCoop-website/">Bannerlord Coop</a>
+		
+		<button id="mode" class="btn btn-link order-2 order-md-4" type="button" aria-label="Toggle mode">
+			<span class="toggle-dark"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-moon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></span>
+			<span class="toggle-light"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-sun"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg></span>
+		</button>
+
+		<ul class="navbar-nav fork-me order-3 order-md-5">
+			
+				
+					<li class="nav-item">
+						<a class="nav-link" href="//discord.gg/VXqGyT8" target="_blank"><svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"><path d="M19.54 0c1.356 0 2.46 1.104 2.46 2.472v21.528l-2.58-2.28-1.452-1.344-1.536-1.428.636 2.22h-13.608c-1.356 0-2.46-1.104-2.46-2.472v-16.224c0-1.368 1.104-2.472 2.46-2.472h16.08zm-4.632 15.672c2.652-.084 3.672-1.824 3.672-1.824 0-3.864-1.728-6.996-1.728-6.996-1.728-1.296-3.372-1.26-3.372-1.26l-.168.192c2.04.624 2.988 1.524 2.988 1.524-1.248-.684-2.472-1.02-3.612-1.152-.864-.096-1.692-.072-2.424.024l-.204.024c-.42.036-1.44.192-2.724.756-.444.204-.708.348-.708.348s.996-.948 3.156-1.572l-.12-.144s-1.644-.036-3.372 1.26c0 0-1.728 3.132-1.728 6.996 0 0 1.008 1.74 3.66 1.824 0 0 .444-.54.804-.996-1.524-.456-2.1-1.416-2.1-1.416l.336.204.048.036.047.027.014.006.047.027c.3.168.6.3.876.408.492.192 1.08.384 1.764.516.9.168 1.956.228 3.108.012.564-.096 1.14-.264 1.74-.516.42-.156.888-.384 1.38-.708 0 0-.6.984-2.172 1.428.36.456.792.972.792.972zm-5.58-5.604c-.684 0-1.224.6-1.224 1.332 0 .732.552 1.332 1.224 1.332.684 0 1.224-.6 1.224-1.332.012-.732-.54-1.332-1.224-1.332zm4.38 0c-.684 0-1.224.6-1.224 1.332 0 .732.552 1.332 1.224 1.332.684 0 1.224-.6 1.224-1.332 0-.732-.54-1.332-1.224-1.332z"/></svg><span class="ms-2 visually-hidden">Discord</span></a>
+					</li>
+				
+			
+		</ul>
+		<div class="collapse navbar-collapse order-4 order-md-1">
+			<ul class="navbar-nav main-nav me-auto order-5 order-md-2">
+				
+					
+				
+				
+				
+					
+						<li class="nav-item docs active">
+							<a class="nav-link" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/getting-started/introduction/">Docs</a>
+						</li>
+					
+						<li class="nav-item">
+							<a class="nav-link" href="https://thomasdelaporte.github.io/BannerlordCoop-website/faq/">FAQ</a>
+						</li>
+					
+				
+			</ul>
+			<div class="break order-6 d-md-none"></div>
+			
+				<form class="navbar-form flex-grow-1 order-7 order-md-3">
+					<input id="userinput" class="form-control is-search" type="search" placeholder="Search docs..."
+						aria-label="Search docs..." autocomplete="off">
+					<div id="suggestions" class="shadow bg-white rounded"></div>
+				</form>
+			
+		</div>
+	</div>
+</header>
+
+
+
+  
+<div class="wrap container" role="document">
+  <div class="content">
+    <div class="row flex-xl-nowrap">
+	  
+<div class="col-lg-5 col-xl-4 docs-sidebar">
+	<nav class="docs-links" aria-label="Main navigation">
+		
+		
+
+		
+
+		
+			
+				
+				
+
+				
+
+					
+						
+					
+						
+					
+						
+					
+
+					<h3 class="docs-sidebar__title docs-sidebar__title--open" role="button">Getting Started</h3>
+					
+					<ul class="collapse list-unstyled show ">
+						                           
+							<li><a class="docs-link" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/getting-started/introduction/">Introduction</a></li>
+						                           
+							<li><a class="docs-link" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/getting-started/quick-start/">Quick Start</a></li>
+						                           
+							<li><a class="docs-link" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/getting-started/how-to-contribute/">How to Contribute</a></li>
+						
+
+						
+					</ul>
+				
+			
+				
+				
+
+				
+
+					
+						
+					
+						
+							
+							
+
+					<h3 class="docs-sidebar__title docs-sidebar__title--open" role="button">Bannerlord modding</h3>
+					
+					<ul class="collapse list-unstyled show ">
+						                           
+							<li><a class="docs-link" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/mod-loading/">How mods are loaded</a></li>
+						                           
+							<li><a class="docs-link active" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/patching/">Patching (Harmony)</a></li>
+						                           
+							<li><a class="docs-link" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/reading/">Reading</a></li>
+						                           
+							<li><a class="docs-link" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/reflection/">Reflection</a></li>
+						
+
+						
+							
+								<li><a class="docs-link" href="https://docs.bannerlordmodding.com/" target="_blank">📖 More documentation</a></li>
+							
+						
+					</ul>
+				
+			
+				
+				
+
+				
+
+					
+						
+					
+						
+					
+						
+					
+
+					<h3 class="docs-sidebar__title" role="button">Main concepts</h3>
+					
+					<ul class="collapse list-unstyled ">
+						                           
+							<li><a class="docs-link" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/main-concepts/architecture/">Architecture</a></li>
+						                           
+							<li><a class="docs-link" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/main-concepts/battles-architecture/">Battles architecture</a></li>
+						                           
+							<li><a class="docs-link" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/main-concepts/syncing/">Syncing</a></li>
+						
+
+						
+					</ul>
+				
+			
+				
+				
+
+				
+
+					
+						
+					
+
+					<h3 class="docs-sidebar__title" role="button">Debug &#x2F; Testing</h3>
+					
+					<ul class="collapse list-unstyled ">
+						                           
+							<li><a class="docs-link" href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/debug-testing/debugging-game/">Debugging tools</a></li>
+						
+
+						
+					</ul>
+				
+			
+		
+	</nav>
+</div>
+
+	  
+  
+  <nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation">
+  	<div class="page-links">
+  			<h3>On this page</h3>
+  			<nav id="TableOfContents">
+  					<ul>
+  							
+  							<li><a href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/patching/#prefix">Prefix</a></li>
+  							
+  							
+  							<li><a href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/patching/#postfix">Postfix</a></li>
+  							
+  							
+  							<li><a href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/patching/#transpiler">Transpiler</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/patching/#tool">Tool</a></li>
+  											
+  									</ul>
+  							
+  							
+  					</ul>
+  			</nav>
+  	</div>
+  </nav>
+  
+
+      <main class="docs-content col-lg-11 col-xl-9">
+        <h1>Patching (Harmony)</h1>
+        <p class="lead">Harmony is the library used to monkey patch "unchangable" methods.</p>
+        <p>In this section we will cover the most common cases where we need this library, and if for some reason you need to know more, here is <a href="https://harmony.pardeike.net/">the official documentation</a>.</p>
+<h2 id="prefix">Prefix</h2>
+<p>The <a href="https://harmony.pardeike.net/articles/patching-prefix.html"><code>prefix</code></a> allows patching of existing methods before they execute. Prefixes are mainly used to replace existing methods.</p>
+<details>
+    <summary>View full example</summary>
+<pre data-lang="C#" style="background-color:#2b303b;color:#c0c5ce;" class="language-C# "><code class="language-C#" data-lang="C#"><span style="color:#b48ead;">using </span><span>HarmonyLib;
+</span><span style="color:#b48ead;">using </span><span>System;
+</span><span style="color:#b48ead;">using </span><span>System.Reflection;
+</span><span>
+</span><span style="color:#b48ead;">namespace </span><span>ConsoleApp
+</span><span>{
+</span><span>    </span><span style="color:#65737e;">// Example of Bannerlord code. Uneditable code.
+</span><span>    </span><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">Foo
+</span><span style="color:#eff1f5;">    {
+</span><span style="color:#eff1f5;">        </span><span style="color:#b48ead;">private int </span><span style="color:#bf616a;">myVar</span><span style="color:#eff1f5;">;
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">        </span><span style="color:#b48ead;">public void </span><span style="color:#8fa1b3;">PrintMyVar</span><span style="color:#eff1f5;">()
+</span><span style="color:#eff1f5;">        {
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">Console</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">WriteLine</span><span style="color:#eff1f5;">(</span><span style="color:#bf616a;">myVar</span><span style="color:#eff1f5;">);
+</span><span style="color:#eff1f5;">        }
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">        </span><span style="color:#65737e;">// Method we want to change.
+</span><span style="color:#eff1f5;">        </span><span style="color:#b48ead;">public void </span><span style="color:#8fa1b3;">SetMyVar</span><span style="color:#eff1f5;">(</span><span style="color:#b48ead;">int </span><span style="color:#bf616a;">newInt</span><span style="color:#eff1f5;">)
+</span><span style="color:#eff1f5;">        {
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">myVar </span><span>= </span><span style="color:#bf616a;">newInt</span><span style="color:#eff1f5;">;
+</span><span style="color:#eff1f5;">        }
+</span><span style="color:#eff1f5;">    }
+</span><span>
+</span><span>    [</span><span style="color:#bf616a;">HarmonyPatch</span><span>(typeof(Foo), &quot;</span><span style="color:#a3be8c;">SetMyVar</span><span>&quot;)]
+</span><span>    </span><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">FooPatch
+</span><span style="color:#eff1f5;">    {
+</span><span style="color:#eff1f5;">        </span><span style="color:#65737e;">// __instance works similar to the &#39;this&#39; keyword
+</span><span style="color:#eff1f5;">        </span><span style="color:#b48ead;">static bool </span><span style="color:#8fa1b3;">Prefix</span><span style="color:#eff1f5;">(</span><span style="color:#b48ead;">ref </span><span style="color:#eff1f5;">Foo </span><span style="color:#bf616a;">__instance</span><span style="color:#eff1f5;">, </span><span style="color:#b48ead;">ref int </span><span style="color:#bf616a;">newInt</span><span style="color:#eff1f5;">)
+</span><span style="color:#eff1f5;">        {
+</span><span style="color:#eff1f5;">            </span><span style="color:#65737e;">// Access private field
+</span><span style="color:#eff1f5;">            FieldInfo </span><span style="color:#bf616a;">myVarField </span><span>= typeof</span><span style="color:#eff1f5;">(Foo).</span><span style="color:#bf616a;">GetField</span><span style="color:#eff1f5;">(</span><span>&quot;</span><span style="color:#a3be8c;">myVar</span><span>&quot;</span><span style="color:#eff1f5;">, </span><span style="color:#bf616a;">BindingFlags</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">Instance </span><span>| </span><span style="color:#bf616a;">BindingFlags</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">NonPublic</span><span style="color:#eff1f5;">);
+</span><span style="color:#eff1f5;">            </span><span style="color:#65737e;">// Set newInto of __instance
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">myVarField</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">SetValue</span><span style="color:#eff1f5;">(</span><span style="color:#bf616a;">__instance</span><span style="color:#eff1f5;">, </span><span style="color:#bf616a;">newInt </span><span>+ </span><span style="color:#d08770;">1</span><span style="color:#eff1f5;">);
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">            </span><span style="color:#65737e;">// Returning false skips original method
+</span><span style="color:#eff1f5;">            </span><span style="color:#b48ead;">return </span><span style="color:#d08770;">false</span><span style="color:#eff1f5;">;
+</span><span style="color:#eff1f5;">        }
+</span><span style="color:#eff1f5;">    }
+</span><span>
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">Program
+</span><span style="color:#eff1f5;">    {
+</span><span style="color:#eff1f5;">        </span><span style="color:#b48ead;">static void </span><span style="color:#8fa1b3;">Main</span><span style="color:#eff1f5;">(</span><span style="color:#b48ead;">string</span><span style="color:#eff1f5;">[] </span><span style="color:#bf616a;">args</span><span style="color:#eff1f5;">)
+</span><span style="color:#eff1f5;">        {
+</span><span style="color:#eff1f5;">            Harmony </span><span style="color:#bf616a;">harmony </span><span>= new </span><span style="color:#eff1f5;">Harmony(</span><span>&quot;</span><span style="color:#a3be8c;">com.company.project.product</span><span>&quot;</span><span style="color:#eff1f5;">);
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">            Foo </span><span style="color:#bf616a;">foo </span><span>= new </span><span style="color:#eff1f5;">Foo();
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">foo</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">SetMyVar</span><span style="color:#eff1f5;">(</span><span style="color:#d08770;">2</span><span style="color:#eff1f5;">);
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">foo</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">PrintMyVar</span><span style="color:#eff1f5;">(); </span><span style="color:#65737e;">// -&gt; 2
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">harmony</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">PatchAll</span><span style="color:#eff1f5;">();
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">foo</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">SetMyVar</span><span style="color:#eff1f5;">(</span><span style="color:#d08770;">2</span><span style="color:#eff1f5;">);
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">foo</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">PrintMyVar</span><span style="color:#eff1f5;">(); </span><span style="color:#65737e;">// -&gt; 3
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">Console</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">ReadKey</span><span style="color:#eff1f5;">();
+</span><span style="color:#eff1f5;">        }
+</span><span style="color:#eff1f5;">    }
+</span><span>}
+</span></code></pre>
+</details>
+<h2 id="postfix">Postfix</h2>
+<p>The <a href="https://harmony.pardeike.net/articles/patching-postfix.html"><code>postfix</code></a> allows patching of existing methods after they execute. Postfixes are normally used to replace return values.</p>
+<details>
+<summary>Preview full example</summary>
+<pre data-lang="C#" style="background-color:#2b303b;color:#c0c5ce;" class="language-C# "><code class="language-C#" data-lang="C#"><span style="color:#b48ead;">using </span><span>HarmonyLib;
+</span><span style="color:#b48ead;">using </span><span>System;
+</span><span>
+</span><span style="color:#b48ead;">namespace </span><span>ConsoleApp
+</span><span>{
+</span><span>    </span><span style="color:#65737e;">// Example of Bannerlord code. Uneditable code.
+</span><span>    </span><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">Foo
+</span><span style="color:#eff1f5;">    {
+</span><span style="color:#eff1f5;">        </span><span style="color:#b48ead;">private int </span><span style="color:#bf616a;">myVar </span><span>= </span><span style="color:#d08770;">2</span><span style="color:#eff1f5;">;
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">        </span><span style="color:#b48ead;">public void </span><span style="color:#8fa1b3;">PrintMyVar</span><span style="color:#eff1f5;">()
+</span><span style="color:#eff1f5;">        {
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">Console</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">WriteLine</span><span style="color:#eff1f5;">(</span><span style="color:#bf616a;">myVar</span><span style="color:#eff1f5;">);
+</span><span style="color:#eff1f5;">        }
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">        </span><span style="color:#65737e;">// Method we want to change.
+</span><span style="color:#eff1f5;">        </span><span style="color:#b48ead;">public int </span><span style="color:#8fa1b3;">GetMyVar</span><span style="color:#eff1f5;">()
+</span><span style="color:#eff1f5;">        {
+</span><span style="color:#eff1f5;">            </span><span style="color:#b48ead;">return </span><span style="color:#bf616a;">myVar</span><span style="color:#eff1f5;">;
+</span><span style="color:#eff1f5;">        }
+</span><span style="color:#eff1f5;">    }
+</span><span>
+</span><span>    [</span><span style="color:#bf616a;">HarmonyPatch</span><span>(typeof(Foo), &quot;</span><span style="color:#a3be8c;">GetMyVar</span><span>&quot;)]
+</span><span>    </span><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">FooPatch
+</span><span style="color:#eff1f5;">    {
+</span><span style="color:#eff1f5;">        </span><span style="color:#65737e;">// __result is the return value of the original method
+</span><span style="color:#eff1f5;">        </span><span style="color:#b48ead;">static int </span><span style="color:#8fa1b3;">Postfix</span><span style="color:#eff1f5;">(</span><span style="color:#b48ead;">int </span><span style="color:#bf616a;">__result</span><span style="color:#eff1f5;">)
+</span><span style="color:#eff1f5;">        {
+</span><span style="color:#eff1f5;">            </span><span style="color:#65737e;">// This will overwrite the return value
+</span><span style="color:#eff1f5;">            </span><span style="color:#b48ead;">return </span><span style="color:#bf616a;">__result </span><span>+ </span><span style="color:#d08770;">1</span><span style="color:#eff1f5;">;
+</span><span style="color:#eff1f5;">        }
+</span><span style="color:#eff1f5;">    }
+</span><span>
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">Program
+</span><span style="color:#eff1f5;">    {
+</span><span style="color:#eff1f5;">        </span><span style="color:#b48ead;">static void </span><span style="color:#8fa1b3;">Main</span><span style="color:#eff1f5;">(</span><span style="color:#b48ead;">string</span><span style="color:#eff1f5;">[] </span><span style="color:#bf616a;">args</span><span style="color:#eff1f5;">)
+</span><span style="color:#eff1f5;">        {
+</span><span style="color:#eff1f5;">            Harmony </span><span style="color:#bf616a;">harmony </span><span>= new </span><span style="color:#eff1f5;">Harmony(</span><span>&quot;</span><span style="color:#a3be8c;">com.company.project.product</span><span>&quot;</span><span style="color:#eff1f5;">);
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">            Foo </span><span style="color:#bf616a;">foo </span><span>= new </span><span style="color:#eff1f5;">Foo();
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">Console</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">WriteLine</span><span style="color:#eff1f5;">(</span><span style="color:#bf616a;">foo</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">GetMyVar</span><span style="color:#eff1f5;">()); </span><span style="color:#65737e;">// -&gt; 2
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">            </span><span style="color:#65737e;">// Apply patch
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">harmony</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">PatchAll</span><span style="color:#eff1f5;">();
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">Console</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">WriteLine</span><span style="color:#eff1f5;">(</span><span style="color:#bf616a;">foo</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">GetMyVar</span><span style="color:#eff1f5;">()); </span><span style="color:#65737e;">// -&gt; 3
+</span><span style="color:#eff1f5;">
+</span><span style="color:#eff1f5;">            </span><span style="color:#bf616a;">Console</span><span style="color:#eff1f5;">.</span><span style="color:#bf616a;">ReadKey</span><span style="color:#eff1f5;">();
+</span><span style="color:#eff1f5;">        }
+</span><span style="color:#eff1f5;">    }
+</span><span>}
+</span></code></pre>
+</details>
+<h2 id="transpiler">Transpiler</h2>
+<p>Transpilers work directly with the compiled C# code, aka MSIL.
+This is an advanced topic and we should use this <strong>sparingly</strong>, for more information see <a href="https://harmony.pardeike.net/articles/patching-transpiler.html">here</a>.</p>
+<h3 id="tool">Tool</h3>
+<p>The library <a href="https://github.com/garrettluskey/HarmonyTranspilerTools"><code>HarmonyTranspilerTool</code></a> that can help with transpilers by searching and replacing specific IL code.</p>
+
+        
+        
+<div class="docs-navigation d-flex justify-content-between">
+  
+  
+  
+  
+  
+  <a href="https:&#x2F;&#x2F;thomasdelaporte.github.io&#x2F;BannerlordCoop-website&#x2F;docs&#x2F;bannerlord-modding&#x2F;mod-loading&#x2F;">
+    <div class="card my-1">
+      <div class="card-body py-2">
+        &larr; How mods are loaded
+      </div>
+    </div>
+  </a>
+  
+
+  
+  
+  
+  
+  
+    <a class="ms-auto" href="https:&#x2F;&#x2F;thomasdelaporte.github.io&#x2F;BannerlordCoop-website&#x2F;docs&#x2F;bannerlord-modding&#x2F;reading&#x2F;">
+      <div class="card my-1">
+        <div class="card-body py-2">
+          Reading &rarr;
+        </div>
+      </div>
+    </a>
+  
+</div>
+
+      </main>
+    </div>
+  </div>
+</div>
+
+
+  
+    
+<footer class="footer text-muted">
+	<div class="container">
+		<div class="row">
+			<div class="col-lg-8 order-last order-lg-first">
+				<ul class="list-inline">
+					
+						<li class="list-inline-item">Powered by <a href="https://www.getzola.org/">Zola</a>, and <a href="https://github.com/aaranxu/adidoks">AdiDoks</a></li>
+					
+				</ul>
+			</div>
+			<div class="col-lg-8 order-first order-lg-last text-lg-end">
+				<ul class="list-inline">
+					
+						
+							<li class="list-inline-item"><a href="https://thomasdelaporte.github.io/BannerlordCoop-website/privacy-policy/">Privacy</a></li>
+						
+					
+				</ul>
+			</div>
+		</div>
+	</div>
+</footer>
+
+  
+
+  
+<script type="text/javascript" src="https://thomasdelaporte.github.io/BannerlordCoop-website/js/main.js" defer></script>
+
+  <script type="text/javascript" src="https://thomasdelaporte.github.io/BannerlordCoop-website/plugins/elasticlunr.min.js" defer></script>
+  <script type="text/javascript" src="https://thomasdelaporte.github.io/BannerlordCoop-website/search_index.en.js" defer></script>
+  <script type="text/javascript" src="https://thomasdelaporte.github.io/BannerlordCoop-website/js/search.js" defer></script>
+
+  
+</body>
+</html>

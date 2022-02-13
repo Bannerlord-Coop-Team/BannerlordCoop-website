@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://thomasdelaporte.github.io/BannerlordCoop-website//sitemap.xml

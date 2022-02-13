@@ -1,0 +1,525 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+	<title>Bannerlord Coop</title>
+	<subtitle>The Bannerlord Coop Campaign will bring you a truly sandbox campaign, allowing every player to be on their own and act on their own.</subtitle>
+	<link href="https://thomasdelaporte.github.io/BannerlordCoop-website/atom.xml" rel="self" type="application/atom+xml"/>
+  <link href="https://thomasdelaporte.github.io/BannerlordCoop-website/"/>
+	<generator uri="https://www.getzola.org/">Zola</generator>
+	<updated>2021-05-01T18:10:00+00:00</updated>
+	<id>https://thomasdelaporte.github.io/BannerlordCoop-website/atom.xml</id>
+	<entry xml:lang="en">
+		<title>How to Contribute</title>
+		<published>2021-05-01T18:10:00+00:00</published>
+		<updated>2021-05-01T18:10:00+00:00</updated>
+		<link href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/getting-started/how-to-contribute/" type="text/html"/>
+		<id>https://thomasdelaporte.github.io/BannerlordCoop-website/docs/getting-started/how-to-contribute/</id>
+		<content type="html">&lt;p&gt;As you can guess, we work on a git environment and hosted on Github.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;contribute-to-bannerlord-coop&quot;&gt;Contribute to Bannerlord Coop&lt;&#x2F;h2&gt;
+&lt;p&gt;The Bannerlord Coop mod code lives in the &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;Bannerlord-Coop-Team&#x2F;BannerlordCoop&quot;&gt;&lt;code&gt;Bannerlord-Coop-Team&#x2F;BannerlordCoop&lt;&#x2F;code&gt; repository&lt;&#x2F;a&gt;&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;Follow the &lt;a href=&quot;https:&#x2F;&#x2F;guides.github.com&#x2F;introduction&#x2F;flow&#x2F;&quot;&gt;GitHub flow&lt;&#x2F;a&gt;.&lt;&#x2F;li&gt;
+&lt;li&gt;Follow the &lt;a href=&quot;https:&#x2F;&#x2F;www.conventionalcommits.org&#x2F;en&#x2F;v1.0.0&#x2F;&quot;&gt;Conventional Commits Specification&lt;&#x2F;a&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;Check the &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;Bannerlord-Coop-Team&#x2F;BannerlordCoop&#x2F;projects&quot;&gt;Project board&lt;&#x2F;a&gt;&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;h3 id=&quot;create-an-issue&quot;&gt;Create an issue&lt;&#x2F;h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;Bannerlord-Coop-Team&#x2F;BannerlordCoop&#x2F;issues&#x2F;new&quot;&gt;Bug report&lt;&#x2F;a&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;Bannerlord-Coop-Team&#x2F;BannerlordCoop&#x2F;issues&#x2F;new?template=pull_request_template.md&quot;&gt;Feature request&lt;&#x2F;a&gt;&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;h3 id=&quot;improve-documentation&quot;&gt;Improve documentation&lt;&#x2F;h3&gt;
+&lt;p&gt;The documentation&#x2F;website lives in &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;Bannerlord-Coop-Team&#x2F;website&quot;&gt;&lt;code&gt;Bannerlord-Coop-Team&#x2F;website&lt;&#x2F;code&gt; repository&lt;&#x2F;a&gt; and works with &lt;a href=&quot;https:&#x2F;&#x2F;www.getzola.org&#x2F;&quot;&gt;&lt;code&gt;zola&lt;&#x2F;code&gt;&lt;&#x2F;a&gt; which is a static site generator.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;how-can-i-support-you&quot;&gt;How can I support you?&lt;&#x2F;h2&gt;
+&lt;p&gt;Currently, we aren&#x27;t accepting any kind of financial support, and we won&#x27;t accept any until we deliver something playable. The best support you can do is to &lt;strong&gt;share the word&lt;&#x2F;strong&gt; that way more people who could potentially help the development can find us.&lt;&#x2F;p&gt;
+</content>
+	</entry>
+	<entry xml:lang="en">
+		<title>Quick Start</title>
+		<published>2021-05-01T08:20:00+00:00</published>
+		<updated>2021-05-01T08:20:00+00:00</updated>
+		<link href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/getting-started/quick-start/" type="text/html"/>
+		<id>https://thomasdelaporte.github.io/BannerlordCoop-website/docs/getting-started/quick-start/</id>
+		<content type="html">&lt;h2 id=&quot;requirements&quot;&gt;Requirements&lt;&#x2F;h2&gt;
+&lt;p&gt;Before getting started with modding we need to install some software.&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&quot;https:&#x2F;&#x2F;docs.microsoft.com&#x2F;en-us&#x2F;visualstudio&#x2F;releases&#x2F;2019&#x2F;release-notes&quot;&gt;Visual Studio&lt;&#x2F;a&gt; &lt;em&gt;2019&lt;&#x2F;em&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;a href=&quot;https:&#x2F;&#x2F;desktop.github.com&#x2F;&quot;&gt;Github Desktop&lt;&#x2F;a&gt; &lt;em&gt;(optional)&lt;&#x2F;em&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;0xd4d&#x2F;dnSpy&#x2F;releases&quot;&gt;dnSpy&lt;&#x2F;a&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;a href=&quot;https:&#x2F;&#x2F;dotnet.microsoft.com&#x2F;download&#x2F;dotnet-framework&#x2F;net472&quot;&gt;.NET Framework&lt;&#x2F;a&gt; &lt;em&gt;4.7.2&lt;&#x2F;em&gt;&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;h2 id=&quot;download-repository&quot;&gt;Download repository&lt;&#x2F;h2&gt;
+&lt;pre data-lang=&quot;bash&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-bash &quot;&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;git&lt;&#x2F;span&gt;&lt;span&gt; clone https:&#x2F;&#x2F;github.com&#x2F;Bannerlord-Coop-Team&#x2F;BannerlordCoop.git
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#96b5b4;&quot;&gt;cd&lt;&#x2F;span&gt;&lt;span&gt; BannerlordCoop
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;git&lt;&#x2F;span&gt;&lt;span&gt; submodule init &amp;amp;&amp;amp; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;git&lt;&#x2F;span&gt;&lt;span&gt; submodule update&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt; --recursive --force
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;h2 id=&quot;installation&quot;&gt;Installation&lt;&#x2F;h2&gt;
+&lt;p&gt;To work properly with Bannerlord, you will need to dynamically attach your Bannerlord path and resolve references.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;attach-bannerlord-path-resolve-refs&quot;&gt;Attach Bannerlord path &amp;amp; resolve refs&lt;&#x2F;h3&gt;
+&lt;p&gt;To do this, run the file &lt;code&gt;runmefirst.cmd&lt;&#x2F;code&gt;&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;in-case-of-issue&quot;&gt;In case of issue&lt;&#x2F;h4&gt;
+&lt;p&gt;If references in projects did not resolved automatically do the following. &lt;&#x2F;p&gt;
+&lt;ol&gt;
+&lt;li&gt;This can be done in Visual Studio by right-clicking references, going to browse, navigating to your Bannerlord directory through the mb2 shortcut, and selecting all TaleWorld.* .dlls. There are additional .dlls in the Modules folder, being the Native and StoryMode.&lt;&#x2F;li&gt;
+&lt;li&gt;Click start external program and browse to your Bannerlord path. You should select the executable for Bannerlord normally located at &lt;code&gt;bin\Win64_Shipping_Client\Bannerlord.exe&lt;&#x2F;code&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;For the command line arguments enter this &lt;code&gt;&#x2F;singleplayer &#x2F;server _MODULES_*Native*SandBoxCore*CustomBattle*SandBox*StoryMode*Coop*_MODULES_&lt;&#x2F;code&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;Now we need to enter the working directory. NOTE: This will select a folder, not a file. The folder you need to select for this is &lt;code&gt;bin\Win64_Shipping_Client&lt;&#x2F;code&gt;. The same path that &lt;code&gt;Bannerlord.exe&lt;&#x2F;code&gt; is located.&lt;&#x2F;li&gt;
+&lt;&#x2F;ol&gt;
+&lt;h3 id=&quot;setup-a-second-client&quot;&gt;Setup a second client&lt;&#x2F;h3&gt;
+&lt;p&gt;If you want two clients (one that acts as a server&#x2F;client and a simple client) follow the instructions below:&lt;&#x2F;p&gt;
+&lt;ol&gt;
+&lt;li&gt;Open the ClientDebug properties
+&lt;ol&gt;
+&lt;li&gt;Go to debug &lt;&#x2F;li&gt;
+&lt;li&gt;External program: &lt;code&gt;bin\Win64_Shipping_Client\Bannerlord.exe&lt;&#x2F;code&gt; &lt;&#x2F;li&gt;
+&lt;li&gt;Command line arguments: &lt;code&gt;&#x2F;singleplayer &#x2F;client _MODULES_*Native*SandBoxCore*CustomBattle*SandBox*StoryMode*Coop*_MODULES_.&lt;&#x2F;code&gt;
+&lt;br&#x2F;&gt;&lt;&#x2F;li&gt;
+&lt;&#x2F;ol&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;Open the Solution &#x27;Coop&#x27; properties 
+&lt;ol&gt;
+&lt;li&gt;Select the Startup Projects tab&lt;&#x2F;li&gt;
+&lt;li&gt;Select &amp;quot;Multiple startup projects&amp;quot; and make sure Coop and ClientDebug are set to start.&lt;&#x2F;li&gt;
+&lt;&#x2F;ol&gt;
+&lt;&#x2F;li&gt;
+&lt;&#x2F;ol&gt;
+&lt;h3 id=&quot;start-a-game-server&quot;&gt;Start a game server&lt;&#x2F;h3&gt;
+&lt;p&gt;For the moment, it is not possible to select a backup to play on, the one used by default by the mod is the backup named &lt;code&gt;MP&lt;&#x2F;code&gt;.
+If you do not have one, follow these instructions:&lt;&#x2F;p&gt;
+&lt;ol&gt;
+&lt;li&gt;Create a new game and save it as &amp;quot;MP&amp;quot;&lt;&#x2F;li&gt;
+&lt;li&gt;Click on &amp;quot;host game&amp;quot; at the menu and the game will load the &amp;quot;MP&amp;quot; save file on the host.&lt;&#x2F;li&gt;
+&lt;&#x2F;ol&gt;
+</content>
+	</entry>
+	<entry xml:lang="en">
+		<title>How mods are loaded</title>
+		<published>2021-05-01T08:00:00+00:00</published>
+		<updated>2021-05-01T08:00:00+00:00</updated>
+		<link href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/mod-loading/" type="text/html"/>
+		<id>https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/mod-loading/</id>
+		<content type="html">&lt;p&gt;Mods are packaged in the &lt;em&gt;Modules&lt;&#x2F;em&gt; folder (where your Bannerlord game is saved) with along with a respective &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;Bannerlord-Coop-Team&#x2F;BannerlordCoop&#x2F;blob&#x2F;development&#x2F;template&#x2F;SubModule.xml&quot;&gt;&lt;code&gt;SubModule.xml&lt;&#x2F;code&gt; file&lt;&#x2F;a&gt; &lt;em&gt;(just below)&lt;&#x2F;em&gt; where the variable &lt;code&gt;${name}&lt;&#x2F;code&gt; is the name of the module folder.&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;xml&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-xml &quot;&gt;&lt;code class=&quot;language-xml&quot; data-lang=&quot;xml&quot;&gt;&lt;span&gt;&amp;lt;?&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;xml &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;version&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;1.0&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;encoding&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;utf-8&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;?&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;&amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Module&lt;&#x2F;span&gt;&lt;span&gt;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Name &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;value&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;${name}&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Id &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;value&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;${name}&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Version &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;value&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;${version}&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;SingleplayerModule &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;value&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;true&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;MultiplayerModule &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;value&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;false&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;DependedModules&lt;&#x2F;span&gt;&lt;span&gt;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;        &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;DependedModule &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;Id&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;Native&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;DependentVersion&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;${game_version}&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;        &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;DependedModule &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;Id&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;SandBoxCore&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;DependentVersion&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;${game_version}&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;        &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;DependedModule &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;Id&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;Sandbox&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;DependentVersion&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;${game_version}&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;        &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;DependedModule &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;Id&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;CustomBattle&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;DependentVersion&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;${game_version}&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;        &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;DependedModule &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;Id&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;StoryMode&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;DependentVersion&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;${game_version}&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    &amp;lt;&#x2F;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;DependedModules&lt;&#x2F;span&gt;&lt;span&gt;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;SubModules&lt;&#x2F;span&gt;&lt;span&gt;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;        &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;SubModule&lt;&#x2F;span&gt;&lt;span&gt;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;            &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Name &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;value&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;${name}&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;            &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;DLLName &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;value&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;${name}.dll&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;            &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;SubModuleClassType &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;value&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;${name}.Mod.Main&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;            &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Tags&lt;&#x2F;span&gt;&lt;span&gt;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;                &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Tag &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;key&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;DedicatedServerType&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;value&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;none&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;                &amp;lt;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Tag &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;key&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;IsNoRenderModeElement&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;value&lt;&#x2F;span&gt;&lt;span&gt;=&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;false&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot; &#x2F;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;            &amp;lt;&#x2F;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Tags&lt;&#x2F;span&gt;&lt;span&gt;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;        &amp;lt;&#x2F;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;SubModule&lt;&#x2F;span&gt;&lt;span&gt;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    &amp;lt;&#x2F;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;SubModules&lt;&#x2F;span&gt;&lt;span&gt;&amp;gt;
+&lt;&#x2F;span&gt;&lt;span&gt;&amp;lt;&#x2F;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Module&lt;&#x2F;span&gt;&lt;span&gt;&amp;gt;
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;The &lt;code&gt;SubModuleClassType&lt;&#x2F;code&gt; tag represents the main input class that Bannerlord will initialize. In our case, the mod entry point is the class &lt;code&gt;Main&lt;&#x2F;code&gt; from the project &lt;code&gt;Coop.Mod&lt;&#x2F;code&gt;.&lt;&#x2F;p&gt;
+</content>
+	</entry>
+	<entry xml:lang="en">
+		<title>Patching (Harmony)</title>
+		<published>2021-05-01T08:00:00+00:00</published>
+		<updated>2021-05-01T08:00:00+00:00</updated>
+		<link href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/patching/" type="text/html"/>
+		<id>https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/patching/</id>
+		<content type="html">&lt;p&gt;In this section we will cover the most common cases where we need this library, and if for some reason you need to know more, here is &lt;a href=&quot;https:&#x2F;&#x2F;harmony.pardeike.net&#x2F;&quot;&gt;the official documentation&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;prefix&quot;&gt;Prefix&lt;&#x2F;h2&gt;
+&lt;p&gt;The &lt;a href=&quot;https:&#x2F;&#x2F;harmony.pardeike.net&#x2F;articles&#x2F;patching-prefix.html&quot;&gt;&lt;code&gt;prefix&lt;&#x2F;code&gt;&lt;&#x2F;a&gt; allows patching of existing methods before they execute. Prefixes are mainly used to replace existing methods.&lt;&#x2F;p&gt;
+&lt;details&gt;
+    &lt;summary&gt;View full example&lt;&#x2F;summary&gt;
+&lt;pre data-lang=&quot;C#&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-C# &quot;&gt;&lt;code class=&quot;language-C#&quot; data-lang=&quot;C#&quot;&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;using &lt;&#x2F;span&gt;&lt;span&gt;HarmonyLib;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;using &lt;&#x2F;span&gt;&lt;span&gt;System;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;using &lt;&#x2F;span&gt;&lt;span&gt;System.Reflection;
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;namespace &lt;&#x2F;span&gt;&lt;span&gt;ConsoleApp
+&lt;&#x2F;span&gt;&lt;span&gt;{
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Example of Bannerlord code. Uneditable code.
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;class &lt;&#x2F;span&gt;&lt;span style=&quot;color:#ebcb8b;&quot;&gt;Foo
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;private int &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;myVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;public void &lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;PrintMyVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;()
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Console&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;WriteLine&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;myVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;);
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Method we want to change.
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;public void &lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;SetMyVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;int &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;newInt&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;)
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;myVar &lt;&#x2F;span&gt;&lt;span&gt;= &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;newInt&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    }
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    [&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;HarmonyPatch&lt;&#x2F;span&gt;&lt;span&gt;(typeof(Foo), &amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;SetMyVar&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;)]
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;class &lt;&#x2F;span&gt;&lt;span style=&quot;color:#ebcb8b;&quot;&gt;FooPatch
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; __instance works similar to the &amp;#39;this&amp;#39; keyword
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;static bool &lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;Prefix&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;ref &lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;Foo &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;__instance&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;, &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;ref int &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;newInt&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;)
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Access private field
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            FieldInfo &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;myVarField &lt;&#x2F;span&gt;&lt;span&gt;= typeof&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(Foo).&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;GetField&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;myVar&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;, &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;BindingFlags&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Instance &lt;&#x2F;span&gt;&lt;span&gt;| &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;BindingFlags&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;NonPublic&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;);
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Set newInto of __instance
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;myVarField&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;SetValue&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;__instance&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;, &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;newInt &lt;&#x2F;span&gt;&lt;span&gt;+ &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;1&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;);
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Returning false skips original method
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;return &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;false&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    }
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;class &lt;&#x2F;span&gt;&lt;span style=&quot;color:#ebcb8b;&quot;&gt;Program
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;static void &lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;Main&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;string&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;[] &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;args&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;)
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            Harmony &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;harmony &lt;&#x2F;span&gt;&lt;span&gt;= new &lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;Harmony(&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;com.company.project.product&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;);
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            Foo &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo &lt;&#x2F;span&gt;&lt;span&gt;= new &lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;Foo();
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;SetMyVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;2&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;);
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;PrintMyVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(); &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; -&amp;gt; 2
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;harmony&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;PatchAll&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;();
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;SetMyVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;2&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;);
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;PrintMyVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(); &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; -&amp;gt; 3
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Console&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;ReadKey&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;();
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    }
+&lt;&#x2F;span&gt;&lt;span&gt;}
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;&#x2F;details&gt;
+&lt;h2 id=&quot;postfix&quot;&gt;Postfix&lt;&#x2F;h2&gt;
+&lt;p&gt;The &lt;a href=&quot;https:&#x2F;&#x2F;harmony.pardeike.net&#x2F;articles&#x2F;patching-postfix.html&quot;&gt;&lt;code&gt;postfix&lt;&#x2F;code&gt;&lt;&#x2F;a&gt; allows patching of existing methods after they execute. Postfixes are normally used to replace return values.&lt;&#x2F;p&gt;
+&lt;details&gt;
+&lt;summary&gt;Preview full example&lt;&#x2F;summary&gt;
+&lt;pre data-lang=&quot;C#&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-C# &quot;&gt;&lt;code class=&quot;language-C#&quot; data-lang=&quot;C#&quot;&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;using &lt;&#x2F;span&gt;&lt;span&gt;HarmonyLib;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;using &lt;&#x2F;span&gt;&lt;span&gt;System;
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;namespace &lt;&#x2F;span&gt;&lt;span&gt;ConsoleApp
+&lt;&#x2F;span&gt;&lt;span&gt;{
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Example of Bannerlord code. Uneditable code.
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;class &lt;&#x2F;span&gt;&lt;span style=&quot;color:#ebcb8b;&quot;&gt;Foo
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;private int &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;myVar &lt;&#x2F;span&gt;&lt;span&gt;= &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;2&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;public void &lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;PrintMyVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;()
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Console&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;WriteLine&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;myVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;);
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Method we want to change.
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;public int &lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;GetMyVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;()
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;return &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;myVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    }
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    [&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;HarmonyPatch&lt;&#x2F;span&gt;&lt;span&gt;(typeof(Foo), &amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;GetMyVar&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;)]
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;class &lt;&#x2F;span&gt;&lt;span style=&quot;color:#ebcb8b;&quot;&gt;FooPatch
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; __result is the return value of the original method
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;static int &lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;Postfix&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;int &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;__result&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;)
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; This will overwrite the return value
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;return &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;__result &lt;&#x2F;span&gt;&lt;span&gt;+ &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;1&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    }
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;class &lt;&#x2F;span&gt;&lt;span style=&quot;color:#ebcb8b;&quot;&gt;Program
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;static void &lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;Main&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;string&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;[] &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;args&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;)
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            Harmony &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;harmony &lt;&#x2F;span&gt;&lt;span&gt;= new &lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;Harmony(&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;com.company.project.product&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;);
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            Foo &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo &lt;&#x2F;span&gt;&lt;span&gt;= new &lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;Foo();
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Console&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;WriteLine&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;GetMyVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;()); &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; -&amp;gt; 2
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Apply patch
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;harmony&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;PatchAll&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;();
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Console&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;WriteLine&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;GetMyVar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;()); &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; -&amp;gt; 3
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Console&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;ReadKey&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;();
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    }
+&lt;&#x2F;span&gt;&lt;span&gt;}
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;&#x2F;details&gt;
+&lt;h2 id=&quot;transpiler&quot;&gt;Transpiler&lt;&#x2F;h2&gt;
+&lt;p&gt;Transpilers work directly with the compiled C# code, aka MSIL.
+This is an advanced topic and we should use this &lt;strong&gt;sparingly&lt;&#x2F;strong&gt;, for more information see &lt;a href=&quot;https:&#x2F;&#x2F;harmony.pardeike.net&#x2F;articles&#x2F;patching-transpiler.html&quot;&gt;here&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;tool&quot;&gt;Tool&lt;&#x2F;h3&gt;
+&lt;p&gt;The library &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;garrettluskey&#x2F;HarmonyTranspilerTools&quot;&gt;&lt;code&gt;HarmonyTranspilerTool&lt;&#x2F;code&gt;&lt;&#x2F;a&gt; that can help with transpilers by searching and replacing specific IL code.&lt;&#x2F;p&gt;
+</content>
+	</entry>
+	<entry xml:lang="en">
+		<title>Reading</title>
+		<published>2021-05-01T08:00:00+00:00</published>
+		<updated>2021-05-01T08:00:00+00:00</updated>
+		<link href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/reading/" type="text/html"/>
+		<id>https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/reading/</id>
+		<content type="html">&lt;p&gt;That&#x27;s why we use &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;0xd4d&#x2F;dnSpy&#x2F;releases&quot;&gt;dnSpy&lt;&#x2F;a&gt; to view Bannerlord code as it can &lt;strong&gt;decompile, analyze, and debug dlls&lt;&#x2F;strong&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;Bannerlord dlls can be opened using dnspy and are found in &lt;code&gt;{Bannerlord Directory}\bin\Win64_Shipping_Client&lt;&#x2F;code&gt;.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;using-dnspy&quot;&gt;Using dnSpy&lt;&#x2F;h2&gt;
+&lt;p&gt;You can analyze existing code by right clicking on an &lt;em&gt;object&#x2F;method&#x2F;variable&lt;&#x2F;em&gt; and selecting &lt;strong&gt;Analyze&lt;&#x2F;strong&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;This allows you to know where this code is used and what is using it.&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;img src=&quot;&#x2F;dnspy_analyze.jpg&quot; alt=&quot;dnSpy Analyse&quot; &#x2F;&gt;&lt;&#x2F;p&gt;
+</content>
+	</entry>
+	<entry xml:lang="en">
+		<title>Reflection</title>
+		<published>2021-05-01T08:00:00+00:00</published>
+		<updated>2021-05-01T08:00:00+00:00</updated>
+		<link href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/reflection/" type="text/html"/>
+		<id>https://thomasdelaporte.github.io/BannerlordCoop-website/docs/bannerlord-modding/reflection/</id>
+		<content type="html">&lt;h2 id=&quot;reading-and-writing-to-a-private-variable&quot;&gt;Reading and Writing to a Private Variable&lt;&#x2F;h2&gt;
+&lt;p&gt;Let&#x27;s take this Foo class as an example&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;C#&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-C# &quot;&gt;&lt;code class=&quot;language-C#&quot; data-lang=&quot;C#&quot;&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;using &lt;&#x2F;span&gt;&lt;span&gt;System;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;using &lt;&#x2F;span&gt;&lt;span&gt;System.Reflection;
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;class &lt;&#x2F;span&gt;&lt;span style=&quot;color:#ebcb8b;&quot;&gt;Foo &lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;{
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;private string &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;_bar &lt;&#x2F;span&gt;&lt;span&gt;= &amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;private bar&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;public void &lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;printBar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;() {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Console&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;WriteLine&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;_bar&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;);
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;}
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;To read and write to a private variable, we use the &lt;code&gt;FieldInfo&lt;&#x2F;code&gt; class as below:&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;C#&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-C# &quot;&gt;&lt;code class=&quot;language-C#&quot; data-lang=&quot;C#&quot;&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;using &lt;&#x2F;span&gt;&lt;span&gt;System;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;using &lt;&#x2F;span&gt;&lt;span&gt;System.Reflection;
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;Foo &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo &lt;&#x2F;span&gt;&lt;span&gt;= new Foo();
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo&lt;&#x2F;span&gt;&lt;span&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;printBar&lt;&#x2F;span&gt;&lt;span&gt;(); &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Output &amp;quot;private_bar&amp;quot;
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;FieldInfo &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;fieldInfo &lt;&#x2F;span&gt;&lt;span&gt;= typeof(Foo).&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;GetField&lt;&#x2F;span&gt;&lt;span&gt;(&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;_bar&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;, &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;BindingFlags&lt;&#x2F;span&gt;&lt;span&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;NonPublic &lt;&#x2F;span&gt;&lt;span&gt;| &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;BindingFlags&lt;&#x2F;span&gt;&lt;span&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Instance&lt;&#x2F;span&gt;&lt;span&gt;);
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;string &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;bar &lt;&#x2F;span&gt;&lt;span&gt;= (&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;string&lt;&#x2F;span&gt;&lt;span&gt;) &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;fieldInfo&lt;&#x2F;span&gt;&lt;span&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;GetValue&lt;&#x2F;span&gt;&lt;span&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo&lt;&#x2F;span&gt;&lt;span&gt;);
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Console&lt;&#x2F;span&gt;&lt;span&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;WriteLine&lt;&#x2F;span&gt;&lt;span&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;bar&lt;&#x2F;span&gt;&lt;span&gt;); &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Output &amp;quot;private_bar&amp;quot;
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;fieldInfo&lt;&#x2F;span&gt;&lt;span&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;SetValue&lt;&#x2F;span&gt;&lt;span&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo&lt;&#x2F;span&gt;&lt;span&gt;, &amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;I set a new value!&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;);
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;foo&lt;&#x2F;span&gt;&lt;span&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;printBar&lt;&#x2F;span&gt;&lt;span&gt;(); &lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Output &amp;quot;I set a new value!&amp;quot;
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;h2 id=&quot;instantiating-a-internal-private-class&quot;&gt;Instantiating a Internal&#x2F;Private Class&lt;&#x2F;h2&gt;
+&lt;p&gt;For this example, we have this class &lt;code&gt;PrivateClass&lt;&#x2F;code&gt; that is inacessible.&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;C#&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-C# &quot;&gt;&lt;code class=&quot;language-C#&quot; data-lang=&quot;C#&quot;&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;namespace &lt;&#x2F;span&gt;&lt;span&gt;ConsoleApp.Private {
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;class &lt;&#x2F;span&gt;&lt;span style=&quot;color:#ebcb8b;&quot;&gt;PrivateClass &lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;{
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;public int &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;someVar &lt;&#x2F;span&gt;&lt;span&gt;= &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d08770;&quot;&gt;5&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    }
+&lt;&#x2F;span&gt;&lt;span&gt;}
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;pre data-lang=&quot;C#&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-C# &quot;&gt;&lt;code class=&quot;language-C#&quot; data-lang=&quot;C#&quot;&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;using &lt;&#x2F;span&gt;&lt;span&gt;System;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;using &lt;&#x2F;span&gt;&lt;span&gt;System.Reflection;
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Activator
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Need to get assembly when getting type, need full namespace type name as well.
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Assembly may be different, you can pull assembly off public types
+&lt;&#x2F;span&gt;&lt;span&gt;Type &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;privateType &lt;&#x2F;span&gt;&lt;span&gt;= &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Assembly&lt;&#x2F;span&gt;&lt;span&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;GetCallingAssembly&lt;&#x2F;span&gt;&lt;span&gt;().&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;GetType&lt;&#x2F;span&gt;&lt;span&gt;(&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;ConsoleApp.Private.PrivateClass&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;);
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Create class given a type
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;object &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;privateClass &lt;&#x2F;span&gt;&lt;span&gt;= &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Activator&lt;&#x2F;span&gt;&lt;span&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;CreateInstance&lt;&#x2F;span&gt;&lt;span&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;privateType&lt;&#x2F;span&gt;&lt;span&gt;);
+&lt;&#x2F;span&gt;&lt;span&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#65737e;&quot;&gt;&#x2F;&#x2F; Get someVar field value and print it
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Console&lt;&#x2F;span&gt;&lt;span&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;WriteLine&lt;&#x2F;span&gt;&lt;span&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;privateType&lt;&#x2F;span&gt;&lt;span&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;GetField&lt;&#x2F;span&gt;&lt;span&gt;(&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;someVar&lt;&#x2F;span&gt;&lt;span&gt;&amp;quot;).&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;GetValue&lt;&#x2F;span&gt;&lt;span&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;privateClass&lt;&#x2F;span&gt;&lt;span&gt;));
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+</content>
+	</entry>
+	<entry xml:lang="en">
+		<title>Debugging tools</title>
+		<published>2021-05-01T08:00:00+00:00</published>
+		<updated>2021-05-01T08:00:00+00:00</updated>
+		<link href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/debug-testing/debugging-game/" type="text/html"/>
+		<id>https://thomasdelaporte.github.io/BannerlordCoop-website/docs/debug-testing/debugging-game/</id>
+		<content type="html">&lt;p&gt;If you know methods to debug C# applications, you are free to use this one otherwise we present you some here. 
+present you some of them here.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;visual-studio-way&quot;&gt;Visual studio way&lt;&#x2F;h2&gt;
+&lt;p&gt;One of the classic ways to debug an application is to put &lt;a href=&quot;https:&#x2F;&#x2F;docs.microsoft.com&#x2F;en-us&#x2F;visualstudio&#x2F;debugger&#x2F;using-breakpoints?view=vs-2022&quot;&gt;breakpoint&lt;&#x2F;a&gt; on specific part of your project and to check what you want.&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;img src=&quot;https:&#x2F;&#x2F;docs.microsoft.com&#x2F;en-us&#x2F;visualstudio&#x2F;debugger&#x2F;media&#x2F;vs-2022&#x2F;breakpoint-execution.png?view=vs-2022&quot; alt=&quot;Breakpoint&quot; &#x2F;&gt;&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;mod-utilities&quot;&gt;Mod utilities&lt;&#x2F;h2&gt;
+&lt;p&gt;We have added &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;Bannerlord-Coop-Team&#x2F;BannerlordCoop&#x2F;blob&#x2F;development&#x2F;source&#x2F;Coop&#x2F;Mod&#x2F;DebugUtil&#x2F;DebugUI.cs&quot;&gt;an interface&lt;&#x2F;a&gt; based on the &lt;code&gt;imgui&lt;&#x2F;code&gt; library within the game to simply visualize the important data of the mod.&lt;&#x2F;p&gt;
+&lt;p&gt;You can access it by using the keys &lt;code&gt;leftCtrl + ~&lt;&#x2F;code&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;img src=&quot;&#x2F;debug_ui.jpg&quot; alt=&quot;Debug UI&quot; &#x2F;&gt;&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;logging&quot;&gt;Logging&lt;&#x2F;h2&gt;
+&lt;p&gt;We use the &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;nlog&#x2F;nlog&#x2F;wiki&quot;&gt;NLog&lt;&#x2F;a&gt; library to log specific information during the application, the configuration that we are using (that you can find on the &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;Bannerlord-Coop-Team&#x2F;BannerlordCoop&#x2F;blob&#x2F;development&#x2F;source&#x2F;Coop&#x2F;Mod&#x2F;Logging.cs&quot;&gt;&lt;code&gt;Logging&lt;&#x2F;code&gt;&lt;&#x2F;a&gt; class) is the following:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;File: available on Bannerlord source &lt;code&gt;bin\Win64_Shipping_Client\&lt;&#x2F;code&gt;
+&lt;ul&gt;
+&lt;li&gt;For the server (Coop_0.log)&lt;&#x2F;li&gt;
+&lt;li&gt;For the client (Coop_1.log)&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;UDP through &lt;code&gt;NLogViewerTarget&lt;&#x2F;code&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;Debugger (&lt;em&gt;disabled by default)&lt;&#x2F;em&gt;&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+</content>
+	</entry>
+	<entry xml:lang="en">
+		<title>Introduction</title>
+		<published>2021-05-01T08:00:00+00:00</published>
+		<updated>2021-05-01T08:00:00+00:00</updated>
+		<link href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/getting-started/introduction/" type="text/html"/>
+		<id>https://thomasdelaporte.github.io/BannerlordCoop-website/docs/getting-started/introduction/</id>
+		<content type="html">&lt;p&gt;Everything you need should be in this documentation, if it is not make some noise on the discord or add it yourself using a pull request.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;quick-start&quot;&gt;Quick Start&lt;&#x2F;h2&gt;
+&lt;p&gt;You want to work on the project and you don&#x27;t know where to start. &lt;a href=&quot;..&#x2F;quick-start&#x2F;&quot;&gt;Quick Start →&lt;&#x2F;a&gt;&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;contributing&quot;&gt;Contributing&lt;&#x2F;h2&gt;
+&lt;p&gt;Find out how to contribute. &lt;a href=&quot;..&#x2F;..&#x2F;contributing&#x2F;how-to-contribute&#x2F;&quot;&gt;Contributing →&lt;&#x2F;a&gt;&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;any-questions&quot;&gt;Any questions?&lt;&#x2F;h2&gt;
+&lt;p&gt;If you want more information you can talk to the team and the community on our discord or by following the project on the github project. &lt;a href=&quot;&#x2F;&#x2F;discord.gg&#x2F;VXqGyT8&quot;&gt;Join our discord →&lt;&#x2F;a&gt;&lt;&#x2F;p&gt;
+</content>
+	</entry>
+	<entry xml:lang="en">
+		<title>Architecture</title>
+		<published>2021-05-01T08:00:00+00:00</published>
+		<updated>2021-05-01T08:00:00+00:00</updated>
+		<link href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/main-concepts/architecture/" type="text/html"/>
+		<id>https://thomasdelaporte.github.io/BannerlordCoop-website/docs/main-concepts/architecture/</id>
+		<content type="html">&lt;p&gt;&lt;img src=&quot;&#x2F;architecture.jpg&quot; alt=&quot;Architecture&quot; &#x2F;&gt;&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;components&quot;&gt;Components&lt;&#x2F;h2&gt;
+&lt;h3 id=&quot;network&quot;&gt;Network&lt;&#x2F;h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Offers basic network connection handling for server and clients.&lt;&#x2F;li&gt;
+&lt;li&gt;Defines a protocol for client-server communication.&lt;&#x2F;li&gt;
+&lt;li&gt;Implementation of protocol packet handlers.&lt;&#x2F;li&gt;
+&lt;li&gt;Connection state transitions for client &amp;amp; server.&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;h3 id=&quot;protocol&quot;&gt;Protocol&lt;&#x2F;h3&gt;
+&lt;p&gt;The protocol describes communication between client and server in multiple stages:&lt;&#x2F;p&gt;
+&lt;ol&gt;
+&lt;li&gt;Establish a connection.&lt;&#x2F;li&gt;
+&lt;li&gt;Exchange initial world state.&lt;&#x2F;li&gt;
+&lt;li&gt;Keep the state in sync. Detailed documentation about the protocol can be found in Network.Protocol.&lt;&#x2F;li&gt;
+&lt;&#x2F;ol&gt;
+&lt;h3 id=&quot;sync&quot;&gt;Sync&lt;&#x2F;h3&gt;
+&lt;p&gt;Library to declare fields whose values are supposed to be synchronized.&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;Watches for local changes to registered fields.&lt;&#x2F;li&gt;
+&lt;li&gt;Offers callbacks for local change requests.&lt;&#x2F;li&gt;
+&lt;li&gt;Offers generic interface to read &amp;amp; write values.&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;h3 id=&quot;mod&quot;&gt;Mod&lt;&#x2F;h3&gt;
+&lt;p&gt;Handles everything interacting directly with game state or logic.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;issues&quot;&gt;Issues&lt;&#x2F;h3&gt;
+&lt;p&gt;Persistence should be refactored into a separate layer.&lt;&#x2F;p&gt;
+</content>
+	</entry>
+	<entry xml:lang="en">
+		<title>Battles architecture</title>
+		<published>2021-05-01T08:00:00+00:00</published>
+		<updated>2021-05-01T08:00:00+00:00</updated>
+		<link href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/main-concepts/battles-architecture/" type="text/html"/>
+		<id>https://thomasdelaporte.github.io/BannerlordCoop-website/docs/main-concepts/battles-architecture/</id>
+		<content type="html">&lt;h2 id=&quot;server-architecture&quot;&gt;Server Architecture&lt;&#x2F;h2&gt;
+&lt;h3 id=&quot;overview&quot;&gt;Overview&lt;&#x2F;h3&gt;
+&lt;p&gt;The server is responsible for efficiently providing multi-agent syncing for battles, places players can visit, and the output of said battles. The server would need to provide real time synchronization for a total of floor(N &#x2F; 2) places where N is the number of players in a server. For example, in a server where there are 7 people, sync would only happen when 2+ people are in a battle. Thus, assuming worst case, we would have 3 1v1, and 1 idle player. This would verifies that floor(7&#x2F;2) = 3. In a server architecture, a single instance of a server can technically handle all the clients on 1 process. This allows for the server to be scaled horizontally rather than vertically. Here is a diagram that describes the process: ServerArchitecture The server keeps track of 3 distinct things:&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;img src=&quot;&#x2F;battle_architecture.png&quot; alt=&quot;Battle server architecture&quot; &#x2F;&gt;&lt;&#x2F;p&gt;
+&lt;ol&gt;
+&lt;li&gt;Unique battles IDs&lt;&#x2F;li&gt;
+&lt;li&gt;Unique client IDs&lt;&#x2F;li&gt;
+&lt;li&gt;Notable Place IDs (static)&lt;&#x2F;li&gt;
+&lt;&#x2F;ol&gt;
+&lt;ul&gt;
+&lt;li&gt;Client ID maps to a Battle ID&lt;&#x2F;li&gt;
+&lt;li&gt;Battle ID maps to a list of Client IDs&lt;&#x2F;li&gt;
+&lt;li&gt;Notable Place IDs loaded from the server. Clients are expected to send the correct ID.&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;h3 id=&quot;encounters&quot;&gt;Encounters&lt;&#x2F;h3&gt;
+&lt;p&gt;Players can encounter other players on the map, or players that are in a battle with AI. These are custom encounters that need to be generated, and the interactions between the players are specific. For the initial release, encounters with players in battles (to reinforce or fight against) could be disabled. Such encounters need to be limited to prevent grieving; in the case where a player might interrupt another player and keep the dialog open, or the player constantly interacts with another player. This is true for notable places as well.&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;player-npc-player-interaction&quot;&gt;Player, NPC, Player Interaction&lt;&#x2F;h4&gt;
+&lt;p&gt;In the case where a player runs into an NPC (say a lord), an encounter is created. This encounter will be associated with the player that initiated it. No server syncing is needed so far. If another player decides to join this encounter before a battle start, they can. This will lead to a custom encounter for the joining player. The joining player can choose which side to help and wait for the player that created the encounter to start the battle. The custom encounter ensures the joining player waits for the other player to start the battle or cancel the encounter all together. The joining player will send the following message to the server.&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;code&gt;MessageType | PartySideToJoin | Num of Encountered Lords | List of Encounter Lords IDs&lt;&#x2F;code&gt;&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;player-player-interaction&quot;&gt;Player, Player Interaction&lt;&#x2F;h4&gt;
+&lt;p&gt;Player&#x2F;Player interaction is a custom interaction that will result in an encounter. The server will load the character’s data, and show each player two options:&lt;&#x2F;p&gt;
+&lt;ol&gt;
+&lt;li&gt;Offer to Trade&lt;&#x2F;li&gt;
+&lt;li&gt;Battle!&lt;&#x2F;li&gt;
+&lt;&#x2F;ol&gt;
+&lt;h3 id=&quot;notable-places&quot;&gt;Notable Places&lt;&#x2F;h3&gt;
+&lt;p&gt;Notable places get loaded from the server’s game instance. Each notable place is a pair of IDs. One that describes the location on the map, and the second describes a place in that location. Example: (Sargot, Arena) or (Charas, Tavern) When a player visit an Arena, the values get sent as follows:&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;code&gt;MessageType | ClientI | LocationPlacePair&lt;&#x2F;code&gt;&lt;&#x2F;p&gt;
+&lt;p&gt;This lets the server know someone visited a notable place. The server will add this client to a list and check if the # of clients for the LocationPlacePair is &amp;gt; 1. If yes, the server will send updates of the other client(s) to each other.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;battles-scenes&quot;&gt;Battles&#x2F;Scenes&lt;&#x2F;h3&gt;
+&lt;p&gt;One client asks to battle another client
+Server generates a batteID, and based on their location, a scene ID.&lt;&#x2F;p&gt;
+&lt;p&gt;The server passes the following tuples to each client:&lt;br &#x2F;&gt;
+&lt;code&gt;BatteID | SceneID&lt;&#x2F;code&gt;&lt;&#x2F;p&gt;
+&lt;p&gt;Each client will spawn its troops, then send the data about each agent to the server:&lt;br &#x2F;&gt;
+&lt;code&gt;BatteID | SceneID | ListOfAgenet&lt;&#x2F;code&gt;&lt;&#x2F;p&gt;
+&lt;p&gt;List of Agents will contain the following:&lt;br &#x2F;&gt;
+&lt;code&gt;AgentIndex | AgentVisuals&lt;&#x2F;code&gt;&lt;&#x2F;p&gt;
+&lt;p&gt;The server will keep a mapping between an internal index and the client’s index. For any client, the other clients first agent index will start from be CLIENT_A_LAST_INDEX + 1 and will end at CLIENT_A_LAST_INDEX + CLIENT_B_COUNT. Thus if client A sends an update for its second agent movement, it would be AGENTS[CLIENT_A_LAST_INDEX + 2]. The server will keep an internal order of parties and perform these conversions before sending updates.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;battle-results&quot;&gt;Battle Results&lt;&#x2F;h3&gt;
+&lt;p&gt;TBD&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;character-synchronization&quot;&gt;Character Synchronization&lt;&#x2F;h2&gt;
+&lt;h3 id=&quot;movements&quot;&gt;Movements&lt;&#x2F;h3&gt;
+&lt;p&gt;Character movements will be sent to the server at n ticks. Each client will send the information about its main hero and all its units. The server will verify this information and pass it back to all clients If the location doesn’t make sense, the server will teleport the player&#x2F;character to its last known location.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;events-actions&quot;&gt;Events&#x2F;Actions&lt;&#x2F;h3&gt;
+&lt;p&gt;When a character swings, the swing is sent to the server. If the client claims the swing did damage, the damage information will be sent to the server for verification. If it passes, the damage will be registered and sent to all the clients. Therefore, all actions that cause feedback (swing, release arrow, block) need to be animated and not actual actions that cause any change. The change will be supplied by the server and applied to all clients. If it doesn’t no damage will be recorded on any of the clients. Events need guarantee of arrival (unlike movement) so a reliable UDP connection is required. An example of events &#x2F; actions:&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;code&gt;ActionType | AgentID | AgentLocationDirection&lt;&#x2F;code&gt;&lt;&#x2F;p&gt;
+</content>
+	</entry>
+	<entry xml:lang="en">
+		<title>Syncing</title>
+		<published>2021-05-01T08:00:00+00:00</published>
+		<updated>2021-05-01T08:00:00+00:00</updated>
+		<link href="https://thomasdelaporte.github.io/BannerlordCoop-website/docs/main-concepts/syncing/" type="text/html"/>
+		<id>https://thomasdelaporte.github.io/BannerlordCoop-website/docs/main-concepts/syncing/</id>
+		<content type="html">&lt;p&gt;As an example let&#x27;s sync some of the Hero class.&lt;&#x2F;p&gt;
+&lt;pre data-lang=&quot;C#&quot; style=&quot;background-color:#2b303b;color:#c0c5ce;&quot; class=&quot;language-C# &quot;&gt;&lt;code class=&quot;language-C#&quot; data-lang=&quot;C#&quot;&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;class &lt;&#x2F;span&gt;&lt;span style=&quot;color:#ebcb8b;&quot;&gt;HeroSync &lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;: &lt;&#x2F;span&gt;&lt;span style=&quot;color:#a3be8c;&quot;&gt;CoopManaged&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;&amp;lt;HeroSync, Hero&amp;gt; {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;static &lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;HeroSync&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;() {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;When&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;GameLoop&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;)
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            .&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Calls&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Setter&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;nameof&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(Hero.HasMet)),
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;                    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Method&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;nameof&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(Hero.ChangeState)),
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;                    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Method&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span&gt;typeof&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(AddCompanionAction), &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;nameof&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(AddCompanionAction.Apply)))
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            .&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Broadcast&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(() &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;=&amp;gt; &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;CoopClient&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Instance&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Synchronization&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;)
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            .&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;DelegateTo&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;IsServer&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;);
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;ApplyStaticPatches&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;();
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;AutoWrapAllInstances&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;c &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;=&amp;gt; &lt;&#x2F;span&gt;&lt;span&gt;new &lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;HeroSync(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;c&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;));
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;private static &lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;ECallPropagation &lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;IsServer&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(IPendingMethodCall &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;call&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;) {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;if&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Coop&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;IsServer &lt;&#x2F;span&gt;&lt;span&gt;|| &lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(Hero) &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;call&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Instance &lt;&#x2F;span&gt;&lt;span&gt;== &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Hero&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;MainHero&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;) {
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;            &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;return &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;ECallPropagation&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;CallOriginal&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        } 
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;        &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;return &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;ECallPropagation&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;Skip&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b48ead;&quot;&gt;public &lt;&#x2F;span&gt;&lt;span style=&quot;color:#8fa1b3;&quot;&gt;HeroSync&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;([&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;NotNull&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;] Hero &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;instance&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;) : &lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;base&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#bf616a;&quot;&gt;instance&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;) { }
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#eff1f5;&quot;&gt;}
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;The following must exist in a Static constructor.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;when&quot;&gt;When&lt;&#x2F;h3&gt;
+&lt;p&gt;Defines when to process a call. The current default Conditions for this are GameLoop (from this clients game) or RemoteAuthority (from another clients game).&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;calls&quot;&gt;Calls&lt;&#x2F;h3&gt;
+&lt;p&gt;Defines which methods&#x2F;setters are to be patched (can be a list of Methods&#x2F;Setters). Defining Setter or Method works very similar to reflection.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;broadcast&quot;&gt;Broadcast&lt;&#x2F;h3&gt;
+&lt;p&gt;Broadcasts the call to all clients if DelegatesTo allows the call.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;delegateto&quot;&gt;DelegateTo&lt;&#x2F;h3&gt;
+&lt;p&gt;Allows or disallows the call. So in this case we only want the main hero of each client to allow the call or any of the heros on the server.&lt;&#x2F;p&gt;
+&lt;p&gt;Note - DelegateTo is not required, if possible simplify to Execute or Skip.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;applystaticpatches&quot;&gt;ApplyStaticPatches&lt;&#x2F;h3&gt;
+&lt;p&gt;Patches any static Methods&#x2F;Setters, this currently has to be done manually.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;autowrapallinstances&quot;&gt;AutoWrapAllInstances&lt;&#x2F;h3&gt;
+&lt;p&gt;Wraps all instances in a patch for non static Methods&#x2F;Setters, this currently has to be done manually. AutoWrapAllInstances manages all creation and destruction of instances.&lt;&#x2F;p&gt;
+</content>
+	</entry>
+</feed>
