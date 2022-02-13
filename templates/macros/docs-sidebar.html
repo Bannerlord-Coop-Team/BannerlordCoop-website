@@ -3,6 +3,7 @@
 	<nav class="docs-links" aria-label="Main navigation">
 		{% set index_path = current_section ~ "/_index.md" | trim_start_matches(pat="/") %}
 		{% set index = get_section(path=index_path) %}
+
 		{% if index.pages %}
 			<h3>{{ index.title }}</h3>
 			<ul class="list-unstyled">
@@ -11,12 +12,24 @@
 				{% endfor %}
 			</ul>
 		{% endif %}
+
 		{% if index.subsections %}
 			{% for s in index.subsections %}
 				{% set subsection = get_section(path=s) %}
+				{% set_global active_page = false %}
+
 				{% if subsection.pages %}
-					<h3 class="docs-sidebar__title{% if subsection.extra.collapse and subsection.extra.collapse == 'show' %} docs-sidebar__title--open{% endif %}" role="button">{{ subsection.title }}</h3>
-					<ul class="collapse list-unstyled{% if subsection.extra.collapse %} {{ subsection.extra.collapse }}{% endif %} ">
+
+					{% for page in subsection.pages  %}
+						{% if current_url == page.permalink %}
+							{% set_global active_page = true %}
+							{% break %}
+						{% endif %}
+					{% endfor %}
+
+					<h3 class="docs-sidebar__title{% if active_page or subsection.extra.collapse and subsection.extra.collapse == 'show' %} docs-sidebar__title--open{% endif %}" role="button">{{ subsection.title }}</h3>
+					
+					<ul class="collapse list-unstyled{% if active_page or subsection.extra.collapse and subsection.extra.collapse == 'show' %} show{% endif %} ">
 						{% for page in subsection.pages %}                           
 							<li><a class="docs-link{% if current_url == page.permalink %} active{% endif %}" href="{{ page.permalink | safe }}">{{ page.title }}</a></li>
 						{% endfor %}
