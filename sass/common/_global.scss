@@ -178,6 +178,10 @@ body {
 .docs-content {
   padding-bottom: 3rem;
   order: 1;
+
+  img {
+    @extend .img-fluid;
+  }
 }
 
 .docs-navigation,
