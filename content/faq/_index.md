@@ -19,10 +19,6 @@ title = "Is the mod currently playable?"
 content = "No. Currently, there are a lot of unfinished features. The mod will not be playable until version 1.0"
 
 [[extra.list]]
-title = "Is the mod currently playable?"
-content = "No. Currently, there are a lot of unfinished features. The mod will not be playable until version 1.0"
-
-[[extra.list]]
 title = "What will happen with the campaign? What about other quests?"
 content = "We are using sandbox so no main quest. For the V1 release of this mod, all quests will be disabled."
 
