@@ -8,11 +8,11 @@ sort_by = "weight"
 template = "docs/page.html"
 
 [extra]
-lead = "Vous allez bien un jour avoir besoin de débugger votre code."
+lead = "One day you will need to debug your code."
 +++
 
-Si vous connaissez des méthodes pour débugger des applications C#, vous êtes libres d'utiliser celle-ci sinon on 
-vous en présente quelque une ici.
+If you know methods to debug C# applications, you are free to use this one otherwise we present you some here. 
+present you some of them here.
 
 ## Visual studio way
 
