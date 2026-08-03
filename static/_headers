@@ -1,2 +1,6 @@
 /*
   Access-Control-Allow-Origin: *
+
+/server/install.ps1
+  Cache-Control: no-store
+  Content-Type: text/plain; charset=utf-8
