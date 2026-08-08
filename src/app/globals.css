@@ -1,26 +1,90 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #070806;
+  --surface: #0c0d0b;
+  --surface-raised: #11120f;
+
+  --foreground: #e8e4da;
+  --foreground-muted: #96938b;
+  --foreground-dim: #67665f;
+
+  --crimson: #8f1d23;
+  --crimson-hover: #a4232a;
+
+  --gold: #aa9760;
+  --gold-muted: #756a49;
+
+  --border: rgba(232,228,218,0.1);
+  --border-gold: rgba(170,151,96,0.22);
+
+  --content-width: 1280px;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-dim: var(--foreground-dim);
+
+  --color-crimson: var(--crimson);
+  --color-crimson-hover: var(--crimson-hover);
+
+  --color-gold: var(--gold);
+  --color-gold-muted: var(--gold-muted);
+
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-cormorant);
+  --font-label: var(--font-barlow);
+
+
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--background);
+}
+
+.site-container {
+  width: min(calc(100% - 48px), var(--content-width));
+  margin-inline: auto;
 }
 
 body {
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter, Arial, Helvetica, sans-serif);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  font: inherit;
+}
+::selection {
+  background: var(--crimson);
+  color: #fff;
+}
+
+@media (max-width: 640px){
+  .site-container {
+    width: min(calc(100% - 32px), var(--content-width));
+  }
 }
