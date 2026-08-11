@@ -1,0 +1,153 @@
+import { Clapperboard, ExternalLink } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { ScrollReveal } from "@/app/components/motion/ScrollReveal";
+import { VideoCarousel } from "@/app/components/home/media/VideoCarousel";
+import type { ChannelVideo, ContentCreator } from "@/app/components/utils/types/media.types";
+import { getYouTubeCreators, getYouTubeVideos } from "@/app/lib/youtube";
+
+// Add official YouTube video links here.
+const channelVideos: ChannelVideo[] = [
+    {
+        href: "https://www.youtube.com/watch?v=laZM967Eals",
+    },
+];
+
+// Add approved content creators here.
+const contentCreators: ContentCreator[] = [
+    {
+        channelId: "UC9sy-WPppdluS2q3crOaFpA",
+    },
+];
+
+export async function CommunityMedia() {
+    const [videos, creators] = await Promise.all([
+        getYouTubeVideos(channelVideos.map((video) => video.href)),
+        getYouTubeCreators(
+            contentCreators.map((creator) => creator.channelId),
+        ),
+    ]);
+
+    return (
+        <section
+            id="media"
+            className="relative overflow-hidden border-b border-white/10 bg-surface py-24 sm:py-32"
+            aria-labelledby="community-media-heading"
+        >
+            <div
+                aria-hidden="true"
+                className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(170,151,96,0.07),transparent_38%)]"
+            />
+
+            <div className="site-container relative">
+                <ScrollReveal className="max-w-4xl" amount={0.3}>
+                    <p className="font-label text-sm font-semibold uppercase tracking-[0.24em] text-gold">
+                        Videos &amp; Community
+                    </p>
+
+                    <h2
+                        id="community-media-heading"
+                        className="mt-4 font-display text-5xl font-semibold uppercase leading-[0.9] tracking-[-0.035em] text-foreground sm:text-6xl lg:text-7xl"
+                    >
+                        Bannerlord Coop
+                        <span className="block text-gold">In Action</span>
+                    </h2>
+
+                    <p className="mt-6 max-w-2xl font-sans text-base leading-7 text-foreground-muted sm:text-lg">
+                        Watch gameplay, development updates, and guides from the
+                        Bannerlord Coop team and community creators.
+                    </p>
+                </ScrollReveal>
+
+                {videos.length > 0 && (
+                    <div className="mt-14">
+                        <div className="flex items-end justify-between gap-6 border-b border-white/10 pb-5">
+                            <div>
+                                <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
+                                    Official Videos
+                                </p>
+                                <h3 className="mt-2 font-display text-3xl font-semibold uppercase text-foreground sm:text-4xl">
+                                    Latest Videos
+                                </h3>
+                            </div>
+
+                            <Clapperboard
+                                aria-hidden="true"
+                                strokeWidth={1.25}
+                                className="hidden size-8 text-foreground-dim sm:block"
+                            />
+                        </div>
+
+                        <VideoCarousel videos={videos} />
+                    </div>
+                )}
+
+                {creators.length > 0 && (
+                    <div className="mt-20">
+                    <div className="border-b border-white/10 pb-5">
+                        <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
+                            Community
+                        </p>
+                        <h3 className="mt-2 font-display text-3xl font-semibold uppercase text-foreground sm:text-4xl">
+                            Featured Content Creators
+                        </h3>
+                    </div>
+
+                        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            {creators.map((creator, index) => (
+                                <ScrollReveal
+                                    key={creator.id}
+                                    delay={index * 0.08}
+                                    distance={20}
+                                    amount={0.2}
+                                    className="h-full"
+                                >
+                                    <Link
+                                        href={creator.href}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="group flex rounded-sm h-full items-center gap-5 border border-white/10 bg-surface-raised p-6 transition-colors duration-300 hover:border-gold/40 hover:bg-white/2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
+                                    >
+                                        {creator.avatar ? (
+                                            <Image
+                                                src={creator.avatar}
+                                                alt={`${creator.name} YouTube channel avatar`}
+                                                width={72}
+                                                height={72}
+                                                className="size-18 shrink-0 rounded-full border border-white/10 object-cover grayscale transition-[filter,border-color] duration-300 group-hover:border-gold/40 group-hover:grayscale-0"
+                                            />
+                                        ) : (
+                                            <span
+                                                aria-hidden="true"
+                                                className="flex size-18 shrink-0 items-center justify-center rounded-full border border-white/10 bg-background font-display text-3xl font-semibold uppercase text-gold"
+                                            >
+                                                {creator.name.charAt(0)}
+                                            </span>
+                                        )}
+
+                                        <article className="min-w-0 flex-1">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <h4 className="font-display text-2xl font-semibold text-foreground">
+                                                    {creator.name}
+                                                </h4>
+                                                <ExternalLink
+                                                    aria-hidden="true"
+                                                    className="mt-1 size-4 shrink-0 text-foreground-dim transition-colors group-hover:text-gold"
+                                                />
+                                            </div>
+                                            {creator.description && (
+                                                <p className="mt-2 line-clamp-3 wrap-break-words font-sans text-sm leading-6 text-foreground-muted">
+                                                    {creator.description}
+                                                </p>
+                                            )}
+                                        </article>
+                                    </Link>
+                                </ScrollReveal>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </section>
+    );
+}
