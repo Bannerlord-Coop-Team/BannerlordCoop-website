@@ -39,8 +39,6 @@
   --font-sans: var(--font-inter);
   --font-display: var(--font-cormorant);
   --font-label: var(--font-barlow);
-
-
 }
 
 * {
@@ -53,7 +51,7 @@ html {
 }
 
 .site-container {
-  width: min(calc(100% - 48px), var(--content-width));
+  width: min(calc(100% - 96px), var(--content-width));
   margin-inline: auto;
 }
 
@@ -69,21 +67,51 @@ body {
 }
 
 a {
-  color: inherit;
   text-decoration: none;
 }
-button, a {
+button,
+a {
   -webkit-tap-highlight-color: transparent;
 }
-button {
-  font: inherit;
-}
+
 ::selection {
   background: var(--crimson);
   color: #fff;
 }
 
-@media (max-width: 640px){
+/* Custom scrollbar */
+@supports not selector(::-webkit-scrollbar) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--crimson);
+  }
+}
+
+html::-webkit-scrollbar {
+  width: 10px;
+}
+
+html::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+html::-webkit-scrollbar-thumb {
+  background: #292b2d;
+  border: 2px solid var(--background);
+  border-radius: 0;
+}
+
+html::-webkit-scrollbar-thumb:hover {
+  background: var(--crimson);
+}
+
+@media (max-width: 768px) {
+  .site-container {
+    width: min(calc(100% - 48px), var(--content-width));
+  }
+}
+
+@media (max-width: 640px) {
   .site-container {
     width: min(calc(100% - 32px), var(--content-width));
   }

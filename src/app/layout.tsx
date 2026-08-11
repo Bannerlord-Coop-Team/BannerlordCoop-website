@@ -25,7 +25,7 @@ const barlowCondensed = Barlow_Condensed({
 
 export const metadata: Metadata = {
   title: "Bannerlord Coop",
-  description: "Conquer With Friends, Fight for the Realm",
+  description: "Play the Mount & Blade II: Bannerlord campaign with friends.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
