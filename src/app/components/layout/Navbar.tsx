@@ -1,5 +1,6 @@
 import { Swords } from "lucide-react";
 import Link from "next/link";
+import { MobileNavigation } from "@/app/components/layout/MobileNavigation";
 
 const navigation = [
     {
@@ -23,10 +24,10 @@ const navigation = [
 export function Navbar() {
     return (
         <header className="border-b border-white/10 bg-background">
-            <div className="site-container flex h-15 items-center justify-between">
+            <div className="site-container flex h-15 items-center justify-between gap-4">
                 <Link
                     href="/"
-                    className="flex items-center gap-3"
+                    className="flex shrink-0 items-center gap-2 sm:gap-3"
                     aria-label="Bannerlord Coop home"
                 >
                     <Swords
@@ -35,12 +36,12 @@ export function Navbar() {
                         strokeWidth={3}
                     />
 
-                    <span className="font-display text-lg font-black uppercase tracking-[0.14em] text-foreground transition-colors duration-300 hover:text-gold">
+                    <span className="font-display text-sm font-black uppercase tracking-[0.06em] text-foreground transition-colors duration-300 hover:text-gold min-[380px]:text-base min-[380px]:tracking-[0.08em] sm:text-lg sm:tracking-[0.14em]">
                         Bannerlord Coop
                     </span>
                 </Link>
 
-                <nav aria-label="Primary navigation">
+                <nav aria-label="Primary navigation" className="hidden lg:block">
                     <ul className="flex items-center gap-8">
                         {navigation.map((item) => (
                             <li key={item.href}>
@@ -67,13 +68,14 @@ export function Navbar() {
                         <li>
                             <a
                                 href="#download"
-                                className="rounded-sm border border-crimson bg-crimson px-5 py-2.5 font-sans text-xs uppercase tracking-[0.16em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                className="inline-flex min-h-10 items-center rounded-sm border border-crimson bg-crimson px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-5 sm:py-2.5 sm:tracking-[0.16em]"
                             >
                                 Download
                             </a>
                         </li>
                     </ul>
                 </nav>
+                <MobileNavigation />
             </div>
         </header>
     );
