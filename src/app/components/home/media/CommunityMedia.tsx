@@ -31,7 +31,7 @@ export async function CommunityMedia() {
     return (
         <section
             id="media"
-            className="relative overflow-hidden border-b border-white/10 bg-surface py-24 sm:py-32"
+            className="relative overflow-hidden border-b border-white/10 bg-surface py-16 sm:py-20 lg:py-28 2xl:py-32"
             aria-labelledby="community-media-heading"
         >
             <div
@@ -41,13 +41,13 @@ export async function CommunityMedia() {
 
             <div className="site-container relative">
                 <ScrollReveal className="max-w-4xl" amount={0.3}>
-                    <p className="font-label text-sm font-semibold uppercase tracking-[0.24em] text-gold">
+                    <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:text-sm sm:tracking-[0.24em]">
                         Videos &amp; Community
                     </p>
 
                     <h2
                         id="community-media-heading"
-                        className="mt-4 font-display text-5xl font-semibold uppercase leading-[0.9] tracking-[-0.035em] text-foreground sm:text-6xl lg:text-7xl"
+                        className="mt-4 font-display text-4xl font-semibold uppercase leading-[0.92] tracking-[-0.03em] text-foreground min-[380px]:text-5xl sm:text-6xl lg:text-7xl 2xl:text-8xl"
                     >
                         Bannerlord Coop
                         <span className="block text-gold">In Action</span>
@@ -60,7 +60,7 @@ export async function CommunityMedia() {
                 </ScrollReveal>
 
                 {videos.length > 0 && (
-                    <div className="mt-14">
+                    <div className="mt-10 sm:mt-12 lg:mt-14">
                         <div className="flex items-end justify-between gap-6 border-b border-white/10 pb-5">
                             <div>
                                 <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
@@ -83,7 +83,7 @@ export async function CommunityMedia() {
                 )}
 
                 {creators.length > 0 && (
-                    <div className="mt-20">
+                    <div className="mt-14 sm:mt-16 lg:mt-20">
                     <div className="border-b border-white/10 pb-5">
                         <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
                             Community
@@ -93,7 +93,7 @@ export async function CommunityMedia() {
                         </h3>
                     </div>
 
-                        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                             {creators.map((creator, index) => (
                                 <ScrollReveal
                                     key={creator.id}
@@ -106,7 +106,7 @@ export async function CommunityMedia() {
                                         href={creator.href}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="group flex rounded-sm h-full items-center gap-5 border border-white/10 bg-surface-raised p-6 transition-colors duration-300 hover:border-gold/40 hover:bg-white/2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
+                                        className="group flex h-full flex-col items-start gap-4 rounded-sm border border-white/10 bg-surface-raised p-5 transition-colors duration-300 hover:border-gold/40 hover:bg-white/2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-surface min-[420px]:flex-row min-[420px]:items-center sm:p-6"
                                     >
                                         {creator.avatar ? (
                                             <Image
@@ -114,12 +114,12 @@ export async function CommunityMedia() {
                                                 alt={`${creator.name} YouTube channel avatar`}
                                                 width={72}
                                                 height={72}
-                                                className="size-18 shrink-0 rounded-full border border-white/10 object-cover grayscale transition-[filter,border-color] duration-300 group-hover:border-gold/40 group-hover:grayscale-0"
+                                                className="size-16 shrink-0 rounded-full border border-white/10 object-cover grayscale transition-[filter,border-color] duration-300 group-hover:border-gold/40 group-hover:grayscale-0 sm:size-18"
                                             />
                                         ) : (
                                             <span
                                                 aria-hidden="true"
-                                                className="flex size-18 shrink-0 items-center justify-center rounded-full border border-white/10 bg-background font-display text-3xl font-semibold uppercase text-gold"
+                                                className="flex size-16 shrink-0 items-center justify-center rounded-full border border-white/10 bg-background font-display text-2xl font-semibold uppercase text-gold sm:size-18 sm:text-3xl"
                                             >
                                                 {creator.name.charAt(0)}
                                             </span>
@@ -127,7 +127,7 @@ export async function CommunityMedia() {
 
                                         <article className="min-w-0 flex-1">
                                             <div className="flex items-start justify-between gap-3">
-                                                <h4 className="font-display text-2xl font-semibold text-foreground">
+                                                <h4 className="wrap-break-word font-display text-xl font-semibold text-foreground sm:text-2xl">
                                                     {creator.name}
                                                 </h4>
                                                 <ExternalLink
@@ -136,7 +136,7 @@ export async function CommunityMedia() {
                                                 />
                                             </div>
                                             {creator.description && (
-                                                <p className="mt-2 line-clamp-3 wrap-break-words font-sans text-sm leading-6 text-foreground-muted">
+                                                <p className="mt-2 line-clamp-3 wrap-break-word font-sans text-sm leading-6 text-foreground-muted">
                                                     {creator.description}
                                                 </p>
                                             )}

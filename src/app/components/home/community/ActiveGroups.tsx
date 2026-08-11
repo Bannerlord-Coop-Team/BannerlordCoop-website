@@ -12,16 +12,16 @@ const columns = ["Server", "Region", "Mode", "Warriors", "Ping", "Status"] as co
 
 export function ActiveGroups({ servers, lastUpdated }: ActiveGroupsProps) {
     return (
-        <ScrollReveal className="mt-16" amount={0.15}>
+        <ScrollReveal className="mt-12 sm:mt-16" amount={0.15}>
             <section aria-labelledby="active-servers-heading">
                 <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <p className="font-label text-sm font-semibold uppercase tracking-[0.24em] text-gold">
+                        <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:text-sm sm:tracking-[0.24em]">
                             Server Browser
                         </p>
                         <h2
                             id="active-servers-heading"
-                            className="mt-4 font-display text-5xl font-semibold leading-[0.95] tracking-[-0.03em] text-foreground sm:text-6xl"
+                            className="mt-4 font-display text-4xl font-semibold leading-[0.95] tracking-[-0.03em] text-foreground sm:text-5xl lg:text-6xl"
                         >
                             Online Servers
                         </h2>
@@ -37,15 +37,15 @@ export function ActiveGroups({ servers, lastUpdated }: ActiveGroupsProps) {
 
                 <div className="overflow-hidden border border-white/10 bg-surface-raised">
                     {servers.length > 0 ? (
-                        <div className="overflow-x-auto">
-                            <table className="w-full border-collapse text-left">
+                        <div className="overflow-x-auto overscroll-x-contain">
+                            <table className="min-w-240 w-full border-collapse text-left">
                                 <thead className="border-b border-white/10 bg-background/45">
                                     <tr>
                                         {columns.map((column) => (
                                             <th
                                                 key={column}
                                                 scope="col"
-                                                className="whitespace-nowrap px-6 py-4 font-label text-xs font-semibold uppercase tracking-[0.18em] text-foreground-dim"
+                                                className="whitespace-nowrap px-4 py-4 font-label text-xs font-semibold uppercase tracking-[0.16em] text-foreground-dim sm:px-6 sm:tracking-[0.18em]"
                                             >
                                                 {column}
                                             </th>
@@ -60,7 +60,7 @@ export function ActiveGroups({ servers, lastUpdated }: ActiveGroupsProps) {
                             </table>
                         </div>
                     ) : (
-                        <div className="px-6 py-16 text-center">
+                        <div className="px-4 py-12 text-center sm:px-6 sm:py-16">
                             <p className="font-display text-2xl font-semibold text-foreground">
                                 Server data not available
                             </p>

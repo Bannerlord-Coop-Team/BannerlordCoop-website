@@ -78,7 +78,7 @@ export function DownloadModal() {
                 ref={openButtonRef}
                 type="button"
                 onClick={() => setIsOpen(true)}
-                className="inline-flex gap-2 cursor-pointer border border-crimson bg-crimson px-7 py-3.5 rounded-sm font-label text-sm font-semibold uppercase tracking-[0.16em] text-white transition-colors duration-300 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-sm border border-crimson bg-crimson px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-white transition-colors duration-300 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-13 sm:w-auto sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
             >
                 <Download aria-hidden="true" className="size-4" strokeWidth={1.75} />
                 Download The Mod
@@ -86,7 +86,7 @@ export function DownloadModal() {
 
             {isOpen && (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm sm:p-6"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 backdrop-blur-sm sm:p-6"
                     onMouseDown={(event) => {
                         if (event.currentTarget === event.target) {
                             setIsOpen(false);
@@ -99,7 +99,7 @@ export function DownloadModal() {
                         aria-modal="true"
                         aria-labelledby="download-modal-heading"
                         aria-describedby="download-modal-description"
-                        className="relative max-h-full w-full max-w-2xl overflow-y-auto border border-white/10 bg-surface-raised shadow-2xl rounded-sm"
+                        className="relative max-h-[calc(100svh-1.5rem)] w-full max-w-2xl overflow-y-auto rounded-sm border border-white/10 bg-surface-raised shadow-2xl sm:max-h-[calc(100svh-3rem)]"
                     >
                         <div
                             aria-hidden="true"
@@ -110,23 +110,23 @@ export function DownloadModal() {
                             className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(170,151,96,0.08),transparent_45%)]"
                         />
 
-                        <div className="relative p-6 sm:p-9">
+                        <div className="relative p-5 sm:p-9">
                             <button
                                 ref={closeButtonRef}
                                 type="button"
                                 onClick={() => setIsOpen(false)}
-                                className="absolute cursor-pointer rounded-sm top-5 right-5 flex size-10 items-center justify-center border border-white/15 text-foreground-muted transition-colors duration-300 hover:border-gold/50 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
+                                className="absolute top-4 right-4 flex size-10 cursor-pointer items-center justify-center rounded-sm border border-white/15 text-foreground-muted transition-colors duration-300 hover:border-gold/50 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised sm:top-5 sm:right-5"
                                 aria-label="Close download options"
                             >
                                 <X aria-hidden="true" className="size-5" />
                             </button>
 
-                            <p className="pr-14 font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
+                            <p className="pr-12 font-label text-xs font-semibold uppercase tracking-[0.16em] text-gold sm:pr-14 sm:tracking-[0.2em]">
                                 Download Options
                             </p>
                             <h3
                                 id="download-modal-heading"
-                                className="mt-3 pr-14 font-display text-4xl font-semibold uppercase leading-none text-foreground sm:text-5xl"
+                                className="mt-3 pr-12 font-display text-3xl font-semibold uppercase leading-none text-foreground min-[380px]:text-4xl sm:pr-14 sm:text-5xl"
                             >
                                 Choose A Platform
                             </h3>
@@ -138,22 +138,22 @@ export function DownloadModal() {
                                 uses the same version of Bannerlord Coop.
                             </p>
 
-                            <div className="mt-8 grid gap-3 ">
+                            <div className="mt-6 grid gap-3 sm:mt-8">
                                 {downloadSources.map((source) => (
                                     <a
                                         key={source.name}
                                         href={source.href}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="group flex items-center rounded-sm justify-between gap-6 border border-white/10 bg-background/60 p-5 text-left transition-colors duration-300 hover:border-gold/50 hover:bg-white/2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised sm:p-6"
+                                        className="group flex items-start justify-between gap-3 rounded-sm border border-white/10 bg-background/60 p-4 text-left transition-colors duration-300 hover:border-gold/50 hover:bg-white/2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised sm:items-center sm:gap-6 sm:p-6"
                                     >
                                         <span>
-                                            <span className="flex items-center gap-3">
-                                                <span className="font-display text-2xl font-semibold text-foreground transition-colors duration-300 group-hover:text-gold">
+                                            <span className="flex flex-wrap items-center gap-2 sm:gap-3">
+                                                <span className="font-display text-xl font-semibold text-foreground transition-colors duration-300 group-hover:text-gold sm:text-2xl">
                                                     {source.name}
                                                 </span>
                                                 {"recommended" in source && source.recommended && (
-                                                    <span className="border border-crimson/60 px-2 py-1 font-label text-xs font-semibold uppercase tracking-[0.12em] text-crimson-hover rounded-sm">
+                                                    <span className="rounded-sm border border-crimson/60 px-2 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-widest text-crimson-hover sm:text-xs sm:tracking-[0.12em]">
                                                         Recommended
                                                     </span>
                                                 )}

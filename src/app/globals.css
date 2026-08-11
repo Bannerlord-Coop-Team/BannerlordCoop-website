@@ -51,7 +51,7 @@ html {
 }
 
 .site-container {
-  width: min(calc(100% - 96px), var(--content-width));
+  width: min(calc(100% - 2rem), var(--content-width));
   margin-inline: auto;
 }
 
@@ -105,14 +105,20 @@ html::-webkit-scrollbar-thumb:hover {
   background: var(--crimson);
 }
 
-@media (max-width: 768px) {
+@media (min-width: 640px) {
   .site-container {
-    width: min(calc(100% - 48px), var(--content-width));
+    width: min(calc(100% - 3rem), var(--content-width));
   }
 }
 
-@media (max-width: 640px) {
+@media (min-width: 1024px) {
   .site-container {
-    width: min(calc(100% - 32px), var(--content-width));
+    width: min(calc(100% - 6rem), var(--content-width));
+  }
+}
+
+@media (max-height: 700px) and (orientation: landscape) {
+  .site-container {
+    width: min(calc(100% - 3rem), var(--content-width));
   }
 }
