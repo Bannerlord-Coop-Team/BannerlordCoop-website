@@ -16,7 +16,7 @@ const numberFormatter = new Intl.NumberFormat("en-US");
 export function StatCard({ label, description, value, status, icon: Icon, isLive = false, animationDelay = 0 }: StatCardProps) {
     return (
         <ScrollReveal className="h-full" delay={animationDelay} distance={24} amount={0.2}>
-            <article className="group relative h-full min-h-56 bg-surface-raised p-7 transition-colors duration-300 hover:bg-white/2.5">
+            <article className="group relative h-full min-h-52 bg-surface-raised p-6 transition-colors duration-300 hover:bg-white/2.5 sm:min-h-56 sm:p-7">
                 <div className="flex items-center justify-between gap-4">
                     <span className="flex items-center gap-2 font-label text-xs font-semibold uppercase tracking-[0.2em] text-foreground-dim">
                         {isLive && <span aria-hidden="true" className="size-1.5 rounded-full bg-crimson shadow-[0_0_8px_rgba(143,29,35,0.9)]" />}
@@ -24,9 +24,9 @@ export function StatCard({ label, description, value, status, icon: Icon, isLive
                     </span>
                     <Icon aria-hidden="true" className="size-5 text-gold-muted transition-colors duration-300 group-hover:text-gold" strokeWidth={1.5} />
                 </div>
-                <p className="mt-8 font-display text-5xl font-semibold leading-none tabular-nums tracking-[-0.03em] text-foreground sm:text-6xl">
+                <p className="mt-7 font-display text-4xl font-semibold leading-none tabular-nums tracking-[-0.03em] text-foreground sm:mt-8 sm:text-5xl lg:text-6xl">
                     {value === null ? (
-                        <span className="font-label text-2xl uppercase tracking-[0.12em] text-foreground-muted sm:text-3xl">
+                        <span className="font-label text-xl uppercase tracking-[0.1em] text-foreground-muted sm:text-2xl lg:text-3xl lg:tracking-[0.12em]">
                             Not available
                         </span>
                     ) : (

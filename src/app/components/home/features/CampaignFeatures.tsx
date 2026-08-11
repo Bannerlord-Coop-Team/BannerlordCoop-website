@@ -16,7 +16,7 @@ const features: CoopFeature[] = [
             "Warriors overlooking the landscape of Calradia",
         variant: "hero",
         className:
-            "min-h-[34rem] lg:col-span-7 lg:row-span-2",
+            "min-h-96 sm:min-h-[30rem] lg:col-span-7 lg:row-span-2 lg:min-h-[34rem]",
     },
     {
         id: "warriors",
@@ -85,7 +85,7 @@ export function CoopFeatures() {
     return (
         <section
             id="features"
-            className="relative overflow-hidden border-b border-white/10 bg-background py-24 sm:py-32"
+            className="relative overflow-hidden border-b border-white/10 bg-background py-16 sm:py-20 lg:py-28 2xl:py-32"
             aria-labelledby="campaign-features-heading"
         >
             <div
@@ -99,13 +99,13 @@ export function CoopFeatures() {
                     amount={0.3}
                 >
                     <div className="lg:col-span-8">
-                        <p className="font-label text-sm font-semibold uppercase tracking-[0.24em] text-gold">
+                        <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:text-sm sm:tracking-[0.24em]">
                             Campaign Features
                         </p>
 
                         <h2
                             id="campaign-features-heading"
-                            className="mt-4 max-w-4xl font-display text-5xl font-semibold uppercase leading-[0.9] tracking-[-0.035em] text-foreground sm:text-6xl lg:text-7xl"
+                            className="mt-4 max-w-4xl font-display text-4xl font-semibold uppercase leading-[0.92] tracking-[-0.03em] text-foreground min-[380px]:text-5xl sm:text-6xl lg:text-7xl 2xl:text-8xl"
                         >
                             Play Bannerlord.
                             <br />
@@ -122,7 +122,7 @@ export function CoopFeatures() {
                     </p>
                 </ScrollReveal>
 
-                <div className="mt-14 grid auto-rows-fr gap-4 lg:grid-cols-12">
+                <div className="mt-10 grid auto-rows-fr gap-4 sm:mt-12 lg:mt-14 lg:grid-cols-12">
                     {features.map((feature, index) => (
                         <FeatureCard
                             key={feature.id}

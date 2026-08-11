@@ -33,7 +33,7 @@ export function AboutProject() {
     return (
         <section
             id="about"
-            className="relative overflow-hidden border-b border-white/10 bg-surface py-24 sm:py-32"
+            className="relative overflow-hidden border-b border-white/10 bg-surface py-16 sm:py-20 lg:py-28 2xl:py-32"
             aria-labelledby="about-project-heading"
         >
             <div className="site-container relative">
@@ -41,13 +41,13 @@ export function AboutProject() {
                     className="max-w-4xl"
                     amount={0.3}
                 >
-                    <p className="font-label text-sm font-semibold uppercase tracking-[0.24em] text-gold">
+                    <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:text-sm sm:tracking-[0.24em]">
                         About The Project
                     </p>
 
                     <h2
                         id="about-project-heading"
-                        className="mt-4 font-display text-5xl font-semibold uppercase leading-[0.9] tracking-[-0.035em] text-foreground sm:text-6xl lg:text-7xl"
+                        className="mt-4 font-display text-4xl font-semibold uppercase leading-[0.92] tracking-[-0.03em] text-foreground min-[380px]:text-5xl sm:text-6xl lg:text-7xl 2xl:text-8xl"
                     >
                         Built For Shared Campaigns
                     </h2>
@@ -59,7 +59,7 @@ export function AboutProject() {
                     </p>
                 </ScrollReveal>
 
-                <div className="mt-14 grid lg:grid-cols-3">
+                <div className="mt-10 grid sm:mt-12 md:grid-cols-2 lg:mt-14 lg:grid-cols-3">
                     {principles.map((item, index) => {
                         const Icon = item.icon;
 
@@ -69,7 +69,7 @@ export function AboutProject() {
                                 delay={index * 0.1}
                                 distance={20}
                                 amount={0.35}
-                                className="border-b border-white/10 py-10 first:pt-0 last:pb-0 lg:border-r lg:border-b-0 lg:px-12 lg:py-2 lg:first:pl-0 lg:last:border-r-0 lg:last:pr-0"
+                                className="border-b border-white/10 py-8 first:pt-0 last:pb-0 md:px-8 md:py-8 md:first:border-r md:first:pt-8 md:[&:nth-child(2)]:border-b md:[&:nth-child(3)]:col-span-2 md:[&:nth-child(3)]:pt-8 lg:col-span-1 lg:border-r lg:border-b-0 lg:px-10 lg:py-2 lg:first:pl-0 lg:first:pt-2 lg:[&:nth-child(2)]:border-b-0 lg:[&:nth-child(3)]:col-span-1 lg:[&:nth-child(3)]:border-r-0 lg:[&:nth-child(3)]:pt-2 lg:[&:nth-child(3)]:pr-0 xl:px-12"
                             >
                                 <Icon
                                     aria-hidden="true"

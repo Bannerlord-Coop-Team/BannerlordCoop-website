@@ -17,7 +17,7 @@ export function FeatureCard({ feature, animationDelay = 0 }: FeatureCardProps) {
             distance={28}
             amount={0.15}
         >
-            <article className="group relative isolate h-full min-h-72 overflow-hidden border border-white/10 bg-surface-raised">
+            <article className="group relative isolate h-full min-h-64 overflow-hidden border border-white/10 bg-surface-raised sm:min-h-72">
                 {hasImage && (
                     <>
                         <Image
@@ -51,7 +51,7 @@ export function FeatureCard({ feature, animationDelay = 0 }: FeatureCardProps) {
                     />
                 )}
 
-                <div className="flex h-full flex-col justify-between p-7 sm:p-9">
+                <div className="flex h-full flex-col justify-between p-6 sm:p-8 lg:p-9">
                     <div className="flex items-start justify-between gap-6">
                         {Icon ? (
                             <span className="flex size-11 items-center justify-center border-2 border-gold bg-gold/5 text-gold">
@@ -66,7 +66,7 @@ export function FeatureCard({ feature, animationDelay = 0 }: FeatureCardProps) {
                         )}
                     </div>
 
-                    <div className="mt-16">
+                    <div className="mt-10 sm:mt-12 lg:mt-16">
                         {feature.eyebrow && (
                             <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
                                 {feature.eyebrow}
@@ -76,7 +76,7 @@ export function FeatureCard({ feature, animationDelay = 0 }: FeatureCardProps) {
                         <h3
                             className={
                                 feature.variant === "hero"
-                                    ? "mt-3 font-display text-4xl font-semibold uppercase leading-[0.95] tracking-[-0.02em] text-foreground sm:text-5xl"
+                                    ? "mt-3 font-display text-3xl font-semibold uppercase leading-[0.95] tracking-[-0.02em] text-foreground sm:text-4xl lg:text-5xl"
                                     : "mt-3 font-display text-3xl font-semibold uppercase leading-none tracking-[-0.02em] text-foreground"
                             }
                         >

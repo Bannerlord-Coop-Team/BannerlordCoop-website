@@ -37,12 +37,12 @@ export function Footer() {
     return (
         <footer className="border-t border-white/10 bg-background">
             <div className="site-container">
-                <div className="grid gap-12 py-14 md:grid-cols-12 md:items-start sm:py-16">
-                    <div className="md:col-span-6">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-10 py-12 sm:gap-x-12 sm:py-14 lg:grid-cols-12 lg:items-start lg:py-16">
+                    <div className="col-span-2 lg:col-span-6">
                         <Link
                             href="/"
                             aria-label="Bannerlord Coop home"
-                            className="inline-flex items-center gap-3 text-foreground transition-colors duration-300 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-background"
+                            className="inline-flex max-w-full items-center gap-3 text-foreground transition-colors duration-300 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-background"
                         >
                             <span className="flex size-10 items-center justify-center border border-gold/35 text-gold">
                                 <Swords
@@ -52,7 +52,7 @@ export function Footer() {
                                 />
                             </span>
 
-                            <span className="font-display text-2xl font-semibold uppercase tracking-[0.04em]">
+                            <span className="font-display text-xl font-semibold uppercase tracking-[0.04em] sm:text-2xl">
                                 Bannerlord Coop
                             </span>
                         </Link>
@@ -64,7 +64,7 @@ export function Footer() {
                     </div>
 
                     <nav
-                        className="md:col-span-3"
+                        className="lg:col-span-3"
                         aria-label="Footer navigation"
                     >
                         <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
@@ -86,7 +86,7 @@ export function Footer() {
                     </nav>
 
                     <nav
-                        className="md:col-span-3"
+                        className="lg:col-span-3"
                         aria-label="Community links"
                     >
                         <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">

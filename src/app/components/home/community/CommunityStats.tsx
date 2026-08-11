@@ -31,13 +31,13 @@ export function CommunityStats({ playersOnline, dedicatedServersCount, battlesTo
     ];
 
     return (
-        <section className="relative overflow-hidden border-b border-white/10 bg-surface py-20 sm:py-24" aria-labelledby="community-stats-heading">
+        <section className="relative overflow-hidden border-b border-white/10 bg-surface py-16 sm:py-20 lg:py-24 2xl:py-28" aria-labelledby="community-stats-heading">
             <div className="site-container relative">
                 <ScrollReveal className="max-w-3xl" amount={0.35}>
-                    <p className="font-label text-sm font-semibold uppercase tracking-[0.24em] text-gold">
+                    <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:text-sm sm:tracking-[0.24em]">
                         Community Activity
                     </p>
-                    <h2 id="community-stats-heading" className="mt-4 font-display text-5xl font-semibold leading-[0.95] tracking-[-0.03em] text-foreground sm:text-6xl">
+                    <h2 id="community-stats-heading" className="mt-4 font-display text-4xl font-semibold leading-[0.95] tracking-[-0.03em] text-foreground sm:text-5xl lg:text-6xl 2xl:text-7xl">
                         Bannerlord Coop By The Numbers
                     </h2>
                     <p className="mt-5 max-w-2xl font-sans text-base leading-7 text-foreground-muted sm:text-lg">
@@ -45,9 +45,9 @@ export function CommunityStats({ playersOnline, dedicatedServersCount, battlesTo
                     </p>
                 </ScrollReveal>
 
-                <div className="mt-12 grid overflow-hidden border border-white/10 bg-surface-raised sm:grid-cols-2 xl:grid-cols-4">
+                <div className="mt-10 grid overflow-hidden border border-white/10 bg-surface-raised sm:mt-12 sm:grid-cols-2 xl:grid-cols-4">
                     {stats.map((stat, index) => (
-                        <div key={stat.label} className="border-b border-white/10 sm:border-l sm:nth-last-[-n+2]:border-b-0 xl:border-r xl:border-b-0 xl:even:border-l-0 xl:last:border-r-0">
+                        <div key={stat.label} className="border-b border-white/10 sm:odd:border-r sm:nth-3:border-b-0 xl:border-r xl:border-b-0 xl:last:border-r-0">
                             <StatCard {...stat} animationDelay={index * 0.12} />
                         </div>
                     ))}

@@ -9,7 +9,7 @@ export function DownloadSection() {
     return (
         <section
             id="download"
-            className="relative overflow-hidden border-b border-white/10 bg-background py-24 sm:py-32"
+            className="relative overflow-hidden border-b border-white/10 bg-background py-16 sm:py-20 lg:py-28 2xl:py-32"
             aria-labelledby="final-cta-heading"
         >
             <div
@@ -27,13 +27,13 @@ export function DownloadSection() {
                     className="mx-auto max-w-5xl text-center"
                     amount={0.3}
                 >
-                    <p className="font-label text-sm font-semibold uppercase tracking-[0.24em] text-gold">
+                    <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:text-sm sm:tracking-[0.24em]">
                         Download Bannerlord Coop
                     </p>
 
                     <h2
                         id="final-cta-heading"
-                        className="mt-4 font-display text-5xl font-semibold uppercase leading-[0.88] tracking-[-0.035em] text-foreground sm:text-6xl lg:text-7xl"
+                        className="mt-4 font-display text-4xl font-semibold uppercase leading-[0.9] tracking-[-0.03em] text-foreground min-[380px]:text-5xl sm:text-6xl lg:text-7xl 2xl:text-8xl"
                     >
                         The Realm Awaits.
                         <span className="block text-crimson">
@@ -53,7 +53,7 @@ export function DownloadSection() {
                             href={DISCORD_URL}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex min-h-13 items-center justify-center gap-3 rounded-sm border border-white/20 bg-background/60 px-7 py-3.5 font-label text-sm font-semibold uppercase tracking-[0.16em] text-foreground transition-colors duration-300 hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                            className="inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-sm border border-white/20 bg-background/60 px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors duration-300 hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-13 sm:w-auto sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
                         >
                             <MessageCircle
                                 aria-hidden="true"
@@ -64,24 +64,20 @@ export function DownloadSection() {
                         </Link>
                     </div>
 
-                    <p className="mt-6 font-label text-xs uppercase tracking-[0.14em] text-foreground-dim">
-                        A Free Community Mod
-                        <span
-                            aria-hidden="true"
-                            className="mx-3 text-gold-muted"
-                        >
-                            /
-                        </span>
-
-                        Windows &amp; Linux
-                        <span
-                            aria-hidden="true"
-                            className="mx-3 text-gold-muted"
-                        >
-                            /
-                        </span>
-                        Requires A Legal Copy Of Mount &amp; Blade II: Bannerlord
-                    </p>
+                    <ul className="mt-6 flex flex-wrap justify-center gap-x-3 gap-y-2 font-label text-xs uppercase tracking-[0.12em] text-foreground-dim sm:tracking-[0.14em]">
+                        {[
+                            "A Free Community Mod",
+                            "Windows & Linux",
+                            "Requires A Legal Copy Of Mount & Blade II: Bannerlord",
+                        ].map((item, index) => (
+                            <li key={item} className="flex items-center gap-3">
+                                {index > 0 && (
+                                    <span aria-hidden="true" className="text-gold-muted">/</span>
+                                )}
+                                <span>{item}</span>
+                            </li>
+                        ))}
+                    </ul>
                 </ScrollReveal>
             </div>
         </section>
