@@ -65,7 +65,15 @@ export function DownloadSection() {
                     </div>
 
                     <p className="mt-6 font-label text-xs uppercase tracking-[0.14em] text-foreground-dim">
-                        Free Community Mod
+                        A Free Community Mod
+                        <span
+                            aria-hidden="true"
+                            className="mx-3 text-gold-muted"
+                        >
+                            /
+                        </span>
+
+                        Windows &amp; Linux
                         <span
                             aria-hidden="true"
                             className="mx-3 text-gold-muted"
