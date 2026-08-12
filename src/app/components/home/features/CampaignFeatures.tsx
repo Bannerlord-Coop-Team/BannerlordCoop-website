@@ -21,9 +21,9 @@ const features: CoopFeature[] = [
     {
         id: "warriors",
         eyebrow: "Player Count",
-        title: "Up To 8 Players",
+        title: "No Limit On People",
         description:
-            "Ride with up to seven companions in campaigns optimized for eight players, each commanding their own character and forces.",
+            "Play with as many people as you want, each commanding their own character and forces. Fight every battle side by side and experience the same campaign.",
         icon: Users,
         variant: "text",
         className:
