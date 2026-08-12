@@ -19,6 +19,13 @@ export type AssignedAccount = {
     email: string;
 };
 
+export type RestartSchedule = {
+    cron: string;
+    timezone: string;
+    description: string;
+    enabled: boolean;
+};
+
 export type HostedServer = {
     id: string;
     name: string;
@@ -35,6 +42,7 @@ export type HostedServer = {
     backups: string;
     node: string;
     version: string;
+    restartSchedule: RestartSchedule;
     logs: HostedServerLog[];
 };
 
@@ -59,6 +67,12 @@ export const PLACEHOLDER_SERVERS: readonly HostedServer[] = [
         backups: "Daily",
         node: "eu-demo-01",
         version: "v1.2.12",
+        restartSchedule: {
+            cron: "0 4 * * *",
+            timezone: "UTC",
+            description: "Every day at 04:00 UTC",
+            enabled: false,
+        },
         logs: [
             { time: "12:04:18", level: "INFO", message: "Campaign state loaded successfully" },
             { time: "12:04:20", level: "INFO", message: "Listening for cooperative connections on demo port" },
@@ -85,6 +99,12 @@ export const PLACEHOLDER_SERVERS: readonly HostedServer[] = [
         backups: "Every 6 hours",
         node: "us-demo-02",
         version: "v1.2.12",
+        restartSchedule: {
+            cron: "0 4 * * *",
+            timezone: "UTC",
+            description: "Every day at 04:00 UTC",
+            enabled: false,
+        },
         logs: [
             { time: "09:31:02", level: "INFO", message: "World save completed" },
             { time: "09:31:04", level: "INFO", message: "All cooperative sessions closed" },

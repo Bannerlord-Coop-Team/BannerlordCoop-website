@@ -94,7 +94,7 @@ The protected `/servers` area is the management preview for the planned hosting 
 
 - `Admin` and `Server Manager` can view every placeholder hosted server and its assigned account.
 - `Standard Server` and `Premium Server` see the placeholder management experience for their plan.
-- Start, stop, restart, runtime status, and log streaming are simulated in the browser and reset on refresh.
+- Start, stop, restart, a daily `0 4 * * *` UTC cron-restart toggle, runtime status, and log streaming are simulated in the browser and reset on refresh.
 
 There is no VPS control plane, persistent server inventory, account-assignment store, or real log connection yet. Typed placeholder records—including fictitious account assignments—live in `src/app/lib/hosting/servers.ts` so the routes and interface can be developed without implying production connectivity. Replace that repository and the local control simulation when the infrastructure contract is ready.
 

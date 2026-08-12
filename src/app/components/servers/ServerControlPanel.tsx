@@ -3,8 +3,9 @@
 import type {
     HostedServerLog,
     HostedServerStatus,
+    RestartSchedule,
 } from "@/app/lib/hosting/servers";
-import { CircleStop, Play, RotateCw, Terminal } from "lucide-react";
+import { CircleStop, Clock3, Play, RotateCw, Terminal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type RuntimeStatus = HostedServerStatus | "Starting" | "Stopping" | "Restarting";
@@ -30,14 +31,19 @@ function currentTime() {
 export function ServerControlPanel({
     initialLogs,
     initialStatus,
+    restartSchedule,
     serverName,
 }: {
     initialLogs: HostedServerLog[];
     initialStatus: HostedServerStatus;
+    restartSchedule: RestartSchedule;
     serverName: string;
 }) {
     const [status, setStatus] = useState<RuntimeStatus>(initialStatus);
     const [logs, setLogs] = useState(initialLogs);
+    const [cronRestartEnabled, setCronRestartEnabled] = useState(
+        restartSchedule.enabled,
+    );
     const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
     const logViewport = useRef<HTMLDivElement>(null);
     const isTransitioning = !["Online", "Offline"].includes(status);
@@ -70,6 +76,15 @@ export function ServerControlPanel({
     function completeAfter(delay: number, callback: () => void) {
         const timer = setTimeout(callback, delay);
         timers.current.push(timer);
+    }
+
+    function toggleCronRestart() {
+        const nextEnabled = !cronRestartEnabled;
+        setCronRestartEnabled(nextEnabled);
+        addLog(
+            `Scheduled restart ${nextEnabled ? "enabled" : "disabled"} for ${restartSchedule.description} (simulation)`,
+            nextEnabled ? "INFO" : "WARN",
+        );
     }
 
     function runAction(action: ControlAction) {
@@ -153,8 +168,49 @@ export function ServerControlPanel({
                         <RotateCw aria-hidden="true" className="size-4" /> Restart
                     </button>
                 </div>
+                <div className="mt-5 border-t border-white/10 pt-5">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex min-w-0 gap-3">
+                            <Clock3 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
+                            <div>
+                                <h3 className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-foreground">
+                                    Cron restart
+                                </h3>
+                                <p className="mt-1 text-xs leading-5 text-foreground-muted">
+                                    {restartSchedule.description}
+                                </p>
+                                <p className="mt-1 font-mono text-[0.68rem] text-foreground-dim">
+                                    {restartSchedule.cron} · {restartSchedule.timezone}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={cronRestartEnabled}
+                            aria-label="Toggle scheduled cron restart"
+                            onClick={toggleCronRestart}
+                            className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
+                                cronRestartEnabled
+                                    ? "border-gold bg-gold/80"
+                                    : "border-white/20 bg-background"
+                            }`}
+                        >
+                            <span
+                                aria-hidden="true"
+                                className={`absolute top-0.5 left-0 size-4 rounded-full bg-foreground shadow-sm transition-transform ${
+                                    cronRestartEnabled ? "translate-x-6" : "translate-x-0.5"
+                                }`}
+                            />
+                        </button>
+                    </div>
+                    <p className={`mt-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${cronRestartEnabled ? "text-emerald-300" : "text-foreground-dim"}`} aria-live="polite">
+                        Scheduled restart {cronRestartEnabled ? "enabled" : "disabled"}
+                    </p>
+                </div>
+
                 <p className="mt-5 text-xs leading-5 text-foreground-dim">
-                    Controls only update this browser preview. They do not contact a VPS and reset when the page reloads.
+                    Controls and schedule settings only update this browser preview. They do not contact a VPS and reset when the page reloads.
                 </p>
             </section>
 

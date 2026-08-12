@@ -36,6 +36,17 @@ test("every placeholder server has a distinct assigned account", () => {
     );
 });
 
+test("every placeholder server defines a cron restart schedule", () => {
+    assert.ok(
+        PLACEHOLDER_SERVERS.every(
+            (server) =>
+                server.restartSchedule.cron === "0 4 * * *" &&
+                server.restartSchedule.timezone === "UTC" &&
+                server.restartSchedule.enabled === false,
+        ),
+    );
+});
+
 test("individual server lookup enforces role visibility", () => {
     assert.equal(
         getServerForRole("calradia-standard-01", "Standard Server")?.plan,

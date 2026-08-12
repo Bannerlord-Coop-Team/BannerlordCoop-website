@@ -178,6 +178,7 @@ export default async function ServerPage({ params }: ServerPageProps) {
                     <ServerControlPanel
                         initialLogs={[...server.logs]}
                         initialStatus={server.status}
+                        restartSchedule={server.restartSchedule}
                         serverName={server.name}
                     />
                 </div>
