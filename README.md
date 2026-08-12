@@ -78,7 +78,7 @@ The OAuth providers also require their Supabase callback URL (shown in the provi
 
 ### Member administration
 
-The protected `/admin` page lists Supabase Auth users, searches by member information, and stores one of `Admin`, `Developer`, `Helper`, or `User` in each user's protected `app_metadata.role`.
+The protected `/admin` page lists Supabase Auth users, searches by member information, and stores one of `Admin`, `Server Manager`, `Standard Server`, `Premium Server`, `Developer`, `Helper`, or `User` in each user's protected `app_metadata.role`.
 
 To enable it:
 
@@ -87,6 +87,19 @@ To enable it:
 3. Restart the development server, sign in using that email, and open `/admin`.
 
 Bootstrap administrators always retain admin access, preventing an accidental total lockout. Assigned roles take effect after the user's Auth session refreshes or they sign in again.
+
+### Server hosting preview
+
+The protected `/servers` area is the management preview for the planned hosting service:
+
+- `Admin` and `Server Manager` can view every placeholder hosted server and its assigned account.
+- `Standard Server` and `Premium Server` see the placeholder management experience for their plan.
+- Start, stop, restart, runtime status, and log streaming are simulated in the browser and reset on refresh.
+- The cron-restart toggle reveals an editable five-field UTC expression while enabled, initially `0 4 * * *`.
+
+There is no VPS control plane, persistent server inventory, account-assignment store, or real log connection yet. Typed placeholder records—including fictitious account assignments—live in `src/app/lib/hosting/servers.ts` so the routes and interface can be developed without implying production connectivity. Replace that repository and the local control simulation when the infrastructure contract is ready.
+
+The design and replacement seams are documented in `docs/server-hosting-design.md`.
 
 ## Environment Variables
 
