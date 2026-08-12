@@ -1,6 +1,10 @@
 import "server-only";
 
-import { isMemberRole, type MemberRole } from "@/app/lib/auth/roles";
+import {
+    hasServerDashboardAccess,
+    isMemberRole,
+    type MemberRole,
+} from "@/app/lib/auth/roles";
 import type { User } from "@supabase/supabase-js";
 
 function adminEmails() {
@@ -25,4 +29,8 @@ export function getMemberRole(user: User): MemberRole {
 
 export function hasAdminAccess(user: User) {
     return getMemberRole(user) === "Admin";
+}
+
+export function hasHostedServerAccess(user: User) {
+    return hasServerDashboardAccess(getMemberRole(user));
 }

@@ -1,6 +1,7 @@
 import { signOut } from "@/app/auth/actions";
 import { MobileNavigation } from "@/app/components/layout/MobileNavigation";
-import { hasAdminAccess } from "@/app/lib/auth/access";
+import { getMemberRole, hasAdminAccess } from "@/app/lib/auth/access";
+import { hasServerDashboardAccess } from "@/app/lib/auth/roles";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { Swords } from "lucide-react";
 import Link from "next/link";
@@ -27,12 +28,16 @@ const navigation = [
 export async function Navbar() {
     let isAuthenticated = false;
     let isAdmin = false;
+    let hasServerAccess = false;
 
     try {
         const supabase = await getSupabaseServerClient();
         const { data } = await supabase.auth.getUser();
         isAuthenticated = data.user !== null;
         isAdmin = data.user ? hasAdminAccess(data.user) : false;
+        hasServerAccess = data.user
+            ? hasServerDashboardAccess(getMemberRole(data.user))
+            : false;
     } catch {
         // Keep public navigation usable when authentication is not configured.
     }
@@ -68,6 +73,17 @@ export async function Navbar() {
                                 </Link>
                             </li>
                         ))}
+
+                        {hasServerAccess && (
+                            <li>
+                                <Link
+                                    href="/servers"
+                                    className="font-sans text-xs uppercase tracking-[0.2em] text-gold transition-colors duration-300 hover:text-foreground focus-visible:outline-none"
+                                >
+                                    Servers
+                                </Link>
+                            </li>
+                        )}
 
                         {isAdmin && (
                             <li>
@@ -120,6 +136,7 @@ export async function Navbar() {
                     </ul>
                 </nav>
                 <MobileNavigation
+                    hasServerAccess={hasServerAccess}
                     isAdmin={isAdmin}
                     isAuthenticated={isAuthenticated}
                 />

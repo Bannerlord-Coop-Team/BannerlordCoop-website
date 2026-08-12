@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "test": "tsx --test src/app/lib/auth/redirect.test.ts",
+    "test": "tsx --test src/app/lib/auth/redirect.test.ts src/app/lib/auth/roles.test.ts src/app/lib/hosting/servers.test.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
