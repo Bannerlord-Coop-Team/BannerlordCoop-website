@@ -13,7 +13,7 @@ The official website for [Bannerlord Coop](https://github.com/Bannerlord-Coop-Te
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 22 or newer
 - npm
 - A YouTube Data API v3 key for the media section
 
@@ -25,10 +25,18 @@ Install dependencies:
 npm install
 ```
 
-Create a local environment file named `.env.local`:
+Copy the example environment file and add your project values:
+
+```bash
+cp .env.example .env.local
+```
 
 ```env
 YOUTUBE_API_KEY=your_api_key
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+SUPABASE_SECRET_KEY=your_secret_key
+SUPABASE_ADMIN_EMAILS=owner@example.com
 ```
 
 Environment files are ignored by Git. Do not commit API keys or other secrets.
@@ -57,7 +65,46 @@ npm run lint
 npm run build
 ```
 
+## Authentication
+
+The `/login` page uses [Supabase Auth](https://supabase.com/docs/guides/auth) for Google, Discord, and passwordless email sign-in.
+
+1. Create a Supabase project and copy its project URL and publishable key into `.env.local`.
+2. Enable Google and Discord under **Authentication → Providers** and add the OAuth credentials from each provider.
+3. Add `http://localhost:3000/auth/callback` and your production `/auth/callback` URL to the Supabase redirect allow list under **Authentication → URL Configuration**.
+4. Configure the site URL in Supabase for the environment you are running.
+
+The OAuth providers also require their Supabase callback URL (shown in the provider settings) to be allow-listed in the Google/Discord developer console.
+
+### Member administration
+
+The protected `/admin` page lists Supabase Auth users, searches by member information, and stores one of `Admin`, `Developer`, `Helper`, or `User` in each user's protected `app_metadata.role`.
+
+To enable it:
+
+1. Copy the server-only Supabase secret key from **Project Settings → API Keys** into `SUPABASE_SECRET_KEY`. Never use this value in a `NEXT_PUBLIC_` variable or browser component.
+2. Set `SUPABASE_ADMIN_EMAILS` to the email address of the first administrator. Multiple bootstrap administrators may be comma-separated.
+3. Restart the development server, sign in using that email, and open `/admin`.
+
+Bootstrap administrators always retain admin access, preventing an accidental total lockout. Assigned roles take effect after the user's Auth session refreshes or they sign in again.
+
 ## Environment Variables
+
+### `NEXT_PUBLIC_SUPABASE_URL`
+
+Public URL for the Supabase project used by the browser and server auth clients.
+
+### `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+
+Supabase publishable key. Despite being browser-visible, row-level security and Auth policies must still protect project data. Never substitute the service-role key.
+
+### `SUPABASE_SECRET_KEY`
+
+Server-only Supabase secret key used exclusively by protected admin actions to list users and update `app_metadata`. Never expose or commit it.
+
+### `SUPABASE_ADMIN_EMAILS`
+
+Comma-separated bootstrap administrator emails. These users always have admin access and cannot be demoted through the member administration page.
 
 ### `YOUTUBE_API_KEY`
 
