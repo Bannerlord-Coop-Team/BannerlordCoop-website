@@ -90,10 +90,11 @@ Bootstrap administrators always retain admin access, preventing an accidental to
 
 ### Server hosting preview
 
-The protected `/servers` area is the management preview for the planned hosting service:
+The public `/servers` page provides the server directory, while server management remains role-protected:
 
-- `Admin` and `Server Manager` can view every placeholder hosted server and its assigned account.
-- `Standard Server` and `Premium Server` see the placeholder management experience for their plan.
+- Everyone can browse, search, filter, and join servers without signing in.
+- Signed-in `Admin` and `Server Manager` members can manage every placeholder hosted server and view its assigned account.
+- Signed-in `Standard Server` and `Premium Server` members see the placeholder management experience for their plan.
 - Start, stop, restart, runtime status, and log streaming are simulated in the browser and reset on refresh.
 - The cron-restart toggle reveals an editable five-field UTC expression while enabled, initially `0 4 * * *`.
 

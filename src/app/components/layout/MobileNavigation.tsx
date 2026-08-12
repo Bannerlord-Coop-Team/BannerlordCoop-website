@@ -7,17 +7,16 @@ import { useEffect, useRef, useState } from "react";
 
 const navigation = [
     { label: "Home", href: "/" },
+    { label: "Servers", href: "/servers" },
     { label: "Wiki", href: "/wiki" },
     { label: "Changelog", href: "/changelog" },
     { label: "Support", href: "/support" },
 ] as const;
 
 export function MobileNavigation({
-    hasServerAccess,
     isAdmin,
     isAuthenticated,
 }: {
-    hasServerAccess: boolean;
     isAdmin: boolean;
     isAuthenticated: boolean;
 }) {
@@ -131,17 +130,6 @@ export function MobileNavigation({
                                         </Link>
                                     </li>
                                 ))}
-                                {hasServerAccess && (
-                                    <li>
-                                        <Link
-                                            href="/servers"
-                                            onClick={closeMenu}
-                                            className="block border-b border-white/10 py-4 font-display text-3xl font-semibold uppercase text-gold transition-colors hover:text-foreground focus-visible:outline-none"
-                                        >
-                                            Servers
-                                        </Link>
-                                    </li>
-                                )}
                                 {isAdmin && (
                                     <li>
                                         <Link

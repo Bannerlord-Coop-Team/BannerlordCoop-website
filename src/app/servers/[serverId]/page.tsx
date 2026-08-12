@@ -20,7 +20,6 @@ import {
     Server,
     ShieldCheck,
     UserRound,
-    Users,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -153,10 +152,9 @@ export default async function ServerPage({ params }: ServerPageProps) {
                     </p>
                 </div>
 
-                <section className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Server resources">
+                <section className="mt-8 grid gap-3 sm:grid-cols-3" aria-label="Server resources">
                     <ResourceCard icon={MemoryStick} label="Memory" value={server.memory} />
                     <ResourceCard icon={HardDrive} label="Storage" value={server.storage} />
-                    <ResourceCard icon={Users} label="Player slots" value={`${server.maxPlayers}`} />
                     <ResourceCard icon={Database} label="Backups" value={server.backups} />
                 </section>
 
@@ -167,7 +165,7 @@ export default async function ServerPage({ params }: ServerPageProps) {
                             <div>
                                 <h2 className="font-display text-xl font-semibold text-foreground">Premium management</h2>
                                 <p className="mt-1 text-sm leading-6 text-foreground-muted">
-                                    This preview includes a priority node, increased resources, sixteen player slots, and more frequent backup scheduling.
+                                    This preview includes a priority node, increased resources, and more frequent backup scheduling.
                                 </p>
                             </div>
                         </div>

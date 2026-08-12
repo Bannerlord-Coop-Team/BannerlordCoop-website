@@ -6,7 +6,7 @@
 - Allow Admins and Server Managers to view the complete hosted-server list.
 - Associate every placeholder server with an account and show the account name, email, and identifier in staff fleet and management views.
 - Give Standard Server and Premium Server members a role-appropriate view of their own placeholder server.
-- Protect both the server list and individual management routes on the server.
+- Keep the server directory public while protecting owned-server data and individual management routes on the server.
 - Provide start, stop, and restart controls and a live-looking log console.
 - Provide an accessible toggle for each server's placeholder cron restart schedule and reveal its editable five-field cron expression only while enabled.
 - Keep all server state, schedule settings, and control operations explicitly simulated until VPS infrastructure exists.
@@ -38,7 +38,6 @@ classDiagram
         +string region
         +string ownerName
         +string ownerEmail
-        +number maxPlayers
         +string memory
         +string storage
         +LogEntry[] logs

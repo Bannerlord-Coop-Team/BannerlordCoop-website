@@ -6,6 +6,7 @@ import {
 
 export type ServerPlan = "Standard" | "Premium";
 export type HostedServerStatus = "Online" | "Offline";
+export type ServerConnectionType = "Direct" | "Steam" | "GOG";
 
 export type HostedServerLog = {
     time: string;
@@ -25,17 +26,21 @@ export type RestartSchedule = {
     enabled: boolean;
 };
 
-export type HostedServer = {
+export type DirectoryServer = {
     id: string;
     name: string;
+    status: HostedServerStatus;
+    connectionType: ServerConnectionType;
+    joinUrl: string;
+    players: number;
+};
+
+export type HostedServer = DirectoryServer & {
     assignedAccount: AssignedAccount;
     audience: ServerCustomerRole;
     plan: ServerPlan;
-    status: HostedServerStatus;
     region: string;
     location: string;
-    players: number;
-    maxPlayers: number;
     memory: string;
     storage: string;
     backups: string;
@@ -57,10 +62,11 @@ export const PLACEHOLDER_SERVERS: readonly HostedServer[] = [
         audience: "Standard Server",
         plan: "Standard",
         status: "Online",
+        connectionType: "Direct",
+        joinUrl: "bannerlordcoop://join/calradia-standard-01",
         region: "Europe",
         location: "Frankfurt, DE",
         players: 3,
-        maxPlayers: 8,
         memory: "6 GB",
         storage: "25 GB NVMe",
         backups: "Daily",
@@ -88,10 +94,11 @@ export const PLACEHOLDER_SERVERS: readonly HostedServer[] = [
         audience: "Premium Server",
         plan: "Premium",
         status: "Offline",
+        connectionType: "Steam",
+        joinUrl: "bannerlordcoop://join/vlandian-premium-01",
         region: "North America",
         location: "Virginia, US",
         players: 0,
-        maxPlayers: 16,
         memory: "12 GB",
         storage: "60 GB NVMe",
         backups: "Every 6 hours",
@@ -109,6 +116,21 @@ export const PLACEHOLDER_SERVERS: readonly HostedServer[] = [
         ],
     },
 ] as const;
+
+const PLACEHOLDER_COMMUNITY_SERVERS: readonly DirectoryServer[] = [
+    {
+        id: "battanian-freebooters-01",
+        name: "Battanian Freebooters",
+        status: "Online",
+        connectionType: "GOG",
+        joinUrl: "bannerlordcoop://join/battanian-freebooters-01",
+        players: 5,
+    },
+] as const;
+
+export function getAllServers(): DirectoryServer[] {
+    return [...PLACEHOLDER_SERVERS, ...PLACEHOLDER_COMMUNITY_SERVERS];
+}
 
 export function getServersForRole(role: MemberRole) {
     if (hasServerFleetAccess(role)) return [...PLACEHOLDER_SERVERS];
