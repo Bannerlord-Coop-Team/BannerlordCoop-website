@@ -29,7 +29,7 @@ export function Hero() {
 
                         <h1
                             id="hero-heading"
-                            className="mt-5 font-display text-4xl font-semibold leading-[0.9] tracking-tight text-foreground min-[380px]:text-5xl sm:mt-6 sm:text-6xl md:text-7xl lg:text-8xl 2xl:text-9xl"
+                            className="mt-5 font-display text-4xl font-semibold leading-[0.8] tracking-tight text-foreground min-[380px]:text-5xl sm:mt-6 sm:text-6xl md:text-7xl lg:text-8xl 2xl:text-8xl"
                         >
                             Rally The Warband.
                             <br />
