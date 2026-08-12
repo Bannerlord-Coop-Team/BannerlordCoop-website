@@ -6,7 +6,13 @@ import type {
     RestartSchedule,
 } from "@/app/lib/hosting/servers";
 import { CircleStop, Clock3, Play, RotateCw, Terminal } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+    type FormEvent,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+} from "react";
 
 type RuntimeStatus = HostedServerStatus | "Starting" | "Stopping" | "Restarting";
 type ControlAction = "start" | "stop" | "restart";
@@ -44,6 +50,9 @@ export function ServerControlPanel({
     const [cronRestartEnabled, setCronRestartEnabled] = useState(
         restartSchedule.enabled,
     );
+    const [cronExpression, setCronExpression] = useState(restartSchedule.cron);
+    const [cronDraft, setCronDraft] = useState(restartSchedule.cron);
+    const [cronError, setCronError] = useState("");
     const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
     const logViewport = useRef<HTMLDivElement>(null);
     const isTransitioning = !["Online", "Offline"].includes(status);
@@ -81,9 +90,29 @@ export function ServerControlPanel({
     function toggleCronRestart() {
         const nextEnabled = !cronRestartEnabled;
         setCronRestartEnabled(nextEnabled);
+        if (!nextEnabled) {
+            setCronDraft(cronExpression);
+            setCronError("");
+        }
         addLog(
-            `Scheduled restart ${nextEnabled ? "enabled" : "disabled"} for ${restartSchedule.description} (simulation)`,
+            `Scheduled restart ${nextEnabled ? `enabled with cron ${cronExpression}` : "disabled"} (simulation)`,
             nextEnabled ? "INFO" : "WARN",
+        );
+    }
+
+    function applyCronSchedule(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        const normalizedCron = cronDraft.trim().replace(/\s+/g, " ");
+        if (normalizedCron.split(" ").length !== 5) {
+            setCronError("Enter exactly five cron fields separated by spaces.");
+            return;
+        }
+
+        setCronError("");
+        setCronDraft(normalizedCron);
+        setCronExpression(normalizedCron);
+        addLog(
+            `Scheduled restart cron updated to ${normalizedCron} ${restartSchedule.timezone} (simulation)`,
         );
     }
 
@@ -177,10 +206,7 @@ export function ServerControlPanel({
                                     Cron restart
                                 </h3>
                                 <p className="mt-1 text-xs leading-5 text-foreground-muted">
-                                    {restartSchedule.description}
-                                </p>
-                                <p className="mt-1 font-mono text-[0.68rem] text-foreground-dim">
-                                    {restartSchedule.cron} · {restartSchedule.timezone}
+                                    Automatically restart this server on a five-field cron schedule.
                                 </p>
                             </div>
                         </div>
@@ -207,6 +233,51 @@ export function ServerControlPanel({
                     <p className={`mt-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${cronRestartEnabled ? "text-emerald-300" : "text-foreground-dim"}`} aria-live="polite">
                         Scheduled restart {cronRestartEnabled ? "enabled" : "disabled"}
                     </p>
+
+                    {cronRestartEnabled && (
+                        <form onSubmit={applyCronSchedule} className="mt-4 border-l-2 border-gold/50 pl-4">
+                            <label htmlFor="restart-cron" className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted">
+                                Cron expression
+                            </label>
+                            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                                <input
+                                    id="restart-cron"
+                                    name="restartCron"
+                                    type="text"
+                                    required
+                                    title="Enter a five-field cron expression, such as 0 4 * * *"
+                                    value={cronDraft}
+                                    onChange={(event) => {
+                                        setCronDraft(event.target.value);
+                                        setCronError("");
+                                    }}
+                                    spellCheck={false}
+                                    autoComplete="off"
+                                    className="min-h-10 min-w-0 flex-1 rounded-sm border border-white/15 bg-background px-3 font-mono text-sm text-foreground outline-none transition-colors placeholder:text-foreground-dim hover:border-white/25 focus:border-gold focus:ring-1 focus:ring-gold/30"
+                                    aria-describedby="restart-cron-help"
+                                    aria-invalid={Boolean(cronError)}
+                                />
+                                <span className="inline-flex min-h-10 items-center justify-center rounded-sm border border-white/10 bg-background px-3 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted">
+                                    {restartSchedule.timezone}
+                                </span>
+                                <button
+                                    type="submit"
+                                    disabled={cronDraft.trim().replace(/\s+/g, " ") === cronExpression}
+                                    className="inline-flex min-h-10 items-center justify-center rounded-sm border border-gold/40 bg-gold/10 px-4 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:bg-gold/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:opacity-35"
+                                >
+                                    Apply
+                                </button>
+                            </div>
+                            <p id="restart-cron-help" className="mt-2 text-[0.68rem] leading-5 text-foreground-dim">
+                                Five fields: minute, hour, day of month, month, and day of week. Example: <code className="font-mono text-foreground-muted">0 4 * * *</code>.
+                            </p>
+                            {cronError && (
+                                <p role="alert" className="mt-2 text-xs text-red-300">
+                                    {cronError}
+                                </p>
+                            )}
+                        </form>
+                    )}
                 </div>
 
                 <p className="mt-5 text-xs leading-5 text-foreground-dim">

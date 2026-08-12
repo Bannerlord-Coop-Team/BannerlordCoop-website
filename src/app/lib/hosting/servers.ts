@@ -22,7 +22,6 @@ export type AssignedAccount = {
 export type RestartSchedule = {
     cron: string;
     timezone: string;
-    description: string;
     enabled: boolean;
 };
 
@@ -70,7 +69,6 @@ export const PLACEHOLDER_SERVERS: readonly HostedServer[] = [
         restartSchedule: {
             cron: "0 4 * * *",
             timezone: "UTC",
-            description: "Every day at 04:00 UTC",
             enabled: false,
         },
         logs: [
@@ -102,7 +100,6 @@ export const PLACEHOLDER_SERVERS: readonly HostedServer[] = [
         restartSchedule: {
             cron: "0 4 * * *",
             timezone: "UTC",
-            description: "Every day at 04:00 UTC",
             enabled: false,
         },
         logs: [
