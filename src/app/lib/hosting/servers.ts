@@ -13,10 +13,16 @@ export type HostedServerLog = {
     message: string;
 };
 
+export type AssignedAccount = {
+    id: string;
+    displayName: string;
+    email: string;
+};
+
 export type HostedServer = {
     id: string;
     name: string;
-    ownerLabel: string;
+    assignedAccount: AssignedAccount;
     audience: ServerCustomerRole;
     plan: ServerPlan;
     status: HostedServerStatus;
@@ -36,7 +42,11 @@ export const PLACEHOLDER_SERVERS: readonly HostedServer[] = [
     {
         id: "calradia-standard-01",
         name: "Calradia Company",
-        ownerLabel: "Standard subscriber (placeholder)",
+        assignedAccount: {
+            id: "account-demo-standard",
+            displayName: "Arenicos Company",
+            email: "standard.demo@bannerlordcoop.test",
+        },
         audience: "Standard Server",
         plan: "Standard",
         status: "Online",
@@ -58,7 +68,11 @@ export const PLACEHOLDER_SERVERS: readonly HostedServer[] = [
     {
         id: "vlandian-premium-01",
         name: "Vlandian Vanguard",
-        ownerLabel: "Premium subscriber (placeholder)",
+        assignedAccount: {
+            id: "account-demo-premium",
+            displayName: "Derthert Vanguard",
+            email: "premium.demo@bannerlordcoop.test",
+        },
         audience: "Premium Server",
         plan: "Premium",
         status: "Offline",

@@ -3,6 +3,7 @@ import {
     getMemberRole,
     hasHostedServerAccess,
 } from "@/app/lib/auth/access";
+import { hasServerFleetAccess } from "@/app/lib/auth/roles";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
@@ -12,10 +13,13 @@ import {
     Crown,
     Database,
     HardDrive,
+    KeyRound,
+    Mail,
     MapPin,
     MemoryStick,
     Server,
     ShieldCheck,
+    UserRound,
     Users,
 } from "lucide-react";
 import type { Metadata } from "next";
@@ -45,6 +49,7 @@ export default async function ServerPage({ params }: ServerPageProps) {
     if (!server) redirect("/servers");
 
     const isPremium = server.plan === "Premium";
+    const isFleetView = hasServerFleetAccess(role);
 
     return (
         <main className="min-h-svh bg-background">
@@ -105,6 +110,40 @@ export default async function ServerPage({ params }: ServerPageProps) {
                         </div>
                     </div>
                 </section>
+
+                {isFleetView && (
+                    <section className="mt-8 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="account-assignment-heading">
+                        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex items-start gap-3">
+                                <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-gold/25 bg-gold/10 text-gold">
+                                    <UserRound aria-hidden="true" className="size-4" />
+                                </span>
+                                <div>
+                                    <p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-foreground-muted">
+                                        Assigned account
+                                    </p>
+                                    <h2 id="account-assignment-heading" className="mt-1 font-display text-2xl font-semibold text-foreground">
+                                        {server.assignedAccount.displayName}
+                                    </h2>
+                                </div>
+                            </div>
+                            <dl className="grid gap-4 sm:grid-cols-2 lg:min-w-150">
+                                <div>
+                                    <dt className="flex items-center gap-1.5 font-label text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-foreground-dim">
+                                        <Mail aria-hidden="true" className="size-3.5" /> Account email
+                                    </dt>
+                                    <dd className="mt-1 break-all text-sm text-foreground-muted">{server.assignedAccount.email}</dd>
+                                </div>
+                                <div>
+                                    <dt className="flex items-center gap-1.5 font-label text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-foreground-dim">
+                                        <KeyRound aria-hidden="true" className="size-3.5" /> Account ID
+                                    </dt>
+                                    <dd className="mt-1 break-all font-mono text-xs text-foreground-muted">{server.assignedAccount.id}</dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </section>
+                )}
 
                 <div className="mt-8 flex gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3.5 text-sm text-foreground-muted">
                     <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />

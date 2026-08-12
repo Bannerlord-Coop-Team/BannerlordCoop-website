@@ -4,6 +4,7 @@
 
 - Add `Server Manager`, `Standard Server`, and `Premium Server` member roles alongside the existing roles.
 - Allow Admins and Server Managers to view the complete hosted-server list.
+- Associate every placeholder server with an account and show the account name, email, and identifier in staff fleet and management views.
 - Give Standard Server and Premium Server members a role-appropriate view of their own placeholder server.
 - Protect both the server list and individual management routes on the server.
 - Provide start, stop, and restart controls and a live-looking log console.
@@ -12,7 +13,7 @@
 
 ## Minimum-complexity design
 
-Use typed, in-process placeholder records rather than adding a database or API prematurely. Server Components enforce role access and select the records a member may see. A single Client Component owns temporary control state and simulated logs; refreshing resets it. A later infrastructure adapter can replace the placeholder repository and client simulation without changing the routes or page composition.
+Use typed, in-process placeholder records rather than adding a database or API prematurely. Each record includes a typed placeholder account assignment that is exposed only in Admin and Server Manager fleet views. Server Components enforce role access and select the records a member may see. A single Client Component owns temporary control state and simulated logs; refreshing resets it. A later infrastructure adapter can replace the placeholder repository, account assignment source, and client simulation without changing the routes or page composition.
 
 ## Type relationships
 
@@ -41,6 +42,11 @@ classDiagram
         +string storage
         +LogEntry[] logs
     }
+    class AssignedAccount {
+        +string id
+        +string displayName
+        +string email
+    }
     class ServerPlan {
         <<union>>
         Standard
@@ -59,6 +65,7 @@ classDiagram
         +stop()
         +restart()
     }
+    HostedServer --> AssignedAccount
     HostedServer --> ServerPlan
     HostedServer --> ServerRuntimeStatus
     ServerControlPanel --> HostedServer
@@ -87,6 +94,7 @@ flowchart LR
 - Admin and Server Manager access helpers return staff-level server access.
 - Standard and Premium roles receive customer server access; unrelated roles do not.
 - Server list and detail routes compile and enforce authentication/authorization server-side.
+- Staff fleet and management views show a distinct account assignment for each server.
 - Management controls visibly update local status and append simulated logs.
 - The UI clearly labels placeholder data and unavailable infrastructure.
 - `npm test`, `npm run lint`, and `npm run build` pass.

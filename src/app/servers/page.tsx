@@ -13,6 +13,7 @@ import {
     MapPin,
     Server,
     ShieldCheck,
+    UserRound,
     Users,
 } from "lucide-react";
 import type { Metadata } from "next";
@@ -128,7 +129,18 @@ export default async function ServersPage() {
                                                 {server.status}
                                             </span>
                                         </div>
-                                        <p className="mt-1 text-xs text-foreground-muted">{server.ownerLabel}</p>
+                                        {isFleetView ? (
+                                            <div className="mt-2 flex min-w-0 items-center gap-2 text-xs text-foreground-muted">
+                                                <UserRound aria-hidden="true" className="size-3.5 shrink-0 text-gold-muted" />
+                                                <span className="font-medium text-foreground">{server.assignedAccount.displayName}</span>
+                                                <span aria-hidden="true" className="text-foreground-dim">•</span>
+                                                <span className="truncate">{server.assignedAccount.email}</span>
+                                            </div>
+                                        ) : (
+                                            <p className="mt-1 text-xs text-foreground-muted">
+                                                Assigned to your {server.plan.toLowerCase()} account
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
