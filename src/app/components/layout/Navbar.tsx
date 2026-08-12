@@ -1,6 +1,9 @@
+import { signOut } from "@/app/auth/actions";
+import { MobileNavigation } from "@/app/components/layout/MobileNavigation";
+import { hasAdminAccess } from "@/app/lib/auth/access";
+import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { Swords } from "lucide-react";
 import Link from "next/link";
-import { MobileNavigation } from "@/app/components/layout/MobileNavigation";
 
 const navigation = [
     {
@@ -21,7 +24,19 @@ const navigation = [
     },
 ] as const;
 
-export function Navbar() {
+export async function Navbar() {
+    let isAuthenticated = false;
+    let isAdmin = false;
+
+    try {
+        const supabase = await getSupabaseServerClient();
+        const { data } = await supabase.auth.getUser();
+        isAuthenticated = data.user !== null;
+        isAdmin = data.user ? hasAdminAccess(data.user) : false;
+    } catch {
+        // Keep public navigation usable when authentication is not configured.
+    }
+
     return (
         <header className="border-b border-white/10 bg-background">
             <div className="site-container flex h-15 items-center justify-between gap-4">
@@ -42,7 +57,7 @@ export function Navbar() {
                 </Link>
 
                 <nav aria-label="Primary navigation" className="hidden lg:block">
-                    <ul className="flex items-center gap-8">
+                    <ul className="flex items-center gap-5 xl:gap-8">
                         {navigation.map((item) => (
                             <li key={item.href}>
                                 <Link
@@ -53,6 +68,17 @@ export function Navbar() {
                                 </Link>
                             </li>
                         ))}
+
+                        {isAdmin && (
+                            <li>
+                                <Link
+                                    href="/admin"
+                                    className="font-sans text-xs uppercase tracking-[0.2em] text-gold transition-colors duration-300 hover:text-foreground focus-visible:outline-none"
+                                >
+                                    Admin
+                                </Link>
+                            </li>
+                        )}
 
                         <li>
                             <a
@@ -65,17 +91,38 @@ export function Navbar() {
                             </a>
                         </li>
 
-                        <li>
+                        <li className="flex items-center gap-3">
                             <a
                                 href="#download"
-                                className="inline-flex min-h-10 items-center rounded-sm border border-crimson bg-crimson px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-5 sm:py-2.5 sm:tracking-[0.16em]"
+                                className="inline-flex min-h-10 items-center rounded-sm border border-crimson bg-crimson px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]"
                             >
                                 Download
                             </a>
+
+                            {isAuthenticated ? (
+                                <form action={signOut}>
+                                    <button
+                                        type="submit"
+                                        className="inline-flex min-h-10 items-center rounded-sm border border-crimson bg-transparent px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-foreground transition-colors hover:border-crimson-hover hover:bg-crimson/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]"
+                                    >
+                                        Log out
+                                    </button>
+                                </form>
+                            ) : (
+                                <Link
+                                    href="/login"
+                                    className="inline-flex min-h-10 items-center rounded-sm border border-crimson bg-transparent px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-foreground transition-colors hover:border-crimson-hover hover:bg-crimson/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]"
+                                >
+                                    Sign in
+                                </Link>
+                            )}
                         </li>
                     </ul>
                 </nav>
-                <MobileNavigation />
+                <MobileNavigation
+                    isAdmin={isAdmin}
+                    isAuthenticated={isAuthenticated}
+                />
             </div>
         </header>
     );

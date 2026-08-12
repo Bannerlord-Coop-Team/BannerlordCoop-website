@@ -11,6 +11,9 @@
 # testing
 /coverage
 
+# local agent artifacts
+/.pi-subagents/
+
 # next.js
 /.next/
 /out/
@@ -30,6 +33,7 @@ yarn-error.log*
 
 # environment files
 .env*
+!.env.example
 
 # vercel
 .vercel

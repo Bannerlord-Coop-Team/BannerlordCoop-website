@@ -1,5 +1,6 @@
 "use client";
 
+import { signOut } from "@/app/auth/actions";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -11,7 +12,13 @@ const navigation = [
     { label: "Support", href: "/support" },
 ] as const;
 
-export function MobileNavigation() {
+export function MobileNavigation({
+    isAdmin,
+    isAuthenticated,
+}: {
+    isAdmin: boolean;
+    isAuthenticated: boolean;
+}) {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -122,6 +129,17 @@ export function MobileNavigation() {
                                         </Link>
                                     </li>
                                 ))}
+                                {isAdmin && (
+                                    <li>
+                                        <Link
+                                            href="/admin"
+                                            onClick={closeMenu}
+                                            className="block border-b border-white/10 py-4 font-display text-3xl font-semibold uppercase text-gold transition-colors hover:text-foreground focus-visible:outline-none"
+                                        >
+                                            Admin
+                                        </Link>
+                                    </li>
+                                )}
                             </ul>
                         </nav>
 
@@ -142,6 +160,24 @@ export function MobileNavigation() {
                             >
                                 Download
                             </a>
+                            {isAuthenticated ? (
+                                <form action={signOut} onSubmit={closeMenu}>
+                                    <button
+                                        type="submit"
+                                        className="inline-flex min-h-12 w-full items-center justify-center rounded-sm border border-crimson bg-transparent font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors hover:border-crimson-hover hover:bg-crimson/15 hover:text-white"
+                                    >
+                                        Log out
+                                    </button>
+                                </form>
+                            ) : (
+                                <Link
+                                    href="/login"
+                                    onClick={closeMenu}
+                                    className="inline-flex min-h-12 items-center justify-center rounded-sm border border-crimson bg-transparent font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors hover:border-crimson-hover hover:bg-crimson/15 hover:text-white"
+                                >
+                                    Sign in
+                                </Link>
+                            )}
                         </div>
                     </motion.div>
                 </motion.div>
