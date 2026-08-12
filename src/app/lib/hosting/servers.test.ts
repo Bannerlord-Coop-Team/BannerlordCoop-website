@@ -1,10 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getServerForRole, getServersForRole, PLACEHOLDER_SERVERS } from "./servers";
+import {
+    getAllServers,
+    getServerForRole,
+    getServersForRole,
+    PLACEHOLDER_SERVERS,
+} from "./servers";
 
 test("fleet roles can see every placeholder server", () => {
     assert.equal(getServersForRole("Admin").length, PLACEHOLDER_SERVERS.length);
     assert.equal(getServersForRole("Server Manager").length, PLACEHOLDER_SERVERS.length);
+});
+
+test("the directory includes hosted and community servers for every connection type", () => {
+    const directory = getAllServers();
+
+    assert.ok(directory.length > PLACEHOLDER_SERVERS.length);
+    assert.deepEqual(
+        new Set(directory.map((server) => server.connectionType)),
+        new Set(["Direct", "Steam", "GOG"]),
+    );
+    assert.ok(
+        directory.every((server) =>
+            server.joinUrl.startsWith("bannerlordcoop://join/"),
+        ),
+    );
 });
 
 test("subscriber roles only see their own plan placeholder", () => {
