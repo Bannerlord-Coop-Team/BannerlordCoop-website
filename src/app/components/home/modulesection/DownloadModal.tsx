@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 const downloadSources = [
     {
         name: "Guided Installer",
-        description: "Supporter nightly: verifies your Discord role or sponsored seat during every install/update. Later server updates download only changed files.",
+        description: "Supporter and Tester nightly: verifies your Discord role or sponsored seat during every install/update. Later server updates download only changed files.",
         href: "/server/install.ps1",
         recommended: true,
         download: true,
@@ -140,9 +140,9 @@ export function DownloadModal() {
                                 id="download-modal-description"
                                 className="mt-4 max-w-xl font-sans text-sm leading-6 text-foreground-muted sm:text-base"
                             >
-                                Public releases are available below. Nightly builds require a
-                                current Patreon, Afdian, or Boosty supporter role, or one of a
-                                supporter&apos;s 10 sponsored Discord-account seats.
+                                Public releases are available below. Nightly builds require the
+                                Tester role, a Patreon, Boosty, or Afdian supporter role, or one
+                                of an eligible member&apos;s 10 sponsored Discord-account seats.
                             </p>
 
                             <div className="mt-6 grid gap-3 sm:mt-8">

@@ -4,6 +4,11 @@ export const SUPPORTER_ROLE_IDS = Object.freeze([
     "1532744756151455834", // Boosty supporter
     "1533090199104524338", // Afdian supporter
 ]);
+export const TESTER_ROLE_ID = "710222948375593010";
+export const NIGHTLY_ACCESS_ROLE_IDS = Object.freeze([
+    ...SUPPORTER_ROLE_IDS,
+    TESTER_ROLE_ID,
+]);
 export const SPONSORED_ACCOUNT_LIMIT = 10;
 export const DEVICE_SESSION_SECONDS = 10 * 60;
 export const DOWNLOAD_SESSION_SECONDS = 60 * 60;
@@ -12,8 +17,8 @@ export const DISCORD_OAUTH_SCOPES = "identify guilds.members.read";
 const SNOWFLAKE = /^\d{17,20}$/;
 const OBJECT_KEY = /^(?:(?:nightly|release)\/[A-Za-z0-9][A-Za-z0-9._/-]{0,1022}|windows\/base\/v1\/[a-f0-9]{64}\/[a-f0-9]{64}\/server-base\.7z)$/;
 
-export function hasSupporterRole(roleIds: readonly string[]): boolean {
-    return roleIds.some((roleId) => SUPPORTER_ROLE_IDS.includes(roleId));
+export function hasNightlyAccessRole(roleIds: readonly string[]): boolean {
+    return roleIds.some((roleId) => NIGHTLY_ACCESS_ROLE_IDS.includes(roleId));
 }
 
 export function isDiscordSnowflake(value: unknown): value is string {

@@ -3,7 +3,7 @@ import test from "node:test";
 import {
     SPONSORED_ACCOUNT_LIMIT,
     artifactKeyFromUrl,
-    hasSupporterRole,
+    hasNightlyAccessRole,
     isAllowedArtifactKey,
     rewriteManifestArtifactUrls,
 } from "./core";
@@ -12,11 +12,12 @@ import { nightlyAccessPage, page } from "./index";
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
 
-test("only the fixed Patreon, Boosty, and Afdian roles grant direct access", () => {
-    assert.equal(hasSupporterRole(["1532151760012050452"]), true);
-    assert.equal(hasSupporterRole(["1532744756151455834"]), true);
-    assert.equal(hasSupporterRole(["1533090199104524338"]), true);
-    assert.equal(hasSupporterRole(["710222948375593010"]), false);
+test("supporters and Testers get nightly access and share the same seat limit", () => {
+    assert.equal(hasNightlyAccessRole(["1532151760012050452"]), true);
+    assert.equal(hasNightlyAccessRole(["1532744756151455834"]), true);
+    assert.equal(hasNightlyAccessRole(["1533090199104524338"]), true);
+    assert.equal(hasNightlyAccessRole(["710222948375593010"]), true);
+    assert.equal(hasNightlyAccessRole(["709516043332354119"]), false);
     assert.equal(SPONSORED_ACCOUNT_LIMIT, 10);
 });
 
@@ -75,6 +76,7 @@ test("gateway pages use the site brand without weakening page security", () => {
 
 test("gateway eligibility copy names every supported membership platform", () => {
     const markup = nightlyAccessPage();
-    assert.match(markup, /for Patreon, Boosty, and Afdian supporters and their sponsored friends/);
+    assert.match(markup, /for Patreon, Boosty, and Afdian supporters, Testers, and sponsored friends/);
+    assert.match(markup, /Tester role/);
     assert.doesNotMatch(markup, /community supporters/i);
 });

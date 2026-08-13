@@ -4,7 +4,7 @@ import {
     DISCORD_OAUTH_SCOPES,
     DOWNLOAD_SESSION_SECONDS,
     SPONSORED_ACCOUNT_LIMIT,
-    hasSupporterRole,
+    hasNightlyAccessRole,
     isAllowedArtifactKey,
     isDiscordSnowflake,
     rewriteManifestArtifactUrls,
@@ -202,7 +202,7 @@ async function completeOAuth(url: URL, env: Env): Promise<Response> {
     ).bind(stateHash, nowSeconds()).first();
     if (portalState !== null) {
         await env.DB.prepare("DELETE FROM oauth_states WHERE state_hash = ?").bind(stateHash).run();
-        if (!hasSupporterRole(member.roles)) return html(errorPage("A Patreon, Boosty, or Afdian supporter role is required."), 403);
+        if (!hasNightlyAccessRole(member.roles)) return html(errorPage("The Tester role or a Patreon, Boosty, or Afdian supporter role is required."), 403);
         await storeSupporterGrant(env, user.id, token.refresh_token);
         const sponsorSession = randomToken(32);
         const now = nowSeconds();
@@ -224,7 +224,7 @@ async function completeOAuth(url: URL, env: Env): Promise<Response> {
     if (device === null || device.expires_at < nowSeconds() || !["pending", "awaiting-sponsor"].includes(device.status)) {
         return html(errorPage("That installer authorization has expired."), 400);
     }
-    if (hasSupporterRole(member.roles)) {
+    if (hasNightlyAccessRole(member.roles)) {
         await storeSupporterGrant(env, user.id, token.refresh_token);
         await env.DB.prepare(
             "UPDATE device_sessions SET status = 'approved', discord_user_id = ?, sponsor_discord_user_id = ?, authorized_at = ? WHERE id = ?",
@@ -282,7 +282,7 @@ async function claimSponsorship(request: Request, env: Env): Promise<Response> {
         "SELECT supporter_discord_user_id FROM sponsorships WHERE sponsored_discord_user_id = ?",
     ).bind(device.discord_user_id).first<{ supporter_discord_user_id: string }>();
     if (!inserted.success || seat?.supporter_discord_user_id !== sponsor.supporter_discord_user_id) {
-        return html(errorPage("That supporter has already used all 10 sponsored-account seats."), 409);
+        return html(errorPage("That eligible member has already used all 10 sponsored-account seats."), 409);
     }
     await env.DB.prepare(
         "UPDATE device_sessions SET status = 'approved', sponsor_discord_user_id = ?, authorized_at = ? WHERE id = ?",
@@ -297,9 +297,9 @@ async function sponsorPortal(request: Request, env: Env): Promise<Response> {
             "Share nightlies with friends",
             "Supporter portal",
             `<h1>Bring your <span>warband.</span></h1>
-            <p class="lede">Patreon, Boosty, and Afdian supporters can share nightly access with up to 10 Discord accounts.</p>
+            <p class="lede">Testers and Patreon, Boosty, or Afdian supporters can each share nightly access with up to 10 Discord accounts.</p>
             <div class="actions"><a class="button" href="/sponsor/login">Continue with Discord <span aria-hidden="true">&rarr;</span></a></div>
-            <p class="fine-print">We verify your Patreon, Boosty, or Afdian Discord role when you sign in and whenever a sponsored friend installs or updates.</p>`,
+            <p class="fine-print">We verify your Tester or Patreon, Boosty, or Afdian Discord role when you sign in and whenever a sponsored friend installs or updates.</p>`,
             "portal",
         ));
     }
@@ -312,7 +312,7 @@ async function sponsorPortal(request: Request, env: Env): Promise<Response> {
     return html(page(
         `Sponsored accounts (${rows.results.length}/${SPONSORED_ACCOUNT_LIMIT})`,
         "Supporter portal",
-        `<div class="portal-heading"><div><h1>Your <span>warband.</span></h1><p class="lede">Create a code for friends to use during installation. Their access remains tied to your current Patreon, Boosty, or Afdian Discord role.</p></div><div class="seat-count" aria-label="${seatCount} of ${SPONSORED_ACCOUNT_LIMIT} seats used"><strong>${seatCount}</strong><span>of ${SPONSORED_ACCOUNT_LIMIT}<br>seats used</span></div></div>
+        `<div class="portal-heading"><div><h1>Your <span>warband.</span></h1><p class="lede">Create a code for friends to use during installation. Their access remains tied to your current Tester or Patreon, Boosty, or Afdian Discord role.</p></div><div class="seat-count" aria-label="${seatCount} of ${SPONSORED_ACCOUNT_LIMIT} seats used"><strong>${seatCount}</strong><span>of ${SPONSORED_ACCOUNT_LIMIT}<br>seats used</span></div></div>
         <form class="code-action" method="post" action="/v1/sponsor/code"><button class="button">${seatCount === 0 ? "Create sponsor code" : "Create a new code"} <span aria-hidden="true">&rarr;</span></button><p>Creating a new code disables the previous one. Existing sponsored accounts keep access.</p></form>
         <section class="seat-section" aria-labelledby="seat-heading"><div class="section-heading"><h2 id="seat-heading">Sponsored accounts</h2><span>${SPONSORED_ACCOUNT_LIMIT - seatCount} open</span></div><ul class="seat-list">${seats || `<li class="empty-state"><strong>No seats claimed yet.</strong><span>Create a sponsor code and send it to a friend you trust.</span></li>`}</ul></section>`,
         "portal portal-wide",
@@ -433,7 +433,7 @@ async function assertSponsorEligible(env: Env, supporterId: string): Promise<voi
         `/users/@me/guilds/${DISCORD_GUILD_ID}/member`,
         token.access_token,
     );
-    if (!hasSupporterRole(member.roles)) {
+    if (!hasNightlyAccessRole(member.roles)) {
         await env.DB.batch([
             env.DB.prepare("DELETE FROM download_sessions WHERE supporter_discord_user_id = ?").bind(supporterId),
             env.DB.prepare("DELETE FROM supporter_grants WHERE supporter_discord_user_id = ?").bind(supporterId),
@@ -608,11 +608,11 @@ function errorPage(message: string): string {
 }
 
 function sponsorClaimPage(deviceId: string, username: string): string {
-    return page("Sponsor required", "Nightly installer", `<p class="account-chip"><span aria-hidden="true"></span>Signed in as <strong>${escapeHtml(username)}</strong></p><h1>One more step to <span>ride.</span></h1><p class="lede">This Discord account does not currently have a Patreon, Boosty, or Afdian supporter role.</p><div class="divider"><span>Have a sponsor?</span></div><form class="claim-form" method="post" action="/v1/sponsorship/claim"><input type="hidden" name="device_id" value="${escapeHtml(deviceId)}"><label for="sponsor-code">Enter your friend&rsquo;s sponsor code</label><div class="field-row"><input id="sponsor-code" name="sponsor_code" required maxlength="128" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-describedby="sponsor-help"><button class="button">Claim a seat <span aria-hidden="true">&rarr;</span></button></div><p id="sponsor-help" class="field-help">Your friend must have a Patreon, Boosty, or Afdian supporter role and an open seat. Access is checked again on every install and update.</p></form><div class="support-note"><strong>Already support the project?</strong><span>Make sure the correct Discord account is connected to your Patreon, Boosty, or Afdian membership and has its supporter role, then restart the installer.</span></div>`, "claim-page");
+    return page("Sponsor required", "Nightly installer", `<p class="account-chip"><span aria-hidden="true"></span>Signed in as <strong>${escapeHtml(username)}</strong></p><h1>One more step to <span>ride.</span></h1><p class="lede">This Discord account does not currently have the Tester role or a Patreon, Boosty, or Afdian supporter role.</p><div class="divider"><span>Have a sponsor?</span></div><form class="claim-form" method="post" action="/v1/sponsorship/claim"><input type="hidden" name="device_id" value="${escapeHtml(deviceId)}"><label for="sponsor-code">Enter your friend&rsquo;s sponsor code</label><div class="field-row"><input id="sponsor-code" name="sponsor_code" required maxlength="128" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-describedby="sponsor-help"><button class="button">Claim a seat <span aria-hidden="true">&rarr;</span></button></div><p id="sponsor-help" class="field-help">Your friend must have a Patreon, Boosty, or Afdian supporter role and an open seat. Access is checked again on every install and update.</p></form><div class="support-note"><strong>Already eligible?</strong><span>Make sure the correct Discord account has the Tester role or is connected to your Patreon, Boosty, or Afdian membership, then restart the installer.</span></div>`, "claim-page");
 }
 
 export function nightlyAccessPage(): string {
-    return page("Nightly Access", "Supporter builds", `<h1>Test tomorrow&rsquo;s battles <span>today.</span></h1><p class="lede">Nightly builds are early, frequently updated versions of Bannerlord Coop for Patreon, Boosty, and Afdian supporters and their sponsored friends.</p><div class="access-grid"><div><span class="step-number">01</span><strong>Run the installer</strong><p>Start the guided installer from the official Bannerlord Coop website.</p></div><div><span class="step-number">02</span><strong>Verify Discord</strong><p>We check your Patreon, Boosty, or Afdian supporter role—or a sponsored seat—at install and update time.</p></div></div><div class="actions"><a class="button" href="/sponsor">Manage sponsored accounts <span aria-hidden="true">&rarr;</span></a><a class="quiet-link" href="https://discord.gg/bannerlordcoop">Join the Discord</a></div>`, "landing-page");
+    return page("Nightly Access", "Supporter &amp; Tester builds", `<h1>Test tomorrow&rsquo;s battles <span>today.</span></h1><p class="lede">Nightly builds are early, frequently updated versions of Bannerlord Coop for Patreon, Boosty, and Afdian supporters, Testers, and sponsored friends.</p><div class="access-grid"><div><span class="step-number">01</span><strong>Run the installer</strong><p>Start the guided installer from the official Bannerlord Coop website.</p></div><div><span class="step-number">02</span><strong>Verify Discord</strong><p>We check for the Tester role, a Patreon, Boosty, or Afdian supporter role, or a sponsored seat at install and update time.</p></div></div><div class="actions"><a class="button" href="/sponsor">Manage sponsored accounts <span aria-hidden="true">&rarr;</span></a><a class="quiet-link" href="https://discord.gg/bannerlordcoop">Join the Discord</a></div>`, "landing-page");
 }
 
 const GATEWAY_CSS = `

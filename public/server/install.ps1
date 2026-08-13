@@ -47,7 +47,7 @@ function Read-InstallChoice {
 function Get-NightlyAccessToken {
     Write-Host ''
     Write-Host 'Nightly access verification' -ForegroundColor Cyan
-    Write-Host 'Nightly builds are for current Patreon, Afdian, or Boosty supporters and up to 10 Discord accounts sponsored by each supporter.'
+    Write-Host 'Nightly builds are for Testers, current Patreon, Boosty, or Afdian supporters, and up to 10 Discord accounts sponsored by each eligible member.'
     Write-Host 'A browser will open so Discord can verify access for this install or update.'
 
     $session = Invoke-RestMethod -Method Post -Uri "$($script:NightlyGatewayUri)/v1/device/sessions" `
@@ -79,7 +79,7 @@ function Get-NightlyAccessToken {
             try { $statusCode = [int]$_.Exception.Response.StatusCode } catch { }
             if ($statusCode -eq 428) { continue }
             if ($statusCode -eq 403) {
-                throw 'Discord access was denied. A current supporter role or an active sponsored-account seat is required.'
+                throw 'Discord access was denied. The Tester role, a current Patreon, Boosty, or Afdian supporter role, or an active sponsored-account seat is required.'
             }
             if ($statusCode -eq 400 -or $statusCode -eq 401) {
                 throw 'The Discord verification expired. Run the installer again to start a new check.'
@@ -693,7 +693,7 @@ function Install-Server {
 
 function Invoke-BannerlordCoopInstaller {
     Write-Host 'BannerlordCoop nightly installer' -ForegroundColor Cyan
-    Write-Host 'This downloads and installs the latest completed supporter nightly for you.'
+    Write-Host 'This downloads and installs the latest completed Supporter and Tester nightly for you.'
     Write-Host ''
 
     $choice = Read-InstallChoice

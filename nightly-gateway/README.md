@@ -1,19 +1,21 @@
-# Patron nightly access gateway
+# Supporter and Tester nightly access gateway
 
 The installer script is intentionally public. It carries no Discord, R2, or
 shared download secret. Every install or update starts a new device session,
 opens Discord OAuth in the user's browser, and receives a short-lived bearer
 token only after the gateway verifies one of these conditions:
 
-- the signed-in Discord member currently has the fixed Patreon, Afdian, or
-  Boosty supporter role in the Bannerlord Coop guild; or
-- the signed-in Discord account occupies one of a current supporter's ten
+- the signed-in Discord member currently has the fixed Tester, Patreon, Boosty,
+  or Afdian role in the Bannerlord Coop guild; or
+- the signed-in Discord account occupies one of a current eligible member's ten
   sponsored-account seats.
 
 Sponsored access is attached to the friend's Discord account, not to a machine
-or a download count. The supporter's encrypted, revocable Discord refresh grant
-is used to re-check the supporter's role before each installer session is
-approved. Removing a sponsored account revokes its active gateway sessions.
+or a download count. The eligible member's encrypted, revocable Discord refresh
+grant is used to re-check their Tester or supporter role before each installer
+session is approved. Removing a sponsored account revokes its active gateway
+sessions. Every eligible member has one shared ten-seat pool regardless of how
+many qualifying roles they hold.
 
 This controls the official installer and download paths. A person who has
 legitimately received the archive bytes can still copy those bytes; client-side

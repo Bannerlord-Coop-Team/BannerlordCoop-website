@@ -1,7 +1,8 @@
 # Bannerlord Coop Website
 
-> Nightly builds are restricted to current Patreon, Afdian, and Boosty
-> supporters plus up to ten sponsored Discord accounts per supporter. The
+> Nightly builds are restricted to Testers and current Patreon, Boosty, and
+> Afdian supporters, plus up to ten sponsored Discord accounts per eligible
+> member. The
 > public installer verifies that entitlement through the private download
 > gateway on every run. See [nightly-gateway/README.md](nightly-gateway/README.md)
 > for the security boundary and rollout order.
