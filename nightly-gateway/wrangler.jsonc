@@ -8,6 +8,9 @@
   "workers_dev": true,
   "preview_urls": false,
   "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "assets": {
+    "directory": "./public"
+  },
   "vars": {
     "PUBLIC_ORIGIN": "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev",
     "LEGACY_R2_ORIGIN": "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev",

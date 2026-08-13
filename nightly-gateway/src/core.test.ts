@@ -5,6 +5,7 @@ import {
     artifactKeyFromUrl,
     hasNightlyAccessRole,
     isAllowedArtifactKey,
+    isSameOriginFormRequest,
     rewriteManifestArtifactUrls,
 } from "./core";
 import { nightlyAccessPage, page } from "./index";
@@ -19,6 +20,14 @@ test("supporters and Testers get nightly access and share the same seat limit", 
     assert.equal(hasNightlyAccessRole(["710222948375593010"]), true);
     assert.equal(hasNightlyAccessRole(["709516043332354119"]), false);
     assert.equal(SPONSORED_ACCOUNT_LIMIT, 10);
+});
+
+test("browser forms allow same-origin fetch metadata without allowing cross-site posts", () => {
+    assert.equal(isSameOriginFormRequest(gateway, null, gateway), true);
+    assert.equal(isSameOriginFormRequest(null, "same-origin", gateway), true);
+    assert.equal(isSameOriginFormRequest(null, "cross-site", gateway), false);
+    assert.equal(isSameOriginFormRequest("null", "same-origin", gateway), false);
+    assert.equal(isSameOriginFormRequest("https://attacker.invalid", "same-origin", gateway), false);
 });
 
 test("artifact keys are limited to the two release namespaces", () => {
@@ -79,6 +88,7 @@ test("gateway eligibility copy names every supported membership platform", () =>
     assert.match(markup, /for Patreon, Boosty, and Afdian supporters and Testers, plus their sponsored friends/);
     assert.match(markup, /Tester role/);
     assert.match(markup, /Supporter &amp; Tester builds/);
+    assert.match(markup, /href="\/install\.ps1" download="BannerlordCoop-Nightly-Installer\.ps1"/);
     assert.doesNotMatch(markup, /&amp;amp;/);
     assert.doesNotMatch(markup, /community supporters/i);
 });

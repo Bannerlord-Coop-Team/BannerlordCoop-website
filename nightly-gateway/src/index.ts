@@ -7,6 +7,7 @@ import {
     hasNightlyAccessRole,
     isAllowedArtifactKey,
     isDiscordSnowflake,
+    isSameOriginFormRequest,
     rewriteManifestArtifactUrls,
 } from "./core";
 
@@ -572,7 +573,11 @@ function assertConfiguration(env: Env): void {
 }
 
 function assertSameOrigin(request: Request, env: Env): void {
-    if (request.headers.get("origin") !== env.PUBLIC_ORIGIN) throw new GatewayError(403, "origin_invalid");
+    if (!isSameOriginFormRequest(
+        request.headers.get("origin"),
+        request.headers.get("sec-fetch-site"),
+        env.PUBLIC_ORIGIN,
+    )) throw new GatewayError(403, "origin_invalid");
 }
 
 function sponsorCookie(token: string, maxAge: number): string {
@@ -612,7 +617,7 @@ function sponsorClaimPage(deviceId: string, username: string): string {
 }
 
 export function nightlyAccessPage(): string {
-    return page("Nightly Access", "Supporter & Tester builds", `<h1>Test tomorrow&rsquo;s battles <span>today.</span></h1><p class="lede">Nightly builds are early, frequently updated versions of Bannerlord Coop for Patreon, Boosty, and Afdian supporters and Testers, plus their sponsored friends.</p><div class="access-grid"><div><span class="step-number">01</span><strong>Run the installer</strong><p>Start the guided installer from the official Bannerlord Coop website.</p></div><div><span class="step-number">02</span><strong>Verify Discord</strong><p>We check for the Tester role, a Patreon, Boosty, or Afdian supporter role, or a sponsored seat at install and update time.</p></div></div><div class="actions"><a class="button" href="/sponsor">Manage sponsored accounts <span aria-hidden="true">&rarr;</span></a><a class="quiet-link" href="https://discord.gg/bannerlordcoop">Join the Discord</a></div>`, "landing-page");
+    return page("Nightly Access", "Supporter & Tester builds", `<h1>Test tomorrow&rsquo;s battles <span>today.</span></h1><p class="lede">Nightly builds are early, frequently updated versions of Bannerlord Coop for Patreon, Boosty, and Afdian supporters and Testers, plus their sponsored friends.</p><div class="access-grid"><div><span class="step-number">01</span><strong>Download the installer</strong><p>Save the guided PowerShell installer, then right-click it and choose Run with PowerShell.</p></div><div><span class="step-number">02</span><strong>Verify Discord</strong><p>We check for the Tester role, a Patreon, Boosty, or Afdian supporter role, or a sponsored seat at install and update time.</p></div></div><div class="actions"><a class="button" href="/install.ps1" download="BannerlordCoop-Nightly-Installer.ps1">Download installer <span aria-hidden="true">&darr;</span></a><a class="button secondary" href="/sponsor">Manage sponsored accounts</a><a class="quiet-link" href="https://discord.gg/bannerlordcoop">Join the Discord</a></div>`, "landing-page");
 }
 
 const GATEWAY_CSS = `

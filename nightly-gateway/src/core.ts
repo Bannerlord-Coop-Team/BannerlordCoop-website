@@ -25,6 +25,15 @@ export function isDiscordSnowflake(value: unknown): value is string {
     return typeof value === "string" && SNOWFLAKE.test(value);
 }
 
+export function isSameOriginFormRequest(
+    origin: string | null,
+    fetchSite: string | null,
+    expectedOrigin: string,
+): boolean {
+    return origin === expectedOrigin
+        || (origin === null && fetchSite === "same-origin");
+}
+
 export function isAllowedArtifactKey(value: unknown): value is string {
     return typeof value === "string"
         && value.length <= 1024
