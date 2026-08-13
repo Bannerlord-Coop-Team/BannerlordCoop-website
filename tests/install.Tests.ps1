@@ -61,13 +61,13 @@ $validManifest = [pscustomobject]@{
                 fileName = 'BannerlordCoop-DedicatedServer-Win64-Base.7z'
                 bytes = 4300000000
                 sha256 = 'e' * 64
-                publicUrl = 'https://nightly.bannerlordcoop.com/v1/artifacts/windows/base/v1/' + ('d' * 64) + '/' + ('e' * 64) + '/server-base.7z'
+                publicUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/windows/base/v1/' + ('d' * 64) + '/' + ('e' * 64) + '/server-base.7z'
             }
             update = [pscustomobject]@{
                 fileName = 'BannerlordCoop-DedicatedServer-Win64-Update.7z'
                 bytes = 12000000
                 sha256 = 'f' * 64
-                publicUrl = 'https://nightly.bannerlordcoop.com/v1/artifacts/nightly/windows/updates/' + ('a' * 40) + '/' + ('1' * 40) + '/' + ('f' * 64) + '/server-update.7z'
+                publicUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/nightly/windows/updates/' + ('a' * 40) + '/' + ('1' * 40) + '/' + ('f' * 64) + '/server-update.7z'
             }
         }
     }
@@ -194,7 +194,7 @@ try {
     $nextRelease.incremental = $validManifest.server.incremental.PSObject.Copy()
     $nextRelease.incremental.update = $validManifest.server.incremental.update.PSObject.Copy()
     $nextRelease.incremental.update.sha256 = '9' * 64
-    $nextRelease.incremental.update.publicUrl = 'https://nightly.bannerlordcoop.com/v1/artifacts/nightly/windows/updates/' + ('a' * 40) + '/' + ('1' * 40) + '/' + ('9' * 64) + '/server-update.7z'
+    $nextRelease.incremental.update.publicUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/nightly/windows/updates/' + ('a' * 40) + '/' + ('1' * 40) + '/' + ('9' * 64) + '/server-update.7z'
     $script:DownloadedLabels = @()
     Install-Server $nextRelease $server 'unused.exe'
     if ($script:DownloadedLabels.Count -ne 1 -or $script:DownloadedLabels[0] -ne 'dedicated server update') {

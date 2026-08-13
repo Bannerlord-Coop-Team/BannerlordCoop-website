@@ -1,20 +1,19 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "bannerlordcoop-nightly-gateway",
+  "account_id": "734149e144bd731947b01477afb5898d",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-13",
   "compatibility_flags": ["nodejs_compat"],
-  "routes": [
-    { "pattern": "nightly.bannerlordcoop.com/*", "zone_name": "bannerlordcoop.com" }
-  ],
+  "workers_dev": true,
   "observability": { "enabled": true, "head_sampling_rate": 1 },
   "vars": {
-    "PUBLIC_ORIGIN": "https://nightly.bannerlordcoop.com",
+    "PUBLIC_ORIGIN": "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev",
     "LEGACY_R2_ORIGIN": "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev",
     "DISCORD_CLIENT_ID": "REPLACE_WITH_DISCORD_APPLICATION_ID"
   },
   "r2_buckets": [
-    { "binding": "RELEASES", "bucket_name": "bannerlordcoop-nightly-releases" }
+    { "binding": "RELEASES", "bucket_name": "bannerlordcoop-patron-nightlies" }
   ],
   "d1_databases": [
     {

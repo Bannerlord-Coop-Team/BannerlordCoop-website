@@ -550,7 +550,7 @@ async function boundedText(response: Response | Request, maximum: number): Promi
 }
 
 function assertConfiguration(env: Env): void {
-    if (env.PUBLIC_ORIGIN !== "https://nightly.bannerlordcoop.com"
+    if (env.PUBLIC_ORIGIN !== "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev"
         || env.LEGACY_R2_ORIGIN !== "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev"
         || !/^\d{17,20}$/.test(env.DISCORD_CLIENT_ID)
         || env.DISCORD_CLIENT_SECRET.length < 32

@@ -25,22 +25,25 @@ software cannot prevent that.
    placeholder ID and the Discord application ID in `wrangler.jsonc`, then run
    the migration.
 2. Register exactly
-   `https://nightly.bannerlordcoop.com/oauth/callback` as a Discord OAuth2
+   `https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/oauth/callback`
+   as a Discord OAuth2
    redirect and enable the `identify guilds.members.read` scopes.
 3. Set `DISCORD_CLIENT_SECRET` with `wrangler secret put`.
 4. Generate 32 random bytes, encode them as unpadded base64url, and set them as
    `TOKEN_ENCRYPTION_KEY` with `wrangler secret put`.
-5. Bind the existing `bannerlordcoop-nightly-releases` R2 bucket and route
-   `nightly.bannerlordcoop.com` to this Worker.
-6. Migrate Bot_UP/Managed Hosting to authenticated R2 reads before making the
-   release bucket private.
-7. Deploy the updated client, dedicated-server, and website publishers and
+5. Create and bind a private R2 bucket named
+   `bannerlordcoop-patron-nightlies`. Do not enable its `r2.dev` URL or attach a
+   public custom domain. The Worker is exposed through the existing
+   `garrett-luskey.workers.dev` account subdomain, so Squarespace DNS is not
+   involved.
+6. Keep `/create-build` output in the separate public
+   `bannerlordcoop-nightly-releases` bucket. Its copyable links remain valid
+   until Bot_UP's existing 24-hour expiry cleanup; never disable public access
+   on that bucket as part of the Patron-nightly rollout.
+7. Migrate Bot_UP/Managed Hosting to scoped R2 S3 reads from the private Patron
+   bucket. Machine-to-machine hosting downloads do not use Discord OAuth.
+8. Deploy the updated client, dedicated-server, and website publishers and
    verify a live direct-supporter install plus a sponsored install.
-8. Disable the bucket's public `r2.dev` development URL. Leaving it enabled
-   bypasses this gateway.
-
-Never disable `r2.dev` early: Bot_UP and the managed Linux agent currently read
-release objects from that origin.
 
 ## Verification
 
@@ -52,5 +55,5 @@ npm test
 ```
 
 The dry run is intentionally non-deploying. Deployment also requires the real
-D1 ID, Discord application ID, secrets, DNS route, and Cloudflare account that
-owns the existing release bucket.
+D1 ID, Discord application ID, secrets, private Patron bucket, and the Garrett
+Cloudflare account configured in `wrangler.jsonc`.

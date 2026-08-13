@@ -3,7 +3,7 @@ $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $script:InstallerUri = 'https://bannerlordcoop.com/server/install.ps1'
-$script:NightlyGatewayUri = 'https://nightly.bannerlordcoop.com'
+$script:NightlyGatewayUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev'
 $script:ClientManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/client"
 $script:ReleaseManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/release"
 $script:ClientArchiveUri = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/Coop.7z"
@@ -54,7 +54,7 @@ function Get-NightlyAccessToken {
         -ContentType 'application/x-www-form-urlencoded' -Body ''
     if ([string]$session.device_code -notmatch '^[A-Za-z0-9_-]{43}$' -or
         [string]$session.user_code -notmatch '^[A-Z2-9]{4}-[A-Z2-9]{4}$' -or
-        [string]$session.verification_uri -notmatch '^https://nightly\.bannerlordcoop\.com/activate\?') {
+        [string]$session.verification_uri -notmatch '^https://bannerlordcoop-nightly-gateway\.garrett-luskey\.workers\.dev/activate\?') {
         throw 'The nightly authorization service returned an invalid response.'
     }
     Write-Host "Verification code: $($session.user_code)" -ForegroundColor Yellow
@@ -311,7 +311,7 @@ function Test-PublicArtifactUri {
 
     try { $parsed = [Uri]$Uri } catch { return $false }
     if ($parsed.Scheme -cne 'https' -or
-        $parsed.Host -cne 'nightly.bannerlordcoop.com' -or
+        $parsed.Host -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
         -not [string]::IsNullOrEmpty($parsed.Query) -or
         -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
     $pattern = if ($Kind -eq 'base') {

@@ -9,6 +9,7 @@ import {
 } from "./core";
 
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
+const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
 
 test("only the fixed Patreon, Boosty, and Afdian roles grant direct access", () => {
     assert.equal(hasSupporterRole(["1532151760012050452"]), true);
@@ -47,8 +48,8 @@ test("manifest URLs are rewritten to authenticated gateway paths", () => {
                 },
             },
         },
-    }, "https://nightly.bannerlordcoop.com", legacy);
+    }, gateway, legacy);
     assert.equal(manifest.client && typeof manifest.client === "object" && !Array.isArray(manifest.client)
         ? manifest.client.publicUrl
-        : null, "https://nightly.bannerlordcoop.com/v1/artifacts/nightly/Coop.7z");
+        : null, `${gateway}/v1/artifacts/nightly/Coop.7z`);
 });
