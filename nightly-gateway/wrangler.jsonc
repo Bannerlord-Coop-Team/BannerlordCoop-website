@@ -10,7 +10,7 @@
   "vars": {
     "PUBLIC_ORIGIN": "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev",
     "LEGACY_R2_ORIGIN": "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev",
-    "DISCORD_CLIENT_ID": "REPLACE_WITH_DISCORD_APPLICATION_ID"
+    "DISCORD_CLIENT_ID": "1537575576745803799"
   },
   "r2_buckets": [
     { "binding": "RELEASES", "bucket_name": "bannerlordcoop-patron-nightlies" }
