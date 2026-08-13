@@ -299,7 +299,7 @@ async function sponsorPortal(request: Request, env: Env): Promise<Response> {
             `<h1>Bring your <span>warband.</span></h1>
             <p class="lede">Testers and Patreon, Boosty, or Afdian supporters can each share nightly access with up to 10 Discord accounts.</p>
             <div class="actions"><a class="button" href="/sponsor/login">Continue with Discord <span aria-hidden="true">&rarr;</span></a></div>
-            <p class="fine-print">We verify your Tester or Patreon, Boosty, or Afdian Discord role when you sign in and whenever a sponsored friend installs or updates.</p>`,
+            <p class="fine-print">We verify your Tester, Patreon, Boosty, or Afdian Discord role when you sign in and whenever a sponsored friend installs or updates.</p>`,
             "portal",
         ));
     }
@@ -312,7 +312,7 @@ async function sponsorPortal(request: Request, env: Env): Promise<Response> {
     return html(page(
         `Sponsored accounts (${rows.results.length}/${SPONSORED_ACCOUNT_LIMIT})`,
         "Supporter portal",
-        `<div class="portal-heading"><div><h1>Your <span>warband.</span></h1><p class="lede">Create a code for friends to use during installation. Their access remains tied to your current Tester or Patreon, Boosty, or Afdian Discord role.</p></div><div class="seat-count" aria-label="${seatCount} of ${SPONSORED_ACCOUNT_LIMIT} seats used"><strong>${seatCount}</strong><span>of ${SPONSORED_ACCOUNT_LIMIT}<br>seats used</span></div></div>
+        `<div class="portal-heading"><div><h1>Your <span>warband.</span></h1><p class="lede">Create a code for friends to use during installation. Their access remains tied to your current Tester, Patreon, Boosty, or Afdian Discord role.</p></div><div class="seat-count" aria-label="${seatCount} of ${SPONSORED_ACCOUNT_LIMIT} seats used"><strong>${seatCount}</strong><span>of ${SPONSORED_ACCOUNT_LIMIT}<br>seats used</span></div></div>
         <form class="code-action" method="post" action="/v1/sponsor/code"><button class="button">${seatCount === 0 ? "Create sponsor code" : "Create a new code"} <span aria-hidden="true">&rarr;</span></button><p>Creating a new code disables the previous one. Existing sponsored accounts keep access.</p></form>
         <section class="seat-section" aria-labelledby="seat-heading"><div class="section-heading"><h2 id="seat-heading">Sponsored accounts</h2><span>${SPONSORED_ACCOUNT_LIMIT - seatCount} open</span></div><ul class="seat-list">${seats || `<li class="empty-state"><strong>No seats claimed yet.</strong><span>Create a sponsor code and send it to a friend you trust.</span></li>`}</ul></section>`,
         "portal portal-wide",
@@ -612,7 +612,7 @@ function sponsorClaimPage(deviceId: string, username: string): string {
 }
 
 export function nightlyAccessPage(): string {
-    return page("Nightly Access", "Supporter &amp; Tester builds", `<h1>Test tomorrow&rsquo;s battles <span>today.</span></h1><p class="lede">Nightly builds are early, frequently updated versions of Bannerlord Coop for Patreon, Boosty, and Afdian supporters, Testers, and sponsored friends.</p><div class="access-grid"><div><span class="step-number">01</span><strong>Run the installer</strong><p>Start the guided installer from the official Bannerlord Coop website.</p></div><div><span class="step-number">02</span><strong>Verify Discord</strong><p>We check for the Tester role, a Patreon, Boosty, or Afdian supporter role, or a sponsored seat at install and update time.</p></div></div><div class="actions"><a class="button" href="/sponsor">Manage sponsored accounts <span aria-hidden="true">&rarr;</span></a><a class="quiet-link" href="https://discord.gg/bannerlordcoop">Join the Discord</a></div>`, "landing-page");
+    return page("Nightly Access", "Supporter & Tester builds", `<h1>Test tomorrow&rsquo;s battles <span>today.</span></h1><p class="lede">Nightly builds are early, frequently updated versions of Bannerlord Coop for Patreon, Boosty, and Afdian supporters and Testers, plus their sponsored friends.</p><div class="access-grid"><div><span class="step-number">01</span><strong>Run the installer</strong><p>Start the guided installer from the official Bannerlord Coop website.</p></div><div><span class="step-number">02</span><strong>Verify Discord</strong><p>We check for the Tester role, a Patreon, Boosty, or Afdian supporter role, or a sponsored seat at install and update time.</p></div></div><div class="actions"><a class="button" href="/sponsor">Manage sponsored accounts <span aria-hidden="true">&rarr;</span></a><a class="quiet-link" href="https://discord.gg/bannerlordcoop">Join the Discord</a></div>`, "landing-page");
 }
 
 const GATEWAY_CSS = `

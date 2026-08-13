@@ -76,7 +76,9 @@ test("gateway pages use the site brand without weakening page security", () => {
 
 test("gateway eligibility copy names every supported membership platform", () => {
     const markup = nightlyAccessPage();
-    assert.match(markup, /for Patreon, Boosty, and Afdian supporters, Testers, and sponsored friends/);
+    assert.match(markup, /for Patreon, Boosty, and Afdian supporters and Testers, plus their sponsored friends/);
     assert.match(markup, /Tester role/);
+    assert.match(markup, /Supporter &amp; Tester builds/);
+    assert.doesNotMatch(markup, /&amp;amp;/);
     assert.doesNotMatch(markup, /community supporters/i);
 });
