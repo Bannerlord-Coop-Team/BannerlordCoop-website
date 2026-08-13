@@ -5,10 +5,16 @@ import { useEffect, useRef, useState } from "react";
 
 const downloadSources = [
     {
+        name: "Guided Installer",
+        description: "Install the nightly client or Windows server. Later server updates download only the changed files.",
+        href: "/server/install.ps1",
+        recommended: true,
+        download: true,
+    },
+    {
         name: "Steam Workshop",
         description: "Subscribe and receive updates through Steam.",
         href: "https://steamcommunity.com/sharedfiles/filedetails/?id=3770450698",
-        recommended: true,
     },
     {
         name: "Nexus Mods",
@@ -143,8 +149,9 @@ export function DownloadModal() {
                                     <a
                                         key={source.name}
                                         href={source.href}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                        target={"download" in source ? undefined : "_blank"}
+                                        rel={"download" in source ? undefined : "noopener noreferrer"}
+                                        download={"download" in source ? "install.ps1" : undefined}
                                         className="group flex items-start justify-between gap-3 rounded-sm border border-white/10 bg-background/60 p-4 text-left transition-colors duration-300 hover:border-gold/50 hover:bg-white/2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised sm:items-center sm:gap-6 sm:p-6"
                                     >
                                         <span>
