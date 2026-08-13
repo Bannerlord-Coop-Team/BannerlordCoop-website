@@ -19,7 +19,7 @@
     {
       "binding": "DB",
       "database_name": "bannerlordcoop-nightly-access",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "8777c5e1-69a9-42ad-a136-78f21bc43fa3",
       "migrations_dir": "migrations"
     }
   ]
