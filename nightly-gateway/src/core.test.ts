@@ -7,6 +7,7 @@ import {
     isAllowedArtifactKey,
     rewriteManifestArtifactUrls,
 } from "./core";
+import { page } from "./index";
 
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
@@ -52,4 +53,22 @@ test("manifest URLs are rewritten to authenticated gateway paths", () => {
     assert.equal(manifest.client && typeof manifest.client === "object" && !Array.isArray(manifest.client)
         ? manifest.client.publicUrl
         : null, `${gateway}/v1/artifacts/nightly/Coop.7z`);
+});
+
+test("gateway pages use the site brand without weakening page security", () => {
+    const markup = page(
+        `Nightly <access>`,
+        `Supporter "builds"`,
+        `<h1>Known-safe content</h1>`,
+        `claim-page`,
+    );
+
+    assert.match(markup, /Bannerlord Coop/);
+    assert.match(markup, /Nightly Access/);
+    assert.match(markup, /--crimson:#8f1d23/);
+    assert.match(markup, /singleleader\.png/);
+    assert.match(markup, /<title>Nightly &lt;access&gt; \| Bannerlord Coop<\/title>/);
+    assert.match(markup, /Supporter &quot;builds&quot;/);
+    assert.match(markup, /class="shell claim-page"/);
+    assert.doesNotMatch(markup, /<script/i);
 });
