@@ -5,10 +5,16 @@ import { useEffect, useRef, useState } from "react";
 
 const downloadSources = [
     {
+        name: "Guided Installer",
+        description: "Supporter and Tester nightly: verifies your Discord role or sponsored seat during every install/update. Later server updates download only changed files.",
+        href: "/server/install.ps1",
+        recommended: true,
+        download: true,
+    },
+    {
         name: "Steam Workshop",
         description: "Subscribe and receive updates through Steam.",
         href: "https://steamcommunity.com/sharedfiles/filedetails/?id=3770450698",
-        recommended: true,
     },
     {
         name: "Nexus Mods",
@@ -134,8 +140,9 @@ export function DownloadModal() {
                                 id="download-modal-description"
                                 className="mt-4 max-w-xl font-sans text-sm leading-6 text-foreground-muted sm:text-base"
                             >
-                                Select your preferred source. Make sure every player
-                                uses the same version of Bannerlord Coop.
+                                Public releases are available below. Nightly builds require the
+                                Tester role, a Patreon, Boosty, or Afdian supporter role, or one
+                                of an eligible member&apos;s 10 sponsored Discord-account seats.
                             </p>
 
                             <div className="mt-6 grid gap-3 sm:mt-8">
@@ -143,8 +150,9 @@ export function DownloadModal() {
                                     <a
                                         key={source.name}
                                         href={source.href}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                        target={"download" in source ? undefined : "_blank"}
+                                        rel={"download" in source ? undefined : "noopener noreferrer"}
+                                        download={"download" in source ? "install.ps1" : undefined}
                                         className="group flex items-start justify-between gap-3 rounded-sm border border-white/10 bg-background/60 p-4 text-left transition-colors duration-300 hover:border-gold/50 hover:bg-white/2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised sm:items-center sm:gap-6 sm:p-6"
                                     >
                                         <span>

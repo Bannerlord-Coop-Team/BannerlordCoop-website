@@ -1,0 +1,5 @@
+/install.ps1
+  Cache-Control: public, max-age=300
+  Content-Disposition: attachment; filename="BannerlordCoop-Nightly-Installer.ps1"
+  Content-Type: application/octet-stream
+  X-Content-Type-Options: nosniff
