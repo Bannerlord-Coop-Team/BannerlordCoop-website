@@ -7,7 +7,7 @@ import {
     isAllowedArtifactKey,
     rewriteManifestArtifactUrls,
 } from "./core";
-import { page } from "./index";
+import { nightlyAccessPage, page } from "./index";
 
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
@@ -71,4 +71,10 @@ test("gateway pages use the site brand without weakening page security", () => {
     assert.match(markup, /Supporter &quot;builds&quot;/);
     assert.match(markup, /class="shell claim-page"/);
     assert.doesNotMatch(markup, /<script/i);
+});
+
+test("gateway eligibility copy names every supported membership platform", () => {
+    const markup = nightlyAccessPage();
+    assert.match(markup, /for Patreon, Boosty, and Afdian supporters and their sponsored friends/);
+    assert.doesNotMatch(markup, /community supporters/i);
 });
