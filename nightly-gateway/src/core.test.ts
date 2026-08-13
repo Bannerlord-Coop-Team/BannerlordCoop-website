@@ -3,10 +3,11 @@ import test from "node:test";
 import {
     SPONSORED_ACCOUNT_LIMIT,
     artifactKeyFromUrl,
+    createSponsorFormToken,
     hasNightlyAccessRole,
     isAllowedArtifactKey,
-    isSameOriginFormRequest,
     rewriteManifestArtifactUrls,
+    verifySponsorFormToken,
 } from "./core";
 import { nightlyAccessPage, page } from "./index";
 
@@ -22,12 +23,14 @@ test("supporters and Testers get nightly access and share the same seat limit", 
     assert.equal(SPONSORED_ACCOUNT_LIMIT, 10);
 });
 
-test("browser forms allow same-origin fetch metadata without allowing cross-site posts", () => {
-    assert.equal(isSameOriginFormRequest(gateway, null, gateway), true);
-    assert.equal(isSameOriginFormRequest(null, "same-origin", gateway), true);
-    assert.equal(isSameOriginFormRequest(null, "cross-site", gateway), false);
-    assert.equal(isSameOriginFormRequest("null", "same-origin", gateway), false);
-    assert.equal(isSameOriginFormRequest("https://attacker.invalid", "same-origin", gateway), false);
+test("sponsor form tokens are bound to the authenticated browser session", async () => {
+    const session = "A".repeat(43);
+    const otherSession = "B".repeat(43);
+    const proof = await createSponsorFormToken(session);
+    assert.match(proof, /^[A-Za-z0-9_-]{43}$/);
+    assert.equal(await verifySponsorFormToken(session, proof), true);
+    assert.equal(await verifySponsorFormToken(otherSession, proof), false);
+    assert.equal(await verifySponsorFormToken(session, "invalid"), false);
 });
 
 test("artifact keys are limited to the two release namespaces", () => {

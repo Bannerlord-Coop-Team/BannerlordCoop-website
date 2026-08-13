@@ -4,11 +4,12 @@ import {
     DISCORD_OAUTH_SCOPES,
     DOWNLOAD_SESSION_SECONDS,
     SPONSORED_ACCOUNT_LIMIT,
+    createSponsorFormToken,
     hasNightlyAccessRole,
     isAllowedArtifactKey,
     isDiscordSnowflake,
-    isSameOriginFormRequest,
     rewriteManifestArtifactUrls,
+    verifySponsorFormToken,
 } from "./core";
 
 const DISCORD_API = "https://discord.com/api/v10";
@@ -305,24 +306,26 @@ async function sponsorPortal(request: Request, env: Env): Promise<Response> {
         ));
     }
     await assertSponsorEligible(env, sponsorId);
+    const formToken = await sponsorFormToken(request);
     const rows = await env.DB.prepare(
         "SELECT sponsored_discord_user_id, created_at FROM sponsorships WHERE supporter_discord_user_id = ? ORDER BY created_at",
     ).bind(sponsorId).all<{ sponsored_discord_user_id: string; created_at: number }>();
-    const seats = rows.results.map((row, index) => `<li class="seat"><span class="seat-number">${String(index + 1).padStart(2, "0")}</span><span class="seat-account"><span class="seat-label">Discord account</span><code>${escapeHtml(row.sponsored_discord_user_id)}</code></span><form method="post" action="/v1/sponsor/remove"><input type="hidden" name="discord_user_id" value="${escapeHtml(row.sponsored_discord_user_id)}"><button class="text-button">Remove access</button></form></li>`).join("");
+    const seats = rows.results.map((row, index) => `<li class="seat"><span class="seat-number">${String(index + 1).padStart(2, "0")}</span><span class="seat-account"><span class="seat-label">Discord account</span><code>${escapeHtml(row.sponsored_discord_user_id)}</code></span><form method="post" action="/v1/sponsor/remove"><input type="hidden" name="form_token" value="${formToken}"><input type="hidden" name="discord_user_id" value="${escapeHtml(row.sponsored_discord_user_id)}"><button class="text-button">Remove access</button></form></li>`).join("");
     const seatCount = rows.results.length;
     return html(page(
         `Sponsored accounts (${rows.results.length}/${SPONSORED_ACCOUNT_LIMIT})`,
         "Supporter portal",
         `<div class="portal-heading"><div><h1>Your <span>warband.</span></h1><p class="lede">Create a code for friends to use during installation. Their access remains tied to your current Tester, Patreon, Boosty, or Afdian Discord role.</p></div><div class="seat-count" aria-label="${seatCount} of ${SPONSORED_ACCOUNT_LIMIT} seats used"><strong>${seatCount}</strong><span>of ${SPONSORED_ACCOUNT_LIMIT}<br>seats used</span></div></div>
-        <form class="code-action" method="post" action="/v1/sponsor/code"><button class="button">${seatCount === 0 ? "Create sponsor code" : "Create a new code"} <span aria-hidden="true">&rarr;</span></button><p>Creating a new code disables the previous one. Existing sponsored accounts keep access.</p></form>
+        <form class="code-action" method="post" action="/v1/sponsor/code"><input type="hidden" name="form_token" value="${formToken}"><button class="button">${seatCount === 0 ? "Create sponsor code" : "Create a new code"} <span aria-hidden="true">&rarr;</span></button><p>Creating a new code disables the previous one. Existing sponsored accounts keep access.</p></form>
         <section class="seat-section" aria-labelledby="seat-heading"><div class="section-heading"><h2 id="seat-heading">Sponsored accounts</h2><span>${SPONSORED_ACCOUNT_LIMIT - seatCount} open</span></div><ul class="seat-list">${seats || `<li class="empty-state"><strong>No seats claimed yet.</strong><span>Create a sponsor code and send it to a friend you trust.</span></li>`}</ul></section>`,
         "portal portal-wide",
     ));
 }
 
 async function rotateSponsorCode(request: Request, env: Env): Promise<Response> {
-    assertSameOrigin(request, env);
     const sponsorId = await requireSponsorSession(request, env, true);
+    const form = await readForm(request);
+    await assertSponsorFormRequest(request, form);
     const code = `${randomCode(4)}-${randomCode(4)}-${randomCode(4)}`;
     await env.DB.prepare("UPDATE supporter_grants SET sponsor_code_hash = ?, updated_at = ? WHERE supporter_discord_user_id = ?")
         .bind(await sha256(code), nowSeconds(), sponsorId).run();
@@ -334,9 +337,9 @@ async function rotateSponsorCode(request: Request, env: Env): Promise<Response> 
 }
 
 async function removeSponsoredAccount(request: Request, env: Env): Promise<Response> {
-    assertSameOrigin(request, env);
     const sponsorId = await requireSponsorSession(request, env, true);
-    const form = await request.formData();
+    const form = await readForm(request);
+    await assertSponsorFormRequest(request, form);
     const friendId = form.get("discord_user_id");
     if (!isDiscordSnowflake(friendId)) throw new GatewayError(400, "invalid_request");
     await env.DB.batch([
@@ -573,11 +576,21 @@ function assertConfiguration(env: Env): void {
 }
 
 function assertSameOrigin(request: Request, env: Env): void {
-    if (!isSameOriginFormRequest(
-        request.headers.get("origin"),
-        request.headers.get("sec-fetch-site"),
-        env.PUBLIC_ORIGIN,
-    )) throw new GatewayError(403, "origin_invalid");
+    if (request.headers.get("origin") !== env.PUBLIC_ORIGIN) throw new GatewayError(403, "origin_invalid");
+}
+
+async function sponsorFormToken(request: Request): Promise<string> {
+    const token = cookieValue(request.headers.get("cookie"), "nightly_sponsor");
+    if (!token || !DEVICE_SECRET_PATTERN.test(token)) throw new GatewayError(401, "authorization_required");
+    return createSponsorFormToken(token);
+}
+
+async function assertSponsorFormRequest(request: Request, form: URLSearchParams): Promise<void> {
+    if (request.headers.get("sec-fetch-site") === "cross-site") throw new GatewayError(403, "origin_invalid");
+    const token = cookieValue(request.headers.get("cookie"), "nightly_sponsor");
+    if (!token || !await verifySponsorFormToken(token, form.get("form_token"))) {
+        throw new GatewayError(403, "form_token_invalid");
+    }
 }
 
 function sponsorCookie(token: string, maxAge: number): string {

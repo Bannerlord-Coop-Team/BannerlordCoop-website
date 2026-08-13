@@ -15,7 +15,9 @@ export const DOWNLOAD_SESSION_SECONDS = 60 * 60;
 export const DISCORD_OAUTH_SCOPES = "identify guilds.members.read";
 
 const SNOWFLAKE = /^\d{17,20}$/;
+const SESSION_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const OBJECT_KEY = /^(?:(?:nightly|release)\/[A-Za-z0-9][A-Za-z0-9._/-]{0,1022}|windows\/base\/v1\/[a-f0-9]{64}\/[a-f0-9]{64}\/server-base\.7z)$/;
+const SPONSOR_FORM_MESSAGE = new TextEncoder().encode("bannerlordcoop-sponsor-form-v1");
 
 export function hasNightlyAccessRole(roleIds: readonly string[]): boolean {
     return roleIds.some((roleId) => NIGHTLY_ACCESS_ROLE_IDS.includes(roleId));
@@ -25,13 +27,33 @@ export function isDiscordSnowflake(value: unknown): value is string {
     return typeof value === "string" && SNOWFLAKE.test(value);
 }
 
-export function isSameOriginFormRequest(
-    origin: string | null,
-    fetchSite: string | null,
-    expectedOrigin: string,
-): boolean {
-    return origin === expectedOrigin
-        || (origin === null && fetchSite === "same-origin");
+export async function createSponsorFormToken(sessionToken: string): Promise<string> {
+    if (!SESSION_TOKEN.test(sessionToken)) throw new Error("invalid_sponsor_session");
+    const key = await crypto.subtle.importKey(
+        "raw",
+        exactArrayBuffer(fromBase64url(sessionToken)),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"],
+    );
+    return base64url(new Uint8Array(await crypto.subtle.sign("HMAC", key, SPONSOR_FORM_MESSAGE)));
+}
+
+export async function verifySponsorFormToken(sessionToken: string, proof: unknown): Promise<boolean> {
+    if (!SESSION_TOKEN.test(sessionToken) || typeof proof !== "string" || !SESSION_TOKEN.test(proof)) return false;
+    const key = await crypto.subtle.importKey(
+        "raw",
+        exactArrayBuffer(fromBase64url(sessionToken)),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["verify"],
+    );
+    return crypto.subtle.verify(
+        "HMAC",
+        key,
+        exactArrayBuffer(fromBase64url(proof)),
+        SPONSOR_FORM_MESSAGE,
+    );
 }
 
 export function isAllowedArtifactKey(value: unknown): value is string {
@@ -85,4 +107,22 @@ function rewriteRecord(record: JsonObject, gatewayOrigin: string, legacyOrigin: 
 
 function isRecord(value: unknown): value is JsonObject {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function base64url(bytes: Uint8Array): string {
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function fromBase64url(value: string): Uint8Array {
+    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+    const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    return copy.buffer;
 }
