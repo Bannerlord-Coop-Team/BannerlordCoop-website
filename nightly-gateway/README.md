@@ -55,11 +55,14 @@ live nightly-access page always has a working entry point. Run
 ## Verification
 
 ```sh
-npm run gateway:types
 npm run gateway:check
 npm run gateway:dry-run
 npm test
 ```
+
+`gateway:check` regenerates the ignored `worker-configuration.d.ts` from
+`wrangler.jsonc` before typechecking. Run `gateway:types` directly only when
+you want to refresh the generated types for editor use.
 
 The dry run is intentionally non-deploying. Deployment also requires the real
 D1 ID, Discord application ID, secrets, private Patron bucket, and the Garrett
