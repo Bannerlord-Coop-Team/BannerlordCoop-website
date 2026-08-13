@@ -44,3 +44,6 @@ next-env.d.ts
 
 # netlify
 /.netlify/
+
+# Cloudflare local Worker state
+**/.wrangler/

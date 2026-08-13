@@ -3,10 +3,12 @@ $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $script:InstallerUri = 'https://bannerlordcoop.com/server/install.ps1'
-$script:ClientManifestUri = 'https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev/nightly/client.json'
-$script:ReleaseManifestUri = 'https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev/nightly/release.json'
-$script:ClientArchiveUri = 'https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev/nightly/Coop.7z'
-$script:ServerArchiveUri = 'https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev/nightly/BannerlordCoop-DedicatedServer-Win64.7z'
+$script:NightlyGatewayUri = 'https://nightly.bannerlordcoop.com'
+$script:ClientManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/client"
+$script:ReleaseManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/release"
+$script:ClientArchiveUri = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/Coop.7z"
+$script:ServerArchiveUri = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/BannerlordCoop-DedicatedServer-Win64.7z"
+$script:NightlyAccessToken = $null
 $script:SevenZipUri = 'https://www.7-zip.org/a/7zr.exe'
 $script:SevenZipSha256 = '56b8cc9f4971cef253644fafe54063ed7fdca551d4dee0f8c6baa81b855acd72'
 
@@ -39,6 +41,63 @@ function Read-InstallChoice {
             '3' { return 'Both' }
             default { Write-Host 'Please enter 1, 2, or 3.' -ForegroundColor Yellow }
         }
+    }
+}
+
+function Get-NightlyAccessToken {
+    Write-Host ''
+    Write-Host 'Nightly access verification' -ForegroundColor Cyan
+    Write-Host 'Nightly builds are for current Patreon, Afdian, or Boosty supporters and up to 10 Discord accounts sponsored by each supporter.'
+    Write-Host 'A browser will open so Discord can verify access for this install or update.'
+
+    $session = Invoke-RestMethod -Method Post -Uri "$($script:NightlyGatewayUri)/v1/device/sessions" `
+        -ContentType 'application/x-www-form-urlencoded' -Body ''
+    if ([string]$session.device_code -notmatch '^[A-Za-z0-9_-]{43}$' -or
+        [string]$session.user_code -notmatch '^[A-Z2-9]{4}-[A-Z2-9]{4}$' -or
+        [string]$session.verification_uri -notmatch '^https://nightly\.bannerlordcoop\.com/activate\?') {
+        throw 'The nightly authorization service returned an invalid response.'
+    }
+    Write-Host "Verification code: $($session.user_code)" -ForegroundColor Yellow
+    Write-Host 'Opening Discord verification in your browser...'
+    Start-Process ([string]$session.verification_uri)
+
+    $deadline = [datetimeoffset]::UtcNow.AddSeconds([Math]::Min(600, [int]$session.expires_in))
+    while ([datetimeoffset]::UtcNow -lt $deadline) {
+        Start-Sleep -Seconds ([Math]::Max(3, [int]$session.interval))
+        try {
+            $token = Invoke-RestMethod -Method Post -Uri "$($script:NightlyGatewayUri)/v1/device/token" `
+                -ContentType 'application/x-www-form-urlencoded' `
+                -Body @{ device_code = [string]$session.device_code }
+            if ([string]$token.token_type -cne 'Bearer' -or
+                [string]$token.access_token -notmatch '^[A-Za-z0-9_-]{43}$') {
+                throw 'The nightly authorization token is invalid.'
+            }
+            Write-Host 'Nightly access verified.' -ForegroundColor Green
+            return [string]$token.access_token
+        } catch {
+            $statusCode = 0
+            try { $statusCode = [int]$_.Exception.Response.StatusCode } catch { }
+            if ($statusCode -eq 428) { continue }
+            if ($statusCode -eq 403) {
+                throw 'Discord access was denied. A current supporter role or an active sponsored-account seat is required.'
+            }
+            if ($statusCode -eq 400 -or $statusCode -eq 401) {
+                throw 'The Discord verification expired. Run the installer again to start a new check.'
+            }
+            throw
+        }
+    }
+    throw 'Discord verification timed out. Run the installer again when you are ready to authorize it.'
+}
+
+function Get-NightlyHeaders {
+    if ([string]::IsNullOrWhiteSpace([string]$script:NightlyAccessToken)) {
+        throw 'Nightly access has not been verified.'
+    }
+    return @{
+        Authorization = "Bearer $($script:NightlyAccessToken)"
+        'Cache-Control' = 'no-cache'
+        Pragma = 'no-cache'
     }
 }
 
@@ -197,7 +256,7 @@ function Select-ServerPath {
 function Get-ReleaseManifest {
     param([bool]$ClientOnly = $false)
 
-    $headers = @{ 'Cache-Control' = 'no-cache'; Pragma = 'no-cache' }
+    $headers = Get-NightlyHeaders
     $manifestUri = if ($ClientOnly) { $script:ClientManifestUri } else { $script:ReleaseManifestUri }
     Write-Host 'Checking the latest completed nightly release...'
     $manifest = Invoke-RestMethod -Method Get -Uri $manifestUri -Headers $headers
@@ -252,13 +311,13 @@ function Test-PublicArtifactUri {
 
     try { $parsed = [Uri]$Uri } catch { return $false }
     if ($parsed.Scheme -cne 'https' -or
-        $parsed.Host -cne 'pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev' -or
+        $parsed.Host -cne 'nightly.bannerlordcoop.com' -or
         -not [string]::IsNullOrEmpty($parsed.Query) -or
         -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
     $pattern = if ($Kind -eq 'base') {
-        '^/windows/base/v1/[a-f0-9]{64}/[a-f0-9]{64}/server-base\.7z$'
+        '^/v1/artifacts/windows/base/v1/[a-f0-9]{64}/[a-f0-9]{64}/server-base\.7z$'
     } else {
-        '^/(?:nightly/windows/updates/[a-f0-9]{40}/[a-f0-9]{40}|release/\d{17,20}/windows/update)/[a-f0-9]{64}/server-update\.7z$'
+        '^/v1/artifacts/(?:nightly/windows/updates/[a-f0-9]{40}/[a-f0-9]{40}|release/\d{17,20}/windows/update)/[a-f0-9]{64}/server-update\.7z$'
     }
     return $parsed.AbsolutePath -cmatch $pattern
 }
@@ -307,6 +366,10 @@ function Get-Archive {
     $handler = New-Object System.Net.Http.HttpClientHandler
     $http = New-Object System.Net.Http.HttpClient($handler)
     $http.Timeout = [TimeSpan]::FromHours(4)
+    $http.DefaultRequestHeaders.Authorization = New-Object System.Net.Http.Headers.AuthenticationHeaderValue(
+        'Bearer',
+        [string]$script:NightlyAccessToken
+    )
     try {
         $response = $http.GetAsync($Uri, [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
         [void]$response.EnsureSuccessStatusCode()
@@ -630,12 +693,13 @@ function Install-Server {
 
 function Invoke-BannerlordCoopInstaller {
     Write-Host 'BannerlordCoop nightly installer' -ForegroundColor Cyan
-    Write-Host 'This downloads and installs the latest completed nightly for you.'
+    Write-Host 'This downloads and installs the latest completed supporter nightly for you.'
     Write-Host ''
 
     $choice = Read-InstallChoice
     $installClient = $choice -eq 'Client' -or $choice -eq 'Both'
     $installServer = $choice -eq 'Server' -or $choice -eq 'Both'
+    $script:NightlyAccessToken = Get-NightlyAccessToken
     $manifest = Get-ReleaseManifest ($choice -eq 'Client')
     Write-Host "Latest nightly: $($manifest.releaseDate) ($([string]$manifest.headSha).Substring(0, 7))"
     $modulesPath = if ($installClient) { Select-ClientModulesPath } else { $null }

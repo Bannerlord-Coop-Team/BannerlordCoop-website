@@ -42,8 +42,9 @@ export function DownloadSection() {
                     </h2>
 
                     <p className="mx-auto mt-6 max-w-2xl font-sans text-base leading-7 text-foreground-muted sm:text-lg">
-                        Choose your preferred download platform, install the Coop
-                        module, and start a shared campaign with your friends.
+                        Public releases are free for everyone. Supporter nightlies use
+                        live Discord verification and may be shared through up to 10
+                        sponsored accounts per supporter.
                     </p>
 
                     <div className="mt-9 flex flex-col items-stretch justify-center gap-4 sm:flex-row sm:items-center">
