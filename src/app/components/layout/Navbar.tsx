@@ -1,4 +1,5 @@
 import { signOut } from "@/app/auth/actions";
+import { DownloadLink } from "@/app/components/layout/DownloadLink";
 import { MobileNavigation } from "@/app/components/layout/MobileNavigation";
 import { hasAdminAccess } from "@/app/lib/auth/access";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -46,7 +47,7 @@ export async function Navbar() {
             <div className="site-container flex h-15 items-center justify-between gap-4">
                 <Link
                     href="/"
-                    className="flex shrink-0 items-center gap-2 sm:gap-3"
+                    className="flex shrink-0 items-center gap-2 sm:gap-3`"
                     aria-label="Bannerlord Coop home"
                 >
                     <Swords
@@ -96,18 +97,17 @@ export async function Navbar() {
                         </li>
 
                         <li className="flex items-center gap-3">
-                            <a
-                                href="#download"
+                            <DownloadLink
                                 className="inline-flex min-h-10 items-center rounded-sm border border-crimson bg-crimson px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]"
                             >
                                 Download
-                            </a>
+                            </DownloadLink>
 
                             {isAuthenticated ? (
                                 <form action={signOut}>
                                     <button
                                         type="submit"
-                                        className="inline-flex min-h-10 items-center rounded-sm border border-crimson bg-transparent px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-foreground transition-colors hover:border-crimson-hover hover:bg-crimson/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]"
+                                        className="inline-flex min-h-10 items-center cursor-pointer rounded-sm border border-white/20 bg-background/70 px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-foreground transition-colors hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]"
                                     >
                                         Log out
                                     </button>
