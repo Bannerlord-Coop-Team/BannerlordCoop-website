@@ -11,9 +11,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "gateway:types": "wrangler types --config nightly-gateway/wrangler.jsonc nightly-gateway/worker-configuration.d.ts",
+    "gateway:types": "npx --yes wrangler@4.40.2 types --config nightly-gateway/wrangler.jsonc nightly-gateway/worker-configuration.d.ts",
     "gateway:check": "tsc --project nightly-gateway/tsconfig.json",
-    "gateway:dry-run": "npm run gateway:sync-installer && wrangler deploy --dry-run --config nightly-gateway/wrangler.jsonc",
+    "gateway:dry-run": "npm run gateway:sync-installer && npx --yes wrangler@4.40.2 deploy --dry-run --config nightly-gateway/wrangler.jsonc",
     "gateway:sync-installer": "node --input-type=module -e \"import{copyFileSync}from'node:fs';copyFileSync('public/server/install.ps1','nightly-gateway/public/install.ps1')\""
   },
   "dependencies": {
@@ -36,7 +36,6 @@
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
-    "typescript": "^5",
-    "wrangler": "^4.40.2"
+    "typescript": "^5"
   }
 }
