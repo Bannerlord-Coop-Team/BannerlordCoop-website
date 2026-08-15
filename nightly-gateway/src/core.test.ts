@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
     SPONSORED_ACCOUNT_LIMIT,
@@ -88,10 +89,23 @@ test("gateway pages use the site brand without weakening page security", () => {
 
 test("gateway eligibility copy names every supported membership platform", () => {
     const markup = nightlyAccessPage();
-    assert.match(markup, /for Patreon, Boosty, and Afdian supporters and Testers, plus their sponsored friends/);
-    assert.match(markup, /Tester role/);
+    assert.match(markup, /available to Patreon, Boosty, and Afdian supporters and Testers, plus their sponsored friends/);
+    assert.match(markup, /client, Windows dedicated server, or both/);
+    assert.match(markup, /Select the client, dedicated server, or both/);
     assert.match(markup, /Supporter &amp; Tester builds/);
+    assert.match(markup, /href="\/install\.cmd" download="BannerlordCoop-Nightly-Installer\.cmd"/);
     assert.match(markup, /href="\/install\.ps1" download="BannerlordCoop-Nightly-Installer\.ps1"/);
     assert.doesNotMatch(markup, /&amp;amp;/);
     assert.doesNotMatch(markup, /community supporters/i);
+});
+
+test("the Windows launcher is synchronized and keeps failures visible", () => {
+    const canonical = readFileSync(new URL("../../public/server/install.cmd", import.meta.url), "utf8");
+    const served = readFileSync(new URL("../public/install.cmd", import.meta.url), "utf8");
+
+    assert.equal(served, canonical);
+    assert.match(served, /client, Windows dedicated server, or both/);
+    assert.match(served, /-ExecutionPolicy Bypass -File/);
+    assert.match(served, /The installer stopped with an error/);
+    assert.match(served, /pause/);
 });
