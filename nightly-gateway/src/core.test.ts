@@ -15,11 +15,17 @@ import { nightlyAccessPage, page } from "./index";
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
 
-test("supporters and Testers get nightly access and share the same seat limit", () => {
+test("supporters, Testers, and Staff get nightly access and share the same seat limit", () => {
     assert.equal(hasNightlyAccessRole(["1532151760012050452"]), true);
     assert.equal(hasNightlyAccessRole(["1532744756151455834"]), true);
     assert.equal(hasNightlyAccessRole(["1533090199104524338"]), true);
     assert.equal(hasNightlyAccessRole(["710222948375593010"]), true);
+    assert.equal(hasNightlyAccessRole(["730945590011232296"]), true);
+    assert.equal(hasNightlyAccessRole(["711610715152056331"]), true);
+    assert.equal(hasNightlyAccessRole(["750401609045115114"]), true);
+    assert.equal(hasNightlyAccessRole(["709516608741048390"]), true);
+    assert.equal(hasNightlyAccessRole(["730631536122003548"]), true);
+    assert.equal(hasNightlyAccessRole(["730631233524072588"]), true);
     assert.equal(hasNightlyAccessRole(["709516043332354119"]), false);
     assert.equal(SPONSORED_ACCOUNT_LIMIT, 10);
 });
@@ -89,10 +95,10 @@ test("gateway pages use the site brand without weakening page security", () => {
 
 test("gateway eligibility copy names every supported membership platform", () => {
     const markup = nightlyAccessPage();
-    assert.match(markup, /available to Patreon, Boosty, and Afdian supporters and Testers, plus their sponsored friends/);
+    assert.match(markup, /available to Staff, Testers, and Patreon, Boosty, and Afdian supporters, plus their sponsored friends/);
     assert.match(markup, /client, Windows dedicated server, or both/);
     assert.match(markup, /Select the client, dedicated server, or both/);
-    assert.match(markup, /Supporter &amp; Tester builds/);
+    assert.match(markup, /Staff, Supporter &amp; Tester builds/);
     assert.match(markup, /href="\/install\.cmd" download="BannerlordCoop-Nightly-Installer\.cmd"/);
     assert.match(markup, /href="\/install\.ps1" download="BannerlordCoop-Nightly-Installer\.ps1"/);
     assert.doesNotMatch(markup, /&amp;amp;/);
