@@ -4,6 +4,7 @@ title BannerlordCoop Nightly Installer
 
 set "POWERSHELL_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 set "BANNERLORDCOOP_INSTALLER_TEMP=%TEMP%\BannerlordCoop-Nightly-Installer-%RANDOM%-%RANDOM%.ps1"
+set "BANNERLORDCOOP_INSTALLER_LAUNCHER=1"
 
 echo BannerlordCoop Nightly Installer
 echo Installs or updates the Coop client, Windows dedicated server, or both.
