@@ -36,6 +36,15 @@ export function isDiscordSnowflake(value: unknown): value is string {
     return typeof value === "string" && SNOWFLAKE.test(value);
 }
 
+export function isAllowedSponsorClaimRequest(
+    origin: string | null,
+    fetchSite: string | null,
+    publicOrigin: string,
+): boolean {
+    if (fetchSite === "cross-site") return false;
+    return origin === null || origin === publicOrigin;
+}
+
 export async function createSponsorFormToken(sessionToken: string): Promise<string> {
     if (!SESSION_TOKEN.test(sessionToken)) throw new Error("invalid_sponsor_session");
     const key = await crypto.subtle.importKey(
