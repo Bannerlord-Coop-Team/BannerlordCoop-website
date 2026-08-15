@@ -10,10 +10,98 @@ import {
     rewriteManifestArtifactUrls,
     verifySponsorFormToken,
 } from "./core";
-import { nightlyAccessPage, page } from "./index";
+import { completeOAuth, nightlyAccessPage, page } from "./index";
 
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+
+type TestDatabaseOptions = { portalLogin?: boolean };
+
+function testEnvironment(options: TestDatabaseOptions = {}): { env: Env; statements: string[] } {
+    const statements: string[] = [];
+    const database = {
+        prepare(sql: string) {
+            const statement = {
+                bind() { return statement; },
+                async first<T>() {
+                    if (sql.includes("FROM oauth_states")) {
+                        return (options.portalLogin ? { state_hash: "state" } : null) as T | null;
+                    }
+                    if (sql.includes("FROM device_sessions WHERE oauth_state_hash")) {
+                        return { id: "device-id", status: "pending", expires_at: Math.floor(Date.now() / 1000) + 60 } as T;
+                    }
+                    if (sql.includes("FROM sponsorships WHERE sponsored_discord_user_id")) return null;
+                    throw new Error(`Unexpected test query: ${sql}`);
+                },
+                async run() {
+                    statements.push(sql);
+                    return { success: true };
+                },
+            };
+            return statement;
+        },
+    };
+    return {
+        env: {
+            DB: database,
+            DISCORD_CLIENT_ID: "1537575576745803799",
+            DISCORD_CLIENT_SECRET: "test-secret",
+            PUBLIC_ORIGIN: gateway,
+        } as unknown as Env,
+        statements,
+    };
+}
+
+function discordOAuthFetch(input: string | URL | Request): Promise<Response> {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (url.endsWith("/oauth2/token")) {
+        return Promise.resolve(Response.json({
+            access_token: "access-token",
+            refresh_token: "refresh-token",
+            expires_in: 3600,
+            scope: "identify guilds.members.read",
+            token_type: "Bearer",
+        }));
+    }
+    if (url.endsWith("/users/@me")) {
+        return Promise.resolve(Response.json({ id: "123456789012345678", username: "Sponsored Friend" }));
+    }
+    if (url.includes(`/guilds/709516043332354119/member`)) {
+        return Promise.resolve(Response.json({ message: "Unknown Member", code: 10007 }, { status: 404 }));
+    }
+    throw new Error(`Unexpected test request: ${url}`);
+}
+
+test("Discord server membership is optional when claiming a sponsored seat", async () => {
+    const originalFetch = globalThis.fetch;
+    const { env, statements } = testEnvironment();
+    globalThis.fetch = discordOAuthFetch as typeof fetch;
+    try {
+        const state = "A".repeat(43);
+        const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env);
+        const markup = await response.text();
+        assert.equal(response.status, 200);
+        assert.match(markup, /Enter your friend&rsquo;s sponsor code/);
+        assert.ok(statements.some((sql) => sql.includes("status = 'awaiting-sponsor'")));
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test("Discord server membership remains required to manage sponsor seats", async () => {
+    const originalFetch = globalThis.fetch;
+    const { env } = testEnvironment({ portalLogin: true });
+    globalThis.fetch = discordOAuthFetch as typeof fetch;
+    try {
+        const state = "B".repeat(43);
+        await assert.rejects(
+            completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env),
+            /discord_membership_required/,
+        );
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
 
 test("supporters, Testers, and Staff get nightly access and share the same seat limit", () => {
     assert.equal(hasNightlyAccessRole(["1532151760012050452"]), true);
