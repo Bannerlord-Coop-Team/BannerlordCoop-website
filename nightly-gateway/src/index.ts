@@ -6,6 +6,7 @@ import {
     SPONSORED_ACCOUNT_LIMIT,
     createSponsorFormToken,
     hasNightlyAccessRole,
+    isAllowedSponsorClaimRequest,
     isAllowedArtifactKey,
     isDiscordSnowflake,
     rewriteManifestArtifactUrls,
@@ -259,7 +260,7 @@ export async function completeOAuth(url: URL, env: Env): Promise<Response> {
 }
 
 async function claimSponsorship(request: Request, env: Env): Promise<Response> {
-    assertSameOrigin(request, env);
+    assertSponsorClaimRequest(request, env);
     const form = await request.formData();
     const deviceId = form.get("device_id");
     const sponsorCode = form.get("sponsor_code");
@@ -588,8 +589,12 @@ function assertConfiguration(env: Env): void {
     }
 }
 
-function assertSameOrigin(request: Request, env: Env): void {
-    if (request.headers.get("origin") !== env.PUBLIC_ORIGIN) throw new GatewayError(403, "origin_invalid");
+function assertSponsorClaimRequest(request: Request, env: Env): void {
+    if (!isAllowedSponsorClaimRequest(
+        request.headers.get("origin"),
+        request.headers.get("sec-fetch-site"),
+        env.PUBLIC_ORIGIN,
+    )) throw new GatewayError(403, "origin_invalid");
 }
 
 async function sponsorFormToken(request: Request): Promise<string> {
