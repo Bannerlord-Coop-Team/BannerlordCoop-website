@@ -129,14 +129,16 @@ test("sponsor form tokens are bound to the authenticated browser session", async
     assert.equal(await verifySponsorFormToken(session, "invalid"), false);
 });
 
-test("sponsor claims tolerate omitted Origin headers without allowing cross-site forms", () => {
+test("sponsor claims tolerate omitted or opaque Origin headers without allowing cross-site forms", () => {
     assert.equal(isAllowedSponsorClaimRequest(gateway, "same-origin", gateway), true);
     assert.equal(isAllowedSponsorClaimRequest(null, "same-origin", gateway), true);
     assert.equal(isAllowedSponsorClaimRequest(null, null, gateway), true);
-    assert.equal(isAllowedSponsorClaimRequest("null", "same-origin", gateway), false);
+    assert.equal(isAllowedSponsorClaimRequest("null", "same-origin", gateway), true);
+    assert.equal(isAllowedSponsorClaimRequest("null", null, gateway), true);
     assert.equal(isAllowedSponsorClaimRequest("https://attacker.invalid", "same-origin", gateway), false);
     assert.equal(isAllowedSponsorClaimRequest(gateway, "cross-site", gateway), false);
     assert.equal(isAllowedSponsorClaimRequest(null, "cross-site", gateway), false);
+    assert.equal(isAllowedSponsorClaimRequest("null", "cross-site", gateway), false);
 });
 
 test("artifact keys are limited to the two release namespaces", () => {
