@@ -14,7 +14,7 @@
     "gateway:types": "npx --yes wrangler@4.40.2 types --config nightly-gateway/wrangler.jsonc nightly-gateway/worker-configuration.d.ts",
     "gateway:check": "npm run gateway:types && tsc --project nightly-gateway/tsconfig.json",
     "gateway:dry-run": "npm run gateway:sync-installer && npx --yes wrangler@4.40.2 deploy --dry-run --config nightly-gateway/wrangler.jsonc",
-    "gateway:sync-installer": "node --input-type=module -e \"import{copyFileSync}from'node:fs';copyFileSync('public/server/install.ps1','nightly-gateway/public/install.ps1')\""
+    "gateway:sync-installer": "node --input-type=module -e \"import{copyFileSync}from'node:fs';for(const extension of['cmd','ps1'])copyFileSync('public/server/install.'+extension,'nightly-gateway/public/install.'+extension)\""
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

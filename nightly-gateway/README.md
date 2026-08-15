@@ -21,10 +21,13 @@ This controls the official installer and download paths. A person who has
 legitimately received the archive bytes can still copy those bytes; client-side
 software cannot prevent that.
 
-The gateway also serves the current public installer at `/install.ps1` so the
-live nightly-access page always has a working entry point. Run
-`npm run gateway:sync-installer` after changing `public/server/install.ps1`;
-`gateway:dry-run` performs the sync automatically before packaging.
+The gateway serves the double-clickable Windows launcher at `/install.cmd` and
+the underlying public PowerShell installer at `/install.ps1` so the live
+nightly-access page always has a working entry point. The launcher downloads
+the latest script, runs it with a one-process execution-policy bypass, and
+keeps errors visible. Run `npm run gateway:sync-installer` after changing
+either canonical file under `public/server/`; `gateway:dry-run` performs the
+sync automatically before packaging.
 
 ## Required production setup
 
