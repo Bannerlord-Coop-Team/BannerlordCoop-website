@@ -204,7 +204,7 @@ async function completeOAuth(url: URL, env: Env): Promise<Response> {
     ).bind(stateHash, nowSeconds()).first();
     if (portalState !== null) {
         await env.DB.prepare("DELETE FROM oauth_states WHERE state_hash = ?").bind(stateHash).run();
-        if (!hasNightlyAccessRole(member.roles)) return html(errorPage("The Tester role or a Patreon, Boosty, or Afdian supporter role is required."), 403);
+        if (!hasNightlyAccessRole(member.roles)) return html(errorPage("A Staff, Tester, Patreon, Boosty, or Afdian role is required."), 403);
         await storeSupporterGrant(env, user.id, token.refresh_token);
         const sponsorSession = randomToken(32);
         const now = nowSeconds();
@@ -297,11 +297,11 @@ async function sponsorPortal(request: Request, env: Env): Promise<Response> {
     if (sponsorId === null) {
         return html(page(
             "Share nightlies with friends",
-            "Supporter portal",
+            "Nightly access portal",
             `<h1>Bring your <span>warband.</span></h1>
-            <p class="lede">Testers and Patreon, Boosty, or Afdian supporters can each share nightly access with up to 10 Discord accounts.</p>
+            <p class="lede">Staff, Testers, and Patreon, Boosty, or Afdian supporters can each share nightly access with up to 10 Discord accounts.</p>
             <div class="actions"><a class="button" href="/sponsor/login">Continue with Discord <span aria-hidden="true">&rarr;</span></a></div>
-            <p class="fine-print">We verify your Tester, Patreon, Boosty, or Afdian Discord role when you sign in and whenever a sponsored friend installs or updates.</p>`,
+            <p class="fine-print">We verify your qualifying Staff, Tester, Patreon, Boosty, or Afdian Discord role when you sign in and whenever a sponsored friend installs or updates.</p>`,
             "portal",
         ));
     }
@@ -314,8 +314,8 @@ async function sponsorPortal(request: Request, env: Env): Promise<Response> {
     const seatCount = rows.results.length;
     return html(page(
         `Sponsored accounts (${rows.results.length}/${SPONSORED_ACCOUNT_LIMIT})`,
-        "Supporter portal",
-        `<div class="portal-heading"><div><h1>Your <span>warband.</span></h1><p class="lede">Create a code for friends to use during installation. Their access remains tied to your current Tester, Patreon, Boosty, or Afdian Discord role.</p></div><div class="seat-count" aria-label="${seatCount} of ${SPONSORED_ACCOUNT_LIMIT} seats used"><strong>${seatCount}</strong><span>of ${SPONSORED_ACCOUNT_LIMIT}<br>seats used</span></div></div>
+        "Nightly access portal",
+        `<div class="portal-heading"><div><h1>Your <span>warband.</span></h1><p class="lede">Create a code for friends to use during installation. Their access remains tied to your current qualifying Staff, Tester, Patreon, Boosty, or Afdian Discord role.</p></div><div class="seat-count" aria-label="${seatCount} of ${SPONSORED_ACCOUNT_LIMIT} seats used"><strong>${seatCount}</strong><span>of ${SPONSORED_ACCOUNT_LIMIT}<br>seats used</span></div></div>
         <form class="code-action" method="post" action="/v1/sponsor/code"><input type="hidden" name="form_token" value="${formToken}"><button class="button">${seatCount === 0 ? "Create sponsor code" : "Create a new code"} <span aria-hidden="true">&rarr;</span></button><p>Creating a new code disables the previous one. Existing sponsored accounts keep access.</p></form>
         <section class="seat-section" aria-labelledby="seat-heading"><div class="section-heading"><h2 id="seat-heading">Sponsored accounts</h2><span>${SPONSORED_ACCOUNT_LIMIT - seatCount} open</span></div><ul class="seat-list">${seats || `<li class="empty-state"><strong>No seats claimed yet.</strong><span>Create a sponsor code and send it to a friend you trust.</span></li>`}</ul></section>`,
         "portal portal-wide",
@@ -626,11 +626,11 @@ function errorPage(message: string): string {
 }
 
 function sponsorClaimPage(deviceId: string, username: string): string {
-    return page("Sponsor required", "Nightly installer", `<p class="account-chip"><span aria-hidden="true"></span>Signed in as <strong>${escapeHtml(username)}</strong></p><h1>One more step to <span>ride.</span></h1><p class="lede">This Discord account does not currently have the Tester role or a Patreon, Boosty, or Afdian supporter role.</p><div class="divider"><span>Have a sponsor?</span></div><form class="claim-form" method="post" action="/v1/sponsorship/claim"><input type="hidden" name="device_id" value="${escapeHtml(deviceId)}"><label for="sponsor-code">Enter your friend&rsquo;s sponsor code</label><div class="field-row"><input id="sponsor-code" name="sponsor_code" required maxlength="128" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-describedby="sponsor-help"><button class="button">Claim a seat <span aria-hidden="true">&rarr;</span></button></div><p id="sponsor-help" class="field-help">Your friend must have a Patreon, Boosty, or Afdian supporter role and an open seat. Access is checked again on every install and update.</p></form><div class="support-note"><strong>Already eligible?</strong><span>Make sure the correct Discord account has the Tester role or is connected to your Patreon, Boosty, or Afdian membership, then restart the installer.</span></div>`, "claim-page");
+    return page("Sponsor required", "Nightly installer", `<p class="account-chip"><span aria-hidden="true"></span>Signed in as <strong>${escapeHtml(username)}</strong></p><h1>One more step to <span>ride.</span></h1><p class="lede">This Discord account does not currently have a qualifying Staff, Tester, Patreon, Boosty, or Afdian role.</p><div class="divider"><span>Have a sponsor?</span></div><form class="claim-form" method="post" action="/v1/sponsorship/claim"><input type="hidden" name="device_id" value="${escapeHtml(deviceId)}"><label for="sponsor-code">Enter your friend&rsquo;s sponsor code</label><div class="field-row"><input id="sponsor-code" name="sponsor_code" required maxlength="128" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-describedby="sponsor-help"><button class="button">Claim a seat <span aria-hidden="true">&rarr;</span></button></div><p id="sponsor-help" class="field-help">Your friend must have a qualifying Staff, Tester, Patreon, Boosty, or Afdian role and an open seat. Access is checked again on every install and update.</p></form><div class="support-note"><strong>Already eligible?</strong><span>Make sure the correct Discord account has a qualifying Staff or Tester role or is connected to your Patreon, Boosty, or Afdian membership, then restart the installer.</span></div>`, "claim-page");
 }
 
 export function nightlyAccessPage(): string {
-    return page("Nightly Access", "Supporter & Tester builds", `<h1>Test tomorrow&rsquo;s battles <span>today.</span></h1><p class="lede">Install or update the Bannerlord Coop client, Windows dedicated server, or both. Nightly builds are available to Patreon, Boosty, and Afdian supporters and Testers, plus their sponsored friends.</p><div class="access-grid"><div><span class="step-number">01</span><strong>Download and double-click</strong><p>Save the Windows installer launcher, then double-click it. The window stays open so you can see every prompt or error.</p></div><div><span class="step-number">02</span><strong>Choose and verify</strong><p>Select the client, dedicated server, or both. Discord access is checked at install and update time.</p></div></div><div class="actions"><a class="button" href="/install.cmd" download="BannerlordCoop-Nightly-Installer.cmd">Download Windows installer <span aria-hidden="true">&darr;</span></a><a class="button secondary" href="/sponsor">Manage sponsored accounts</a><a class="quiet-link" href="/install.ps1" download="BannerlordCoop-Nightly-Installer.ps1">Raw PowerShell script</a><a class="quiet-link" href="https://discord.gg/bannerlordcoop">Join the Discord</a></div>`, "landing-page");
+    return page("Nightly Access", "Staff, Supporter & Tester builds", `<h1>Test tomorrow&rsquo;s battles <span>today.</span></h1><p class="lede">Install or update the Bannerlord Coop client, Windows dedicated server, or both. Nightly builds are available to Staff, Testers, and Patreon, Boosty, and Afdian supporters, plus their sponsored friends.</p><div class="access-grid"><div><span class="step-number">01</span><strong>Download and double-click</strong><p>Save the Windows installer launcher, then double-click it. The window stays open so you can see every prompt or error.</p></div><div><span class="step-number">02</span><strong>Choose and verify</strong><p>Select the client, dedicated server, or both. Discord access is checked at install and update time.</p></div></div><div class="actions"><a class="button" href="/install.cmd" download="BannerlordCoop-Nightly-Installer.cmd">Download Windows installer <span aria-hidden="true">&darr;</span></a><a class="button secondary" href="/sponsor">Manage sponsored accounts</a><a class="quiet-link" href="/install.ps1" download="BannerlordCoop-Nightly-Installer.ps1">Raw PowerShell script</a><a class="quiet-link" href="https://discord.gg/bannerlordcoop">Join the Discord</a></div>`, "landing-page");
 }
 
 const GATEWAY_CSS = `
