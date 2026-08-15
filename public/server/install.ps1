@@ -108,6 +108,13 @@ function Get-NormalizedPath {
     return [IO.Path]::GetFullPath($expanded).TrimEnd([IO.Path]::DirectorySeparatorChar)
 }
 
+function Get-ShortCommitSha {
+    param([Parameter(Mandatory = $true)][string]$Sha)
+
+    if ($Sha.Length -le 7) { return $Sha }
+    return $Sha.Substring(0, 7)
+}
+
 function Get-DownloadsPath {
     try {
         $shell = New-Object -ComObject Shell.Application
@@ -120,6 +127,8 @@ function Get-DownloadsPath {
 }
 
 function Get-SteamRoots {
+    param([string[]]$AdditionalRoots = @())
+
     $roots = New-Object 'System.Collections.Generic.List[string]'
     foreach ($registryPath in @(
         'HKCU:\Software\Valve\Steam',
@@ -138,19 +147,24 @@ function Get-SteamRoots {
     }
     if (${env:ProgramFiles(x86)}) { $roots.Add((Join-Path ${env:ProgramFiles(x86)} 'Steam')) }
     if ($env:ProgramFiles) { $roots.Add((Join-Path $env:ProgramFiles 'Steam')) }
+    foreach ($root in $AdditionalRoots) {
+        if (-not [string]::IsNullOrWhiteSpace($root)) { $roots.Add($root) }
+    }
 
     $libraries = New-Object 'System.Collections.Generic.List[string]'
     foreach ($root in $roots) {
         if ([string]::IsNullOrWhiteSpace($root)) { continue }
         try { $normalizedRoot = Get-NormalizedPath $root } catch { continue }
+        if (-not (Test-Path -LiteralPath $normalizedRoot -PathType Container -ErrorAction SilentlyContinue)) { continue }
         if (-not $libraries.Contains($normalizedRoot)) { $libraries.Add($normalizedRoot) }
-        $libraryFile = Join-Path $normalizedRoot 'steamapps\libraryfolders.vdf'
+        $libraryFile = [IO.Path]::Combine($normalizedRoot, 'steamapps', 'libraryfolders.vdf')
         if (-not (Test-Path -LiteralPath $libraryFile -PathType Leaf)) { continue }
         try {
             $contents = Get-Content -LiteralPath $libraryFile -Raw
             foreach ($match in [regex]::Matches($contents, '"path"\s+"(?<path>(?:\\\\|[^\"])*)"')) {
                 $library = $match.Groups['path'].Value -replace '\\\\', '\'
                 $library = Get-NormalizedPath $library
+                if (-not (Test-Path -LiteralPath $library -PathType Container -ErrorAction SilentlyContinue)) { continue }
                 if (-not $libraries.Contains($library)) { $libraries.Add($library) }
             }
         } catch {
@@ -173,7 +187,7 @@ function Test-BannerlordModulesPath {
 function Get-BannerlordModulesCandidates {
     $candidates = New-Object 'System.Collections.Generic.List[string]'
     foreach ($steamRoot in Get-SteamRoots) {
-        $modules = Join-Path $steamRoot 'steamapps\common\Mount & Blade II Bannerlord\Modules'
+        $modules = [IO.Path]::Combine($steamRoot, 'steamapps', 'common', 'Mount & Blade II Bannerlord', 'Modules')
         if ((Test-BannerlordModulesPath $modules) -and -not $candidates.Contains($modules)) {
             $candidates.Add($modules)
         }
@@ -713,7 +727,7 @@ function Invoke-BannerlordCoopInstaller {
     $installServer = $choice -eq 'Server' -or $choice -eq 'Both'
     $script:NightlyAccessToken = Get-NightlyAccessToken
     $manifest = Get-ReleaseManifest ($choice -eq 'Client')
-    Write-Host "Latest nightly: $($manifest.releaseDate) ($([string]$manifest.headSha).Substring(0, 7))"
+    Write-Host "Latest nightly: $($manifest.releaseDate) ($(Get-ShortCommitSha ([string]$manifest.headSha)))"
     $modulesPath = if ($installClient) { Select-ClientModulesPath } else { $null }
     $serverPath = if ($installServer) { Select-ServerPath } else { $null }
 
