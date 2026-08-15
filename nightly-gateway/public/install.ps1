@@ -115,6 +115,32 @@ function Get-ShortCommitSha {
     return $Sha.Substring(0, 7)
 }
 
+function Get-NightlyDisplayDate {
+    param(
+        [Parameter(Mandatory = $true)][string]$ReleaseDate,
+        [string]$BuiltAt
+    )
+
+    if ([string]::IsNullOrWhiteSpace($BuiltAt) -or $BuiltAt.Length -gt 64 -or
+        $BuiltAt -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$') {
+        return $ReleaseDate
+    }
+    try {
+        $timestamp = [DateTimeOffset]::Parse(
+            $BuiltAt,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::RoundtripKind
+        )
+        $central = [TimeZoneInfo]::FindSystemTimeZoneById('Central Standard Time')
+        return [TimeZoneInfo]::ConvertTime($timestamp, $central).ToString(
+            'yyyy-MM-dd',
+            [Globalization.CultureInfo]::InvariantCulture
+        )
+    } catch {
+        return $ReleaseDate
+    }
+}
+
 function Get-DownloadsPath {
     try {
         $shell = New-Object -ComObject Shell.Application
@@ -727,7 +753,8 @@ function Invoke-BannerlordCoopInstaller {
     $installServer = $choice -eq 'Server' -or $choice -eq 'Both'
     $script:NightlyAccessToken = Get-NightlyAccessToken
     $manifest = Get-ReleaseManifest ($choice -eq 'Client')
-    Write-Host "Latest nightly: $($manifest.releaseDate) ($(Get-ShortCommitSha ([string]$manifest.headSha)))"
+    $displayDate = Get-NightlyDisplayDate ([string]$manifest.releaseDate) ([string]$manifest.builtAt)
+    Write-Host "Latest nightly: $displayDate ($(Get-ShortCommitSha ([string]$manifest.headSha)))"
     $modulesPath = if ($installClient) { Select-ClientModulesPath } else { $null }
     $serverPath = if ($installServer) { Select-ServerPath } else { $null }
 

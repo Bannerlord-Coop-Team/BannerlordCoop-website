@@ -21,6 +21,15 @@ try {
 if ((Get-ShortCommitSha ('a' * 40)) -ne 'aaaaaaa') {
     throw 'The nightly commit SHA was not shortened for display.'
 }
+if ((Get-NightlyDisplayDate '2026-08-14' '2026-08-15T05:50:41.0000000Z') -ne '2026-08-15') {
+    throw 'A nightly completed after Central midnight did not use its completion date.'
+}
+if ((Get-NightlyDisplayDate '2026-08-14' '2026-08-15T04:59:59Z') -ne '2026-08-14') {
+    throw 'A nightly completed before Central midnight used the next UTC date.'
+}
+if ((Get-NightlyDisplayDate '2026-08-14' 'invalid') -ne '2026-08-14') {
+    throw 'An invalid nightly completion timestamp did not fall back to its release date.'
+}
 
 $root = Join-Path ([IO.Path]::GetTempPath()) ('BannerlordCoopInstallerTests-' + [guid]::NewGuid().ToString('N'))
 try {
@@ -73,6 +82,7 @@ try {
 $validManifest = [pscustomobject]@{
     version = 1
     releaseDate = '2026-08-03'
+    builtAt = '2026-08-04T05:30:00Z'
     headSha = 'a' * 40
     client = [pscustomobject]@{
         fileName = 'Coop 08-03-2026.7z'
