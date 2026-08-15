@@ -18,6 +18,10 @@ try {
     Remove-Item Env:BANNERLORDCOOP_INSTALLER_TEST -ErrorAction SilentlyContinue
 }
 
+if ((Get-ShortCommitSha ('a' * 40)) -ne 'aaaaaaa') {
+    throw 'The nightly commit SHA was not shortened for display.'
+}
+
 $root = Join-Path ([IO.Path]::GetTempPath()) ('BannerlordCoopInstallerTests-' + [guid]::NewGuid().ToString('N'))
 try {
     $modules = Join-Path $root 'Mount & Blade II Bannerlord\Modules'
@@ -36,6 +40,34 @@ try {
     }
 } finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+$steamRoot = Join-Path ([IO.Path]::GetTempPath()) ('BannerlordCoopSteamRootTests-' + [guid]::NewGuid().ToString('N'))
+try {
+    $libraryFolder = Join-Path $steamRoot 'steamapps'
+    New-Item -ItemType Directory -Path $libraryFolder -Force | Out-Null
+    $usedDriveNames = @(Get-PSDrive -PSProvider FileSystem | ForEach-Object { $_.Name.ToUpperInvariant() })
+    $missingDriveName = @(68..90 | ForEach-Object { ([char]$_).ToString() } | Where-Object { $usedDriveNames -notcontains $_ }) | Select-Object -First 1
+    if (-not $missingDriveName) { throw 'The stale Steam library test requires an unavailable drive letter.' }
+    $staleLibrary = $missingDriveName + ':\StaleSteamLibrary'
+    $escapedLibrary = $staleLibrary.Replace('\', '\\')
+    $availableLibrary = Join-Path $steamRoot 'secondary-library'
+    New-Item -ItemType Directory -Path $availableLibrary -Force | Out-Null
+    $escapedAvailableLibrary = $availableLibrary.Replace('\', '\\')
+    Set-Content -LiteralPath (Join-Path $libraryFolder 'libraryfolders.vdf') -Value "`"libraryfolders`"`n{`n  `"0`" { `"path`" `"$escapedLibrary`" }`n  `"1`" { `"path`" `"$escapedAvailableLibrary`" }`n}"
+
+    $detectedRoots = @(Get-SteamRoots -AdditionalRoots @($steamRoot, $staleLibrary))
+    if ($detectedRoots -contains (Get-NormalizedPath $staleLibrary)) {
+        throw 'An unavailable Steam library drive was accepted.'
+    }
+    if ($detectedRoots -notcontains (Get-NormalizedPath $steamRoot)) {
+        throw 'The accessible Steam root was not retained.'
+    }
+    if ($detectedRoots -notcontains (Get-NormalizedPath $availableLibrary)) {
+        throw 'An accessible Steam library from libraryfolders.vdf was not retained.'
+    }
+} finally {
+    Remove-Item -LiteralPath $steamRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 $validManifest = [pscustomobject]@{
