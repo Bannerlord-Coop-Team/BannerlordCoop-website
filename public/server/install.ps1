@@ -259,7 +259,19 @@ function Get-ReleaseManifest {
     $headers = Get-NightlyHeaders
     $manifestUri = if ($ClientOnly) { $script:ClientManifestUri } else { $script:ReleaseManifestUri }
     Write-Host 'Checking the latest completed nightly release...'
-    $manifest = Invoke-RestMethod -Method Get -Uri $manifestUri -Headers $headers
+    try {
+        $manifest = Invoke-RestMethod -Method Get -Uri $manifestUri -Headers $headers
+    } catch {
+        $statusCode = 0
+        try { $statusCode = [int]$_.Exception.Response.StatusCode } catch { }
+        if ($statusCode -eq 404) {
+            if ($ClientOnly) {
+                throw 'No Patron client nightly has been published yet. Wait for the next completed nightly build, then run the installer again.'
+            }
+            throw 'No matched Patron client and dedicated-server nightly has been published yet. Wait for the next completed nightly build, then run the installer again.'
+        }
+        throw
+    }
     if ($manifest.version -ne 1 -or
         [string]$manifest.releaseDate -notmatch '^\d{4}-\d{2}-\d{2}$' -or
         [string]$manifest.headSha -notmatch '^[a-f0-9]{40}$') {
@@ -731,7 +743,8 @@ if ($env:BANNERLORDCOOP_INSTALLER_TEST -ne '1') {
     } catch {
         Write-Host ''
         Write-Host "Installation failed: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host 'If the selected folder is under Program Files, reopen PowerShell as Administrator and run the command again.' -ForegroundColor Yellow
+        Write-Host 'If you need help, copy this message and ask in the Bannerlord Coop Discord.' -ForegroundColor Yellow
+        if ($env:BANNERLORDCOOP_INSTALLER_LAUNCHER -eq '1') { exit 1 }
         throw
     }
 }

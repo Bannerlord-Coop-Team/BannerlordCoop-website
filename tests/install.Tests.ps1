@@ -112,6 +112,24 @@ if (-not $rejected) {
     throw 'An incremental release containing an untrusted update URL was accepted.'
 }
 
+function Invoke-RestMethod {
+    param($Method, $Uri, $Headers)
+    $response = [pscustomobject]@{ StatusCode = 404 }
+    $exception = [Net.WebException]::new('Not Found')
+    Add-Member -InputObject $exception -MemberType NoteProperty -Name Response -Value $response -Force
+    throw $exception
+}
+$rejectedMessage = $null
+try { Get-ReleaseManifest | Out-Null } catch { $rejectedMessage = $_.Exception.Message }
+if ($rejectedMessage -notmatch '^No matched Patron client and dedicated-server nightly has been published yet\.') {
+    throw 'A missing combined nightly manifest did not produce the expected installer guidance.'
+}
+$rejectedMessage = $null
+try { Get-ReleaseManifest $true | Out-Null } catch { $rejectedMessage = $_.Exception.Message }
+if ($rejectedMessage -notmatch '^No Patron client nightly has been published yet\.') {
+    throw 'A missing client nightly manifest did not produce the expected installer guidance.'
+}
+
 function Get-Archive {
     param($Uri, $Destination, $ExpectedBytes, $ExpectedSha256, $Label)
     New-Item -ItemType File -Path $Destination -Force | Out-Null

@@ -106,6 +106,14 @@ test("the Windows launcher is synchronized and keeps failures visible", () => {
     assert.equal(served, canonical);
     assert.match(served, /client, Windows dedicated server, or both/);
     assert.match(served, /-ExecutionPolicy Bypass -File/);
+    assert.match(served, /BANNERLORDCOOP_INSTALLER_LAUNCHER=1/);
     assert.match(served, /The installer stopped with an error/);
     assert.match(served, /pause/);
+});
+
+test("Discord approval sends users back to the installer window", () => {
+    const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+
+    assert.match(source, /Return to the installer window\. It will continue automatically\./);
+    assert.doesNotMatch(source, /Return to PowerShell/);
 });

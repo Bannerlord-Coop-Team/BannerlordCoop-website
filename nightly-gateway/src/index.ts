@@ -231,7 +231,7 @@ async function completeOAuth(url: URL, env: Env): Promise<Response> {
         await env.DB.prepare(
             "UPDATE device_sessions SET status = 'approved', discord_user_id = ?, sponsor_discord_user_id = ?, authorized_at = ? WHERE id = ?",
         ).bind(user.id, user.id, nowSeconds(), device.id).run();
-        return html(successPage("Access approved", "Return to PowerShell. The installer will continue automatically."));
+        return html(successPage("Access approved", "Return to the installer window. It will continue automatically."));
     }
     const existing = await env.DB.prepare(
         "SELECT supporter_discord_user_id FROM sponsorships WHERE sponsored_discord_user_id = ?",
@@ -241,7 +241,7 @@ async function completeOAuth(url: URL, env: Env): Promise<Response> {
         await env.DB.prepare(
             "UPDATE device_sessions SET status = 'approved', discord_user_id = ?, sponsor_discord_user_id = ?, authorized_at = ? WHERE id = ?",
         ).bind(user.id, existing.supporter_discord_user_id, nowSeconds(), device.id).run();
-        return html(successPage("Sponsored access approved", "Return to PowerShell. The installer will continue automatically."));
+        return html(successPage("Sponsored access approved", "Return to the installer window. It will continue automatically."));
     }
     await env.DB.prepare("UPDATE device_sessions SET status = 'awaiting-sponsor', discord_user_id = ? WHERE id = ?")
         .bind(user.id, device.id).run();
@@ -289,7 +289,7 @@ async function claimSponsorship(request: Request, env: Env): Promise<Response> {
     await env.DB.prepare(
         "UPDATE device_sessions SET status = 'approved', sponsor_discord_user_id = ?, authorized_at = ? WHERE id = ?",
     ).bind(sponsor.supporter_discord_user_id, nowSeconds(), deviceId).run();
-    return html(successPage("Sponsored access approved", "Return to PowerShell. The installer will continue automatically."));
+    return html(successPage("Sponsored access approved", "Return to the installer window. It will continue automatically."));
 }
 
 async function sponsorPortal(request: Request, env: Env): Promise<Response> {
