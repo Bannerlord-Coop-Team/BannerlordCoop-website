@@ -42,7 +42,7 @@ export function isAllowedSponsorClaimRequest(
     publicOrigin: string,
 ): boolean {
     if (fetchSite === "cross-site") return false;
-    return origin === null || origin === publicOrigin;
+    return origin === null || origin === "null" || origin === publicOrigin;
 }
 
 export async function createSponsorFormToken(sessionToken: string): Promise<string> {
