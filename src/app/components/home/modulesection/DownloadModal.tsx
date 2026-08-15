@@ -9,6 +9,7 @@ const downloadSources = [
         description: "Supporter and Tester nightly: verifies your Discord role or sponsored seat during every install/update. Later server updates download only changed files.",
         href: "/server/install.ps1",
         recommended: true,
+        supporterOnly: true,
         download: true,
     },
     {
@@ -163,6 +164,11 @@ export function DownloadModal() {
                                                 {"recommended" in source && source.recommended && (
                                                     <span className="rounded-sm border border-crimson/60 px-2 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-widest text-crimson-hover sm:text-xs sm:tracking-[0.12em]">
                                                         Recommended
+                                                    </span>
+                                                )}
+                                                {"supporterOnly" in source && source.supporterOnly && (
+                                                    <span className="rounded-sm border border-[#ff8181]/60 px-2 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-widest text-[#ff8181] sm:text-xs sm:tracking-[0.12em]">
+                                                        Supporter Only
                                                     </span>
                                                 )}
                                             </span>
