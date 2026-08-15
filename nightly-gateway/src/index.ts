@@ -184,7 +184,7 @@ async function beginSponsorAuthorization(env: Env): Promise<Response> {
     return Response.redirect(discordAuthorizationUrl(env, state), 302);
 }
 
-async function completeOAuth(url: URL, env: Env): Promise<Response> {
+export async function completeOAuth(url: URL, env: Env): Promise<Response> {
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
     if (!code || code.length > 512 || !state || !DEVICE_SECRET_PATTERN.test(state)) {
@@ -192,11 +192,8 @@ async function completeOAuth(url: URL, env: Env): Promise<Response> {
     }
     const stateHash = await sha256(state);
     const token = await exchangeDiscordCode(env, code);
-    const [user, member] = await Promise.all([
-        discordGet<DiscordUser>("/users/@me", token.access_token),
-        discordGet<DiscordMember>(`/users/@me/guilds/${DISCORD_GUILD_ID}/member`, token.access_token),
-    ]);
-    if (!isDiscordSnowflake(user.id) || !Array.isArray(member.roles)) {
+    const user = await discordGet<DiscordUser>("/users/@me", token.access_token);
+    if (!isDiscordSnowflake(user.id)) {
         throw new GatewayError(502, "discord_response_invalid");
     }
     const portalState = await env.DB.prepare(
@@ -204,6 +201,11 @@ async function completeOAuth(url: URL, env: Env): Promise<Response> {
     ).bind(stateHash, nowSeconds()).first();
     if (portalState !== null) {
         await env.DB.prepare("DELETE FROM oauth_states WHERE state_hash = ?").bind(stateHash).run();
+        const member = await discordGet<DiscordMember>(
+            `/users/@me/guilds/${DISCORD_GUILD_ID}/member`,
+            token.access_token,
+        );
+        if (!Array.isArray(member.roles)) throw new GatewayError(502, "discord_response_invalid");
         if (!hasNightlyAccessRole(member.roles)) return html(errorPage("A Staff, Tester, Patreon, Boosty, or Afdian role is required."), 403);
         await storeSupporterGrant(env, user.id, token.refresh_token);
         const sponsorSession = randomToken(32);
@@ -226,7 +228,15 @@ async function completeOAuth(url: URL, env: Env): Promise<Response> {
     if (device === null || device.expires_at < nowSeconds() || !["pending", "awaiting-sponsor"].includes(device.status)) {
         return html(errorPage("That installer authorization has expired."), 400);
     }
-    if (hasNightlyAccessRole(member.roles)) {
+    const member = await discordGet<DiscordMember>(
+        `/users/@me/guilds/${DISCORD_GUILD_ID}/member`,
+        token.access_token,
+        true,
+    );
+    if (member !== null && !Array.isArray(member.roles)) {
+        throw new GatewayError(502, "discord_response_invalid");
+    }
+    if (member !== null && hasNightlyAccessRole(member.roles)) {
         await storeSupporterGrant(env, user.id, token.refresh_token);
         await env.DB.prepare(
             "UPDATE device_sessions SET status = 'approved', discord_user_id = ?, sponsor_discord_user_id = ?, authorized_at = ? WHERE id = ?",
@@ -504,11 +514,14 @@ async function discordTokenRequest(env: Env, form: URLSearchParams): Promise<Dis
     return value as DiscordToken;
 }
 
-async function discordGet<T>(path: string, accessToken: string): Promise<T> {
+async function discordGet<T>(path: string, accessToken: string): Promise<T>;
+async function discordGet<T>(path: string, accessToken: string, allowNotFound: true): Promise<T | null>;
+async function discordGet<T>(path: string, accessToken: string, allowNotFound = false): Promise<T | null> {
     const response = await fetch(`${DISCORD_API}${path}`, {
         headers: { authorization: `Bearer ${accessToken}`, "user-agent": "BannerlordCoop-Nightly-Gateway/1" },
     });
     const text = await boundedText(response, 64 * 1024);
+    if (allowNotFound && response.status === 404) return null;
     if (!response.ok) throw new GatewayError(response.status === 404 ? 403 : 502, "discord_membership_required");
     return JSON.parse(text) as T;
 }
