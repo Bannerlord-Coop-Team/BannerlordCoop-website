@@ -73,6 +73,14 @@ function discordOAuthFetch(input: string | URL | Request): Promise<Response> {
     throw new Error(`Unexpected test request: ${url}`);
 }
 
+function discordOAuthFetchWithoutRoles(input: string | URL | Request): Promise<Response> {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (url.includes(`/guilds/709516043332354119/member`)) {
+        return Promise.resolve(Response.json({ roles: [] }));
+    }
+    return discordOAuthFetch(input);
+}
+
 test("Discord server membership is optional when claiming a sponsored seat", async () => {
     const originalFetch = globalThis.fetch;
     const { env, statements } = testEnvironment();
@@ -99,6 +107,24 @@ test("Discord server membership remains required to manage sponsor seats", async
             completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env),
             /discord_membership_required/,
         );
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test("the sponsor portal directs code recipients to the installer redemption flow", async () => {
+    const originalFetch = globalThis.fetch;
+    const { env } = testEnvironment({ portalLogin: true });
+    globalThis.fetch = discordOAuthFetchWithoutRoles as typeof fetch;
+    try {
+        const state = "C".repeat(43);
+        const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env);
+        const markup = await response.text();
+        assert.equal(response.status, 403);
+        assert.match(markup, /Have a sponsor code\?/);
+        assert.match(markup, /Codes are redeemed through the installer/);
+        assert.match(markup, /href="\/install\.cmd"/);
+        assert.match(markup, /download="BannerlordCoop-Nightly-Installer\.cmd"/);
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -201,7 +227,7 @@ test("gateway eligibility copy names every supported membership platform", () =>
     assert.match(markup, /Select the client, dedicated server, or both/);
     assert.match(markup, /Staff, Supporter &amp; Tester builds/);
     assert.match(markup, /href="\/install\.cmd" download="BannerlordCoop-Nightly-Installer\.cmd"/);
-    assert.match(markup, /href="\/install\.ps1" download="BannerlordCoop-Nightly-Installer\.ps1"/);
+    assert.doesNotMatch(markup, /Raw PowerShell script|href="\/install\.ps1"/);
     assert.doesNotMatch(markup, /&amp;amp;/);
     assert.doesNotMatch(markup, /community supporters/i);
 });
