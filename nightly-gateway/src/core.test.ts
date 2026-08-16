@@ -125,6 +125,7 @@ test("the sponsor portal directs code recipients to the installer redemption flo
         assert.match(markup, /Codes are redeemed through the installer/);
         assert.match(markup, /href="\/install\.cmd"/);
         assert.match(markup, /download="BannerlordCoop-Nightly-Installer\.cmd"/);
+        assert.match(markup, /href="https:\/\/discord\.gg\/bannerlordcoop">Ask in the Bannerlord Coop Discord<\/a>/);
     } finally {
         globalThis.fetch = originalFetch;
     }
