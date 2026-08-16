@@ -227,7 +227,7 @@ test("gateway eligibility copy names every supported membership platform", () =>
     assert.match(markup, /Select the client, dedicated server, or both/);
     assert.match(markup, /Staff, Supporter &amp; Tester builds/);
     assert.match(markup, /href="\/install\.cmd" download="BannerlordCoop-Nightly-Installer\.cmd"/);
-    assert.match(markup, /href="\/install\.ps1" download="BannerlordCoop-Nightly-Installer\.ps1"/);
+    assert.doesNotMatch(markup, /Raw PowerShell script|href="\/install\.ps1"/);
     assert.doesNotMatch(markup, /&amp;amp;/);
     assert.doesNotMatch(markup, /community supporters/i);
 });
