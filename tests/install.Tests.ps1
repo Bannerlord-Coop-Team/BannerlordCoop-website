@@ -99,6 +99,7 @@ $validManifest = [pscustomobject]@{
             version = 1
             layout = 'base-overlay-v1'
             baseFingerprint = 'd' * 64
+            compatibleBaseFingerprints = @()
             base = [pscustomobject]@{
                 fileName = 'BannerlordCoop-DedicatedServer-Win64-Base.7z'
                 bytes = 4300000000
@@ -187,6 +188,20 @@ function Expand-SevenZipArchive {
     New-Item -ItemType Directory -Path (Join-Path $Destination 'engine\bin\Win64_Shipping_Server') -Force | Out-Null
     New-Item -ItemType File -Path (Join-Path $Destination 'engine\bin\Win64_Shipping_Server\TaleWorlds.Starter.DotNetCore.dll') -Force | Out-Null
     New-Item -ItemType File -Path (Join-Path $Destination 'engine\bin\Win64_Shipping_Server\DedicatedServer.Core.dll') -Force | Out-Null
+    New-Item -ItemType File -Path (Join-Path $Destination 'engine\bin\Win64_Shipping_Server\TaleWorlds.Starter.DotNetCore.deps.json') -Force | Out-Null
+    foreach ($name in @(
+        'System.Diagnostics.DiagnosticSource.dll',
+        'System.Threading.Channels.dll',
+        'System.Collections.Immutable.dll',
+        'System.Text.Json.dll',
+        'System.Reflection.Metadata.dll',
+        'System.Text.Encoding.CodePages.dll',
+        'System.IO.Pipelines.dll',
+        'System.Text.Encodings.Web.dll',
+        'Microsoft.Bcl.AsyncInterfaces.dll'
+    )) {
+        New-Item -ItemType File -Path (Join-Path $Destination "engine\bin\Win64_Shipping_Server\$name") -Force | Out-Null
+    }
     New-Item -ItemType Directory -Path (Join-Path $Destination 'engine\Modules\Native') -Force | Out-Null
     New-Item -ItemType File -Path (Join-Path $Destination 'engine\Modules\Native\SubModule.xml') -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $Destination 'engine\Modules\Coop\bin\Win64_Shipping_Server') -Force | Out-Null
@@ -201,6 +216,8 @@ function Expand-SevenZipArchive {
     New-Item -ItemType File -Path (Join-Path $Destination 'release-info.txt') -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $Destination 'server-data\server-config.json') -Value 'new default'
     New-Item -ItemType File -Path (Join-Path $Destination 'server-data\Game Saves\default_new_game.sav') -Force | Out-Null
+    New-Item -ItemType File -Path (Join-Path $Destination 'engine\bin\Win64_Shipping_Server\default_new_game.sav') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $Destination 'server-data\mod-config.json') -Value 'nightly seed'
 }
 
 $installRoot = Join-Path ([IO.Path]::GetTempPath()) ('BannerlordCoopInstallBehaviorTests-' + [guid]::NewGuid().ToString('N'))
@@ -222,6 +239,7 @@ try {
     $server = Join-Path $installRoot 'server'
     New-Item -ItemType Directory -Path (Join-Path $server 'server-data\Game Saves') -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $server 'server-data\server-config.json') -Value 'my configuration'
+    Set-Content -LiteralPath (Join-Path $server 'server-data\mod-config.json') -Value 'my gameplay configuration'
     Set-Content -LiteralPath (Join-Path $server 'server-data\Game Saves\saveauto1.sav') -Value 'my save'
     Install-Server $validManifest.server $server 'unused.exe'
     if ((Get-Content -LiteralPath (Join-Path $server 'server-data\server-config.json') -Raw).Trim() -ne 'my configuration') {
@@ -229,6 +247,9 @@ try {
     }
     if ((Get-Content -LiteralPath (Join-Path $server 'server-data\Game Saves\saveauto1.sav') -Raw).Trim() -ne 'my save') {
         throw 'An existing server save was overwritten.'
+    }
+    if ((Get-Content -LiteralPath (Join-Path $server 'server-data\mod-config.json') -Raw).Trim() -ne 'my gameplay configuration') {
+        throw 'An existing gameplay configuration was overwritten.'
     }
     if (-not (Test-Path -LiteralPath (Join-Path $server 'BannerlordCoopServer.exe'))) {
         throw 'The dedicated server was not installed.'
@@ -252,7 +273,10 @@ try {
     }
     $nextRelease = $validManifest.server.PSObject.Copy()
     $nextRelease.incremental = $validManifest.server.incremental.PSObject.Copy()
+    $nextRelease.incremental.base = $validManifest.server.incremental.base.PSObject.Copy()
     $nextRelease.incremental.update = $validManifest.server.incremental.update.PSObject.Copy()
+    $nextRelease.incremental.base.sha256 = '8' * 64
+    $nextRelease.incremental.base.publicUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/windows/base/v1/' + ('d' * 64) + '/' + ('8' * 64) + '/server-base.7z'
     $nextRelease.incremental.update.sha256 = '9' * 64
     $nextRelease.incremental.update.publicUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/nightly/windows/updates/' + ('a' * 40) + '/' + ('1' * 40) + '/' + ('9' * 64) + '/server-update.7z'
     $script:DownloadedLabels = @()
@@ -262,6 +286,28 @@ try {
     }
     if ((Get-ServerInstallState $server).updateSha256 -ne ('9' * 64)) {
         throw 'The incremental update state was not advanced.'
+    }
+    if ((Get-ServerInstallState $server).baseSha256 -ne ('e' * 64)) {
+        throw 'A compatible overlay replaced the SHA of the base that is actually installed.'
+    }
+    if ((Get-Content -LiteralPath (Join-Path $server 'server-data\mod-config.json') -Raw).Trim() -ne 'my gameplay configuration') {
+        throw 'A routine incremental update overwrote the gameplay configuration.'
+    }
+    $migratedRelease = $nextRelease.PSObject.Copy()
+    $migratedRelease.incremental = $nextRelease.incremental.PSObject.Copy()
+    $migratedRelease.incremental.update = $nextRelease.incremental.update.PSObject.Copy()
+    $migratedRelease.incremental.baseFingerprint = '7' * 64
+    $migratedRelease.incremental.compatibleBaseFingerprints = @('d' * 64)
+    $migratedRelease.incremental.update.sha256 = '6' * 64
+    $migratedRelease.incremental.update.publicUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/nightly/windows/updates/' + ('a' * 40) + '/' + ('1' * 40) + '/' + ('6' * 64) + '/server-update.7z'
+    $script:DownloadedLabels = @()
+    Install-Server $migratedRelease $server 'unused.exe'
+    if ($script:DownloadedLabels.Count -ne 1 -or $script:DownloadedLabels[0] -ne 'dedicated server update') {
+        throw 'A declared compatible legacy fingerprint triggered a full base download.'
+    }
+    $migratedState = Get-ServerInstallState $server
+    if ($migratedState.baseFingerprint -ne ('7' * 64) -or $migratedState.baseSha256 -ne ('e' * 64)) {
+        throw 'A compatible legacy base was not canonicalized without losing its actual SHA.'
     }
 } finally {
     Remove-Item -LiteralPath $installRoot -Recurse -Force -ErrorAction SilentlyContinue
