@@ -374,6 +374,47 @@ function Test-PublicArtifactUri {
     return $parsed.AbsolutePath -cmatch $pattern
 }
 
+function Get-FileSha256 {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    Write-Host "Verifying $Label..." -ForegroundColor Cyan
+    $previousProgressPreference = $ProgressPreference
+    $ProgressPreference = 'Continue'
+    $stream = [IO.File]::OpenRead($Path)
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    $hash = $null
+    try {
+        $buffer = New-Object byte[] (4 * 1024 * 1024)
+        $total = $stream.Length
+        $processed = 0L
+        $lastPercent = -1
+        while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            [void]$algorithm.TransformBlock($buffer, 0, $read, $buffer, 0)
+            $processed += $read
+            $percent = if ($total -gt 0) {
+                [Math]::Min(100, [int](($processed * 100L) / $total))
+            } else { 100 }
+            if ($percent -ne $lastPercent) {
+                $status = '{0}% ({1:N1} of {2:N1} MiB)' -f $percent, ($processed / 1MB), ($total / 1MB)
+                Write-Progress -Id 2 -Activity "Verifying $Label" -Status $status -PercentComplete $percent
+                $lastPercent = $percent
+            }
+        }
+        $empty = New-Object byte[] 0
+        [void]$algorithm.TransformFinalBlock($empty, 0, 0)
+        $hash = [BitConverter]::ToString($algorithm.Hash).Replace('-', '').ToLowerInvariant()
+    } finally {
+        Write-Progress -Id 2 -Activity "Verifying $Label" -Completed
+        $algorithm.Dispose()
+        $stream.Dispose()
+        $ProgressPreference = $previousProgressPreference
+    }
+    return $hash
+}
+
 function Get-SevenZip {
     param([Parameter(Mandatory = $true)][string]$WorkPath)
 
@@ -390,7 +431,7 @@ function Get-SevenZip {
     $path = Join-Path $WorkPath '7zr.exe'
     Write-Host 'Downloading the official standalone 7-Zip extractor...'
     Invoke-WebRequest -UseBasicParsing -Uri $script:SevenZipUri -OutFile $path
-    $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actualHash = Get-FileSha256 $path '7-Zip extractor'
     if ($actualHash -cne $script:SevenZipSha256) {
         throw 'The downloaded 7-Zip extractor did not match its pinned SHA-256 hash.'
     }
@@ -440,14 +481,20 @@ function Get-Archive {
                 $received += $read
                 $percent = [Math]::Min(100, [int](($received * 100L) / $ExpectedBytes))
                 if ($percent -ne $lastPercent) {
-                    Write-Progress -Activity "Downloading $Label" -Status "$percent%" -PercentComplete $percent
+                    $receivedLabel = if ($ExpectedBytes -ge 1GB) {
+                        '{0:N2} GiB' -f ($received / 1GB)
+                    } else {
+                        '{0:N1} MiB' -f ($received / 1MB)
+                    }
+                    $status = '{0}% ({1} of {2})' -f $percent, $receivedLabel, $sizeLabel
+                    Write-Progress -Id 1 -Activity "Downloading $Label" -Status $status -PercentComplete $percent
                     $lastPercent = $percent
                 }
             }
         } finally {
             if ($output) { $output.Dispose() }
             if ($input) { $input.Dispose() }
-            Write-Progress -Activity "Downloading $Label" -Completed
+            Write-Progress -Id 1 -Activity "Downloading $Label" -Completed
         }
     } finally {
         $ProgressPreference = $previousProgressPreference
@@ -456,8 +503,8 @@ function Get-Archive {
     }
     $file = Get-Item -LiteralPath $Destination
     if ($file.Length -ne $ExpectedBytes) { throw "$Label download was incomplete." }
-    Write-Host "Verifying $Label..."
-    $actualHash = (Get-FileHash -LiteralPath $Destination -Algorithm SHA256).Hash.ToLowerInvariant()
+    Write-Host "Downloaded $Label." -ForegroundColor Green
+    $actualHash = Get-FileSha256 $Destination $Label
     if ($actualHash -cne $ExpectedSha256) {
         throw "$Label did not match the published SHA-256 hash. The nightly may still be updating; try again shortly."
     }
@@ -467,11 +514,13 @@ function Expand-SevenZipArchive {
     param(
         [Parameter(Mandatory = $true)][string]$SevenZip,
         [Parameter(Mandatory = $true)][string]$Archive,
-        [Parameter(Mandatory = $true)][string]$Destination
+        [Parameter(Mandatory = $true)][string]$Destination,
+        [Parameter(Mandatory = $true)][string]$Label
     )
 
+    Write-Host "Extracting $Label..." -ForegroundColor Cyan
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    $arguments = 'x -y -aoa -bso0 -bsp0 "-o{0}" "{1}"' -f $Destination, $Archive
+    $arguments = 'x -y -aoa -bso0 -bsp1 "-o{0}" "{1}"' -f $Destination, $Archive
     $process = Start-Process -FilePath $SevenZip -ArgumentList $arguments -NoNewWindow -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw "7-Zip failed to extract $Archive." }
 }
@@ -496,8 +545,7 @@ function Install-Client {
     Write-Host ''
     Write-Host 'Installing the Coop client mod...' -ForegroundColor Cyan
     Get-Archive ([string]$Release.publicUrl) $archive ([long]$Release.bytes) ([string]$Release.sha256) 'Coop client'
-    Write-Host 'Extracting the Coop client...'
-    Expand-SevenZipArchive $SevenZip $archive $stage
+    Expand-SevenZipArchive $SevenZip $archive $stage 'Coop client'
     $stagedModule = Join-Path $stage 'Coop'
     if (-not (Test-Path -LiteralPath (Join-Path $stagedModule 'SubModule.xml') -PathType Leaf) -or
         -not (Test-Path -LiteralPath (Join-Path $stagedModule 'bin\Win64_Shipping_Client\Coop.Core.dll') -PathType Leaf)) {
@@ -621,7 +669,7 @@ function Install-ServerIncremental {
         $updateArchive = Join-Path $work 'server-update.7z'
         $updateStage = Join-Path $work 'update-stage'
         Get-Archive ([string]$incremental.update.publicUrl) $updateArchive ([long]$incremental.update.bytes) ([string]$incremental.update.sha256) 'dedicated server update'
-        Expand-SevenZipArchive $SevenZip $updateArchive $updateStage
+        Expand-SevenZipArchive $SevenZip $updateArchive $updateStage 'dedicated server update'
 
         if ($sameBase) {
             $owned = @(
@@ -674,8 +722,8 @@ function Install-ServerIncremental {
         $baseArchive = Join-Path $work 'server-base.7z'
         $stage = Join-Path $work 'complete-stage'
         Get-Archive ([string]$incremental.base.publicUrl) $baseArchive ([long]$incremental.base.bytes) ([string]$incremental.base.sha256) 'dedicated server base'
-        Expand-SevenZipArchive $SevenZip $baseArchive $stage
-        Expand-SevenZipArchive $SevenZip $updateArchive $stage
+        Expand-SevenZipArchive $SevenZip $baseArchive $stage 'dedicated server base'
+        Expand-SevenZipArchive $SevenZip $updateArchive $stage 'dedicated server update'
         Assert-ServerStage $stage
         if (Test-Path -LiteralPath (Join-Path $ServerPath 'server-data') -PathType Container) {
             Invoke-Robocopy -Arguments @((Join-Path $ServerPath 'server-data'), (Join-Path $stage 'server-data'), '/E', '/R:2', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/NP')
@@ -719,8 +767,7 @@ function Install-Server {
         $archive = Join-Path $work 'server.7z'
         $stage = Join-Path $work 'stage'
         Get-Archive ([string]$Release.publicUrl) $archive ([long]$Release.bytes) ([string]$Release.sha256) 'dedicated server'
-        Write-Host 'Extracting the dedicated server. This can take several minutes...'
-        Expand-SevenZipArchive $SevenZip $archive $stage
+        Expand-SevenZipArchive $SevenZip $archive $stage 'dedicated server'
         if (-not (Test-Path -LiteralPath (Join-Path $stage 'BannerlordCoopServer.exe') -PathType Leaf) -or
             -not (Test-Path -LiteralPath (Join-Path $stage 'engine') -PathType Container)) {
             throw 'The server archive does not contain a valid dedicated server.'
