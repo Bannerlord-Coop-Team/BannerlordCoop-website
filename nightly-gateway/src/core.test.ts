@@ -245,6 +245,17 @@ test("the Windows launcher is synchronized and keeps failures visible", () => {
     assert.match(served, /pause/);
 });
 
+test("the installer keeps long download, verification, and extraction progress visible", () => {
+    const installer = readFileSync(new URL("../../public/server/install.ps1", import.meta.url), "utf8");
+
+    assert.match(installer, /Write-Progress -Id 1 -Activity "Downloading \$Label"/);
+    assert.match(installer, /Write-Progress -Id 2 -Activity "Verifying \$Label"/);
+    assert.match(installer, /-bsp1/);
+    assert.doesNotMatch(installer, /-bsp0/);
+    assert.match(installer, /Expand-SevenZipArchive \$SevenZip \$archive \$stage 'Coop client'/);
+    assert.match(installer, /Expand-SevenZipArchive \$SevenZip \$archive \$stage 'dedicated server'/);
+});
+
 test("Discord approval sends users back to the installer window", () => {
     const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 
