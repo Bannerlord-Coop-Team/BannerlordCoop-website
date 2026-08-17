@@ -254,7 +254,7 @@ function Select-ClientModulesPath {
             Write-Host 'That is not a Bannerlord Modules folder. It must contain Native\SubModule.xml.' -ForegroundColor Yellow
             continue
         }
-        if (Read-YesNo "Install the Coop client into $path?" $true) { return $path }
+        if (Read-YesNo "Install the Coop client into ${path}?" $true) { return $path }
     }
 }
 
@@ -289,7 +289,7 @@ function Select-ServerPath {
             Write-Host 'Choose an empty folder so unrelated files cannot be overwritten.' -ForegroundColor Yellow
             continue
         }
-        if (Read-YesNo "Install the dedicated server into $path?" $true) { return $path }
+        if (Read-YesNo "Install the dedicated server into ${path}?" $true) { return $path }
     }
 }
 
@@ -338,6 +338,12 @@ function Get-ReleaseManifest {
             [string]$incremental.layout -cne 'base-overlay-v1' -or
             [string]$incremental.baseFingerprint -notmatch '^[a-f0-9]{64}$') {
             throw 'The incremental Windows server release metadata is invalid.'
+        }
+        $compatibleFingerprints = @($incremental.compatibleBaseFingerprints | Where-Object { $null -ne $_ })
+        if ($compatibleFingerprints.Count -gt 16 -or
+            @($compatibleFingerprints | Where-Object { [string]$_ -notmatch '^[a-f0-9]{64}$' }).Count -gt 0 -or
+            @($compatibleFingerprints | Select-Object -Unique).Count -ne $compatibleFingerprints.Count) {
+            throw 'The incremental Windows server compatibility metadata is invalid.'
         }
         foreach ($partName in @('base', 'update')) {
             $part = $incremental.$partName
@@ -593,14 +599,19 @@ function Get-ServerInstallState {
 function Write-ServerInstallState {
     param(
         [Parameter(Mandatory = $true)][string]$ServerPath,
-        [Parameter(Mandatory = $true)][object]$Release
+        [Parameter(Mandatory = $true)][object]$Release,
+        [string]$InstalledBaseSha256 = ''
     )
 
     $incremental = $Release.incremental
+    if (-not $InstalledBaseSha256) { $InstalledBaseSha256 = [string]$incremental.base.sha256 }
+    if ($InstalledBaseSha256 -notmatch '^[a-f0-9]{64}$') {
+        throw 'The installed server base SHA-256 is invalid.'
+    }
     $state = [ordered]@{
         version = 1
         baseFingerprint = [string]$incremental.baseFingerprint
-        baseSha256 = [string]$incremental.base.sha256
+        baseSha256 = $InstalledBaseSha256
         updateSha256 = [string]$incremental.update.sha256
         installedAt = [datetimeoffset]::UtcNow.ToString('o')
     }
@@ -658,9 +669,11 @@ function Install-ServerIncremental {
     New-Item -ItemType Directory -Path $work -Force | Out-Null
     $incremental = $Release.incremental
     $installed = Get-ServerInstallState $ServerPath
+    $compatibleFingerprints = @([string]$incremental.baseFingerprint) + @(
+        $incremental.compatibleBaseFingerprints | Where-Object { $null -ne $_ }
+    )
     $sameBase = $null -ne $installed -and
-        [string]$installed.baseFingerprint -ceq [string]$incremental.baseFingerprint -and
-        [string]$installed.baseSha256 -ceq [string]$incremental.base.sha256
+        $compatibleFingerprints -ccontains [string]$installed.baseFingerprint
     try {
         if ($sameBase -and [string]$installed.updateSha256 -ceq [string]$incremental.update.sha256) {
             Write-Host 'The dedicated server is already up to date.' -ForegroundColor Green
@@ -672,7 +685,7 @@ function Install-ServerIncremental {
         Expand-SevenZipArchive $SevenZip $updateArchive $updateStage 'dedicated server update'
 
         if ($sameBase) {
-            $owned = @(
+            $requiredOwned = @(
                 'BannerlordCoopServer.exe',
                 'engine\Modules\Coop',
                 'engine\Modules\DedicatedServer.Windows\SubModule.xml',
@@ -681,29 +694,53 @@ function Install-ServerIncremental {
                 'engine\bin\Win64_Shipping_Server\DedicatedServer.Core.dll',
                 'release-info.txt'
             )
-            foreach ($relative in $owned) {
+            foreach ($relative in $requiredOwned) {
                 if (-not (Test-Path -LiteralPath (Join-Path $updateStage $relative))) {
                     throw "The server update is missing $relative."
                 }
             }
+            $optionalOwned = @(
+                'engine\bin\Win64_Shipping_Server\TaleWorlds.Starter.DotNetCore.deps.json',
+                'engine\bin\Win64_Shipping_Server\System.Diagnostics.DiagnosticSource.dll',
+                'engine\bin\Win64_Shipping_Server\System.Threading.Channels.dll',
+                'engine\bin\Win64_Shipping_Server\System.Collections.Immutable.dll',
+                'engine\bin\Win64_Shipping_Server\System.Text.Json.dll',
+                'engine\bin\Win64_Shipping_Server\System.Reflection.Metadata.dll',
+                'engine\bin\Win64_Shipping_Server\System.Text.Encoding.CodePages.dll',
+                'engine\bin\Win64_Shipping_Server\System.IO.Pipelines.dll',
+                'engine\bin\Win64_Shipping_Server\System.Text.Encodings.Web.dll',
+                'engine\bin\Win64_Shipping_Server\Microsoft.Bcl.AsyncInterfaces.dll',
+                'engine\bin\Win64_Shipping_Server\default_new_game.sav',
+                'server-data\Game Saves\default_new_game.sav',
+                'server-data\mod-config.json'
+            )
+            $owned = @($requiredOwned) + @($optionalOwned | Where-Object {
+                Test-Path -LiteralPath (Join-Path $updateStage $_)
+            })
             $backup = Join-Path $work 'rollback'
             New-Item -ItemType Directory -Path $backup -Force | Out-Null
+            $applied = @()
             try {
                 foreach ($relative in $owned) {
                     $target = Join-Path $ServerPath $relative
+                    if ($relative -eq 'server-data\mod-config.json' -and
+                        (Test-Path -LiteralPath $target -PathType Leaf)) {
+                        continue
+                    }
                     if (Test-Path -LiteralPath $target) {
                         $backupTarget = Join-Path $backup $relative
                         New-Item -ItemType Directory -Path (Split-Path -Parent $backupTarget) -Force | Out-Null
                         Copy-Item -LiteralPath $target -Destination $backupTarget -Recurse -Force
                     }
+                    $applied += $relative
                     Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction SilentlyContinue
                     New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
                     Copy-Item -LiteralPath (Join-Path $updateStage $relative) -Destination $target -Recurse -Force
                 }
                 Assert-ServerStage $ServerPath
-                Write-ServerInstallState $ServerPath $Release
+                Write-ServerInstallState $ServerPath $Release ([string]$installed.baseSha256)
             } catch {
-                foreach ($relative in $owned) {
+                foreach ($relative in $applied) {
                     $target = Join-Path $ServerPath $relative
                     Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction SilentlyContinue
                     $backupTarget = Join-Path $backup $relative
