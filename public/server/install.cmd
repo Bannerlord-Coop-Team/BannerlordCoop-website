@@ -30,8 +30,6 @@ if not "%INSTALLER_EXIT%"=="0" (
   goto :failed
 )
 
-echo The installer finished successfully.
-pause
 exit /b 0
 
 :download_failed

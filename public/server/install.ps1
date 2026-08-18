@@ -827,6 +827,47 @@ function Install-Server {
     }
 }
 
+function Show-InstallationComplete {
+    param(
+        [AllowNull()][string]$ClientPath,
+        [AllowNull()][string]$ServerPath,
+        [switch]$NoWait
+    )
+
+    Write-Host ''
+    foreach ($line in @(
+        '  ____                              _               _    ____                  '
+        ' | __ )  __ _ _ __  _ __   ___ _ __| | ___  _ __ __| |  / ___|___   ___  _ __ '
+        ' |  _ \ / _` | ''_ \| ''_ \ / _ \ ''__| |/ _ \| ''__/ _` | | |   / _ \ / _ \| ''_ \'
+        ' | |_) | (_| | | | | | | |  __/ |  | | (_) | | | (_| | | |__| (_) | (_) | |_) |'
+        ' |____/ \__,_|_| |_|_| |_|\___|_|  |_|\___/|_|  \__,_|  \____\___/ \___/| .__/'
+        '                                                                        |_|   '
+        '             |\/\/\/|                                       |\/\/\/|'
+        '             |######|                                       |######|'
+        '             |######|                                       |######|'
+        '             |######|                                       |######|'
+        '             |######|                                       |######|'
+        '              \####/                                         \####/'
+        '               \##/                                           \##/'
+        '                \/                                             \/'
+        '                ||                                             ||'
+        '                ||                                             ||'
+        '                ||                                             ||'
+    )) {
+        Write-Host $line -ForegroundColor DarkYellow
+    }
+
+    Write-Host ''
+    Write-Host 'Installation complete!' -ForegroundColor Green
+    Write-Host ''
+    Write-Host 'Installation locations:' -ForegroundColor Cyan
+    if ($ClientPath) { Write-Host "  Client: $ClientPath" }
+    if ($ServerPath) { Write-Host "  Dedicated server: $ServerPath" }
+    Write-Host ''
+    Write-Host 'Press Enter to close the installer.' -ForegroundColor Yellow
+    if (-not $NoWait) { [void](Read-Host) }
+}
+
 function Invoke-BannerlordCoopInstaller {
     Write-Host 'BannerlordCoop nightly installer' -ForegroundColor Cyan
     Write-Host 'This downloads and installs the latest completed Supporter and Tester nightly for you.'
@@ -858,8 +899,8 @@ function Invoke-BannerlordCoopInstaller {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    Write-Host ''
-    Write-Host 'Installation complete.' -ForegroundColor Green
+    $clientPath = if ($installClient) { Join-Path $modulesPath 'Coop' } else { $null }
+    Show-InstallationComplete -ClientPath $clientPath -ServerPath $serverPath
 }
 
 if ($env:BANNERLORDCOOP_INSTALLER_TEST -ne '1') {

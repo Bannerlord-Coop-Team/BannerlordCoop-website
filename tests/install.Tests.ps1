@@ -18,6 +18,41 @@ try {
     Remove-Item Env:BANNERLORDCOOP_INSTALLER_TEST -ErrorAction SilentlyContinue
 }
 
+$sampleClient = 'C:\Games\Mount & Blade II Bannerlord\Modules\Coop'
+$sampleServer = 'C:\BannerlordCoop Server'
+$clientSummary = (Show-InstallationComplete -ClientPath $sampleClient -NoWait 6>&1 | Out-String)
+$bannerLines = @($clientSummary -split "`r?`n" | Select-Object -Skip 1 | Select-Object -First 15)
+if (($bannerLines | Measure-Object -Property Length -Maximum).Maximum -gt 80 -or
+    $clientSummary -notmatch '\|######\|' -or
+    $clientSummary -notmatch [regex]::Escape("Client: $sampleClient") -or
+    $clientSummary -match 'Dedicated server:' -or
+    $clientSummary -match 'PARTY READY|party is ready' -or
+    $clientSummary -notmatch 'Press Enter to close the installer\.') {
+    throw 'The client-only completion summary is incomplete.'
+}
+$serverSummary = (Show-InstallationComplete -ServerPath $sampleServer -NoWait 6>&1 | Out-String)
+if ($serverSummary -notmatch [regex]::Escape("Dedicated server: $sampleServer") -or
+    $serverSummary -match 'Client:') {
+    throw 'The server-only completion summary is incomplete.'
+}
+$combinedSummary = (Show-InstallationComplete -ClientPath $sampleClient -ServerPath $sampleServer -NoWait 6>&1 | Out-String)
+if ($combinedSummary -notmatch [regex]::Escape("Client: $sampleClient") -or
+    $combinedSummary -notmatch [regex]::Escape("Dedicated server: $sampleServer")) {
+    throw 'The combined completion summary did not show both installation locations.'
+}
+$summaryLines = @($combinedSummary -split "`r?`n")
+$completionLine = [array]::IndexOf($summaryLines, 'Installation complete!')
+if ($completionLine -lt 1) {
+    throw 'The completion summary did not contain the expected status line.'
+}
+$artLines = @($summaryLines[0..($completionLine - 1)] | Where-Object { $_.Length -gt 0 })
+if ($artLines -notcontains ($artLines | Where-Object { $_ -match '\|######\|' } | Select-Object -First 1)) {
+    throw 'The completion artwork did not include the twin war banners.'
+}
+if ($artLines | Where-Object { $_.Length -gt 80 }) {
+    throw 'The completion artwork exceeds the 80-column installer window.'
+}
+
 if ((Get-ShortCommitSha ('a' * 40)) -ne 'aaaaaaa') {
     throw 'The nightly commit SHA was not shortened for display.'
 }
