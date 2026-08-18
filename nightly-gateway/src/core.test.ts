@@ -242,7 +242,21 @@ test("the Windows launcher is synchronized and keeps failures visible", () => {
     assert.match(served, /-ExecutionPolicy Bypass -File/);
     assert.match(served, /BANNERLORDCOOP_INSTALLER_LAUNCHER=1/);
     assert.match(served, /The installer stopped with an error/);
-    assert.match(served, /pause/);
+    assert.equal(served.match(/^pause$/gim)?.length, 1);
+    assert.doesNotMatch(served, /The installer finished successfully/);
+});
+
+test("the installer owns the completion banner, locations, and close prompt", () => {
+    const installer = readFileSync(new URL("../../public/server/install.ps1", import.meta.url), "utf8");
+
+    assert.match(installer, /function Show-InstallationComplete/);
+    assert.doesNotMatch(installer, /PARTY READY|party is ready/i);
+    assert.match(installer, /\|######\|/);
+    assert.match(installer, /Installation locations:/);
+    assert.match(installer, /Client: \$ClientPath/);
+    assert.match(installer, /Dedicated server: \$ServerPath/);
+    assert.match(installer, /Press Enter to close the installer\./);
+    assert.match(installer, /if \(-not \$NoWait\) \{ \[void\]\(Read-Host\) \}/);
 });
 
 test("the installer keeps long download, verification, and extraction progress visible", () => {
