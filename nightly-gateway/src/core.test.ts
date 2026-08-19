@@ -259,6 +259,17 @@ test("the installer owns the completion banner, locations, and close prompt", ()
     assert.match(installer, /if \(-not \$NoWait\) \{ \[void\]\(Read-Host\) \}/);
 });
 
+test("the installer explains a locked CrashReporter or Bannerlord client file", () => {
+    const installer = readFileSync(new URL("../../public/server/install.ps1", import.meta.url), "utf8");
+
+    assert.match(installer, /function Get-LockedClientProcesses/);
+    assert.match(installer, /function Remove-OldClient/);
+    assert.match(installer, /\$\(\$running\[0\]\) is still running/);
+    assert.match(installer, /access to '\$FailedPath' was denied/);
+    assert.match(installer, /Close Bannerlord and Coop\.CrashReporter\.exe/);
+    assert.doesNotMatch(installer, /\$fromClientFolder -or \(\$name -ieq 'Bannerlord'\) -or \(\$name -ieq 'Coop\.CrashReporter'\)/);
+});
+
 test("the installer keeps long download, verification, and extraction progress visible", () => {
     const installer = readFileSync(new URL("../../public/server/install.ps1", import.meta.url), "utf8");
 

@@ -538,6 +538,94 @@ function Unblock-Installation {
     Get-ChildItem -LiteralPath $Path -Recurse -File -Force | Unblock-File
 }
 
+function Get-LockedClientProcesses {
+    param([Parameter(Mandatory = $true)][string]$ClientPath)
+
+    $normalized = (Get-NormalizedPath $ClientPath) + [IO.Path]::DirectorySeparatorChar
+    $gameRoot = Split-Path -Parent (Split-Path -Parent $ClientPath)
+    $gamePrefix = if ([string]::IsNullOrWhiteSpace($gameRoot)) {
+        $normalized
+    } else {
+        (Get-NormalizedPath $gameRoot) + [IO.Path]::DirectorySeparatorChar
+    }
+    return @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        $name = [string]$_.ProcessName
+        $path = $null
+        try { $path = [string]$_.Path } catch { $path = $null }
+        if ([string]::IsNullOrWhiteSpace($path)) {
+            return ($name -ieq 'Bannerlord') -or ($name -ieq 'Coop.CrashReporter')
+        }
+        try { $path = Get-NormalizedPath $path } catch { return $false }
+        $fromClientFolder = $path.StartsWith($normalized, [StringComparison]::OrdinalIgnoreCase)
+        $fromThisGame = $path.StartsWith($gamePrefix, [StringComparison]::OrdinalIgnoreCase)
+        $fromClientFolder -or
+            ($fromThisGame -and $name -ieq 'Bannerlord') -or
+            ($fromThisGame -and $name -ieq 'Coop.CrashReporter')
+    })
+}
+
+function Get-DeniedClientFileName {
+    param([Parameter(Mandatory = $true)][System.Exception]$Cause)
+
+    $exception = $Cause
+    while ($null -ne $exception) {
+        $message = [string]$exception.Message
+        if ($message -match "Access to the path '(?<path>[^']+)' is denied") {
+            return [IO.Path]::GetFileName($Matches['path'])
+        }
+        $exception = $exception.InnerException
+    }
+    return $null
+}
+
+function Get-ClientReplacementFailure {
+    param(
+        [Parameter(Mandatory = $true)][string]$ClientPath,
+        [string]$FailedPath
+    )
+
+    $running = @(Get-LockedClientProcesses $ClientPath | ForEach-Object {
+        $name = [string]$_.ProcessName
+        if ($name -ieq 'Coop.CrashReporter') { 'Coop.CrashReporter.exe' }
+        elseif ($name -ieq 'Bannerlord') { 'Bannerlord.exe' }
+        else { [IO.Path]::GetFileName([string]$_.Path) }
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+    if ($running.Count -eq 1) {
+        return "The old Coop client could not be replaced because $($running[0]) is still running. Close Bannerlord and Coop.CrashReporter.exe, then run the installer again."
+    }
+    if ($running.Count -gt 1) {
+        return "The old Coop client could not be replaced because $($running -join ', ') are still running. Close Bannerlord and Coop.CrashReporter.exe, then run the installer again."
+    }
+    if ($FailedPath) {
+        return "The old Coop client could not be replaced because access to '$FailedPath' was denied. Close Bannerlord and Coop.CrashReporter.exe, then run the installer again."
+    }
+    return 'The old Coop client could not be completely removed. Close Bannerlord and Coop.CrashReporter.exe, then try again.'
+}
+
+function Assert-ClientUnlocked {
+    param([Parameter(Mandatory = $true)][string]$ClientPath)
+
+    $running = @(Get-LockedClientProcesses $ClientPath)
+    if ($running.Count -gt 0) {
+        throw (Get-ClientReplacementFailure -ClientPath $ClientPath)
+    }
+}
+
+function Remove-OldClient {
+    param([Parameter(Mandatory = $true)][string]$ClientPath)
+
+    if (-not (Test-Path -LiteralPath $ClientPath)) { return }
+    Assert-ClientUnlocked $ClientPath
+    try {
+        Remove-Item -LiteralPath $ClientPath -Recurse -Force
+    } catch {
+        throw (Get-ClientReplacementFailure -ClientPath $ClientPath -FailedPath (Get-DeniedClientFileName $_.Exception))
+    }
+    if (Test-Path -LiteralPath $ClientPath) {
+        throw (Get-ClientReplacementFailure -ClientPath $ClientPath)
+    }
+}
+
 function Install-Client {
     param(
         [Parameter(Mandatory = $true)][object]$Release,
@@ -550,6 +638,8 @@ function Install-Client {
     $stage = Join-Path $WorkPath 'client-stage'
     Write-Host ''
     Write-Host 'Installing the Coop client mod...' -ForegroundColor Cyan
+    $target = Join-Path $ModulesPath 'Coop'
+    Assert-ClientUnlocked $target
     Get-Archive ([string]$Release.publicUrl) $archive ([long]$Release.bytes) ([string]$Release.sha256) 'Coop client'
     Expand-SevenZipArchive $SevenZip $archive $stage 'Coop client'
     $stagedModule = Join-Path $stage 'Coop'
@@ -557,15 +647,13 @@ function Install-Client {
         -not (Test-Path -LiteralPath (Join-Path $stagedModule 'bin\Win64_Shipping_Client\Coop.Core.dll') -PathType Leaf)) {
         throw 'The client archive does not contain a valid Coop module.'
     }
-    $target = Join-Path $ModulesPath 'Coop'
     Write-Host "Removing the old Coop client from $target..."
-    if (Test-Path -LiteralPath $target) {
-        Remove-Item -LiteralPath $target -Recurse -Force
+    Remove-OldClient $target
+    try {
+        Copy-Item -LiteralPath $stagedModule -Destination $target -Recurse -Force
+    } catch {
+        throw (Get-ClientReplacementFailure -ClientPath $target -FailedPath (Get-DeniedClientFileName $_.Exception))
     }
-    if (Test-Path -LiteralPath $target) {
-        throw 'The old Coop client could not be completely removed. Close Bannerlord and try again.'
-    }
-    Copy-Item -LiteralPath $stagedModule -Destination $target -Recurse -Force
     Unblock-Installation $target
     Write-Host "Client installed: $target" -ForegroundColor Green
 }
@@ -888,6 +976,7 @@ function Invoke-BannerlordCoopInstaller {
     if ($installClient) { Write-Host "  Client: $modulesPath\Coop" }
     if ($installServer) { Write-Host "  Dedicated server: $serverPath" }
     if (-not (Read-YesNo 'Continue with the installation?' $true)) { throw 'Installation cancelled.' }
+    if ($installClient) { Assert-ClientUnlocked (Join-Path $modulesPath 'Coop') }
 
     $work = Join-Path ([IO.Path]::GetTempPath()) ('BannerlordCoopInstaller-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $work -Force | Out-Null
