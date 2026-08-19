@@ -115,7 +115,7 @@ export async function Navbar() {
                             ) : (
                                 <Link
                                     href="/login"
-                                    className="inline-flex min-h-10 items-center rounded-sm border border-crimson bg-transparent px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-foreground transition-colors hover:border-crimson-hover hover:bg-crimson/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]"
+                                    className="inline-flex min-h-10 items-center rounded-sm border border-white/20 bg-background/70 px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-foreground transition-colors hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]"
                                 >
                                     Sign in
                                 </Link>
