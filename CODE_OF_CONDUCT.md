@@ -102,7 +102,7 @@ It may also apply when someone is publicly representing Bannerlord Coop or actin
 
 ## Reporting Problems
 
-If you experience or witness behavior that violates this Code of Conduct, report it privately to a Bannerlord Coop maintainer or Discord moderator.
+If you experience or witness behavior that violates this Code of Conduct, report it privately by opening a ticket through the ticket system in the [official Bannerlord Coop Discord server](https://discord.gg/bannerlordcoop).
 
 When possible, include relevant information such as:
 
