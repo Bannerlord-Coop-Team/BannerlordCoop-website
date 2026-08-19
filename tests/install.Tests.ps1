@@ -271,6 +271,28 @@ try {
         throw 'The replacement client was not installed.'
     }
 
+    $denied = Get-DeniedClientFileName ([UnauthorizedAccessException]::new("Access to the path 'C:\\Modules\\Coop\\bin\\Win64_Shipping_Client\\Coop.CrashReporter.exe' is denied."))
+    if ($denied -cne 'Coop.CrashReporter.exe') {
+        throw 'A locked CrashReporter path was not reduced to its file name.'
+    }
+    function Get-LockedClientProcesses {
+        param($ClientPath)
+        return @([pscustomobject]@{ ProcessName = 'Coop.CrashReporter'; Path = Join-Path $ClientPath 'bin\\Win64_Shipping_Client\\Coop.CrashReporter.exe' })
+    }
+    $runningMessage = Get-ClientReplacementFailure -ClientPath $oldModule
+    if ($runningMessage -notmatch 'Coop.CrashReporter.exe is still running' -or
+        $runningMessage -notmatch 'Close Bannerlord and Coop.CrashReporter.exe') {
+        throw 'A running crash reporter did not produce the expected replacement guidance.'
+    }
+    function Get-LockedClientProcesses {
+        param($ClientPath)
+        return @()
+    }
+    $deniedMessage = Get-ClientReplacementFailure -ClientPath $oldModule -FailedPath 'Coop.CrashReporter.exe'
+    if ($deniedMessage -notmatch [regex]::Escape("access to 'Coop.CrashReporter.exe' was denied")) {
+        throw 'An access-denied client replacement did not name the locked file.'
+    }
+
     $server = Join-Path $installRoot 'server'
     New-Item -ItemType Directory -Path (Join-Path $server 'server-data\Game Saves') -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $server 'server-data\server-config.json') -Value 'my configuration'
