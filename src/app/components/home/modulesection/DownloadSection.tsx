@@ -35,7 +35,7 @@ export function DownloadSection() {
                         id="final-cta-heading"
                         className="mt-4 font-display text-4xl font-semibold uppercase leading-[0.9] tracking-[-0.03em] text-foreground min-[380px]:text-5xl sm:text-6xl lg:text-7xl 2xl:text-8xl"
                     >
-                        The Realm Awaits.
+                        Calradia Awaits.
                         <span className="block text-crimson">
                             Bring Friends.
                         </span>
