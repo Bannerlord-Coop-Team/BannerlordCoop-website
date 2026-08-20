@@ -15,6 +15,10 @@ const navigation = [
         href: "/servers",
     },
     {
+        label: "Cheats",
+        href: "/cheats",
+    },
+    {
         label: "Wiki",
         href: "/wiki",
     },
