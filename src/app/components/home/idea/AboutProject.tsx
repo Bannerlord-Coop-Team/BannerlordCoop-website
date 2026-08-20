@@ -18,7 +18,7 @@ const principles: ProjectPrinciple[] = [
     {
         title: "The Work",
         description:
-            "Synchronizing a persistent campaign takes careful engineering and constant refinement. Dedicated servers, Steam integration, testing, and stability improvements keep the shared realm moving.",
+            "Synchronizing a persistent campaign takes careful engineering and constant refinement. Dedicated servers, Steam integration, testing, and stability improvements keep the shared world moving.",
         icon: ServerCog,
     },
     {
