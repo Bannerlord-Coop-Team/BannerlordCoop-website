@@ -9,7 +9,6 @@ const navigation = [
     { label: "Home", href: "/" },
     { label: "Servers", href: "/servers" },
     { label: "Cheats", href: "/cheats" },
-    { label: "Wiki", href: "/wiki" },
     { label: "Changelog", href: "/changelog" },
     { label: "Support", href: "/support" },
 ] as const;
