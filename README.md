@@ -2,9 +2,8 @@
 
 > Nightly builds are restricted to Testers and current Patreon, Boosty, and
 > Afdian supporters, plus up to ten sponsored Discord accounts per eligible
-> member. The
-> public installer verifies that entitlement through the private download
-> gateway on every run. See [nightly-gateway/README.md](nightly-gateway/README.md)
+> member. The installer is served by the private download gateway and verifies
+> that entitlement on every run. See [nightly-gateway/README.md](nightly-gateway/README.md)
 > for the security boundary and rollout order.
 
 The official website for [Bannerlord Coop](https://github.com/Bannerlord-Coop-Team/BannerlordCoop), a module that brings cooperative multiplayer to the Mount & Blade II: Bannerlord campaign.

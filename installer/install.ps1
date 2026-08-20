@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$script:InstallerUri = 'https://bannerlordcoop.com/server/install.ps1'
+$script:InstallerUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/install.ps1'
 $script:NightlyGatewayUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev'
 $script:ClientManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/client"
 $script:ReleaseManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/release"

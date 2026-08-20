@@ -7,10 +7,9 @@ const downloadSources = [
     {
         name: "Guided Installer",
         description: "Supporter and Tester nightly: verifies your Discord role or sponsored seat during every install/update. Later server updates download only changed files.",
-        href: "/server/install.ps1",
+        href: "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/",
         recommended: true,
         supporterOnly: true,
-        download: true,
     },
     {
         name: "Steam Workshop",
@@ -151,9 +150,8 @@ export function DownloadModal() {
                                     <a
                                         key={source.name}
                                         href={source.href}
-                                        target={"download" in source ? undefined : "_blank"}
-                                        rel={"download" in source ? undefined : "noopener noreferrer"}
-                                        download={"download" in source ? "install.ps1" : undefined}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
                                         className="group flex items-start justify-between gap-3 rounded-sm border border-white/10 bg-background/60 p-4 text-left transition-colors duration-300 hover:border-gold/50 hover:bg-white/2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised sm:items-center sm:gap-6 sm:p-6"
                                     >
                                         <span>

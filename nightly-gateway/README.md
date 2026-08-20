@@ -26,7 +26,7 @@ the underlying public PowerShell installer at `/install.ps1` so the live
 nightly-access page always has a working entry point. The launcher downloads
 the latest script, runs it with a one-process execution-policy bypass, and
 keeps errors visible. Run `npm run gateway:sync-installer` after changing
-either canonical file under `public/server/`; `gateway:dry-run` performs the
+either canonical file under `installer/`; `gateway:dry-run` performs the
 sync automatically before packaging.
 
 ## Required production setup
