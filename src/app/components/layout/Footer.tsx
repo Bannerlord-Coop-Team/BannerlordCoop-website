@@ -18,6 +18,10 @@ const navigationLinks = [
         label: "Download",
         href: "/#download",
     },
+    {
+        label: "Cheats",
+        href: "/cheats",
+    },
 ];
 
 const communityLinks = [

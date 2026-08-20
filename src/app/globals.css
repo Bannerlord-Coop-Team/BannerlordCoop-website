@@ -55,10 +55,15 @@ html {
   margin-inline: auto;
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   min-height: 100vh;
   margin: 0;
-  overflow-x: hidden;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-inter, Arial, Helvetica, sans-serif);
