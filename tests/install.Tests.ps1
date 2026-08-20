@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$installer = Join-Path $PSScriptRoot '..\public\server\install.ps1'
+$installer = Join-Path $PSScriptRoot '..\installer\install.ps1'
 $parseErrors = $null
 [void][Management.Automation.Language.Parser]::ParseFile(
     $installer,

@@ -234,7 +234,7 @@ test("gateway eligibility copy names every supported membership platform", () =>
 });
 
 test("the Windows launcher is synchronized and keeps failures visible", () => {
-    const canonical = readFileSync(new URL("../../public/server/install.cmd", import.meta.url), "utf8");
+    const canonical = readFileSync(new URL("../../installer/install.cmd", import.meta.url), "utf8");
     const served = readFileSync(new URL("../public/install.cmd", import.meta.url), "utf8");
 
     assert.equal(served, canonical);
@@ -247,7 +247,7 @@ test("the Windows launcher is synchronized and keeps failures visible", () => {
 });
 
 test("the installer owns the completion banner, locations, and close prompt", () => {
-    const installer = readFileSync(new URL("../../public/server/install.ps1", import.meta.url), "utf8");
+    const installer = readFileSync(new URL("../../installer/install.ps1", import.meta.url), "utf8");
 
     assert.match(installer, /function Show-InstallationComplete/);
     assert.doesNotMatch(installer, /PARTY READY|party is ready/i);
@@ -260,7 +260,7 @@ test("the installer owns the completion banner, locations, and close prompt", ()
 });
 
 test("the installer explains a locked CrashReporter or Bannerlord client file", () => {
-    const installer = readFileSync(new URL("../../public/server/install.ps1", import.meta.url), "utf8");
+    const installer = readFileSync(new URL("../../installer/install.ps1", import.meta.url), "utf8");
 
     assert.match(installer, /function Get-LockedClientProcesses/);
     assert.match(installer, /function Remove-OldClient/);
@@ -271,7 +271,7 @@ test("the installer explains a locked CrashReporter or Bannerlord client file", 
 });
 
 test("the installer keeps long download, verification, and extraction progress visible", () => {
-    const installer = readFileSync(new URL("../../public/server/install.ps1", import.meta.url), "utf8");
+    const installer = readFileSync(new URL("../../installer/install.ps1", import.meta.url), "utf8");
 
     assert.match(installer, /Write-Progress -Id 1 -Activity "Downloading \$Label"/);
     assert.match(installer, /Write-Progress -Id 2 -Activity "Verifying \$Label"/);
