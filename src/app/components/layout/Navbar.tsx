@@ -19,10 +19,6 @@ const navigation = [
         href: "/cheats",
     },
     {
-        label: "Wiki",
-        href: "/wiki",
-    },
-    {
         label: "Changelog",
         href: "/changelog",
     },
