@@ -162,7 +162,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-3 rounded-sm border border-gold/20 bg-gold/[0.06] px-4 py-3">
+                    <div className="flex items-center gap-3 rounded-sm border border-gold/20 bg-gold/6 px-4 py-3">
                         <Users aria-hidden="true" className="size-5 text-gold" />
                         <div>
                             <p className="font-display text-2xl font-semibold leading-none text-foreground">
@@ -189,7 +189,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         name="q"
                         defaultValue={query}
                         placeholder="Search by name, email, provider, or role"
-                        className="min-h-12 w-full rounded-sm border border-white/15 bg-surface py-3 pr-28 pl-11 text-sm text-foreground outline-none placeholder:text-foreground-dim hover:border-white/25 focus:border-gold focus:ring-1 focus:ring-gold/30"
+                        className="min-h-12 w-full rounded-sm border border-white/15 bg-surface py-3 pr-28 pl-11 text-sm text-foreground outline-none hover:border-white/25 focus:border-gold focus:ring-1 focus:ring-gold/30"
                     />
                     <button
                         type="submit"
@@ -218,7 +218,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <div className="mt-8 overflow-hidden rounded-sm border border-white/10 bg-surface">
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-215 border-collapse text-left">
-                            <thead className="border-b border-white/10 bg-white/[0.025]">
+                            <thead className="border-b border-white/10 bg-white/2.5">
                                 <tr className="font-label text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted">
                                     <th scope="col" className="px-5 py-4">Member</th>
                                     <th scope="col" className="px-5 py-4">Provider</th>
@@ -236,7 +236,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                         isBootstrapAdmin(member.email);
 
                                     return (
-                                        <tr key={member.id} className="transition-colors hover:bg-white/[0.025]">
+                                        <tr key={member.id} className="transition-colors hover:bg-white/2.5">
                                             <td className="px-5 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-gold/25 bg-gold/10 font-label text-xs font-bold text-gold">
@@ -248,7 +248,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-5 py-4 font-label text-xs uppercase tracking-[0.1em] text-foreground-muted">
+                                            <td className="px-5 py-4 font-label text-xs uppercase tracking-widest text-foreground-muted">
                                                 {member.app_metadata.provider ?? "email"}
                                             </td>
                                             <td className="px-5 py-4 text-sm text-foreground-muted">
