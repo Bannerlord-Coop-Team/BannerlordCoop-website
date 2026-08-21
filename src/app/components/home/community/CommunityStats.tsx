@@ -9,7 +9,7 @@ type CommunityStatsProps = {
     playersOnline: number | null;
     dedicatedServersCount: number | null;
     battlesToday: number | null;
-    totalDownloads: number | null;
+    platformReach: number | null;
     servers: CoopServer[];
     generatedAt: string | null;
 };
@@ -23,13 +23,13 @@ type Stat = {
     icon: LucideIcon;
 };
 
-export function CommunityStats({ playersOnline, dedicatedServersCount, battlesToday, totalDownloads, servers, generatedAt }: CommunityStatsProps) {
+export function CommunityStats({ playersOnline, dedicatedServersCount, battlesToday, platformReach, servers, generatedAt }: CommunityStatsProps) {
     const registryAvailable = generatedAt !== null;
     const stats: Stat[] = [
         { label: "Players Online", description: "Across all active servers", value: playersOnline, status: registryAvailable ? "Live" : "Unavailable", isLive: registryAvailable, icon: Users },
         { label: "Dedicated Servers", description: "Reporting to the network", value: dedicatedServersCount, status: registryAvailable ? "Live" : "Unavailable", isLive: registryAvailable, icon: Server },
         { label: "Battles Fought", description: "Since 00:00 UTC", value: battlesToday, status: "Pending", icon: Swords },
-        { label: "Total Downloads", description: "Across all releases", value: totalDownloads, status: "Pending", icon: Download },
+        { label: "Platform Reach", description: "Total Community Outreach", value: platformReach, status: platformReach === null ? "Unavailable" : "Live", isLive: platformReach !== null, icon: Download },
     ];
 
     return (

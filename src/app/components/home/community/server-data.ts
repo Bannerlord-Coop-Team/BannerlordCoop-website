@@ -17,6 +17,7 @@ type CommunityServerRow = {
 export type CommunityServerData = {
     playersOnline: number | null;
     dedicatedServersCount: number | null;
+    platformReach: number | null;
     servers: CoopServer[];
     generatedAt: string | null;
 };
@@ -24,6 +25,7 @@ export type CommunityServerData = {
 const unavailableData: CommunityServerData = {
     playersOnline: null,
     dedicatedServersCount: null,
+    platformReach: null,
     servers: [],
     generatedAt: null,
 };
@@ -46,25 +48,43 @@ export async function getCommunityServerData(): Promise<CommunityServerData> {
             Date.now() - ONLINE_WINDOW_MILLISECONDS,
         ).toISOString();
 
-        const { data, error } = await supabase
-            .from("community_servers")
-            .select(
-                "id, name, region, mode, connected_players, max_players",
-            )
-            .eq("public", true)
-            .eq("enabled", true)
-            .gte("last_seen_at", activeAfter)
-            .order("connected_players", { ascending: false })
-            .order("name", { ascending: true });
+        const [serversResult, platformResult] = await Promise.all([
+            supabase
+                .from("community_servers")
+                .select(
+                    "id, name, region, mode, connected_players, max_players",
+                )
+                .eq("public", true)
+                .eq("enabled", true)
+                .gte("last_seen_at", activeAfter)
+                .order("connected_players", { ascending: false })
+                .order("name", { ascending: true }),
+            supabase
+                .from("platform_statistics")
+                .select("value"),
+        ]);
 
-        if (error) {
-            console.error("Could not load community servers", error);
+        if (serversResult.error) {
+            console.error(
+                "Could not load community servers",
+                serversResult.error,
+            );
             return unavailableData;
         }
 
-        const servers = ((data ?? []) as CommunityServerRow[]).map(
-            toCoopServer,
-        );
+        if (platformResult.error) {
+            console.error(
+                "Could not load platform statistics",
+                platformResult.error,
+            );
+        }
+
+        const servers = (
+            (serversResult.data ?? []) as CommunityServerRow[]
+        ).map(toCoopServer);
+        const platformReach = platformResult.error
+            ? null
+            : sumPlatformStatistics(platformResult.data ?? []);
 
         return {
             playersOnline: servers.reduce(
@@ -72,6 +92,7 @@ export async function getCommunityServerData(): Promise<CommunityServerData> {
                 0,
             ),
             dedicatedServersCount: servers.length,
+            platformReach,
             servers,
             generatedAt: new Date().toISOString(),
         };
@@ -79,6 +100,42 @@ export async function getCommunityServerData(): Promise<CommunityServerData> {
         console.error("Community server data is unavailable", error);
         return unavailableData;
     }
+}
+
+function sumPlatformStatistics(
+    rows: { value: unknown }[],
+): number | null {
+    if (rows.length === 0) return null;
+
+    let total = 0;
+
+    for (const row of rows) {
+        const value = parseNonNegativeInteger(row.value);
+        if (value === null || total > Number.MAX_SAFE_INTEGER - value) {
+            return null;
+        }
+
+        total += value;
+    }
+
+    return total;
+}
+
+function parseNonNegativeInteger(value: unknown): number | null {
+    if (
+        typeof value === "number" &&
+        Number.isSafeInteger(value) &&
+        value >= 0
+    ) {
+        return value;
+    }
+
+    if (typeof value === "string" && /^[0-9]+$/.test(value)) {
+        const parsed = Number(value);
+        return Number.isSafeInteger(parsed) ? parsed : null;
+    }
+
+    return null;
 }
 
 function toCoopServer(row: CommunityServerRow): CoopServer {

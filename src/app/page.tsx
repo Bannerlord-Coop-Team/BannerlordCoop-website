@@ -20,7 +20,7 @@ export default async function Home() {
                     playersOnline={community.playersOnline}
                     dedicatedServersCount={community.dedicatedServersCount}
                     battlesToday={null}
-                    totalDownloads={null}
+                    platformReach={community.platformReach}
                     servers={community.servers}
                     generatedAt={community.generatedAt}
                 />
