@@ -11,6 +11,7 @@ type CommunityStatsProps = {
     battlesToday: number | null;
     totalDownloads: number | null;
     servers: CoopServer[];
+    generatedAt: string | null;
 };
 
 type Stat = {
@@ -22,10 +23,11 @@ type Stat = {
     icon: LucideIcon;
 };
 
-export function CommunityStats({ playersOnline, dedicatedServersCount, battlesToday, totalDownloads, servers }: CommunityStatsProps) {
+export function CommunityStats({ playersOnline, dedicatedServersCount, battlesToday, totalDownloads, servers, generatedAt }: CommunityStatsProps) {
+    const registryAvailable = generatedAt !== null;
     const stats: Stat[] = [
-        { label: "Players Online", description: "Across all active servers", value: playersOnline, status: "Pending", icon: Users },
-        { label: "Dedicated Servers", description: "Reporting to the network", value: dedicatedServersCount, status: "Pending", icon: Server },
+        { label: "Players Online", description: "Across all active servers", value: playersOnline, status: registryAvailable ? "Live" : "Unavailable", isLive: registryAvailable, icon: Users },
+        { label: "Dedicated Servers", description: "Reporting to the network", value: dedicatedServersCount, status: registryAvailable ? "Live" : "Unavailable", isLive: registryAvailable, icon: Server },
         { label: "Battles Fought", description: "Since 00:00 UTC", value: battlesToday, status: "Pending", icon: Swords },
         { label: "Total Downloads", description: "Across all releases", value: totalDownloads, status: "Pending", icon: Download },
     ];
@@ -52,8 +54,26 @@ export function CommunityStats({ playersOnline, dedicatedServersCount, battlesTo
                         </div>
                     ))}
                 </div>
-                <ActiveGroups servers={servers} />
+                <ActiveGroups
+                    servers={servers}
+                    dataAvailable={registryAvailable}
+                    lastUpdated={formatLastUpdated(generatedAt)}
+                />
             </div>
         </section>
     );
+}
+
+function formatLastUpdated(value: string | null): string | undefined {
+    if (value === null) return undefined;
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return undefined;
+
+    return new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "UTC",
+        timeZoneName: "short",
+    }).format(date);
 }

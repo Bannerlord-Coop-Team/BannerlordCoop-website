@@ -6,11 +6,12 @@ import type { CoopServer } from "@/app/components/utils/types/server.types";
 type ActiveGroupsProps = {
     servers: CoopServer[];
     lastUpdated?: string;
+    dataAvailable: boolean;
 };
 
 const columns = ["Server", "Region", "Mode", "Warriors", "Ping", "Status"] as const;
 
-export function ActiveGroups({ servers, lastUpdated }: ActiveGroupsProps) {
+export function ActiveGroups({ servers, lastUpdated, dataAvailable }: ActiveGroupsProps) {
     return (
         <ScrollReveal className="mt-12 sm:mt-16" amount={0.15}>
             <section aria-labelledby="active-servers-heading">
@@ -62,10 +63,12 @@ export function ActiveGroups({ servers, lastUpdated }: ActiveGroupsProps) {
                     ) : (
                         <div className="px-4 py-12 text-center sm:px-6 sm:py-16">
                             <p className="font-display text-2xl font-semibold text-foreground">
-                                Server data not available
+                                {dataAvailable ? "No servers online" : "Server data not available"}
                             </p>
                             <p className="mt-2 text-sm text-foreground-muted">
-                                Live server reporting will be available soon.
+                                {dataAvailable
+                                    ? "No dedicated servers are currently reporting to the network."
+                                    : "The live server registry could not be reached."}
                             </p>
                         </div>
                     )}
