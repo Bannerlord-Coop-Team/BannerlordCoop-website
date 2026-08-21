@@ -10,8 +10,15 @@ $script:ClientArchiveUri = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/Co
 $script:ServerArchiveUri = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/BannerlordCoop-DedicatedServer-Win64.7z"
 $script:NightlyAccessToken = $null
 $script:NightlyTokenPollMinimumSeconds = 3
-$script:SevenZipUri = 'https://www.7-zip.org/a/7zr.exe'
+# 7-zip.org often drops the connection, so try the gateway copy first.
+$script:SevenZipUris = @(
+    "$($script:NightlyGatewayUri)/7zr.exe",
+    'https://www.7-zip.org/a/7zr.exe',
+    'https://github.com/ip7z/7zip/releases/download/26.02/7zr.exe'
+)
 $script:SevenZipSha256 = '56b8cc9f4971cef253644fafe54063ed7fdca551d4dee0f8c6baa81b855acd72'
+$script:SevenZipDownloadAttempts = 3
+$script:SevenZipDownloadRetrySeconds = 1
 
 function Read-YesNo {
     param(
@@ -506,9 +513,7 @@ function Get-FileSha256 {
     return $hash
 }
 
-function Get-SevenZip {
-    param([Parameter(Mandatory = $true)][string]$WorkPath)
-
+function Get-InstalledSevenZip {
     foreach ($candidate in @(
         (Join-Path $env:ProgramFiles '7-Zip\7z.exe'),
         (Join-Path ${env:ProgramFiles(x86)} '7-Zip\7z.exe')
@@ -518,15 +523,57 @@ function Get-SevenZip {
     }
     $command = Get-Command '7z.exe' -ErrorAction SilentlyContinue
     if ($command) { return $command.Source }
+    return $null
+}
+
+function Save-SevenZipExtractor {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+
+    Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $Destination -UserAgent 'BannerlordCoopInstaller'
+}
+
+function Install-StandaloneSevenZip {
+    param([Parameter(Mandatory = $true)][string]$WorkPath)
 
     $path = Join-Path $WorkPath '7zr.exe'
-    Write-Host 'Downloading the official standalone 7-Zip extractor...'
-    Invoke-WebRequest -UseBasicParsing -Uri $script:SevenZipUri -OutFile $path
-    $actualHash = Get-FileSha256 $path '7-Zip extractor'
-    if ($actualHash -cne $script:SevenZipSha256) {
-        throw 'The downloaded 7-Zip extractor did not match its pinned SHA-256 hash.'
+    $lastError = $null
+    foreach ($uri in $script:SevenZipUris) {
+        for ($attempt = 1; $attempt -le [int]$script:SevenZipDownloadAttempts; $attempt++) {
+            try {
+                if ($attempt -eq 1) {
+                    Write-Host 'Downloading the official standalone 7-Zip extractor...'
+                } else {
+                    Write-Host "Retrying the 7-Zip extractor download (attempt $attempt)..."
+                }
+                Save-SevenZipExtractor $uri $path
+                $actualHash = Get-FileSha256 $path '7-Zip extractor'
+                if ($actualHash -cne $script:SevenZipSha256) {
+                    throw 'The downloaded 7-Zip extractor did not match its pinned SHA-256 hash.'
+                }
+                return $path
+            } catch {
+                $lastError = $_
+                if ([string]$_.Exception.Message -match 'did not match its pinned SHA-256 hash') { break }
+                if ($attempt -lt [int]$script:SevenZipDownloadAttempts -and
+                    [int]$script:SevenZipDownloadRetrySeconds -gt 0) {
+                    Start-Sleep -Seconds $script:SevenZipDownloadRetrySeconds
+                }
+            }
+        }
     }
-    return $path
+    $detail = if ($null -ne $lastError) { [string]$lastError.Exception.Message } else { 'No download source succeeded.' }
+    throw "The 7-Zip extractor could not be downloaded. $detail If this keeps happening, install 7-Zip from https://www.7-zip.org and run the installer again."
+}
+
+function Get-SevenZip {
+    param([Parameter(Mandatory = $true)][string]$WorkPath)
+
+    $installed = Get-InstalledSevenZip
+    if ($installed) { return $installed }
+    return Install-StandaloneSevenZip $WorkPath
 }
 
 function Get-Archive {

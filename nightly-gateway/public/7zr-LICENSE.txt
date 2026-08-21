@@ -1,0 +1,47 @@
+7-Zip standalone extractor (7zr.exe), version 26.02
+Copyright (C) 1999-2026 Igor Pavlov
+https://www.7-zip.org/
+
+This directory redistributes the official 7zr.exe binary. 7zr.exe is licensed
+under the GNU LGPL. Redistributions in binary form must reproduce the 7-Zip
+license information below. Official license: https://www.7-zip.org/license.txt
+Source release: https://github.com/ip7z/7zip/releases/tag/26.02
+
+7-Zip
+~~~~~
+License for use and distribution
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+7-Zip Copyright (C) 1999-2025 Igor Pavlov.
+
+The licenses for files are:
+
+  - 7z.dll:
+    - The "GNU LGPL" as main license for most of the code
+    - The "GNU LGPL" with "unRAR license restriction" for some code
+    - The "BSD 3-clause License" for some code
+    - The "BSD 2-clause License" for some code
+  - All other files: the "GNU LGPL".
+
+Redistributions in binary form must reproduce related license information from this file.
+
+Note:
+  You can use 7-Zip on any computer, including a computer in a commercial
+  organization. You don't need to register or pay for 7-Zip.
+
+
+GNU LGPL information
+--------------------
+
+  This library is free software; you can redistribute it and/or
+  modify it under the terms of the GNU Lesser General Public
+  License as published by the Free Software Foundation; either
+  version 2.1 of the License, or (at your option) any later version.
+
+  This library is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+  Lesser General Public License for more details.
+
+  You can receive a copy of the GNU Lesser General Public License from
+  http://www.gnu.org/
