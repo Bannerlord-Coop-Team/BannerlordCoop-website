@@ -32,6 +32,12 @@ export function hasNightlyAccessRole(roleIds: readonly string[]): boolean {
     return roleIds.some((roleId) => NIGHTLY_ACCESS_ROLE_IDS.includes(roleId));
 }
 
+export function isEligibleNightlySponsor(member: { roles?: unknown } | null): boolean {
+    return member !== null && Array.isArray(member.roles) && hasNightlyAccessRole(
+        member.roles.filter((roleId): roleId is string => typeof roleId === "string"),
+    );
+}
+
 export function isDiscordSnowflake(value: unknown): value is string {
     return typeof value === "string" && SNOWFLAKE.test(value);
 }

@@ -8,6 +8,7 @@ import {
     hasNightlyAccessRole,
     isAllowedSponsorClaimRequest,
     isAllowedArtifactKey,
+    isEligibleNightlySponsor,
     rewriteManifestArtifactUrls,
     verifySponsorFormToken,
 } from "./core";
@@ -16,7 +17,7 @@ import { completeOAuth, nightlyAccessPage, page } from "./index";
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
 
-type TestDatabaseOptions = { portalLogin?: boolean };
+type TestDatabaseOptions = { portalLogin?: boolean; existingSponsorId?: string };
 
 function testEnvironment(options: TestDatabaseOptions = {}): { env: Env; statements: string[] } {
     const statements: string[] = [];
@@ -31,7 +32,11 @@ function testEnvironment(options: TestDatabaseOptions = {}): { env: Env; stateme
                     if (sql.includes("FROM device_sessions WHERE oauth_state_hash")) {
                         return { id: "device-id", status: "pending", expires_at: Math.floor(Date.now() / 1000) + 60 } as T;
                     }
-                    if (sql.includes("FROM sponsorships WHERE sponsored_discord_user_id")) return null;
+                    if (sql.includes("FROM sponsorships WHERE sponsored_discord_user_id")) {
+                        return (options.existingSponsorId
+                            ? { supporter_discord_user_id: options.existingSponsorId }
+                            : null) as T | null;
+                    }
                     throw new Error(`Unexpected test query: ${sql}`);
                 },
                 async run() {
@@ -41,10 +46,16 @@ function testEnvironment(options: TestDatabaseOptions = {}): { env: Env; stateme
             };
             return statement;
         },
+        async batch(entries: Array<{ run(): Promise<{ success: boolean }> }>) {
+            const results = [];
+            for (const entry of entries) results.push(await entry.run());
+            return results;
+        },
     };
     return {
         env: {
             DB: database,
+            DISCORD_BOT_TOKEN: "B".repeat(59),
             DISCORD_CLIENT_ID: "1537575576745803799",
             DISCORD_CLIENT_SECRET: "test-secret",
             PUBLIC_ORIGIN: gateway,
@@ -53,7 +64,14 @@ function testEnvironment(options: TestDatabaseOptions = {}): { env: Env; stateme
     };
 }
 
-function discordOAuthFetch(input: string | URL | Request): Promise<Response> {
+function installerOAuthFetch(sponsorMember: { roles: string[] } | null = null) {
+    return (input: string | URL | Request) => discordOAuthFetch(input, sponsorMember);
+}
+
+function discordOAuthFetch(
+    input: string | URL | Request,
+    sponsorMember: { roles: string[] } | null = null,
+): Promise<Response> {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     if (url.endsWith("/oauth2/token")) {
         return Promise.resolve(Response.json({
@@ -67,15 +85,21 @@ function discordOAuthFetch(input: string | URL | Request): Promise<Response> {
     if (url.endsWith("/users/@me")) {
         return Promise.resolve(Response.json({ id: "123456789012345678", username: "Sponsored Friend" }));
     }
-    if (url.includes(`/guilds/709516043332354119/member`)) {
+    if (url.includes("/users/@me/guilds/") && url.endsWith("/member")) {
         return Promise.resolve(Response.json({ message: "Unknown Member", code: 10007 }, { status: 404 }));
+    }
+    if (/\/guilds\/\d+\/members\/\d+$/.test(url)) {
+        if (sponsorMember === null) {
+            return Promise.resolve(Response.json({ message: "Unknown Member", code: 10007 }, { status: 404 }));
+        }
+        return Promise.resolve(Response.json(sponsorMember));
     }
     throw new Error(`Unexpected test request: ${url}`);
 }
 
 function discordOAuthFetchWithoutRoles(input: string | URL | Request): Promise<Response> {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    if (url.includes(`/guilds/709516043332354119/member`)) {
+    if (url.includes("/users/@me/guilds/") && url.endsWith("/member")) {
         return Promise.resolve(Response.json({ roles: [] }));
     }
     return discordOAuthFetch(input);
@@ -84,13 +108,14 @@ function discordOAuthFetchWithoutRoles(input: string | URL | Request): Promise<R
 test("Discord server membership is optional when claiming a sponsored seat", async () => {
     const originalFetch = globalThis.fetch;
     const { env, statements } = testEnvironment();
-    globalThis.fetch = discordOAuthFetch as typeof fetch;
+    globalThis.fetch = installerOAuthFetch() as typeof fetch;
     try {
         const state = "A".repeat(43);
         const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env);
         const markup = await response.text();
         assert.equal(response.status, 200);
         assert.match(markup, /Enter your friend&rsquo;s sponsor code/);
+        assert.doesNotMatch(markup, /Previous sponsor access ended/);
         assert.ok(statements.some((sql) => sql.includes("status = 'awaiting-sponsor'")));
     } finally {
         globalThis.fetch = originalFetch;
@@ -100,13 +125,68 @@ test("Discord server membership is optional when claiming a sponsored seat", asy
 test("Discord server membership remains required to manage sponsor seats", async () => {
     const originalFetch = globalThis.fetch;
     const { env } = testEnvironment({ portalLogin: true });
-    globalThis.fetch = discordOAuthFetch as typeof fetch;
+    globalThis.fetch = installerOAuthFetch() as typeof fetch;
     try {
         const state = "B".repeat(43);
         await assert.rejects(
             completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env),
             /discord_membership_required/,
         );
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test("sponsored installs stay approved while the sponsor still has a qualifying role", async () => {
+    const originalFetch = globalThis.fetch;
+    const { env, statements } = testEnvironment({ existingSponsorId: "987654321098765432" });
+    globalThis.fetch = installerOAuthFetch({ roles: ["1532151760012050452"] }) as typeof fetch;
+    try {
+        const state = "D".repeat(43);
+        const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env);
+        const markup = await response.text();
+        assert.equal(response.status, 200);
+        assert.match(markup, /Sponsored access approved/);
+        assert.doesNotMatch(markup, /Enter your friend&rsquo;s sponsor code/);
+        assert.ok(statements.some((sql) => sql.includes("status = 'approved'")));
+        assert.ok(!statements.some((sql) => sql.includes("DELETE FROM supporter_grants")));
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test("a sponsor who stays in Discord but loses the role has sponsored seats revoked", async () => {
+    const originalFetch = globalThis.fetch;
+    const { env, statements } = testEnvironment({ existingSponsorId: "987654321098765432" });
+    globalThis.fetch = installerOAuthFetch({ roles: [] }) as typeof fetch;
+    try {
+        const state = "F".repeat(43);
+        const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env);
+        const markup = await response.text();
+        assert.equal(response.status, 200);
+        assert.match(markup, /Enter your friend&rsquo;s sponsor code/);
+        assert.ok(statements.some((sql) => sql.includes("DELETE FROM supporter_grants")));
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test("losing a sponsor role cuts sponsored access and shows the installer code form", async () => {
+    const originalFetch = globalThis.fetch;
+    const { env, statements } = testEnvironment({ existingSponsorId: "987654321098765432" });
+    globalThis.fetch = installerOAuthFetch() as typeof fetch;
+    try {
+        const state = "E".repeat(43);
+        const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env);
+        const markup = await response.text();
+        assert.equal(response.status, 200);
+        assert.match(markup, /Enter your friend&rsquo;s sponsor code/);
+        assert.match(markup, /Previous sponsor access ended/);
+        assert.doesNotMatch(markup, /supporter_reauthorization_required/);
+        assert.ok(statements.some((sql) => sql.includes("DELETE FROM supporter_grants")));
+        assert.ok(statements.some((sql) => sql.includes("DELETE FROM download_sessions")));
+        assert.ok(statements.some((sql) => sql.includes("status = 'awaiting-sponsor'")));
+        assert.ok(!statements.some((sql) => sql.includes("status = 'approved'")));
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -143,6 +223,9 @@ test("supporters, Testers, and Staff get nightly access and share the same seat 
     assert.equal(hasNightlyAccessRole(["730631536122003548"]), true);
     assert.equal(hasNightlyAccessRole(["730631233524072588"]), true);
     assert.equal(hasNightlyAccessRole(["709516043332354119"]), false);
+    assert.equal(isEligibleNightlySponsor({ roles: ["1532151760012050452"] }), true);
+    assert.equal(isEligibleNightlySponsor({ roles: [] }), false);
+    assert.equal(isEligibleNightlySponsor(null), false);
     assert.equal(SPONSORED_ACCOUNT_LIMIT, 10);
 });
 
@@ -285,5 +368,9 @@ test("Discord approval sends users back to the installer window", () => {
     const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 
     assert.match(source, /Return to the installer window\. It will continue automatically\./);
+    assert.match(source, /Previous sponsor access ended/);
+    assert.match(source, /Bot \$\{env.DISCORD_BOT_TOKEN\}/);
+    assert.match(source, /prefersHtmlError/);
+    assert.doesNotMatch(source, /supporter_reauthorization_required/);
     assert.doesNotMatch(source, /Return to PowerShell/);
 });
