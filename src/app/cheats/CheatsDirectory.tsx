@@ -367,7 +367,7 @@ export function CheatsDirectory({
                                 value={search}
                                 onChange={(event) => updateSearch(event.target.value)}
                                 placeholder={ui.searchPlaceholder}
-                                className="min-h-11 w-full border border-white/10 bg-background py-2 pl-10 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-foreground-dim focus:border-gold/50 focus:ring-1 focus:ring-gold/40"
+                                className="min-h-11 w-full border border-white/10 bg-background py-2 pl-10 pr-10 text-sm text-foreground outline-none transition-colors focus:ring-1 focus:ring-gold/40"
                             />
                             {search && (
                                 <button
@@ -453,7 +453,7 @@ export function CheatsDirectory({
                                 <li
                                     key={command.command}
                                     id={`cheat-${command.command}`}
-                                    className={`group w-full scroll-mt-24 border-b border-white/10 last:border-b-0 ${isSelected ? "bg-gold/[0.08]" : "hover:bg-white/[0.025]"}`}
+                                    className={`group w-full scroll-mt-24 border-b border-white/10 ${isSelected ? "bg-gold/8" : "hover:bg-white/2.5"}`}
                                 >
                                     <div className={`grid w-full gap-3 px-4 py-4 sm:px-5 sm:py-5 ${isSelected ? "border-l-2 border-gold" : "border-l-2 border-transparent"}`}>
                                         <div className="min-w-0">
@@ -489,7 +489,7 @@ export function CheatsDirectory({
                                             <button
                                                 type="button"
                                                 onClick={() => copySharePath(commandPath)}
-                                                className={`inline-flex min-h-9 items-center justify-center gap-1.5 border border-white/10 bg-background px-2.5 text-foreground-muted transition-colors hover:border-gold/40 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${cheatsLabelClass(locale, "button")}`}
+                                                className={`inline-flex min-h-9 items-center justify-center gap-1.5 borde border-white/10 bg-background px-2.5 text-foreground-muted transition-colors hover:border-gold/40 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${cheatsLabelClass(locale, "button")}`}
                                             >
                                                 {copied === `link:${commandPath}` ? (
                                                     <Check aria-hidden="true" className="size-3.5" />
@@ -544,8 +544,8 @@ function CategoryButton({
             onClick={onClick}
             className={
                 isActive
-                    ? "flex w-full min-w-0 items-center justify-between gap-3 border-l-2 border-gold bg-gold/[0.08] px-4 py-2.5 text-left"
-                    : "flex w-full min-w-0 items-center justify-between gap-3 border-l-2 border-transparent px-4 py-2.5 text-left transition-colors hover:bg-white/[0.03] hover:text-gold"
+                    ? "flex w-full min-w-0 items-center justify-between gap-3 border-l-2 border-gold bg-gold/8 px-4 py-2.5 text-left"
+                    : "flex w-full min-w-0 items-center justify-between gap-3 border-l-2 border-transparent px-4 py-2.5 text-left transition-colors hover:bg-white/3 hover:text-gold"
             }
         >
             <span className={`flex min-w-0 items-center gap-2 wrap-break-word ${cheatsLabelClass(locale, "nav")} ${isActive ? "text-gold" : "text-foreground-muted"}`}>
