@@ -9,3 +9,8 @@
   Content-Disposition: attachment; filename="BannerlordCoop-Nightly-Installer.ps1"
   Content-Type: application/octet-stream
   X-Content-Type-Options: nosniff
+
+/7zr.exe
+  Cache-Control: public, max-age=86400
+  Content-Type: application/octet-stream
+  X-Content-Type-Options: nosniff

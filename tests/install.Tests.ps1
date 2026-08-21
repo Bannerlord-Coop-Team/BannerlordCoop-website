@@ -472,4 +472,69 @@ if ($usedMessage -notmatch 'already used') {
     throw 'An already-used token poll still surfaced as an invalid token.'
 }
 
+$sevenZipRoot = Join-Path ([IO.Path]::GetTempPath()) ('BannerlordCoopSevenZipTests-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $sevenZipRoot -Force | Out-Null
+try {
+    $script:SevenZipDownloadAttempts = 2
+    $script:SevenZipDownloadRetrySeconds = 0
+    $extractorBytes = [Text.Encoding]::UTF8.GetBytes('7zr-test')
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    $script:SevenZipSha256 = [BitConverter]::ToString($hasher.ComputeHash($extractorBytes)).Replace('-', '').ToLowerInvariant()
+    $hasher.Dispose()
+
+    $script:SevenZipDownloads = @()
+    function Save-SevenZipExtractor {
+        param($Uri, $Destination)
+        $script:SevenZipDownloads += [string]$Uri
+        if ([string]$Uri -match '7-zip\.org') {
+            [IO.File]::WriteAllBytes($Destination, $extractorBytes)
+            return
+        }
+        throw 'The underlying connection was closed: An unexpected error occurred on a receive.'
+    }
+    $downloaded = Install-StandaloneSevenZip $sevenZipRoot
+    if (-not (Test-Path -LiteralPath $downloaded -PathType Leaf)) {
+        throw 'The standalone 7-Zip extractor was not saved after a fallback download.'
+    }
+    if ($script:SevenZipDownloads.Count -ne 3 -or
+        $script:SevenZipDownloads[0] -notmatch '/7zr\.exe$' -or
+        $script:SevenZipDownloads[0] -notmatch 'bannerlordcoop-nightly-gateway' -or
+        $script:SevenZipDownloads[1] -cne $script:SevenZipDownloads[0] -or
+        $script:SevenZipDownloads[2] -cne 'https://www.7-zip.org/a/7zr.exe') {
+        throw 'A dropped 7-zip.org-style connection did not retry the gateway and then fall back to the official extractor.'
+    }
+
+    $script:SevenZipDownloads = @()
+    function Save-SevenZipExtractor {
+        param($Uri, $Destination)
+        $script:SevenZipDownloads += [string]$Uri
+        throw 'The underlying connection was closed: An unexpected error occurred on a receive.'
+    }
+    $failedMessage = $null
+    try { Install-StandaloneSevenZip $sevenZipRoot | Out-Null } catch { $failedMessage = $_.Exception.Message }
+    if ($failedMessage -notmatch 'could not be downloaded' -or
+        $failedMessage -notmatch 'install 7-Zip' -or
+        $script:SevenZipDownloads.Count -ne 6) {
+        throw 'A complete 7-Zip extractor download failure did not exhaust every source or tell the user to install 7-Zip.'
+    }
+
+    $script:SevenZipDownloads = @()
+    function Save-SevenZipExtractor {
+        param($Uri, $Destination)
+        $script:SevenZipDownloads += [string]$Uri
+        if ([string]$Uri -match 'github.com') {
+            [IO.File]::WriteAllBytes($Destination, $extractorBytes)
+            return
+        }
+        [IO.File]::WriteAllBytes($Destination, [Text.Encoding]::UTF8.GetBytes('wrong-extractor'))
+    }
+    $github = Install-StandaloneSevenZip $sevenZipRoot
+    if (-not (Test-Path -LiteralPath $github -PathType Leaf) -or
+        $script:SevenZipDownloads -notcontains 'https://github.com/ip7z/7zip/releases/download/26.02/7zr.exe') {
+        throw 'A hash-mismatched extractor did not continue to the GitHub 7zr.exe release.'
+    }
+} finally {
+    Remove-Item -LiteralPath $sevenZipRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Write-Host 'Installer tests passed.'

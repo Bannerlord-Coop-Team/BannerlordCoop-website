@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
@@ -316,6 +317,12 @@ test("gateway eligibility copy names every supported membership platform", () =>
     assert.doesNotMatch(markup, /community supporters/i);
 });
 
+test("the PowerShell installer is synchronized with the gateway copy", () => {
+    const canonical = readFileSync(new URL("../../installer/install.ps1", import.meta.url), "utf8");
+    const served = readFileSync(new URL("../public/install.ps1", import.meta.url), "utf8");
+    assert.equal(served, canonical);
+});
+
 test("the Windows launcher is synchronized and keeps failures visible", () => {
     const canonical = readFileSync(new URL("../../installer/install.cmd", import.meta.url), "utf8");
     const served = readFileSync(new URL("../public/install.cmd", import.meta.url), "utf8");
@@ -351,6 +358,23 @@ test("the installer explains a locked CrashReporter or Bannerlord client file", 
     assert.match(installer, /access to '\$FailedPath' was denied/);
     assert.match(installer, /Close Bannerlord and Coop\.CrashReporter\.exe/);
     assert.doesNotMatch(installer, /\$fromClientFolder -or \(\$name -ieq 'Bannerlord'\) -or \(\$name -ieq 'Coop\.CrashReporter'\)/);
+});
+
+test("the installer fetches a pinned 7-Zip extractor from the gateway before 7-zip.org", () => {
+    const installer = readFileSync(new URL("../../installer/install.ps1", import.meta.url), "utf8");
+    const extractor = readFileSync(new URL("../public/7zr.exe", import.meta.url));
+    const hash = createHash("sha256").update(extractor).digest("hex");
+
+    assert.equal(hash, "56b8cc9f4971cef253644fafe54063ed7fdca551d4dee0f8c6baa81b855acd72");
+    assert.match(installer, /\$script:SevenZipSha256 = '56b8cc9f4971cef253644fafe54063ed7fdca551d4dee0f8c6baa81b855acd72'/);
+    const gatewayIndex = installer.indexOf("$($script:NightlyGatewayUri)/7zr.exe");
+    const officialIndex = installer.indexOf("https://www.7-zip.org/a/7zr.exe");
+    const githubIndex = installer.indexOf("https://github.com/ip7z/7zip/releases/download/26.02/7zr.exe");
+    assert.notEqual(gatewayIndex, -1);
+    assert.ok(gatewayIndex < officialIndex);
+    assert.ok(officialIndex < githubIndex);
+    assert.match(installer, /function Install-StandaloneSevenZip/);
+    assert.doesNotMatch(installer, /\$script:SevenZipUri = 'https:\/\/www\.7-zip\.org\/a\/7zr\.exe'/);
 });
 
 test("the installer keeps long download, verification, and extraction progress visible", () => {
