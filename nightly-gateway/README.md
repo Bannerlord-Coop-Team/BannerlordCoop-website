@@ -41,10 +41,11 @@ sync automatically before packaging.
    as a Discord OAuth2
    redirect and enable the `identify guilds.members.read` scopes.
 3. Set `DISCORD_CLIENT_SECRET` with `wrangler secret put`.
-4. Enable a bot on the same Discord application, invite it to the Bannerlord
-   Coop guild, and set `DISCORD_BOT_TOKEN` with `wrangler secret put`. Server
-   Members Intent is not required. The bot looks up a sponsor's current roles
-   so a stale user refresh token cannot block their sponsored installs.
+4. Set `DISCORD_BOT_TOKEN` to Bot_UP's existing Discord bot token with
+   `wrangler secret put`. That bot is already in the Bannerlord Coop guild and
+   can look up one member's current roles without Server Members Intent. Do not
+   create or invite a second bot for this. The installer OAuth app stays
+   separate; only the role check uses Bot_UP.
 5. Generate 32 random bytes, encode them as unpadded base64url, and set them as
    `TOKEN_ENCRYPTION_KEY` with `wrangler secret put`.
 6. Create and bind a private R2 bucket named
