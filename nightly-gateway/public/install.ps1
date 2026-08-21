@@ -9,6 +9,7 @@ $script:ReleaseManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/release"
 $script:ClientArchiveUri = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/Coop.7z"
 $script:ServerArchiveUri = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/BannerlordCoop-DedicatedServer-Win64.7z"
 $script:NightlyAccessToken = $null
+$script:NightlyTokenPollMinimumSeconds = 3
 $script:SevenZipUri = 'https://www.7-zip.org/a/7zr.exe'
 $script:SevenZipSha256 = '56b8cc9f4971cef253644fafe54063ed7fdca551d4dee0f8c6baa81b855acd72'
 
@@ -44,6 +45,97 @@ function Read-InstallChoice {
     }
 }
 
+function Get-HttpStatusCode {
+    param([Parameter(Mandatory = $true)]$ErrorRecord)
+
+    $exception = $null
+    try { $exception = $ErrorRecord.Exception } catch { }
+    while ($null -ne $exception) {
+        try {
+            $statusCode = [int]$exception.Response.StatusCode
+            if ($statusCode -gt 0) { return $statusCode }
+        } catch { }
+        try { $exception = $exception.InnerException } catch { break }
+    }
+    return 0
+}
+
+function Get-NightlyGatewayErrorCode {
+    param($Response)
+
+    if ($null -eq $Response) { return '' }
+    try {
+        $code = [string]$Response.error
+        if ($code -match '^[a-z_]+$') { return $code }
+    } catch { }
+    return ''
+}
+
+function Test-NightlyAccessTokenResponse {
+    param($Response)
+
+    if ($null -eq $Response) { return $false }
+    return [string]$Response.token_type -ceq 'Bearer' -and
+        [string]$Response.access_token -match '^[A-Za-z0-9_-]{43}$'
+}
+
+function Get-NightlyTokenPollDecision {
+    param(
+        $Response,
+        $ErrorRecord
+    )
+
+    $statusCode = 0
+    $errorCode = Get-NightlyGatewayErrorCode $Response
+    if ($null -ne $ErrorRecord) {
+        $statusCode = Get-HttpStatusCode $ErrorRecord
+        $statusError = ''
+        try { $statusError = Get-NightlyGatewayErrorCode $ErrorRecord.Exception.Response } catch { }
+        if ($statusError) { $errorCode = $statusError }
+    } elseif (Test-NightlyAccessTokenResponse $Response) {
+        return [pscustomobject]@{
+            Action = 'Accept'
+            Token = [string]$Response.access_token
+            Message = ''
+        }
+    }
+
+    # Pending JSON can arrive as HTTP 200 when a proxy or HTTP stack drops 428.
+    if ($statusCode -eq 428 -or $errorCode -ceq 'authorization_pending') {
+        return [pscustomobject]@{ Action = 'Continue'; Token = ''; Message = '' }
+    }
+    if ($statusCode -eq 403 -or $errorCode -ceq 'access_denied' -or $errorCode -ceq 'supporter_role_required') {
+        return [pscustomobject]@{
+            Action = 'Fail'
+            Token = ''
+            Message = 'Discord access was denied. The Tester role, a current Patreon, Boosty, or Afdian supporter role, or an active sponsored-account seat is required.'
+        }
+    }
+    if ($statusCode -eq 409 -or $errorCode -ceq 'already_used') {
+        return [pscustomobject]@{
+            Action = 'Fail'
+            Token = ''
+            Message = 'This Discord verification was already used. Close extra installer windows and run the installer again.'
+        }
+    }
+    if ($statusCode -eq 400 -or $statusCode -eq 401 -or
+        $errorCode -ceq 'expired_token' -or $errorCode -ceq 'invalid_request') {
+        return [pscustomobject]@{
+            Action = 'Fail'
+            Token = ''
+            Message = 'The Discord verification expired. Run the installer again to start a new check.'
+        }
+    }
+    if ($null -eq $ErrorRecord) {
+        return [pscustomobject]@{
+            Action = 'Fail'
+            Token = ''
+            Message = 'The nightly authorization token is invalid.'
+        }
+    }
+    return [pscustomobject]@{ Action = 'Rethrow'; Token = ''; Message = '' }
+}
+
 function Get-NightlyAccessToken {
     Write-Host ''
     Write-Host 'Nightly access verification' -ForegroundColor Cyan
@@ -63,29 +155,23 @@ function Get-NightlyAccessToken {
 
     $deadline = [datetimeoffset]::UtcNow.AddSeconds([Math]::Min(600, [int]$session.expires_in))
     while ([datetimeoffset]::UtcNow -lt $deadline) {
-        Start-Sleep -Seconds ([Math]::Max(3, [int]$session.interval))
+        Start-Sleep -Seconds ([Math]::Max($script:NightlyTokenPollMinimumSeconds, [int]$session.interval))
+        $decision = $null
         try {
             $token = Invoke-RestMethod -Method Post -Uri "$($script:NightlyGatewayUri)/v1/device/token" `
                 -ContentType 'application/x-www-form-urlencoded' `
                 -Body @{ device_code = [string]$session.device_code }
-            if ([string]$token.token_type -cne 'Bearer' -or
-                [string]$token.access_token -notmatch '^[A-Za-z0-9_-]{43}$') {
-                throw 'The nightly authorization token is invalid.'
-            }
-            Write-Host 'Nightly access verified.' -ForegroundColor Green
-            return [string]$token.access_token
+            $decision = Get-NightlyTokenPollDecision -Response $token
         } catch {
-            $statusCode = 0
-            try { $statusCode = [int]$_.Exception.Response.StatusCode } catch { }
-            if ($statusCode -eq 428) { continue }
-            if ($statusCode -eq 403) {
-                throw 'Discord access was denied. The Tester role, a current Patreon, Boosty, or Afdian supporter role, or an active sponsored-account seat is required.'
-            }
-            if ($statusCode -eq 400 -or $statusCode -eq 401) {
-                throw 'The Discord verification expired. Run the installer again to start a new check.'
-            }
-            throw
+            $decision = Get-NightlyTokenPollDecision -ErrorRecord $_
         }
+        if ($decision.Action -eq 'Continue') { continue }
+        if ($decision.Action -eq 'Accept') {
+            Write-Host 'Nightly access verified.' -ForegroundColor Green
+            return [string]$decision.Token
+        }
+        if ($decision.Action -eq 'Fail') { throw $decision.Message }
+        throw
     }
     throw 'Discord verification timed out. Run the installer again when you are ready to authorize it.'
 }
@@ -302,8 +388,7 @@ function Get-ReleaseManifest {
     try {
         $manifest = Invoke-RestMethod -Method Get -Uri $manifestUri -Headers $headers
     } catch {
-        $statusCode = 0
-        try { $statusCode = [int]$_.Exception.Response.StatusCode } catch { }
+        $statusCode = Get-HttpStatusCode $_
         if ($statusCode -eq 404) {
             if ($ClientOnly) {
                 throw 'No Patron client nightly has been published yet. Wait for the next completed nightly build, then run the installer again.'
