@@ -1,4 +1,9 @@
 import { FEATURED_TAB } from "@/app/cheats/featured";
+import {
+    DEFAULT_CHEATS_LOCALE,
+    parseCheatsLocale,
+    type CheatsLocale,
+} from "@/app/cheats/locale";
 
 export type CheatKindFilter = "all" | "gameplay" | "inspect";
 export type CheatSideFilter = "all" | "server" | "client" | "either";
@@ -9,6 +14,7 @@ export type CheatsQuery = {
     type: CheatKindFilter;
     side: CheatSideFilter;
     cheat: string | null;
+    lang: CheatsLocale;
 };
 
 type QueryInput = {
@@ -17,6 +23,7 @@ type QueryInput = {
     type?: string | string[];
     side?: string | string[];
     cheat?: string | string[];
+    lang?: string | string[];
 };
 
 function first(value: string | string[] | undefined) {
@@ -43,6 +50,7 @@ export function parseCheatsQuery(input: QueryInput): CheatsQuery {
         type: parseKind(first(input.type)),
         side: parseSide(first(input.side)),
         cheat,
+        lang: parseCheatsLocale(first(input.lang)),
     };
 }
 
@@ -55,18 +63,20 @@ export function buildCheatsPath(query: CheatsQuery) {
     if (query.type !== "all") params.set("type", query.type);
     if (query.side !== "all") params.set("side", query.side);
     if (query.cheat) params.set("cheat", query.cheat);
+    if (query.lang && query.lang !== DEFAULT_CHEATS_LOCALE) params.set("lang", query.lang);
 
     const qs = params.toString();
     return qs ? `/cheats?${qs}` : "/cheats";
 }
 
-export function cheatSharePath(command: string) {
+export function cheatSharePath(command: string, lang: CheatsLocale = DEFAULT_CHEATS_LOCALE) {
     return buildCheatsPath({
         q: "",
         tab: FEATURED_TAB,
         type: "all",
         side: "all",
         cheat: command,
+        lang,
     });
 }
 

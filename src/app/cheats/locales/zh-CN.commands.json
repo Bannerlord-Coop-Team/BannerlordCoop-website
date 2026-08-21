@@ -1,0 +1,2070 @@
+{
+  "coop.delete_player": {
+    "name": "删除玩家",
+    "summary": "请求服务器权威删除本地玩家。仅客户端可用。"
+  },
+  "coop.unstuck": {
+    "name": "解除卡住",
+    "summary": "请求服务器把本地玩家部队从囚禁、地图事件、军团、攻城营地和据点中解救出来。仅客户端可用。在控制台输入 coop.unstuck。"
+  },
+  "coop.debug.alley.abandon": {
+    "name": "放弃",
+    "summary": "放弃小巷"
+  },
+  "coop.debug.alley.attack": {
+    "name": "进攻",
+    "summary": "进攻小巷"
+  },
+  "coop.debug.alley.daily_tick": {
+    "name": "每日结算",
+    "summary": "执行小巷每日结算"
+  },
+  "coop.debug.alley.info": {
+    "name": "小巷信息",
+    "summary": "查看小巷信息"
+  },
+  "coop.debug.alley.list": {
+    "name": "列出小巷",
+    "summary": "列出小巷"
+  },
+  "coop.debug.alley.my_hero_id": {
+    "name": "我的英雄编号",
+    "summary": "显示我的英雄编号"
+  },
+  "coop.debug.alley.recruit_conversation": {
+    "name": "招募对话",
+    "summary": "打开招募对话"
+  },
+  "coop.debug.alley.recruit_conversation_start": {
+    "name": "开始招募对话",
+    "summary": "开始招募对话"
+  },
+  "coop.debug.alley.recruit_fixture_restore": {
+    "name": "恢复测试夹具",
+    "summary": "恢复招募测试夹具"
+  },
+  "coop.debug.alley.recruit_fixture_start": {
+    "name": "开始测试夹具",
+    "summary": "开始招募测试夹具"
+  },
+  "coop.debug.alley.recruit_fixture_state": {
+    "name": "测试夹具状态",
+    "summary": "查看招募测试夹具状态"
+  },
+  "coop.debug.alley.recruit_inventory": {
+    "name": "招募背包",
+    "summary": "查看招募背包"
+  },
+  "coop.debug.alley.recruit_overseer_state": {
+    "name": "招募监工状态",
+    "summary": "查看招募监工状态"
+  },
+  "coop.debug.alley.recruit_roster": {
+    "name": "招募名册",
+    "summary": "查看招募名册"
+  },
+  "coop.debug.alley.recruit_start_looter_battle": {
+    "name": "开始掠夺者战斗",
+    "summary": "开始掠夺者战斗"
+  },
+  "coop.debug.alley.set_owner": {
+    "name": "设置所有者",
+    "summary": "设置小巷所有者"
+  },
+  "coop.debug.arenas.list_interactions": {
+    "name": "列出互动",
+    "summary": "查看服务器上所有玩家以及客户端当前玩家的竞技场大师互动数据"
+  },
+  "coop.debug.army.create": {
+    "name": "创建军团",
+    "summary": "在服务器和客户端上创建新军团"
+  },
+  "coop.debug.army.destroy": {
+    "name": "解散军团",
+    "summary": "在服务器和客户端上删除军团"
+  },
+  "coop.debug.army.info": {
+    "name": "军团信息",
+    "summary": "查看军团信息"
+  },
+  "coop.debug.army.list": {
+    "name": "列出军团",
+    "summary": "列出当前所有军团"
+  },
+  "coop.debug.army.mobile_party_add": {
+    "name": "加入部队",
+    "summary": "向军团添加一支部队"
+  },
+  "coop.debug.army.mobile_party_list": {
+    "name": "列出军团部队",
+    "summary": "列出军团中的全部部队"
+  },
+  "coop.debug.army.mobile_party_remove": {
+    "name": "移出部队",
+    "summary": "从军团移除一支部队"
+  },
+  "coop.debug.battle.action_performance": {
+    "name": "动作性能",
+    "summary": "查看动作性能"
+  },
+  "coop.debug.battle.animation_trace": {
+    "name": "动画跟踪",
+    "summary": "跟踪动画"
+  },
+  "coop.debug.battle.capture_mount_pose": {
+    "name": "捕获坐骑姿态",
+    "summary": "捕获坐骑姿态"
+  },
+  "coop.debug.battle.charge_owned_formations": {
+    "name": "所属阵列冲锋",
+    "summary": "令所属阵列冲锋"
+  },
+  "coop.debug.battle.focus_ladder": {
+    "name": "对准云梯",
+    "summary": "将镜头对准云梯"
+  },
+  "coop.debug.battle.focus_mount": {
+    "name": "对准坐骑",
+    "summary": "将镜头对准坐骑"
+  },
+  "coop.debug.battle.hold_cavalry": {
+    "name": "骑兵待命",
+    "summary": "令骑兵待命"
+  },
+  "coop.debug.battle.ladder_state": {
+    "name": "云梯状态",
+    "summary": "查看云梯状态"
+  },
+  "coop.debug.battle.mount_camera_state": {
+    "name": "坐骑镜头状态",
+    "summary": "查看坐骑镜头状态"
+  },
+  "coop.debug.battle.mount_pose_samples": {
+    "name": "坐骑姿态采样",
+    "summary": "查看坐骑姿态采样状态"
+  },
+  "coop.debug.battle.mount_state": {
+    "name": "坐骑状态",
+    "summary": "查看坐骑状态"
+  },
+  "coop.debug.battle.move_cavalry": {
+    "name": "移动骑兵",
+    "summary": "移动骑兵"
+  },
+  "coop.debug.battle.release_ladder_camera": {
+    "name": "释放云梯镜头",
+    "summary": "释放云梯镜头"
+  },
+  "coop.debug.battle.release_mount_camera": {
+    "name": "释放坐骑镜头",
+    "summary": "释放坐骑镜头"
+  },
+  "coop.debug.battle.state": {
+    "name": "战斗状态",
+    "summary": "查看战斗状态"
+  },
+  "coop.debug.battle.turn_cavalry": {
+    "name": "转向骑兵",
+    "summary": "令骑兵转向"
+  },
+  "coop.debug.battle.wield_test": {
+    "name": "装备测试",
+    "summary": "装备测试"
+  },
+  "coop.debug.campaignoptions.AutoAllocateClanMemberPerks": {
+    "name": "自动分配氏族成员天赋",
+    "summary": "获取或设置战役选项：自动分配氏族成员天赋。"
+  },
+  "coop.debug.campaignoptions.BattleDeath": {
+    "name": "战斗死亡",
+    "summary": "获取或设置战役选项：战斗死亡。"
+  },
+  "coop.debug.campaignoptions.ClanMemberDeathChance": {
+    "name": "氏族成员死亡几率",
+    "summary": "获取或设置战役选项：氏族成员死亡几率。"
+  },
+  "coop.debug.campaignoptions.CombatAIDifficulty": {
+    "name": "战斗 AI 难度",
+    "summary": "获取或设置战役选项：战斗 AI 难度。"
+  },
+  "coop.debug.campaignoptions.IsIronmanMode": {
+    "name": "铁人模式",
+    "summary": "获取或设置战役选项：是否铁人模式。"
+  },
+  "coop.debug.campaignoptions.IsLifeDeathCycleDisabled": {
+    "name": "禁用生死循环",
+    "summary": "获取或设置战役选项：是否禁用生死循环。"
+  },
+  "coop.debug.campaignoptions.list": {
+    "name": "列出选项",
+    "summary": "列出战役选项"
+  },
+  "coop.debug.campaignoptions.PersuasionSuccessChance": {
+    "name": "说服成功几率",
+    "summary": "获取或设置战役选项：说服成功几率。"
+  },
+  "coop.debug.campaignoptions.PlayerMapMovementSpeed": {
+    "name": "玩家地图移速",
+    "summary": "获取或设置战役选项：玩家地图移动速度。"
+  },
+  "coop.debug.campaignoptions.PlayerReceivedDamageDifficulty": {
+    "name": "玩家受伤难度",
+    "summary": "获取或设置战役选项：玩家受到伤害难度。"
+  },
+  "coop.debug.campaignoptions.PlayerTroopsReceivedDamage": {
+    "name": "玩家部队受伤",
+    "summary": "获取或设置战役选项：玩家部队受到伤害。"
+  },
+  "coop.debug.campaignoptions.RecruitmentDifficulty": {
+    "name": "招募难度",
+    "summary": "获取或设置战役选项：招募难度。"
+  },
+  "coop.debug.campaignoptions.StealthAndDisguiseDifficulty": {
+    "name": "潜行与伪装难度",
+    "summary": "获取或设置战役选项：潜行与伪装难度。"
+  },
+  "coop.debug.player_captivity.captivity_state": {
+    "name": "囚禁状态",
+    "summary": "查看囚禁状态"
+  },
+  "coop.debug.player_captivity.capture_ai_lord_fixture": {
+    "name": "俘虏 AI 领主夹具",
+    "summary": "俘虏 AI 领主测试夹具"
+  },
+  "coop.debug.player_captivity.capture_player": {
+    "name": "俘虏玩家",
+    "summary": "俘虏玩家"
+  },
+  "coop.debug.player_captivity.capture_player_fixture": {
+    "name": "俘虏玩家夹具",
+    "summary": "俘虏玩家测试夹具"
+  },
+  "coop.debug.player_captivity.discard_player_from_party_screen": {
+    "name": "从部队界面丢弃玩家",
+    "summary": "从部队界面丢弃玩家"
+  },
+  "coop.debug.player_captivity.focus_hero_party": {
+    "name": "对准英雄部队",
+    "summary": "将镜头对准英雄部队"
+  },
+  "coop.debug.player_captivity.focus_party": {
+    "name": "对准部队",
+    "summary": "将镜头对准部队"
+  },
+  "coop.debug.player_captivity.liberate_prisoner": {
+    "name": "释放俘虏",
+    "summary": "释放俘虏"
+  },
+  "coop.debug.player_captivity.observe_ai_lord_fixture": {
+    "name": "观察 AI 领主夹具",
+    "summary": "观察 AI 领主测试夹具"
+  },
+  "coop.debug.player_captivity.observe_ai_lord_pair": {
+    "name": "观察 AI 领主配对",
+    "summary": "观察 AI 领主配对"
+  },
+  "coop.debug.player_captivity.observe_player": {
+    "name": "观察玩家",
+    "summary": "观察玩家"
+  },
+  "coop.debug.player_captivity.party_fixture_state": {
+    "name": "部队夹具状态",
+    "summary": "查看部队测试夹具状态"
+  },
+  "coop.debug.player_captivity.prepare_visual_test_fixture": {
+    "name": "准备视觉测试夹具",
+    "summary": "准备视觉测试夹具"
+  },
+  "coop.debug.player_captivity.random_capture_player": {
+    "name": "随机俘虏玩家",
+    "summary": "随机俘虏玩家"
+  },
+  "coop.debug.player_captivity.ransom_player_at_settlement": {
+    "name": "在据点赎回玩家",
+    "summary": "在据点赎回玩家"
+  },
+  "coop.debug.player_captivity.release_player": {
+    "name": "释放玩家",
+    "summary": "释放玩家"
+  },
+  "coop.debug.player_captivity.restore_ai_lord_diplomacy_fixture": {
+    "name": "恢复 AI 领主外交夹具",
+    "summary": "恢复 AI 领主外交测试夹具"
+  },
+  "coop.debug.player_captivity.restore_ai_lord_fixture": {
+    "name": "恢复 AI 领主夹具",
+    "summary": "恢复 AI 领主测试夹具"
+  },
+  "coop.debug.player_captivity.restore_party_fixture_state": {
+    "name": "恢复部队夹具状态",
+    "summary": "恢复部队测试夹具状态"
+  },
+  "coop.debug.player_captivity.restore_roster_fixture": {
+    "name": "恢复名册夹具",
+    "summary": "恢复名册测试夹具"
+  },
+  "coop.debug.player_captivity.restore_visual_test_fixture": {
+    "name": "恢复视觉测试夹具",
+    "summary": "恢复视觉测试夹具"
+  },
+  "coop.debug.player_captivity.snapshot_ai_lord_diplomacy_fixture": {
+    "name": "快照 AI 领主外交夹具",
+    "summary": "快照 AI 领主外交测试夹具"
+  },
+  "coop.debug.player_captivity.status": {
+    "name": "俘虏状态",
+    "summary": "查看俘虏状态"
+  },
+  "coop.debug.caravans.view_interacted_caravans": {
+    "name": "查看互动商队",
+    "summary": "在服务器上查看所有玩家互动过的商队，在客户端上查看当前玩家的"
+  },
+  "coop.debug.caravans.view_looted_caravans": {
+    "name": "查看被劫商队",
+    "summary": "查看被劫商队"
+  },
+  "coop.debug.caravans.view_prohibited_kingdoms": {
+    "name": "查看禁入王国",
+    "summary": "在服务器上查看所有玩家的禁入王国，在客户端上查看当前玩家的"
+  },
+  "coop.debug.caravans.view_taken_trade_rumors": {
+    "name": "查看已获贸易传闻",
+    "summary": "在服务器上查看所有玩家已获取贸易传闻的商队，在客户端上查看当前玩家的"
+  },
+  "coop.debug.caravans.view_trade_action_logs": {
+    "name": "查看贸易操作日志",
+    "summary": "查看贸易操作日志"
+  },
+  "coop.debug.characterObjects.info": {
+    "name": "角色对象信息",
+    "summary": "反射转储 CharacterObject 的每个字段（并向上走到 BasicCharacterObject，那里有已同步的 _characterTraits / _occupation / _persona），以便对比服务器与客户端截图，确认角色对象同步仍在复制。"
+  },
+  "coop.debug.characterObjects.list": {
+    "name": "列出角色对象",
+    "summary": "列出角色对象"
+  },
+  "coop.debug.clan.add_companion": {
+    "name": "添加同伴",
+    "summary": "添加同伴"
+  },
+  "coop.debug.clan.add_influence": {
+    "name": "增加影响力",
+    "summary": "通过 ChangeClanInfluenceAction 权威地按给定数量改变氏族影响力，以便 _influence 标量字段库进行复制；两边都用 coop.debug.clan.info 核对。"
+  },
+  "coop.debug.clan.add_renown": {
+    "name": "增加声望",
+    "summary": "增加声望"
+  },
+  "coop.debug.clan.change_clan_kingdom": {
+    "name": "更改氏族所属王国",
+    "summary": "更改氏族所属王国"
+  },
+  "coop.debug.clan.change_clan_leader": {
+    "name": "更换族长",
+    "summary": "更换族长"
+  },
+  "coop.debug.clan.close": {
+    "name": "关闭氏族界面",
+    "summary": "关闭氏族界面"
+  },
+  "coop.debug.clan.daily_gold_change": {
+    "name": "每日金币变化",
+    "summary": "查看预计的每日金币变化"
+  },
+  "coop.debug.clan.destroy_clan": {
+    "name": "摧毁氏族",
+    "summary": "摧毁氏族"
+  },
+  "coop.debug.clan.economy": {
+    "name": "氏族经济",
+    "summary": "只读：打印氏族的战斗经济数值（声望、影响力、族长部队士气、部队总经验）。在主机和客户端用同一氏族编号运行以对比。"
+  },
+  "coop.debug.clan.give_influence": {
+    "name": "给予影响力",
+    "summary": "给予影响力"
+  },
+  "coop.debug.clan.info": {
+    "name": "氏族信息",
+    "summary": "显示氏族名称、族长、王国、影响力、声望、等级和成员。"
+  },
+  "coop.debug.clan.join_kingdom": {
+    "name": "加入王国",
+    "summary": "加入王国"
+  },
+  "coop.debug.clan.leave_kingdom": {
+    "name": "离开王国",
+    "summary": "离开王国"
+  },
+  "coop.debug.clan.list": {
+    "name": "列出氏族",
+    "summary": "列出全部氏族"
+  },
+  "coop.debug.clan.membership": {
+    "name": "成员关系",
+    "summary": "查看成员关系"
+  },
+  "coop.debug.clan.open": {
+    "name": "打开氏族界面",
+    "summary": "打开氏族界面"
+  },
+  "coop.debug.clan.refresh_burst": {
+    "name": "刷新突发",
+    "summary": "刷新突发"
+  },
+  "coop.debug.clan.remove_companion": {
+    "name": "移除同伴",
+    "summary": "移除同伴"
+  },
+  "coop.debug.clan.screen_state": {
+    "name": "氏族界面状态",
+    "summary": "查看氏族界面状态"
+  },
+  "coop.debug.clan.select_parties": {
+    "name": "选择部队",
+    "summary": "选择部队"
+  },
+  "coop.debug.clan.wage_state": {
+    "name": "工资状态",
+    "summary": "查看工资状态"
+  },
+  "coop.debug.companions.clear_wanderers": {
+    "name": "清除流浪者",
+    "summary": "从地图上清除流浪者以便重新生成"
+  },
+  "coop.debug.companions.close_party_screen": {
+    "name": "关闭部队界面",
+    "summary": "关闭部队界面"
+  },
+  "coop.debug.companions.commit_party_screen": {
+    "name": "提交部队界面",
+    "summary": "提交部队界面"
+  },
+  "coop.debug.companions.dismissal_fixture_completion": {
+    "name": "解雇夹具完成",
+    "summary": "解雇测试夹具完成"
+  },
+  "coop.debug.companions.dismissal_fixture_prepare_dismiss": {
+    "name": "解雇夹具准备解雇",
+    "summary": "解雇测试夹具：准备解雇"
+  },
+  "coop.debug.companions.dismissal_fixture_release_encounter": {
+    "name": "解雇夹具释放遭遇",
+    "summary": "解雇测试夹具：释放遭遇"
+  },
+  "coop.debug.companions.dismissal_fixture_request_replacement": {
+    "name": "解雇夹具请求替换",
+    "summary": "解雇测试夹具：请求替换"
+  },
+  "coop.debug.companions.dismissal_fixture_restore": {
+    "name": "恢复解雇夹具",
+    "summary": "恢复解雇测试夹具"
+  },
+  "coop.debug.companions.dismissal_fixture_setup": {
+    "name": "设置解雇夹具",
+    "summary": "设置解雇测试夹具"
+  },
+  "coop.debug.companions.dismissal_fixture_state": {
+    "name": "解雇夹具状态",
+    "summary": "查看解雇测试夹具状态"
+  },
+  "coop.debug.companions.dismissal_fixture_trigger_consequence": {
+    "name": "解雇夹具触发后果",
+    "summary": "解雇测试夹具：触发后果"
+  },
+  "coop.debug.companions.list_wanderers": {
+    "name": "列出流浪者",
+    "summary": "查看游戏中全部流浪者"
+  },
+  "coop.debug.companions.open_party_screen": {
+    "name": "打开部队界面",
+    "summary": "打开部队界面"
+  },
+  "coop.debug.companions.role_fixture_assign_scout": {
+    "name": "角色夹具指定侦察",
+    "summary": "角色测试夹具：指定侦察"
+  },
+  "coop.debug.companions.role_fixture_conversation_state": {
+    "name": "角色夹具对话状态",
+    "summary": "角色测试夹具：对话状态"
+  },
+  "coop.debug.companions.role_fixture_open_conversation": {
+    "name": "角色夹具打开对话",
+    "summary": "角色测试夹具：打开对话"
+  },
+  "coop.debug.companions.role_fixture_prepare_client": {
+    "name": "角色夹具准备客户端",
+    "summary": "角色测试夹具：准备客户端"
+  },
+  "coop.debug.companions.role_fixture_restore": {
+    "name": "恢复角色夹具",
+    "summary": "恢复角色测试夹具"
+  },
+  "coop.debug.companions.role_fixture_setup": {
+    "name": "设置角色夹具",
+    "summary": "设置角色测试夹具"
+  },
+  "coop.debug.companions.role_fixture_state": {
+    "name": "角色夹具状态",
+    "summary": "查看角色测试夹具状态"
+  },
+  "coop.debug.companions.scout_role_state": {
+    "name": "侦察职责状态",
+    "summary": "查看侦察职责状态"
+  },
+  "coop.debug.connection.arm_inactive_party_deficit": {
+    "name": "预备不活动部队缺口",
+    "summary": "预备不活动部队缺口"
+  },
+  "coop.debug.connection.disconnect": {
+    "name": "断开连接",
+    "summary": "断开连接"
+  },
+  "coop.debug.connection.join_state": {
+    "name": "加入状态",
+    "summary": "查看加入状态"
+  },
+  "coop.debug.connection.restore_inactive_party": {
+    "name": "恢复不活动部队",
+    "summary": "恢复不活动部队"
+  },
+  "coop.debug.connection.stage_inactive_party": {
+    "name": "暂存不活动部队",
+    "summary": "暂存不活动部队"
+  },
+  "coop.debug.connection.start": {
+    "name": "开始",
+    "summary": "开始"
+  },
+  "coop.debug.gamethread.instrument": {
+    "name": "线程检测",
+    "summary": "打开或关闭游戏线程排空检测，或报告当前状态。不带参数时切换当前设置。"
+  },
+  "coop.debug.gamethread.stall": {
+    "name": "停顿",
+    "summary": "使游戏线程停顿"
+  },
+  "coop.debug.advance_time": {
+    "name": "推进时间",
+    "summary": "推进时间"
+  },
+  "coop.debug.fix_camera": {
+    "name": "固定镜头",
+    "summary": "固定镜头"
+  },
+  "coop.debug.get_time_mode": {
+    "name": "获取时间模式",
+    "summary": "获取时间模式"
+  },
+  "coop.debug.request_time_mode": {
+    "name": "请求时间模式",
+    "summary": "请求时间模式"
+  },
+  "coop.debug.set_time_mode": {
+    "name": "设置时间模式",
+    "summary": "设置时间模式"
+  },
+  "coop.debug.template": {
+    "name": "模板",
+    "summary": "待填写"
+  },
+  "coop.debug.hero_conversation.close": {
+    "name": "关闭",
+    "summary": "关闭英雄对话"
+  },
+  "coop.debug.hero_conversation.meeting_state": {
+    "name": "会面状态",
+    "summary": "查看会面状态"
+  },
+  "coop.debug.hero_conversation.open": {
+    "name": "打开",
+    "summary": "打开英雄对话"
+  },
+  "coop.debug.hero_conversation.set_has_met": {
+    "name": "设置已见过",
+    "summary": "设置是否已经见过"
+  },
+  "coop.debug.hero_conversation.state": {
+    "name": "对话状态",
+    "summary": "查看英雄对话状态"
+  },
+  "coop.debug.herodeveloper.addattributepoints": {
+    "name": "增加属性点",
+    "summary": "为英雄增加属性点。示例：coop.debug.herodeveloper.addattributepoints RandomPlayer 10"
+  },
+  "coop.debug.herodeveloper.addfocuspoints": {
+    "name": "增加专精点",
+    "summary": "为英雄增加专精点。示例：coop.debug.herodeveloper.addfocuspoints RandomPlayer 10"
+  },
+  "coop.debug.herodeveloper.addskillxp": {
+    "name": "增加技能经验",
+    "summary": "按技能对象名为英雄增加技能经验。示例：coop.debug.herodeveloper.addskillxp RandomPlayer OneHanded 3000"
+  },
+  "coop.debug.herodeveloper.resetskills": {
+    "name": "重置技能",
+    "summary": "重置英雄的全部技能，并按等级返还专精点和属性点。示例：coop.debug.herodeveloper.resetskills"
+  },
+  "coop.debug.herodeveloper.stats": {
+    "name": "成长数据",
+    "summary": "输出指定英雄的属性、专精、技能和天赋"
+  },
+  "coop.debug.hero.audit": {
+    "name": "核对英雄",
+    "summary": "核对英雄"
+  },
+  "coop.debug.hero.boost_fighter": {
+    "name": "强化战士",
+    "summary": "强化战士"
+  },
+  "coop.debug.hero.change": {
+    "name": "更改时间戳",
+    "summary": "更改时间戳"
+  },
+  "coop.debug.hero.createHero": {
+    "name": "创建英雄",
+    "summary": "创建新英雄"
+  },
+  "coop.debug.hero.get_banneritem": {
+    "name": "获取旗帜物品",
+    "summary": "获取英雄的旗帜物品"
+  },
+  "coop.debug.hero.get_effective_relation": {
+    "name": "获取有效关系",
+    "summary": "获取有效关系"
+  },
+  "coop.debug.hero.get_issue": {
+    "name": "获取任务",
+    "summary": "获取英雄的任务"
+  },
+  "coop.debug.hero.get_relation": {
+    "name": "获取关系",
+    "summary": "获取关系"
+  },
+  "coop.debug.hero.getChange": {
+    "name": "获取时间戳",
+    "summary": "获取时间戳"
+  },
+  "coop.debug.hero.gold_state": {
+    "name": "金币状态",
+    "summary": "查看金币状态"
+  },
+  "coop.debug.hero.id": {
+    "name": "查找编号",
+    "summary": "查找编号"
+  },
+  "coop.debug.hero.info": {
+    "name": "英雄信息",
+    "summary": "查看英雄信息"
+  },
+  "coop.debug.hero.issues": {
+    "name": "任务列表",
+    "summary": "列出全部可用任务"
+  },
+  "coop.debug.hero.list": {
+    "name": "列出英雄",
+    "summary": "列出名称以可选前缀开头的英雄"
+  },
+  "coop.debug.hero.list_banneritems": {
+    "name": "列出旗帜物品",
+    "summary": "列出全部可用旗帜物品"
+  },
+  "coop.debug.hero.refresh_volunteers": {
+    "name": "刷新志愿兵",
+    "summary": "对一个据点执行权威的志愿兵刷新。"
+  },
+  "coop.debug.hero.set_banneritem": {
+    "name": "设置旗帜物品",
+    "summary": "设置英雄的旗帜物品"
+  },
+  "coop.debug.hero.set_effective_relation": {
+    "name": "设置有效关系",
+    "summary": "设置有效关系"
+  },
+  "coop.debug.hero.set_gold_state": {
+    "name": "设置金币状态",
+    "summary": "设置金币状态"
+  },
+  "coop.debug.hero.set_hitpoints": {
+    "name": "设置生命值",
+    "summary": "设置英雄的生命值"
+  },
+  "coop.debug.hero.set_issue": {
+    "name": "设置任务",
+    "summary": "设置英雄的任务"
+  },
+  "coop.debug.hero.set_relation": {
+    "name": "设置关系",
+    "summary": "设置关系"
+  },
+  "coop.debug.hero.SetGold": {
+    "name": "设置金币",
+    "summary": "设置金币"
+  },
+  "coop.debug.hero.volunteers": {
+    "name": "志愿兵",
+    "summary": "查看目标英雄的可用志愿兵"
+  },
+  "coop.debug.inventory.giveanimals": {
+    "name": "给予动物",
+    "summary": "按名称给英雄调试用动物"
+  },
+  "coop.debug.inventory.givewarhorses": {
+    "name": "给予战马",
+    "summary": "按名称给英雄战马"
+  },
+  "coop.debug.inventory.heroequipment": {
+    "name": "英雄装备",
+    "summary": "输出指定英雄的战斗、日常和潜行装备编号"
+  },
+  "coop.debug.inventory.itemids": {
+    "name": "物品编号",
+    "summary": "查看玩家背包中的物品编号"
+  },
+  "coop.debug.inventory.itemvalues": {
+    "name": "物品价值",
+    "summary": "查看玩家背包中的物品价值"
+  },
+  "coop.debug.inventory.view_entered_settlements": {
+    "name": "查看进入过的据点",
+    "summary": "在服务器上查看所有玩家进入据点的贸易数据，在客户端上查看当前玩家的"
+  },
+  "coop.debug.inventory.view_player_trade_data": {
+    "name": "查看玩家贸易数据",
+    "summary": "在服务器上查看所有玩家的贸易数据，在客户端上查看当前玩家的"
+  },
+  "coop.debug.inventory.view_player_trade_rumors": {
+    "name": "查看玩家贸易传闻",
+    "summary": "在服务器上查看所有玩家的贸易传闻，在客户端上查看当前玩家的"
+  },
+  "coop.debug.issues.complete": {
+    "name": "完成",
+    "summary": "完成任务"
+  },
+  "coop.debug.issues.give": {
+    "name": "给予",
+    "summary": "给予任务"
+  },
+  "coop.debug.issues.list_types": {
+    "name": "列出类型",
+    "summary": "列出任务类型"
+  },
+  "coop.debug.itemrosters.add_item_burst": {
+    "name": "批量添加物品",
+    "summary": "批量添加物品"
+  },
+  "coop.debug.itemrosters.add_random_item": {
+    "name": "添加随机物品",
+    "summary": "添加随机物品"
+  },
+  "coop.debug.itemrosters.export": {
+    "name": "导出",
+    "summary": "导出物品名册"
+  },
+  "coop.debug.itemrosters.info": {
+    "name": "名册信息",
+    "summary": "查看物品名册信息"
+  },
+  "coop.debug.itemobject.data": {
+    "name": "物品数据",
+    "summary": "按字符串编号查看物品对象的选定属性"
+  },
+  "coop.debug.kingdom.add_decision": {
+    "name": "添加决议",
+    "summary": "向王国添加一项决议。"
+  },
+  "coop.debug.kingdom.add_decision_usage": {
+    "name": "添加决议用法",
+    "summary": "列出 add_decision 指令的全部用法。"
+  },
+  "coop.debug.kingdom.close": {
+    "name": "关闭王国界面",
+    "summary": "关闭王国界面"
+  },
+  "coop.debug.kingdom.collection_add": {
+    "name": "集合添加",
+    "summary": "在服务器上向已同步的王国集合添加一项，并向客户端广播更改。"
+  },
+  "coop.debug.kingdom.collection_list": {
+    "name": "列出集合",
+    "summary": "列出一个已同步的王国集合缓存，供服务器/客户端核对。"
+  },
+  "coop.debug.kingdom.collection_remove": {
+    "name": "集合移除",
+    "summary": "在服务器上从已同步的王国集合移除一项，并向客户端广播更改。"
+  },
+  "coop.debug.kingdom.create": {
+    "name": "创建王国",
+    "summary": "由指定英雄所属氏族创建王国，并通过总督“创建王国”对话框使用的同一通知复制到每个客户端。仅服务器。"
+  },
+  "coop.debug.kingdom.decisions": {
+    "name": "决议",
+    "summary": "列出进行中的王国决议以及已登记的客户端投票状态。"
+  },
+  "coop.debug.kingdom.declare_war": {
+    "name": "宣战",
+    "summary": "直接在两个势力之间宣战（在服务器上运行）。相对于王国 AI 可能否决的宣战决议，这是确定的做法。"
+  },
+  "coop.debug.kingdom.force_player_join_kingdom": {
+    "name": "强制玩家加入王国",
+    "summary": "强制已登记的合作玩家氏族加入一个王国。仅服务器。"
+  },
+  "coop.debug.kingdom.force_player_vassalage": {
+    "name": "强制玩家称臣",
+    "summary": "强制玩家称臣"
+  },
+  "coop.debug.kingdom.info": {
+    "name": "王国信息",
+    "summary": "反射转储 Kingdom 的每个字段，以便对比服务器与客户端截图，确认王国字段同步仍在复制。"
+  },
+  "coop.debug.kingdom.list": {
+    "name": "列出王国",
+    "summary": "列出当前全部王国"
+  },
+  "coop.debug.kingdom.list_decision_outcomes": {
+    "name": "列出决议结果",
+    "summary": "列出排队中王国决议的结果。"
+  },
+  "coop.debug.kingdom.list_kingdom_decisions": {
+    "name": "列出王国决议",
+    "summary": "列出指定王国的全部决议。"
+  },
+  "coop.debug.kingdom.list_policies": {
+    "name": "列出政策",
+    "summary": "列出指定王国的现行政策。用于确认服务器上已结算的政策变更已复制到客户端。"
+  },
+  "coop.debug.kingdom.make_peace": {
+    "name": "议和",
+    "summary": "直接在两个势力之间议和（在服务器上运行）。"
+  },
+  "coop.debug.kingdom.open": {
+    "name": "打开王国界面",
+    "summary": "打开王国界面"
+  },
+  "coop.debug.kingdom.open_decision": {
+    "name": "打开决议界面",
+    "summary": "打开王国决议界面"
+  },
+  "coop.debug.kingdom.remove_decision": {
+    "name": "移除决议",
+    "summary": "从王国移除一项决议"
+  },
+  "coop.debug.kingdom.remove_decision_usage": {
+    "name": "移除决议用法",
+    "summary": "返回 remove_decision 指令的用法。"
+  },
+  "coop.debug.kingdom.resolve_decision": {
+    "name": "结算决议",
+    "summary": "在全部投票完成或共享截止时间到达后，结算排队中的玩家王国决议。"
+  },
+  "coop.debug.kingdom.screen_state": {
+    "name": "王国界面状态",
+    "summary": "查看王国界面状态"
+  },
+  "coop.debug.kingdom.vote_decision": {
+    "name": "投票决议",
+    "summary": "由本地客户端对排队中的王国决议请求投票。"
+  },
+  "coop.debug.location.add_character": {
+    "name": "添加角色",
+    "summary": "在服务器和客户端上向地点添加一名角色"
+  },
+  "coop.debug.location.add_special_item": {
+    "name": "添加特殊物品",
+    "summary": "在服务器和客户端上向地点添加一件特殊物品"
+  },
+  "coop.debug.location.enter": {
+    "name": "进入地点",
+    "summary": "进入地点"
+  },
+  "coop.debug.location.info": {
+    "name": "地点信息",
+    "summary": "显示单个地点的状态"
+  },
+  "coop.debug.location.leave": {
+    "name": "离开地点",
+    "summary": "离开地点"
+  },
+  "coop.debug.location.list": {
+    "name": "列出地点",
+    "summary": "列出全部已登记地点"
+  },
+  "coop.debug.location.list_characters": {
+    "name": "列出地点角色",
+    "summary": "列出当前在该地点的角色"
+  },
+  "coop.debug.location.list_special_items": {
+    "name": "列出特殊物品",
+    "summary": "列出地点的特殊物品"
+  },
+  "coop.debug.location.populate": {
+    "name": "填充地点",
+    "summary": "填充据点的各地点并广播名册快照，如同有玩家部队进入"
+  },
+  "coop.debug.location.remove_all_characters": {
+    "name": "清除全部角色",
+    "summary": "在服务器和客户端上清空地点的角色列表"
+  },
+  "coop.debug.location.remove_character": {
+    "name": "移除角色",
+    "summary": "在服务器和客户端上从地点移除一名角色"
+  },
+  "coop.debug.location.remove_special_item": {
+    "name": "移除特殊物品",
+    "summary": "在服务器和客户端上从地点移除一件特殊物品。原版只会从任务场景内移除特殊物品，因此该指令直接发布移除。"
+  },
+  "coop.debug.map_camera.focus_main_party": {
+    "name": "对准主力部队",
+    "summary": "对准主力部队"
+  },
+  "coop.debug.map_camera.state": {
+    "name": "镜头状态",
+    "summary": "获取镜头状态"
+  },
+  "coop.debug.mapevent.allow_raid_ai_intervention": {
+    "name": "允许袭击 AI 介入",
+    "summary": "允许袭击 AI 介入"
+  },
+  "coop.debug.mapevent.bandit_attack_fixture_prepare": {
+    "name": "准备土匪袭击夹具",
+    "summary": "准备可还原的精确土匪袭击测试夹具，用于取证。"
+  },
+  "coop.debug.mapevent.bandit_attack_fixture_restore": {
+    "name": "恢复土匪袭击夹具",
+    "summary": "结束土匪袭击并恢复双方部队的原始行为。"
+  },
+  "coop.debug.mapevent.bandit_attack_fixture_start": {
+    "name": "开始土匪袭击夹具",
+    "summary": "由指定土匪部队开始已准备好的服务器权威袭击。"
+  },
+  "coop.debug.mapevent.bandit_attack_fixture_state": {
+    "name": "土匪袭击夹具状态",
+    "summary": "在服务器或客户端上报告精确土匪袭击状态。"
+  },
+  "coop.debug.mapevent.battle_reward_client_state": {
+    "name": "战斗奖励客户端状态",
+    "summary": "报告本地玩家已暂存或已应用的原版战斗奖励。"
+  },
+  "coop.debug.mapevent.battle_reward_fixture_begin_rout": {
+    "name": "开始战斗奖励夹具溃逃",
+    "summary": "开始战斗奖励测试夹具溃逃"
+  },
+  "coop.debug.mapevent.battle_reward_fixture_join": {
+    "name": "加入战斗奖励夹具",
+    "summary": "将第二名玩家加入进行中的 #2308 战斗并打开遭遇。"
+  },
+  "coop.debug.mapevent.battle_reward_fixture_prepare": {
+    "name": "准备战斗奖励夹具",
+    "summary": "关闭 #2308 实机测试存档载入的未完成空闲玩家遭遇。"
+  },
+  "coop.debug.mapevent.battle_reward_fixture_reinforce": {
+    "name": "增援战斗奖励夹具",
+    "summary": "增援战斗奖励测试夹具"
+  },
+  "coop.debug.mapevent.battle_reward_fixture_restore": {
+    "name": "恢复战斗奖励夹具",
+    "summary": "结束 #2308 战斗，移除土匪，并恢复两名玩家。"
+  },
+  "coop.debug.mapevent.battle_reward_fixture_route_enemies": {
+    "name": "击溃战斗奖励夹具敌人",
+    "summary": "击溃战斗奖励测试夹具的敌人"
+  },
+  "coop.debug.mapevent.battle_reward_fixture_start": {
+    "name": "开始战斗奖励夹具",
+    "summary": "创建来自 #2308 的双人迟到加入野战。"
+  },
+  "coop.debug.mapevent.battle_reward_fixture_state": {
+    "name": "战斗奖励夹具状态",
+    "summary": "报告进行中 #2308 夹具的贡献和名册奖励差值。"
+  },
+  "coop.debug.mapevent.choose_battle_mode": {
+    "name": "选择战斗模式",
+    "summary": "运行遭遇菜单的任务或模拟后果，供自动战斗测试使用。"
+  },
+  "coop.debug.mapevent.click_deployment_ready": {
+    "name": "点击部署就绪",
+    "summary": "点击部署就绪"
+  },
+  "coop.debug.mapevent.collapse_scoreboard_parties": {
+    "name": "折叠计分板部队",
+    "summary": "折叠计分板部队"
+  },
+  "coop.debug.mapevent.complete_encounter_meeting": {
+    "name": "完成遭遇会面",
+    "summary": "关闭当前遭遇对话，以便原版进入战斗选项。"
+  },
+  "coop.debug.mapevent.conversation_hold_state": {
+    "name": "对话保持状态",
+    "summary": "报告服务器当前是否为对话保持一个 AI PartyBase。"
+  },
+  "coop.debug.mapevent.deployment_state": {
+    "name": "部署状态",
+    "summary": "查看部署状态"
+  },
+  "coop.debug.mapevent.encounter_state": {
+    "name": "遭遇状态",
+    "summary": "打印当前遭遇和主力部队地图事件状态的精简快照，便于拆卸排查。战斗结束后在每个客户端运行，可发现未拆卸的遭遇，例如 PlayerEncounter.Current 仍为 PRESENT，或 MainParty.MapEvent 仍挂在已结束的事件上。与完整反射转储的 list_player_encounter 不同，这段足够短，便于跨客户端对比。"
+  },
+  "coop.debug.mapevent.enter_current_battle": {
+    "name": "进入当前战斗",
+    "summary": "进入当前战斗"
+  },
+  "coop.debug.mapevent.finish_current_encounter": {
+    "name": "结束当前遭遇",
+    "summary": "结束当前遭遇"
+  },
+  "coop.debug.mapevent.finish_deployment": {
+    "name": "结束部署",
+    "summary": "结束部署"
+  },
+  "coop.debug.mapevent.finish_non_battle_encounter": {
+    "name": "结束非战斗遭遇",
+    "summary": "结束非战斗遭遇"
+  },
+  "coop.debug.mapevent.finish_player_encounter": {
+    "name": "结束玩家遭遇",
+    "summary": "通过现有权威离开路径关闭已连接玩家的遭遇。"
+  },
+  "coop.debug.mapevent.get_event": {
+    "name": "获取事件",
+    "summary": "获取事件"
+  },
+  "coop.debug.mapevent.get_events": {
+    "name": "获取事件列表",
+    "summary": "获取事件列表"
+  },
+  "coop.debug.mapevent.join_existing": {
+    "name": "加入已有战斗",
+    "summary": "加入已有战斗"
+  },
+  "coop.debug.mapevent.kill_all_but_one": {
+    "name": "杀到只剩一人",
+    "summary": "杀死当前地图事件敌方除一人外的全部士兵。"
+  },
+  "coop.debug.mapevent.kill_enemy": {
+    "name": "杀死一名敌人",
+    "summary": "杀死一名敌人"
+  },
+  "coop.debug.mapevent.kill_enemy_team": {
+    "name": "杀死敌方全队",
+    "summary": "杀死敌方全队"
+  },
+  "coop.debug.mapevent.kill_own_team": {
+    "name": "杀死己方全队",
+    "summary": "杀死己方全队"
+  },
+  "coop.debug.mapevent.kill_random_troop": {
+    "name": "杀死随机士兵",
+    "summary": "从当前地图事件的敌方随机杀死一名士兵。"
+  },
+  "coop.debug.mapevent.kms": {
+    "name": "杀死玩家单位",
+    "summary": "杀死玩家单位"
+  },
+  "coop.debug.mapevent.late_join_mode_begin_field_battle": {
+    "name": "迟到加入开始野战",
+    "summary": "结束本地部署阶段，以便实机取证显示进行中的野战。"
+  },
+  "coop.debug.mapevent.late_join_mode_cleanup": {
+    "name": "迟到加入清理",
+    "summary": "移除夹具野战并恢复各部队的移动状态。"
+  },
+  "coop.debug.mapevent.late_join_mode_disable_dying": {
+    "name": "迟到加入禁止死亡",
+    "summary": "防止实机测试战斗在两边客户端画面采集完成前结束。"
+  },
+  "coop.debug.mapevent.late_join_mode_enter": {
+    "name": "迟到加入进入",
+    "summary": "将迟到加入者的进攻请求走真实的任务开始处理。"
+  },
+  "coop.debug.mapevent.late_join_mode_exit_missions": {
+    "name": "迟到加入退出任务",
+    "summary": "要求每个夹具任务成员在权威清理前返回战役。"
+  },
+  "coop.debug.mapevent.late_join_mode_fixture": {
+    "name": "迟到加入夹具",
+    "summary": "创建服务器权威战斗，在第二名玩家加入前占据任务模式，再把第二名玩家的加入走真实请求处理。"
+  },
+  "coop.debug.mapevent.late_join_mode_join": {
+    "name": "迟到加入汇合",
+    "summary": "在第一名玩家进入任务后，将等待中玩家按进攻方加入。"
+  },
+  "coop.debug.mapevent.late_join_mode_state": {
+    "name": "迟到加入状态",
+    "summary": "报告玩家的地图事件成员身份以及已知的权威战斗模式。"
+  },
+  "coop.debug.mapevent.leave_battle": {
+    "name": "离开战斗",
+    "summary": "离开战斗"
+  },
+  "coop.debug.mapevent.leave_settlement": {
+    "name": "离开据点",
+    "summary": "离开据点"
+  },
+  "coop.debug.mapevent.list_player_encounter": {
+    "name": "列出玩家遭遇",
+    "summary": "列出当前 PlayerEncounter 的字段和属性。"
+  },
+  "coop.debug.mapevent.peace_pursuit_fixture": {
+    "name": "议和追击夹具",
+    "summary": "找一支中立 AI 部队，可在不改变其原始移动状态的情况下使用。"
+  },
+  "coop.debug.mapevent.peace_pursuit_state": {
+    "name": "议和追击状态",
+    "summary": "报告当前机器上的追击测试部队状态。"
+  },
+  "coop.debug.mapevent.player_interaction_state": {
+    "name": "玩家互动状态",
+    "summary": "查看玩家互动状态"
+  },
+  "coop.debug.mapevent.post_battle_freeze_fixture_open": {
+    "name": "打开战后冻结夹具遭遇",
+    "summary": "打开测试夹具遭遇"
+  },
+  "coop.debug.mapevent.post_battle_freeze_fixture_restore": {
+    "name": "恢复战后冻结夹具",
+    "summary": "恢复测试夹具"
+  },
+  "coop.debug.mapevent.post_battle_freeze_fixture_start": {
+    "name": "开始战后冻结夹具",
+    "summary": "开始测试夹具"
+  },
+  "coop.debug.mapevent.post_battle_freeze_fixture_state": {
+    "name": "战后冻结夹具状态",
+    "summary": "获取测试夹具状态"
+  },
+  "coop.debug.mapevent.post_battle_freeze_fixture_unpause": {
+    "name": "解除战后冻结夹具暂停",
+    "summary": "解除测试夹具暂停"
+  },
+  "coop.debug.mapevent.request_player_field_battle": {
+    "name": "请求玩家野战",
+    "summary": "请求玩家野战"
+  },
+  "coop.debug.mapevent.restore_player_field_battle": {
+    "name": "恢复玩家野战",
+    "summary": "恢复玩家野战"
+  },
+  "coop.debug.mapevent.retreat_confirmation": {
+    "name": "撤退确认",
+    "summary": "显示、关闭或报告实机撤退确认，供自动退出战斗测试使用。"
+  },
+  "coop.debug.mapevent.scoreboard_state": {
+    "name": "计分板状态",
+    "summary": "查看计分板状态"
+  },
+  "coop.debug.mapevent.start_attack_mission": {
+    "name": "开始进攻任务",
+    "summary": "通过正常的客户端/服务器任务开始关卡启动当前战斗。"
+  },
+  "coop.debug.mapevent.start_looter": {
+    "name": "开始掠夺者战斗",
+    "summary": "与掠夺者开战"
+  },
+  "coop.debug.mapevent.start_nearest_bandit_attack": {
+    "name": "开始最近土匪袭击",
+    "summary": "开始一次针对已连接玩家的服务器权威土匪袭击遭遇。"
+  },
+  "coop.debug.mapevent.start_nearest_looter": {
+    "name": "开始最近掠夺者遭遇",
+    "summary": "在玩家部队与最近的活跃土匪/掠夺者部队之间强制开启遭遇，这样不必追着打也能进入投降/招募对话。在客户端运行（使用玩家主力部队）。带一支远大于土匪的部队，他们才会提出投降或加入。"
+  },
+  "coop.debug.mapevent.start_player_field_battle": {
+    "name": "开始玩家野战",
+    "summary": "开始玩家野战"
+  },
+  "coop.debug.mapevent.submit_player_interaction": {
+    "name": "提交玩家互动",
+    "summary": "提交玩家互动"
+  },
+  "coop.debug.mapevent.test_peace_stops_pursuit": {
+    "name": "测试议和停止追击",
+    "summary": "让选定的中立 AI 部队追击已连接玩家，然后议和。"
+  },
+  "coop.debug.mapevent.toggle_scoreboard": {
+    "name": "切换计分板",
+    "summary": "切换计分板"
+  },
+  "coop.debug.mapevent.wounded_allied_fixture_restore": {
+    "name": "恢复受伤盟军夹具",
+    "summary": "结束 #2097 夹具，并恢复玩家原来的英雄、士气和名册状态。"
+  },
+  "coop.debug.mapevent.wounded_allied_fixture_start": {
+    "name": "开始受伤盟军夹具",
+    "summary": "创建来自 #2097 的受伤、无兵玩家加上健康盟军的野战遭遇。"
+  },
+  "coop.debug.mapevent.wounded_allied_fixture_state": {
+    "name": "受伤盟军夹具状态",
+    "summary": "报告 #2097 夹具状态，并在适用时报告本地已修补的下令进攻选项。"
+  },
+  "coop.debug.metrics.party_sync_performance_logs": {
+    "name": "部队同步性能日志",
+    "summary": "部队同步性能日志"
+  },
+  "coop.debug.mobileparty.addprisoners": {
+    "name": "添加俘虏",
+    "summary": "向英雄部队添加俘虏"
+  },
+  "coop.debug.mobileparty.addtroops": {
+    "name": "添加士兵",
+    "summary": "向英雄部队添加士兵"
+  },
+  "coop.debug.mobileparty.addtroopxp": {
+    "name": "添加士兵经验",
+    "summary": "为英雄部队中的全部士兵增加经验"
+  },
+  "coop.debug.mobileparty.attachment_ids": {
+    "name": "附属编号",
+    "summary": "查看附属编号"
+  },
+  "coop.debug.mobileparty.audit": {
+    "name": "核对部队",
+    "summary": "核对部队"
+  },
+  "coop.debug.mobileparty.characterids": {
+    "name": "角色编号",
+    "summary": "按全名或英雄编号查看英雄部队中的角色编号。"
+  },
+  "coop.debug.mobileparty.clan_party_transfer_screen_state": {
+    "name": "调拨界面状态",
+    "summary": "查看调拨界面状态"
+  },
+  "coop.debug.mobileparty.clan_party_xp_fixture_capture": {
+    "name": "捕获",
+    "summary": "捕获氏族部队经验测试夹具"
+  },
+  "coop.debug.mobileparty.clan_party_xp_fixture_restore": {
+    "name": "恢复",
+    "summary": "恢复氏族部队经验测试夹具"
+  },
+  "coop.debug.mobileparty.clan_party_xp_fixture_setup": {
+    "name": "设置",
+    "summary": "设置氏族部队经验测试夹具"
+  },
+  "coop.debug.mobileparty.clan_party_xp_fixture_state": {
+    "name": "状态",
+    "summary": "查看氏族部队经验测试夹具状态"
+  },
+  "coop.debug.mobileparty.clan_party_xp_fixture_verify_restore": {
+    "name": "验证恢复",
+    "summary": "验证恢复"
+  },
+  "coop.debug.mobileparty.commit_clan_party_transfer": {
+    "name": "提交调拨",
+    "summary": "提交调拨"
+  },
+  "coop.debug.mobileparty.commit_garrison_xp_withdrawal": {
+    "name": "提交抽出",
+    "summary": "提交抽出"
+  },
+  "coop.debug.mobileparty.component_info": {
+    "name": "组件信息",
+    "summary": "查看组件信息"
+  },
+  "coop.debug.mobileparty.createParty": {
+    "name": "创建部队",
+    "summary": "创建新部队"
+  },
+  "coop.debug.mobileparty.declare_war": {
+    "name": "宣战",
+    "summary": "在部队所属势力与据点所属势力之间宣战，以便该部队围攻该据点。独立氏族也可用（不必有王国）。仅服务器；战争会复制。"
+  },
+  "coop.debug.mobileparty.destroyAllBanditParties": {
+    "name": "摧毁全部土匪部队",
+    "summary": "摧毁全部土匪部队"
+  },
+  "coop.debug.mobileparty.destroyParty": {
+    "name": "摧毁部队",
+    "summary": "摧毁部队"
+  },
+  "coop.debug.mobileparty.exact_battle_roster_begin": {
+    "name": "开始精确名册",
+    "summary": "开始精确"
+  },
+  "coop.debug.mobileparty.exact_battle_roster_restore": {
+    "name": "恢复精确名册",
+    "summary": "恢复精确"
+  },
+  "coop.debug.mobileparty.exact_battle_roster_status": {
+    "name": "精确名册状态",
+    "summary": "精确状态"
+  },
+  "coop.debug.mobileparty.follow_fixture_follow": {
+    "name": "跟随",
+    "summary": "跟随"
+  },
+  "coop.debug.mobileparty.follow_fixture_move_target": {
+    "name": "移动目标",
+    "summary": "移动目标"
+  },
+  "coop.debug.mobileparty.follow_fixture_restore": {
+    "name": "恢复",
+    "summary": "恢复"
+  },
+  "coop.debug.mobileparty.follow_fixture_setup": {
+    "name": "设置",
+    "summary": "设置"
+  },
+  "coop.debug.mobileparty.follow_fixture_state": {
+    "name": "状态",
+    "summary": "查看跟随测试夹具状态"
+  },
+  "coop.debug.mobileparty.garrison_xp_fixture_capture": {
+    "name": "捕获",
+    "summary": "捕获驻军经验测试夹具"
+  },
+  "coop.debug.mobileparty.garrison_xp_fixture_restore": {
+    "name": "恢复",
+    "summary": "恢复驻军经验测试夹具"
+  },
+  "coop.debug.mobileparty.garrison_xp_fixture_screen_state": {
+    "name": "界面状态",
+    "summary": "查看界面状态"
+  },
+  "coop.debug.mobileparty.garrison_xp_fixture_setup": {
+    "name": "设置",
+    "summary": "设置驻军经验测试夹具"
+  },
+  "coop.debug.mobileparty.garrison_xp_fixture_state": {
+    "name": "状态",
+    "summary": "查看驻军经验测试夹具状态"
+  },
+  "coop.debug.mobileparty.garrison_xp_fixture_verify_restore": {
+    "name": "验证恢复",
+    "summary": "验证恢复"
+  },
+  "coop.debug.mobileparty.imprison_companion": {
+    "name": "囚禁同伴",
+    "summary": "把一名英雄（例如玩家同伴）放入另一英雄部队的监狱名册，以便准备同伴保留测试。参数：俘获者英雄名，俘虏英雄名。"
+  },
+  "coop.debug.mobileparty.info": {
+    "name": "部队信息",
+    "summary": "查看部队信息"
+  },
+  "coop.debug.mobileparty.large_battle_roster_begin": {
+    "name": "开始大场战斗名册",
+    "summary": "开始"
+  },
+  "coop.debug.mobileparty.large_battle_roster_restore": {
+    "name": "恢复大场战斗名册",
+    "summary": "恢复"
+  },
+  "coop.debug.mobileparty.large_battle_roster_status": {
+    "name": "大场战斗名册状态",
+    "summary": "查看大场战斗名册状态"
+  },
+  "coop.debug.mobileparty.list": {
+    "name": "列出部队",
+    "summary": "列出部队"
+  },
+  "coop.debug.mobileparty.move_offset": {
+    "name": "移动偏移",
+    "summary": "发出本地玩家部队的点移动命令，以便自动实机测试确认恢复后的部队接受客户端控制，并向服务器发送正常行为更新。"
+  },
+  "coop.debug.mobileparty.move_to_settlement": {
+    "name": "移动到据点",
+    "summary": "移动到据点"
+  },
+  "coop.debug.mobileparty.open_clan_party_transfer": {
+    "name": "打开部队界面",
+    "summary": "打开部队界面"
+  },
+  "coop.debug.mobileparty.open_garrison_xp_fixture": {
+    "name": "打开驻军",
+    "summary": "打开驻军"
+  },
+  "coop.debug.mobileparty.party_screen_troop_state": {
+    "name": "部队界面士兵状态",
+    "summary": "报告一个打开的部队界面行的可见名册、完成基线和已渲染 VM 状态。"
+  },
+  "coop.debug.mobileparty.position": {
+    "name": "位置",
+    "summary": "报告精确的部队位置和移动模式，供跨客户端实机测试对比。"
+  },
+  "coop.debug.mobileparty.removeprisoners": {
+    "name": "移除俘虏",
+    "summary": "移除英雄部队中的全部俘虏"
+  },
+  "coop.debug.mobileparty.restore_position": {
+    "name": "恢复位置",
+    "summary": "在自动实机测试后，将部队恢复到精确战役地图位置并保持待命。"
+  },
+  "coop.debug.mobileparty.select_party_screen_troop": {
+    "name": "选择部队界面士兵",
+    "summary": "选择真实的右侧成员行，以便实机测试观察其行内升级选项。"
+  },
+  "coop.debug.mobileparty.set_troop_state": {
+    "name": "设置士兵状态",
+    "summary": "设置名册中一名士兵的精确状态，并报告被替换的状态。"
+  },
+  "coop.debug.mobileparty.set_troop_wounded": {
+    "name": "设置士兵受伤",
+    "summary": "设置名册中一名士兵的受伤数量，供实机同步测试。"
+  },
+  "coop.debug.mobileparty.set_wage_limit_updated": {
+    "name": "设置工资上限已更新",
+    "summary": "仅用于设置无限工资变更测试"
+  },
+  "coop.debug.mobileparty.set_wage_unlimited": {
+    "name": "设置无限工资",
+    "summary": "仅用于设置无限工资变更测试"
+  },
+  "coop.debug.mobileparty.siege_buff": {
+    "name": "攻城强化",
+    "summary": "将部队补到 2000 名士兵，拉满士气，强制高地图速度，并补充粮食，以便行军并打赢攻城测试且不会饿死。仅服务器；士兵和物品添加会通过名册同步复制。在拥有该部队的客户端上用 coop.debug.mobileparty.whoami 获取部队编号。"
+  },
+  "coop.debug.mobileparty.snapshot_prison": {
+    "name": "快照监狱",
+    "summary": "对英雄部队的监狱名册应用整本名册快照并去掉英雄俘虏，如同服务器释放了他们。在监狱名册上驱动 TroopRosterInterface.UpdateWithData：英雄俘虏（包括玩家同伴）必须被移除而不是保留，且移除会复制到客户端。"
+  },
+  "coop.debug.mobileparty.spawn_test_parties": {
+    "name": "生成测试部队",
+    "summary": "生成测试部队"
+  },
+  "coop.debug.mobileparty.stage_clan_party_transfer": {
+    "name": "暂存调拨",
+    "summary": "暂存调拨"
+  },
+  "coop.debug.mobileparty.stage_garrison_xp_withdrawal": {
+    "name": "暂存抽出",
+    "summary": "暂存抽出"
+  },
+  "coop.debug.mobileparty.stage_party_screen_transfer": {
+    "name": "暂存部队界面调拨",
+    "summary": "创建真实的待处理部队界面调拨，供实机同步测试。"
+  },
+  "coop.debug.mobileparty.upgrade_party_screen_troop": {
+    "name": "升级部队界面士兵",
+    "summary": "应用与部队界面行相同的升级命令。"
+  },
+  "coop.debug.mobileparty.verify_ai_authority": {
+    "name": "验证 AI 权威",
+    "summary": "验证 AI 权威"
+  },
+  "coop.debug.mobileparty.whoami": {
+    "name": "我是谁",
+    "summary": "打印本实例控制的英雄及其编号。在客户端运行以获知自己英雄的 StringId，再把它传给 imprison_companion / snapshot_prison，以便在多名“RandomPlayer”重名时对准你自己的部队。"
+  },
+  "coop.debug.modconfig.list": {
+    "name": "列出选项",
+    "summary": "列出模组选项"
+  },
+  "coop.debug.movement.clear_receive_pressure": {
+    "name": "清除接收压力",
+    "summary": "清除接收压力"
+  },
+  "coop.debug.movement.force_rate": {
+    "name": "强制速率",
+    "summary": "强制速率"
+  },
+  "coop.debug.movement.force_receiver_cap": {
+    "name": "强制接收上限",
+    "summary": "强制接收上限"
+  },
+  "coop.debug.movement.simulate_receive_pressure": {
+    "name": "模拟接收压力",
+    "summary": "模拟接收压力"
+  },
+  "coop.debug.movement.state": {
+    "name": "移动状态",
+    "summary": "查看移动状态"
+  },
+  "coop.debug.partyvisuals.buffer_state": {
+    "name": "缓冲状态",
+    "summary": "查看缓冲状态"
+  },
+  "coop.debug.partyvisuals.fixture_state": {
+    "name": "夹具状态",
+    "summary": "查看测试夹具状态"
+  },
+  "coop.debug.partyvisuals.restore_over_limit_fixture": {
+    "name": "恢复超限夹具",
+    "summary": "恢复超限测试夹具"
+  },
+  "coop.debug.partyvisuals.stage_over_limit_fixture": {
+    "name": "暂存超限夹具",
+    "summary": "暂存超限测试夹具"
+  },
+  "coop.debug.players.list": {
+    "name": "列出玩家",
+    "summary": "列出玩家"
+  },
+  "coop.debug.players.party_state": {
+    "name": "部队状态",
+    "summary": "查看部队状态"
+  },
+  "coop.debug.romance.agree": {
+    "name": "同意结婚",
+    "summary": "将玩家与 NPC 标为已同意结婚。"
+  },
+  "coop.debug.romance.compatible": {
+    "name": "彼此合适",
+    "summary": "将玩家与 NPC 标为已认定彼此合适。"
+  },
+  "coop.debug.romance.divorce": {
+    "name": "离婚",
+    "summary": "让玩家英雄与 NPC 离婚。不会恢复婚前的氏族或部队变更。"
+  },
+  "coop.debug.romance.help": {
+    "name": "恋爱帮助",
+    "summary": "列出恋爱指令用法。"
+  },
+  "coop.debug.romance.list": {
+    "name": "列出恋爱状态",
+    "summary": "列出恋爱状态。"
+  },
+  "coop.debug.romance.marry": {
+    "name": "结婚",
+    "summary": "让玩家英雄与 NPC 结婚。"
+  },
+  "coop.debug.romance.start": {
+    "name": "开始追求",
+    "summary": "开始玩家英雄与 NPC 之间的追求。"
+  },
+  "coop.debug.romance.status": {
+    "name": "恋爱状态",
+    "summary": "显示玩家英雄与 NPC 之间的恋爱状态。"
+  },
+  "coop.debug.save.force_autosave": {
+    "name": "强制自动存档",
+    "summary": "排队一次原版自动存档（与 SaveHandler 定时使用的同一路径），以便按需测试客户端存档拦截。在客户端上 SetSaveArgs 会被拦截，因此不会入队也不会写文件；在主机上会出现存档文件。"
+  },
+  "coop.debug.save.save_as": {
+    "name": "另存为",
+    "summary": "另存为"
+  },
+  "coop.debug.save.state": {
+    "name": "存档状态",
+    "summary": "查看存档状态"
+  },
+  "coop.debug.settlementComponent.set_gold": {
+    "name": "设置金币",
+    "summary": "更改据点组件的金币"
+  },
+  "coop.debug.settlementComponent.set_is_owner_unassigned": {
+    "name": "设置所有者未指定",
+    "summary": "更改据点组件的所有者未指定状态"
+  },
+  "coop.debug.settlementComponent.set_owner": {
+    "name": "设置所有者",
+    "summary": "更改据点组件的所有者"
+  },
+  "coop.debug.settlements.audit": {
+    "name": "核对据点",
+    "summary": "核对据点"
+  },
+  "coop.debug.settlements.capture_by_siege": {
+    "name": "攻城占领",
+    "summary": "通过攻城占领"
+  },
+  "coop.debug.settlements.collect_cache_notables": {
+    "name": "收集缓存名流",
+    "summary": "测试将名流收集到缓存。"
+  },
+  "coop.debug.settlements.enter_random_castle": {
+    "name": "进入随机城堡",
+    "summary": "进入随机城堡"
+  },
+  "coop.debug.settlements.get_town_name": {
+    "name": "获取城镇名",
+    "summary": "获取城镇名"
+  },
+  "coop.debug.settlements.info": {
+    "name": "据点信息",
+    "summary": "给出据点的大量信息。"
+  },
+  "coop.debug.settlements.last_attacker": {
+    "name": "上一攻击者",
+    "summary": "更改 LastAttackerParty"
+  },
+  "coop.debug.settlements.list_siege_state": {
+    "name": "列出攻城状态",
+    "summary": "列出全部可能的攻城状态"
+  },
+  "coop.debug.settlements.owner_state": {
+    "name": "所有者状态",
+    "summary": "查看所有者状态"
+  },
+  "coop.debug.settlements.restore_main_party_castle_teleport": {
+    "name": "恢复主力部队城堡传送",
+    "summary": "恢复主力部队城堡传送"
+  },
+  "coop.debug.settlements.set_allies_spotted": {
+    "name": "设置发现的盟军",
+    "summary": "更改 NumberOfAlliesSpottedAround"
+  },
+  "coop.debug.settlements.set_bribe_paid": {
+    "name": "设置已付贿赂",
+    "summary": "更改 BribePaid"
+  },
+  "coop.debug.settlements.set_enemies_spotted": {
+    "name": "设置发现的敌军",
+    "summary": "更改 NumberOfEnemiesSpottedAround"
+  },
+  "coop.debug.settlements.set_garrison_pay_limit": {
+    "name": "设置驻军工资上限",
+    "summary": "更改驻军工资上限"
+  },
+  "coop.debug.settlements.set_hit_points": {
+    "name": "设置生命值",
+    "summary": "更改 SettlementHitPoints"
+  },
+  "coop.debug.settlements.set_militia": {
+    "name": "设置民兵",
+    "summary": "更改民兵数量"
+  },
+  "coop.debug.settlements.set_ownerclan": {
+    "name": "设置所有氏族",
+    "summary": "按英雄编号设置据点的所有氏族"
+  },
+  "coop.debug.settlements.set_siege_state": {
+    "name": "设置攻城状态",
+    "summary": "更改 SiegeState"
+  },
+  "coop.debug.settlements.teleport_main_party_to_castle": {
+    "name": "传送主力部队到城堡",
+    "summary": "传送主力部队到城堡"
+  },
+  "coop.debug.besiegercamp.add_besiegerparty": {
+    "name": "添加攻城部队",
+    "summary": "向攻城营地添加一支攻城部队。"
+  },
+  "coop.debug.besiegercamp.coop.debug.besiegercamp.set_progress": {
+    "name": "设置进度",
+    "summary": "设置攻城准备进度"
+  },
+  "coop.debug.besiegercamp.remove_party": {
+    "name": "移除部队",
+    "summary": "从攻城营地移除一支攻城部队。"
+  },
+  "coop.debug.besiegercamp.set_leader_party": {
+    "name": "设置领导部队",
+    "summary": "设置指定攻城营地的领导部队字段。"
+  },
+  "coop.debug.besiegercamp.set_number_of_troops_killed_on_side": {
+    "name": "设置一方阵亡数",
+    "summary": "设置阵亡士兵数量"
+  },
+  "coop.debug.besiegercamp.set_siege_strategy": {
+    "name": "设置攻城策略",
+    "summary": "为攻城营地设置攻城策略"
+  },
+  "coop.debug.siege.army_relief_state": {
+    "name": "军团解围状态",
+    "summary": "查看军团解围状态"
+  },
+  "coop.debug.siege.assault": {
+    "name": "强攻",
+    "summary": "为已有的 AI 主导攻城开始攻墙。仅服务器；产生的地图事件使用与战役 AI 相同的权威动作。"
+  },
+  "coop.debug.siege.assault_entry_state": {
+    "name": "强攻进入状态",
+    "summary": "查看强攻进入状态"
+  },
+  "coop.debug.siege.dump_engines": {
+    "name": "转储攻城器械",
+    "summary": "转储每场进行中攻城的器械及其合作注册编号、生命值、进度和瞄准。只读；请在服务器和客户端两边运行并对比。编号与生命值一致说明同步有效（屏幕上过期则是界面刷新问题）；客户端编号不同或显示未注册，说明它在渲染服务器生命值/瞄准更新到不了的本地副本。"
+  },
+  "coop.debug.siege.dump_machines": {
+    "name": "转储攻城器械与部署点",
+    "summary": "转储当前任务的攻城武器和部署点——使用提示和 AI 读取的那些标记——排序后便于两个客户端逐行对比，并写入 Coop 日志供事后比较。传入 all 可包含每台可用器械。只读。"
+  },
+  "coop.debug.siege.dump_party": {
+    "name": "转储部队攻城状态",
+    "summary": "转储部队与攻城相关的状态——CurrentSettlement、BesiegerCamp、BesiegedSettlement、Position——及其合作注册编号。只读；攻城占领后立刻在服务器和两个客户端上运行，并对比共同攻城者的部队。若 CurrentSettlement 在服务器/主机上有值，但在共同攻城者自己的客户端上为 null（部队仍在营地位置，BesiegerCamp 可能未清除），就能定位它被留在外面的原因。可用 main（该客户端自己的部队）、合作编号或族长英雄名解析。"
+  },
+  "coop.debug.siege.focus": {
+    "name": "对准",
+    "summary": "将客户端战役镜头对准据点以便目视检查。"
+  },
+  "coop.debug.siege.graph": {
+    "name": "攻城图",
+    "summary": "报告据点已复制的攻城图是否已准备好用于地图视觉。只读。"
+  },
+  "coop.debug.siege.join_active_assault": {
+    "name": "加入进行中的强攻",
+    "summary": "加入进行中的强攻"
+  },
+  "coop.debug.siege.join_players": {
+    "name": "加入玩家",
+    "summary": "在权威服务器上将每支已连接的玩家部队加入进行中的攻城。"
+  },
+  "coop.debug.siege.leave": {
+    "name": "离开",
+    "summary": "离开"
+  },
+  "coop.debug.siege.leave_settlement": {
+    "name": "离开据点",
+    "summary": "离开据点"
+  },
+  "coop.debug.siege.list": {
+    "name": "列出攻城",
+    "summary": "列出进行中的攻城及其准备进度和已部署器械数量。"
+  },
+  "coop.debug.siege.player_state": {
+    "name": "玩家状态",
+    "summary": "查看玩家状态"
+  },
+  "coop.debug.siege.prepare_ladders_only": {
+    "name": "只准备云梯",
+    "summary": "只准备云梯"
+  },
+  "coop.debug.siege.request_assault": {
+    "name": "请求强攻",
+    "summary": "请求强攻"
+  },
+  "coop.debug.siege.request_besiege": {
+    "name": "请求围城",
+    "summary": "请求围城"
+  },
+  "coop.debug.siege.stage_machines": {
+    "name": "暂存器械",
+    "summary": "暂存器械"
+  },
+  "coop.debug.siege.start": {
+    "name": "开始攻城",
+    "summary": "由指定部队（未指定时则由最强敌对领主部队）开始围攻据点。仅服务器；攻城会复制到客户端。"
+  },
+  "coop.debug.siege.start_army_relief": {
+    "name": "开始军团解围",
+    "summary": "创建由玩家主导的攻城，并派出多部队守方军团前来打断。仅服务器。"
+  },
+  "coop.debug.siege.stop": {
+    "name": "停止攻城",
+    "summary": "通过正常权威离开路径结束 AI 主导的攻城。仅服务器。"
+  },
+  "coop.debug.crafting.addcrafteditems": {
+    "name": "添加已锻造物品",
+    "summary": "将现有全部已锻造物品给予指定英雄"
+  },
+  "coop.debug.crafting.addtownorder": {
+    "name": "添加城镇订单",
+    "summary": "由该镇的一名英雄向城镇添加订单"
+  },
+  "coop.debug.crafting.crafteditemhistory": {
+    "name": "锻造物品历史",
+    "summary": "查看锻造物品历史，服务器显示全部玩家，客户端显示当前玩家"
+  },
+  "coop.debug.crafting.craftingpiecesxp": {
+    "name": "锻造部件经验",
+    "summary": "查看锻造部件经验，服务器显示全部玩家，客户端显示当前玩家"
+  },
+  "coop.debug.crafting.givesupplies": {
+    "name": "给予材料",
+    "summary": "按名称给英雄调试用锻造材料"
+  },
+  "coop.debug.crafting.stamina": {
+    "name": "体力",
+    "summary": "在客户端查看部队中全部英雄的锻造体力，在服务器查看全部英雄"
+  },
+  "coop.debug.crafting.townorders": {
+    "name": "城镇订单",
+    "summary": "查看指定城镇的订单"
+  },
+  "coop.debug.crafting.unlockallcraftingpieces": {
+    "name": "解锁全部锻造部件",
+    "summary": "在客户端解锁全部锻造部件。OpenPart 已被修补，会更新 CoopSession 并跨会话保留"
+  },
+  "coop.debug.crafting.unlockedcraftingpieces": {
+    "name": "已解锁锻造部件",
+    "summary": "查看已解锁的锻造部件，服务器显示全部玩家，客户端显示当前玩家"
+  },
+  "coop.debug.steam.host_lobby": {
+    "name": "主持大厅",
+    "summary": "主持大厅"
+  },
+  "coop.debug.steam.invite": {
+    "name": "邀请",
+    "summary": "邀请"
+  },
+  "coop.debug.steam.join": {
+    "name": "加入",
+    "summary": "加入"
+  },
+  "coop.debug.steam.status": {
+    "name": "状态",
+    "summary": "查看 Steam 状态"
+  },
+  "coop.debug.tournaments.add_tournament_to_town": {
+    "name": "向城镇添加比武",
+    "summary": "向城镇添加比武大会"
+  },
+  "coop.debug.tournaments.danustica_fixture_abort": {
+    "name": "中止 Danustica 夹具",
+    "summary": "中止 Danustica 测试夹具"
+  },
+  "coop.debug.tournaments.danustica_fixture_begin": {
+    "name": "开始 Danustica 夹具",
+    "summary": "开始 Danustica 测试夹具"
+  },
+  "coop.debug.tournaments.danustica_fixture_restore": {
+    "name": "恢复 Danustica 夹具",
+    "summary": "恢复 Danustica 测试夹具"
+  },
+  "coop.debug.tournaments.danustica_fixture_state": {
+    "name": "Danustica 夹具状态",
+    "summary": "查看 Danustica 测试夹具状态"
+  },
+  "coop.debug.tournaments.danustica_observe": {
+    "name": "观察 Danustica",
+    "summary": "观察 Danustica"
+  },
+  "coop.debug.tournaments.danustica_request_choice": {
+    "name": "请求 Danustica 选择",
+    "summary": "请求 Danustica 选择"
+  },
+  "coop.debug.tournaments.danustica_request_join": {
+    "name": "请求加入 Danustica",
+    "summary": "请求加入 Danustica"
+  },
+  "coop.debug.tournaments.danustica_request_leave": {
+    "name": "请求离开 Danustica",
+    "summary": "请求离开 Danustica"
+  },
+  "coop.debug.tournaments.danustica_request_start": {
+    "name": "请求开始 Danustica",
+    "summary": "请求开始 Danustica"
+  },
+  "coop.debug.town.add_item_to_sold_items": {
+    "name": "添加到已售物品",
+    "summary": "向指定城镇的已售物品列表添加若干物品。"
+  },
+  "coop.debug.town.apply_garrison_lifecycle": {
+    "name": "应用驻军生命周期",
+    "summary": "应用驻军生命周期"
+  },
+  "coop.debug.town.auditor": {
+    "name": "城镇核对",
+    "summary": "把已同步到服务器的全部城镇值发过去，以查找不匹配的值"
+  },
+  "coop.debug.town.change_current_building": {
+    "name": "更改当前建筑",
+    "summary": "设置城镇当前建筑。"
+  },
+  "coop.debug.town.change_current_building_queue": {
+    "name": "更改当前建筑队列",
+    "summary": "设置城镇当前建筑队列。"
+  },
+  "coop.debug.town.focus_garrison": {
+    "name": "对准驻军",
+    "summary": "对准驻军"
+  },
+  "coop.debug.town.garrison_backlink": {
+    "name": "驻军反向链接",
+    "summary": "查看驻军反向链接"
+  },
+  "coop.debug.town.info": {
+    "name": "城镇信息",
+    "summary": "获取指定城镇的信息。"
+  },
+  "coop.debug.town.list_buildings": {
+    "name": "列出建筑",
+    "summary": "列出城镇的 Buildings 与 BuildingsInProgress（已同步的集合字段 MBList）以及每座建筑的等级/进度，以便对比服务器与客户端截图，确认建筑集合仍在复制。"
+  },
+  "coop.debug.town.list_items": {
+    "name": "列出物品",
+    "summary": "列出全部物品"
+  },
+  "coop.debug.town.list_towns": {
+    "name": "列出城镇",
+    "summary": "列出全部城镇"
+  },
+  "coop.debug.town.list_workshops": {
+    "name": "列出作坊",
+    "summary": "列出城镇的 Workshops（已同步的集合属性数组）以及每间作坊的类型和所有者，以便对比服务器与客户端截图，确认作坊集合仍在复制。"
+  },
+  "coop.debug.town.managementdata": {
+    "name": "管理数据",
+    "summary": "查看指定城镇的管理数据"
+  },
+  "coop.debug.town.refresh_mercenary_stocks": {
+    "name": "刷新 Mercenary 库存",
+    "summary": "刷新 Mercenary 库存"
+  },
+  "coop.debug.town.request_mercenary_stock": {
+    "name": "请求 Mercenary 库存",
+    "summary": "请求 Mercenary 库存"
+  },
+  "coop.debug.town.set_foodStocks": {
+    "name": "设置粮食库存",
+    "summary": "设置城镇的粮食库存"
+  },
+  "coop.debug.town.set_garrison_auto_recruitment": {
+    "name": "设置驻军自动招募",
+    "summary": "设置指定城镇的 GarrisonAutoRecruitmentIsEnabled 属性。"
+  },
+  "coop.debug.town.set_governor": {
+    "name": "设置总督",
+    "summary": "设置指定城镇的总督。"
+  },
+  "coop.debug.town.set_in_rebellious_state": {
+    "name": "设置叛乱状态",
+    "summary": "设置指定城镇的叛乱状态。"
+  },
+  "coop.debug.town.set_last_captured_by": {
+    "name": "设置上次占领者",
+    "summary": "设置指定城镇的 LastCapturedBy 属性。"
+  },
+  "coop.debug.town.set_loyalty": {
+    "name": "设置忠诚",
+    "summary": "设置指定城镇的忠诚。"
+  },
+  "coop.debug.town.set_prosperity": {
+    "name": "设置繁荣",
+    "summary": "设置指定城镇的繁荣。"
+  },
+  "coop.debug.town.set_security": {
+    "name": "设置治安",
+    "summary": "设置指定城镇的治安。"
+  },
+  "coop.debug.town.set_trade_tax_acc": {
+    "name": "设置累计贸易税",
+    "summary": "设置城镇的累计贸易税。"
+  },
+  "coop.debug.town.start_rebellion": {
+    "name": "开始叛乱",
+    "summary": "开始叛乱"
+  },
+  "coop.debug.ui.active_state": {
+    "name": "活动状态",
+    "summary": "查看活动状态"
+  },
+  "coop.debug.ui.close_screen": {
+    "name": "关闭界面",
+    "summary": "关闭界面"
+  },
+  "coop.debug.ui.evidence_map_state": {
+    "name": "取证地图状态",
+    "summary": "查看取证地图状态"
+  },
+  "coop.debug.ui.leave_settlement_encounter": {
+    "name": "离开据点遭遇",
+    "summary": "离开据点遭遇"
+  },
+  "coop.debug.ui.loading_window_state": {
+    "name": "加载窗口状态",
+    "summary": "查看加载窗口状态"
+  },
+  "coop.debug.ui.map_click_offset": {
+    "name": "地图点击偏移",
+    "summary": "地图点击偏移"
+  },
+  "coop.debug.ui.map_movement_state": {
+    "name": "地图移动状态",
+    "summary": "查看地图移动状态"
+  },
+  "coop.debug.ui.pop_state": {
+    "name": "弹出状态",
+    "summary": "弹出状态"
+  },
+  "coop.debug.ui.prepare_evidence_map": {
+    "name": "准备取证地图",
+    "summary": "准备取证地图"
+  },
+  "coop.debug.ui.saving_overlay_state": {
+    "name": "保存遮罩状态",
+    "summary": "查看保存遮罩状态"
+  },
+  "coop.debug.ui.switch_menu": {
+    "name": "切换菜单",
+    "summary": "切换菜单"
+  },
+  "coop.debug.ui.tactical_symbols": {
+    "name": "战术符号",
+    "summary": "战术符号"
+  },
+  "coop.debug.villagers.view_interacted_villagers": {
+    "name": "查看互动村民",
+    "summary": "在服务器上查看所有玩家互动过的村民，在客户端上查看当前玩家的"
+  },
+  "coop.debug.villagers.view_looted_villagers": {
+    "name": "查看被劫村民",
+    "summary": "查看被劫村民"
+  },
+  "coop.debug.village.info": {
+    "name": "村庄信息",
+    "summary": "获取指定村庄的信息"
+  },
+  "coop.debug.village.list": {
+    "name": "列出村庄",
+    "summary": "列出全部村庄"
+  },
+  "coop.debug.village.set_demand_time": {
+    "name": "设置需求时间",
+    "summary": "设置 LastDemandTimeSatisified"
+  },
+  "coop.debug.village.set_hearth": {
+    "name": "设置炉火",
+    "summary": "设置村庄的炉火浮点值。"
+  },
+  "coop.debug.village.set_state": {
+    "name": "设置状态",
+    "summary": "设置指定村庄的 VillageState。"
+  },
+  "coop.debug.village.set_trade_tax_acc": {
+    "name": "设置累计贸易税",
+    "summary": "设置村庄的累计贸易税。"
+  },
+  "coop.debug.weapon_pickup.camera_state": {
+    "name": "镜头状态",
+    "summary": "查看镜头状态"
+  },
+  "coop.debug.weapon_pickup.fixture_drop": {
+    "name": "掉落夹具武器",
+    "summary": "掉落测试夹具武器"
+  },
+  "coop.debug.weapon_pickup.fixture_pickup": {
+    "name": "拾取夹具武器",
+    "summary": "拾取测试夹具武器"
+  },
+  "coop.debug.weapon_pickup.fixture_restore": {
+    "name": "恢复夹具武器",
+    "summary": "恢复测试夹具武器"
+  },
+  "coop.debug.weapon_pickup.focus_agent": {
+    "name": "对准单位",
+    "summary": "对准单位"
+  },
+  "coop.debug.weapon_pickup.partial_fixture_drop": {
+    "name": "掉落部分消耗品夹具",
+    "summary": "掉落部分消耗品测试夹具"
+  },
+  "coop.debug.weapon_pickup.partial_fixture_pickup": {
+    "name": "拾取部分消耗品夹具",
+    "summary": "拾取部分消耗品测试夹具"
+  },
+  "coop.debug.weapon_pickup.release_camera": {
+    "name": "释放单位镜头",
+    "summary": "释放单位镜头"
+  },
+  "coop.debug.weapon_pickup.state": {
+    "name": "拾取状态",
+    "summary": "查看武器拾取状态"
+  },
+  "coop.debug.weapon_pickup.world_item_state": {
+    "name": "世界物品状态",
+    "summary": "查看世界物品状态"
+  },
+  "coop.debug.workshop.hero_owned_workshops": {
+    "name": "英雄拥有的作坊",
+    "summary": "查看英雄拥有的作坊"
+  },
+  "coop.debug.workshop.owners_in_settlement": {
+    "name": "据点内作坊所有者",
+    "summary": "查看据点内的作坊所有者"
+  },
+  "coop.debug.workshop.set_workshop_custom_name": {
+    "name": "设置作坊自定义名称",
+    "summary": "设置作坊自定义名称"
+  },
+  "coop.debug.workshop.set_workshop_owner": {
+    "name": "设置作坊所有者",
+    "summary": "设置作坊所有者"
+  },
+  "coop.debug.workshop.view_warehouse_rosters": {
+    "name": "查看仓库名册",
+    "summary": "在服务器上查看所有玩家的仓库名册，在客户端上查看当前玩家的"
+  },
+  "coop.debug.workshop.workshop_info": {
+    "name": "作坊信息",
+    "summary": "查看据点内作坊的信息"
+  }
+}
