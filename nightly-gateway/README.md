@@ -11,11 +11,13 @@ token only after the gateway verifies one of these conditions:
   sponsored-account seats.
 
 Sponsored access is attached to the friend's Discord account, not to a machine
-or a download count. The eligible member's encrypted, revocable Discord refresh
-grant is used to re-check their Staff, Tester, or supporter role before each installer
-session is approved. Removing a sponsored account revokes its active gateway
-sessions. Every eligible member has one shared ten-seat pool regardless of how
-many qualifying roles they hold.
+or a download count. Before each installer session is approved, the gateway
+asks Discord whether that sponsor still has a qualifying Staff, Tester, or
+supporter role. If they left the guild or lost the role, their grant, seats,
+and active download sessions are removed. Sponsored friends do not need the
+sponsor to sign in again. Removing a sponsored account also revokes its active
+gateway sessions. Every eligible member has one shared ten-seat pool
+regardless of how many qualifying roles they hold.
 
 This controls the official installer and download paths. A person who has
 legitimately received the archive bytes can still copy those bytes; client-side
@@ -39,20 +41,25 @@ sync automatically before packaging.
    as a Discord OAuth2
    redirect and enable the `identify guilds.members.read` scopes.
 3. Set `DISCORD_CLIENT_SECRET` with `wrangler secret put`.
-4. Generate 32 random bytes, encode them as unpadded base64url, and set them as
+4. Set `DISCORD_BOT_TOKEN` to Bot_UP's existing Discord bot token with
+   `wrangler secret put`. That bot is already in the Bannerlord Coop guild and
+   can look up one member's current roles without Server Members Intent. Do not
+   create or invite a second bot for this. The installer OAuth app stays
+   separate; only the role check uses Bot_UP.
+5. Generate 32 random bytes, encode them as unpadded base64url, and set them as
    `TOKEN_ENCRYPTION_KEY` with `wrangler secret put`.
-5. Create and bind a private R2 bucket named
+6. Create and bind a private R2 bucket named
    `bannerlordcoop-patron-nightlies`. Do not enable its `r2.dev` URL or attach a
    public custom domain. The Worker is exposed through the existing
    `garrett-luskey.workers.dev` account subdomain, so Squarespace DNS is not
    involved.
-6. Keep `/create-build` output in the separate public
+7. Keep `/create-build` output in the separate public
    `bannerlordcoop-nightly-releases` bucket. Its copyable links remain valid
    until Bot_UP's existing 24-hour expiry cleanup; never disable public access
    on that bucket as part of the Patron-nightly rollout.
-7. Migrate Bot_UP/Managed Hosting to scoped R2 S3 reads from the private Patron
+8. Migrate Bot_UP/Managed Hosting to scoped R2 S3 reads from the private Patron
    bucket. Machine-to-machine hosting downloads do not use Discord OAuth.
-8. Deploy the updated client, dedicated-server, and website publishers and
+9. Deploy the updated client, dedicated-server, and website publishers and
    verify a live direct eligible-member install plus a sponsored install.
 
 ## Verification

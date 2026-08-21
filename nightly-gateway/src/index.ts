@@ -6,6 +6,7 @@ import {
     SPONSORED_ACCOUNT_LIMIT,
     createSponsorFormToken,
     hasNightlyAccessRole,
+    isEligibleNightlySponsor,
     isAllowedSponsorClaimRequest,
     isAllowedArtifactKey,
     isDiscordSnowflake,
@@ -49,6 +50,9 @@ export default {
                 error: error instanceof GatewayError ? error.code : "internal_error",
             }));
             if (error instanceof GatewayError) {
+                if (prefersHtmlError(request)) {
+                    return html(errorPage(gatewayErrorMessage(error.code)), error.status);
+                }
                 return json({ error: error.code }, error.status);
             }
             return json({ error: "internal_error" }, 500);
@@ -252,8 +256,8 @@ export async function completeOAuth(url: URL, env: Env): Promise<Response> {
     const existing = await env.DB.prepare(
         "SELECT supporter_discord_user_id FROM sponsorships WHERE sponsored_discord_user_id = ?",
     ).bind(user.id).first<{ supporter_discord_user_id: string }>();
-    if (existing !== null) {
-        await assertSponsorEligible(env, existing.supporter_discord_user_id);
+    // Keep the code form available when the previous sponsor no longer has access.
+    if (existing !== null && await tryAssertSponsorEligible(env, existing.supporter_discord_user_id)) {
         await env.DB.prepare(
             "UPDATE device_sessions SET status = 'approved', discord_user_id = ?, sponsor_discord_user_id = ?, authorized_at = ? WHERE id = ?",
         ).bind(user.id, existing.supporter_discord_user_id, nowSeconds(), device.id).run();
@@ -261,7 +265,11 @@ export async function completeOAuth(url: URL, env: Env): Promise<Response> {
     }
     await env.DB.prepare("UPDATE device_sessions SET status = 'awaiting-sponsor', discord_user_id = ? WHERE id = ?")
         .bind(user.id, device.id).run();
-    return html(sponsorClaimPage(device.id, user.username));
+    return html(sponsorClaimPage(
+        device.id,
+        user.username,
+        existing === null ? "" : previousSponsorAccessRevokedHelp(),
+    ));
 }
 
 async function claimSponsorship(request: Request, env: Env): Promise<Response> {
@@ -284,7 +292,25 @@ async function claimSponsorship(request: Request, env: Env): Promise<Response> {
         "SELECT supporter_discord_user_id FROM supporter_grants WHERE sponsor_code_hash = ?",
     ).bind(await sha256(normalizeSponsorCode(sponsorCode))).first<{ supporter_discord_user_id: string }>();
     if (sponsor === null) return html(errorPage("That sponsor code is not valid."), 403);
-    await assertSponsorEligible(env, sponsor.supporter_discord_user_id);
+    if (!await tryAssertSponsorEligible(env, sponsor.supporter_discord_user_id)) {
+        return html(errorPage(
+            "That sponsor no longer has a qualifying Staff, Tester, Patreon, Boosty, or Afdian role.",
+        ), 403);
+    }
+    const existingSeat = await env.DB.prepare(
+        "SELECT supporter_discord_user_id FROM sponsorships WHERE sponsored_discord_user_id = ?",
+    ).bind(device.discord_user_id).first<{ supporter_discord_user_id: string }>();
+    if (existingSeat !== null && existingSeat.supporter_discord_user_id !== sponsor.supporter_discord_user_id) {
+        if (await tryAssertSponsorEligible(env, existingSeat.supporter_discord_user_id)) {
+            return html(errorPage("This Discord account already has sponsored access."), 409);
+        }
+        await env.DB.batch([
+            env.DB.prepare("DELETE FROM sponsorships WHERE sponsored_discord_user_id = ?")
+                .bind(device.discord_user_id),
+            env.DB.prepare("DELETE FROM download_sessions WHERE discord_user_id = ?")
+                .bind(device.discord_user_id),
+        ]);
+    }
     const inserted = await env.DB.prepare(`
         INSERT OR IGNORE INTO sponsorships (supporter_discord_user_id, sponsored_discord_user_id, created_at)
         SELECT ?, ?, ?
@@ -321,7 +347,9 @@ async function sponsorPortal(request: Request, env: Env): Promise<Response> {
             "portal",
         ));
     }
-    await assertSponsorEligible(env, sponsorId);
+    if (!await tryAssertSponsorEligible(env, sponsorId)) {
+        return Response.redirect(`${env.PUBLIC_ORIGIN}/sponsor/login`, 302);
+    }
     const formToken = await sponsorFormToken(request);
     const rows = await env.DB.prepare(
         "SELECT sponsored_discord_user_id, created_at FROM sponsorships WHERE supporter_discord_user_id = ? ORDER BY created_at",
@@ -437,30 +465,29 @@ async function requireSponsorSession(request: Request, env: Env, required: boole
     return row.supporter_discord_user_id;
 }
 
-async function assertSponsorEligible(env: Env, supporterId: string): Promise<void> {
-    const grant = await env.DB.prepare(
-        "SELECT encrypted_refresh_token, token_nonce FROM supporter_grants WHERE supporter_discord_user_id = ?",
-    ).bind(supporterId).first<{ encrypted_refresh_token: string; token_nonce: string }>();
-    if (grant === null) throw new GatewayError(403, "supporter_reauthorization_required");
-    let token: DiscordToken;
+async function tryAssertSponsorEligible(env: Env, supporterId: string): Promise<boolean> {
     try {
-        const refreshToken = await decryptRefreshToken(env, grant.encrypted_refresh_token, grant.token_nonce);
-        token = await refreshDiscordToken(env, refreshToken);
-    } catch {
-        throw new GatewayError(403, "supporter_reauthorization_required");
+        await assertSponsorEligible(env, supporterId);
+        return true;
+    } catch (error) {
+        if (error instanceof GatewayError && error.code === "supporter_role_required") {
+            return false;
+        }
+        throw error;
     }
-    const member = await discordGet<DiscordMember>(
-        `/users/@me/guilds/${DISCORD_GUILD_ID}/member`,
-        token.access_token,
-    );
-    if (!hasNightlyAccessRole(member.roles)) {
-        await env.DB.batch([
-            env.DB.prepare("DELETE FROM download_sessions WHERE supporter_discord_user_id = ?").bind(supporterId),
-            env.DB.prepare("DELETE FROM supporter_grants WHERE supporter_discord_user_id = ?").bind(supporterId),
-        ]);
-        throw new GatewayError(403, "supporter_role_required");
+}
+
+async function assertSponsorEligible(env: Env, supporterId: string): Promise<void> {
+    const member = await discordBotGetGuildMember(env, supporterId);
+    if (member !== null && !Array.isArray(member.roles)) {
+        throw new GatewayError(502, "discord_response_invalid");
     }
-    await storeSupporterGrant(env, supporterId, token.refresh_token);
+    if (isEligibleNightlySponsor(member)) return;
+    await env.DB.batch([
+        env.DB.prepare("DELETE FROM download_sessions WHERE supporter_discord_user_id = ?").bind(supporterId),
+        env.DB.prepare("DELETE FROM supporter_grants WHERE supporter_discord_user_id = ?").bind(supporterId),
+    ]);
+    throw new GatewayError(403, "supporter_role_required");
 }
 
 async function storeSupporterGrant(env: Env, supporterId: string, refreshToken: string): Promise<void> {
@@ -491,13 +518,6 @@ async function exchangeDiscordCode(env: Env, code: string): Promise<DiscordToken
         grant_type: "authorization_code",
         code,
         redirect_uri: `${env.PUBLIC_ORIGIN}/oauth/callback`,
-    }));
-}
-
-async function refreshDiscordToken(env: Env, refreshToken: string): Promise<DiscordToken> {
-    return discordTokenRequest(env, new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
     }));
 }
 
@@ -532,21 +552,24 @@ async function discordGet<T>(path: string, accessToken: string, allowNotFound = 
     return JSON.parse(text) as T;
 }
 
+async function discordBotGetGuildMember(env: Env, userId: string): Promise<DiscordMember | null> {
+    const response = await fetch(`${DISCORD_API}/guilds/${DISCORD_GUILD_ID}/members/${userId}`, {
+        headers: {
+            authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+            "user-agent": "BannerlordCoop-Nightly-Gateway/1",
+        },
+    });
+    const text = await boundedText(response, 64 * 1024);
+    if (response.status === 404) return null;
+    if (!response.ok) throw new GatewayError(502, "discord_membership_required");
+    return JSON.parse(text) as DiscordMember;
+}
+
 async function encryptRefreshToken(env: Env, plaintext: string): Promise<{ ciphertext: string; nonce: string }> {
     const key = await encryptionKey(env);
     const nonce = crypto.getRandomValues(new Uint8Array(12));
     const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, key, new TextEncoder().encode(plaintext));
     return { ciphertext: base64url(new Uint8Array(ciphertext)), nonce: base64url(nonce) };
-}
-
-async function decryptRefreshToken(env: Env, ciphertext: string, nonce: string): Promise<string> {
-    const key = await encryptionKey(env);
-    const plaintext = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: exactArrayBuffer(fromBase64url(nonce)) },
-        key,
-        exactArrayBuffer(fromBase64url(ciphertext)),
-    );
-    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(plaintext);
 }
 
 async function encryptionKey(env: Env): Promise<CryptoKey> {
@@ -589,6 +612,7 @@ function assertConfiguration(env: Env): void {
         || env.LEGACY_R2_ORIGIN !== "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev"
         || !/^\d{17,20}$/.test(env.DISCORD_CLIENT_ID)
         || env.DISCORD_CLIENT_SECRET.length < 32
+        || env.DISCORD_BOT_TOKEN.length < 50
         || env.TOKEN_ENCRYPTION_KEY.length < 40) {
         throw new Error("gateway_configuration_invalid");
     }
@@ -648,12 +672,27 @@ function errorPage(message: string, extra = ""): string {
     return page("Access unavailable", "Nightly access", `<div class="status-icon error" aria-hidden="true"><span>!</span></div><h1>Access <span>unavailable.</span></h1><p class="lede">${escapeHtml(message)}</p>${extra}<div class="support-note"><strong>Need a hand?</strong><span><a href="https://discord.gg/bannerlordcoop">Ask in the Bannerlord Coop Discord</a> and include the message shown above.</span></div>`, "status-page");
 }
 
+function prefersHtmlError(request: Request): boolean {
+    return (request.headers.get("accept") ?? "").includes("text/html");
+}
+
+function gatewayErrorMessage(code: string): string {
+    if (code === "supporter_role_required") {
+        return "That sponsor no longer has a qualifying Staff, Tester, Patreon, Boosty, or Afdian role.";
+    }
+    return "Access could not be verified. Run the installer again or ask in the Bannerlord Coop Discord.";
+}
+
+function previousSponsorAccessRevokedHelp(): string {
+    return `<div class="redeem-note"><div><strong>Previous sponsor access ended</strong><p>The friend who sponsored this Discord account no longer has a qualifying Staff, Tester, Patreon, Boosty, or Afdian role. Enter a new sponsor code below.</p></div></div>`;
+}
+
 function sponsorCodeHelp(): string {
     return `<div class="redeem-note"><div><strong>Have a sponsor code?</strong><p>Codes are redeemed through the installer. Run it, sign in with your own Discord account, then enter the code on the &ldquo;One more step&rdquo; page.</p></div><a class="button secondary" href="/install.cmd" download="BannerlordCoop-Nightly-Installer.cmd">Download installer <span aria-hidden="true">&darr;</span></a></div>`;
 }
 
-function sponsorClaimPage(deviceId: string, username: string): string {
-    return page("Sponsor required", "Nightly installer", `<p class="account-chip"><span aria-hidden="true"></span>Signed in as <strong>${escapeHtml(username)}</strong></p><h1>One more step to <span>ride.</span></h1><p class="lede">This Discord account does not currently have a qualifying Staff, Tester, Patreon, Boosty, or Afdian role.</p><div class="divider"><span>Have a sponsor?</span></div><form class="claim-form" method="post" action="/v1/sponsorship/claim"><input type="hidden" name="device_id" value="${escapeHtml(deviceId)}"><label for="sponsor-code">Enter your friend&rsquo;s sponsor code</label><div class="field-row"><input id="sponsor-code" name="sponsor_code" required maxlength="128" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-describedby="sponsor-help"><button class="button">Claim a seat <span aria-hidden="true">&rarr;</span></button></div><p id="sponsor-help" class="field-help">Your friend must have a qualifying Staff, Tester, Patreon, Boosty, or Afdian role and an open seat. Access is checked again on every install and update.</p></form><div class="support-note"><strong>Already eligible?</strong><span>Make sure the correct Discord account has a qualifying Staff or Tester role or is connected to your Patreon, Boosty, or Afdian membership, then restart the installer.</span></div>`, "claim-page");
+function sponsorClaimPage(deviceId: string, username: string, extra = ""): string {
+    return page("Sponsor required", "Nightly installer", `<p class="account-chip"><span aria-hidden="true"></span>Signed in as <strong>${escapeHtml(username)}</strong></p><h1>One more step to <span>ride.</span></h1><p class="lede">This Discord account does not currently have a qualifying Staff, Tester, Patreon, Boosty, or Afdian role.</p>${extra}<div class="divider"><span>Have a sponsor?</span></div><form class="claim-form" method="post" action="/v1/sponsorship/claim"><input type="hidden" name="device_id" value="${escapeHtml(deviceId)}"><label for="sponsor-code">Enter your friend&rsquo;s sponsor code</label><div class="field-row"><input id="sponsor-code" name="sponsor_code" required maxlength="128" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-describedby="sponsor-help"><button class="button">Claim a seat <span aria-hidden="true">&rarr;</span></button></div><p id="sponsor-help" class="field-help">Your friend must have a qualifying Staff, Tester, Patreon, Boosty, or Afdian role and an open seat. Access is checked again on every install and update.</p></form><div class="support-note"><strong>Already eligible?</strong><span>Make sure the correct Discord account has a qualifying Staff or Tester role or is connected to your Patreon, Boosty, or Afdian membership, then restart the installer.</span></div>`, "claim-page");
 }
 
 export function nightlyAccessPage(): string {
@@ -667,7 +706,7 @@ const GATEWAY_CSS = `
 .shell{position:relative;z-index:1;width:min(calc(100% - 3rem),1280px);margin:auto;display:grid;grid-template-columns:repeat(12,1fr);padding:64px 0}.card{position:relative;grid-column:2/span 7;max-width:760px;padding:48px 52px 50px;background:linear-gradient(145deg,rgba(17,18,15,.96),rgba(10,11,9,.92));border:1px solid var(--border);box-shadow:0 28px 90px rgba(0,0,0,.38)}.card:before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 0 0,rgba(170,151,96,.1),transparent 42%)}.card-accent{position:absolute;top:-1px;left:52px;width:80px;height:2px;background:var(--gold);box-shadow:0 0 18px rgba(170,151,96,.35)}.card>*:not(.card-accent){position:relative}.eyebrow{margin:0 0 17px;font-size:12px;line-height:1.4;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:var(--gold)}h1{max-width:680px;margin:0;font-family:Georgia,"Times New Roman",serif;font-size:clamp(43px,5vw,70px);font-weight:500;line-height:.92;letter-spacing:-.035em;text-wrap:balance}h1 span{color:var(--crimson)}.lede{max-width:650px;margin:25px 0 0;color:var(--muted);font-size:16px;line-height:1.75;text-wrap:pretty}.actions{display:flex;align-items:center;flex-wrap:wrap;gap:22px;margin-top:32px}.button,button.button{min-height:50px;display:inline-flex;align-items:center;justify-content:center;gap:16px;padding:14px 22px;border:1px solid var(--crimson);border-radius:2px;background:var(--crimson);color:#fff;text-decoration:none;font:700 12px/1.2 Inter,ui-sans-serif,system-ui,sans-serif;letter-spacing:.13em;text-transform:uppercase;cursor:pointer;transition:background .2s,border-color .2s,color .2s}.button:hover,button.button:hover{background:var(--crimson-hover);border-color:var(--crimson-hover)}.button:focus-visible,button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offset:3px}.button.secondary{background:transparent;border-color:rgba(232,228,218,.2);color:var(--foreground)}.button.secondary:hover{border-color:var(--gold);color:var(--gold);background:rgba(170,151,96,.06)}.quiet-link{color:var(--muted);font-size:12px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;text-underline-offset:5px}.quiet-link:hover{color:var(--gold)}.fine-print{max-width:560px;margin:28px 0 0;padding-top:20px;border-top:1px solid var(--border);color:var(--dim);font-size:12px;line-height:1.65}
 .account-chip{display:inline-flex;align-items:center;gap:7px;margin:0 0 24px;padding:7px 10px 7px 8px;background:rgba(232,228,218,.055);border:1px solid var(--border);color:var(--muted);font-size:12px}.account-chip>span{width:7px;height:7px;background:#5f9565;border-radius:50%;box-shadow:0 0 9px rgba(95,149,101,.55)}.account-chip strong{color:var(--foreground);font-weight:650}.divider{display:flex;align-items:center;gap:14px;margin:30px 0 20px;color:var(--gold);font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase}.divider:after{content:"";height:1px;flex:1;background:var(--border-gold)}.claim-form{margin:0}.claim-form label{display:block;margin-bottom:9px;color:var(--foreground);font:650 12px/1.4 Inter,ui-sans-serif,system-ui,sans-serif}.field-row{display:flex;gap:10px}.field-row input{min-width:0;flex:1;height:50px;padding:0 16px;border:1px solid rgba(232,228,218,.18);border-radius:2px;background:rgba(3,4,3,.72);color:var(--foreground);font:600 16px/1 ui-monospace,"SFMono-Regular",Consolas,monospace;letter-spacing:.08em;text-transform:uppercase}.field-row input::placeholder{color:#585a54}.field-row input:hover{border-color:rgba(170,151,96,.42)}.field-help{margin:10px 0 0;color:var(--dim);font-size:11px;line-height:1.6}.support-note{display:grid;grid-template-columns:minmax(130px,.55fr) 1fr;gap:20px;margin-top:30px;padding:19px 20px;border-left:2px solid var(--gold);background:rgba(170,151,96,.055);font-size:12px;line-height:1.55}.support-note strong{color:var(--gold);font-size:10px;letter-spacing:.12em;text-transform:uppercase}.support-note span{color:var(--muted)}.support-note a{color:var(--foreground);text-underline-offset:3px}.support-note a:hover{color:var(--gold)}
 .status-page .card{grid-column:3/span 6;max-width:680px}.status-icon{width:46px;height:46px;margin:0 0 25px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-gold);color:var(--gold);font:500 24px/1 Georgia,serif;transform:rotate(45deg)}.status-icon>span{transform:rotate(-45deg)}.status-icon.success{border-color:rgba(95,149,101,.55);color:#88b28b}.status-icon.error{border-color:rgba(143,29,35,.65);color:#cf555c}.code-block{margin-top:28px;padding:20px 22px;border:1px solid var(--border-gold);background:rgba(3,4,3,.7)}.code-block>span{color:var(--gold);font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase}.code{margin:9px 0 0;color:var(--foreground);font:600 clamp(20px,4vw,30px)/1.2 ui-monospace,"SFMono-Regular",Consolas,monospace;letter-spacing:.1em}.status-page .code-block+.actions+.fine-print{display:none}
-.redeem-note{display:flex;align-items:center;justify-content:space-between;gap:22px;margin-top:30px;padding:20px;border:1px solid var(--border-gold);background:rgba(170,151,96,.055)}.redeem-note>div{min-width:0}.redeem-note strong{display:block;color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}.redeem-note p{max-width:380px;margin:8px 0 0;color:var(--muted);font-size:12px;line-height:1.6}.redeem-note .button{min-height:44px;flex:0 0 auto;padding:12px 16px;font-size:10px;letter-spacing:.1em}
+.redeem-note{display:flex;align-items:center;justify-content:space-between;gap:22px;margin-top:30px;padding:20px;border:1px solid var(--border-gold);background:rgba(170,151,96,.055)}.redeem-note>div{min-width:0}.redeem-note strong{display:block;color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}.redeem-note p{max-width:380px;margin:8px 0 0;color:var(--muted);font-size:12px;line-height:1.6}.redeem-note a{color:var(--foreground);text-underline-offset:3px}.redeem-note a:hover{color:var(--gold)}.redeem-note .button{min-height:44px;flex:0 0 auto;padding:12px 16px;font-size:10px;letter-spacing:.1em}
 .access-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:32px;background:var(--border)}.access-grid>div{padding:20px;background:rgba(7,8,6,.88)}.step-number{display:block;margin-bottom:12px;color:var(--crimson);font:700 11px/1 Inter,sans-serif;letter-spacing:.15em}.access-grid strong{font-family:Georgia,"Times New Roman",serif;font-size:18px;font-weight:600}.access-grid p{margin:7px 0 0;color:var(--muted);font-size:12px;line-height:1.55}
 .portal-wide .card{grid-column:2/span 10;max-width:none}.portal-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:42px}.portal-heading .lede{max-width:630px}.seat-count{flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:12px 15px;border:1px solid var(--border-gold);background:rgba(170,151,96,.04)}.seat-count strong{color:var(--gold);font:500 32px/1 Georgia,serif}.seat-count span{color:var(--dim);font-size:9px;line-height:1.4;letter-spacing:.12em;text-transform:uppercase}.code-action{display:flex;align-items:center;gap:20px;margin-top:32px}.code-action p{max-width:420px;margin:0;color:var(--dim);font-size:11px;line-height:1.55}.seat-section{margin-top:38px}.section-heading{display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--border-gold)}.section-heading h2{margin:0;font:600 12px/1.4 Inter,sans-serif;letter-spacing:.17em;text-transform:uppercase}.section-heading>span{color:var(--gold);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}.seat-list{margin:0;padding:0;list-style:none}.seat{display:grid;grid-template-columns:48px 1fr auto;align-items:center;gap:14px;min-height:70px;border-bottom:1px solid var(--border)}.seat-number{color:var(--dim);font:500 12px/1 ui-monospace,monospace}.seat-account{display:flex;flex-direction:column;gap:4px}.seat-label{color:var(--dim);font-size:9px;letter-spacing:.13em;text-transform:uppercase}.seat code{color:var(--foreground);font:500 13px/1.4 ui-monospace,monospace}.seat form{margin:0}.text-button{padding:8px 0;border:0;background:transparent;color:var(--muted);font:650 10px/1 Inter,sans-serif;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}.text-button:hover{color:#cf555c}.empty-state{display:flex;flex-direction:column;gap:7px;padding:26px 0;color:var(--foreground);font:600 14px/1.4 Georgia,serif}.empty-state span{color:var(--dim);font:400 12px/1.5 Inter,sans-serif}
 footer{position:relative;z-index:2;width:min(calc(100% - 3rem),1280px);min-height:54px;margin:0 auto;display:flex;align-items:center;gap:13px;color:var(--dim);font-size:9px;font-weight:650;letter-spacing:.17em;text-transform:uppercase}footer>span:first-child{color:var(--muted)}.footer-rule{width:28px;height:1px;background:var(--crimson)}
