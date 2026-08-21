@@ -3,11 +3,16 @@ const STEAM_DETAILS_URL =
 const STEAM_WORKSHOP_ITEM_ID = "3770450698";
 const STEAM_WORKSHOP_URL =
   `https://steamcommunity.com/sharedfiles/filedetails/?id=${STEAM_WORKSHOP_ITEM_ID}`;
+const MODDB_DOWNLOADS_URL =
+  "https://www.moddb.com/mods/bannerlord-coop/downloads";
 const REQUEST_TIMEOUT_MILLISECONDS = 10_000;
 const USER_AGENT = "BannerlordCoop-PlatformStatistics/1.0";
 
-type Platform = "steam" | "nexus";
-type PlatformMetric = "current_subscribers" | "unique_downloads";
+type Platform = "steam" | "nexus" | "moddb";
+type PlatformMetric =
+  | "current_subscribers"
+  | "unique_downloads"
+  | "total_downloads";
 
 type PlatformStatistic = {
   platform: Platform;
@@ -89,6 +94,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
       results,
     );
   }
+
+  await synchronizePlatform(
+    "moddb",
+    getModDbStatistic,
+    supabaseUrl,
+    serviceRoleKey,
+    results,
+  );
 
   const updatedCount = results.filter(
     (result) => result.status === "updated",
@@ -230,6 +243,34 @@ async function getNexusStatistic(
   };
 }
 
+async function getModDbStatistic(): Promise<PlatformStatistic> {
+  const response = await fetch(MODDB_DOWNLOADS_URL, {
+    headers: {
+      accept: "text/html,application/xhtml+xml",
+      "user-agent": USER_AGENT,
+    },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MILLISECONDS),
+  });
+
+  if (!response.ok) {
+    throw new Error(`ModDB returned HTTP ${response.status}`);
+  }
+
+  const downloads = parseModDbTotalDownloads(await response.text());
+
+  if (downloads === null) {
+    throw new Error("ModDB returned an unrecognized downloads page");
+  }
+
+  return {
+    platform: "moddb",
+    metric: "total_downloads",
+    value: downloads,
+    sourceUrl: MODDB_DOWNLOADS_URL,
+    measuredAt: new Date().toISOString(),
+  };
+}
+
 async function storeStatistic(
   supabaseUrl: string,
   serviceRoleKey: string,
@@ -300,6 +341,25 @@ function parseNexusUniqueDownloads(
   }
 
   return value.unique_downloads;
+}
+
+function parseModDbTotalDownloads(html: string): number | null {
+  const text = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+  const match = text.match(
+    /\bDownloads\s+([0-9][0-9,]*)\s+Downloads Today\b/i,
+  );
+
+  if (!match) return null;
+
+  const downloads = Number(match[1].replace(/,/g, ""));
+  return isNonNegativeInteger(downloads) ? downloads : null;
 }
 
 function isNonNegativeInteger(value: unknown): value is number {
