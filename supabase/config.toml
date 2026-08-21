@@ -417,3 +417,8 @@ enabled = true
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/server-heartbeat/index.ts"
+
+[functions.sync-platform-statistics]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/sync-platform-statistics/index.ts"
