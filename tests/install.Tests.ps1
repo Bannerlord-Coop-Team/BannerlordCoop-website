@@ -370,4 +370,106 @@ try {
     Remove-Item -LiteralPath $installRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+function New-GatewayWebError {
+    param(
+        [Parameter(Mandatory = $true)][int]$StatusCode,
+        [string]$ErrorCode = ''
+    )
+
+    $response = [pscustomobject]@{
+        StatusCode = $StatusCode
+        error = $ErrorCode
+    }
+    $exception = [Net.WebException]::new("Gateway $StatusCode")
+    Add-Member -InputObject $exception -MemberType NoteProperty -Name Response -Value $response -Force
+    $record = $null
+    try { throw $exception } catch { $record = $_ }
+    return $record
+}
+
+$pending = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ error = 'authorization_pending' })
+if ($pending.Action -cne 'Continue') {
+    throw 'A pending token JSON body aborted instead of continuing to poll.'
+}
+$accepted = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{
+    token_type = 'Bearer'
+    access_token = 'n' * 43
+    expires_in = 3600
+})
+if ($accepted.Action -cne 'Accept' -or $accepted.Token -cne ('n' * 43)) {
+    throw 'A valid bearer token was not accepted.'
+}
+$used = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ error = 'already_used' })
+if ($used.Action -cne 'Fail' -or $used.Message -notmatch 'already used') {
+    throw 'An already-used verification did not tell the user to rerun the installer.'
+}
+$denied = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 403 'access_denied')
+if ($denied.Action -cne 'Fail' -or $denied.Message -notmatch 'Discord access was denied') {
+    throw 'A 403 token poll did not produce the access-denied guidance.'
+}
+$statusPending = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 428 'authorization_pending')
+if ($statusPending.Action -cne 'Continue') {
+    throw 'An HTTP 428 token poll did not continue waiting for Discord.'
+}
+$invalid = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ token_type = 'Basic'; access_token = 'nope' })
+if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid.') {
+    throw 'A malformed success body did not keep the invalid-token message.'
+}
+
+$script:NightlyTokenPollMinimumSeconds = 0
+$script:OpenedVerificationUri = $null
+function Start-Process {
+    param($FilePath)
+    $script:OpenedVerificationUri = $FilePath
+}
+$script:TokenPolls = 0
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    if ([string]$Uri -match '/v1/device/sessions$') {
+        return [pscustomobject]@{
+            device_code = 'd' * 43
+            user_code = 'AB2D-EF3H'
+            verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H'
+            expires_in = 600
+            interval = 0
+        }
+    }
+    $script:TokenPolls += 1
+    if ($script:TokenPolls -eq 1) {
+        return [pscustomobject]@{ error = 'authorization_pending' }
+    }
+    return [pscustomobject]@{
+        token_type = 'Bearer'
+        access_token = 't' * 43
+        expires_in = 3600
+    }
+}
+$polledToken = Get-NightlyAccessToken
+if ($script:OpenedVerificationUri -notmatch '/activate\?code=AB2D-EF3H$') {
+    throw 'The installer did not open the Discord verification URL.'
+}
+if ($script:TokenPolls -ne 2 -or $polledToken -cne ('t' * 43)) {
+    throw 'A pending JSON body still failed the installer before Discord finished.'
+}
+
+$script:TokenPolls = 0
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    if ([string]$Uri -match '/v1/device/sessions$') {
+        return [pscustomobject]@{
+            device_code = 'e' * 43
+            user_code = 'Z9K4-M7PX'
+            verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=Z9K4-M7PX'
+            expires_in = 600
+            interval = 0
+        }
+    }
+    return [pscustomobject]@{ error = 'already_used' }
+}
+$usedMessage = $null
+try { Get-NightlyAccessToken | Out-Null } catch { $usedMessage = $_.Exception.Message }
+if ($usedMessage -notmatch 'already used') {
+    throw 'An already-used token poll still surfaced as an invalid token.'
+}
+
 Write-Host 'Installer tests passed.'
