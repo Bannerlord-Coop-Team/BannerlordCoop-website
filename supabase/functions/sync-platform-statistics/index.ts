@@ -1,6 +1,12 @@
+import {
+  parseModDbTotalDownloads,
+  parseNexusUniqueDownloads,
+  parseSteamResponse,
+  STEAM_WORKSHOP_ITEM_ID,
+} from "../_shared/platform-statistics.ts";
+
 const STEAM_DETAILS_URL =
   "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/";
-const STEAM_WORKSHOP_ITEM_ID = "3770450698";
 const STEAM_WORKSHOP_URL =
   `https://steamcommunity.com/sharedfiles/filedetails/?id=${STEAM_WORKSHOP_ITEM_ID}`;
 const MODDB_DOWNLOADS_URL =
@@ -33,11 +39,6 @@ type SyncResult =
     status: "skipped" | "failed";
     reason: string;
   };
-
-type SteamPublishedFile = {
-  publishedfileid: string;
-  subscriptions: number;
-};
 
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method !== "POST") {
@@ -303,71 +304,6 @@ async function storeStatistic(
       `Could not store ${statistic.platform}: HTTP ${response.status}: ${body}`,
     );
   }
-}
-
-function parseSteamResponse(value: unknown): SteamPublishedFile | null {
-  if (!isRecord(value) || !isRecord(value.response)) return null;
-
-  const details = value.response.publishedfiledetails;
-
-  if (!Array.isArray(details) || details.length !== 1) return null;
-
-  const publishedFile = details[0];
-
-  if (
-    !isRecord(publishedFile) ||
-    publishedFile.publishedfileid !== STEAM_WORKSHOP_ITEM_ID ||
-    !isNonNegativeInteger(publishedFile.subscriptions)
-  ) {
-    return null;
-  }
-
-  return {
-    publishedfileid: publishedFile.publishedfileid,
-    subscriptions: publishedFile.subscriptions,
-  };
-}
-
-function parseNexusUniqueDownloads(
-  value: unknown,
-  expectedModId: number,
-): number | null {
-  if (
-    !isRecord(value) ||
-    value.mod_id !== expectedModId ||
-    !isNonNegativeInteger(value.unique_downloads)
-  ) {
-    return null;
-  }
-
-  return value.unique_downloads;
-}
-
-function parseModDbTotalDownloads(html: string): number | null {
-  const text = html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;|&#160;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/\s+/g, " ")
-    .trim();
-  const match = text.match(
-    /\bDownloads\s+([0-9][0-9,]*)\s+Downloads Today\b/i,
-  );
-
-  if (!match) return null;
-
-  const downloads = Number(match[1].replace(/,/g, ""));
-  return isNonNegativeInteger(downloads) ? downloads : null;
-}
-
-function isNonNegativeInteger(value: unknown): value is number {
-  return (
-    typeof value === "number" &&
-    Number.isSafeInteger(value) &&
-    value >= 0
-  );
 }
 
 function errorMessage(error: unknown): string {
