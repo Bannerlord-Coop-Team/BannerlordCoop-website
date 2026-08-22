@@ -1,15 +1,26 @@
 import {
+    CREATE_BUILD_PIN_KIND,
+    CREATE_BUILD_PIN_LIFETIME_SECONDS,
     DEVICE_SESSION_SECONDS,
     DISCORD_GUILD_ID,
     DISCORD_OAUTH_SCOPES,
     DOWNLOAD_SESSION_SECONDS,
     SPONSORED_ACCOUNT_LIMIT,
+    createBuildPinInstallUrl,
+    createBuildPinToken,
     createSponsorFormToken,
     hasNightlyAccessRole,
-    isEligibleNightlySponsor,
-    isAllowedSponsorClaimRequest,
     isAllowedArtifactKey,
+    isAllowedManualServerKey,
+    isAllowedPinClientKey,
+    isAllowedSponsorClaimRequest,
+    isCreateBuildPinCommitSha,
+    isCreateBuildPinToken,
     isDiscordSnowflake,
+    isEligibleNightlySponsor,
+    isSha256Hex,
+    mintSecretsEqual,
+    pinClientObjectKey,
     rewriteManifestArtifactUrls,
     verifySponsorFormToken,
 } from "./core";
@@ -24,6 +35,11 @@ const JSON_HEADERS = Object.freeze({
 const DEVICE_SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const USER_CODE_PATTERN = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/;
 const MAXIMUM_MANIFEST_BYTES = 128 * 1024;
+const MAXIMUM_PIN_CLIENT_BYTES = 8 * 1024 * 1024;
+const MAXIMUM_PIN_MINT_BYTES = MAXIMUM_PIN_CLIENT_BYTES + 16 * 1024;
+const MAXIMUM_PIN_SERVER_BYTES = 6 * 1024 * 1024 * 1024;
+const MANUAL_SERVER_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/;
+const PUBLIC_MANUAL_SERVER_ORIGIN = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const SPONSOR_SESSION_SECONDS = 24 * 60 * 60;
 const OAUTH_STATE_SECONDS = 10 * 60;
 const SITE_HERO_IMAGE = "https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/07491ba62e3b038b16458402b4cc92dccf71b985/public/images/singleleader.png";
@@ -92,6 +108,21 @@ async function route(request: Request, env: Env): Promise<Response> {
     }
     if (request.method === "POST" && url.pathname === "/v1/sponsor/remove") {
         return removeSponsoredAccount(request, env);
+    }
+    if (request.method === "GET" && url.pathname === "/install" && url.searchParams.has("pin")) {
+        return serveCreateBuildPinPage(url, env);
+    }
+    if (request.method === "GET" && url.pathname === "/v1/pins/install.cmd") {
+        return serveCreateBuildPinLauncher(url, env);
+    }
+    if (request.method === "POST" && url.pathname === "/v1/pins") {
+        return mintCreateBuildPin(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/v1/pins/token") {
+        return redeemCreateBuildPin(request, env);
+    }
+    if (request.method === "GET" && url.pathname === "/v1/manifests/pin") {
+        return servePinManifest(request, env);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/client") {
         return serveManifest(request, env, "nightly/client.json");
@@ -395,8 +426,383 @@ async function removeSponsoredAccount(request: Request, env: Env): Promise<Respo
     return Response.redirect(`${env.PUBLIC_ORIGIN}/sponsor`, 303);
 }
 
+type DownloadAuthorization = { kind: "nightly" } | PinAuthorization;
+type PinAuthorization = { kind: "pin"; buildId: string };
+
+type CreateBuildPinMetadata = {
+    buildId: string;
+    clientSha: string;
+    serverSha: string;
+    expiresAt: string;
+    client: { fileName: string; bytes: number; sha256: string };
+    server: {
+        fileName: string;
+        key: string;
+        publicUrl: string;
+        bytes: number;
+        sha256: string;
+    };
+};
+
+type InstallerPinRow = {
+    token_hash: string;
+    build_id: string;
+    client_sha: string;
+    server_sha: string;
+    client_file_name: string;
+    client_bytes: number;
+    client_sha256: string;
+    server_file_name: string;
+    server_key: string;
+    server_public_url: string;
+    server_bytes: number;
+    server_sha256: string;
+    created_at: number;
+    expires_at: number;
+    consumed_at: number | null;
+};
+
+export async function mintCreateBuildPin(request: Request, env: Env): Promise<Response> {
+    await requirePinMintSecret(request, env);
+    const contentLength = request.headers.get("content-length");
+    if (contentLength !== null) {
+        const declared = Number(contentLength);
+        if (!Number.isSafeInteger(declared) || declared <= 0 || declared > MAXIMUM_PIN_MINT_BYTES) {
+            throw new GatewayError(413, "request_too_large");
+        }
+    }
+    const form = await request.formData();
+    const rawMetadata = form.get("metadata");
+    const clientFile = form.get("client");
+    if (typeof rawMetadata !== "string" || rawMetadata.length > 8 * 1024 || !(clientFile instanceof File)) {
+        throw new GatewayError(400, "invalid_request");
+    }
+    let metadata: CreateBuildPinMetadata;
+    try {
+        metadata = JSON.parse(rawMetadata) as CreateBuildPinMetadata;
+    } catch {
+        throw new GatewayError(400, "invalid_request");
+    }
+    const parsed = parseCreateBuildPinMetadata(metadata, env);
+    if (clientFile.size !== parsed.client.bytes || clientFile.size > MAXIMUM_PIN_CLIENT_BYTES) {
+        throw new GatewayError(400, "invalid_request");
+    }
+    const clientBytes = new Uint8Array(await clientFile.arrayBuffer());
+    if (clientBytes.byteLength !== parsed.client.bytes) throw new GatewayError(400, "invalid_request");
+    const digest = await sha256Bytes(clientBytes);
+    if (digest !== parsed.client.sha256) throw new GatewayError(400, "invalid_request");
+    const token = await createBuildPinToken(
+        pinMintSecret(env),
+        parsed.buildId,
+        parsed.client.sha256,
+        parsed.server.sha256,
+    );
+    const tokenHash = await sha256(token);
+    const now = nowSeconds();
+    const expiresAt = Math.floor(Date.parse(parsed.expiresAt) / 1000);
+    const existing = await env.DB.prepare(
+        "SELECT token_hash, client_sha256, server_sha256, expires_at FROM installer_pins WHERE build_id = ?",
+    ).bind(parsed.buildId).first<{
+        token_hash: string;
+        client_sha256: string;
+        server_sha256: string;
+        expires_at: number;
+    }>();
+    if (existing !== null) {
+        if (existing.token_hash !== tokenHash
+            || existing.client_sha256 !== parsed.client.sha256
+            || existing.server_sha256 !== parsed.server.sha256) {
+            throw new GatewayError(409, "pin_identity_conflict");
+        }
+    } else {
+        const inserted = await env.DB.prepare(`
+            INSERT INTO installer_pins (
+                token_hash, build_id, client_sha, server_sha,
+                client_file_name, client_bytes, client_sha256,
+                server_file_name, server_key, server_public_url, server_bytes, server_sha256,
+                created_at, expires_at, consumed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+        `).bind(
+            tokenHash,
+            parsed.buildId,
+            parsed.clientSha,
+            parsed.serverSha,
+            parsed.client.fileName,
+            parsed.client.bytes,
+            parsed.client.sha256,
+            parsed.server.fileName,
+            parsed.server.key,
+            parsed.server.publicUrl,
+            parsed.server.bytes,
+            parsed.server.sha256,
+            now,
+            expiresAt,
+        ).run();
+        if (!inserted.success) throw new GatewayError(500, "internal_error");
+    }
+    await env.RELEASES.put(pinClientObjectKey(parsed.buildId), clientBytes, {
+        httpMetadata: { contentType: "application/x-7z-compressed" },
+        customMetadata: { sha256: parsed.client.sha256 },
+    });
+    return json({
+        token,
+        installUrl: createBuildPinInstallUrl(env.PUBLIC_ORIGIN, token),
+        expiresAt: parsed.expiresAt,
+    }, existing === null ? 201 : 200);
+}
+
+export async function redeemCreateBuildPin(request: Request, env: Env): Promise<Response> {
+    const body = await readForm(request);
+    const pin = body.get("pin");
+    if (!isCreateBuildPinToken(pin)) throw new GatewayError(400, "invalid_request");
+    const now = nowSeconds();
+    const pinHash = await sha256(pin);
+    const row = await env.DB.prepare(
+        "SELECT build_id, expires_at, consumed_at FROM installer_pins WHERE token_hash = ?",
+    ).bind(pinHash).first<{ build_id: string; expires_at: number; consumed_at: number | null }>();
+    if (row === null) throw new GatewayError(400, "invalid_request");
+    if (row.expires_at < now) throw new GatewayError(400, "expired_token");
+    if (row.consumed_at !== null) throw new GatewayError(409, "already_used");
+    const object = await env.RELEASES.get(pinClientObjectKey(row.build_id));
+    if (object === null) throw new GatewayError(409, "pin_incomplete");
+    const accessToken = randomToken(32);
+    const result = await env.DB.batch([
+        env.DB.prepare(`
+            UPDATE installer_pins SET consumed_at = ?
+            WHERE token_hash = ? AND consumed_at IS NULL AND expires_at > ?
+        `).bind(now, pinHash, now),
+        env.DB.prepare(`
+            INSERT INTO pin_download_sessions (token_hash, pin_token_hash, created_at, expires_at)
+            SELECT ?, token_hash, ?, ?
+            FROM installer_pins WHERE token_hash = ? AND consumed_at = ?
+        `).bind(await sha256(accessToken), now, now + DOWNLOAD_SESSION_SECONDS, pinHash, now),
+    ]);
+    if (!result.every((entry) => entry.success && entry.meta.changes === 1)) {
+        throw new GatewayError(409, "already_used");
+    }
+    return json({ access_token: accessToken, token_type: "Bearer", expires_in: DOWNLOAD_SESSION_SECONDS });
+}
+
+export async function servePinManifest(request: Request, env: Env): Promise<Response> {
+    const session = await requirePinDownloadSession(request, env);
+    const pin = await env.DB.prepare(`
+        SELECT build_id, client_sha, server_sha, client_file_name, client_bytes, client_sha256,
+               server_file_name, server_key, server_public_url, server_bytes, server_sha256,
+               created_at, expires_at
+        FROM installer_pins WHERE build_id = ?
+    `).bind(session.buildId).first<InstallerPinRow>();
+    if (pin === null) throw new GatewayError(404, "manifest_unavailable");
+    const clientKey = pinClientObjectKey(pin.build_id);
+    const builtAt = new Date(pin.created_at * 1000).toISOString();
+    return json({
+        version: 1,
+        kind: CREATE_BUILD_PIN_KIND,
+        releaseDate: builtAt.slice(0, 10),
+        headSha: pin.client_sha,
+        clientSha: pin.client_sha,
+        serverSha: pin.server_sha,
+        builtAt,
+        expiresAt: new Date(pin.expires_at * 1000).toISOString(),
+        client: {
+            fileName: pin.client_file_name,
+            key: clientKey,
+            publicUrl: `${env.PUBLIC_ORIGIN}/v1/artifacts/${clientKey.split("/").map(encodeURIComponent).join("/")}`,
+            bytes: pin.client_bytes,
+            sha256: pin.client_sha256,
+        },
+        server: {
+            fileName: pin.server_file_name,
+            key: pin.server_key,
+            publicUrl: pin.server_public_url,
+            bytes: pin.server_bytes,
+            sha256: pin.server_sha256,
+        },
+    });
+}
+
+export async function serveCreateBuildPinPage(url: URL, env: Env): Promise<Response> {
+    const pin = await loadVisibleCreateBuildPin(url, env);
+    if (typeof pin === "string") return html(errorPage(pin), 400);
+    return html(page(
+        "Install this build",
+        "Create-build installer",
+        `<h1>Install this <span>exact</span> build.</h1><p class="lede">This one-time Windows installer installs client <code>${escapeHtml(pin.client_sha.slice(0, 7))}</code> and dedicated server <code>${escapeHtml(pin.server_sha.slice(0, 7))}</code>. It works once and expires after 24 hours. Discord sign-in is not required.</p><div class="actions"><a class="button" href="/v1/pins/install.cmd?pin=${encodeURIComponent(pin.token)}" download="BannerlordCoop-Create-Build-Installer.cmd">Download Windows installer <span aria-hidden="true">&darr;</span></a></div><p class="fine-print">Do not share this link. Anyone who opens the installer consumes it.</p>`,
+        "landing-page",
+    ));
+}
+
+export async function serveCreateBuildPinLauncher(url: URL, env: Env): Promise<Response> {
+    const pin = await loadVisibleCreateBuildPin(url, env);
+    if (typeof pin === "string") return new Response(pin, { status: 400, headers: { "content-type": "text/plain; charset=utf-8" } });
+    return new Response(createBuildPinLauncher(pin.token), {
+        status: 200,
+        headers: {
+            "content-type": "application/x-bat; charset=utf-8",
+            "content-disposition": 'attachment; filename="BannerlordCoop-Create-Build-Installer.cmd"',
+            "cache-control": "private, no-store",
+            "x-content-type-options": "nosniff",
+            "referrer-policy": "no-referrer",
+        },
+    });
+}
+
+type VisibleCreateBuildPin = {
+    token: string;
+    client_sha: string;
+    server_sha: string;
+};
+
+async function loadVisibleCreateBuildPin(url: URL, env: Env): Promise<string | VisibleCreateBuildPin> {
+    const token = url.searchParams.get("pin");
+    if (!isCreateBuildPinToken(token)) return "That create-build installer link is invalid.";
+    const row = await env.DB.prepare(
+        "SELECT client_sha, server_sha, expires_at, consumed_at FROM installer_pins WHERE token_hash = ?",
+    ).bind(await sha256(token)).first<{
+        client_sha: string;
+        server_sha: string;
+        expires_at: number;
+        consumed_at: number | null;
+    }>();
+    if (row === null) return "That create-build installer link is invalid.";
+    if (row.consumed_at !== null) return "That create-build installer link was already used.";
+    if (row.expires_at < nowSeconds()) return "That create-build installer link has expired.";
+    return { token, client_sha: row.client_sha, server_sha: row.server_sha };
+}
+
+function parseCreateBuildPinMetadata(value: CreateBuildPinMetadata, env: Env): CreateBuildPinMetadata {
+    const expiresAtMs = Date.parse(value.expiresAt);
+    const now = Date.now();
+    if (
+        !isDiscordSnowflake(value.buildId)
+        || !isCreateBuildPinCommitSha(value.clientSha)
+        || !isCreateBuildPinCommitSha(value.serverSha)
+        || !Number.isFinite(expiresAtMs)
+        || new Date(expiresAtMs).toISOString() !== value.expiresAt
+        || expiresAtMs <= now
+        || expiresAtMs > now + (CREATE_BUILD_PIN_LIFETIME_SECONDS * 1_000) + 60_000
+        || value.client.fileName !== "Coop.7z"
+        || !Number.isSafeInteger(value.client.bytes)
+        || value.client.bytes <= 0
+        || value.client.bytes > MAXIMUM_PIN_CLIENT_BYTES
+        || !isSha256Hex(value.client.sha256)
+        || !MANUAL_SERVER_FILE.test(value.server.fileName)
+        || !isAllowedManualServerKey(value.server.key, value.buildId)
+        || !value.server.key.endsWith(`/${value.server.fileName}`)
+        || value.server.publicUrl !== `${env.LEGACY_R2_ORIGIN}/${value.server.key}`
+        || env.LEGACY_R2_ORIGIN !== PUBLIC_MANUAL_SERVER_ORIGIN
+        || !Number.isSafeInteger(value.server.bytes)
+        || value.server.bytes <= 0
+        || value.server.bytes > MAXIMUM_PIN_SERVER_BYTES
+        || !isSha256Hex(value.server.sha256)
+    ) {
+        throw new GatewayError(400, "invalid_request");
+    }
+    return value;
+}
+
+async function requirePinMintSecret(request: Request, env: Env): Promise<void> {
+    const expected = pinMintSecret(env);
+    const authorization = request.headers.get("authorization");
+    if (!authorization?.startsWith("Bearer ")) throw new GatewayError(401, "authorization_required");
+    if (!await mintSecretsEqual(expected, authorization.slice(7))) {
+        throw new GatewayError(401, "authorization_invalid");
+    }
+}
+
+function pinMintSecret(env: Env): string {
+    const value = env.PIN_MINT_SECRET;
+    if (typeof value !== "string" || value.length < 32) throw new GatewayError(503, "pin_mint_unavailable");
+    return value;
+}
+
+function createBuildPinLauncher(token: string): string {
+    if (!isCreateBuildPinToken(token)) throw new GatewayError(400, "invalid_request");
+    return [
+        "@echo off",
+        "setlocal",
+        "title BannerlordCoop Create-Build Installer",
+        "",
+        "set \"POWERSHELL_EXE=%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
+        "set \"CURL_EXE=%SystemRoot%\\System32\\curl.exe\"",
+        "set \"BANNERLORDCOOP_INSTALLER_TEMP=%TEMP%\\BannerlordCoop-Create-Build-Installer-%RANDOM%-%RANDOM%.ps1\"",
+        "set \"BANNERLORDCOOP_INSTALLER_LAUNCHER=1\"",
+        `set "BANNERLORDCOOP_INSTALLER_PIN=${token}"`,
+        "set \"INSTALLER_PRIMARY=https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/install.ps1\"",
+        "set \"INSTALLER_MIRROR=https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/main/installer/install.ps1\"",
+        "",
+        "echo BannerlordCoop Create-Build Installer",
+        "echo Installs one staff-created client and dedicated-server pair. This link works once.",
+        "echo.",
+        "",
+        "if not exist \"%POWERSHELL_EXE%\" (",
+        "  echo Windows PowerShell could not be found.",
+        "  echo Expected: %POWERSHELL_EXE%",
+        "  goto :failed",
+        ")",
+        "",
+        "echo Downloading the latest installer...",
+        "call :download_installer \"%INSTALLER_PRIMARY%\" \"nightly gateway\"",
+        "if not errorlevel 1 goto :download_complete",
+        "",
+        "echo The nightly gateway download failed. Trying the GitHub mirror...",
+        "call :download_installer \"%INSTALLER_MIRROR%\" \"GitHub mirror\"",
+        "if errorlevel 1 goto :download_failed",
+        "",
+        ":download_complete",
+        "",
+        "\"%POWERSHELL_EXE%\" -NoLogo -NoProfile -ExecutionPolicy Bypass -File \"%BANNERLORDCOOP_INSTALLER_TEMP%\"",
+        "set \"INSTALLER_EXIT=%ERRORLEVEL%\"",
+        "del /q \"%BANNERLORDCOOP_INSTALLER_TEMP%\" >nul 2>&1",
+        "",
+        "echo.",
+        "if not \"%INSTALLER_EXIT%\"==\"0\" (",
+        "  echo The installer stopped with an error. The details are shown above.",
+        "  goto :failed",
+        ")",
+        "",
+        "exit /b 0",
+        "",
+        ":download_installer",
+        "del /q \"%BANNERLORDCOOP_INSTALLER_TEMP%\" >nul 2>&1",
+        "\"%POWERSHELL_EXE%\" -NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"try { $ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri '%~1' -OutFile $env:BANNERLORDCOOP_INSTALLER_TEMP; exit 0 } catch { exit 1 }\"",
+        "if not errorlevel 1 call :validate_installer",
+        "if not errorlevel 1 exit /b 0",
+        "",
+        "if not exist \"%CURL_EXE%\" exit /b 1",
+        "echo PowerShell could not download from the %~2. Trying Windows curl...",
+        "del /q \"%BANNERLORDCOOP_INSTALLER_TEMP%\" >nul 2>&1",
+        "\"%CURL_EXE%\" --fail --location --silent --show-error --connect-timeout 15 --max-time 120 --retry 2 --retry-delay 1 --output \"%BANNERLORDCOOP_INSTALLER_TEMP%\" \"%~1\"",
+        "if errorlevel 1 exit /b 1",
+        "call :validate_installer",
+        "exit /b %ERRORLEVEL%",
+        "",
+        ":validate_installer",
+        "if not exist \"%BANNERLORDCOOP_INSTALLER_TEMP%\" exit /b 1",
+        "for %%I in (\"%BANNERLORDCOOP_INSTALLER_TEMP%\") do if %%~zI LEQ 0 exit /b 1",
+        "findstr /b /l /c:\"$ErrorActionPreference = 'Stop'\" \"%BANNERLORDCOOP_INSTALLER_TEMP%\" >nul 2>&1",
+        "exit /b %ERRORLEVEL%",
+        "",
+        ":download_failed",
+        "del /q \"%BANNERLORDCOOP_INSTALLER_TEMP%\" >nul 2>&1",
+        "echo.",
+        "echo The latest installer could not be downloaded from the nightly gateway or GitHub mirror.",
+        "echo Check your firewall or proxy, then try again.",
+        "",
+        ":failed",
+        "echo.",
+        "pause",
+        "exit /b 1",
+        "",
+    ].join("\r\n");
+}
+
+async function sha256Bytes(bytes: Uint8Array): Promise<string> {
+    const digest = await crypto.subtle.digest("SHA-256", exactArrayBuffer(bytes));
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 async function serveManifest(request: Request, env: Env, key: string): Promise<Response> {
-    await requireDownloadSession(request, env);
+    await requireNightlyDownloadSession(request, env);
     const object = await env.RELEASES.get(key);
     if (object === null || object.size > MAXIMUM_MANIFEST_BYTES) throw new GatewayError(404, "manifest_unavailable");
     const parsed = JSON.parse(await object.text()) as unknown;
@@ -405,14 +811,18 @@ async function serveManifest(request: Request, env: Env, key: string): Promise<R
 }
 
 async function serveArtifact(request: Request, env: Env, encodedKey: string): Promise<Response> {
-    await requireDownloadSession(request, env);
+    const authorization = await authorizeDownload(request, env);
     let key: string;
     try {
         key = encodedKey.split("/").map(decodeURIComponent).join("/");
     } catch {
         throw new GatewayError(400, "invalid_artifact");
     }
-    if (!isAllowedArtifactKey(key) || key.endsWith(".json")) throw new GatewayError(400, "invalid_artifact");
+    if (authorization.kind === "pin") {
+        if (!isAllowedPinClientKey(key, authorization.buildId)) throw new GatewayError(400, "invalid_artifact");
+    } else if (!isAllowedArtifactKey(key) || key.endsWith(".json")) {
+        throw new GatewayError(400, "invalid_artifact");
+    }
     const object = await env.RELEASES.get(key, { range: request.headers, onlyIf: request.headers });
     if (object === null) throw new GatewayError(404, "artifact_unavailable");
     const headers = new Headers({
@@ -436,15 +846,41 @@ async function serveArtifact(request: Request, env: Env, encodedKey: string): Pr
     return new Response(object.body, { status: 200, headers });
 }
 
-async function requireDownloadSession(request: Request, env: Env): Promise<void> {
+async function requireNightlyDownloadSession(request: Request, env: Env): Promise<void> {
+    const authorization = await authorizeDownload(request, env);
+    if (authorization.kind !== "nightly") throw new GatewayError(403, "access_denied");
+}
+
+async function requirePinDownloadSession(request: Request, env: Env): Promise<PinAuthorization> {
+    const authorization = await authorizeDownload(request, env);
+    if (authorization.kind !== "pin") throw new GatewayError(403, "access_denied");
+    return authorization;
+}
+
+async function authorizeDownload(request: Request, env: Env): Promise<DownloadAuthorization> {
     const authorization = request.headers.get("authorization");
     if (!authorization?.startsWith("Bearer ")) throw new GatewayError(401, "authorization_required");
     const token = authorization.slice(7);
     if (!DEVICE_SECRET_PATTERN.test(token)) throw new GatewayError(401, "authorization_invalid");
+    const tokenHash = await sha256(token);
+    const now = nowSeconds();
+    const pinSession = await env.DB.prepare(`
+        SELECT pin.build_id, session.expires_at AS session_expires_at, pin.expires_at AS pin_expires_at
+        FROM pin_download_sessions AS session
+        JOIN installer_pins AS pin ON pin.token_hash = session.pin_token_hash
+        WHERE session.token_hash = ?
+    `).bind(tokenHash).first<{ build_id: string; session_expires_at: number; pin_expires_at: number }>();
+    if (pinSession !== null) {
+        if (pinSession.session_expires_at < now || pinSession.pin_expires_at < now) {
+            throw new GatewayError(401, "authorization_expired");
+        }
+        return { kind: "pin", buildId: pinSession.build_id };
+    }
     const row = await env.DB.prepare(
         "SELECT supporter_discord_user_id, expires_at FROM download_sessions WHERE token_hash = ?",
-    ).bind(await sha256(token)).first<{ supporter_discord_user_id: string; expires_at: number }>();
-    if (row === null || row.expires_at < nowSeconds()) throw new GatewayError(401, "authorization_expired");
+    ).bind(tokenHash).first<{ supporter_discord_user_id: string; expires_at: number }>();
+    if (row === null || row.expires_at < now) throw new GatewayError(401, "authorization_expired");
+    return { kind: "nightly" };
 }
 
 async function requireSponsorSession(request: Request, env: Env, required: true): Promise<string>;
@@ -679,6 +1115,21 @@ function prefersHtmlError(request: Request): boolean {
 function gatewayErrorMessage(code: string): string {
     if (code === "supporter_role_required") {
         return "That sponsor no longer has a qualifying Staff, Tester, Patreon, Boosty, or Afdian role.";
+    }
+    if (code === "already_used") {
+        return "That create-build installer link was already used. Ask staff for a new /create-build link.";
+    }
+    if (code === "expired_token") {
+        return "That create-build installer link has expired.";
+    }
+    if (code === "pin_incomplete") {
+        return "That create-build installer is not ready yet. Ask staff to run /create-build again.";
+    }
+    if (code === "pin_identity_conflict") {
+        return "That create-build installer no longer matches this build. Ask staff for a new /create-build link.";
+    }
+    if (code === "pin_mint_unavailable") {
+        return "Create-build installer links are not configured on this gateway.";
     }
     return "Access could not be verified. Run the installer again or ask in the Bannerlord Coop Discord.";
 }

@@ -446,6 +446,92 @@ function Get-NightlyHeaders {
     }
 }
 
+function Get-InstallerPin {
+    $value = [string]$env:BANNERLORDCOOP_INSTALLER_PIN
+    if ([string]::IsNullOrWhiteSpace($value)) { return '' }
+    $pin = $value.Trim()
+    if ($pin -notmatch '^[A-Za-z0-9_-]{43}$') {
+        throw 'The create-build installer pin is invalid. Ask staff for a new /create-build link.'
+    }
+    return $pin
+}
+
+function Get-CreateBuildPinRedeemDecision {
+    param($Response, $ErrorRecord)
+
+    $statusCode = 0
+    $errorCode = Get-NightlyGatewayErrorCode $Response
+    if ($null -ne $ErrorRecord) {
+        $statusCode = Get-HttpStatusCode $ErrorRecord
+        $statusError = ''
+        try { $statusError = Get-NightlyGatewayErrorCode $ErrorRecord.Exception.Response } catch { }
+        if ($statusError) { $errorCode = $statusError }
+    } elseif (Test-NightlyAccessTokenResponse $Response) {
+        return [pscustomobject]@{
+            Action = 'Accept'
+            Token = [string]$Response.access_token
+            Message = ''
+        }
+    }
+
+    if ($statusCode -eq 409 -or $errorCode -ceq 'already_used') {
+        return [pscustomobject]@{
+            Action = 'Fail'
+            Token = ''
+            Message = 'That create-build installer link was already used. Ask staff for a new /create-build link.'
+        }
+    }
+    if ($errorCode -ceq 'expired_token') {
+        return [pscustomobject]@{
+            Action = 'Fail'
+            Token = ''
+            Message = 'That create-build installer link has expired. Ask staff for a new /create-build link.'
+        }
+    }
+    if ($errorCode -ceq 'pin_incomplete') {
+        return [pscustomobject]@{
+            Action = 'Fail'
+            Token = ''
+            Message = 'That create-build installer is not ready yet. Ask staff to run /create-build again.'
+        }
+    }
+    if ($statusCode -eq 400 -or $statusCode -eq 401 -or $errorCode -ceq 'invalid_request') {
+        return [pscustomobject]@{
+            Action = 'Fail'
+            Token = ''
+            Message = 'That create-build installer link is invalid. Ask staff for a new /create-build link.'
+        }
+    }
+    if ($null -eq $ErrorRecord) {
+        return [pscustomobject]@{
+            Action = 'Fail'
+            Token = ''
+            Message = 'The create-build installer service returned an invalid response.'
+        }
+    }
+    return [pscustomobject]@{ Action = 'Rethrow'; Token = ''; Message = '' }
+}
+
+function Get-CreateBuildPinAccessToken {
+    param([Parameter(Mandatory = $true)][string]$Pin)
+
+    Write-Host ''
+    Write-Host 'Create-build installer' -ForegroundColor Cyan
+    Write-Host 'Redeeming the one-time installer link for this exact client and dedicated-server pair.'
+    $decision = $null
+    try {
+        $response = Invoke-RestMethod -Method Post -Uri "$($script:NightlyGatewayUri)/v1/pins/token" `
+            -ContentType 'application/x-www-form-urlencoded' `
+            -Body @{ pin = $Pin }
+        $decision = Get-CreateBuildPinRedeemDecision -Response $response
+    } catch {
+        $decision = Get-CreateBuildPinRedeemDecision -ErrorRecord $_
+    }
+    if ($decision.Action -eq 'Accept') { return [string]$decision.Token }
+    if ($decision.Action -eq 'Fail') { throw $decision.Message }
+    throw
+}
+
 function Get-NormalizedPath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -705,6 +791,64 @@ function Get-ReleaseManifest {
     return $manifest
 }
 
+function Test-PinClientArtifactUri {
+    param([Parameter(Mandatory = $true)][string]$Uri)
+
+    try { $parsed = [Uri]$Uri } catch { return $false }
+    if ($parsed.Scheme -cne 'https' -or
+        $parsed.Host -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        -not [string]::IsNullOrEmpty($parsed.Query) -or
+        -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
+    return $parsed.AbsolutePath -cmatch '^/v1/artifacts/pins/\d{17,20}/Coop\.7z$'
+}
+
+function Test-PinServerArtifactUri {
+    param([Parameter(Mandatory = $true)][string]$Uri)
+
+    try { $parsed = [Uri]$Uri } catch { return $false }
+    if ($parsed.Scheme -cne 'https' -or
+        $parsed.Host -cne 'pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev' -or
+        -not [string]::IsNullOrEmpty($parsed.Query) -or
+        -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
+    return $parsed.AbsolutePath -cmatch '^/manual/\d{17,20}/[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$'
+}
+
+function Get-PinManifest {
+    $headers = Get-NightlyHeaders
+    Write-Host 'Loading the pinned create-build release...'
+    try {
+        $manifest = Invoke-RestMethod -Method Get -Uri "$($script:NightlyGatewayUri)/v1/manifests/pin" -Headers $headers
+    } catch {
+        $statusCode = Get-HttpStatusCode $_
+        if ($statusCode -eq 401 -or $statusCode -eq 403) {
+            throw 'The create-build installer session expired. Ask staff for a new /create-build link.'
+        }
+        throw
+    }
+    $clientBytes = 0L
+    $serverBytes = 0L
+    $validClientBytes = [long]::TryParse([string]$manifest.client.bytes, [ref]$clientBytes)
+    $validServerBytes = [long]::TryParse([string]$manifest.server.bytes, [ref]$serverBytes)
+    if ($manifest.version -ne 1 -or
+        [string]$manifest.kind -cne 'create-build-pin' -or
+        [string]$manifest.releaseDate -notmatch '^\d{4}-\d{2}-\d{2}$' -or
+        [string]$manifest.clientSha -notmatch '^[a-f0-9]{40}$' -or
+        [string]$manifest.serverSha -notmatch '^[a-f0-9]{40}$' -or
+        [string]$manifest.headSha -cne [string]$manifest.clientSha -or
+        -not (Test-PinClientArtifactUri ([string]$manifest.client.publicUrl)) -or
+        [string]$manifest.client.sha256 -notmatch '^[a-f0-9]{64}$' -or
+        -not $validClientBytes -or $clientBytes -le 0 -or $clientBytes -gt 8388608L -or
+        [string]$manifest.client.fileName -cne 'Coop.7z' -or
+        -not (Test-PinServerArtifactUri ([string]$manifest.server.publicUrl)) -or
+        [string]$manifest.server.sha256 -notmatch '^[a-f0-9]{64}$' -or
+        -not $validServerBytes -or $serverBytes -le 0 -or $serverBytes -gt 6442450944L -or
+        [string]$manifest.server.fileName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$' -or
+        $null -ne $manifest.server.incremental) {
+        throw 'The create-build installer manifest is invalid.'
+    }
+    return $manifest
+}
+
 function Test-PublicArtifactUri {
     param(
         [Parameter(Mandatory = $true)][string]$Uri,
@@ -828,6 +972,20 @@ function Get-SevenZip {
     return Install-StandaloneSevenZip $WorkPath
 }
 
+function Get-ArchiveAuthorization {
+    param([Parameter(Mandatory = $true)][string]$Uri)
+
+    try { $parsed = [Uri]$Uri } catch { throw 'The download URL is invalid.' }
+    if ($parsed.Scheme -cne 'https') { throw 'The download URL is invalid.' }
+    if ($parsed.Host -ceq ([Uri]$script:NightlyGatewayUri).Host) {
+        if ([string]::IsNullOrWhiteSpace([string]$script:NightlyAccessToken)) {
+            throw 'Nightly access has not been verified.'
+        }
+        return [string]$script:NightlyAccessToken
+    }
+    return $null
+}
+
 function Get-Archive {
     param(
         [Parameter(Mandatory = $true)][string]$Uri,
@@ -849,10 +1007,13 @@ function Get-Archive {
     $handler = New-Object System.Net.Http.HttpClientHandler
     $http = New-Object System.Net.Http.HttpClient($handler)
     $http.Timeout = [TimeSpan]::FromHours(4)
-    $http.DefaultRequestHeaders.Authorization = New-Object System.Net.Http.Headers.AuthenticationHeaderValue(
-        'Bearer',
-        [string]$script:NightlyAccessToken
-    )
+    $archiveAuthorization = Get-ArchiveAuthorization $Uri
+    if ($archiveAuthorization) {
+        $http.DefaultRequestHeaders.Authorization = New-Object System.Net.Http.Headers.AuthenticationHeaderValue(
+            'Bearer',
+            $archiveAuthorization
+        )
+    }
     try {
         $response = $http.GetAsync($Uri, [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
         [void]$response.EnsureSuccessStatusCode()
@@ -1341,17 +1502,29 @@ function Show-InstallationComplete {
 }
 
 function Invoke-BannerlordCoopInstaller {
-    Write-Host 'BannerlordCoop nightly installer' -ForegroundColor Cyan
-    Write-Host 'This downloads and installs the latest completed Supporter and Tester nightly for you.'
+    $installerPin = Get-InstallerPin
+    if ($installerPin) {
+        Write-Host 'BannerlordCoop create-build installer' -ForegroundColor Cyan
+        Write-Host 'This installs one staff-created client and dedicated-server pair. The link works once and expires after 24 hours.'
+    } else {
+        Write-Host 'BannerlordCoop nightly installer' -ForegroundColor Cyan
+        Write-Host 'This downloads and installs the latest completed Supporter and Tester nightly for you.'
+    }
     Write-Host ''
 
     $choice = Read-InstallChoice
     $installClient = $choice -eq 'Client' -or $choice -eq 'Both'
     $installServer = $choice -eq 'Server' -or $choice -eq 'Both'
-    $script:NightlyAccessToken = Get-NightlyAccessToken
-    $manifest = Get-ReleaseManifest ($choice -eq 'Client')
-    $displayDate = Get-NightlyDisplayDate ([string]$manifest.releaseDate) ([string]$manifest.builtAt)
-    Write-Host "Latest nightly: $displayDate ($(Get-ShortCommitSha ([string]$manifest.headSha)))"
+    if ($installerPin) {
+        $script:NightlyAccessToken = Get-CreateBuildPinAccessToken $installerPin
+        $manifest = Get-PinManifest
+        Write-Host "Pinned create-build: $(Get-ShortCommitSha ([string]$manifest.clientSha)) / $(Get-ShortCommitSha ([string]$manifest.serverSha))"
+    } else {
+        $script:NightlyAccessToken = Get-NightlyAccessToken
+        $manifest = Get-ReleaseManifest ($choice -eq 'Client')
+        $displayDate = Get-NightlyDisplayDate ([string]$manifest.releaseDate) ([string]$manifest.builtAt)
+        Write-Host "Latest nightly: $displayDate ($(Get-ShortCommitSha ([string]$manifest.headSha)))"
+    }
     $modulesPath = if ($installClient) { Select-ClientModulesPath } else { $null }
     $serverPath = if ($installServer) { Select-ServerPath } else { $null }
 
