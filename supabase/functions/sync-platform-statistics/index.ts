@@ -78,22 +78,31 @@ Deno.serve(async (request: Request): Promise<Response> => {
     results,
   );
 
-  const nexusConfiguration = getNexusConfiguration();
+  try {
+    const nexusConfiguration = getNexusConfiguration();
 
-  if (nexusConfiguration === null) {
+    if (nexusConfiguration === null) {
+      results.push({
+        platform: "nexus",
+        status: "skipped",
+        reason: "Nexus configuration is not available",
+      });
+    } else {
+      await synchronizePlatform(
+        "nexus",
+        () => getNexusStatistic(nexusConfiguration),
+        supabaseUrl,
+        serviceRoleKey,
+        results,
+      );
+    }
+  } catch (error) {
+    console.error("Could not configure Nexus statistics", error);
     results.push({
       platform: "nexus",
-      status: "skipped",
-      reason: "Nexus configuration is not available",
+      status: "failed",
+      reason: errorMessage(error),
     });
-  } else {
-    await synchronizePlatform(
-      "nexus",
-      () => getNexusStatistic(nexusConfiguration),
-      supabaseUrl,
-      serviceRoleKey,
-      results,
-    );
   }
 
   await synchronizePlatform(
@@ -225,8 +234,9 @@ async function getNexusStatistic(
     throw new Error(`Nexus returned HTTP ${response.status}`);
   }
 
+  const nexusResponse: unknown = await response.json();
   const downloads = parseNexusUniqueDownloads(
-    await response.json(),
+    nexusResponse,
     Number(configuration.modId),
   );
 

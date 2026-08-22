@@ -65,7 +65,7 @@ Deno.test("rejects a different Steam Workshop item", () => {
 Deno.test("parses Nexus unique downloads for the expected mod", () => {
   assertEquals(
     parseNexusUniqueDownloads(
-      { mod_id: 42, unique_downloads: 1_234 },
+      { mod_id: 42, mod_unique_downloads: 1_234 },
       42,
     ),
     1_234,
@@ -75,7 +75,7 @@ Deno.test("parses Nexus unique downloads for the expected mod", () => {
 Deno.test("rejects Nexus downloads for a different mod", () => {
   assertEquals(
     parseNexusUniqueDownloads(
-      { mod_id: 41, unique_downloads: 1_234 },
+      { mod_id: 41, mod_unique_downloads: 1_234 },
       42,
     ),
     null,

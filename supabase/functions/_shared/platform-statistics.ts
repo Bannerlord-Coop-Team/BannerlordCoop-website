@@ -35,12 +35,12 @@ export function parseNexusUniqueDownloads(
   if (
     !isRecord(value) ||
     value.mod_id !== expectedModId ||
-    !isNonNegativeInteger(value.unique_downloads)
+    !isNonNegativeInteger(value.mod_unique_downloads)
   ) {
     return null;
   }
 
-  return value.unique_downloads;
+  return value.mod_unique_downloads;
 }
 
 export function parseModDbTotalDownloads(html: string): number | null {
