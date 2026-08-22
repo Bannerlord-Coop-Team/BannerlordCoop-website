@@ -48,18 +48,25 @@ sync automatically before packaging.
    separate; only the role check uses Bot_UP.
 5. Generate 32 random bytes, encode them as unpadded base64url, and set them as
    `TOKEN_ENCRYPTION_KEY` with `wrangler secret put`.
-6. Create and bind a private R2 bucket named
+6. Optionally set `PIN_MINT_SECRET` with `wrangler secret put` to the same
+   value as Bot_UP's `NIGHTLY_GATEWAY_PIN_SECRET` (at least 32 characters).
+   Nightly Discord OAuth and `/v1/manifests/client` keep working when this
+   secret is absent. When it is set, `/create-build` can mint a one-time
+   installer pin. Apply D1 migration `0002_installer_pins.sql`, and add a
+   one-day `pins/` lifecycle rule on `bannerlordcoop-patron-nightlies`. Do not
+   require this secret at Worker start.
+7. Create and bind a private R2 bucket named
    `bannerlordcoop-patron-nightlies`. Do not enable its `r2.dev` URL or attach a
    public custom domain. The Worker is exposed through the existing
    `garrett-luskey.workers.dev` account subdomain, so Squarespace DNS is not
    involved.
-7. Keep `/create-build` output in the separate public
+8. Keep `/create-build` output in the separate public
    `bannerlordcoop-nightly-releases` bucket. Its copyable links remain valid
    until Bot_UP's existing 24-hour expiry cleanup; never disable public access
    on that bucket as part of the Patron-nightly rollout.
-8. Migrate Bot_UP/Managed Hosting to scoped R2 S3 reads from the private Patron
+9. Migrate Bot_UP/Managed Hosting to scoped R2 S3 reads from the private Patron
    bucket. Machine-to-machine hosting downloads do not use Discord OAuth.
-9. Deploy the updated client, dedicated-server, and website publishers and
+10. Deploy the updated client, dedicated-server, and website publishers and
    verify a live direct eligible-member install plus a sponsored install.
 
 ## Verification

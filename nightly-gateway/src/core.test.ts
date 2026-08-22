@@ -5,11 +5,17 @@ import test from "node:test";
 import {
     SPONSORED_ACCOUNT_LIMIT,
     artifactKeyFromUrl,
+    createBuildPinInstallUrl,
+    createBuildPinToken,
     createSponsorFormToken,
     hasNightlyAccessRole,
     isAllowedSponsorClaimRequest,
     isAllowedArtifactKey,
+    isAllowedManualServerKey,
+    isAllowedPinClientKey,
     isEligibleNightlySponsor,
+    mintSecretsEqual,
+    pinClientObjectKey,
     rewriteManifestArtifactUrls,
     verifySponsorFormToken,
 } from "./core";
@@ -260,6 +266,32 @@ test("artifact keys are limited to the two release namespaces", () => {
     assert.equal(isAllowedArtifactKey("managed-hosting/private/export"), false);
     assert.equal(isAllowedArtifactKey("nightly/../secret"), false);
     assert.equal(isAllowedArtifactKey("nightly//Coop.7z"), false);
+    assert.equal(isAllowedArtifactKey("pins/1527333818711806084/Coop.7z"), false);
+    assert.equal(isAllowedArtifactKey("manual/1527333818711806084/server.7z"), false);
+});
+
+test("create-build pin keys stay bound to one Discord interaction", () => {
+    const buildId = "1527333818711806084";
+    assert.equal(pinClientObjectKey(buildId), `pins/${buildId}/Coop.7z`);
+    assert.equal(isAllowedPinClientKey(`pins/${buildId}/Coop.7z`, buildId), true);
+    assert.equal(isAllowedPinClientKey(`pins/${buildId}/other.7z`, buildId), false);
+    assert.equal(isAllowedPinClientKey("nightly/Coop.7z", buildId), false);
+    assert.equal(isAllowedManualServerKey(`manual/${buildId}/BannerlordCoop-DedicatedServer-Win64.7z`, buildId), true);
+    assert.equal(isAllowedManualServerKey(`manual/1527333818711806085/server.7z`, buildId), false);
+    assert.equal(createBuildPinInstallUrl(gateway, "A".repeat(43)), `${gateway}/install?pin=${"A".repeat(43)}`);
+});
+
+test("create-build pin tokens are deterministic for one build identity", async () => {
+    const secret = "pin-mint-secret-value-32-bytes-min";
+    const buildId = "1527333818711806084";
+    const clientSha256 = "a".repeat(64);
+    const serverSha256 = "b".repeat(64);
+    const token = await createBuildPinToken(secret, buildId, clientSha256, serverSha256);
+    assert.match(token, /^[A-Za-z0-9_-]{43}$/);
+    assert.equal(await createBuildPinToken(secret, buildId, clientSha256, serverSha256), token);
+    assert.notEqual(await createBuildPinToken(secret, buildId, "c".repeat(64), serverSha256), token);
+    assert.equal(await mintSecretsEqual(secret, secret), true);
+    assert.equal(await mintSecretsEqual(secret, `x${secret.slice(1)}`), false);
 });
 
 test("legacy artifact URLs must use the exact fixed origin", () => {
@@ -393,6 +425,22 @@ test("the installer fetches a pinned 7-Zip extractor from the gateway before 7-z
     assert.ok(officialIndex < githubIndex);
     assert.match(installer, /function Install-StandaloneSevenZip/);
     assert.doesNotMatch(installer, /\$script:SevenZipUri = 'https:\/\/www\.7-zip\.org\/a\/7zr\.exe'/);
+});
+
+test("the installer can pin one create-build pair without falling back to the latest nightly", () => {
+    const installer = readFileSync(new URL("../../installer/install.ps1", import.meta.url), "utf8");
+
+    assert.equal(installer.startsWith("$ErrorActionPreference = 'Stop'\n") || installer.startsWith("$ErrorActionPreference = 'Stop'\r\n"), true);
+    assert.match(installer, /\$env:BANNERLORDCOOP_INSTALLER_PIN/);
+    assert.match(installer, /function Get-InstallerPin/);
+    assert.match(installer, /function Get-CreateBuildPinAccessToken/);
+    assert.match(installer, /function Get-PinManifest/);
+    assert.match(installer, /v1\/pins\/token/);
+    assert.match(installer, /v1\/manifests\/pin/);
+    assert.match(installer, /create-build-pin/);
+    assert.match(installer, /Pinned create-build:/);
+    assert.match(installer, /function Get-ArchiveAuthorization/);
+    assert.match(installer, /if \(\$installerPin\) \{[\s\S]*Get-CreateBuildPinAccessToken[\s\S]*Get-PinManifest[\s\S]*\} else \{[\s\S]*Get-NightlyAccessToken/);
 });
 
 test("the installer keeps long download, verification, and extraction progress visible", () => {

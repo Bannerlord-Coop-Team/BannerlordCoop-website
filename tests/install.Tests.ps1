@@ -537,4 +537,105 @@ try {
     Remove-Item -LiteralPath $sevenZipRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+$emptyPin = Get-InstallerPin
+if ($emptyPin -cne '') {
+    throw 'An unset create-build pin was treated as present.'
+}
+$env:BANNERLORDCOOP_INSTALLER_PIN = ' not-a-pin '
+$invalidPinMessage = $null
+try { Get-InstallerPin | Out-Null } catch { $invalidPinMessage = $_.Exception.Message }
+Remove-Item Env:BANNERLORDCOOP_INSTALLER_PIN -ErrorAction SilentlyContinue
+if ($invalidPinMessage -notmatch 'create-build installer pin is invalid') {
+    throw 'An invalid create-build pin did not fail closed.'
+}
+$validPin = 'P' * 43
+$env:BANNERLORDCOOP_INSTALLER_PIN = "  $validPin  "
+if ((Get-InstallerPin) -cne $validPin) {
+    throw 'A valid create-build pin was not accepted.'
+}
+Remove-Item Env:BANNERLORDCOOP_INSTALLER_PIN -ErrorAction SilentlyContinue
+
+$pinAccepted = Get-CreateBuildPinRedeemDecision -Response ([pscustomobject]@{
+    token_type = 'Bearer'
+    access_token = 'p' * 43
+    expires_in = 3600
+})
+if ($pinAccepted.Action -cne 'Accept' -or $pinAccepted.Token -cne ('p' * 43)) {
+    throw 'A valid create-build pin session was not accepted.'
+}
+$pinUsed = Get-CreateBuildPinRedeemDecision -Response ([pscustomobject]@{ error = 'already_used' })
+if ($pinUsed.Action -cne 'Fail' -or $pinUsed.Message -notmatch 'already used') {
+    throw 'An already-used create-build pin did not tell the user to ask staff for a new link.'
+}
+$pinExpired = Get-CreateBuildPinRedeemDecision -ErrorRecord (New-GatewayWebError 400 'expired_token')
+if ($pinExpired.Action -cne 'Fail' -or $pinExpired.Message -notmatch 'has expired') {
+    throw 'An expired create-build pin did not produce the expected guidance.'
+}
+
+$pinClientUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/pins/1527333818711806084/Coop.7z'
+$pinServerUri = 'https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev/manual/1527333818711806084/BannerlordCoop-DedicatedServer-Win64-client-1234567-server-abcdef1.7z'
+if (-not (Test-PinClientArtifactUri $pinClientUri)) {
+    throw 'A valid pinned client URL was rejected.'
+}
+if (-not (Test-PinServerArtifactUri $pinServerUri)) {
+    throw 'A valid pinned dedicated-server URL was rejected.'
+}
+if (Test-PinClientArtifactUri $script:ClientArchiveUri) {
+    throw 'The latest nightly client URL was accepted as a create-build pin artifact.'
+}
+if (Test-PinServerArtifactUri $script:ServerArchiveUri) {
+    throw 'The latest nightly server URL was accepted as a create-build pin artifact.'
+}
+if (Test-PinServerArtifactUri ($pinServerUri + '?extra=1')) {
+    throw 'A pinned server URL with a query string was accepted.'
+}
+
+$validPinManifest = [pscustomobject]@{
+    version = 1
+    kind = 'create-build-pin'
+    releaseDate = '2026-08-22'
+    builtAt = '2026-08-22T15:00:00Z'
+    headSha = 'a' * 40
+    clientSha = 'a' * 40
+    serverSha = 'b' * 40
+    client = [pscustomobject]@{
+        fileName = 'Coop.7z'
+        bytes = 7000000
+        sha256 = 'c' * 64
+        publicUrl = $pinClientUri
+    }
+    server = [pscustomobject]@{
+        fileName = 'BannerlordCoop-DedicatedServer-Win64-client-1234567-server-abcdef1.7z'
+        bytes = 4380000000
+        sha256 = 'd' * 64
+        publicUrl = $pinServerUri
+    }
+}
+function Invoke-RestMethod {
+    param($Method, $Uri, $Headers)
+    return $script:PinManifestResponse
+}
+$script:PinManifestResponse = $validPinManifest
+$script:NightlyAccessToken = 'p' * 43
+$pinManifest = Get-PinManifest
+if ($pinManifest.kind -cne 'create-build-pin' -or $pinManifest.client.publicUrl -cne $pinClientUri) {
+    throw 'A valid create-build pin manifest was rejected.'
+}
+$script:PinManifestResponse = $validPinManifest.PSObject.Copy()
+$script:PinManifestResponse.client = $validPinManifest.client.PSObject.Copy()
+$script:PinManifestResponse.client.publicUrl = $script:ClientArchiveUri
+$rejectedPin = $false
+try { Get-PinManifest | Out-Null } catch { $rejectedPin = $true }
+if (-not $rejectedPin) {
+    throw 'A pin manifest pointing at the latest nightly client was accepted.'
+}
+
+$script:NightlyAccessToken = 'p' * 43
+if ((Get-ArchiveAuthorization $pinClientUri) -cne ('p' * 43)) {
+    throw 'A gateway pin client download did not send the pin session bearer.'
+}
+if ($null -ne (Get-ArchiveAuthorization $pinServerUri)) {
+    throw 'A public dedicated-server download sent a bearer token.'
+}
+
 Write-Host 'Installer tests passed.'
