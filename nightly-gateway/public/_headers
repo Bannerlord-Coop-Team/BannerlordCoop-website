@@ -10,6 +10,18 @@
   Content-Type: application/octet-stream
   X-Content-Type-Options: nosniff
 
+/install.sh
+  Cache-Control: public, max-age=300
+  Content-Disposition: attachment; filename="BannerlordCoop-Nightly-Installer.sh"
+  Content-Type: application/octet-stream
+  X-Content-Type-Options: nosniff
+
+/install-linux.sh
+  Cache-Control: public, max-age=300
+  Content-Disposition: attachment; filename="BannerlordCoop-Nightly-Installer-linux.sh"
+  Content-Type: application/octet-stream
+  X-Content-Type-Options: nosniff
+
 /7zr.exe
   Cache-Control: public, max-age=86400
   Content-Type: application/octet-stream
