@@ -436,6 +436,35 @@ if ((Get-NightlyDpiToolName @('winws')) -cne 'zapret') {
 if ((Get-NightlyDpiToolName @('explorer', 'chrome')) -cne '') {
     throw 'An ordinary process list was treated as a DPI tool.'
 }
+if (-not (Test-NightlyPhoneQrRecommended -ProcessNames @('goodbyedpi'))) {
+    throw 'GoodbyeDPI did not enable the phone verification QR.'
+}
+if (Test-NightlyPhoneQrRecommended -ProcessNames @('chrome')) {
+    throw 'An ordinary process list requested a phone verification QR.'
+}
+$qrUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H'
+$qrModules = Get-QrCodeModules $qrUrl
+if ($qrModules.Length -ne 37 -or $qrModules[0].Length -ne 37) {
+    throw 'The verification QR was not a version-5 matrix.'
+}
+$finder = '1111111'
+if (($qrModules[0][0..6] -join '') -cne $finder -or
+    ($qrModules[6][0..6] -join '') -cne $finder -or
+    ($qrModules[0][30..36] -join '') -cne $finder -or
+    ($qrModules[30][0..6] -join '') -cne $finder) {
+    throw 'The verification QR is missing finder patterns.'
+}
+if (($qrModules[0] -join '') -cne '1111111000100010000101110011001111111') {
+    throw 'The verification QR is not the scannable mask-7 layout.'
+}
+$qrText = Get-QrCodeText $qrUrl
+if ($qrText -notmatch [char]0x2588 -or ($qrText -split "`r?`n" | Where-Object { $_.Length -gt 80 })) {
+    throw 'The console QR was missing or wider than the installer window.'
+}
+$qrHtml = Get-NightlyPhoneVerificationHtml $qrUrl
+if ($qrHtml -notmatch [regex]::Escape($qrUrl) -or $qrHtml -notmatch 'mobile data' -or $qrHtml -notmatch '<rect x="') {
+    throw 'The phone verification page did not include a scannable QR for the activate URL.'
+}
 if (-not (Test-CloudflareWarpRunning @('warp-svc'))) {
     throw 'Cloudflare WARP was not detected from warp-svc.'
 }
@@ -511,6 +540,20 @@ if ($script:OpenedVerificationUri -notmatch '/activate\?code=AB2D-EF3H$') {
 }
 if ($script:TokenPolls -ne 2 -or $polledToken -cne ('t' * 43)) {
     throw 'A pending JSON body still failed the installer before Discord finished.'
+}
+
+$script:NightlyObservedProcessNames = @('goodbyedpi')
+$script:TokenPolls = 0
+$script:OpenedVerificationUri = $null
+$dpiQrOutput = (Get-NightlyAccessToken 6>&1 | Out-String)
+$script:NightlyObservedProcessNames = $null
+if ($script:OpenedVerificationUri -notmatch '/activate\?code=AB2D-EF3H$') {
+    throw 'A GoodbyeDPI machine did not still open the Discord verification URL.'
+}
+if ($dpiQrOutput -notmatch 'mobile data' -or
+    $dpiQrOutput -notmatch [regex]::Escape('https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H') -or
+    $dpiQrOutput -notmatch [char]0x2588) {
+    throw 'GoodbyeDPI did not show a phone QR for the activate URL.'
 }
 
 $script:TokenPolls = 0

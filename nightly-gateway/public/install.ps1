@@ -124,6 +124,349 @@ function Get-NightlyDpiToolName {
     return ''
 }
 
+function Test-NightlyPhoneQrRecommended {
+    param([string[]]$ProcessNames)
+
+    if (-not $PSBoundParameters.ContainsKey('ProcessNames')) {
+        $ProcessNames = Get-NightlyObservedProcessNames
+    }
+    if (Get-NightlyDpiToolName $ProcessNames) { return $true }
+    if ($script:NightlyAuthorizationSkipLiveProbes) { return $false }
+    return Test-WinDivertServiceRunning
+}
+
+function Initialize-QrGaloisField {
+    if ($null -ne $script:QrGfExp) { return }
+    $exp = New-Object 'int[]' 512
+    $log = New-Object 'int[]' 256
+    $x = 1
+    for ($i = 0; $i -lt 255; $i++) {
+        $exp[$i] = $x
+        $log[$x] = $i
+        $x = $x -shl 1
+        if ($x -ge 256) { $x = $x -bxor 285 }
+    }
+    for ($i = 255; $i -lt 512; $i++) { $exp[$i] = $exp[$i - 255] }
+    $script:QrGfExp = $exp
+    $script:QrGfLog = $log
+}
+
+function Get-QrGfMultiply {
+    param([int]$Left, [int]$Right)
+
+    if ($Left -eq 0 -or $Right -eq 0) { return 0 }
+    Initialize-QrGaloisField
+    return $script:QrGfExp[$script:QrGfLog[$Left] + $script:QrGfLog[$Right]]
+}
+
+function Get-QrReedSolomonRemainder {
+    param([int[]]$Data, [int]$Degree)
+
+    Initialize-QrGaloisField
+    $generator = @(1)
+    for ($i = 0; $i -lt $Degree; $i++) {
+        $next = New-Object 'int[]' ($generator.Count + 1)
+        for ($j = 0; $j -lt $generator.Count; $j++) {
+            $next[$j] = $next[$j] -bxor $generator[$j]
+            $next[$j + 1] = $next[$j + 1] -bxor (Get-QrGfMultiply $generator[$j] $script:QrGfExp[$i])
+        }
+        $generator = $next
+    }
+    $remainder = New-Object 'int[]' $Degree
+    foreach ($byte in $Data) {
+        $factor = $byte -bxor $remainder[0]
+        for ($i = 0; $i -lt ($Degree - 1); $i++) { $remainder[$i] = $remainder[$i + 1] }
+        $remainder[$Degree - 1] = 0
+        if ($factor -eq 0) { continue }
+        for ($i = 0; $i -lt $Degree; $i++) {
+            $remainder[$i] = $remainder[$i] -bxor (Get-QrGfMultiply $generator[$i + 1] $factor)
+        }
+    }
+    return ,$remainder
+}
+
+function Get-QrByteCodewords {
+    param([byte[]]$Payload)
+
+    # Version 5-L holds 108 data codewords; activate URLs stay under that.
+    $capacity = 108
+    if ($Payload.Length -gt 104) {
+        throw 'The verification link is too long to encode as a QR code.'
+    }
+    $bits = New-Object System.Collections.Generic.List[int]
+    foreach ($bit in @(0, 1, 0, 0)) { $bits.Add($bit) }
+    for ($i = 7; $i -ge 0; $i--) { $bits.Add((($Payload.Length -shr $i) -band 1)) }
+    foreach ($byte in $Payload) {
+        for ($i = 7; $i -ge 0; $i--) { $bits.Add((($byte -shr $i) -band 1)) }
+    }
+    $terminator = [Math]::Min(4, (8 * $capacity) - $bits.Count)
+    for ($i = 0; $i -lt $terminator; $i++) { $bits.Add(0) }
+    while ($bits.Count % 8 -ne 0) { $bits.Add(0) }
+    $pad = @(0xEC, 0x11)
+    $padIndex = 0
+    while ($bits.Count -lt (8 * $capacity)) {
+        $byte = $pad[$padIndex % 2]
+        $padIndex += 1
+        for ($i = 7; $i -ge 0; $i--) { $bits.Add((($byte -shr $i) -band 1)) }
+    }
+    $codewords = New-Object 'int[]' $capacity
+    for ($i = 0; $i -lt $capacity; $i++) {
+        $value = 0
+        for ($b = 0; $b -lt 8; $b++) { $value = ($value -shl 1) -bor $bits[(8 * $i) + $b] }
+        $codewords[$i] = $value
+    }
+    return ,$codewords
+}
+
+function Test-QrFunctionModule {
+    param([int]$Row, [int]$Column, [int]$Size)
+
+    if ($Row -le 8 -and $Column -le 8) { return $true }
+    if ($Row -le 8 -and $Column -ge ($Size - 8)) { return $true }
+    if ($Row -ge ($Size - 8) -and $Column -le 8) { return $true }
+    if ($Row -eq 6 -or $Column -eq 6) { return $true }
+    return ($Row -ge 28 -and $Row -le 32 -and $Column -ge 28 -and $Column -le 32)
+}
+
+function Set-QrFinder {
+    param($Modules, [int]$Row, [int]$Column)
+
+    for ($r = -1; $r -le 7; $r++) {
+        for ($c = -1; $c -le 7; $c++) {
+            $rr = $Row + $r
+            $cc = $Column + $c
+            if ($rr -lt 0 -or $cc -lt 0 -or $rr -ge $Modules.Length -or $cc -ge $Modules.Length) { continue }
+            $on = ($r -ge 0 -and $r -le 6 -and $c -ge 0 -and $c -le 6) -and (
+                $r -eq 0 -or $r -eq 6 -or $c -eq 0 -or $c -eq 6 -or
+                ($r -ge 2 -and $r -le 4 -and $c -ge 2 -and $c -le 4)
+            )
+            $Modules[$rr][$cc] = [int]$on
+        }
+    }
+}
+
+function Set-QrAlignment {
+    param($Modules, [int]$CenterRow, [int]$CenterColumn)
+
+    for ($r = -2; $r -le 2; $r++) {
+        for ($c = -2; $c -le 2; $c++) {
+            $on = $r -eq -2 -or $r -eq 2 -or $c -eq -2 -or $c -eq 2 -or ($r -eq 0 -and $c -eq 0)
+            $Modules[$CenterRow + $r][$CenterColumn + $c] = [int]$on
+        }
+    }
+}
+
+function Test-QrMask {
+    param([int]$Pattern, [int]$Row, [int]$Column)
+
+    switch ($Pattern) {
+        0 { return (($Row + $Column) % 2) -eq 0 }
+        1 { return ($Row % 2) -eq 0 }
+        2 { return ($Column % 3) -eq 0 }
+        3 { return (($Row + $Column) % 3) -eq 0 }
+        4 { return (([int][Math]::Floor($Row / 2) + [int][Math]::Floor($Column / 3)) % 2) -eq 0 }
+        5 { return (($Row * $Column) % 2) + (($Row * $Column) % 3) -eq 0 }
+        6 { return (((($Row * $Column) % 2) + (($Row * $Column) % 3)) % 2) -eq 0 }
+        7 { return (((($Row + $Column) % 2) + (($Row * $Column) % 3)) % 2) -eq 0 }
+        default { return $false }
+    }
+}
+
+function Get-QrBitLength {
+    param([uint32]$Value)
+
+    $length = 0
+    while ($Value -ne 0) {
+        $length += 1
+        $Value = $Value -shr 1
+    }
+    return $length
+}
+
+function Get-QrFormatInfo {
+    param([int]$Mask)
+
+    # Level L is 01. Place LSB-first to match common scanner format layout.
+    $data = [uint32]((1 -shl 3) -bor $Mask)
+    $generator = [uint32]1335
+    $remainder = $data -shl 10
+    while ((Get-QrBitLength $remainder) -ge (Get-QrBitLength $generator)) {
+        $remainder = $remainder -bxor ($generator -shl ((Get-QrBitLength $remainder) - (Get-QrBitLength $generator)))
+    }
+    return [int](21522 -bxor (($data -shl 10) -bor $remainder))
+}
+
+function Test-QrFormatBit {
+    param([int]$FormatInfo, [int]$Index)
+
+    return [int](($FormatInfo -shr $Index) -band 1)
+}
+
+function Set-QrFormatBits {
+    param($Modules, [int]$Mask)
+
+    $info = Get-QrFormatInfo $Mask
+    $size = $Modules.Length
+    for ($i = 0; $i -lt 15; $i++) {
+        $bit = Test-QrFormatBit $info $i
+        if ($i -lt 6) { $Modules[$i][8] = $bit }
+        elseif ($i -lt 8) { $Modules[$i + 1][8] = $bit }
+        else { $Modules[$size - 15 + $i][8] = $bit }
+    }
+    for ($i = 0; $i -lt 15; $i++) {
+        $bit = Test-QrFormatBit $info $i
+        if ($i -lt 8) { $Modules[8][$size - $i - 1] = $bit }
+        elseif ($i -lt 9) { $Modules[8][15 - $i] = $bit }
+        else { $Modules[8][14 - $i] = $bit }
+    }
+    $Modules[$size - 8][8] = 1
+}
+
+function Get-QrCodeModules {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [int]$Mask = 7
+    )
+
+    $payload = [Text.Encoding]::UTF8.GetBytes($Text)
+    $data = Get-QrByteCodewords $payload
+    $ec = Get-QrReedSolomonRemainder -Data $data -Degree 26
+    $bits = New-Object System.Collections.Generic.List[int]
+    foreach ($byte in @($data + $ec)) {
+        for ($i = 7; $i -ge 0; $i--) { $bits.Add((($byte -shr $i) -band 1)) }
+    }
+    for ($i = 0; $i -lt 7; $i++) { $bits.Add(0) }
+
+    $size = 37
+    $base = New-Object 'object[]' $size
+    for ($r = 0; $r -lt $size; $r++) { $base[$r] = New-Object 'int[]' $size }
+    Set-QrFinder $base 0 0
+    Set-QrFinder $base 0 ($size - 7)
+    Set-QrFinder $base ($size - 7) 0
+    Set-QrAlignment $base 30 30
+    for ($i = 8; $i -lt ($size - 8); $i++) {
+        $base[6][$i] = [int](($i % 2) -eq 0)
+        $base[$i][6] = [int](($i % 2) -eq 0)
+    }
+
+    $bitIndex = 0
+    $up = $true
+    $column = $size - 1
+    while ($column -gt 0) {
+        if ($column -eq 6) { $column -= 1 }
+        for ($row = 0; $row -lt $size; $row++) {
+            $r = if ($up) { $size - 1 - $row } else { $row }
+            foreach ($offset in @(0, 1)) {
+                $c = $column - $offset
+                if (Test-QrFunctionModule $r $c $size) { continue }
+                $bit = 0
+                if ($bitIndex -lt $bits.Count) {
+                    $bit = $bits[$bitIndex]
+                    $bitIndex += 1
+                }
+                $base[$r][$c] = $bit
+            }
+        }
+        $up = -not $up
+        $column -= 2
+    }
+
+    if ($Mask -lt 0 -or $Mask -gt 7) { $Mask = 7 }
+    for ($r = 0; $r -lt $size; $r++) {
+        for ($c = 0; $c -lt $size; $c++) {
+            if (Test-QrFunctionModule $r $c $size) { continue }
+            if (Test-QrMask $Mask $r $c) {
+                $base[$r][$c] = 1 - $base[$r][$c]
+            }
+        }
+    }
+    Set-QrFormatBits $base $Mask
+    return ,$base
+}
+
+function Get-QrCodeText {
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $modules = Get-QrCodeModules $Text
+    $size = $modules.Length
+    $quiet = 2
+    $lines = New-Object System.Collections.Generic.List[string]
+    $width = $size + (2 * $quiet)
+    for ($r = 0; $r -lt $width; $r += 2) {
+        $line = ''
+        for ($c = 0; $c -lt $width; $c++) {
+            $topRow = $r - $quiet
+            $bottomRow = $r + 1 - $quiet
+            $col = $c - $quiet
+            $top = 0
+            $bottom = 0
+            if ($topRow -ge 0 -and $topRow -lt $size -and $col -ge 0 -and $col -lt $size) {
+                $top = $modules[$topRow][$col]
+            }
+            if ($bottomRow -ge 0 -and $bottomRow -lt $size -and $col -ge 0 -and $col -lt $size) {
+                $bottom = $modules[$bottomRow][$col]
+            }
+            if ($top -eq 1 -and $bottom -eq 1) { $line += [char]0x2588 }
+            elseif ($top -eq 1) { $line += [char]0x2580 }
+            elseif ($bottom -eq 1) { $line += [char]0x2584 }
+            else { $line += ' ' }
+        }
+        $lines.Add($line)
+    }
+    return ($lines -join [Environment]::NewLine)
+}
+
+function Get-NightlyPhoneVerificationHtml {
+    param([Parameter(Mandatory = $true)][string]$VerificationUri)
+
+    $modules = Get-QrCodeModules $VerificationUri
+    $size = $modules.Length
+    $quiet = 4
+    $view = $size + (2 * $quiet)
+    $rects = New-Object System.Collections.Generic.List[string]
+    for ($r = 0; $r -lt $size; $r++) {
+        for ($c = 0; $c -lt $size; $c++) {
+            if ($modules[$r][$c] -ne 1) { continue }
+            $rects.Add("<rect x=`"$($c + $quiet)`" y=`"$($r + $quiet)`" width=`"1`" height=`"1`"/>")
+        }
+    }
+    $safeUri = [Net.WebUtility]::HtmlEncode($VerificationUri)
+    return @"
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Bannerlord Coop verification</title>
+<style>
+body { margin: 0; font: 16px/1.4 Segoe UI, sans-serif; background: #111; color: #eee; text-align: center; padding: 24px; }
+svg { width: min(72vw, 72vh); height: auto; background: #fff; }
+a { color: #8ec8ff; word-break: break-all; }
+</style></head>
+<body>
+<p>Scan this with your phone using <strong>mobile data</strong>, not this Wi-Fi.</p>
+<svg viewBox="0 0 $view $view" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+<rect width="$view" height="$view" fill="#fff"/>
+<g fill="#000">$($rects -join '')</g>
+</svg>
+<p><a href="$safeUri">$safeUri</a></p>
+</body></html>
+"@
+}
+
+function Show-NightlyPhoneVerification {
+    param(
+        [Parameter(Mandatory = $true)][string]$VerificationUri,
+        [string]$ToolName = 'GoodbyeDPI'
+    )
+
+    Write-Host ''
+    Write-Host "$ToolName is running, so Discord on this PC may not load." -ForegroundColor Yellow
+    Write-Host 'Scan this QR with your phone using mobile data, not this Wi-Fi.'
+    Write-Host $VerificationUri -ForegroundColor Yellow
+    Write-Host (Get-QrCodeText $VerificationUri)
+    if ($script:NightlyAuthorizationSkipLiveProbes) { return }
+    $html = Join-Path ([IO.Path]::GetTempPath()) ('BannerlordCoop-verify-' + [guid]::NewGuid().ToString('N') + '.html')
+    [IO.File]::WriteAllText($html, (Get-NightlyPhoneVerificationHtml $VerificationUri))
+    Start-Process $html
+}
+
 function Test-CloudflareWarpRunning {
     param([string[]]$ProcessNames)
 
@@ -409,8 +752,14 @@ function Get-NightlyAccessToken {
         throw (Get-NightlyDeviceSessionFailureMessage -SessionResponse $session)
     }
     Write-Host "Verification code: $($session.user_code)" -ForegroundColor Yellow
+    $verificationUri = [string]$session.verification_uri
+    if (Test-NightlyPhoneQrRecommended) {
+        $dpiTool = Get-NightlyDpiToolName (Get-NightlyObservedProcessNames)
+        if (-not $dpiTool) { $dpiTool = 'GoodbyeDPI' }
+        Show-NightlyPhoneVerification -VerificationUri $verificationUri -ToolName $dpiTool
+    }
     Write-Host 'Opening Discord verification in your browser...'
-    Start-Process ([string]$session.verification_uri)
+    Start-Process $verificationUri
 
     $deadline = [datetimeoffset]::UtcNow.AddSeconds([Math]::Min(600, [int]$session.expires_in))
     while ([datetimeoffset]::UtcNow -lt $deadline) {
