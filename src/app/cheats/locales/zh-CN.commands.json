@@ -103,14 +103,6 @@
     "name": "移出部队",
     "summary": "从军团移除一支部队"
   },
-  "coop.debug.battle.action_performance": {
-    "name": "动作性能",
-    "summary": "查看动作性能"
-  },
-  "coop.debug.battle.animation_trace": {
-    "name": "动画跟踪",
-    "summary": "跟踪动画"
-  },
   "coop.debug.battle.capture_mount_pose": {
     "name": "捕获坐骑姿态",
     "summary": "捕获坐骑姿态"
@@ -166,10 +158,6 @@
   "coop.debug.battle.turn_cavalry": {
     "name": "转向骑兵",
     "summary": "令骑兵转向"
-  },
-  "coop.debug.battle.wield_test": {
-    "name": "装备测试",
-    "summary": "装备测试"
   },
   "coop.debug.campaignoptions.AutoAllocateClanMemberPerks": {
     "name": "自动分配氏族成员天赋",
@@ -227,10 +215,6 @@
     "name": "囚禁状态",
     "summary": "查看囚禁状态"
   },
-  "coop.debug.player_captivity.capture_ai_lord_fixture": {
-    "name": "俘虏 AI 领主夹具",
-    "summary": "俘虏 AI 领主测试夹具"
-  },
   "coop.debug.player_captivity.capture_player": {
     "name": "俘虏玩家",
     "summary": "俘虏玩家"
@@ -243,25 +227,9 @@
     "name": "从部队界面丢弃玩家",
     "summary": "从部队界面丢弃玩家"
   },
-  "coop.debug.player_captivity.focus_hero_party": {
-    "name": "对准英雄部队",
-    "summary": "将镜头对准英雄部队"
-  },
-  "coop.debug.player_captivity.focus_party": {
-    "name": "对准部队",
-    "summary": "将镜头对准部队"
-  },
   "coop.debug.player_captivity.liberate_prisoner": {
     "name": "释放俘虏",
     "summary": "释放俘虏"
-  },
-  "coop.debug.player_captivity.observe_ai_lord_fixture": {
-    "name": "观察 AI 领主夹具",
-    "summary": "观察 AI 领主测试夹具"
-  },
-  "coop.debug.player_captivity.observe_ai_lord_pair": {
-    "name": "观察 AI 领主配对",
-    "summary": "观察 AI 领主配对"
   },
   "coop.debug.player_captivity.observe_player": {
     "name": "观察玩家",
@@ -287,14 +255,6 @@
     "name": "释放玩家",
     "summary": "释放玩家"
   },
-  "coop.debug.player_captivity.restore_ai_lord_diplomacy_fixture": {
-    "name": "恢复 AI 领主外交夹具",
-    "summary": "恢复 AI 领主外交测试夹具"
-  },
-  "coop.debug.player_captivity.restore_ai_lord_fixture": {
-    "name": "恢复 AI 领主夹具",
-    "summary": "恢复 AI 领主测试夹具"
-  },
   "coop.debug.player_captivity.restore_party_fixture_state": {
     "name": "恢复部队夹具状态",
     "summary": "恢复部队测试夹具状态"
@@ -306,10 +266,6 @@
   "coop.debug.player_captivity.restore_visual_test_fixture": {
     "name": "恢复视觉测试夹具",
     "summary": "恢复视觉测试夹具"
-  },
-  "coop.debug.player_captivity.snapshot_ai_lord_diplomacy_fixture": {
-    "name": "快照 AI 领主外交夹具",
-    "summary": "快照 AI 领主外交测试夹具"
   },
   "coop.debug.player_captivity.status": {
     "name": "俘虏状态",
@@ -511,30 +467,6 @@
     "name": "侦察职责状态",
     "summary": "查看侦察职责状态"
   },
-  "coop.debug.connection.arm_inactive_party_deficit": {
-    "name": "预备不活动部队缺口",
-    "summary": "预备不活动部队缺口"
-  },
-  "coop.debug.connection.disconnect": {
-    "name": "断开连接",
-    "summary": "断开连接"
-  },
-  "coop.debug.connection.join_state": {
-    "name": "加入状态",
-    "summary": "查看加入状态"
-  },
-  "coop.debug.connection.restore_inactive_party": {
-    "name": "恢复不活动部队",
-    "summary": "恢复不活动部队"
-  },
-  "coop.debug.connection.stage_inactive_party": {
-    "name": "暂存不活动部队",
-    "summary": "暂存不活动部队"
-  },
-  "coop.debug.connection.start": {
-    "name": "开始",
-    "summary": "开始"
-  },
   "coop.debug.gamethread.instrument": {
     "name": "线程检测",
     "summary": "打开或关闭游戏线程排空检测，或报告当前状态。不带参数时切换当前设置。"
@@ -555,10 +487,6 @@
     "name": "获取时间模式",
     "summary": "获取时间模式"
   },
-  "coop.debug.request_time_mode": {
-    "name": "请求时间模式",
-    "summary": "请求时间模式"
-  },
   "coop.debug.set_time_mode": {
     "name": "设置时间模式",
     "summary": "设置时间模式"
@@ -566,26 +494,6 @@
   "coop.debug.template": {
     "name": "模板",
     "summary": "待填写"
-  },
-  "coop.debug.hero_conversation.close": {
-    "name": "关闭",
-    "summary": "关闭英雄对话"
-  },
-  "coop.debug.hero_conversation.meeting_state": {
-    "name": "会面状态",
-    "summary": "查看会面状态"
-  },
-  "coop.debug.hero_conversation.open": {
-    "name": "打开",
-    "summary": "打开英雄对话"
-  },
-  "coop.debug.hero_conversation.set_has_met": {
-    "name": "设置已见过",
-    "summary": "设置是否已经见过"
-  },
-  "coop.debug.hero_conversation.state": {
-    "name": "对话状态",
-    "summary": "查看英雄对话状态"
   },
   "coop.debug.herodeveloper.addattributepoints": {
     "name": "增加属性点",
@@ -1059,25 +967,13 @@
     "name": "杀死玩家单位",
     "summary": "杀死玩家单位"
   },
-  "coop.debug.mapevent.late_join_mode_begin_field_battle": {
-    "name": "迟到加入开始野战",
-    "summary": "结束本地部署阶段，以便实机取证显示进行中的野战。"
-  },
   "coop.debug.mapevent.late_join_mode_cleanup": {
     "name": "迟到加入清理",
     "summary": "移除夹具野战并恢复各部队的移动状态。"
   },
-  "coop.debug.mapevent.late_join_mode_disable_dying": {
-    "name": "迟到加入禁止死亡",
-    "summary": "防止实机测试战斗在两边客户端画面采集完成前结束。"
-  },
   "coop.debug.mapevent.late_join_mode_enter": {
     "name": "迟到加入进入",
     "summary": "将迟到加入者的进攻请求走真实的任务开始处理。"
-  },
-  "coop.debug.mapevent.late_join_mode_exit_missions": {
-    "name": "迟到加入退出任务",
-    "summary": "要求每个夹具任务成员在权威清理前返回战役。"
   },
   "coop.debug.mapevent.late_join_mode_fixture": {
     "name": "迟到加入夹具",
@@ -1114,26 +1010,6 @@
   "coop.debug.mapevent.player_interaction_state": {
     "name": "玩家互动状态",
     "summary": "查看玩家互动状态"
-  },
-  "coop.debug.mapevent.post_battle_freeze_fixture_open": {
-    "name": "打开战后冻结夹具遭遇",
-    "summary": "打开测试夹具遭遇"
-  },
-  "coop.debug.mapevent.post_battle_freeze_fixture_restore": {
-    "name": "恢复战后冻结夹具",
-    "summary": "恢复测试夹具"
-  },
-  "coop.debug.mapevent.post_battle_freeze_fixture_start": {
-    "name": "开始战后冻结夹具",
-    "summary": "开始测试夹具"
-  },
-  "coop.debug.mapevent.post_battle_freeze_fixture_state": {
-    "name": "战后冻结夹具状态",
-    "summary": "获取测试夹具状态"
-  },
-  "coop.debug.mapevent.post_battle_freeze_fixture_unpause": {
-    "name": "解除战后冻结夹具暂停",
-    "summary": "解除测试夹具暂停"
   },
   "coop.debug.mapevent.request_player_field_battle": {
     "name": "请求玩家野战",
@@ -1275,18 +1151,6 @@
     "name": "摧毁部队",
     "summary": "摧毁部队"
   },
-  "coop.debug.mobileparty.exact_battle_roster_begin": {
-    "name": "开始精确名册",
-    "summary": "开始精确"
-  },
-  "coop.debug.mobileparty.exact_battle_roster_restore": {
-    "name": "恢复精确名册",
-    "summary": "恢复精确"
-  },
-  "coop.debug.mobileparty.exact_battle_roster_status": {
-    "name": "精确名册状态",
-    "summary": "精确状态"
-  },
   "coop.debug.mobileparty.follow_fixture_follow": {
     "name": "跟随",
     "summary": "跟随"
@@ -1338,18 +1202,6 @@
   "coop.debug.mobileparty.info": {
     "name": "部队信息",
     "summary": "查看部队信息"
-  },
-  "coop.debug.mobileparty.large_battle_roster_begin": {
-    "name": "开始大场战斗名册",
-    "summary": "开始"
-  },
-  "coop.debug.mobileparty.large_battle_roster_restore": {
-    "name": "恢复大场战斗名册",
-    "summary": "恢复"
-  },
-  "coop.debug.mobileparty.large_battle_roster_status": {
-    "name": "大场战斗名册状态",
-    "summary": "查看大场战斗名册状态"
   },
   "coop.debug.mobileparty.list": {
     "name": "列出部队",
@@ -1447,41 +1299,9 @@
     "name": "列出选项",
     "summary": "列出模组选项"
   },
-  "coop.debug.movement.clear_receive_pressure": {
-    "name": "清除接收压力",
-    "summary": "清除接收压力"
-  },
-  "coop.debug.movement.force_rate": {
-    "name": "强制速率",
-    "summary": "强制速率"
-  },
-  "coop.debug.movement.force_receiver_cap": {
-    "name": "强制接收上限",
-    "summary": "强制接收上限"
-  },
-  "coop.debug.movement.simulate_receive_pressure": {
-    "name": "模拟接收压力",
-    "summary": "模拟接收压力"
-  },
-  "coop.debug.movement.state": {
-    "name": "移动状态",
-    "summary": "查看移动状态"
-  },
   "coop.debug.partyvisuals.buffer_state": {
     "name": "缓冲状态",
     "summary": "查看缓冲状态"
-  },
-  "coop.debug.partyvisuals.fixture_state": {
-    "name": "夹具状态",
-    "summary": "查看测试夹具状态"
-  },
-  "coop.debug.partyvisuals.restore_over_limit_fixture": {
-    "name": "恢复超限夹具",
-    "summary": "恢复超限测试夹具"
-  },
-  "coop.debug.partyvisuals.stage_over_limit_fixture": {
-    "name": "暂存超限夹具",
-    "summary": "暂存超限测试夹具"
   },
   "coop.debug.players.list": {
     "name": "列出玩家",
@@ -1583,10 +1403,6 @@
     "name": "所有者状态",
     "summary": "查看所有者状态"
   },
-  "coop.debug.settlements.restore_main_party_castle_teleport": {
-    "name": "恢复主力部队城堡传送",
-    "summary": "恢复主力部队城堡传送"
-  },
   "coop.debug.settlements.set_allies_spotted": {
     "name": "设置发现的盟军",
     "summary": "更改 NumberOfAlliesSpottedAround"
@@ -1618,10 +1434,6 @@
   "coop.debug.settlements.set_siege_state": {
     "name": "设置攻城状态",
     "summary": "更改 SiegeState"
-  },
-  "coop.debug.settlements.teleport_main_party_to_castle": {
-    "name": "传送主力部队到城堡",
-    "summary": "传送主力部队到城堡"
   },
   "coop.debug.besiegercamp.add_besiegerparty": {
     "name": "添加攻城部队",
@@ -1787,42 +1599,6 @@
     "name": "向城镇添加比武",
     "summary": "向城镇添加比武大会"
   },
-  "coop.debug.tournaments.danustica_fixture_abort": {
-    "name": "中止 Danustica 夹具",
-    "summary": "中止 Danustica 测试夹具"
-  },
-  "coop.debug.tournaments.danustica_fixture_begin": {
-    "name": "开始 Danustica 夹具",
-    "summary": "开始 Danustica 测试夹具"
-  },
-  "coop.debug.tournaments.danustica_fixture_restore": {
-    "name": "恢复 Danustica 夹具",
-    "summary": "恢复 Danustica 测试夹具"
-  },
-  "coop.debug.tournaments.danustica_fixture_state": {
-    "name": "Danustica 夹具状态",
-    "summary": "查看 Danustica 测试夹具状态"
-  },
-  "coop.debug.tournaments.danustica_observe": {
-    "name": "观察 Danustica",
-    "summary": "观察 Danustica"
-  },
-  "coop.debug.tournaments.danustica_request_choice": {
-    "name": "请求 Danustica 选择",
-    "summary": "请求 Danustica 选择"
-  },
-  "coop.debug.tournaments.danustica_request_join": {
-    "name": "请求加入 Danustica",
-    "summary": "请求加入 Danustica"
-  },
-  "coop.debug.tournaments.danustica_request_leave": {
-    "name": "请求离开 Danustica",
-    "summary": "请求离开 Danustica"
-  },
-  "coop.debug.tournaments.danustica_request_start": {
-    "name": "请求开始 Danustica",
-    "summary": "请求开始 Danustica"
-  },
   "coop.debug.town.add_item_to_sold_items": {
     "name": "添加到已售物品",
     "summary": "向指定城镇的已售物品列表添加若干物品。"
@@ -1943,14 +1719,6 @@
     "name": "加载窗口状态",
     "summary": "查看加载窗口状态"
   },
-  "coop.debug.ui.map_click_offset": {
-    "name": "地图点击偏移",
-    "summary": "地图点击偏移"
-  },
-  "coop.debug.ui.map_movement_state": {
-    "name": "地图移动状态",
-    "summary": "查看地图移动状态"
-  },
   "coop.debug.ui.pop_state": {
     "name": "弹出状态",
     "summary": "弹出状态"
@@ -2002,46 +1770,6 @@
   "coop.debug.village.set_trade_tax_acc": {
     "name": "设置累计贸易税",
     "summary": "设置村庄的累计贸易税。"
-  },
-  "coop.debug.weapon_pickup.camera_state": {
-    "name": "镜头状态",
-    "summary": "查看镜头状态"
-  },
-  "coop.debug.weapon_pickup.fixture_drop": {
-    "name": "掉落夹具武器",
-    "summary": "掉落测试夹具武器"
-  },
-  "coop.debug.weapon_pickup.fixture_pickup": {
-    "name": "拾取夹具武器",
-    "summary": "拾取测试夹具武器"
-  },
-  "coop.debug.weapon_pickup.fixture_restore": {
-    "name": "恢复夹具武器",
-    "summary": "恢复测试夹具武器"
-  },
-  "coop.debug.weapon_pickup.focus_agent": {
-    "name": "对准单位",
-    "summary": "对准单位"
-  },
-  "coop.debug.weapon_pickup.partial_fixture_drop": {
-    "name": "掉落部分消耗品夹具",
-    "summary": "掉落部分消耗品测试夹具"
-  },
-  "coop.debug.weapon_pickup.partial_fixture_pickup": {
-    "name": "拾取部分消耗品夹具",
-    "summary": "拾取部分消耗品测试夹具"
-  },
-  "coop.debug.weapon_pickup.release_camera": {
-    "name": "释放单位镜头",
-    "summary": "释放单位镜头"
-  },
-  "coop.debug.weapon_pickup.state": {
-    "name": "拾取状态",
-    "summary": "查看武器拾取状态"
-  },
-  "coop.debug.weapon_pickup.world_item_state": {
-    "name": "世界物品状态",
-    "summary": "查看世界物品状态"
   },
   "coop.debug.workshop.hero_owned_workshops": {
     "name": "英雄拥有的作坊",
