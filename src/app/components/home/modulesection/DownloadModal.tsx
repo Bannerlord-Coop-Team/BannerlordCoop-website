@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 const downloadSources = [
     {
         name: "Guided Installer",
-        description: "Supporter and Tester nightly: verifies your Discord role or sponsored seat during every install/update. Later server updates download only changed files.",
+        description: "Windows and Linux. Supporter and Tester nightly: verifies your Discord role or sponsored seat during every install/update. Later server updates download only changed files.",
         href: "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/",
         recommended: true,
         supporterOnly: true,

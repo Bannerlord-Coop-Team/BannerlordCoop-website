@@ -23,13 +23,15 @@ This controls the official installer and download paths. A person who has
 legitimately received the archive bytes can still copy those bytes; client-side
 software cannot prevent that.
 
-The gateway serves the double-clickable Windows launcher at `/install.cmd` and
-the underlying public PowerShell installer at `/install.ps1` so the live
-nightly-access page always has a working entry point. The launcher downloads
-the latest script, runs it with a one-process execution-policy bypass, and
-keeps errors visible. Run `npm run gateway:sync-installer` after changing
-either canonical file under `installer/`; `gateway:dry-run` performs the
-sync automatically before packaging.
+The gateway serves the double-clickable Windows launcher at `/install.cmd`,
+the Linux launcher at `/install.sh`, and the underlying public installers at
+`/install.ps1` and `/install-linux.sh` so the live nightly-access page always
+has a working entry point. Each launcher downloads the latest script and keeps
+errors visible. Both installers ship the Windows client and Windows dedicated
+server; Linux testers run those files through Wine or Proton. Run
+`npm run gateway:sync-installer` after changing the canonical files under
+`installer/`; `gateway:dry-run` performs the sync automatically before
+packaging.
 
 ## Required production setup
 

@@ -16,6 +16,16 @@ const nextConfig: NextConfig = {
                 destination: `${GATEWAY_ORIGIN}/install.cmd`,
                 permanent: true,
             },
+            {
+                source: "/server/install.sh",
+                destination: `${GATEWAY_ORIGIN}/install.sh`,
+                permanent: true,
+            },
+            {
+                source: "/server/install-linux.sh",
+                destination: `${GATEWAY_ORIGIN}/install-linux.sh`,
+                permanent: true,
+            },
         ];
     },
     images: {

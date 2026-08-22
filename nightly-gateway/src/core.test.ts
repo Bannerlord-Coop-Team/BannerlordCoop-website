@@ -344,7 +344,8 @@ test("gateway eligibility copy names every supported membership platform", () =>
     assert.match(markup, /Select the client, dedicated server, or both/);
     assert.match(markup, /Staff, Supporter &amp; Tester builds/);
     assert.match(markup, /href="\/install\.cmd" download="BannerlordCoop-Nightly-Installer\.cmd"/);
-    assert.doesNotMatch(markup, /Raw PowerShell script|href="\/install\.ps1"/);
+    assert.match(markup, /href="\/install\.sh" download="BannerlordCoop-Nightly-Installer\.sh"/);
+    assert.doesNotMatch(markup, /Raw PowerShell script|href="\/install\.ps1"|href="\/install-linux\.sh"/);
     assert.doesNotMatch(markup, /&amp;amp;/);
     assert.doesNotMatch(markup, /community supporters/i);
 });
@@ -384,6 +385,44 @@ test("the Windows launcher is synchronized, falls back safely, and keeps failure
     assert.match(served, /The installer stopped with an error/);
     assert.equal(served.match(/^pause$/gim)?.length, 1);
     assert.doesNotMatch(served, /The installer finished successfully/);
+});
+
+test("the Linux launcher is synchronized, falls back safely, and fetches the latest installer", () => {
+    const canonical = readFileSync(new URL("../../installer/install.sh", import.meta.url), "utf8");
+    const served = readFileSync(new URL("../public/install.sh", import.meta.url), "utf8");
+
+    assert.equal(served, canonical);
+    assert.match(served, /client, Windows dedicated server, or both/);
+    assert.match(served, /BANNERLORDCOOP_INSTALLER_LAUNCHER=1/);
+    assert.match(served, /\/install-linux\.sh/);
+    const gatewayIndex = served.indexOf(
+        "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/install-linux.sh",
+    );
+    const mirrorIndex = served.indexOf(
+        "https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/main/installer/install-linux.sh",
+    );
+    assert.notEqual(gatewayIndex, -1);
+    assert.ok(gatewayIndex < mirrorIndex);
+    assert.match(served, /nightly gateway download failed\. Trying the GitHub mirror/);
+    assert.match(served, /could not be downloaded from the nightly gateway or GitHub mirror/);
+    assert.match(served, /The installer stopped with an error/);
+    assert.doesNotMatch(served, /nightly-token|reuse-base/);
+});
+
+test("the Linux installer matches Windows nightly policy and ships Windows artifacts", () => {
+    const installer = readFileSync(new URL("../../installer/install-linux.sh", import.meta.url), "utf8");
+    const served = readFileSync(new URL("../public/install-linux.sh", import.meta.url), "utf8");
+
+    assert.equal(served, installer);
+    assert.match(installer, /BannerlordCoop-DedicatedServer-Win64\.7z/);
+    assert.match(installer, /Win64_Shipping_Client/);
+    assert.match(installer, /DedicatedServer\.Windows/);
+    assert.match(installer, /compatibleBaseFingerprints/);
+    assert.match(installer, /Discord access was denied/);
+    assert.match(installer, /\|######\|/);
+    assert.match(installer, /Press Enter to close the installer\./);
+    assert.doesNotMatch(installer, /nightly-token|TOKEN_FILE|reuse-base|REUSE_BASE/);
+    assert.doesNotMatch(installer, /Linux64|DedicatedServer\.Linux/);
 });
 
 test("the installer owns the completion banner, locations, and close prompt", () => {
