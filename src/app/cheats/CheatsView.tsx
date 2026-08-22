@@ -171,7 +171,7 @@ function DirectoryStat({
     value: number;
 }) {
     return (
-        <div className="min-w-24 border-r border-white/10 px-4 py-3 last:border-r-0 sm:min-w-32 sm:px-5">
+        <div className="min-w-24 border-r border-white/10 px-4 py-3 sm:min-w-32 sm:px-5">
             <dt className={`flex items-center gap-1.5 text-foreground-muted ${cheatsLabelClass(locale, "badge")}`}>
                 <Icon aria-hidden="true" className="size-3.5 text-gold-muted" />
                 {label}

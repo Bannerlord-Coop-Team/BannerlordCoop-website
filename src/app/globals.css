@@ -79,6 +79,10 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
+button:not(:disabled) {
+  cursor: pointer;
+}
+
 ::selection {
   background: var(--crimson);
   color: #fff;
