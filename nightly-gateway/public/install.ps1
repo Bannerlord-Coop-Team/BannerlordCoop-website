@@ -1,6 +1,8 @@
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+# Windows adds Expect: 100-continue on POST; some DPI and proxies then return an empty body.
+try { [Net.ServicePointManager]::Expect100Continue = $false } catch { }
 
 $script:InstallerUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/install.ps1'
 $script:NightlyGatewayUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev'
@@ -20,6 +22,7 @@ $script:SevenZipSha256 = '56b8cc9f4971cef253644fafe54063ed7fdca551d4dee0f8c6baa8
 $script:SevenZipDownloadAttempts = 3
 $script:SevenZipDownloadRetrySeconds = 1
 $script:NightlyAuthorizationSkipLiveProbes = $env:BANNERLORDCOOP_INSTALLER_TEST -eq '1'
+$script:NightlySessionRetrySeconds = if ($script:NightlyAuthorizationSkipLiveProbes) { 0 } else { 1 }
 $script:NightlyObservedProcessNames = $null
 
 function Read-YesNo {
@@ -62,9 +65,15 @@ function Get-HttpStatusCode {
     while ($null -ne $exception) {
         try {
             $statusCode = [int]$exception.Response.StatusCode
-            if ($statusCode -gt 0) { return $statusCode }
+            if ($statusCode -ge 100 -and $statusCode -le 599) { return $statusCode }
         } catch { }
         try { $exception = $exception.InnerException } catch { break }
+    }
+    $text = ''
+    try { $text = [string]$ErrorRecord.Exception.Message } catch { }
+    if ($text -match '\((\d{3})\)') {
+        $parsed = [int]$Matches[1]
+        if ($parsed -ge 100 -and $parsed -le 599) { return $parsed }
     }
     return 0
 }
@@ -78,6 +87,111 @@ function Get-NightlyGatewayErrorCode {
         if ($code -match '^[a-z_]+$') { return $code }
     } catch { }
     return ''
+}
+
+function Get-NightlyErrorRecordText {
+    param($ErrorRecord)
+
+    if ($null -eq $ErrorRecord) { return '' }
+    try {
+        $details = [string]$ErrorRecord.ErrorDetails.Message
+        if (-not [string]::IsNullOrWhiteSpace($details)) { return $details.Trim() }
+    } catch { }
+    try {
+        $response = $ErrorRecord.Exception.Response
+        if ($null -ne $response) {
+            $stream = $null
+            try {
+                $stream = $response.GetResponseStream()
+                if ($null -ne $stream) {
+                    return [string](New-Object IO.StreamReader($stream)).ReadToEnd()
+                }
+            } catch { }
+        }
+    } catch { }
+    return ''
+}
+
+function Get-NightlyGatewayErrorCodeFromText {
+    param([string]$Text)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) { return '' }
+    try { return Get-NightlyGatewayErrorCode ($Text | ConvertFrom-Json) } catch { }
+    if ($Text -match '"error"\s*:\s*"([a-z_]+)"') { return $Matches[1] }
+    return ''
+}
+
+function ConvertTo-NightlyJsonObject {
+    param($Value)
+
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [string]) {
+        $text = $Value.Trim()
+        if ($text.StartsWith('{') -or $text.StartsWith('[')) {
+            try { return ($text | ConvertFrom-Json) } catch { }
+        }
+    }
+    return $Value
+}
+
+function Get-NightlyResponseSnippet {
+    param($Response, [string]$Text)
+
+    $value = ''
+    if (-not [string]::IsNullOrWhiteSpace($Text)) {
+        $value = $Text
+    } elseif ($null -ne $Response) {
+        if ($Response -is [string]) {
+            $value = [string]$Response
+        } else {
+            try { $value = [string]($Response | ConvertTo-Json -Compress) } catch { $value = [string]$Response }
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($value)) { return '' }
+    $value = ($value -replace '\s+', ' ').Trim()
+    $value = $value -replace '(?i)("(?:access_token|device_code|pin|refresh_token)"\s*:\s*")[^"]+"', '$1[redacted]"'
+    if ($value.Length -gt 180) { $value = $value.Substring(0, 180) + '...' }
+    return $value
+}
+
+function Get-NightlyFailureDetailSuffix {
+    param(
+        $SessionResponse,
+        $ErrorRecord,
+        [string]$Kind
+    )
+
+    $statusCode = 0
+    if ($null -ne $ErrorRecord) { $statusCode = Get-HttpStatusCode $ErrorRecord }
+    $body = Get-NightlyErrorRecordText $ErrorRecord
+    $errorCode = Get-NightlyGatewayErrorCode $SessionResponse
+    if (-not $errorCode) { $errorCode = Get-NightlyGatewayErrorCodeFromText $body }
+    $exceptionMessage = ''
+    if ($null -ne $ErrorRecord) {
+        try { $exceptionMessage = [string]$ErrorRecord.Exception.Message } catch { }
+    }
+    $snippet = Get-NightlyResponseSnippet $SessionResponse $body
+    $parts = @()
+    if ($statusCode -gt 0) { $parts += "HTTP $statusCode" }
+    if ($errorCode) { $parts += "error=$errorCode" }
+    if ($Kind -and $Kind -cne 'empty') { $parts += "kind=$Kind" }
+    if (-not [string]::IsNullOrWhiteSpace($exceptionMessage)) { $parts += $exceptionMessage }
+    if ($snippet -and $snippet -cne $exceptionMessage) { $parts += "body=$snippet" }
+    if ($parts.Count -eq 0) { return '' }
+    return ' Details: ' + ($parts -join '; ')
+}
+
+function Add-NightlyDiagnosisDetails {
+    param(
+        $Diagnosis,
+        $SessionResponse,
+        $ErrorRecord,
+        [string]$Kind
+    )
+
+    $Diagnosis.Message = [string]$Diagnosis.Message + (Get-NightlyFailureDetailSuffix `
+        -SessionResponse $SessionResponse -ErrorRecord $ErrorRecord -Kind $Kind)
+    return $Diagnosis
 }
 
 function Test-NightlyAccessTokenResponse {
@@ -603,13 +717,18 @@ function Get-NightlyAuthorizationDiagnosis {
     }
     if ($null -eq $DnsAddresses) { $DnsAddresses = @() }
 
+    $SessionResponse = ConvertTo-NightlyJsonObject $SessionResponse
     $dpiTool = Get-NightlyDpiToolName $ProcessNames
     $warpRunning = Test-CloudflareWarpRunning $ProcessNames
     $inspection = Get-NightlyHttpsInspectionProduct $TlsIssuer
     $dnsHijacked = [bool](@($DnsAddresses) | Where-Object { Test-PrivateOrLocalAddress $_ })
     $kind = Get-NightlyResponseInterceptKind $SessionResponse
     $statusCode = 0
-    if ($null -ne $ErrorRecord) { $statusCode = Get-HttpStatusCode $ErrorRecord }
+    $errorCode = Get-NightlyGatewayErrorCode $SessionResponse
+    if ($null -ne $ErrorRecord) {
+        $statusCode = Get-HttpStatusCode $ErrorRecord
+        if (-not $errorCode) { $errorCode = Get-NightlyGatewayErrorCodeFromText (Get-NightlyErrorRecordText $ErrorRecord) }
+    }
 
     if ($dpiTool) {
         $message = if ($warpRunning) {
@@ -617,7 +736,7 @@ function Get-NightlyAuthorizationDiagnosis {
         } else {
             "$dpiTool is running and is blocking nightly authorization. Turn off $dpiTool, or enable Cloudflare WARP, then run the installer again."
         }
-        return [pscustomobject]@{ Code = 'dpi_tool'; Message = $message }
+        return Add-NightlyDiagnosisDetails ([pscustomobject]@{ Code = 'dpi_tool'; Message = $message }) $SessionResponse $ErrorRecord $kind
     }
     if ($WinDivertRunning) {
         $message = if ($warpRunning) {
@@ -625,48 +744,65 @@ function Get-NightlyAuthorizationDiagnosis {
         } else {
             'A GoodbyeDPI or zapret network driver is active and is blocking nightly authorization. Turn that tool off, or enable Cloudflare WARP, then run the installer again.'
         }
-        return [pscustomobject]@{ Code = 'windivert'; Message = $message }
+        return Add-NightlyDiagnosisDetails ([pscustomobject]@{ Code = 'windivert'; Message = $message }) $SessionResponse $ErrorRecord $kind
     }
     if ($inspection) {
-        return [pscustomobject]@{
+        return Add-NightlyDiagnosisDetails ([pscustomobject]@{
             Code = 'https_inspection'
             Message = "Antivirus HTTPS scanning ($inspection) is intercepting the nightly gateway. Turn off HTTPS or encrypted scanning, or enable Cloudflare WARP, then run the installer again."
-        }
+        }) $SessionResponse $ErrorRecord $kind
     }
     if ($dnsHijacked) {
-        return [pscustomobject]@{
+        return Add-NightlyDiagnosisDetails ([pscustomobject]@{
             Code = 'dns_hijack'
             Message = 'DNS for the nightly gateway is being redirected locally. Set DNS to 1.1.1.1, or enable Cloudflare WARP, then run the installer again.'
-        }
+        }) $SessionResponse $ErrorRecord $kind
     }
     if ($probed -and @($DnsAddresses).Count -eq 0) {
-        return [pscustomobject]@{
+        return Add-NightlyDiagnosisDetails ([pscustomobject]@{
             Code = 'dns_failure'
             Message = 'The nightly gateway hostname could not be resolved. Set DNS to 1.1.1.1, or enable Cloudflare WARP, then run the installer again.'
-        }
+        }) $SessionResponse $ErrorRecord $kind
     }
     if ($kind -ceq 'cloudflare_challenge') {
-        return [pscustomobject]@{
+        return Add-NightlyDiagnosisDetails ([pscustomobject]@{
             Code = 'cloudflare_challenge'
             Message = 'Cloudflare challenged this installer request. Enable Cloudflare WARP, or turn off GoodbyeDPI / VPN / DNS tools, then run the installer again.'
-        }
+        }) $SessionResponse $ErrorRecord $kind
     }
     if ($kind -ceq 'html' -or $kind -ceq 'text') {
-        return [pscustomobject]@{
+        return Add-NightlyDiagnosisDetails ([pscustomobject]@{
             Code = 'html_intercept'
             Message = 'A network filter replaced the nightly authorization response. Enable Cloudflare WARP, or turn off GoodbyeDPI / antivirus HTTPS scanning, then run the installer again.'
-        }
+        }) $SessionResponse $ErrorRecord $kind
+    }
+    if ($errorCode -ceq 'internal_error') {
+        return Add-NightlyDiagnosisDetails ([pscustomobject]@{
+            Code = 'internal_error'
+            Message = 'The nightly authorization service failed. Wait a minute and run the installer again.'
+        }) $SessionResponse $ErrorRecord $kind
     }
     if ($statusCode -gt 0) {
-        return [pscustomobject]@{
+        return Add-NightlyDiagnosisDetails ([pscustomobject]@{
             Code = 'http_error'
             Message = "The nightly authorization service returned HTTP $statusCode. If you use GoodbyeDPI or another DNS tool, try Cloudflare WARP or turn that tool off, then run the installer again."
-        }
+        }) $SessionResponse $ErrorRecord $kind
     }
-    return [pscustomobject]@{
+    return Add-NightlyDiagnosisDetails ([pscustomobject]@{
         Code = 'invalid_response'
         Message = 'The nightly authorization service returned an invalid response. If you use GoodbyeDPI or another DNS tool, try Cloudflare WARP or turn that tool off, then run the installer again.'
-    }
+    }) $SessionResponse $ErrorRecord $kind
+}
+
+function Get-NightlyDeviceSessionFromCurl {
+    $curl = Join-Path $env:SystemRoot 'System32\curl.exe'
+    if (-not (Test-Path -LiteralPath $curl -PathType Leaf)) { return $null }
+    $output = & $curl --silent --show-error --connect-timeout 15 --max-time 30 `
+        --user-agent 'BannerlordCoopInstaller' `
+        -X POST --data 'client=installer' `
+        -H 'Content-Type: application/x-www-form-urlencoded' `
+        "$($script:NightlyGatewayUri)/v1/device/sessions" 2>&1
+    return ConvertTo-NightlyJsonObject ([string]($output | Out-String))
 }
 
 function Get-NightlyDeviceSessionFailureMessage {
@@ -742,14 +878,28 @@ function Get-NightlyAccessToken {
     Write-Host 'A browser will open so Discord can verify access for this install or update.'
 
     $session = $null
-    try {
-        $session = Invoke-RestMethod -Method Post -Uri "$($script:NightlyGatewayUri)/v1/device/sessions" `
-            -ContentType 'application/x-www-form-urlencoded' -Body 'client=installer'
-    } catch {
-        throw (Get-NightlyDeviceSessionFailureMessage -ErrorRecord $_)
+    $lastRecord = $null
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        try {
+            $session = ConvertTo-NightlyJsonObject (Invoke-RestMethod -Method Post `
+                -Uri "$($script:NightlyGatewayUri)/v1/device/sessions" `
+                -ContentType 'application/x-www-form-urlencoded' -Body 'client=installer')
+            $lastRecord = $null
+            if (Test-NightlyDeviceSessionResponse $session) { break }
+        } catch {
+            $lastRecord = $_
+            $session = $null
+        }
+        if ($attempt -lt 2 -and $script:NightlySessionRetrySeconds -gt 0) {
+            Start-Sleep -Seconds $script:NightlySessionRetrySeconds
+        }
+    }
+    if (-not (Test-NightlyDeviceSessionResponse $session) -and -not $script:NightlyAuthorizationSkipLiveProbes) {
+        $curlSession = Get-NightlyDeviceSessionFromCurl
+        if (Test-NightlyDeviceSessionResponse $curlSession) { $session = $curlSession }
     }
     if (-not (Test-NightlyDeviceSessionResponse $session)) {
-        throw (Get-NightlyDeviceSessionFailureMessage -SessionResponse $session)
+        throw (Get-NightlyDeviceSessionFailureMessage -SessionResponse $session -ErrorRecord $lastRecord)
     }
     Write-Host "Verification code: $($session.user_code)" -ForegroundColor Yellow
     $verificationUri = [string]$session.verification_uri
@@ -1902,7 +2052,7 @@ function Get-InstallationSupportLines {
     param([string]$FailureMessage = '')
 
     $lines = @()
-    if ($FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged') {
+    if ($FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged|internal_error|HTTP 50') {
         $lines += 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.'
     }
     $lines += 'If you need help, copy this message and ask in the Bannerlord Coop Discord.'
