@@ -415,6 +415,67 @@ $invalid = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ token_type
 if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid.') {
     throw 'A malformed success body did not keep the invalid-token message.'
 }
+$supportLines = @(Get-InstallationSupportLines)
+if ($supportLines.Count -ne 2 -or
+    $supportLines[0] -cne 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.' -or
+    $supportLines[1] -cne 'If you need help, copy this message and ask in the Bannerlord Coop Discord.') {
+    throw 'Installer failure help omitted the GoodbyeDPI or Discord guidance.'
+}
+$diagnosedSupport = @(Get-InstallationSupportLines 'GoodbyeDPI is running and is blocking nightly authorization. Turn off GoodbyeDPI, or enable Cloudflare WARP, then run the installer again.')
+if ($diagnosedSupport.Count -ne 1 -or
+    $diagnosedSupport[0] -cne 'If you need help, copy this message and ask in the Bannerlord Coop Discord.') {
+    throw 'A diagnosed authorization failure still repeated the generic DNS advice.'
+}
+
+if ((Get-NightlyDpiToolName @('GoodbyeDPI', 'chrome')) -cne 'GoodbyeDPI') {
+    throw 'GoodbyeDPI was not recognized as a nightly-blocking DNS tool.'
+}
+if ((Get-NightlyDpiToolName @('winws')) -cne 'zapret') {
+    throw 'zapret winws was not recognized as a nightly-blocking DNS tool.'
+}
+if ((Get-NightlyDpiToolName @('explorer', 'chrome')) -cne '') {
+    throw 'An ordinary process list was treated as a DPI tool.'
+}
+if (-not (Test-CloudflareWarpRunning @('warp-svc'))) {
+    throw 'Cloudflare WARP was not detected from warp-svc.'
+}
+if (-not (Test-PrivateOrLocalAddress '192.168.1.1') -or (Test-PrivateOrLocalAddress '1.1.1.1')) {
+    throw 'Private DNS hijack addresses were not classified correctly.'
+}
+if ((Get-NightlyHttpsInspectionProduct 'CN=Kaspersky Antivirus CA, O=Kaspersky Lab') -cne 'Kaspersky') {
+    throw 'A Kaspersky intercepted certificate was not identified.'
+}
+if ((Get-NightlyHttpsInspectionProduct 'CN=WE1, O=Google Trust Services, C=US') -cne '') {
+    throw 'A normal Cloudflare certificate was treated as HTTPS inspection.'
+}
+if ((Get-NightlyResponseInterceptKind '<html><title>Just a moment...</title></html>') -cne 'cloudflare_challenge') {
+    throw 'A Cloudflare challenge page was not classified.'
+}
+
+$dpiDiagnosis = Get-NightlyAuthorizationDiagnosis -SessionResponse ([pscustomobject]@{}) -ProcessNames @('goodbyedpi') -TlsIssuer '' -DnsAddresses @('1.1.1.1') -WinDivertRunning $false
+if ($dpiDiagnosis.Code -cne 'dpi_tool' -or $dpiDiagnosis.Message -notmatch 'Turn off GoodbyeDPI, or enable Cloudflare WARP') {
+    throw 'A GoodbyeDPI process did not produce the turn-off-or-WARP action.'
+}
+$dpiWithWarp = Get-NightlyAuthorizationDiagnosis -SessionResponse ([pscustomobject]@{}) -ProcessNames @('goodbyedpi', 'warp-svc') -TlsIssuer '' -DnsAddresses @('1.1.1.1') -WinDivertRunning $false
+if ($dpiWithWarp.Message -notmatch 'Turn off GoodbyeDPI, then run' -or $dpiWithWarp.Message -match 'enable Cloudflare WARP') {
+    throw 'GoodbyeDPI running beside WARP still told the user to enable WARP.'
+}
+$avDiagnosis = Get-NightlyAuthorizationDiagnosis -SessionResponse ([pscustomobject]@{}) -ProcessNames @() -TlsIssuer 'CN=Bitdefender, O=Bitdefender' -DnsAddresses @('1.1.1.1') -WinDivertRunning $false
+if ($avDiagnosis.Code -cne 'https_inspection' -or $avDiagnosis.Message -notmatch 'Bitdefender' -or $avDiagnosis.Message -notmatch 'Turn off HTTPS') {
+    throw 'An antivirus-intercepted certificate did not tell the user to disable HTTPS scanning.'
+}
+$dnsDiagnosis = Get-NightlyAuthorizationDiagnosis -SessionResponse ([pscustomobject]@{}) -ProcessNames @() -TlsIssuer '' -DnsAddresses @('127.0.0.1') -WinDivertRunning $false
+if ($dnsDiagnosis.Code -cne 'dns_hijack' -or $dnsDiagnosis.Message -notmatch 'Set DNS to 1.1.1.1') {
+    throw 'A hijacked gateway DNS answer did not tell the user to change DNS.'
+}
+$challengeDiagnosis = Get-NightlyAuthorizationDiagnosis -SessionResponse 'Attention Required! | Cloudflare' -ProcessNames @() -TlsIssuer '' -DnsAddresses @('1.1.1.1') -WinDivertRunning $false
+if ($challengeDiagnosis.Code -cne 'cloudflare_challenge') {
+    throw 'A Cloudflare interstitial was not turned into a WARP action.'
+}
+$genericDiagnosis = Get-NightlyAuthorizationDiagnosis -SessionResponse ([pscustomobject]@{}) -ProcessNames @() -TlsIssuer '' -DnsAddresses @('1.1.1.1') -WinDivertRunning $false
+if ($genericDiagnosis.Code -cne 'invalid_response' -or $genericDiagnosis.Message -notmatch 'try Cloudflare WARP') {
+    throw 'An unclassified invalid session did not keep the WARP fallback action.'
+}
 
 $script:NightlyTokenPollMinimumSeconds = 0
 $script:OpenedVerificationUri = $null
@@ -470,6 +531,18 @@ $usedMessage = $null
 try { Get-NightlyAccessToken | Out-Null } catch { $usedMessage = $_.Exception.Message }
 if ($usedMessage -notmatch 'already used') {
     throw 'An already-used token poll still surfaced as an invalid token.'
+}
+
+$script:NightlyObservedProcessNames = @('goodbyedpi')
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    return [pscustomobject]@{}
+}
+$dpiAccessMessage = $null
+try { Get-NightlyAccessToken | Out-Null } catch { $dpiAccessMessage = $_.Exception.Message }
+$script:NightlyObservedProcessNames = $null
+if ($dpiAccessMessage -notmatch 'Turn off GoodbyeDPI, or enable Cloudflare WARP') {
+    throw 'A GoodbyeDPI machine still received the generic invalid-response error.'
 }
 
 $sevenZipRoot = Join-Path ([IO.Path]::GetTempPath()) ('BannerlordCoopSevenZipTests-' + [guid]::NewGuid().ToString('N'))
