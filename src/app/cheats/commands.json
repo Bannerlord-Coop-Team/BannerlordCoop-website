@@ -1,5 +1,5 @@
 {
-  "count": 517,
+  "count": 449,
   "categories": [
     {
       "name": "Player",
@@ -19,7 +19,7 @@
     },
     {
       "name": "Battles",
-      "count": 17
+      "count": 14
     },
     {
       "name": "Campaign options",
@@ -27,7 +27,7 @@
     },
     {
       "name": "Captivity",
-      "count": 23
+      "count": 15
     },
     {
       "name": "Caravans",
@@ -46,19 +46,11 @@
       "count": 21
     },
     {
-      "name": "Connection",
-      "count": 6
-    },
-    {
       "name": "Game thread",
       "count": 2
     },
     {
       "name": "General",
-      "count": 6
-    },
-    {
-      "name": "Hero conversation",
       "count": 5
     },
     {
@@ -99,7 +91,7 @@
     },
     {
       "name": "Map events",
-      "count": 69
+      "count": 61
     },
     {
       "name": "Metrics",
@@ -107,19 +99,15 @@
     },
     {
       "name": "Mobile parties",
-      "count": 61
+      "count": 55
     },
     {
       "name": "Mod options",
       "count": 1
     },
     {
-      "name": "Movement",
-      "count": 5
-    },
-    {
       "name": "Party visuals",
-      "count": 4
+      "count": 1
     },
     {
       "name": "Players",
@@ -135,7 +123,7 @@
     },
     {
       "name": "Settlements",
-      "count": 22
+      "count": 20
     },
     {
       "name": "Sieges",
@@ -151,7 +139,7 @@
     },
     {
       "name": "Tournaments",
-      "count": 10
+      "count": 1
     },
     {
       "name": "Towns",
@@ -159,7 +147,7 @@
     },
     {
       "name": "UI",
-      "count": 12
+      "count": 10
     },
     {
       "name": "Villager parties",
@@ -168,10 +156,6 @@
     {
       "name": "Villages",
       "count": 6
-    },
-    {
-      "name": "Weapon pickup",
-      "count": 10
     },
     {
       "name": "Workshops",
@@ -468,28 +452,6 @@
       "aliases": []
     },
     {
-      "command": "coop.debug.battle.action_performance",
-      "name": "action_performance",
-      "group": "coop.debug.battle",
-      "category": "Battles",
-      "summary": "Action Performance",
-      "usage": "coop.debug.battle.action_performance <start|snapshot|stop|status>",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.battle.animation_trace",
-      "name": "animation_trace",
-      "group": "coop.debug.battle",
-      "category": "Battles",
-      "summary": "Animation Trace",
-      "usage": "coop.debug.battle.animation_trace <start|snapshot|stop|status>",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
       "command": "coop.debug.battle.capture_mount_pose",
       "name": "capture_mount_pose",
       "group": "coop.debug.battle",
@@ -639,17 +601,6 @@
       "category": "Battles",
       "summary": "Turn Cavalry",
       "usage": "coop.debug.battle.turn_cavalry <degrees: -180 to -1 or 1 to 180>",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.battle.wield_test",
-      "name": "wield_test",
-      "group": "coop.debug.battle",
-      "category": "Battles",
-      "summary": "Wield Test",
-      "usage": "coop.debug.battle.wield_test <start|restore|status>",
       "side": "either",
       "kind": "action",
       "aliases": []
@@ -809,17 +760,6 @@
       "aliases": []
     },
     {
-      "command": "coop.debug.player_captivity.capture_ai_lord_fixture",
-      "name": "capture_ai_lord_fixture",
-      "group": "coop.debug.player_captivity",
-      "category": "Captivity",
-      "summary": "Capture Ai Lord Fixture",
-      "usage": "coop.debug.player_captivity.capture_ai_lord_fixture <prisonerHeroId> <captorHeroId>",
-      "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
       "command": "coop.debug.player_captivity.capture_player",
       "name": "capture_player",
       "group": "coop.debug.player_captivity",
@@ -853,28 +793,6 @@
       "aliases": []
     },
     {
-      "command": "coop.debug.player_captivity.focus_hero_party",
-      "name": "focus_hero_party",
-      "group": "coop.debug.player_captivity",
-      "category": "Captivity",
-      "summary": "Focus Hero Party",
-      "usage": "coop.debug.player_captivity.focus_hero_party <heroId>",
-      "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.player_captivity.focus_party",
-      "name": "focus_party",
-      "group": "coop.debug.player_captivity",
-      "category": "Captivity",
-      "summary": "Focus Party",
-      "usage": "coop.debug.player_captivity.focus_party <mobilePartyId>",
-      "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
       "command": "coop.debug.player_captivity.liberate_prisoner",
       "name": "liberate_prisoner",
       "group": "coop.debug.player_captivity",
@@ -883,28 +801,6 @@
       "usage": "coop.debug.player_captivity.liberate_prisoner",
       "side": "either",
       "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.player_captivity.observe_ai_lord_fixture",
-      "name": "observe_ai_lord_fixture",
-      "group": "coop.debug.player_captivity",
-      "category": "Captivity",
-      "summary": "Observe Ai Lord Fixture",
-      "usage": "coop.debug.player_captivity.observe_ai_lord_fixture",
-      "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.player_captivity.observe_ai_lord_pair",
-      "name": "observe_ai_lord_pair",
-      "group": "coop.debug.player_captivity",
-      "category": "Captivity",
-      "summary": "Observe Ai Lord Pair",
-      "usage": "coop.debug.player_captivity.observe_ai_lord_pair <prisonerHeroId> <captorHeroId>",
-      "side": "either",
-      "kind": "fixture",
       "aliases": []
     },
     {
@@ -974,28 +870,6 @@
       "aliases": []
     },
     {
-      "command": "coop.debug.player_captivity.restore_ai_lord_diplomacy_fixture",
-      "name": "restore_ai_lord_diplomacy_fixture",
-      "group": "coop.debug.player_captivity",
-      "category": "Captivity",
-      "summary": "Restore Ai Lord Diplomacy Fixture",
-      "usage": "coop.debug.player_captivity.restore_ai_lord_diplomacy_fixture",
-      "side": "client",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.player_captivity.restore_ai_lord_fixture",
-      "name": "restore_ai_lord_fixture",
-      "group": "coop.debug.player_captivity",
-      "category": "Captivity",
-      "summary": "Restore Ai Lord Fixture",
-      "usage": "coop.debug.player_captivity.restore_ai_lord_fixture",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
       "command": "coop.debug.player_captivity.restore_party_fixture_state",
       "name": "restore_party_fixture_state",
       "group": "coop.debug.player_captivity",
@@ -1025,17 +899,6 @@
       "summary": "Restore Visual Test Fixture",
       "usage": "coop.debug.player_captivity.restore_visual_test_fixture",
       "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.player_captivity.snapshot_ai_lord_diplomacy_fixture",
-      "name": "snapshot_ai_lord_diplomacy_fixture",
-      "group": "coop.debug.player_captivity",
-      "category": "Captivity",
-      "summary": "Snapshot Ai Lord Diplomacy Fixture",
-      "usage": "coop.debug.player_captivity.snapshot_ai_lord_diplomacy_fixture <prisonerHeroId> <captorHeroId>",
-      "side": "client",
       "kind": "fixture",
       "aliases": []
     },
@@ -1590,72 +1453,6 @@
       "aliases": []
     },
     {
-      "command": "coop.debug.connection.arm_inactive_party_deficit",
-      "name": "arm_inactive_party_deficit",
-      "group": "coop.debug.connection",
-      "category": "Connection",
-      "summary": "Arm Inactive Party Deficit",
-      "usage": "coop.debug.connection.arm_inactive_party_deficit <partyStringId>",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.connection.disconnect",
-      "name": "disconnect",
-      "group": "coop.debug.connection",
-      "category": "Connection",
-      "summary": "Disconnect",
-      "usage": "coop.debug.connection.disconnect",
-      "side": "client",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.connection.join_state",
-      "name": "join_state",
-      "group": "coop.debug.connection",
-      "category": "Connection",
-      "summary": "Join State",
-      "usage": "coop.debug.connection.join_state",
-      "side": "either",
-      "kind": "inspect",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.connection.restore_inactive_party",
-      "name": "restore_inactive_party",
-      "group": "coop.debug.connection",
-      "category": "Connection",
-      "summary": "Restore Inactive Party",
-      "usage": "coop.debug.connection.restore_inactive_party",
-      "side": "server",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.connection.stage_inactive_party",
-      "name": "stage_inactive_party",
-      "group": "coop.debug.connection",
-      "category": "Connection",
-      "summary": "Stage Inactive Party",
-      "usage": "coop.debug.connection.stage_inactive_party",
-      "side": "server",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.connection.start",
-      "name": "start",
-      "group": "coop.debug.connection",
-      "category": "Connection",
-      "summary": "Start",
-      "usage": "coop.debug.connection.start",
-      "side": "client",
-      "kind": "action",
-      "aliases": []
-    },
-    {
       "command": "coop.debug.gamethread.instrument",
       "name": "instrument",
       "group": "coop.debug.gamethread",
@@ -1711,17 +1508,6 @@
       "aliases": []
     },
     {
-      "command": "coop.debug.request_time_mode",
-      "name": "request_time_mode",
-      "group": "coop.debug",
-      "category": "General",
-      "summary": "Request Time Mode",
-      "usage": "coop.debug.request_time_mode <Pause|Play_1x|Play_2x>",
-      "side": "client",
-      "kind": "action",
-      "aliases": []
-    },
-    {
       "command": "coop.debug.set_time_mode",
       "name": "set_time_mode",
       "group": "coop.debug",
@@ -1741,61 +1527,6 @@
       "usage": "coop.debug.template",
       "side": "either",
       "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.hero_conversation.close",
-      "name": "close",
-      "group": "coop.debug.hero_conversation",
-      "category": "Hero conversation",
-      "summary": "Close",
-      "usage": "coop.debug.hero_conversation.close",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.hero_conversation.meeting_state",
-      "name": "meeting_state",
-      "group": "coop.debug.hero_conversation",
-      "category": "Hero conversation",
-      "summary": "Meeting State",
-      "usage": "coop.debug.hero_conversation.meeting_state <playerHeroId> <metHeroId>",
-      "side": "server",
-      "kind": "inspect",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.hero_conversation.open",
-      "name": "open",
-      "group": "coop.debug.hero_conversation",
-      "category": "Hero conversation",
-      "summary": "Open",
-      "usage": "coop.debug.hero_conversation.open <heroId>",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.hero_conversation.set_has_met",
-      "name": "set_has_met",
-      "group": "coop.debug.hero_conversation",
-      "category": "Hero conversation",
-      "summary": "Set Has Met",
-      "usage": "coop.debug.hero_conversation.set_has_met <heroId> <true|false>",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.hero_conversation.state",
-      "name": "state",
-      "group": "coop.debug.hero_conversation",
-      "category": "Hero conversation",
-      "summary": "State hero conversation",
-      "usage": "coop.debug.hero_conversation.state [heroId]",
-      "side": "either",
-      "kind": "inspect",
       "aliases": []
     },
     {
@@ -2936,7 +2667,7 @@
       "name": "encounter_state",
       "group": "coop.debug.mapevent",
       "category": "Map events",
-      "summary": "Prints a compact, teardown-focused snapshot of the current  and the main party's map-event state. Run on each client after a battle to spot an encounter that did not tear down \u2014 e.g. PlayerEncounter.Current still PRESENT, or MainParty.MapEvent lingering on an already-finalized event. Unlike list_player_encounter (full reflection dump) this is short enough to diff across clients.",
+      "summary": "Prints a compact, teardown-focused snapshot of the current  and the main party's map-event state. Run on each client after a battle to spot an encounter that did not tear down — e.g. PlayerEncounter.Current still PRESENT, or MainParty.MapEvent lingering on an already-finalized event. Unlike list_player_encounter (full reflection dump) this is short enough to diff across clients.",
       "usage": "coop.debug.mapevent.encounter_state",
       "side": "either",
       "kind": "inspect",
@@ -3097,17 +2828,6 @@
       "aliases": []
     },
     {
-      "command": "coop.debug.mapevent.late_join_mode_begin_field_battle",
-      "name": "late_join_mode_begin_field_battle",
-      "group": "coop.debug.mapevent",
-      "category": "Map events",
-      "summary": "Finishes the local deployment phase so live evidence shows the active field battle.",
-      "usage": "coop.debug.mapevent.late_join_mode_begin_field_battle",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
       "command": "coop.debug.mapevent.late_join_mode_cleanup",
       "name": "late_join_mode_cleanup",
       "group": "coop.debug.mapevent",
@@ -3115,17 +2835,6 @@
       "summary": "Removes the fixture field battle and restores each party's movement state.",
       "usage": "coop.debug.mapevent.late_join_mode_cleanup",
       "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.mapevent.late_join_mode_disable_dying",
-      "name": "late_join_mode_disable_dying",
-      "group": "coop.debug.mapevent",
-      "category": "Map events",
-      "summary": "Prevents the live-test battle from resolving before both client views are captured.",
-      "usage": "coop.debug.mapevent.late_join_mode_disable_dying",
-      "side": "either",
       "kind": "fixture",
       "aliases": []
     },
@@ -3138,17 +2847,6 @@
       "usage": "coop.debug.mapevent.late_join_mode_enter",
       "side": "server",
       "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.mapevent.late_join_mode_exit_missions",
-      "name": "late_join_mode_exit_missions",
-      "group": "coop.debug.mapevent",
-      "category": "Map events",
-      "summary": "Asks every fixture mission member to return to campaign before authoritative cleanup.",
-      "usage": "coop.debug.mapevent.late_join_mode_exit_missions",
-      "side": "server",
-      "kind": "fixture",
       "aliases": []
     },
     {
@@ -3248,61 +2946,6 @@
       "usage": "coop.debug.mapevent.player_interaction_state",
       "side": "either",
       "kind": "inspect",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.mapevent.post_battle_freeze_fixture_open",
-      "name": "post_battle_freeze_fixture_open",
-      "group": "coop.debug.mapevent",
-      "category": "Map events",
-      "summary": "Open Fixture Encounters",
-      "usage": "coop.debug.mapevent.post_battle_freeze_fixture_open",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.mapevent.post_battle_freeze_fixture_restore",
-      "name": "post_battle_freeze_fixture_restore",
-      "group": "coop.debug.mapevent",
-      "category": "Map events",
-      "summary": "Restore Fixture",
-      "usage": "coop.debug.mapevent.post_battle_freeze_fixture_restore",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.mapevent.post_battle_freeze_fixture_start",
-      "name": "post_battle_freeze_fixture_start",
-      "group": "coop.debug.mapevent",
-      "category": "Map events",
-      "summary": "Start Fixture",
-      "usage": "coop.debug.mapevent.post_battle_freeze_fixture_start <firstControllerId> <secondControllerId>",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.mapevent.post_battle_freeze_fixture_state",
-      "name": "post_battle_freeze_fixture_state",
-      "group": "coop.debug.mapevent",
-      "category": "Map events",
-      "summary": "Get Fixture State",
-      "usage": "coop.debug.mapevent.post_battle_freeze_fixture_state",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.mapevent.post_battle_freeze_fixture_unpause",
-      "name": "post_battle_freeze_fixture_unpause",
-      "group": "coop.debug.mapevent",
-      "category": "Map events",
-      "summary": "Unpause Fixture",
-      "usage": "coop.debug.mapevent.post_battle_freeze_fixture_unpause",
-      "side": "server",
-      "kind": "fixture",
       "aliases": []
     },
     {
@@ -3691,39 +3334,6 @@
       "aliases": []
     },
     {
-      "command": "coop.debug.mobileparty.exact_battle_roster_begin",
-      "name": "exact_battle_roster_begin",
-      "group": "coop.debug.mobileparty",
-      "category": "Mobile parties",
-      "summary": "Begin Exact",
-      "usage": "coop.debug.mobileparty.exact_battle_roster_begin <firstPartyId> <secondPartyId> <healthyPerParty:5|900>",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.mobileparty.exact_battle_roster_restore",
-      "name": "exact_battle_roster_restore",
-      "group": "coop.debug.mobileparty",
-      "category": "Mobile parties",
-      "summary": "Restore Exact",
-      "usage": "coop.debug.mobileparty.exact_battle_roster_restore",
-      "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.mobileparty.exact_battle_roster_status",
-      "name": "exact_battle_roster_status",
-      "group": "coop.debug.mobileparty",
-      "category": "Mobile parties",
-      "summary": "Exact Status",
-      "usage": "{commandName}",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
       "command": "coop.debug.mobileparty.follow_fixture_follow",
       "name": "follow_fixture_follow",
       "group": "coop.debug.mobileparty",
@@ -3864,39 +3474,6 @@
       "usage": "coop.debug.mobileparty.info <PartyStringID>",
       "side": "either",
       "kind": "inspect",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.mobileparty.large_battle_roster_begin",
-      "name": "large_battle_roster_begin",
-      "group": "coop.debug.mobileparty",
-      "category": "Mobile parties",
-      "summary": "Begin",
-      "usage": "coop.debug.mobileparty.large_battle_roster_begin <firstPartyId> <secondPartyId> <troopsPerParty:1-500>",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.mobileparty.large_battle_roster_restore",
-      "name": "large_battle_roster_restore",
-      "group": "coop.debug.mobileparty",
-      "category": "Mobile parties",
-      "summary": "Restore",
-      "usage": "{commandName}",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.mobileparty.large_battle_roster_status",
-      "name": "large_battle_roster_status",
-      "group": "coop.debug.mobileparty",
-      "category": "Mobile parties",
-      "summary": "Status mobile parties",
-      "usage": "{commandName} <firstPartyId> <secondPartyId>",
-      "side": "server",
-      "kind": "fixture",
       "aliases": []
     },
     {
@@ -4164,61 +3741,6 @@
       "aliases": []
     },
     {
-      "command": "coop.debug.movement.clear_receive_pressure",
-      "name": "clear_receive_pressure",
-      "group": "coop.debug.movement",
-      "category": "Movement",
-      "summary": "Clear Receive Pressure",
-      "usage": "coop.debug.movement.clear_receive_pressure",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.movement.force_rate",
-      "name": "force_rate",
-      "group": "coop.debug.movement",
-      "category": "Movement",
-      "summary": "Force Rate",
-      "usage": "coop.debug.movement.force_rate",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.movement.force_receiver_cap",
-      "name": "force_receiver_cap",
-      "group": "coop.debug.movement",
-      "category": "Movement",
-      "summary": "Force Receiver Cap",
-      "usage": "coop.debug.movement.force_receiver_cap",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.movement.simulate_receive_pressure",
-      "name": "simulate_receive_pressure",
-      "group": "coop.debug.movement",
-      "category": "Movement",
-      "summary": "Simulate Receive Pressure",
-      "usage": "coop.debug.movement.simulate_receive_pressure <duration-seconds> <queue-ms> <apply-ms> <snapshots>",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.movement.state",
-      "name": "state",
-      "group": "coop.debug.movement",
-      "category": "Movement",
-      "summary": "State movement",
-      "usage": "coop.debug.movement.state",
-      "side": "either",
-      "kind": "inspect",
-      "aliases": []
-    },
-    {
       "command": "coop.debug.partyvisuals.buffer_state",
       "name": "buffer_state",
       "group": "coop.debug.partyvisuals",
@@ -4227,39 +3749,6 @@
       "usage": "coop.debug.partyvisuals.buffer_state",
       "side": "either",
       "kind": "inspect",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.partyvisuals.fixture_state",
-      "name": "fixture_state",
-      "group": "coop.debug.partyvisuals",
-      "category": "Party visuals",
-      "summary": "Fixture State",
-      "usage": "coop.debug.partyvisuals.fixture_state",
-      "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.partyvisuals.restore_over_limit_fixture",
-      "name": "restore_over_limit_fixture",
-      "group": "coop.debug.partyvisuals",
-      "category": "Party visuals",
-      "summary": "Restore Over Limit Fixture",
-      "usage": "coop.debug.partyvisuals.restore_over_limit_fixture",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.partyvisuals.stage_over_limit_fixture",
-      "name": "stage_over_limit_fixture",
-      "group": "coop.debug.partyvisuals",
-      "category": "Party visuals",
-      "summary": "Stage Over Limit Fixture",
-      "usage": "coop.debug.partyvisuals.stage_over_limit_fixture <targetEligiblePartyCount>=2500+ <settlementId>",
-      "side": "server",
-      "kind": "fixture",
       "aliases": []
     },
     {
@@ -4538,17 +4027,6 @@
       "aliases": []
     },
     {
-      "command": "coop.debug.settlements.restore_main_party_castle_teleport",
-      "name": "restore_main_party_castle_teleport",
-      "group": "coop.debug.settlements",
-      "category": "Settlements",
-      "summary": "Restore Main Party Castle Teleport",
-      "usage": "coop.debug.settlements.restore_main_party_castle_teleport",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
       "command": "coop.debug.settlements.set_allies_spotted",
       "name": "set_allies_spotted",
       "group": "coop.debug.settlements",
@@ -4634,17 +4112,6 @@
       "usage": "coop.debug.settlements.set_siege_state town_ES1 InTheLordsHall",
       "side": "server",
       "kind": "inspect",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.settlements.teleport_main_party_to_castle",
-      "name": "teleport_main_party_to_castle",
-      "group": "coop.debug.settlements",
-      "category": "Settlements",
-      "summary": "Teleport Main Party To Castle",
-      "usage": "coop.debug.settlements.teleport_main_party_to_castle <castleId>",
-      "side": "either",
-      "kind": "action",
       "aliases": []
     },
     {
@@ -4762,7 +4229,7 @@
       "name": "dump_machines",
       "group": "coop.debug.siege",
       "category": "Sieges",
-      "summary": "Dumps the siege weapons and deployment points of the current mission \u2014 the exact flags the use prompt and the AI read \u2014 sorted so two clients' dumps diff line by line, and written to the Coop log for post-run comparison. Pass \"all\" to include every usable machine. Read-only.",
+      "summary": "Dumps the siege weapons and deployment points of the current mission — the exact flags the use prompt and the AI read — sorted so two clients' dumps diff line by line, and written to the Coop log for post-run comparison. Pass \"all\" to include every usable machine. Read-only.",
       "usage": "coop.debug.siege.dump_machines",
       "side": "either",
       "kind": "action",
@@ -4773,7 +4240,7 @@
       "name": "dump_party",
       "group": "coop.debug.siege",
       "category": "Sieges",
-      "summary": "Dumps a party's siege-relevant state \u2014 CurrentSettlement, BesiegerCamp, BesiegedSettlement, Position \u2014 with its co-op registry id. Read-only; run on the SERVER and BOTH clients right after a siege capture and compare the co-besieger's party. A CurrentSettlement set on the server/host but null on the co-besieger's own client (party still at the camp Position, its BesiegerCamp maybe uncleared) pinpoints why it is left outside. Resolve by \"main\" (that client's own party), a coop id, or a leader-hero name.",
+      "summary": "Dumps a party's siege-relevant state — CurrentSettlement, BesiegerCamp, BesiegedSettlement, Position — with its co-op registry id. Read-only; run on the SERVER and BOTH clients right after a siege capture and compare the co-besieger's party. A CurrentSettlement set on the server/host but null on the co-besieger's own client (party still at the camp Position, its BesiegerCamp maybe uncleared) pinpoints why it is left outside. Resolve by \"main\" (that client's own party), a coop id, or a leader-hero name.",
       "usage": "coop.debug.siege.dump_party <heroName|main|partyId>",
       "side": "either",
       "kind": "inspect",
@@ -5095,105 +4562,6 @@
       "summary": "Add Tournament To Town",
       "usage": "coop.debug.tournaments.add_tournament_to_town <town name or id>",
       "side": "server",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.tournaments.danustica_fixture_abort",
-      "name": "danustica_fixture_abort",
-      "group": "coop.debug.tournaments",
-      "category": "Tournaments",
-      "summary": "Abort Danustica Fixture",
-      "usage": "coop.debug.tournaments.danustica_fixture_abort",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.tournaments.danustica_fixture_begin",
-      "name": "danustica_fixture_begin",
-      "group": "coop.debug.tournaments",
-      "category": "Tournaments",
-      "summary": "Begin Danustica Fixture",
-      "usage": "coop.debug.tournaments.danustica_fixture_begin",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.tournaments.danustica_fixture_restore",
-      "name": "danustica_fixture_restore",
-      "group": "coop.debug.tournaments",
-      "category": "Tournaments",
-      "summary": "Restore Danustica Fixture",
-      "usage": "coop.debug.tournaments.danustica_fixture_restore",
-      "side": "server",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.tournaments.danustica_fixture_state",
-      "name": "danustica_fixture_state",
-      "group": "coop.debug.tournaments",
-      "category": "Tournaments",
-      "summary": "Danustica Fixture State",
-      "usage": "coop.debug.tournaments.danustica_fixture_state",
-      "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.tournaments.danustica_observe",
-      "name": "danustica_observe",
-      "group": "coop.debug.tournaments",
-      "category": "Tournaments",
-      "summary": "Observe Danustica",
-      "usage": "coop.debug.tournaments.danustica_observe",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.tournaments.danustica_request_choice",
-      "name": "danustica_request_choice",
-      "group": "coop.debug.tournaments",
-      "category": "Tournaments",
-      "summary": "Request Danustica Choice",
-      "usage": "coop.debug.tournaments.danustica_request_choice <Join|Watch|Skip>",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.tournaments.danustica_request_join",
-      "name": "danustica_request_join",
-      "group": "coop.debug.tournaments",
-      "category": "Tournaments",
-      "summary": "Request Danustica Join",
-      "usage": "coop.debug.tournaments.danustica_request_join",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.tournaments.danustica_request_leave",
-      "name": "danustica_request_leave",
-      "group": "coop.debug.tournaments",
-      "category": "Tournaments",
-      "summary": "Request Danustica Leave",
-      "usage": "coop.debug.tournaments.danustica_request_leave",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.tournaments.danustica_request_start",
-      "name": "danustica_request_start",
-      "group": "coop.debug.tournaments",
-      "category": "Tournaments",
-      "summary": "Request Danustica Start",
-      "usage": "coop.debug.tournaments.danustica_request_start",
-      "side": "either",
       "kind": "action",
       "aliases": []
     },
@@ -5528,28 +4896,6 @@
       "aliases": []
     },
     {
-      "command": "coop.debug.ui.map_click_offset",
-      "name": "map_click_offset",
-      "group": "coop.debug.ui",
-      "category": "UI",
-      "summary": "Map Click Offset",
-      "usage": "coop.debug.ui.map_click_offset <offsetX> <offsetY>",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.ui.map_movement_state",
-      "name": "map_movement_state",
-      "group": "coop.debug.ui",
-      "category": "UI",
-      "summary": "Map Movement State",
-      "usage": "coop.debug.ui.map_movement_state",
-      "side": "either",
-      "kind": "inspect",
-      "aliases": []
-    },
-    {
       "command": "coop.debug.ui.pop_state",
       "name": "pop_state",
       "group": "coop.debug.ui",
@@ -5690,116 +5036,6 @@
       "usage": "This command can only be used by the server for debugging purposes.",
       "side": "server",
       "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.weapon_pickup.camera_state",
-      "name": "camera_state",
-      "group": "coop.debug.weapon_pickup",
-      "category": "Weapon pickup",
-      "summary": "Camera State",
-      "usage": "coop.debug.weapon_pickup.camera_state",
-      "side": "either",
-      "kind": "inspect",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.weapon_pickup.fixture_drop",
-      "name": "fixture_drop",
-      "group": "coop.debug.weapon_pickup",
-      "category": "Weapon pickup",
-      "summary": "Drop Fixture Weapon",
-      "usage": "coop.debug.weapon_pickup.fixture_drop",
-      "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.weapon_pickup.fixture_pickup",
-      "name": "fixture_pickup",
-      "group": "coop.debug.weapon_pickup",
-      "category": "Weapon pickup",
-      "summary": "Pickup Fixture Weapon",
-      "usage": "coop.debug.weapon_pickup.fixture_pickup",
-      "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.weapon_pickup.fixture_restore",
-      "name": "fixture_restore",
-      "group": "coop.debug.weapon_pickup",
-      "category": "Weapon pickup",
-      "summary": "Restore Fixture Weapon",
-      "usage": "coop.debug.weapon_pickup.fixture_restore",
-      "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.weapon_pickup.focus_agent",
-      "name": "focus_agent",
-      "group": "coop.debug.weapon_pickup",
-      "category": "Weapon pickup",
-      "summary": "Focus Agent",
-      "usage": "coop.debug.weapon_pickup.focus_agent <agentId> [left|right|wide]",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.weapon_pickup.partial_fixture_drop",
-      "name": "partial_fixture_drop",
-      "group": "coop.debug.weapon_pickup",
-      "category": "Weapon pickup",
-      "summary": "Drop Partial Consumable Fixture",
-      "usage": "coop.debug.weapon_pickup.partial_fixture_drop",
-      "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.weapon_pickup.partial_fixture_pickup",
-      "name": "partial_fixture_pickup",
-      "group": "coop.debug.weapon_pickup",
-      "category": "Weapon pickup",
-      "summary": "Pickup Partial Consumable Fixture",
-      "usage": "coop.debug.weapon_pickup.partial_fixture_pickup",
-      "side": "either",
-      "kind": "fixture",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.weapon_pickup.release_camera",
-      "name": "release_camera",
-      "group": "coop.debug.weapon_pickup",
-      "category": "Weapon pickup",
-      "summary": "Release Agent Camera",
-      "usage": "coop.debug.weapon_pickup.release_camera",
-      "side": "either",
-      "kind": "action",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.weapon_pickup.state",
-      "name": "state",
-      "group": "coop.debug.weapon_pickup",
-      "category": "Weapon pickup",
-      "summary": "State weapon pickup",
-      "usage": "coop.debug.weapon_pickup.state [agentId]",
-      "side": "either",
-      "kind": "inspect",
-      "aliases": []
-    },
-    {
-      "command": "coop.debug.weapon_pickup.world_item_state",
-      "name": "world_item_state",
-      "group": "coop.debug.weapon_pickup",
-      "category": "Weapon pickup",
-      "summary": "World Item State",
-      "usage": "coop.debug.weapon_pickup.world_item_state <worldItemId>",
-      "side": "either",
-      "kind": "inspect",
       "aliases": []
     },
     {

@@ -1,0 +1,87 @@
+/** Commands compiled only under `#if DEBUG`. Nightly and Workshop builds do not register them. */
+export const debugOnlyCommandNames = [
+    "coop.debug.battle.action_performance",
+    "coop.debug.battle.animation_trace",
+    "coop.debug.battle.column_reinforcement_fixture",
+    "coop.debug.battle.wield_test",
+    "coop.debug.connection.arm_inactive_party_deficit",
+    "coop.debug.connection.disconnect",
+    "coop.debug.connection.join_state",
+    "coop.debug.connection.restore_inactive_party",
+    "coop.debug.connection.stage_inactive_party",
+    "coop.debug.connection.start",
+    "coop.debug.hero_conversation.close",
+    "coop.debug.hero_conversation.meeting_state",
+    "coop.debug.hero_conversation.open",
+    "coop.debug.hero_conversation.set_has_met",
+    "coop.debug.hero_conversation.state",
+    "coop.debug.mapevent.late_join_mode_begin_field_battle",
+    "coop.debug.mapevent.late_join_mode_disable_dying",
+    "coop.debug.mapevent.late_join_mode_exit_missions",
+    "coop.debug.mapevent.late_join_mode_restore",
+    "coop.debug.mapevent.post_battle_freeze_fixture_open",
+    "coop.debug.mapevent.post_battle_freeze_fixture_restore",
+    "coop.debug.mapevent.post_battle_freeze_fixture_start",
+    "coop.debug.mapevent.post_battle_freeze_fixture_state",
+    "coop.debug.mapevent.post_battle_freeze_fixture_unpause",
+    "coop.debug.mobileparty.battle_size_roster_begin",
+    "coop.debug.mobileparty.exact_battle_roster_begin",
+    "coop.debug.mobileparty.exact_battle_roster_restore",
+    "coop.debug.mobileparty.exact_battle_roster_status",
+    "coop.debug.mobileparty.large_battle_roster_begin",
+    "coop.debug.mobileparty.large_battle_roster_restore",
+    "coop.debug.mobileparty.large_battle_roster_status",
+    "coop.debug.movement.clear_receive_pressure",
+    "coop.debug.movement.force_rate",
+    "coop.debug.movement.force_receiver_cap",
+    "coop.debug.movement.simulate_receive_pressure",
+    "coop.debug.movement.state",
+    "coop.debug.partyvisuals.fixture_state",
+    "coop.debug.partyvisuals.restore_over_limit_fixture",
+    "coop.debug.partyvisuals.stage_over_limit_fixture",
+    "coop.debug.player_captivity.capture_ai_lord_fixture",
+    "coop.debug.player_captivity.focus_hero_party",
+    "coop.debug.player_captivity.focus_party",
+    "coop.debug.player_captivity.observe_ai_lord_fixture",
+    "coop.debug.player_captivity.observe_ai_lord_pair",
+    "coop.debug.player_captivity.restore_ai_lord_diplomacy_fixture",
+    "coop.debug.player_captivity.restore_ai_lord_fixture",
+    "coop.debug.player_captivity.snapshot_ai_lord_diplomacy_fixture",
+    "coop.debug.request_time_mode",
+    "coop.debug.settlements.restore_main_party_castle_teleport",
+    "coop.debug.settlements.teleport_main_party_to_castle",
+    "coop.debug.tournaments.danustica_fixture_abort",
+    "coop.debug.tournaments.danustica_fixture_begin",
+    "coop.debug.tournaments.danustica_fixture_restore",
+    "coop.debug.tournaments.danustica_fixture_state",
+    "coop.debug.tournaments.danustica_observe",
+    "coop.debug.tournaments.danustica_request_choice",
+    "coop.debug.tournaments.danustica_request_join",
+    "coop.debug.tournaments.danustica_request_leave",
+    "coop.debug.tournaments.danustica_request_start",
+    "coop.debug.ui.map_click_offset",
+    "coop.debug.ui.map_movement_state",
+    "coop.debug.weapon_pickup.camera_state",
+    "coop.debug.weapon_pickup.fixture_drop",
+    "coop.debug.weapon_pickup.fixture_pickup",
+    "coop.debug.weapon_pickup.fixture_restore",
+    "coop.debug.weapon_pickup.focus_agent",
+    "coop.debug.weapon_pickup.partial_fixture_drop",
+    "coop.debug.weapon_pickup.partial_fixture_pickup",
+    "coop.debug.weapon_pickup.release_camera",
+    "coop.debug.weapon_pickup.state",
+    "coop.debug.weapon_pickup.world_item_state",
+] as const;
+
+const debugOnlyCommandSet = new Set<string>(debugOnlyCommandNames);
+
+export function isDebugOnlyCommand(command: string) {
+    return debugOnlyCommandSet.has(command);
+}
+
+export function isPublishedCheat(command: { command: string; name: string }) {
+    if (isDebugOnlyCommand(command.command)) return false;
+
+    const haystack = `${command.command} ${command.name}`.toLowerCase();
+    return !haystack.includes("fixture");
+}

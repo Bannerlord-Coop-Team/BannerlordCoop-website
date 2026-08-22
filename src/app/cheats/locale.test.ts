@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import commandsData from "./commands.json";
+import { debugOnlyCommandNames, isPublishedCheat } from "./debugOnly";
 import { featuredCommandNames } from "./featured";
 import { parseCheatsLocale } from "./locale";
 import { getCheatsMessages, localizedCategory, localizedCommandSummary } from "./locales";
@@ -47,5 +48,23 @@ test("covers every command category and featured summary in simplified chinese",
         const source = commands.find((item) => item.command === command);
         assert.ok(source, command);
         assert.equal(localizedCommandSummary(source, zh, true), zh.featured[command]);
+    }
+});
+
+test("does not catalog debug-only commands", () => {
+    for (const command of debugOnlyCommandNames) {
+        assert.equal(
+            commands.some((item) => item.command === command),
+            false,
+            command,
+        );
+    }
+});
+
+test("keeps featured commands publishable", () => {
+    for (const command of featuredCommandNames) {
+        const source = commands.find((item) => item.command === command);
+        assert.ok(source, command);
+        assert.equal(isPublishedCheat(source), true, command);
     }
 });

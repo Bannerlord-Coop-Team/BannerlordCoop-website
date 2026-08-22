@@ -1,6 +1,7 @@
 import { type CheatCommand } from "@/app/cheats/CheatsDirectory";
 import { CheatsView } from "@/app/cheats/CheatsView";
 import commandsData from "@/app/cheats/commands.json";
+import { isPublishedCheat } from "@/app/cheats/debugOnly";
 import { CHEATS_LOCALE_COOKIE, parseCheatsLocale } from "@/app/cheats/locale";
 import { getCheatsMessages } from "@/app/cheats/locales";
 import { parseCheatsQuery } from "@/app/cheats/query";
@@ -47,10 +48,7 @@ export async function generateMetadata({ searchParams }: CheatsPageProps): Promi
     };
 }
 
-const publishedCommands = (commandsData.commands as CheatCommand[]).filter((command) => (
-    !command.command.toLowerCase().includes("fixture")
-    && !command.name.toLowerCase().includes("fixture")
-));
+const publishedCommands = (commandsData.commands as CheatCommand[]).filter(isPublishedCheat);
 
 export default async function CheatsPage({ searchParams }: CheatsPageProps) {
     const params = await searchParams;
