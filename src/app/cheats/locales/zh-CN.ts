@@ -122,7 +122,7 @@ export const zhCNMessages: Omit<CheatsMessages, "commands"> = {
         "coop.debug.players.list": "列出玩家。第一条应显示 (you)。大多数指令使用第一个下划线之后的编号。",
         "coop.debug.mobileparty.whoami": "打印你角色的编号，供其他指令使用。",
         "coop.debug.hero.list": "列出英雄编号。这些编号区分大小写。",
-        "coop.debug.town.list_towns": "列出城镇和城堡相关指令要用的据点编号。",
+        "coop.debug.town.list_towns": "列出城镇相关指令要用的城镇编号。不包括城堡。",
         "coop.debug.village.list": "列出村庄编号。",
         "coop.debug.kingdom.list": "列出宣战、议和等王国指令要用的王国编号。",
         "coop.debug.clan.list": "列出氏族及其编号。",
