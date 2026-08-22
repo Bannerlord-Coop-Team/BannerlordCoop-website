@@ -323,7 +323,7 @@ test("the PowerShell installer is synchronized with the gateway copy", () => {
     assert.equal(served, canonical);
 });
 
-test("the Windows launcher is synchronized and keeps failures visible", () => {
+test("the Windows launcher is synchronized, falls back safely, and keeps failures visible", () => {
     const canonical = readFileSync(new URL("../../installer/install.cmd", import.meta.url), "utf8");
     const served = readFileSync(new URL("../public/install.cmd", import.meta.url), "utf8");
 
@@ -331,6 +331,24 @@ test("the Windows launcher is synchronized and keeps failures visible", () => {
     assert.match(served, /client, Windows dedicated server, or both/);
     assert.match(served, /-ExecutionPolicy Bypass -File/);
     assert.match(served, /BANNERLORDCOOP_INSTALLER_LAUNCHER=1/);
+    assert.match(served, /try \{[^\r\n]+Invoke-WebRequest[^\r\n]+\} catch \{ exit 1 \}/);
+    assert.match(served, /%SystemRoot%\\System32\\curl\.exe/);
+    assert.match(served, /%SystemRoot%\\System32\\findstr\.exe/);
+    assert.match(served, /--fail --location --silent --show-error/);
+    assert.match(served, /if %%~zI LSS 4096 exit \/b 1/);
+    assert.match(served, /"%FINDSTR_EXE%" \/b \/l \/c:"\$ErrorActionPreference = 'Stop'"/);
+    assert.match(served, /"%FINDSTR_EXE%" \/b \/l \/c:"if \(\$env:BANNERLORDCOOP_INSTALLER_TEST -ne '1'\) \{"/);
+    assert.match(served, /Management\.Automation\.Language\.Parser/);
+    const gatewayIndex = served.indexOf(
+        "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/install.ps1",
+    );
+    const mirrorIndex = served.indexOf(
+        "https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/main/installer/install.ps1",
+    );
+    assert.notEqual(gatewayIndex, -1);
+    assert.ok(gatewayIndex < mirrorIndex);
+    assert.match(served, /nightly gateway download failed\. Trying the GitHub mirror/);
+    assert.match(served, /could not be downloaded from the nightly gateway or GitHub mirror/);
     assert.match(served, /The installer stopped with an error/);
     assert.equal(served.match(/^pause$/gim)?.length, 1);
     assert.doesNotMatch(served, /The installer finished successfully/);
