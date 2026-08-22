@@ -42,7 +42,7 @@ export const featuredSummaries: Record<string, string> = {
     "coop.debug.players.list": "Lists players. The first entry should say (you). Most commands use the id after the first underscore.",
     "coop.debug.mobileparty.whoami": "Prints ids for your character so you can use them in other cheats.",
     "coop.debug.hero.list": "Lists hero ids. These ids are case-sensitive.",
-    "coop.debug.town.list_towns": "Lists settlement ids for town and castle cheats.",
+    "coop.debug.town.list_towns": "Lists town ids for town cheats. Does not list castles.",
     "coop.debug.village.list": "Lists village ids.",
     "coop.debug.kingdom.list": "Lists kingdom ids for war, peace, and other kingdom cheats.",
     "coop.debug.clan.list": "Lists clans and their ids.",
