@@ -502,8 +502,44 @@ if ($challengeDiagnosis.Code -cne 'cloudflare_challenge') {
     throw 'A Cloudflare interstitial was not turned into a WARP action.'
 }
 $genericDiagnosis = Get-NightlyAuthorizationDiagnosis -SessionResponse ([pscustomobject]@{}) -ProcessNames @() -TlsIssuer '' -DnsAddresses @('1.1.1.1') -WinDivertRunning $false
-if ($genericDiagnosis.Code -cne 'invalid_response' -or $genericDiagnosis.Message -notmatch 'try Cloudflare WARP') {
+if ($genericDiagnosis.Code -cne 'invalid_response' -or $genericDiagnosis.Message -notmatch 'try Cloudflare WARP' -or $genericDiagnosis.Message -notmatch 'Details:') {
     throw 'An unclassified invalid session did not keep the WARP fallback action.'
+}
+
+$closedRecord = $null
+try { throw [Net.WebException]::new('The underlying connection was closed: An unexpected error occurred on a send.') } catch { $closedRecord = $_ }
+$closedDiagnosis = Get-NightlyAuthorizationDiagnosis -SessionResponse $null -ErrorRecord $closedRecord -ProcessNames @() -TlsIssuer '' -DnsAddresses @('1.1.1.1') -WinDivertRunning $false
+if ($closedDiagnosis.Message -notmatch 'underlying connection was closed' -or $closedDiagnosis.Message -notmatch 'Details:') {
+    throw 'A connection-reset session failure hid the actual Windows error.'
+}
+
+$statusFromMessage = Get-HttpStatusCode $closedRecord
+$remoteRecord = $null
+try { throw [Net.WebException]::new('The remote server returned an error: (500) Internal Server Error') } catch { $remoteRecord = $_ }
+if ((Get-HttpStatusCode $remoteRecord) -ne 500) {
+    throw 'An HTTP status embedded in a WebException message was not recovered.'
+}
+if ($statusFromMessage -ne 0) {
+    throw 'A connection-reset exception was treated as an HTTP status.'
+}
+
+$serverError = Get-NightlyAuthorizationDiagnosis -SessionResponse ([pscustomobject]@{ error = 'internal_error' }) -ErrorRecord (New-GatewayWebError 500 'internal_error') -ProcessNames @() -TlsIssuer '' -DnsAddresses @('1.1.1.1') -WinDivertRunning $false
+if ($serverError.Code -cne 'internal_error' -or $serverError.Message -notmatch 'Wait a minute' -or $serverError.Message -notmatch 'error=internal_error') {
+    throw 'A gateway internal_error was still blamed on GoodbyeDPI.'
+}
+$serverSupport = @(Get-InstallationSupportLines $serverError.Message)
+if ($serverSupport.Count -ne 1 -or $serverSupport[0] -notmatch 'Bannerlord Coop Discord') {
+    throw 'A gateway internal_error still repeated the generic DNS advice.'
+}
+
+$jsonSession = ConvertTo-NightlyJsonObject (@'
+{"device_code":"ddddddddddddddddddddddddddddddddddddddddddd","user_code":"AB2D-EF3H","verification_uri":"https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H","expires_in":600,"interval":3}
+'@)
+if (-not (Test-NightlyDeviceSessionResponse $jsonSession)) {
+    throw 'A JSON string device session was not parsed before validation.'
+}
+if ((Get-NightlyResponseSnippet ([pscustomobject]@{ device_code = 'secret-device-code'; error = 'x' }) '') -match 'secret-device-code') {
+    throw 'A failure snippet leaked a device_code.'
 }
 
 $script:NightlyTokenPollMinimumSeconds = 0
