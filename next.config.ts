@@ -7,6 +7,16 @@ const nextConfig: NextConfig = {
     async redirects() {
         return [
             {
+                source: "/servers",
+                destination: "/infra",
+                permanent: true,
+            },
+            {
+                source: "/servers/:path*",
+                destination: "/infra/:path*",
+                permanent: true,
+            },
+            {
                 source: "/server/install.ps1",
                 destination: `${GATEWAY_ORIGIN}/install.ps1`,
                 permanent: true,

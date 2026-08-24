@@ -11,8 +11,8 @@ const navigation = [
         href: "/",
     },
     {
-        label: "Servers",
-        href: "/servers",
+        label: "Infra",
+        href: "/infra",
     },
     {
         label: "Cheats",

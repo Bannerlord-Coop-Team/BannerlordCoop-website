@@ -87,8 +87,8 @@ classDiagram
 ```mermaid
 flowchart LR
     Supabase[Supabase Auth session] --> Access[Role/access helpers]
-    Placeholders[Typed placeholder server records] --> ListPage[/servers Server Component]
-    Placeholders --> DetailPage[/servers/[serverId] Server Component]
+    Placeholders[Typed placeholder server records] --> ListPage[/infra Server Component]
+    Placeholders --> DetailPage[/infra/[serverId] Server Component]
     Access --> ListPage
     Access --> DetailPage
     ListPage --> DetailPage
@@ -102,7 +102,7 @@ flowchart LR
 
 A provider-backed IONOS adapter and management UI are retained for possible future use, but they are disabled by default while alternative hosting options are evaluated:
 
-- `/servers` does not call the IONOS inventory API or render the IONOS panel unless `IONOS_MANAGEMENT_ENABLED=true`.
+- `/infra` does not call the IONOS inventory API or render the IONOS panel unless `IONOS_MANAGEMENT_ENABLED=true`.
 - The create-server Server Action rejects direct requests before contacting IONOS unless management and `IONOS_SERVER_CREATION_ENABLED=true` are both enabled.
 - Provider mutations reauthenticate the Supabase user and restrict billable actions to Admins.
 - Provider identifiers and website ownership markers are validated before requests can address resources.

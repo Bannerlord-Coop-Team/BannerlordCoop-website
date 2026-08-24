@@ -37,9 +37,9 @@ export default async function LiveServerConsolePage({ params }: LiveServerConsol
     const user = data.user;
 
     if (!user) {
-        redirect(`/login?next=${encodeURIComponent(`/servers/live/${server.id}`)}`);
+        redirect(`/login?next=${encodeURIComponent(`/infra/live/${server.id}`)}`);
     }
-    if (!hasAdminAccess(user)) redirect("/servers");
+    if (!hasAdminAccess(user)) redirect("/infra");
 
     const gatewayUrl = getConsoleGatewayUrl();
 
@@ -48,7 +48,7 @@ export default async function LiveServerConsolePage({ params }: LiveServerConsol
             <header className="border-b border-white/10 bg-surface">
                 <div className="site-container flex min-h-18 items-center justify-between gap-4 py-3">
                     <Link
-                        href="/servers"
+                        href="/infra"
                         className="inline-flex items-center gap-2 font-label text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted transition-colors hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                     >
                         <ArrowLeft aria-hidden="true" className="size-4" />

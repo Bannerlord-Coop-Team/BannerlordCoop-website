@@ -85,7 +85,7 @@ flowchart LR
 | Component | Path | Responsibility |
 | --- | --- | --- |
 | Admin fleet card | `src/app/components/servers/LiveConsoleServersSection.tsx` | Shows the external live server only when rendered by the Admin-gated server page. |
-| Admin console route | `src/app/servers/live/[serverId]/page.tsx` | Re-fetches the Supabase user and rejects non-Admins before returning server data or UI. |
+| Admin console route | `src/app/infra/live/[serverId]/page.tsx` | Re-fetches the Supabase user and rejects non-Admins before returning server data or UI. |
 | Browser console | `src/app/components/servers/LiveServerConsole.tsx` | Authenticates, renders bounded escaped output, and sends line commands. |
 | Server catalog | `src/app/lib/console/servers.ts` | Contains the fixed server/node identity and validates the WSS browser URL. |
 | Gateway | `services/console-gateway/` | Revalidates Admin access and bridges exactly one browser session to the registered node. |
@@ -154,7 +154,7 @@ Mounting the Docker socket is security-sensitive even though the agent protocol 
 
 ## Acceptance checks
 
-- Admin sees `15.204.120.17` in `/servers` and can open its console.
+- Admin sees `15.204.120.17` in `/infra` and can open its console.
 - Server Manager and customer roles do not receive the card and are redirected away from the console route.
 - The gateway independently rejects anonymous, expired, and non-Admin Supabase sessions.
 - A node with the wrong bearer token, node ID, or server mapping cannot register.
