@@ -25,7 +25,7 @@ const supportOptions = [
         href: "https://www.paypal.com/donate/?hosted_button_id=KHBSK4FXQ9GKS",
     },
     {
-        name: "Afdian",
+        name: "Afdian (爱发电)",
         descriptor: "Support us from China",
         href: "https://ifdian.net/a/BannerlordCoop",
     },
