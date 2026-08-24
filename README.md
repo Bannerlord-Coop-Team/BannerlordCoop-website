@@ -96,7 +96,7 @@ Bootstrap administrators always retain admin access, preventing an accidental to
 
 ### Server hosting preview
 
-The public `/infra` page provides the server directory, while server management remains role-protected:
+The public `/servers` page provides the server directory, while server management remains role-protected:
 
 - Everyone can browse, search, filter, and join servers without signing in.
 - Signed-in `Admin` and `Server Manager` members can manage every placeholder hosted server and view its assigned account.
@@ -112,7 +112,7 @@ The placeholder design is documented in `docs/server-hosting-design.md`.
 
 ### Admin live server console
 
-Admins also see the separately hosted live Bannerlord server at `15.204.120.17` on `/infra`. It is not an IONOS resource. The server card and dedicated console page provide protected Start, Stop, Restart, and Update operations; the console page also streams the allowlisted Docker container stdout/stderr and sends line commands to stdin.
+Admins also see the separately hosted live Bannerlord server at `15.204.120.17` on `/servers`. It is not an IONOS resource. The server card and dedicated console page provide protected Start, Stop, Restart, and Update operations; the console page also streams the allowlisted Docker container stdout/stderr and sends line commands to stdin.
 
 Update pulls the configured image, treats an unchanged digest as a no-op, and otherwise recreates only the allowlisted game container after validating its deployment specification. The old container is retained until the replacement passes the configured readiness marker; failed readiness triggers verified automatic rollback.
 

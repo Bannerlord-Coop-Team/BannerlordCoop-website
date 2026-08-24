@@ -98,7 +98,7 @@ export function ServerDirectoryTable({
                                         )}
                                         {showManage && (
                                             <Link
-                                                href={`/infra/${server.id}`}
+                                                href={`/servers/${server.id}`}
                                                 className="inline-flex min-h-10 items-center justify-center gap-1.5 border border-gold/35 bg-gold/[0.07] px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                                             >
                                                 Manage

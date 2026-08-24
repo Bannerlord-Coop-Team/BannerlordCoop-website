@@ -21,7 +21,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-    title: "Infrastructure | Bannerlord Coop",
+    title: "Servers | Bannerlord Coop",
     description: "Browse and join Bannerlord Coop servers.",
 };
 
@@ -113,7 +113,7 @@ export default async function ServersPage() {
                                 Sign in to view and manage your servers.
                             </p>
                             <Link
-                                href="/login?next=/infra"
+                                href="/login?next=/servers"
                                 className="inline-flex min-h-10 items-center justify-center border border-gold/35 bg-gold/[0.07] px-5 font-label text-xs font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                             >
                                 Sign in

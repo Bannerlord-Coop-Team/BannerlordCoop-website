@@ -86,7 +86,7 @@ export function LiveConsoleServersSection({
                                 serverId={server.id}
                             />
                             <Link
-                                href={`/infra/live/${encodeURIComponent(server.id)}`}
+                                href={`/servers/live/${encodeURIComponent(server.id)}`}
                                 className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-sm border border-gold/40 bg-gold/10 px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:bg-gold/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                             >
                                 <Container aria-hidden="true" className="size-4" />

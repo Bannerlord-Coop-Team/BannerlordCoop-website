@@ -12,18 +12,18 @@ import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-function infraUrl(key: "ionosError" | "ionosSuccess", value: string) {
-    return `/infra?${new URLSearchParams({ [key]: value }).toString()}`;
+function serversUrl(key: "ionosError" | "ionosSuccess", value: string) {
+    return `/servers?${new URLSearchParams({ [key]: value }).toString()}`;
 }
 
 async function requireAdmin() {
     const sessionClient = await getSupabaseServerClient();
     const { data } = await sessionClient.auth.getUser();
 
-    if (!data.user) redirect("/login?next=/infra");
+    if (!data.user) redirect("/login?next=/servers");
     if (!hasAdminAccess(data.user)) {
         redirect(
-            infraUrl(
+            serversUrl(
                 "ionosError",
                 "Your current Supabase session does not have the Admin role. Refresh the session or sign in again after a role change.",
             ),
@@ -43,7 +43,7 @@ export async function createIonosServer(formData: FormData) {
 
     if (!isIonosServerCreationEnabled()) {
         redirect(
-            infraUrl(
+            serversUrl(
                 "ionosError",
                 "IONOS server creation is disabled while alternative hosting options are evaluated.",
             ),
@@ -55,7 +55,7 @@ export async function createIonosServer(formData: FormData) {
     const sshPublicKey = String(formData.get("sshPublicKey") ?? "").trim().slice(0, 9000);
 
     if (!isIonosServerPreset(preset)) {
-        redirect(infraUrl("ionosError", "Choose a valid server preset."));
+        redirect(serversUrl("ionosError", "Choose a valid server preset."));
     }
 
     let serverName: string;
@@ -68,12 +68,12 @@ export async function createIonosServer(formData: FormData) {
         });
         serverName = server.name;
     } catch (error) {
-        redirect(infraUrl("ionosError", operationError(error)));
+        redirect(serversUrl("ionosError", operationError(error)));
     }
 
-    revalidatePath("/infra");
+    revalidatePath("/servers");
     redirect(
-        infraUrl(
+        serversUrl(
             "ionosSuccess",
             `${serverName} is being provisioned in IONOS.`,
         ),
@@ -91,12 +91,12 @@ export async function destroyIonosServer(formData: FormData) {
         const server = await destroyManagedIonosServer(datacenterId, serverId);
         serverName = server.name;
     } catch (error) {
-        redirect(infraUrl("ionosError", operationError(error)));
+        redirect(serversUrl("ionosError", operationError(error)));
     }
 
-    revalidatePath("/infra");
+    revalidatePath("/servers");
     redirect(
-        infraUrl(
+        serversUrl(
             "ionosSuccess",
             `${serverName} is being destroyed in IONOS.`,
         ),

@@ -164,7 +164,7 @@ export function IonosManagementSection({
 
                                 <div className="flex shrink-0 flex-wrap gap-2">
                                     <Link
-                                        href={`/infra/${server.id}?datacenterId=${encodeURIComponent(server.datacenterId)}`}
+                                        href={`/servers/${server.id}?datacenterId=${encodeURIComponent(server.datacenterId)}`}
                                         className="inline-flex min-h-10 items-center justify-center gap-2 rounded-sm border border-gold/40 bg-gold/10 px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:bg-gold/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                                     >
                                         Manage <ChevronRight aria-hidden="true" className="size-4" />

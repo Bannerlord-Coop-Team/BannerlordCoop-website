@@ -8,7 +8,7 @@ import {
 import {
     createIonosServer,
     destroyIonosServer,
-} from "@/app/infra/actions";
+} from "@/app/servers/actions";
 import { ChevronDown, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import type { FormEvent } from "react";
 import { useFormStatus } from "react-dom";
