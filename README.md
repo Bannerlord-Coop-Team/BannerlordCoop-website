@@ -112,11 +112,11 @@ The placeholder design is documented in `docs/server-hosting-design.md`.
 
 ### Admin live server console
 
-Admins also see the separately hosted live Bannerlord server at `15.204.120.17` on `/servers`. It is not an IONOS resource. The server card and dedicated console page provide protected Start, Stop, Restart, and Update operations; the console page also streams the allowlisted Docker container stdout/stderr and sends line commands to stdin.
+Admins also see the configured live Bannerlord containers hosted at `15.204.120.17` on `/servers`. They are not IONOS resources. Each server card and dedicated console page provides protected Start, Stop, Restart, and Update operations; the console page also streams that allowlisted container's stdout/stderr and sends line commands to stdin.
 
 Update pulls the configured image, treats an unchanged digest as a no-op, and otherwise recreates only the allowlisted game container after validating its deployment specification. The old container is retained until the replacement passes the configured readiness marker; failed readiness triggers verified automatic rollback.
 
-The browser authenticates over WSS to `services/console-gateway`, which validates the current Supabase Admin session and bridges to a persistent outbound WSS connection from `services/bannerlord-node-agent` on the VPS. Node credentials remain server-only. Deployment and security boundaries are documented in `docs/live-server-console-design.md`.
+The browser authenticates over WSS to `services/console-gateway`, which validates the current Supabase Admin session and bridges to one persistent outbound WSS connection from `services/bannerlord-node-agent` on the VPS. One agent can manage multiple server-specific container, volume, and UDP-port allowlists. Node credentials remain server-only. Deployment and security boundaries are documented in `docs/live-server-console-design.md`.
 
 ## Environment Variables
 
@@ -144,7 +144,7 @@ Comma-separated bootstrap administrator emails. These users always have admin ac
 
 ### `CONSOLE_GATEWAY_URL`
 
-Server-only WSS browser endpoint for the external live console, including `/v1/browser`. Production values must use `wss://`; only localhost development may use `ws://`. Node-agent credentials are configured separately under `services/` and must never use a `NEXT_PUBLIC_` variable.
+Server-only WSS browser endpoint for the external live console, including `/v1/browser`. Production values must use `wss://`; only localhost development may use `ws://`. `CONSOLE_SERVER_CATALOG` optionally supplies the Admin-visible multi-server catalog. Node-agent credentials and per-server Docker resource allowlists are configured separately under `services/` and must never use a `NEXT_PUBLIC_` variable.
 
 ### `YOUTUBE_API_KEY`
 

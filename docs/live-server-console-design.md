@@ -2,7 +2,7 @@
 
 ## Required behavior
 
-- Add the live Bannerlord server at `15.204.120.17` to the server-management area.
+- Show explicitly configured live Bannerlord containers from the external VPS in the server-management area.
 - Show that server and its console only to users whose current protected role resolves to exactly `Admin` (including configured bootstrap Admins).
 - Stream the allowlisted Docker container's stdout/stderr and send entered commands to its stdin.
 - Provide Admin-only Start, Stop, Restart, and Update buttons for the allowlisted game container.
@@ -14,11 +14,11 @@
 
 ## Minimum-complexity design
 
-The current requirement has one fixed external server and one access role, so the website keeps a server-only catalog instead of introducing new inventory, subscription, or assignment tables. Supabase remains the identity and protected-role source. A database-backed catalog can replace `src/app/lib/console/servers.ts` when servers or subscriptions become dynamic.
+The current requirement has a small, Admin-only set of containers, so the website reads a strict server-only JSON catalog instead of introducing inventory, subscription, or assignment tables. Supabase remains the identity and protected-role source. A database-backed catalog can replace `src/app/lib/console/servers.ts` when servers or subscriptions become dynamic.
 
 The browser never connects to the VPS. It opens the configured WSS gateway and sends its existing Supabase access token as the first WebSocket frame (never in a URL). The gateway calls Supabase `auth.getUser`, accepts only `app_metadata.role === "Admin"` or the matching bootstrap Admin email, and forgets the token after authentication. Each session is short-lived and one operator may attach to a server at a time.
 
-The node agent makes the only connection from `15.204.120.17`: an outbound authenticated WSS connection. It maps the fixed website server ID to one configured Docker container. It supports attach/input/output only; it contains no create, destroy, exec, or host-shell protocol.
+The node agent makes the only connection from `15.204.120.17`: one outbound authenticated WSS connection. It maps each allowlisted website server ID to an isolated configuration containing a stable Docker name, named volume, host UDP port, update image, data path, and readiness marker. Container names, volumes, and ports must be unique. The protocol contains no arbitrary create, destroy, exec, or host-shell operation.
 
 ## Type relationships
 
@@ -49,12 +49,22 @@ classDiagram
         +forwardOutput()
     }
     class BannerlordNodeAgent {
-        -Map serverContainers
+        -Map serverConfigurations
         -Map sessions
+        -Set operationsInProgress
         +registerNode()
         +attachContainer()
         +writeStdin()
         +streamLogs()
+    }
+    class ServerConfiguration {
+        +string serverId
+        +string container
+        +string dataVolume
+        +string dataPath
+        +number udpPort
+        +string updateImage
+        +string readinessPattern
     }
     class DockerContainer {
         +stdin
@@ -65,7 +75,8 @@ classDiagram
     LiveServerConsole --> LiveConsoleServer
     LiveServerConsole --> ConsoleGateway : browser WSS
     ConsoleGateway --> BannerlordNodeAgent : persistent WSS
-    BannerlordNodeAgent --> DockerContainer : allowlisted Docker attach/logs
+    BannerlordNodeAgent "1" --> "many" ServerConfiguration : strict allowlist
+    ServerConfiguration "1" --> "1" DockerContainer : isolated Docker resources
 ```
 
 ## Dependency diagram
@@ -73,11 +84,12 @@ classDiagram
 ```mermaid
 flowchart LR
     Admin[Admin browser] -->|Supabase session| Website[Next.js website]
-    Website -->|server-side role gate| Catalog[Fixed external server catalog]
+    Website -->|server-side role gate| Catalog[Configured external server catalog]
     Admin -->|WSS + token in first frame| Gateway[Console gateway]
     Gateway -->|Auth getUser| Supabase[Supabase Auth]
     Agent[bannerlord-node-agent\n15.204.120.17] -->|persistent outbound WSS\nnode bearer token| Gateway
-    Agent -->|Docker socket\nallowlisted attach/logs only| Container[Bannerlord container]
+    Agent -->|Docker socket\nserver-specific allowlist| ContainerA[Bannerlord container A]
+    Agent -->|Docker socket\nserver-specific allowlist| ContainerB[Bannerlord container B]
 ```
 
 ## Components
@@ -87,9 +99,9 @@ flowchart LR
 | Admin fleet card | `src/app/components/servers/LiveConsoleServersSection.tsx` | Shows the external live server only when rendered by the Admin-gated server page. |
 | Admin console route | `src/app/servers/live/[serverId]/page.tsx` | Re-fetches the Supabase user and rejects non-Admins before returning server data or UI. |
 | Browser console | `src/app/components/servers/LiveServerConsole.tsx` | Authenticates, renders bounded escaped output, and sends line commands. |
-| Server catalog | `src/app/lib/console/servers.ts` | Contains the fixed server/node identity and validates the WSS browser URL. |
+| Server catalog | `src/app/lib/console/servers.ts` | Validates the optional multi-server catalog and the WSS browser URL. |
 | Gateway | `services/console-gateway/` | Revalidates Admin access and bridges exactly one browser session to the registered node. |
-| Node agent | `services/bannerlord-node-agent/` | Maintains outbound WSS and attaches only the configured container. |
+| Node agent | `services/bannerlord-node-agent/` | Maintains one outbound WSS connection and targets only each server's configured container/resources. |
 
 ## Gateway deployment
 
@@ -123,7 +135,7 @@ The Bannerlord container must be created with stdin kept open (`docker run -i`, 
 ```bash
 cd services/bannerlord-node-agent
 cp .env.example .env
-# Set BANNERLORD_CONTAINER and the same node token as the gateway.
+# Set AGENT_SERVERS and the same node token as the gateway.
 docker build -t bannerlord-node-agent .
 docker run \
   --env-file .env \
@@ -141,6 +153,8 @@ Mounting the Docker socket is security-sensitive even though the agent protocol 
 - The gateway validates the token directly with Supabase and permits only the Admin role.
 - The gateway accepts agents only on `/v1/node` with a 32+ character bearer token checked during the HTTP upgrade.
 - Both gateway and agent independently check the server-to-node/container allowlists.
+- Each configured server must use a unique container name, named volume, and host UDP port; ambiguous configurations fail agent startup.
+- Before attach or any lifecycle operation, the agent inspects Docker and requires the resolved canonical name, mounted volume, container data path, and UDP binding to match that server's declaration.
 - Console input is capped at 4 KiB per frame and 16 KiB per second, NUL bytes are rejected, and the protocol has no host shell or arbitrary Docker operation.
 - The only Docker lifecycle operations are the fixed `start`, `stop`, `restart`, and `update` messages for an allowlisted stable container name. Operations are serialized per server and audited without command/token contents.
 - Update requires the server to be running, pulls the configured image, performs no restart when its digest is unchanged, and rejects containers that do not exactly match the declared Bannerlord volume, UDP port, security, image-default, and restart-policy specification.
@@ -154,7 +168,8 @@ Mounting the Docker socket is security-sensitive even though the agent protocol 
 
 ## Acceptance checks
 
-- Admin sees `15.204.120.17` in `/servers` and can open its console.
+- Admin sees every configured VPS server in `/servers` and can open each console.
+- Two servers on one node can hold independent console sessions and lifecycle operations without targeting one another.
 - Server Manager and customer roles do not receive the card and are redirected away from the console route.
 - The gateway independently rejects anonymous, expired, and non-Admin Supabase sessions.
 - A node with the wrong bearer token, node ID, or server mapping cannot register.
@@ -167,4 +182,4 @@ Mounting the Docker socket is security-sensitive even though the agent protocol 
 
 ## Deferred work
 
-Dynamic `game_servers`, `server_nodes`, and `subscriptions` tables are intentionally deferred until there is more than one fixed Admin-only server or customer assignment is required. MFA/recent-auth enforcement, persistent audit storage/retention, console session revocation, Docker socket proxy policy, and production deployment monitoring should be added before broadening access beyond the Admin role.
+Dynamic `game_servers`, `server_nodes`, and `subscriptions` tables are intentionally deferred while the server set remains small, environment-configured, and Admin-only. MFA/recent-auth enforcement, persistent audit storage/retention, console session revocation, Docker socket proxy policy, and production deployment monitoring should be added before broadening access beyond the Admin role.

@@ -3,7 +3,7 @@ FROM node:22-alpine
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
-COPY agent.mjs ./
+COPY agent.mjs config.mjs container-policy.mjs ./
 
 ENV NODE_ENV=production
 # Docker socket permissions differ by host. Run with only the socket mount and
