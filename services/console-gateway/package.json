@@ -7,7 +7,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "test": "node --test access.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

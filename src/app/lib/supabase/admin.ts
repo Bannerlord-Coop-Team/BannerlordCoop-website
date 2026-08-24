@@ -8,7 +8,7 @@ export function getSupabaseAdminClient() {
 
     if (!url || !secretKey) {
         throw new Error(
-            "Admin member management is not configured. Add SUPABASE_SECRET_KEY to .env.local.",
+            "Member and server access management is not configured. Add SUPABASE_SECRET_KEY to .env.local.",
         );
     }
 

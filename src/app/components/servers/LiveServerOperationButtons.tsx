@@ -34,13 +34,11 @@ export const containerOperationConfirmations: Partial<Record<ContainerOperation,
 
 export function LiveServerOperationButtons({
     className = "grid grid-cols-2 gap-2 sm:flex sm:flex-wrap",
-    containerState,
     controlsReady,
     onOperation,
     pendingOperation,
 }: {
     className?: string;
-    containerState: ContainerState;
     controlsReady: boolean;
     onOperation: (operation: ContainerOperation) => void;
     pendingOperation: ContainerOperation | null;
@@ -53,7 +51,7 @@ export function LiveServerOperationButtons({
                 icon={Play}
                 label="Start"
                 onClick={() => onOperation("start")}
-                disabled={!controlsReady || operationBusy || containerState !== "stopped"}
+                disabled={!controlsReady || operationBusy}
                 pending={pendingOperation === "start"}
                 tone="success"
             />
@@ -61,7 +59,7 @@ export function LiveServerOperationButtons({
                 icon={Square}
                 label="Stop"
                 onClick={() => onOperation("stop")}
-                disabled={!controlsReady || operationBusy || containerState !== "running"}
+                disabled={!controlsReady || operationBusy}
                 pending={pendingOperation === "stop"}
                 tone="danger"
             />
@@ -69,7 +67,7 @@ export function LiveServerOperationButtons({
                 icon={RotateCw}
                 label="Restart"
                 onClick={() => onOperation("restart")}
-                disabled={!controlsReady || operationBusy || containerState !== "running"}
+                disabled={!controlsReady || operationBusy}
                 pending={pendingOperation === "restart"}
                 tone="warning"
             />
@@ -77,7 +75,7 @@ export function LiveServerOperationButtons({
                 icon={Download}
                 label="Update"
                 onClick={() => onOperation("update")}
-                disabled={!controlsReady || operationBusy || containerState !== "running"}
+                disabled={!controlsReady || operationBusy}
                 pending={pendingOperation === "update"}
                 tone="default"
             />

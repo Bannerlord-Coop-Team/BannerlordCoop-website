@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "test": "tsx --test src/app/lib/auth/redirect.test.ts src/app/lib/auth/roles.test.ts src/app/lib/hosting/servers.test.ts src/app/lib/console/catalog.test.ts src/app/lib/ionos/resources.test.ts src/app/cheats/locale.test.ts nightly-gateway/src/core.test.ts nightly-gateway/src/pin.test.ts",
+    "test": "tsx --test src/app/lib/auth/redirect.test.ts src/app/lib/auth/roles.test.ts src/app/lib/hosting/servers.test.ts src/app/lib/hosting/server-names.test.ts src/app/lib/console/access.test.ts src/app/lib/console/catalog.test.ts src/app/lib/ionos/resources.test.ts src/app/cheats/locale.test.ts nightly-gateway/src/core.test.ts nightly-gateway/src/pin.test.ts && node --test services/console-gateway/access.test.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

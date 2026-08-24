@@ -1,15 +1,34 @@
+import { EditableServerName } from "@/app/components/servers/EditableServerName";
+import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
+import { LiveServerConsole } from "@/app/components/servers/LiveServerConsole";
 import { ServerControlPanel } from "@/app/components/servers/ServerControlPanel";
 import {
+    getLiveConsoleAccessLevel,
     getMemberRole,
     hasHostedServerAccess,
 } from "@/app/lib/auth/access";
+import {
+    getLiveConsoleMember,
+    getOperatedLiveConsoleServerIds,
+    getOwnedLiveConsoleServerIds,
+    type LiveConsoleAccessLevel,
+    type LiveConsoleMember,
+} from "@/app/lib/console/access";
+import {
+    getConsoleGatewayUrl,
+    getLiveConsoleServer,
+    type LiveConsoleServer,
+} from "@/app/lib/console/servers";
 import { hasServerFleetAccess } from "@/app/lib/auth/roles";
+import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
+import { listSupabaseUsers } from "@/app/lib/supabase/users";
 import {
     ArrowLeft,
     CircleAlert,
     CloudCog,
+    Container,
     Crown,
     Database,
     HardDrive,
@@ -19,6 +38,7 @@ import {
     MemoryStick,
     Server,
     ShieldCheck,
+    TerminalSquare,
     UserRound,
 } from "lucide-react";
 import type { Metadata } from "next";
@@ -27,20 +47,54 @@ import { redirect } from "next/navigation";
 
 type ServerPageProps = {
     params: Promise<{ serverId: string }>;
+    searchParams: Promise<{
+        accessError?: string | string[];
+        accessUpdated?: string | string[];
+    }>;
 };
+
+const accessLabels: Record<LiveConsoleAccessLevel, string> = {
+    admin: "Administrator",
+    owner: "Owner",
+    operator: "Operator",
+};
+
+function firstValue(value: string | string[] | undefined) {
+    return Array.isArray(value) ? value[0] : value;
+}
 
 export const metadata: Metadata = {
     title: "Manage Server | Bannerlord Coop",
-    description: "Manage a Bannerlord Coop hosted server.",
+    description: "Manage a Bannerlord Coop server."
 };
 
-export default async function ServerPage({ params }: ServerPageProps) {
-    const { serverId } = await params;
+export default async function ServerPage({ params, searchParams }: ServerPageProps) {
+    const [{ serverId }, query] = await Promise.all([params, searchParams]);
+    const liveServer = getLiveConsoleServer(serverId);
     const supabase = await getSupabaseServerClient();
     const { data } = await supabase.auth.getUser();
     const user = data.user;
 
     if (!user) redirect(`/login?next=/servers/${encodeURIComponent(serverId)}`);
+
+    if (liveServer) {
+        const accessLevel = getLiveConsoleAccessLevel(user, liveServer.id);
+        if (!accessLevel) redirect("/servers");
+
+        const displayNames = await getServerDisplayNames([liveServer.id]);
+        return (
+            <LiveServerManagementPage
+                accessError={firstValue(query.accessError)}
+                accessLevel={accessLevel}
+                accessUpdated={firstValue(query.accessUpdated)}
+                server={{
+                    ...liveServer,
+                    name: displayNames.get(liveServer.id) ?? liveServer.name,
+                }}
+            />
+        );
+    }
+
     if (!hasHostedServerAccess(user)) redirect("/");
 
     const role = getMemberRole(user);
@@ -185,6 +239,171 @@ export default async function ServerPage({ params }: ServerPageProps) {
     );
 }
 
+async function LiveServerManagementPage({
+    accessError,
+    accessLevel,
+    accessUpdated,
+    server,
+}: {
+    accessError?: string;
+    accessLevel: LiveConsoleAccessLevel;
+    accessUpdated?: string;
+    server: LiveConsoleServer;
+}) {
+    const canManageAssignments = accessLevel === "admin" || accessLevel === "owner";
+    let assignmentLoadError = "";
+    let assignmentWarning = "";
+    let operators: LiveConsoleMember[] = [];
+    let owner: LiveConsoleMember | null = null;
+
+    if (canManageAssignments) {
+        try {
+            const result = await listSupabaseUsers();
+            if (result.truncated) {
+                assignmentLoadError = "The member directory is too large to manage assignments safely.";
+            } else {
+                const owners = result.users.filter((member) =>
+                    getOwnedLiveConsoleServerIds(member.app_metadata).includes(server.id),
+                );
+                const operatorUsers = result.users.filter((member) =>
+                    getOperatedLiveConsoleServerIds(member.app_metadata).includes(server.id),
+                );
+
+                owner = owners[0] ? getLiveConsoleMember(owners[0]) : null;
+                operators = operatorUsers.map(getLiveConsoleMember);
+                if (owners.length > 1) {
+                    assignmentWarning = "Multiple owner assignments were found. Reassign the owner to repair access.";
+                }
+            }
+        } catch (error) {
+            console.error("Live server assignments failed to load", error);
+            assignmentLoadError = "Owner and operator assignments could not be loaded.";
+        }
+    }
+
+    return (
+        <main className="min-h-svh bg-background">
+            <header className="border-b border-white/10 bg-surface">
+                <div className="site-container flex min-h-18 items-center justify-between gap-4 py-3">
+                    <Link
+                        href="/servers"
+                        className="inline-flex items-center gap-2 font-label text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted transition-colors hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                    >
+                        <ArrowLeft aria-hidden="true" className="size-4" />
+                        All servers
+                    </Link>
+                    <div className="flex items-center gap-2 text-gold">
+                        <CloudCog aria-hidden="true" className="size-5" />
+                        <span className="font-label text-xs font-semibold uppercase tracking-[0.18em]">
+                            Management console
+                        </span>
+                    </div>
+                </div>
+            </header>
+
+            <div className="site-container py-10 sm:py-14">
+                <section className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end" aria-labelledby="server-heading">
+                    <div>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <p className="font-label text-xs font-semibold uppercase tracking-[0.22em] text-gold">
+                                Live dedicated server
+                            </p>
+                            <span className="inline-flex items-center gap-1.5 rounded-sm border border-gold/25 bg-gold/[0.07] px-2 py-1 font-label text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-gold">
+                                <TerminalSquare aria-hidden="true" className="size-3" /> Production console
+                            </span>
+                        </div>
+                        <EditableServerName
+                            key={server.name}
+                            canEdit={accessLevel === "admin" || accessLevel === "owner"}
+                            initialName={server.name}
+                            serverId={server.id}
+                        />
+                        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-foreground-muted">
+                            <span className="inline-flex items-center gap-1.5">
+                                <MapPin aria-hidden="true" className="size-4 text-gold-muted" />
+                                <span className="font-mono text-xs">{server.address}</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                                <Server aria-hidden="true" className="size-4 text-gold-muted" /> {server.provider}
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                                <Container aria-hidden="true" className="size-4 text-gold-muted" /> Docker container
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 rounded-sm border border-gold/25 bg-gold/[0.07] px-4 py-3">
+                        <ShieldCheck aria-hidden="true" className="size-5 text-gold" />
+                        <div>
+                            <p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted">
+                                Management access
+                            </p>
+                            <p className="mt-0.5 font-display text-xl font-semibold text-foreground">
+                                {accessLabels[accessLevel]}
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <div className="mt-8 flex gap-3 border-l-2 border-red-400 bg-red-500/[0.07] px-4 py-3.5 text-sm leading-6 text-foreground-muted">
+                    <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-red-300" />
+                    <p>
+                        <strong className="font-semibold text-foreground">Protected production access.</strong>{" "}
+                        Controls and commands affect the live Bannerlord process immediately. The gateway revalidates your server access and targets only the registered container.
+                    </p>
+                </div>
+
+                <section className="mt-8 grid gap-3 sm:grid-cols-3" aria-label="Server resources">
+                    <ResourceCard icon={MapPin} label="Endpoint" value={server.address} />
+                    <ResourceCard icon={Server} label="Provider" value={server.provider} />
+                    <ResourceCard icon={Container} label="Node" value={server.nodeId} />
+                </section>
+
+                {canManageAssignments && (
+                    <section id="server-access" className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-access-heading">
+                        <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
+                            Delegated management
+                        </p>
+                        <h2 id="server-access-heading" className="mt-2 font-display text-2xl font-semibold text-foreground sm:text-3xl">
+                            Server access
+                        </h2>
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
+                            Administrators assign the owner. Administrators and the owner can grant operator access to this server.
+                        </p>
+
+                        {accessError && (
+                            <p role="alert" className="mt-4 border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
+                                {accessError}
+                            </p>
+                        )}
+                        {accessUpdated && !accessError && (
+                            <p role="status" className="mt-4 border-l-2 border-emerald-500 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+                                {accessUpdated}
+                            </p>
+                        )}
+
+                        <LiveServerAccessManager
+                            canAssignOwner={accessLevel === "admin"}
+                            loadError={assignmentLoadError || undefined}
+                            operators={operators}
+                            owner={owner}
+                            serverId={server.id}
+                            warning={assignmentWarning || undefined}
+                        />
+                    </section>
+                )}
+
+                <div className="mt-6">
+                    <LiveServerConsole
+                        gatewayUrl={getConsoleGatewayUrl()}
+                        serverId={server.id}
+                    />
+                </div>
+            </div>
+        </main>
+    );
+}
+
 function ResourceCard({
     icon: Icon,
     label,
@@ -200,7 +419,7 @@ function ResourceCard({
                 <Icon aria-hidden="true" className="size-4 text-gold-muted" />
                 <p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em]">{label}</p>
             </div>
-            <p className="mt-2 font-display text-xl font-semibold text-foreground sm:text-2xl">{value}</p>
+            <p className="mt-2 break-words font-display text-xl font-semibold text-foreground sm:text-2xl">{value}</p>
         </div>
     );
 }

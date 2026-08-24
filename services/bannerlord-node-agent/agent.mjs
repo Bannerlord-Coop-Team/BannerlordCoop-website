@@ -301,9 +301,6 @@ async function updateContainer(socket, serverId, sessionId, server) {
     assertContainerIdentityAndIsolation(inspection, server);
     // Keep a stable ID handle across renames during the update transaction.
     const container = docker.getContainer(inspection.Id);
-    if (!inspection.State?.Running) {
-        throw new Error("Start the server before applying an update.");
-    }
     const imageInspection = await pullImage(server.updateImage);
 
     if (inspection.Image === imageInspection.Id) {

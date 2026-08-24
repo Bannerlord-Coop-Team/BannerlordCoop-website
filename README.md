@@ -82,6 +82,10 @@ The `/login` page uses [Supabase Auth](https://supabase.com/docs/guides/auth) fo
 
 The OAuth providers also require their Supabase callback URL (shown in the provider settings) to be allow-listed in the Google/Discord developer console.
 
+### Supabase database migrations
+
+Apply the SQL files in `supabase/migrations/` to the Supabase project in filename order. For a new project, open **SQL Editor** in the Supabase dashboard and run `202608240001_create_server_settings.sql`. This creates the RLS-protected global display-name overrides used by live server management. Browser roles receive no direct table privileges; the website accesses it only with `SUPABASE_SECRET_KEY` after reauthenticating and authorizing each rename.
+
 ### Member administration
 
 The protected `/admin` page lists Supabase Auth users, searches by member information, and stores one of `Admin`, `Server Manager`, `Standard Server`, `Premium Server`, `Developer`, `Helper`, or `User` in each user's protected `app_metadata.role`.
@@ -110,13 +114,13 @@ A dormant IONOS adapter is retained, but its inventory panel and API calls are d
 
 The placeholder design is documented in `docs/server-hosting-design.md`.
 
-### Admin live server console
+### Live server console
 
-Admins also see the configured live Bannerlord containers hosted at `15.204.120.17` on `/servers`. They are not IONOS resources. Each server card and dedicated console page provides protected Start, Stop, Restart, and Update operations; the console page also streams that allowlisted container's stdout/stderr and sends line commands to stdin.
+Configured live Bannerlord containers hosted at `15.204.120.17` appear under **My Servers** on `/servers`. Administrators see every configured server and can assign each one owner account. Owners can add and remove operator accounts; owners and operators receive the same protected Start, Stop, Restart, Update, log-stream, and stdin controls for their assigned server. Administrators and owners can also edit a server's globally persisted display name from its manage page after the `server_settings` migration is applied. These servers are not IONOS resources.
 
 Update pulls the configured image, treats an unchanged digest as a no-op, and otherwise recreates only the allowlisted game container after validating its deployment specification. The old container is retained until the replacement passes the configured readiness marker; failed readiness triggers verified automatic rollback.
 
-The browser authenticates over WSS to `services/console-gateway`, which validates the current Supabase Admin session and bridges to one persistent outbound WSS connection from `services/bannerlord-node-agent` on the VPS. One agent can manage multiple server-specific container, volume, and UDP-port allowlists. Node credentials remain server-only. Deployment and security boundaries are documented in `docs/live-server-console-design.md`.
+The browser authenticates over WSS to `services/console-gateway`, which validates the current Supabase administrator role or server-specific owner/operator assignment and bridges to one persistent outbound WSS connection from `services/bannerlord-node-agent` on the VPS. Assignments are protected Supabase Auth `app_metadata` maintained only through server actions using `SUPABASE_SECRET_KEY`. One agent can manage multiple server-specific container, volume, and UDP-port allowlists. Node credentials remain server-only. Deployment and security boundaries are documented in `docs/live-server-console-design.md`.
 
 ## Environment Variables
 
@@ -130,7 +134,7 @@ Supabase publishable key. Despite being browser-visible, row-level security and 
 
 ### `SUPABASE_SECRET_KEY`
 
-Server-only Supabase secret key used exclusively by protected admin actions to list users and update `app_metadata`. Never expose or commit it.
+Server-only Supabase secret key used by protected member-role and live-server assignment actions to list users and update `app_metadata`. Never expose or commit it.
 
 ### `SUPABASE_ADMIN_EMAILS`
 
@@ -144,7 +148,7 @@ Comma-separated bootstrap administrator emails. These users always have admin ac
 
 ### `CONSOLE_GATEWAY_URL`
 
-Server-only WSS browser endpoint for the external live console, including `/v1/browser`. Production values must use `wss://`; only localhost development may use `ws://`. `CONSOLE_SERVER_CATALOG` optionally supplies the Admin-visible multi-server catalog. Node-agent credentials and per-server Docker resource allowlists are configured separately under `services/` and must never use a `NEXT_PUBLIC_` variable.
+Server-only WSS browser endpoint for the external live console, including `/v1/browser`. Production values must use `wss://`; only localhost development may use `ws://`. `CONSOLE_SERVER_CATALOG` optionally supplies the live multi-server catalog. Administrators see the complete catalog; owners and operators see only assigned entries. Node-agent credentials and per-server Docker resource allowlists are configured separately under `services/` and must never use a `NEXT_PUBLIC_` variable.
 
 ### `YOUTUBE_API_KEY`
 

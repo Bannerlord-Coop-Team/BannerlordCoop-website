@@ -5,6 +5,10 @@ import {
     isMemberRole,
     type MemberRole,
 } from "@/app/lib/auth/roles";
+import {
+    getAssignedLiveConsoleAccess,
+    type LiveConsoleAccessLevel,
+} from "@/app/lib/console/access";
 import type { User } from "@supabase/supabase-js";
 
 function adminEmails() {
@@ -33,4 +37,16 @@ export function hasAdminAccess(user: User) {
 
 export function hasHostedServerAccess(user: User) {
     return hasServerDashboardAccess(getMemberRole(user));
+}
+
+export function getLiveConsoleAccessLevel(
+    user: User,
+    serverId: string,
+): LiveConsoleAccessLevel | null {
+    if (hasAdminAccess(user)) return "admin";
+    return getAssignedLiveConsoleAccess(user.app_metadata, serverId);
+}
+
+export function hasLiveConsoleServerAccess(user: User, serverId: string) {
+    return getLiveConsoleAccessLevel(user, serverId) !== null;
 }
