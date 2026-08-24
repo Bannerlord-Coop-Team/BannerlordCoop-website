@@ -22,6 +22,10 @@ export function hasServerFleetAccess(role: MemberRole) {
     return role === "Admin" || role === "Server Manager";
 }
 
+export function hasLiveConsoleAccess(role: MemberRole) {
+    return role === "Admin";
+}
+
 export function isServerCustomerRole(role: MemberRole): role is ServerCustomerRole {
     return role === "Standard Server" || role === "Premium Server";
 }

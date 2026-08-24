@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+    hasLiveConsoleAccess,
     hasServerDashboardAccess,
     hasServerFleetAccess,
     isMemberRole,
@@ -18,6 +19,10 @@ test("separates fleet and subscriber access", () => {
     assert.equal(hasServerFleetAccess("Admin"), true);
     assert.equal(hasServerFleetAccess("Server Manager"), true);
     assert.equal(hasServerFleetAccess("Premium Server"), false);
+
+    assert.equal(hasLiveConsoleAccess("Admin"), true);
+    assert.equal(hasLiveConsoleAccess("Server Manager"), false);
+    assert.equal(hasLiveConsoleAccess("Premium Server"), false);
 
     assert.equal(isServerCustomerRole("Standard Server"), true);
     assert.equal(isServerCustomerRole("Premium Server"), true);

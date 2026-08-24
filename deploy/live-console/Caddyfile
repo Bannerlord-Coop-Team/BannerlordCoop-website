@@ -1,0 +1,4 @@
+console.15-204-120-17.sslip.io {
+    encode zstd gzip
+    reverse_proxy gateway:8787
+}
