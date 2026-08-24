@@ -2,8 +2,8 @@ import Docker from "dockerode";
 import { PassThrough } from "node:stream";
 import { isDeepStrictEqual } from "node:util";
 import { WebSocket } from "ws";
-
-const DEFAULT_SERVER_ID = "bannerlord-live-15-204-120-17";
+import { loadServerConfigurations } from "./config.mjs";
+import { assertContainerIdentityAndIsolation } from "./container-policy.mjs";
 const MAX_OUTPUT_CHUNK_BYTES = 48 * 1024;
 const MAX_WS_BUFFERED_BYTES = 1024 * 1024;
 const CONTAINER_OPERATIONS = new Set(["start", "stop", "restart", "update"]);
@@ -20,71 +20,6 @@ function positiveInteger(name, fallback, maximum) {
         throw new Error(`${name} must be a positive integer no greater than ${maximum}.`);
     }
     return value;
-}
-
-function serverContainers() {
-    const raw = process.env.AGENT_SERVER_CONTAINERS?.trim();
-    const fallbackContainer = process.env.BANNERLORD_CONTAINER?.trim();
-    let parsed;
-
-    if (raw) {
-        try {
-            parsed = JSON.parse(raw);
-        } catch {
-            throw new Error("AGENT_SERVER_CONTAINERS must be a JSON object.");
-        }
-    } else if (fallbackContainer) {
-        parsed = { [DEFAULT_SERVER_ID]: fallbackContainer };
-    } else {
-        throw new Error("Set AGENT_SERVER_CONTAINERS or BANNERLORD_CONTAINER.");
-    }
-
-    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-        throw new Error("AGENT_SERVER_CONTAINERS must be a JSON object.");
-    }
-
-    const entries = Object.entries(parsed);
-    if (
-        entries.length === 0 ||
-        entries.some(([serverId, container]) =>
-            !serverId ||
-            typeof container !== "string" ||
-            !/^[a-zA-Z0-9][a-zA-Z0-9_.-]+$/.test(container.trim()) ||
-            /^[a-f0-9]{12,64}$/i.test(container.trim())
-        )
-    ) {
-        throw new Error("AGENT_SERVER_CONTAINERS must map server IDs to stable Docker container names, not IDs.");
-    }
-
-    return new Map(entries.map(([serverId, container]) => [serverId, container.trim()]));
-}
-
-function serverUpdateImages() {
-    const raw = process.env.AGENT_SERVER_UPDATE_IMAGES?.trim();
-    const fallbackImage = process.env.BANNERLORD_UPDATE_IMAGE?.trim();
-    if (!raw && !fallbackImage) return new Map();
-
-    let parsed;
-    if (raw) {
-        try {
-            parsed = JSON.parse(raw);
-        } catch {
-            throw new Error("AGENT_SERVER_UPDATE_IMAGES must be a JSON object.");
-        }
-    } else {
-        parsed = { [DEFAULT_SERVER_ID]: fallbackImage };
-    }
-
-    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-        throw new Error("AGENT_SERVER_UPDATE_IMAGES must be a JSON object.");
-    }
-    const entries = Object.entries(parsed);
-    if (entries.some(([serverId, image]) =>
-        !serverId || typeof image !== "string" || !image.trim()
-    )) {
-        throw new Error("AGENT_SERVER_UPDATE_IMAGES must map server IDs to image references.");
-    }
-    return new Map(entries.map(([serverId, image]) => [serverId, image.trim()]));
 }
 
 function validateGatewayUrl(value) {
@@ -131,8 +66,7 @@ const nodeToken = required("CONSOLE_NODE_TOKEN");
 if (nodeToken.length < 32) throw new Error("CONSOLE_NODE_TOKEN must contain at least 32 characters.");
 
 const nodeId = process.env.CONSOLE_NODE_ID?.trim() || "vps-15-204-120-17";
-const containers = serverContainers();
-const updateImages = serverUpdateImages();
+const servers = loadServerConfigurations();
 const tailLines = positiveInteger("CONSOLE_TAIL_LINES", 500, 10_000);
 const stopTimeoutSeconds = positiveInteger("CONTAINER_STOP_TIMEOUT_SECONDS", 60, 300);
 const updateReadinessTimeoutSeconds = positiveInteger(
@@ -140,10 +74,6 @@ const updateReadinessTimeoutSeconds = positiveInteger(
     300,
     600,
 );
-const updateReadinessPattern = process.env.BANNERLORD_READY_LOG_PATTERN?.trim() || '"phase":"serving"';
-const bannerlordDataVolume = process.env.BANNERLORD_DATA_VOLUME?.trim() || "bannerlordcoop-data";
-const bannerlordDataPath = process.env.BANNERLORD_DATA_PATH?.trim() || "/srv/data";
-const bannerlordUdpPort = positiveInteger("BANNERLORD_UDP_PORT", 4200, 65535);
 const docker = new Docker({ socketPath: process.env.DOCKER_SOCKET || "/var/run/docker.sock" });
 const sessions = new Map();
 const closedSessionIds = new Set();
@@ -224,11 +154,11 @@ function sendOperationResult(socket, sessionId, operation, ok, message, serverId
     });
 }
 
-function assertUpdateConfiguration(inspection, imageInspection, containerName) {
+function assertUpdateConfiguration(inspection, imageInspection, server) {
+    assertContainerIdentityAndIsolation(inspection, server);
     const config = inspection.Config ?? {};
     const imageConfig = imageInspection.Config ?? {};
     const host = inspection.HostConfig ?? {};
-    const canonicalName = inspection.Name?.replace(/^\//, "");
     const inheritedConfigKeys = [
         "Cmd",
         "Entrypoint",
@@ -260,29 +190,10 @@ function assertUpdateConfiguration(inspection, imageInspection, containerName) {
                         : imageConfig[key];
         return !isDeepStrictEqual(containerValue, imageValue);
     });
-    if (canonicalName !== containerName) {
-        throw new Error("The lifecycle target must be the container's stable canonical name.");
-    }
     if (unsupportedOverride) {
         throw new Error(`Update refused because the container overrides ${unsupportedOverride}.`);
     }
 
-    const mounts = inspection.Mounts ?? [];
-    const expectedPort = `${bannerlordUdpPort}/udp`;
-    const portKeys = Object.keys(host.PortBindings ?? {}).filter(
-        (key) => host.PortBindings[key] !== null,
-    );
-    const portBindings = host.PortBindings?.[expectedPort];
-    const supportedMount = mounts.length === 1 &&
-        mounts[0].Type === "volume" &&
-        mounts[0].Name === bannerlordDataVolume &&
-        mounts[0].Destination === bannerlordDataPath &&
-        mounts[0].RW === true;
-    const supportedPort = portKeys.length === 1 &&
-        portKeys[0] === expectedPort &&
-        Array.isArray(portBindings) &&
-        portBindings.length === 1 &&
-        portBindings[0].HostPort === String(bannerlordUdpPort);
     const supportedSecurity =
         host.Privileged === false &&
         host.ReadonlyRootfs === false &&
@@ -305,14 +216,14 @@ function assertUpdateConfiguration(inspection, imageInspection, containerName) {
         host.Tmpfs ||
         host.Ulimits?.length;
 
-    if (!supportedMount || !supportedPort || !supportedSecurity || unsupportedHostCustomization) {
+    if (!supportedSecurity || unsupportedHostCustomization) {
         throw new Error("Update refused because the container does not match the supported Bannerlord deployment specification.");
     }
 }
 
-function replacementOptions(inspection, image, name) {
+function replacementOptions(inspection, image, name, server) {
     const host = inspection.HostConfig;
-    const port = `${bannerlordUdpPort}/udp`;
+    const port = `${server.udpPort}/udp`;
     return {
         name,
         Image: image,
@@ -327,8 +238,8 @@ function replacementOptions(inspection, image, name) {
             LogConfig: host.LogConfig,
             Mounts: [{
                 Type: "volume",
-                Source: bannerlordDataVolume,
-                Target: bannerlordDataPath,
+                Source: server.dataVolume,
+                Target: server.dataPath,
                 ReadOnly: false,
             }],
             NetworkMode: "bridge",
@@ -354,7 +265,7 @@ async function pullImage(image) {
     return docker.getImage(image).inspect();
 }
 
-async function waitForReplacementReadiness(container, startedAtSeconds) {
+async function waitForReplacementReadiness(container, startedAtSeconds, readinessPattern) {
     const deadline = Date.now() + updateReadinessTimeoutSeconds * 1000;
     while (Date.now() < deadline) {
         const inspection = await container.inspect();
@@ -373,27 +284,27 @@ async function waitForReplacementReadiness(container, startedAtSeconds) {
             since: startedAtSeconds,
             tail: 500,
         });
-        if (logs.toString("utf8").includes(updateReadinessPattern)) return;
+        if (logs.toString("utf8").includes(readinessPattern)) return;
         await new Promise((resolve) => setTimeout(resolve, 1000));
     }
     throw new Error("The replacement container did not reach the configured readiness marker in time.");
 }
 
-async function updateContainer(socket, serverId, sessionId, containerName) {
-    const updateImage = updateImages.get(serverId);
-    if (!updateImage) {
+async function updateContainer(socket, serverId, sessionId, server) {
+    if (!server.updateImage) {
         throw new Error("No update image is configured for this server.");
     }
 
     sendContainerState(socket, sessionId, "updating", "Pulling the configured update image…", serverId);
-    const configuredContainer = docker.getContainer(containerName);
+    const configuredContainer = docker.getContainer(server.container);
     const inspection = await configuredContainer.inspect();
+    assertContainerIdentityAndIsolation(inspection, server);
     // Keep a stable ID handle across renames during the update transaction.
     const container = docker.getContainer(inspection.Id);
     if (!inspection.State?.Running) {
         throw new Error("Start the server before applying an update.");
     }
-    const imageInspection = await pullImage(updateImage);
+    const imageInspection = await pullImage(server.updateImage);
 
     if (inspection.Image === imageInspection.Id) {
         sendContainerState(
@@ -411,7 +322,7 @@ async function updateContainer(socket, serverId, sessionId, containerName) {
     const failedReplacementName = `${originalName}-failed-update-${Date.now()}`;
     const wasRunning = Boolean(inspection.State?.Running);
     const oldImageInspection = await docker.getImage(inspection.Image).inspect();
-    assertUpdateConfiguration(inspection, oldImageInspection, containerName);
+    assertUpdateConfiguration(inspection, oldImageInspection, server);
     closeServerSessions(serverId, "The container is being updated.");
 
     let originalStopped = false;
@@ -432,14 +343,18 @@ async function updateContainer(socket, serverId, sessionId, containerName) {
         await container.rename({ name: rollbackName });
         originalRenamed = true;
         replacement = await docker.createContainer(
-            replacementOptions(inspection, updateImage, originalName),
+            replacementOptions(inspection, server.updateImage, originalName, server),
         );
         replacementOwnsProductionName = true;
 
         if (wasRunning) {
             const startedAtSeconds = Math.floor(Date.now() / 1000);
             await replacement.start();
-            await waitForReplacementReadiness(replacement, startedAtSeconds);
+            await waitForReplacementReadiness(
+                replacement,
+                startedAtSeconds,
+                server.readinessPattern,
+            );
         }
 
         const replacementInspection = await replacement.inspect();
@@ -498,12 +413,17 @@ async function updateContainer(socket, serverId, sessionId, containerName) {
                     await waitForReplacementReadiness(
                         container,
                         restoredStartedAtSeconds,
+                        server.readinessPattern,
                     );
                 } else if (originalStopped) {
                     const recentStart = Math.floor(
                         new Date(originalInspection.State.StartedAt).getTime() / 1000,
                     );
-                    await waitForReplacementReadiness(container, recentStart);
+                    await waitForReplacementReadiness(
+                        container,
+                        recentStart,
+                        server.readinessPattern,
+                    );
                 }
             } catch (startError) {
                 recoveryErrors.push(`original readiness: ${startError instanceof Error ? startError.message : "unknown error"}`);
@@ -541,8 +461,8 @@ async function updateContainer(socket, serverId, sessionId, containerName) {
 
 async function executeOperation(socket, message) {
     const { operation, serverId, sessionId } = message;
-    const containerName = containers.get(serverId);
-    if (!containerName || !CONTAINER_OPERATIONS.has(operation)) {
+    const server = servers.get(serverId);
+    if (!server || !CONTAINER_OPERATIONS.has(operation)) {
         sendOperationResult(socket, sessionId, operation, false, "Invalid server operation.", serverId);
         return;
     }
@@ -552,12 +472,13 @@ async function executeOperation(socket, message) {
     }
 
     operationsInProgress.add(serverId);
-    const container = docker.getContainer(containerName);
+    const container = docker.getContainer(server.container);
     try {
         if (operation === "stop") {
+            const inspection = await container.inspect();
+            assertContainerIdentityAndIsolation(inspection, server);
             sendContainerState(socket, sessionId, "stopping", undefined, serverId);
             closeServerSessions(serverId, "The container is stopping.");
-            const inspection = await container.inspect();
             if (inspection.State?.Running) await container.stop({ t: stopTimeoutSeconds });
             sendContainerState(socket, sessionId, "stopped", undefined, serverId);
             sendOperationResult(socket, sessionId, operation, true, "Server stopped.", serverId);
@@ -565,8 +486,9 @@ async function executeOperation(socket, message) {
         }
 
         if (operation === "start") {
-            sendContainerState(socket, sessionId, "starting", undefined, serverId);
             const inspection = await container.inspect();
+            assertContainerIdentityAndIsolation(inspection, server);
+            sendContainerState(socket, sessionId, "starting", undefined, serverId);
             if (!inspection.State?.Running) await container.start();
             sendContainerState(socket, sessionId, "running", undefined, serverId);
             sendOperationResult(socket, sessionId, operation, true, "Server started.", serverId);
@@ -574,9 +496,10 @@ async function executeOperation(socket, message) {
         }
 
         if (operation === "restart") {
+            const inspection = await container.inspect();
+            assertContainerIdentityAndIsolation(inspection, server);
             sendContainerState(socket, sessionId, "restarting", undefined, serverId);
             closeServerSessions(serverId, "The container is restarting.");
-            const inspection = await container.inspect();
             if (inspection.State?.Running) await container.restart({ t: stopTimeoutSeconds });
             else await container.start();
             sendContainerState(socket, sessionId, "running", undefined, serverId);
@@ -588,7 +511,7 @@ async function executeOperation(socket, message) {
             socket,
             serverId,
             sessionId,
-            containerName,
+            server,
         );
         sendOperationResult(socket, sessionId, operation, true, result, serverId);
     } catch (error) {
@@ -596,7 +519,8 @@ async function executeOperation(socket, message) {
             ? error.message.slice(0, 300)
             : "The Docker operation failed.";
         try {
-            const inspection = await docker.getContainer(containerName).inspect();
+            const inspection = await docker.getContainer(server.container).inspect();
+            assertContainerIdentityAndIsolation(inspection, server);
             sendContainerState(
                 socket,
                 sessionId,
@@ -618,8 +542,8 @@ async function attachSession(socket, message) {
     const { serverId, sessionId } = message;
     if (closedSessionIds.has(sessionId)) return;
 
-    const containerName = containers.get(serverId);
-    if (!containerName) {
+    const server = servers.get(serverId);
+    if (!server) {
         send(socket, { type: "error", sessionId, message: "This server is not allowlisted on the node agent." });
         return;
     }
@@ -648,10 +572,11 @@ async function attachSession(socket, message) {
         sessions.get(sessionId) !== session ||
         socket !== activeSocket ||
         socket.readyState !== WebSocket.OPEN;
-    const container = docker.getContainer(containerName);
+    const container = docker.getContainer(server.container);
 
     try {
         const inspection = await container.inspect();
+        assertContainerIdentityAndIsolation(inspection, server);
         if (cancelled()) {
             closeSession(sessionId, "Container attach was cancelled.", false);
             return;
@@ -660,7 +585,7 @@ async function attachSession(socket, message) {
             sessions.delete(sessionId);
             session.closing = true;
             sendContainerState(socket, sessionId, "stopped", undefined, serverId);
-            log("container_not_running", { sessionId, serverId, container: containerName });
+            log("container_not_running", { sessionId, serverId, container: server.container });
             return;
         }
         const inputEnabled = Boolean(inspection.Config?.OpenStdin);
@@ -723,7 +648,7 @@ async function attachSession(socket, message) {
             closeSession(sessionId, "Gateway connection changed.", false);
             return;
         }
-        log("container_attached", { sessionId, serverId, container: containerName });
+        log("container_attached", { sessionId, serverId, container: server.container });
     } catch (error) {
         const wasCancelled = cancelled();
         if (sessions.get(sessionId) === session) sessions.delete(sessionId);
@@ -778,9 +703,9 @@ function connect() {
         send(socket, {
             type: "register",
             nodeId,
-            servers: [...containers.keys()],
+            servers: [...servers.keys()],
         });
-        log("gateway_connected", { nodeId, servers: [...containers.keys()] });
+        log("gateway_connected", { nodeId, servers: [...servers.keys()] });
     });
 
     socket.on("message", (data) => {

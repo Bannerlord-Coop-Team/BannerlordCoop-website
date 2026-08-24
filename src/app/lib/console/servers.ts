@@ -1,16 +1,15 @@
 import "server-only";
 
+import {
+    parseConsoleServerCatalog,
+    type LiveConsoleServer,
+} from "@/app/lib/console/catalog";
+
+export type { LiveConsoleServer } from "@/app/lib/console/catalog";
+
 export const LIVE_CONSOLE_SERVER_ID = "bannerlord-live-15-204-120-17";
 
-export type LiveConsoleServer = {
-    id: string;
-    name: string;
-    address: string;
-    nodeId: string;
-    provider: string;
-};
-
-const LIVE_CONSOLE_SERVERS: readonly LiveConsoleServer[] = [
+const DEFAULT_LIVE_CONSOLE_SERVERS: readonly LiveConsoleServer[] = [
     {
         id: LIVE_CONSOLE_SERVER_ID,
         name: "Bannerlord Live Server",
@@ -21,11 +20,14 @@ const LIVE_CONSOLE_SERVERS: readonly LiveConsoleServer[] = [
 ];
 
 export function listLiveConsoleServers() {
-    return LIVE_CONSOLE_SERVERS;
+    return parseConsoleServerCatalog(
+        process.env.CONSOLE_SERVER_CATALOG,
+        DEFAULT_LIVE_CONSOLE_SERVERS,
+    );
 }
 
 export function getLiveConsoleServer(serverId: string) {
-    return LIVE_CONSOLE_SERVERS.find((server) => server.id === serverId) ?? null;
+    return listLiveConsoleServers().find((server) => server.id === serverId) ?? null;
 }
 
 export function getConsoleGatewayUrl() {
