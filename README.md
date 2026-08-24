@@ -8,6 +8,15 @@
 
 The official website for [Bannerlord Coop](https://github.com/Bannerlord-Coop-Team/BannerlordCoop), a module that brings cooperative multiplayer to the Mount & Blade II: Bannerlord campaign.
 
+## Contributing
+
+By submitting a contribution to BannerlordCoop, you agree that your contribution
+may be used, modified, distributed, sublicensed, and relicensed by the
+BannerlordCoop project maintainers as part of the BannerlordCoop project.
+
+You also confirm that you have the right to submit the contribution and that it
+does not knowingly include code copied from another project without permission.
+
 ## Tech Stack
 
 - [Next.js 16](https://nextjs.org/) with the App Router
