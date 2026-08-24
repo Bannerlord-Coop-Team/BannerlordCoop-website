@@ -90,7 +90,23 @@ export function CheatsView({
                     </dl>
                 </section>
 
-                <div className="mt-8 flex gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3.5 text-sm text-foreground-muted">
+                <div
+                    role="alert"
+                    className="mt-8 flex gap-3 border-l-2 border-crimson bg-crimson/10 px-4 py-3.5 text-sm leading-6 text-red-200"
+                >
+                    <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-crimson-hover" />
+                    <p>
+                        {ui.vanillaCampaignWarning.map((part, index) => (
+                            "code" in part ? (
+                                <code key={index} className="font-semibold text-red-100">{part.code}</code>
+                            ) : (
+                                <span key={index}>{part.text}</span>
+                            )
+                        ))}
+                    </p>
+                </div>
+
+                <div className="mt-3 flex gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3.5 text-sm text-foreground-muted">
                     <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
                     <p>
                         <strong className="font-semibold text-foreground">{ui.consoleTip}</strong>

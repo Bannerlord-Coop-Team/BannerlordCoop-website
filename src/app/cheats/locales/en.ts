@@ -10,7 +10,12 @@ export const enMessages: Omit<CheatsMessages, "commands"> = {
         commandsStat: "Commands",
         serverStat: "Server",
         clientStat: "Client",
-        consoleTip: "Open the console with Alt + `.",
+        consoleTip: "Open the cheat console ingame with Alt + `.",
+        vanillaCampaignWarning: [
+            { text: "Vanilla cheats prefixed " },
+            { code: "campaign." },
+            { text: " are DISABLED and cannot be used." },
+        ],
         directoryEyebrow: "Command directory",
         directoryTitle: "Commands",
         categories: "Categories",

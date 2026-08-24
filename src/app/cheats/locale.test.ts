@@ -14,6 +14,19 @@ const commands = commandsData.commands as Array<{
     summary: string;
 }>;
 
+test("warns that vanilla campaign. cheats are disabled", () => {
+    const en = getCheatsMessages("en").ui.vanillaCampaignWarning;
+    const zh = getCheatsMessages("zh-CN").ui.vanillaCampaignWarning;
+
+    assert.deepEqual(en, [
+        { text: "Vanilla cheats prefixed " },
+        { code: "campaign." },
+        { text: " are DISABLED and cannot be used." },
+    ]);
+    assert.ok(zh.some((part) => "code" in part && part.code === "campaign."));
+    assert.ok(zh.some((part) => "text" in part && part.text.includes("已禁用")));
+});
+
 test("parses simplified chinese locale aliases", () => {
     assert.equal(parseCheatsLocale("zh"), "zh-CN");
     assert.equal(parseCheatsLocale("zh-CN"), "zh-CN");
