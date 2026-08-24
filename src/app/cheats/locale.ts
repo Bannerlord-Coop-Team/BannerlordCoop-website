@@ -18,6 +18,7 @@ export type CheatsUi = {
     serverStat: string;
     clientStat: string;
     consoleTip: string;
+    vanillaCampaignWarning: CheatsRichPart[];
     directoryEyebrow: string;
     directoryTitle: string;
     categories: string;

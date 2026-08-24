@@ -10,7 +10,12 @@ export const zhCNMessages: Omit<CheatsMessages, "commands"> = {
         commandsStat: "指令",
         serverStat: "服务器",
         clientStat: "客户端",
-        consoleTip: "用 Alt + ` 打开控制台。",
+        consoleTip: "用 Alt + ` 打开游戏内作弊控制台。",
+        vanillaCampaignWarning: [
+            { text: "以 " },
+            { code: "campaign." },
+            { text: " 为前缀的原版作弊指令已禁用，无法使用。" },
+        ],
         directoryEyebrow: "指令目录",
         directoryTitle: "指令",
         categories: "分类",
