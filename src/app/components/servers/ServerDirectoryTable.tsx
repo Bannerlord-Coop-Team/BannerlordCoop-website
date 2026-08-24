@@ -1,9 +1,20 @@
-import type { DirectoryServer } from "@/app/lib/hosting/servers";
+import type {
+    DirectoryServer,
+    HostedServerStatus,
+} from "@/app/lib/hosting/servers";
 import { ChevronRight, LogIn, Server } from "lucide-react";
 import Link from "next/link";
 
+export type ManagedServerDirectoryEntry = Omit<
+    DirectoryServer,
+    "players" | "status"
+> & {
+    players: number | null;
+    status: HostedServerStatus | "Unknown";
+};
+
 type ServerDirectoryTableProps = {
-    servers: readonly DirectoryServer[];
+    servers: readonly ManagedServerDirectoryEntry[];
     showManage?: boolean;
     emptyMessage: string;
 };
@@ -69,7 +80,7 @@ export function ServerDirectoryTable({
                                     </div>
                                 </td>
                                 <td className="whitespace-nowrap px-5 py-4 font-label text-sm font-semibold tabular-nums text-foreground sm:px-6 sm:py-5">
-                                    {server.players}
+                                    {server.players ?? "—"}
                                 </td>
                                 <td className="whitespace-nowrap px-5 py-4 sm:px-6 sm:py-5">
                                     <span className={`inline-flex border px-2.5 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-[0.14em] ${connectionTypeStyles[server.connectionType]}`}>
@@ -98,7 +109,7 @@ export function ServerDirectoryTable({
                                         )}
                                         {showManage && (
                                             <Link
-                                                href={`/servers/${server.id}`}
+                                                href={`/servers/${encodeURIComponent(server.id)}`}
                                                 className="inline-flex min-h-10 items-center justify-center gap-1.5 border border-gold/35 bg-gold/[0.07] px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                                             >
                                                 Manage

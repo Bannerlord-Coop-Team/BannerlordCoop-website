@@ -1,13 +1,16 @@
 import { Navbar } from "@/app/components/layout/Navbar";
 import { AllServersDirectory } from "@/app/components/servers/AllServersDirectory";
-import { LiveConsoleServersSection } from "@/app/components/servers/LiveConsoleServersSection";
-import { ServerDirectoryTable } from "@/app/components/servers/ServerDirectoryTable";
 import {
+    ServerDirectoryTable,
+    type ManagedServerDirectoryEntry,
+} from "@/app/components/servers/ServerDirectoryTable";
+import {
+    getLiveConsoleAccessLevel,
     getMemberRole,
     hasHostedServerAccess,
 } from "@/app/lib/auth/access";
-import { hasLiveConsoleAccess } from "@/app/lib/auth/roles";
 import { listLiveConsoleServers } from "@/app/lib/console/servers";
+import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getAllServers, getServersForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
@@ -38,9 +41,30 @@ export default async function ServersPage() {
 
     const role = user ? getMemberRole(user) : null;
     const canManageServers = user ? hasHostedServerAccess(user) : false;
-    const isAdmin = role ? hasLiveConsoleAccess(role) : false;
-    const liveConsoleServers = isAdmin ? listLiveConsoleServers() : [];
-    const myServers = role && canManageServers ? getServersForRole(role) : [];
+    const accessibleLiveServers = user
+        ? listLiveConsoleServers().filter((server) =>
+            getLiveConsoleAccessLevel(user, server.id),
+        )
+        : [];
+    const liveServerDisplayNames = await getServerDisplayNames(
+        accessibleLiveServers.map((server) => server.id),
+    );
+    const liveServers: ManagedServerDirectoryEntry[] = accessibleLiveServers.map(
+        (server) => ({
+            id: server.id,
+            name: liveServerDisplayNames.get(server.id) ?? server.name,
+            status: "Unknown",
+            connectionType: "Direct",
+            joinUrl: `bannerlordcoop://join/${server.id}`,
+            players: null,
+        }),
+    );
+    const hostedServers = role && canManageServers ? getServersForRole(role) : [];
+    const managedServers: ManagedServerDirectoryEntry[] = [
+        ...liveServers,
+        ...hostedServers,
+    ];
+    const managedServerCount = managedServers.length;
     const allServers = getAllServers();
     const onlineServers = allServers.filter((server) => server.status === "Online");
     const onlinePlayers = onlineServers.reduce(
@@ -81,11 +105,7 @@ export default async function ServersPage() {
                     </p>
                 </div>
 
-                {isAdmin && (
-                    <LiveConsoleServersSection servers={liveConsoleServers} />
-                )}
-
-                <section className="mt-12" aria-labelledby="my-servers-heading">
+                <section id="my-servers" className="mt-12" aria-labelledby="my-servers-heading">
                     <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
                         <div>
                             <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
@@ -97,15 +117,15 @@ export default async function ServersPage() {
                         </div>
                         {user && (
                             <p className="text-sm text-foreground-muted">
-                                {myServers.length} {myServers.length === 1 ? "server" : "servers"} available to manage
+                                {managedServerCount} {managedServerCount === 1 ? "server" : "servers"} available to manage
                             </p>
                         )}
                     </div>
                     {user ? (
                         <ServerDirectoryTable
-                            servers={myServers}
+                            servers={managedServers}
                             showManage
-                            emptyMessage="You do not own any servers yet."
+                            emptyMessage="You do not own or operate any servers yet."
                         />
                     ) : (
                         <div className="flex min-h-36 flex-col items-center justify-center gap-4 border border-dashed border-white/15 bg-surface px-6 text-center">

@@ -187,7 +187,7 @@ export function LiveServerConsole({
         socketRef.current = null;
         authorizedRef.current = false;
         if (socket && socket.readyState < WebSocket.CLOSING) {
-            socket.close(1000, "Admin disconnected");
+            socket.close(1000, "Operator disconnected");
         }
         if (mountedRef.current && gatewayUrl) {
             setContainerState("unknown");
@@ -248,7 +248,7 @@ export function LiveServerConsole({
                 return;
             }
             setStatus("authorizing");
-            setStatusMessage("Verifying the current Admin session…");
+            setStatusMessage("Verifying your server access…");
             socket.send(JSON.stringify({
                 type: "authenticate",
                 accessToken,
@@ -270,7 +270,7 @@ export function LiveServerConsole({
                 authorizedRef.current = true;
                 setControlsReady(true);
                 setStatus("attaching");
-                setStatusMessage("Admin verified. Loading container state…");
+                setStatusMessage("Server access verified. Loading container state…");
                 appendNotice("Authenticated. Waiting for the container attach…");
                 return;
             }
@@ -516,7 +516,6 @@ export function LiveServerConsole({
                 </div>
 
                 <LiveServerOperationButtons
-                    containerState={containerState}
                     controlsReady={controlsReady}
                     onOperation={requestOperation}
                     pendingOperation={pendingOperation}
@@ -570,7 +569,7 @@ export function LiveServerConsole({
             {!gatewayUrl && (
                 <div className="flex gap-3 border-t border-gold/20 bg-gold/[0.07] px-4 py-3 text-xs leading-5 text-foreground-muted">
                     <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
-                    The admin page is ready, but the WSS gateway URL must be configured before it can attach to the remote container.
+                    The console page is ready, but the WSS gateway URL must be configured before it can attach to the remote container.
                 </div>
             )}
             {consoleWritable && (

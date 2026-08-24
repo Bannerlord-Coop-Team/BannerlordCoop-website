@@ -1,7 +1,11 @@
 import { RoleEditor } from "@/app/components/admin/RoleEditor";
 import { getMemberRole, hasAdminAccess, isBootstrapAdmin } from "@/app/lib/auth/access";
-import { getSupabaseAdminClient } from "@/app/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
+import {
+    AUTH_USERS_MAX_PAGES,
+    AUTH_USERS_PAGE_SIZE,
+    listSupabaseUsers,
+} from "@/app/lib/supabase/users";
 import type { User } from "@supabase/supabase-js";
 import { ArrowLeft, Search, ShieldCheck, Users } from "lucide-react";
 import type { Metadata } from "next";
@@ -12,9 +16,6 @@ export const metadata: Metadata = {
     title: "Member Administration | Bannerlord Coop",
     description: "Manage Bannerlord Coop member roles.",
 };
-
-const PAGE_SIZE = 1000;
-const MAX_PAGES = 10;
 
 type AdminPageProps = {
     searchParams: Promise<{
@@ -57,27 +58,6 @@ function formatDate(value: string | undefined) {
     }).format(new Date(value));
 }
 
-async function loadMembers() {
-    const adminClient = getSupabaseAdminClient();
-    const users: User[] = [];
-    let truncated = false;
-
-    for (let page = 1; page <= MAX_PAGES; page += 1) {
-        const { data, error } = await adminClient.auth.admin.listUsers({
-            page,
-            perPage: PAGE_SIZE,
-        });
-
-        if (error) throw error;
-        users.push(...data.users);
-
-        if (data.users.length < PAGE_SIZE) break;
-        if (page === MAX_PAGES) truncated = true;
-    }
-
-    return { users, truncated };
-}
-
 export default async function AdminPage({ searchParams }: AdminPageProps) {
     const sessionClient = await getSupabaseServerClient();
     const { data: sessionData } = await sessionClient.auth.getUser();
@@ -96,7 +76,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     let truncated = false;
 
     try {
-        const result = await loadMembers();
+        const result = await listSupabaseUsers();
         members = result.users;
         truncated = result.truncated;
     } catch (error) {
@@ -211,7 +191,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 )}
                 {truncated && (
                     <p className="mt-6 border-l-2 border-gold bg-gold/10 px-4 py-3 text-sm text-foreground-muted">
-                        Only the first {PAGE_SIZE * MAX_PAGES} members are shown. Narrow your search or add database-backed pagination before exceeding this limit.
+                        Only the first {AUTH_USERS_PAGE_SIZE * AUTH_USERS_MAX_PAGES} members are shown. Narrow your search or add database-backed pagination before exceeding this limit.
                     </p>
                 )}
 

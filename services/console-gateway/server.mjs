@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getConsoleServerAccess } from "./access.mjs";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
@@ -460,7 +461,7 @@ browserServer.on("connection", (socket, request) => {
                 return;
             }
             if (activeServerSessions.has(message.serverId)) {
-                send(socket, { type: "error", message: "Another Admin is already attached to this console." });
+                send(socket, { type: "error", message: "Another operator is already attached to this console." });
                 socket.close(1008, "Console already in use");
                 return;
             }
@@ -485,20 +486,22 @@ browserServer.on("connection", (socket, request) => {
             if (socket.readyState !== WebSocket.OPEN) return;
 
             const user = userData.user;
-            const bootstrapAdmin = Boolean(
-                user?.email && bootstrapAdminEmails.has(user.email.toLowerCase()),
+            const accessLevel = getConsoleServerAccess(
+                user,
+                message.serverId,
+                bootstrapAdminEmails,
             );
-            if (authenticationError || !user || (user.app_metadata?.role !== "Admin" && !bootstrapAdmin)) {
+            if (authenticationError || !user || !accessLevel) {
                 audit("console_auth_rejected", {
                     serverId: message.serverId,
                     origin: request.headers.origin,
                 });
-                socket.close(1008, "Admin authorization failed");
+                socket.close(1008, "Server authorization failed");
                 return;
             }
 
             if (activeServerSessions.has(message.serverId)) {
-                send(socket, { type: "error", message: "Another Admin is already attached to this console." });
+                send(socket, { type: "error", message: "Another operator is already attached to this console." });
                 socket.close(1008, "Console already in use");
                 return;
             }
@@ -517,6 +520,7 @@ browserServer.on("connection", (socket, request) => {
                 closeOperatorSession(sessionId, "The maximum console session time was reached.", true);
             }, sessionMaxMs);
             operatorSessions.set(sessionId, {
+                accessLevel,
                 browser: socket,
                 consoleAttached: false,
                 consoleInputEnabled: false,
@@ -551,7 +555,7 @@ browserServer.on("connection", (socket, request) => {
                 sessionId,
                 serverId: message.serverId,
                 userId: user.id,
-                bootstrapAdmin,
+                accessLevel,
             });
             return;
         }
@@ -670,7 +674,7 @@ browserServer.on("connection", (socket, request) => {
 
     socket.on("close", () => {
         clearTimeout(authenticationTimeout);
-        if (sessionId) closeOperatorSession(sessionId, "Admin disconnected.", false);
+        if (sessionId) closeOperatorSession(sessionId, "Operator disconnected.", false);
     });
 });
 
