@@ -90,7 +90,32 @@ export default function SupportPage() {
                             >
                                 Support Bannerlord Coop
                             </h1>
-                            <p className="mt-6 max-w-2xl font-display text-2xl leading-8 text-foreground sm:text-3xl sm:leading-10">
+                            <ul className="mt-8 max-w-3xl divide-y divide-white/10 border border-white/10 bg-surface/75">
+                                {supportOptions.map((option) => (
+                                    <li key={option.name}>
+                                        <a
+                                            href={option.href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="group flex min-h-18 items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-gold/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold sm:px-6"
+                                        >
+                                            <span className="min-w-0">
+                                                <span className="block font-display text-2xl font-semibold text-foreground transition-colors group-hover:text-gold">
+                                                    {option.name}
+                                                </span>
+                                                <span className="mt-1 block text-sm leading-5 text-foreground-muted">
+                                                    {option.descriptor}
+                                                </span>
+                                            </span>
+                                            <span aria-hidden="true" className="shrink-0 font-display text-2xl text-gold">
+                                                ↗
+                                            </span>
+                                            <span className="sr-only">(opens in a new tab)</span>
+                                        </a>
+                                    </li>
+                                ))}
+                            </ul>
+                            <p className="mt-8 max-w-2xl font-display text-2xl leading-8 text-foreground sm:text-3xl sm:leading-10">
                                 Built by volunteers. Always free.
                             </p>
                             <p className="mt-5 max-w-2xl text-sm leading-7 text-foreground-muted sm:text-base">
@@ -157,78 +182,6 @@ export default function SupportPage() {
                                 </li>
                             ))}
                         </ul>
-                    </div>
-                </section>
-
-                <section
-                    className="site-container py-16 sm:py-20 lg:py-24"
-                    aria-labelledby="platforms-heading"
-                >
-                    <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-                        <div className="max-w-3xl">
-                            <p className="font-label text-xs font-semibold uppercase tracking-[0.22em] text-gold">
-                                Choose what works for you
-                            </p>
-                            <h2
-                                id="platforms-heading"
-                                className="mt-3 font-display text-4xl font-semibold text-foreground sm:text-5xl"
-                            >
-                                Support platforms
-                            </h2>
-                        </div>
-                        <p className="max-w-md text-sm leading-6 text-foreground-muted lg:text-right">
-                            Each option supports the same volunteer project. Choose
-                            whichever platform is most convenient for you.
-                        </p>
-                    </div>
-
-                    <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {supportOptions.map((option, index) => (
-                            <article
-                                key={option.name}
-                                className="group flex min-w-0 flex-col border border-white/10 bg-surface p-6 transition-colors hover:border-gold/35 sm:p-7"
-                            >
-                                <div className="flex items-start justify-between gap-5">
-                                    <span className="flex size-11 shrink-0 items-center justify-center border border-gold/30 bg-gold/[0.06]">
-                                        <span
-                                            aria-hidden="true"
-                                            className="size-2 rotate-45 bg-gold"
-                                        />
-                                    </span>
-                                    <span
-                                        aria-hidden="true"
-                                        className="font-label text-xs font-semibold tracking-[0.16em] text-foreground-dim"
-                                    >
-                                        {String(index + 1).padStart(2, "0")}
-                                    </span>
-                                </div>
-
-                                <h3 className="mt-8 font-display text-3xl font-semibold text-foreground">
-                                    {option.name}
-                                </h3>
-                                <p className="mt-2 min-h-12 text-sm leading-6 text-foreground-muted">
-                                    {option.descriptor}
-                                </p>
-
-                                <a
-                                    href={option.href}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="mt-7 inline-flex min-h-12 w-full items-center justify-between gap-3 border border-crimson bg-crimson/10 px-4 font-label text-xs font-semibold uppercase tracking-[0.14em] text-foreground transition-colors hover:border-crimson-hover hover:bg-crimson hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-                                >
-                                    <span>Support on {option.name}</span>
-                                    <span
-                                        aria-hidden="true"
-                                        className="shrink-0 text-base leading-none"
-                                    >
-                                        ↗
-                                    </span>
-                                    <span className="sr-only">
-                                        (opens in a new tab)
-                                    </span>
-                                </a>
-                            </article>
-                        ))}
                     </div>
                 </section>
 
