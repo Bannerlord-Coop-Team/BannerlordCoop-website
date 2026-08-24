@@ -1,0 +1,16 @@
+{
+  "name": "@bannerlord-coop/bannerlord-node-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "start": "node agent.mjs"
+  },
+  "dependencies": {
+    "dockerode": "^5.0.1",
+    "ws": "^8.18.3"
+  }
+}

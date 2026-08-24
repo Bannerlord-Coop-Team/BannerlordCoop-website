@@ -1,0 +1,47 @@
+services:
+  gateway:
+    build:
+      context: ../../services/console-gateway
+    env_file:
+      - gateway.env
+    restart: unless-stopped
+    networks:
+      - console
+
+  node-agent:
+    build:
+      context: ../../services/bannerlord-node-agent
+    env_file:
+      - node-agent.env
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - console
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - console
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+networks:
+  console:
+
+volumes:
+  caddy_data:
+  caddy_config:

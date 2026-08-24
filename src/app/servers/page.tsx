@@ -1,10 +1,13 @@
 import { Navbar } from "@/app/components/layout/Navbar";
 import { AllServersDirectory } from "@/app/components/servers/AllServersDirectory";
+import { LiveConsoleServersSection } from "@/app/components/servers/LiveConsoleServersSection";
 import { ServerDirectoryTable } from "@/app/components/servers/ServerDirectoryTable";
 import {
     getMemberRole,
     hasHostedServerAccess,
 } from "@/app/lib/auth/access";
+import { hasLiveConsoleAccess } from "@/app/lib/auth/roles";
+import { listLiveConsoleServers } from "@/app/lib/console/servers";
 import { getAllServers, getServersForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
@@ -35,6 +38,8 @@ export default async function ServersPage() {
 
     const role = user ? getMemberRole(user) : null;
     const canManageServers = user ? hasHostedServerAccess(user) : false;
+    const isAdmin = role ? hasLiveConsoleAccess(role) : false;
+    const liveConsoleServers = isAdmin ? listLiveConsoleServers() : [];
     const myServers = role && canManageServers ? getServersForRole(role) : [];
     const allServers = getAllServers();
     const onlineServers = allServers.filter((server) => server.status === "Online");
@@ -75,6 +80,10 @@ export default async function ServersPage() {
                         server availability and player counts are placeholder data. Join links will open the Bannerlord Coop client when integration is available.
                     </p>
                 </div>
+
+                {isAdmin && (
+                    <LiveConsoleServersSection servers={liveConsoleServers} />
+                )}
 
                 <section className="mt-12" aria-labelledby="my-servers-heading">
                     <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">

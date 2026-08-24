@@ -104,9 +104,19 @@ The public `/servers` page provides the server directory, while server managemen
 - Start, stop, restart, runtime status, and log streaming are simulated in the browser and reset on refresh.
 - The cron-restart toggle reveals an editable five-field UTC expression while enabled, initially `0 4 * * *`.
 
-There is no VPS control plane, persistent server inventory, account-assignment store, or real log connection yet. Typed placeholder records—including fictitious account assignments—live in `src/app/lib/hosting/servers.ts` so the routes and interface can be developed without implying production connectivity. Replace that repository and the local control simulation when the infrastructure contract is ready.
+The public directory and placeholder assigned-server records do not have a production control plane yet. Typed placeholder records—including fictitious account assignments—live in `src/app/lib/hosting/servers.ts` so those routes can be developed without implying production connectivity. Replace that repository and the local simulation when the infrastructure contract is ready.
 
-The design and replacement seams are documented in `docs/server-hosting-design.md`.
+A dormant IONOS adapter is retained, but its inventory panel and API calls are disabled while alternative hosting options are evaluated. The create-server Server Action rejects requests before contacting IONOS. `IONOS_MANAGEMENT_ENABLED=true` restores inventory management; billable creation additionally requires `IONOS_SERVER_CREATION_ENABLED=true`.
+
+The placeholder design is documented in `docs/server-hosting-design.md`.
+
+### Admin live server console
+
+Admins also see the separately hosted live Bannerlord server at `15.204.120.17` on `/servers`. It is not an IONOS resource. The server card and dedicated console page provide protected Start, Stop, Restart, and Update operations; the console page also streams the allowlisted Docker container stdout/stderr and sends line commands to stdin.
+
+Update pulls the configured image, treats an unchanged digest as a no-op, and otherwise recreates only the allowlisted game container after validating its deployment specification. The old container is retained until the replacement passes the configured readiness marker; failed readiness triggers verified automatic rollback.
+
+The browser authenticates over WSS to `services/console-gateway`, which validates the current Supabase Admin session and bridges to a persistent outbound WSS connection from `services/bannerlord-node-agent` on the VPS. Node credentials remain server-only. Deployment and security boundaries are documented in `docs/live-server-console-design.md`.
 
 ## Environment Variables
 
@@ -125,6 +135,16 @@ Server-only Supabase secret key used exclusively by protected admin actions to l
 ### `SUPABASE_ADMIN_EMAILS`
 
 Comma-separated bootstrap administrator emails. These users always have admin access and cannot be demoted through the member administration page.
+
+### IONOS management
+
+`IONOS_MANAGEMENT_ENABLED` controls whether the dormant IONOS inventory is loaded and displayed. `IONOS_SERVER_CREATION_ENABLED` separately enables billable creation and has no effect unless management is enabled. Both default to disabled.
+
+`IONOS_TOKEN_ID` and `IONOS_CLOUD_API_TOKEN` are server-only provider credentials. `IONOS_LOCATION` and `IONOS_IMAGE_ALIAS` configure provisioning defaults when management and creation are explicitly enabled.
+
+### `CONSOLE_GATEWAY_URL`
+
+Server-only WSS browser endpoint for the external live console, including `/v1/browser`. Production values must use `wss://`; only localhost development may use `ws://`. Node-agent credentials are configured separately under `services/` and must never use a `NEXT_PUBLIC_` variable.
 
 ### `YOUTUBE_API_KEY`
 
