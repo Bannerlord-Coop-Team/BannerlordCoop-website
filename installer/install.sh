@@ -30,7 +30,7 @@ printf 'BannerlordCoop Nightly Installer\n'
 printf 'Installs or updates the Coop client, Windows dedicated server, or both.\n'
 printf '\n'
 
-for required in curl bash; do
+for required in curl bash tr; do
     command -v "$required" >/dev/null 2>&1 || {
         printf 'Required command not found: %s\n' "$required"
         pause_on_failure
@@ -54,11 +54,14 @@ validate_installer() {
 
 download_installer() {
     local url=$1
-    rm -f "$TEMP_INSTALLER"
+    local normalized="${TEMP_INSTALLER}.lf"
+    rm -f "$TEMP_INSTALLER" "$normalized"
     curl -fsSL --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 120 \
         --retry 2 --retry-delay 1 \
-        -o "$TEMP_INSTALLER" "$url" \
-        && validate_installer
+        -o "$TEMP_INSTALLER" "$url" || return 1
+    tr -d '\r' < "$TEMP_INSTALLER" > "$normalized"
+    mv "$normalized" "$TEMP_INSTALLER"
+    validate_installer
 }
 
 printf 'Downloading the latest installer...\n'
