@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Keep shell scripts LF so Windows deploys do not break Linux shebangs.
+*.sh text eol=lf
