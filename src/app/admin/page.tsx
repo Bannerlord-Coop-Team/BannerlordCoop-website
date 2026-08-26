@@ -7,7 +7,7 @@ import {
     listSupabaseUsers,
 } from "@/app/lib/supabase/users";
 import type { User } from "@supabase/supabase-js";
-import { ArrowLeft, Search, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, CloudCog, Search, ShieldCheck, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -16,6 +16,8 @@ export const metadata: Metadata = {
     title: "Member Administration | Bannerlord Coop",
     description: "Manage Bannerlord Coop member roles.",
 };
+
+export const dynamic = "force-dynamic";
 
 type AdminPageProps = {
     searchParams: Promise<{
@@ -115,10 +117,13 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         <ArrowLeft aria-hidden="true" className="size-4" />
                         Back to site
                     </Link>
-                    <div className="flex items-center gap-2 text-gold">
-                        <ShieldCheck aria-hidden="true" className="size-5" />
-                        <span className="font-label text-xs font-semibold uppercase tracking-[0.18em]">
-                            Admin access
+                    <div className="flex items-center gap-2">
+                        <Link href="/admin/control-plane" className="inline-flex items-center gap-2 border border-white/15 px-3 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted transition-colors hover:border-gold/40 hover:text-gold">
+                            <CloudCog aria-hidden="true" className="size-4" /> Control Plane
+                        </Link>
+                        <span className="inline-flex items-center gap-2 text-gold">
+                            <ShieldCheck aria-hidden="true" className="size-5" />
+                            <span className="font-label text-xs font-semibold uppercase tracking-[0.18em]">Admin access</span>
                         </span>
                     </div>
                 </div>

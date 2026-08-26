@@ -107,6 +107,10 @@ To enable it:
 
 Bootstrap administrators always retain admin access, preventing an accidental total lockout. Assigned roles take effect after the user's Auth session refreshes or they sign in again.
 
+### Control Plane administration
+
+The protected `/admin/control-plane` page is the administrative surface for managed hosting. It reads fleet/server/job/release/audit state and submits the complete supported administrator operation set through the Oracle control-plane web adapter. The website does not query the private control-plane schema or talk directly to OVH, runners, containers, or object storage. Configure the adapter's HTTPS origin with `CONTROL_PLANE_ADMIN_URL`; see `docs/control-plane-admin.md` and the control-plane repository's `docs/managed-hosting/web-admin.md`.
+
 ### Server hosting preview
 
 The public `/servers` page provides the server directory, while server management remains role-protected:
@@ -148,6 +152,10 @@ Server-only Supabase secret key used by protected member-role and live-server as
 ### `SUPABASE_ADMIN_EMAILS`
 
 Comma-separated bootstrap administrator emails. These users always have admin access and cannot be demoted through the member administration page.
+
+### `CONTROL_PLANE_ADMIN_URL`
+
+Server-only HTTPS origin of the Oracle control-plane web-admin adapter. The website appends the fixed `/v1/admin/control-plane` route and forwards only the current Supabase administrator access token. Do not include credentials, query parameters, or fragments.
 
 ### IONOS management
 
