@@ -1,0 +1,18 @@
+project_id = "BannerlordCoop-website"
+
+[api]
+enabled = true
+# The nightly gateway connects directly through Hyperdrive. Keep its private
+# schema out of the generated Supabase Data API.
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+major_version = 17
+
+[db.migrations]
+enabled = true
+
+[db.seed]
+enabled = false

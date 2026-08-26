@@ -21,10 +21,16 @@
   ],
   "d1_databases": [
     {
-      "binding": "DB",
+      "binding": "LEGACY_DB",
       "database_name": "bannerlordcoop-nightly-access",
       "database_id": "8777c5e1-69a9-42ad-a136-78f21bc43fa3",
       "migrations_dir": "migrations"
+    }
+  ],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "0ae7d7f7e45a4261b380e01b3ed9b225"
     }
   ]
 }

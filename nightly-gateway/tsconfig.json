@@ -13,6 +13,7 @@
     "worker-configuration.d.ts",
     "secrets.d.ts",
     "src/index.ts",
-    "src/core.ts"
+    "src/core.ts",
+    "src/database.ts"
   ]
 }

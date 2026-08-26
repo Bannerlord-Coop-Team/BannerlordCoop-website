@@ -35,40 +35,51 @@ packaging.
 
 ## Required production setup
 
-1. Create the D1 database named `bannerlordcoop-nightly-access`, replace its
-   placeholder ID and the Discord application ID in `wrangler.jsonc`, then run
-   the migration.
-2. Register exactly
+1. Apply `supabase/migrations/202608260004_create_nightly_gateway_schema.sql`
+   to the shared Supabase project. It creates the private `nightly_gateway`
+   schema and the non-login `nightly_gateway_runtime` role. Create a separate
+   login named `nightly_gateway_worker`, grant it that runtime role, and use it
+   only for this gateway.
+2. Create a cache-disabled Cloudflare Hyperdrive configuration using that
+   login and the Supabase PostgreSQL connection. Replace the all-zero
+   Hyperdrive ID in `wrangler.jsonc` before a real deployment. The Worker never
+   receives a Supabase service-role key or a general database owner credential.
+3. Keep the existing D1 binding during the migration window only. With no
+   `DATABASE_BACKEND` secret, the bridge release continues using D1. Follow
+   `SUPABASE_CUTOVER.md` to lock writes, import one consistent snapshot, switch
+   to PostgreSQL, verify, and unlock. Remove the D1 binding after the rollback
+   window closes.
+4. Register exactly
    `https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/oauth/callback`
    as a Discord OAuth2
    redirect and enable the `identify guilds.members.read` scopes.
-3. Set `DISCORD_CLIENT_SECRET` with `wrangler secret put`.
-4. Set `DISCORD_BOT_TOKEN` to Bot_UP's existing Discord bot token with
+5. Set `DISCORD_CLIENT_SECRET` with `wrangler secret put`.
+6. Set `DISCORD_BOT_TOKEN` to Bot_UP's existing Discord bot token with
    `wrangler secret put`. That bot is already in the Bannerlord Coop guild and
    can look up one member's current roles without Server Members Intent. Do not
    create or invite a second bot for this. The installer OAuth app stays
    separate; only the role check uses Bot_UP.
-5. Generate 32 random bytes, encode them as unpadded base64url, and set them as
+7. Generate 32 random bytes, encode them as unpadded base64url, and set them as
    `TOKEN_ENCRYPTION_KEY` with `wrangler secret put`.
-6. Optionally set `PIN_MINT_SECRET` with `wrangler secret put` to the same
+8. Optionally set `PIN_MINT_SECRET` with `wrangler secret put` to the same
    value as Bot_UP's `NIGHTLY_GATEWAY_PIN_SECRET` (at least 32 characters).
    Nightly Discord OAuth and `/v1/manifests/client` keep working when this
    secret is absent. When it is set, `/create-build` can mint a one-time
    installer pin. Apply D1 migration `0002_installer_pins.sql`, and add a
    one-day `pins/` lifecycle rule on `bannerlordcoop-patron-nightlies`. Do not
    require this secret at Worker start.
-7. Create and bind a private R2 bucket named
+9. Create and bind a private R2 bucket named
    `bannerlordcoop-patron-nightlies`. Do not enable its `r2.dev` URL or attach a
    public custom domain. The Worker is exposed through the existing
    `garrett-luskey.workers.dev` account subdomain, so Squarespace DNS is not
    involved.
-8. Keep `/create-build` output in the separate public
+10. Keep `/create-build` output in the separate public
    `bannerlordcoop-nightly-releases` bucket. Its copyable links remain valid
    until Bot_UP's existing 24-hour expiry cleanup; never disable public access
    on that bucket as part of the Patron-nightly rollout.
-9. Migrate Bot_UP/Managed Hosting to scoped R2 S3 reads from the private Patron
+11. Migrate Bot_UP/Managed Hosting to scoped R2 S3 reads from the private Patron
    bucket. Machine-to-machine hosting downloads do not use Discord OAuth.
-10. Deploy the updated client, dedicated-server, and website publishers and
+12. Deploy the updated client, dedicated-server, and website publishers and
    verify a live direct eligible-member install plus a sponsored install.
 
 ## Verification
@@ -84,5 +95,6 @@ npm test
 you want to refresh the generated types for editor use.
 
 The dry run is intentionally non-deploying. Deployment also requires the real
-D1 ID, Discord application ID, secrets, private Patron bucket, and the Garrett
-Cloudflare account configured in `wrangler.jsonc`.
+Hyperdrive ID, Discord application ID, secrets, private Patron bucket, and the
+Garrett Cloudflare account configured in `wrangler.jsonc`. D1 remains bound
+only for the controlled cutover and short rollback window.

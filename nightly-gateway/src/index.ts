@@ -24,6 +24,7 @@ import {
     rewriteManifestArtifactUrls,
     verifySponsorFormToken,
 } from "./core";
+import { databaseForRequest } from "./database";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
@@ -58,7 +59,8 @@ type DiscordMember = { roles: string[]; user?: DiscordUser };
 export default {
     async fetch(request: Request, env: Env): Promise<Response> {
         try {
-            return await route(request, env);
+            const database = await databaseForRequest(env);
+            return await route(request, { ...env, DB: database });
         } catch (error) {
             console.error(JSON.stringify({
                 event: "nightly_gateway_request_failed",
@@ -79,6 +81,15 @@ export default {
 async function route(request: Request, env: Env): Promise<Response> {
     assertConfiguration(env);
     const url = new URL(request.url);
+    if (env.MIGRATION_MODE !== undefined && env.MIGRATION_MODE !== "locked") {
+        throw new Error("gateway_migration_mode_invalid");
+    }
+    if (env.MIGRATION_MODE === "locked") {
+        if (request.method === "GET" && url.pathname === "/health") {
+            return json({ ok: false, maintenance: true }, 503);
+        }
+        throw new GatewayError(503, "migration_in_progress");
+    }
     if (request.method === "GET" && url.pathname === "/") {
         return html(nightlyAccessPage());
     }
@@ -1113,6 +1124,9 @@ function prefersHtmlError(request: Request): boolean {
 }
 
 function gatewayErrorMessage(code: string): string {
+    if (code === "migration_in_progress") {
+        return "Nightly access is briefly paused while account data is moved. Try again in a few minutes.";
+    }
     if (code === "supporter_role_required") {
         return "That sponsor no longer has a qualifying Staff, Tester, Patreon, Boosty, or Afdian role.";
     }

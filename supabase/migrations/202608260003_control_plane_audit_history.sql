@@ -1,0 +1,2 @@
+-- Applied migration owned by BannerlordCoop.ControlPlane.
+-- Retained only as a shared Supabase migration-history marker.

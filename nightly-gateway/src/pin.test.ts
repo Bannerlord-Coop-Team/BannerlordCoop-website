@@ -356,3 +356,15 @@ test("pin mint rejects a missing or wrong shared secret", async () => {
     assert.equal(unavailable.status, 503);
     assert.deepEqual(await unavailable.json(), { error: "pin_mint_unavailable" });
 });
+
+test("migration mode fails closed before any gateway state can change", async () => {
+    const { env } = pinEnvironment();
+    const locked = { ...env, MIGRATION_MODE: "locked" as const };
+    const health = await fetchGateway(new Request(`${gateway}/health`), locked);
+    assert.equal(health.status, 503);
+    assert.deepEqual(await health.json(), { ok: false, maintenance: true });
+
+    const create = await fetchGateway(new Request(`${gateway}/v1/device/sessions`, { method: "POST" }), locked);
+    assert.equal(create.status, 503);
+    assert.deepEqual(await create.json(), { error: "migration_in_progress" });
+});

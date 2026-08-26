@@ -1,0 +1,2 @@
+-- Applied website migration that predates this repository snapshot.
+-- Retained as a shared Supabase migration-history marker.
