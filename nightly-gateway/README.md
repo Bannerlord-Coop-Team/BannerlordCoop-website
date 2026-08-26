@@ -45,7 +45,9 @@ packaging.
    Hyperdrive ID in `wrangler.jsonc` before a real deployment. The Worker never
    receives a Supabase service-role key or a general database owner credential.
 3. Keep the existing D1 binding during the migration window only. With no
-   `DATABASE_BACKEND` secret, the bridge release continues using D1. Follow
+   `DATABASE_BACKEND` secret, the post-cutover release uses PostgreSQL. Select
+   `legacy-d1` explicitly before deploying a bridge release to an unmigrated
+   environment. Follow
    `SUPABASE_CUTOVER.md` to lock writes, import one consistent snapshot, switch
    to PostgreSQL, verify, and unlock. Remove the D1 binding after the rollback
    window closes.

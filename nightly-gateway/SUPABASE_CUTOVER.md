@@ -20,7 +20,9 @@ the same time. R2 release objects do not move.
    Supabase database with `nightly_gateway_worker`. Put its real ID in
    `wrangler.jsonc`.
 4. Deploy this bridge release with both `LEGACY_DB` and `HYPERDRIVE` bound.
-   Do not set `DATABASE_BACKEND` yet: absence deliberately selects D1.
+   Before deploying it to an unmigrated environment, explicitly set
+   `DATABASE_BACKEND=legacy-d1`. Absence deliberately selects PostgreSQL and
+   fails closed if Hyperdrive is unavailable.
 5. Confirm a normal eligible-user gateway flow still works on D1.
 
 ## Lock, copy, and switch

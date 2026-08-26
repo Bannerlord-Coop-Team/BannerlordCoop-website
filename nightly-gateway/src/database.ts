@@ -46,11 +46,13 @@ type DatabaseEnvironment = {
 
 export async function databaseForRequest(env: DatabaseEnvironment): Promise<GatewayDatabase> {
     if (isGatewayDatabase(env.DB)) return env.DB;
-    if (env.DATABASE_BACKEND === undefined || env.DATABASE_BACKEND === "legacy-d1") {
+    if (env.DATABASE_BACKEND === "legacy-d1") {
         if (!isGatewayDatabase(env.LEGACY_DB)) throw new Error("gateway_legacy_database_configuration_invalid");
         return env.LEGACY_DB;
     }
-    if (env.DATABASE_BACKEND !== "postgres") throw new Error("gateway_database_backend_invalid");
+    if (env.DATABASE_BACKEND !== undefined && env.DATABASE_BACKEND !== "postgres") {
+        throw new Error("gateway_database_backend_invalid");
+    }
     const connectionString = env.HYPERDRIVE?.connectionString;
     if (typeof connectionString !== "string" || connectionString.length < 16 || connectionString.length > 8_192) {
         throw new Error("gateway_database_configuration_invalid");

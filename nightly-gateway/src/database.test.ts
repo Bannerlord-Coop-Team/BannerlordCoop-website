@@ -29,13 +29,19 @@ test("gateway SQL rejects parameter-count drift", () => {
     );
 });
 
-test("the bridge defaults to the legacy D1 binding until cutover", async () => {
+test("the bridge uses legacy D1 only when it is explicitly selected", async () => {
     const legacy = {
         prepare() { throw new Error("not used"); },
         async batch() { return []; },
     };
-    assert.equal(await databaseForRequest({ LEGACY_DB: legacy }), legacy);
     assert.equal(await databaseForRequest({ LEGACY_DB: legacy, DATABASE_BACKEND: "legacy-d1" }), legacy);
+});
+
+test("the post-cutover default fails closed without Hyperdrive", async () => {
+    await assert.rejects(
+        databaseForRequest({}),
+        /gateway_database_configuration_invalid/,
+    );
 });
 
 test("unknown database backends fail closed", async () => {
