@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut } from "@/app/auth/actions";
+import { DownloadLink } from "@/app/components/layout/DownloadLink";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -154,13 +155,12 @@ export function MobileNavigation({
                             >
                                 Discord
                             </a>
-                            <a
-                                href="#download"
-                                onClick={closeMenu}
+                            <DownloadLink
+                                onNavigate={closeMenu}
                                 className="inline-flex min-h-12 items-center justify-center rounded-sm border border-crimson bg-crimson font-label text-sm font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover"
                             >
                                 Download
-                            </a>
+                            </DownloadLink>
                             {isAuthenticated ? (
                                 <form action={signOut} onSubmit={closeMenu}>
                                     <button
