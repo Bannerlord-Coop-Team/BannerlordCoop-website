@@ -9,6 +9,7 @@ import type {
     AuditEvent,
     Backup,
     GlobalControls,
+    HostingAdminVpsHost,
     HostingJob,
     HostingPage,
     ManagedServer,
@@ -21,6 +22,7 @@ import {
     Activity,
     ArrowLeft,
     BriefcaseBusiness,
+    Cloud,
     CloudCog,
     History,
     ListChecks,
@@ -39,7 +41,7 @@ export const metadata: Metadata = {
     description: "Operate the Bannerlord Coop managed-hosting control plane.",
 };
 
-type View = "overview" | "servers" | "server" | "jobs" | "releases" | "audit" | "operations";
+type View = "overview" | "vps" | "servers" | "server" | "jobs" | "releases" | "audit" | "operations";
 type PageProps = {
     searchParams: Promise<{
         view?: string | string[];
@@ -114,6 +116,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
                     </div>
                 )}
                 {!error && view === "overview" && <OverviewView overview={data as Overview} />}
+                {!error && view === "vps" && <VpsView hosts={data as HostingAdminVpsHost[]} />}
                 {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} />}
                 {!error && view === "server" && <ServerView result={data as ServerDashboardResult} />}
                 {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} />}
@@ -130,6 +133,8 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         case "overview":
         case "operations":
             return requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" });
+        case "vps":
+            return requestControlPlaneAdmin<HostingAdminVpsHost[]>({ accessToken: token, operation: "vps-hosts" });
         case "servers":
             return requestControlPlaneAdmin<HostingPage<ManagedServer>>({
                 accessToken: token,
@@ -164,6 +169,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
 function ViewTabs({ active }: { active: View }) {
     const tabs: Array<{ view: View; label: string; icon: typeof Activity }> = [
         { view: "overview", label: "Overview", icon: Activity },
+        { view: "vps", label: "VPS", icon: Cloud },
         { view: "servers", label: "Servers", icon: ServerCog },
         { view: "jobs", label: "Jobs", icon: BriefcaseBusiness },
         { view: "releases", label: "Releases", icon: PackageCheck },
@@ -183,6 +189,46 @@ function ViewTabs({ active }: { active: View }) {
                 </Link>
             ))}
         </nav>
+    );
+}
+
+function VpsView({ hosts }: { hosts: HostingAdminVpsHost[] }) {
+    const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
+    return (
+        <section className="mt-8">
+            <SectionHeading eyebrow="OVHcloud inventory" title="VPS hosts" count={hosts.length} />
+            <p className="mt-3 text-xs text-foreground-muted">
+                Capacity combines registered control-plane slots with live read-only OVH account billing data.
+                {checkedAt ? ` Provider data checked ${formatDate(checkedAt)}.` : ""}
+            </p>
+            <div className="mt-6 overflow-x-auto border border-white/10 bg-surface">
+                <table className="w-full min-w-250 text-left text-sm">
+                    <thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted">
+                        <tr>
+                            <th className="p-4">Name</th>
+                            <th className="p-4">Region</th>
+                            <th className="p-4">Running Servers</th>
+                            <th className="p-4">Available Servers</th>
+                            <th className="p-4">Cost</th>
+                            <th className="p-4">Expiration Date</th>
+                            <th className="p-4">Auto-Renew</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">{hosts.map((host) => (
+                        <tr key={host.name} className="hover:bg-white/[0.025]">
+                            <td className="p-4 font-mono text-xs text-foreground">{host.name}</td>
+                            <td className="p-4 text-xs text-foreground-muted">{host.region}</td>
+                            <td className="p-4 font-display text-xl text-foreground">{host.runningServers}</td>
+                            <td className="p-4 font-display text-xl text-foreground">{host.availableServers}</td>
+                            <td className="p-4 text-xs text-foreground-muted">{formatVpsCost(host.cost)}</td>
+                            <td className="p-4 text-xs text-foreground-muted">{host.expirationDate ? formatDate(host.expirationDate) : "Unknown"}</td>
+                            <td className="p-4"><State value={host.autoRenew === true ? "enabled" : host.autoRenew === false ? "disabled" : "unknown"} /></td>
+                        </tr>
+                    ))}</tbody>
+                </table>
+                {hosts.length === 0 && <Empty>No registered OVH VPS hosts.</Empty>}
+            </div>
+        </section>
     );
 }
 
@@ -342,8 +388,18 @@ function Empty({ children }: { children: React.ReactNode }) { return <div classN
 function controlRows(controls: GlobalControls): Array<[string, boolean]> { return [["Provisioning", controls.provisioningPaused], ["Role deletions", controls.roleDeletionsPaused], ["Maintenance", controls.maintenancePaused], ["Automatic backups", controls.automaticBackupsPaused], ["Nightly rollouts", controls.nightlyRolloutsPaused]]; }
 function enumOptions(values: readonly string[]): AdminActionOption[] { return values.map((value) => ({ label: value, value })); }
 function first(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
-function parseView(value: string | undefined): View { return ["overview", "servers", "server", "jobs", "releases", "audit", "operations"].includes(value ?? "") ? value as View : "overview"; }
+function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations"].includes(value ?? "") ? value as View : "overview"; }
 function formatDate(value: string | null) { return value ? new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "Never"; }
+function formatVpsCost(cost: HostingAdminVpsHost["cost"]) {
+    if (!cost) return "Unknown";
+    const amount = new Intl.NumberFormat("en", { style: "currency", currency: cost.currencyCode }).format(cost.priceInMicrocents / 100_000_000);
+    const cadence = cost.interval === 1 && cost.duration === "P1M"
+        ? "month"
+        : cost.interval === 1 && cost.duration === "P1Y"
+            ? "year"
+            : `${cost.interval} × ${cost.duration}`;
+    return `${amount} / ${cadence}`;
+}
 function formatNullable(value: number | null) { return value === null ? "Unknown" : String(value); }
 function formatBytes(value: number) { return value < 1_048_576 ? `${Math.round(value / 1024)} KiB` : `${(value / 1_048_576).toFixed(1)} MiB`; }
 function shortId(value: string | null) { return value ? (value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value) : "—"; }

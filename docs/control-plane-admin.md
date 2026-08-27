@@ -5,6 +5,7 @@
 The page provides:
 
 - fleet health, provider capacity, reconciliation, and global controls;
+- registered OVH VPS capacity plus live read-only cost, expiration, and auto-renew metadata;
 - searchable servers with desired/observed state, runtime, release, save, backup, and audit detail;
 - durable job state and retry/cancellation controls;
 - Stable and Nightly release catalogs and validation/revocation actions;

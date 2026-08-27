@@ -79,6 +79,22 @@ export type AuditEvent = {
 
 export type HostingPage<T> = { items: T[]; nextCursor: string | null };
 
+export type HostingAdminVpsHost = {
+    name: string;
+    region: string;
+    runningServers: number;
+    availableServers: number;
+    cost: {
+        priceInMicrocents: number;
+        currencyCode: string;
+        duration: string;
+        interval: number;
+    } | null;
+    expirationDate: string | null;
+    autoRenew: boolean | null;
+    providerCheckedAt: string | null;
+};
+
 export type FleetSummary = {
     entitledUsers: number;
     totalEffectiveQuota: number;
