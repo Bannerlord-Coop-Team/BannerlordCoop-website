@@ -1,6 +1,6 @@
 # Control Plane administration page
 
-`/admin/control-plane` is the website presentation layer for managed-hosting administration. Supabase `Admin` access protects both the page and the same-origin API route. The API route forwards the current access token to the Oracle web-admin adapter, which independently revalidates it and uses the control plane's typed Unix-socket contract.
+`/admin/control-plane` is the website presentation layer for managed-hosting administration. Supabase `Admin` access protects the page, and the browser sends typed requests to the `control-plane-admin` Supabase Edge Function. The function accepts only configured website origins, reauthenticates the current access token, requires the protected `Admin` role and a verified Discord identity, then forwards the unchanged request envelope to the Oracle web-admin adapter. The adapter independently revalidates the token and uses the control plane's typed Unix-socket contract.
 
 The page provides:
 
@@ -15,10 +15,15 @@ The page provides:
 
 The website does not query the private `control_plane` schema, call OVH, connect to runner agents, or construct container operations. Browser request UUIDs become the control-plane correlation and idempotency identity. Server and job mutations carry the current `updatedAt` value selected from the page, so stale forms fail rather than overwrite newer state.
 
-Set the server-only deployment variable:
+Deploy the Edge Function from the repository root:
 
-```env
-CONTROL_PLANE_ADMIN_URL=https://control-plane.example.com
+```sh
+npx supabase secrets set --project-ref <project-ref> \
+  CONTROL_PLANE_ADMIN_URL=https://control-plane.example.com \
+  CONTROL_PLANE_WEB_ORIGINS=https://bannerlordcoop.com,https://bannerlordcoop.netlify.app
+npx supabase functions deploy control-plane-admin --project-ref <project-ref>
 ```
 
-The URL is an HTTPS origin; the client appends `/v1/admin/control-plane`. It must never contain credentials, query parameters, or fragments. Local development may use `http://127.0.0.1:<port>` outside production.
+`CONTROL_PLANE_ADMIN_URL` is the Oracle adapter's HTTPS origin; the function appends the fixed `/v1/admin/control-plane` path. `CONTROL_PLANE_WEB_ORIGINS` is a comma-separated exact allowlist of HTTPS browser origins. Neither value may contain credentials, query parameters, fragments, or path prefixes. JWT verification remains enabled in `supabase/config.toml`.
+
+The website itself needs only the existing public Supabase URL and publishable key. It does not need an Oracle URL or control-plane credential in Netlify.

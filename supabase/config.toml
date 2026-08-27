@@ -16,3 +16,6 @@ enabled = true
 
 [db.seed]
 enabled = false
+
+[functions.control-plane-admin]
+verify_jwt = true

@@ -1,6 +1,8 @@
 "use client";
 
 import { LoaderCircle, Play, TriangleAlert } from "lucide-react";
+import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
+import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -50,25 +52,15 @@ export function ControlPlaneActionCard({
         try {
             const input = buildInput(fields, formData);
             normalizeOperationInput(operation, input);
-            const response = await fetch("/api/admin/control-plane", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({
-                    version: 1,
-                    requestId,
-                    operation,
-                    ...(fields.length === 0 ? {} : { input }),
-                }),
+            const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+            if (!session?.access_token) throw new Error("Authentication is required.");
+            const response = await requestControlPlaneAdmin({
+                accessToken: session.access_token,
+                requestId,
+                operation,
+                ...(fields.length === 0 ? {} : { input }),
             });
-            const envelope = await response.json() as {
-                ok?: boolean;
-                result?: unknown;
-                error?: { message?: string };
-            };
-            if (!response.ok || envelope.ok !== true) {
-                throw new Error(envelope.error?.message ?? "The operation failed.");
-            }
-            setResult({ ok: true, message: summarizeResult(envelope.result) });
+            setResult({ ok: true, message: summarizeResult(response) });
             router.refresh();
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : "The operation failed." });

@@ -1,7 +1,3 @@
-import "server-only";
-
-import { randomUUID } from "node:crypto";
-
 const MAXIMUM_RESPONSE_BYTES = 8 * 1_048_576;
 
 export class ControlPlaneAdminError extends Error {
@@ -30,8 +26,8 @@ export async function requestControlPlaneAdmin<T>(options: {
     input?: unknown;
     requestId?: string;
 }): Promise<T> {
-    const endpoint = controlPlaneAdminEndpoint();
-    const requestId = options.requestId ?? randomUUID();
+    const { endpoint, publishableKey } = controlPlaneAdminEndpoint();
+    const requestId = options.requestId ?? crypto.randomUUID();
     const body = JSON.stringify({
         version: 1,
         requestId,
@@ -43,6 +39,7 @@ export async function requestControlPlaneAdmin<T>(options: {
         response = await fetch(endpoint, {
             method: "POST",
             headers: {
+                apikey: publishableKey,
                 authorization: `Bearer ${options.accessToken}`,
                 "content-type": "application/json",
             },
@@ -82,20 +79,24 @@ export async function requestControlPlaneAdmin<T>(options: {
 }
 
 function controlPlaneAdminEndpoint() {
-    const raw = process.env.CONTROL_PLANE_ADMIN_URL?.trim();
-    if (!raw) throw new ControlPlaneAdminError(
+    const raw = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+    const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
+    if (!raw || !publishableKey) throw new ControlPlaneAdminError(
         "control_plane_not_configured",
-        "CONTROL_PLANE_ADMIN_URL is not configured.",
+        "Supabase is not configured.",
     );
     const url = new URL(raw);
-    if (url.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && url.hostname === "127.0.0.1")) {
-        throw new ControlPlaneAdminError("control_plane_not_configured", "The control plane URL must use HTTPS.");
+    if (url.protocol !== "https:" || url.pathname !== "/") {
+        throw new ControlPlaneAdminError("control_plane_not_configured", "The Supabase URL must be an HTTPS origin.");
     }
     if (url.username || url.password || url.search || url.hash) {
-        throw new ControlPlaneAdminError("control_plane_not_configured", "The control plane URL is invalid.");
+        throw new ControlPlaneAdminError("control_plane_not_configured", "The Supabase URL is invalid.");
     }
-    url.pathname = `${url.pathname.replace(/\/$/u, "")}/v1/admin/control-plane`;
-    return url;
+    if (publishableKey.length < 20 || publishableKey.length > 4_096) {
+        throw new ControlPlaneAdminError("control_plane_not_configured", "The Supabase key is invalid.");
+    }
+    url.pathname = "/functions/v1/control-plane-admin";
+    return { endpoint: url, publishableKey };
 }
 
 function isEnvelope(value: unknown, requestId: string): value is ControlPlaneAdminEnvelope<unknown> {
