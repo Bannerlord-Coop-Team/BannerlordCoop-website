@@ -71,7 +71,7 @@ function Get-HttpStatusCode {
     }
     $text = ''
     try { $text = [string]$ErrorRecord.Exception.Message } catch { }
-    if ($text -match '\((\d{3})\)') {
+    if ($text -match ':\s*(\d{3})\s+\(' -or $text -match '\((\d{3})\)') {
         $parsed = [int]$Matches[1]
         if ($parsed -ge 100 -and $parsed -le 599) { return $parsed }
     }
@@ -1223,6 +1223,15 @@ function Select-ServerPath {
     }
 }
 
+function Get-UnpublishedNightlyMessage {
+    param([bool]$ClientOnly = $false)
+
+    if ($ClientOnly) {
+        return "Last night's supporter client nightly is not available yet. Nightlies usually finish after midnight Central and appear in Discord #nightly-releases. Wait for today's post, then run the installer again."
+    }
+    return "Last night's supporter client and dedicated-server nightly is not available yet. Nightlies usually finish after midnight Central and appear in Discord #nightly-releases. Wait for today's post, then run the installer again."
+}
+
 function Get-ReleaseManifest {
     param([bool]$ClientOnly = $false)
 
@@ -1234,10 +1243,7 @@ function Get-ReleaseManifest {
     } catch {
         $statusCode = Get-HttpStatusCode $_
         if ($statusCode -eq 404) {
-            if ($ClientOnly) {
-                throw 'No Patron client nightly has been published yet. Wait for the next completed nightly build, then run the installer again.'
-            }
-            throw 'No matched Patron client and dedicated-server nightly has been published yet. Wait for the next completed nightly build, then run the installer again.'
+            throw (Get-UnpublishedNightlyMessage $ClientOnly)
         }
         throw
     }
@@ -1515,7 +1521,13 @@ function Get-Archive {
     }
     try {
         $response = $http.GetAsync($Uri, [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
-        [void]$response.EnsureSuccessStatusCode()
+        if (-not $response.IsSuccessStatusCode) {
+            $statusCode = [int]$response.StatusCode
+            if ($statusCode -eq 404) {
+                throw (Get-UnpublishedNightlyMessage ($Label -eq 'client'))
+            }
+            throw "$Label download failed (HTTP $statusCode)."
+        }
         if ($response.Content.Headers.ContentLength -and
             $response.Content.Headers.ContentLength -ne $ExpectedBytes) {
             throw "$Label download size does not match the release manifest."
@@ -2052,7 +2064,7 @@ function Get-InstallationSupportLines {
     param([string]$FailureMessage = '')
 
     $lines = @()
-    if ($FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged|internal_error|HTTP 50') {
+    if ($FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged|internal_error|HTTP 50|not available yet|#nightly-releases') {
         $lines += 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.'
     }
     $lines += 'If you need help, copy this message and ask in the Bannerlord Coop Discord.'
