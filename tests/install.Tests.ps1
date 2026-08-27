@@ -199,12 +199,12 @@ function Invoke-RestMethod {
 }
 $rejectedMessage = $null
 try { Get-ReleaseManifest | Out-Null } catch { $rejectedMessage = $_.Exception.Message }
-if ($rejectedMessage -notmatch '^No matched Patron client and dedicated-server nightly has been published yet\.') {
+if ($rejectedMessage -notmatch "^Last night's supporter client and dedicated-server nightly is not available yet\.") {
     throw 'A missing combined nightly manifest did not produce the expected installer guidance.'
 }
 $rejectedMessage = $null
 try { Get-ReleaseManifest $true | Out-Null } catch { $rejectedMessage = $_.Exception.Message }
-if ($rejectedMessage -notmatch '^No Patron client nightly has been published yet\.') {
+if ($rejectedMessage -notmatch "^Last night's supporter client nightly is not available yet\.") {
     throw 'A missing client nightly manifest did not produce the expected installer guidance.'
 }
 
@@ -425,6 +425,11 @@ $diagnosedSupport = @(Get-InstallationSupportLines 'GoodbyeDPI is running and is
 if ($diagnosedSupport.Count -ne 1 -or
     $diagnosedSupport[0] -cne 'If you need help, copy this message and ask in the Bannerlord Coop Discord.') {
     throw 'A diagnosed authorization failure still repeated the generic DNS advice.'
+}
+$unpublishedSupport = @(Get-InstallationSupportLines (Get-UnpublishedNightlyMessage))
+if ($unpublishedSupport.Count -ne 1 -or
+    $unpublishedSupport[0] -cne 'If you need help, copy this message and ask in the Bannerlord Coop Discord.') {
+    throw 'An unpublished nightly still repeated the generic DNS advice.'
 }
 
 if ((Get-NightlyDpiToolName @('GoodbyeDPI', 'chrome')) -cne 'GoodbyeDPI') {
