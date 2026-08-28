@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+    auditActionExplanation,
     destructiveExplanation,
     jobActionExplanation,
     operationExplanation,
@@ -26,4 +27,10 @@ test("explains reconciliation and OVH assignment boundaries", () => {
 
 test("gives destructive cards a concrete warning", () => {
     assert.match(destructiveExplanation("suspend-server"), /blocks owner operations/iu);
+});
+
+test("explains exact and structured audit actions", () => {
+    assert.match(auditActionExplanation("hosting.admin.server_suspended"), /hold/iu);
+    assert.match(auditActionExplanation("hosting.job.stop.succeeded"), /durable job transition/iu);
+    assert.match(auditActionExplanation("hosting.provider.synthetic_observation"), /provider/iu);
 });
