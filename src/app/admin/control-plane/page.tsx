@@ -4,15 +4,18 @@ import {
     type AdminActionOption,
 } from "@/app/components/admin/ControlPlaneActionCard";
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
+import { JobFailureAcknowledgeButton } from "@/app/components/admin/JobFailureAcknowledgeButton";
+import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
 import { hasAdminAccess } from "@/app/lib/auth/access";
 import { ControlPlaneAdminError, requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import {
+    auditActionExplanation,
     destructiveExplanation,
     jobActionExplanation,
     operationExplanation,
     stateExplanation,
 } from "@/app/lib/control-plane/explanations";
-import { installableBuilds } from "@/app/lib/control-plane/presentation";
+import { installableBuilds, overviewStatRowClass } from "@/app/lib/control-plane/presentation";
 import type {
     AuditEvent,
     Backup,
@@ -62,6 +65,7 @@ type PageProps = {
         view?: string | string[];
         q?: string | string[];
         serverId?: string | string[];
+        state?: string | string[];
     }>;
 };
 
@@ -78,6 +82,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
     const view = parseView(first(params.view));
     const query = (first(params.q) ?? "").trim().slice(0, 100);
     const serverId = (first(params.serverId) ?? "").trim();
+    const jobState = parseJobState(first(params.state));
     const token = sessionData.session.access_token;
 
     return (
@@ -115,7 +120,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
 
                 <ViewTabs active={view} />
                 <Suspense
-                    key={`${view}:${query}:${serverId}`}
+                    key={`${view}:${query}:${serverId}:${jobState ?? "all"}`}
                     fallback={<ControlPlaneViewSkeleton view={view} />}
                 >
                     <ControlPlaneViewContent
@@ -123,6 +128,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
                         view={view}
                         query={query}
                         serverId={serverId}
+                        jobState={jobState}
                     />
                 </Suspense>
             </div>
@@ -135,11 +141,13 @@ async function ControlPlaneViewContent({
     view,
     query,
     serverId,
+    jobState,
 }: {
     token: string;
     view: View;
     query: string;
     serverId: string;
+    jobState: "failed" | "active" | null;
 }) {
     let data: unknown = null;
     let discordUsers: DiscordUserSummary[] = [];
@@ -147,7 +155,7 @@ async function ControlPlaneViewContent({
     try {
         const needsDiscordUsers = view === "servers" || view === "server" || view === "operations";
         const [viewResult, usersResult] = await Promise.allSettled([
-            loadView(token, view, query, serverId),
+            loadView(token, view, query, serverId, jobState),
             needsDiscordUsers ? listDiscordUsers() : Promise.resolve({ users: [], truncated: false }),
         ]);
         if (viewResult.status === "rejected") throw viewResult.reason;
@@ -176,7 +184,7 @@ async function ControlPlaneViewContent({
             {!error && view === "vps" && <VpsView hosts={data as HostingAdminVpsHost[]} />}
             {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} discordUsers={discordUsers} />}
             {!error && view === "server" && <ServerView result={data as ServerDashboardResult} discordUsers={discordUsers} />}
-            {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} />}
+            {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} state={jobState} />}
             {!error && view === "releases" && <ReleasesView data={data as { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }} />}
             {!error && view === "audit" && <AuditView page={data as HostingPage<AuditEvent>} />}
             {!error && view === "operations" && <OperationsView overview={data as Overview} discordUsers={discordUsers} />}
@@ -184,7 +192,7 @@ async function ControlPlaneViewContent({
     );
 }
 
-async function loadView(token: string, view: View, query: string, serverId: string) {
+async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null) {
     switch (view) {
         case "overview":
         case "operations":
@@ -208,7 +216,11 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             return requestControlPlaneAdmin<HostingPage<HostingJob>>({
                 accessToken: token,
                 operation: "jobs",
-                input: { filter: {}, cursor: null, limit: 100 },
+                input: {
+                    filter: jobState === "failed" ? { state: "failed" } : jobState === "active" ? { activeOnly: true } : {},
+                    cursor: null,
+                    limit: 100,
+                },
             });
         case "releases": {
             const [stable, nightly] = await Promise.all([
@@ -258,8 +270,8 @@ function VpsView({ hosts }: { hosts: HostingAdminVpsHost[] }) {
                 {checkedAt && <> Provider data checked <LocalDateTime value={checkedAt} />.</>}
             </p>
             <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
-                <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> register an already-purchased OVH VPS. Registration adds empty slots only; it does not buy a VPS, create a user server, or start a container.</p>
-                <Link href="/admin/control-plane?view=operations#register-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Register VPS</Link>
+                <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased OVH VPS. The durable workflow verifies account ownership, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
+                <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
             </div>
             <div className="mt-6 overflow-x-auto border border-white/10 bg-surface">
                 <table className="w-full min-w-250 text-left text-sm">
@@ -273,6 +285,7 @@ function VpsView({ hosts }: { hosts: HostingAdminVpsHost[] }) {
                             <th className="p-4">Cost</th>
                             <th className="p-4">Expiration Date</th>
                             <th className="p-4">Auto-Renew</th>
+                            <th className="p-4">Runner</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">{hosts.map((host) => (
@@ -288,6 +301,7 @@ function VpsView({ hosts }: { hosts: HostingAdminVpsHost[] }) {
                             <td className="p-4 text-xs text-foreground-muted">{formatVpsCost(host.cost)}</td>
                             <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={host.expirationDate} empty="Unknown" /></td>
                             <td className="p-4"><State value={host.autoRenew === true ? "enabled" : host.autoRenew === false ? "disabled" : "unknown"} /></td>
+                            <td className="p-4"><RunnerOnboardingStatus onboarding={host.runnerOnboarding} /></td>
                         </tr>
                     ))}</tbody>
                 </table>
@@ -309,24 +323,30 @@ function OverviewView({ overview }: { overview: Overview }) {
         { label: "Unhealthy agents", value: fleet.agentUnhealthyOrUnknown, view: "servers", help: "Servers whose runner agent is unhealthy or lacks current trustworthy evidence." },
         { label: "Pending deletion", value: fleet.pendingDeletion, view: "servers", help: stateExplanation("deletion-pending") },
         { label: "Backup failures", value: fleet.backupFailures, view: "jobs", help: "Recent backup jobs that need administrator review." },
+        { label: "Failed jobs", value: fleet.observability.recentJobFailures, view: "jobs", state: "failed", help: "Failed jobs in the current observability window that have not been acknowledged by an administrator." },
     ] as const;
+    const statRows = chunk(stats, 4);
     return (
         <div className="mt-8 space-y-8">
-            <section className="grid gap-px border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
-                {stats.map((stat) => <Stat key={stat.label} {...stat} />)}
+            <section className="space-y-px border border-white/10 bg-white/10">
+                {statRows.map((row, rowIndex) => (
+                    <div key={rowIndex} className={`grid gap-px ${overviewStatRowClass(row.length)}`}>
+                        {row.map((stat) => <Stat key={stat.label} {...stat} />)}
+                    </div>
+                ))}
             </section>
             <section className="grid gap-6 lg:grid-cols-2">
-                <Panel title="Fleet capacity and reconciliation">
-                    <Definition label="Managed VPS" value={String(fleet.managedVpsCount)} />
-                    <Definition label="Managed Bannerlord server instances" value={String(fleet.usedQuota)} />
-                    <Definition label="Total slots" value={String(fleet.totalSlots)} />
-                    <Definition label="Available slots" value={String(fleet.availableSlots)} />
-                    <Definition label="Orphan candidates" value={String(fleet.provider.orphanCandidateCount)} />
-                    <Definition label="Last reconciled" value={<LocalDateTime value={fleet.lastReconciledAt} />} />
+                <Panel title="Fleet capacity and reconciliation" help="Physical VPS capacity, assigned game-server slots, and the latest comparison between desired state and provider/runner evidence.">
+                    <Definition label="Managed VPS" value={String(fleet.managedVpsCount)} help="VPS hosts whose managed runner onboarding completed successfully and whose slots are eligible for scheduling." />
+                    <Definition label="Managed Bannerlord server instances" value={String(fleet.usedQuota)} help="Slots currently assigned to Discord owners as managed Bannerlord servers." />
+                    <Definition label="Total slots" value={String(fleet.totalSlots)} help="Total supported game-server slots across enrolled hosts. Capacity is one slot per two vCPUs." />
+                    <Definition label="Available slots" value={String(fleet.availableSlots)} help="Enrolled slots that are not currently assigned to a managed server." />
+                    <Definition label="Orphan candidates" value={String(fleet.provider.orphanCandidateCount)} help="Provider resources that appear to belong to this fleet but do not currently match durable control-plane ownership." />
+                    <Definition label="Last reconciled" value={<LocalDateTime value={fleet.lastReconciledAt} />} help="When the latest complete desired-versus-observed fleet comparison finished." />
                 </Panel>
-                <Panel title="Global controls">
-                    {controlRows(controls).map(([label, paused]) => <Definition key={label} label={label} value={paused ? "Paused" : "Enabled"} tone={paused ? "warning" : "ok"} />)}
-                    <Definition label="Last reason" value={controls.reason ?? "No override recorded"} />
+                <Panel title="Global controls" help="Fleet-wide safety switches. Pausing one workflow does not stop unrelated running servers.">
+                    {controlRows(controls).map(({ label, paused, help }) => <Definition key={label} label={label} help={help} value={paused ? "Paused" : "Enabled"} tone={paused ? "warning" : "ok"} />)}
+                    <Definition label="Last reason" value={controls.reason ?? "No override recorded"} help="The administrator reason stored with the latest global-control change." />
                 </Panel>
             </section>
             <section>
@@ -354,7 +374,7 @@ function ServersView({ page, query, discordUsers }: { page: HostingPage<ManagedS
                             <td className="p-4"><Link className="font-semibold text-gold hover:underline" href={`/admin/control-plane?view=server&serverId=${server.serverId}`}>{server.displayName}</Link><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.serverId}</p></td>
                             <td className="p-4 text-xs text-foreground-muted"><p className="font-semibold text-foreground">{formatDiscordUsername(usernames.get(server.ownerDiscordUserId))}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.ownerDiscordUserId}</p></td>
                             <td className="p-4"><State value={server.operationState} /></td>
-                            <td className="p-4 text-xs text-foreground-muted">{server.observedVmState} / {server.observedGameState}</td>
+                            <td className="p-4"><RuntimeObservation server={server} /></td>
                             <td className="p-4 text-xs text-foreground-muted">{server.releaseChannel}<br />{shortId(server.installedBuildId)}</td>
                             <td className="p-4 text-xs text-foreground-muted">{server.provider}<br />{shortId(server.providerResourceId)}</td>
                             <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={server.updatedAt} /></td>
@@ -387,7 +407,14 @@ function ServerView({ result, discordUsers }: { result: ServerDashboardResult; d
     );
 }
 
-function JobsView({ page }: { page: HostingPage<HostingJob> }) { return <section className="mt-8"><SectionHeading eyebrow="Durable queue" title="Jobs" count={page.items.length} /><JobsTable jobs={page.items} /></section>; }
+function JobsView({ page, state }: { page: HostingPage<HostingJob>; state: "failed" | "active" | null }) {
+    const filters = [
+        { label: "All", href: "/admin/control-plane?view=jobs", active: state === null },
+        { label: "Active", href: "/admin/control-plane?view=jobs&state=active", active: state === "active" },
+        { label: "Failed", href: "/admin/control-plane?view=jobs&state=failed", active: state === "failed" },
+    ];
+    return <section className="mt-8"><div className="flex flex-wrap items-end justify-between gap-4"><SectionHeading eyebrow="Durable queue" title={state === "failed" ? "Failed jobs" : state === "active" ? "Active jobs" : "Jobs"} count={page.items.length} /><nav aria-label="Job filters" className="flex gap-2">{filters.map((filter) => <Link key={filter.label} href={filter.href} aria-current={filter.active ? "page" : undefined} className={`border px-3 py-2 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] ${filter.active ? "border-gold/40 bg-gold/10 text-gold" : "border-white/10 text-foreground-muted hover:border-white/25 hover:text-foreground"}`}>{filter.label}</Link>)}</nav></div>{state === "failed" && <p className="mt-3 max-w-3xl text-xs leading-5 text-foreground-muted">Silencing acknowledges only the exact failed attempt. It remains in durable job and audit history, but no longer contributes to the Overview failed-job alert. A later failure after retry is a new alert.</p>}<JobsTable jobs={page.items} allowFailureAcknowledgement={state === "failed"} /></section>;
+}
 function AuditView({ page }: { page: HostingPage<AuditEvent> }) { return <section className="mt-8"><SectionHeading eyebrow="Hash-chained history" title="Audit events" count={page.items.length} /><AuditTable events={page.items} /></section>; }
 
 function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> } }) {
@@ -410,12 +437,13 @@ function OperationsView({ overview, discordUsers }: { overview: Overview; discor
     const plainServerField: AdminActionField = { name: "serverId", label: "Server", kind: "select", required: true, options: serverPlainOptions };
     const compatibilityField: AdminActionField = { name: "allowCompatibilityOverride", label: "Override unknown save compatibility", kind: "checkbox", help: "Use only after reviewing the save and build. This permits an unknown compatibility result; it does not bypass a known incompatibility." };
     const cards: Array<{ group: string; operation: string; title: string; description: string; fields: AdminActionField[]; destructive?: boolean }> = [
-        { group: "Fleet", operation: "register-vps-host", title: "Register existing OVH VPS", description: "Add one already-purchased OVH VPS as empty cattle capacity. The control plane verifies that the service belongs to the configured OVH account and derives the reviewed image; it does not buy, renew, start, assign, or install a user server.", fields: [
+        { group: "Fleet", operation: "onboard-vps-host", title: "Onboard existing OVH VPS", description: "Turn one already-purchased OVH VPS into ready managed capacity. This durable workflow verifies the OVH service, pins its SSH identity, installs the reviewed rootless Podman runner, prepares every isolated slot, establishes private routes, enrolls mTLS identities, activates agents, and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.", fields: [
             { name: "serviceName", label: "OVH service name", required: true, placeholder: "vps-example.vps.ovh.us", help: "The exact OVH service name. It must already exist in the authenticated OVH account." },
             { name: "locationId", label: "Control-plane location ID", required: true, placeholder: "us-east-va", help: "The exact reviewed location ID configured for this control plane, not a display label." },
             { name: "friendlyRegion", label: "User-facing region", kind: "select", required: true, options: enumOptions(["germany", "united-kingdom", "spain", "united-states", "europe-automatic"]), help: "The region owners see when selecting placement." },
             { name: "vCpu", label: "vCPU count", kind: "number", required: true, minimum: 2, maximum: 64, help: "Capacity is calculated as floor(vCPU / 2): one Bannerlord slot per two vCPUs." },
             { name: "publicIpv4", label: "Public IPv4", required: true, placeholder: "15.204.120.17", help: "The VPS public IPv4 used by the reviewed runner-enrollment workflow. Private and reserved addresses are rejected." },
+            { name: "hostPublicKey", label: "SSH host public key", kind: "textarea", required: true, placeholder: "ssh-ed25519 AAAA…", help: "Paste the VPS's exact Ed25519 SSH host public key from the OVH console or another authenticated source. This is not a secret. The VPS must be Debian 12 and already authorize the control plane's existing operator SSH public key for either root or the default debian account with passwordless sudo; the workflow installs the remaining OS and runner prerequisites." },
             reasonField,
         ] },
         { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
@@ -460,26 +488,40 @@ function OperationsView({ overview, discordUsers }: { overview: Overview; discor
     return <div className="mt-8 space-y-12">{groups.map((group) => <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={cards.filter((card) => card.group === group).length} /><div className="grid auto-rows-fr gap-5 md:grid-cols-2 xl:grid-cols-3">{cards.filter((card) => card.group === group).map((card) => <ControlPlaneActionCard key={card.operation} {...card} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div></section>)}</div>;
 }
 
-function JobsTable({ jobs }: { jobs: HostingJob[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-230 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Action</th><th className="p-4">State</th><th className="p-4">Server</th><th className="p-4">Progress</th><th className="p-4">Attempts</th><th className="p-4">Updated</th></tr></thead><tbody className="divide-y divide-white/10">{jobs.map((job) => { const explanation = jobActionExplanation(job.action); return <tr key={job.jobId}><td className="p-4"><p className="cursor-help font-semibold text-foreground" title={explanation} aria-label={`${job.action}: ${explanation}`}>{job.action}</p><p className="font-mono text-[0.62rem] text-foreground-dim">{job.jobId}</p></td><td className="p-4"><State value={job.state} /></td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(job.serverId)}</td><td className="p-4 text-xs text-foreground-muted">{job.progressStage}{job.errorCode ? ` · ${job.errorCode}` : ""}</td><td className="p-4 text-xs text-foreground-muted">{job.attemptCount}/{job.maximumAttempts}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={job.updatedAt} /></td></tr>; })}</tbody></table>{jobs.length === 0 && <Empty>No jobs in this view.</Empty>}</div>; }
+function JobsTable({ jobs, allowFailureAcknowledgement = false }: { jobs: HostingJob[]; allowFailureAcknowledgement?: boolean }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-240 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Action</th><th className="p-4">State</th><th className="p-4">Server</th><th className="p-4">Progress</th><th className="p-4">Attempts</th><th className="p-4">Updated</th>{allowFailureAcknowledgement && <th className="p-4">Alert</th>}</tr></thead><tbody className="divide-y divide-white/10">{jobs.map((job) => { const explanation = jobActionExplanation(job.action); return <tr key={job.jobId} className={job.failureAcknowledgedAt ? "opacity-60" : undefined}><td className="p-4"><p className="cursor-help font-semibold text-foreground" title={explanation} aria-label={`${job.action}: ${explanation}`}>{job.action}</p><p className="font-mono text-[0.62rem] text-foreground-dim">{job.jobId}</p></td><td className="p-4"><State value={job.state} /></td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(job.serverId)}</td><td className="p-4 text-xs text-foreground-muted">{job.progressStage}{job.errorCode ? ` · ${job.errorCode}` : ""}</td><td className="p-4 text-xs text-foreground-muted">{job.attemptCount}/{job.maximumAttempts}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={job.updatedAt} /></td>{allowFailureAcknowledgement && <td className="p-4">{job.failureAcknowledgedAt ? <span className="cursor-help text-xs text-foreground-muted" title={`Acknowledged ${job.failureAcknowledgedAt}`}>Silenced</span> : <JobFailureAcknowledgeButton jobId={job.jobId} expectedUpdatedAt={job.updatedAt} />}</td>}</tr>; })}</tbody></table>{jobs.length === 0 && <Empty>No jobs in this view.</Empty>}</div>; }
 function BackupsTable({ backups }: { backups: Backup[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-200 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Backup</th><th className="p-4">Type</th><th className="p-4">State</th><th className="p-4">Size</th><th className="p-4">Created</th><th className="p-4">Expires</th></tr></thead><tbody className="divide-y divide-white/10">{backups.map((backup) => <tr key={backup.backupId}><td className="p-4 font-mono text-xs text-foreground-muted">{backup.backupId}</td><td className="p-4 text-xs text-foreground-muted">{backup.backupType}</td><td className="p-4"><State value={backup.restoreState} /></td><td className="p-4 text-xs text-foreground-muted">{formatBytes(backup.byteSize)}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={backup.createdAt} /></td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={backup.retentionExpiresAt} /></td></tr>)}</tbody></table>{backups.length === 0 && <Empty>No retained backups.</Empty>}</div>; }
-function AuditTable({ events }: { events: AuditEvent[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-240 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Time</th><th className="p-4">Action</th><th className="p-4">Actor</th><th className="p-4">Server</th><th className="p-4">Reason</th><th className="p-4">Correlation</th></tr></thead><tbody className="divide-y divide-white/10">{events.map((event) => <tr key={event.eventId}><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={event.occurredAt} /></td><td className="p-4 text-xs font-semibold text-foreground">{event.action}</td><td className="p-4 text-xs text-foreground-muted">{event.actorType}<br />{shortId(event.actorId)}</td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(event.targetServerId)}</td><td className="max-w-80 p-4 text-xs text-foreground-muted">{event.reason ?? "—"}</td><td className="p-4 font-mono text-[0.62rem] text-foreground-dim">{shortId(event.correlationId)}</td></tr>)}</tbody></table>{events.length === 0 && <Empty>No audit events in this view.</Empty>}</div>; }
-function BuildTable({ builds }: { builds: ReleaseBuild[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-180 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Version</th><th className="p-4">Commit</th><th className="p-4">Validation</th><th className="p-4">Game</th><th className="p-4">Published</th></tr></thead><tbody className="divide-y divide-white/10">{builds.map((build) => <tr key={build.buildId}><td className="p-4"><p className="font-semibold text-foreground">{build.version}</p><p className="font-mono text-[0.62rem] text-foreground-dim">{build.buildId}</p></td><td className="p-4 font-mono text-xs text-foreground-muted" title={build.sourceRevision}>{shortRevision(build.sourceRevision)}</td><td className="p-4"><State value={build.validationState} /></td><td className="p-4 text-xs text-foreground-muted">{build.supportedGameVersion}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={build.publishedAt} /></td></tr>)}</tbody></table>{builds.length === 0 && <Empty>No validated builds in this channel.</Empty>}</div>; }
+function AuditTable({ events }: { events: AuditEvent[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-240 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Time</th><th className="p-4">Action</th><th className="p-4">Actor</th><th className="p-4">Server</th><th className="p-4">Reason</th><th className="p-4">Correlation</th></tr></thead><tbody className="divide-y divide-white/10">{events.map((event) => { const explanation = auditActionExplanation(event.action); return <tr key={event.eventId} className="cursor-help hover:bg-white/[0.025]" title={explanation} aria-label={`${event.action}: ${explanation}`}><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={event.occurredAt} /></td><td className="p-4 text-xs font-semibold text-foreground underline decoration-dotted underline-offset-4">{event.action}</td><td className="p-4 text-xs text-foreground-muted">{event.actorType}<br />{shortId(event.actorId)}</td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(event.targetServerId)}</td><td className="max-w-80 p-4 text-xs text-foreground-muted">{event.reason ?? "—"}</td><td className="p-4 font-mono text-[0.62rem] text-foreground-dim">{shortId(event.correlationId)}</td></tr>; })}</tbody></table>{events.length === 0 && <Empty>No audit events in this view.</Empty>}</div>; }
+function BuildTable({ builds }: { builds: ReleaseBuild[] }) { return <div className="mt-4 border border-white/10 bg-surface"><table className="w-full table-fixed text-left text-sm"><colgroup><col className="w-[28%]" /><col className="w-[17%]" /><col className="w-[20%]" /><col className="w-[12%]" /><col className="w-[23%]" /></colgroup><thead className="border-b border-white/10 font-label text-[0.6rem] uppercase tracking-[0.09em] text-foreground-muted"><tr><th className="px-2 py-4 sm:px-4">Version</th><th className="px-2 py-4 sm:px-4">Commit</th><th className="px-2 py-4 sm:px-4">Validation</th><th className="px-2 py-4 sm:px-4">Game</th><th className="px-2 py-4 sm:px-4">Published</th></tr></thead><tbody className="divide-y divide-white/10">{builds.map((build) => <tr key={build.buildId}><td className="min-w-0 px-2 py-4 sm:px-4"><p className="truncate font-semibold text-foreground" title={build.version}>{build.version}</p><p className="truncate font-mono text-[0.6rem] text-foreground-dim" title={build.buildId}>{shortId(build.buildId)}</p></td><td className="break-all px-2 py-4 font-mono text-xs text-foreground-muted sm:px-4" title={build.sourceRevision}>{shortRevision(build.sourceRevision)}</td><td className="px-2 py-4 sm:px-4"><State value={build.validationState} /></td><td className="break-words px-2 py-4 text-xs text-foreground-muted sm:px-4">{build.supportedGameVersion}</td><td className="px-2 py-4 text-xs text-foreground-muted sm:px-4"><LocalDateTime value={build.publishedAt} /></td></tr>)}</tbody></table>{builds.length === 0 && <Empty>No validated builds in this channel.</Empty>}</div>; }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <section className="border border-white/10 bg-surface p-5"><h2 className="font-display text-2xl font-semibold text-foreground">{title}</h2><dl className="mt-4 divide-y divide-white/10">{children}</dl></section>; }
-function Definition({ label, value, tone }: { label: string; value: React.ReactNode; tone?: "ok" | "warning" }) { return <div className="flex items-start justify-between gap-4 py-3 text-xs"><dt className="text-foreground-muted">{label}</dt><dd className={`max-w-[65%] break-words text-right font-medium ${tone === "ok" ? "text-emerald-300" : tone === "warning" ? "text-amber-300" : "text-foreground"}`}>{value}</dd></div>; }
-function Stat({ label, value, view, help }: { label: string; value: number; view: "servers" | "jobs"; help: string }) { return <Link href={`/admin/control-plane?view=${view}`} className="group bg-surface px-5 py-4 outline-none transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-gold" title={help} aria-label={`${label}: ${value}. ${help} Open ${view}.`}><p className="font-display text-3xl font-semibold text-foreground">{value}</p><p className="mt-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-foreground-muted group-hover:text-gold">{label}</p></Link>; }
+function Panel({ title, children, help }: { title: string; children: React.ReactNode; help?: string }) { return <section className="border border-white/10 bg-surface p-5"><h2 className={`font-display text-2xl font-semibold text-foreground ${help ? "cursor-help" : ""}`} title={help}>{title}</h2><dl className="mt-4 divide-y divide-white/10">{children}</dl></section>; }
+function Definition({ label, value, tone, help }: { label: string; value: React.ReactNode; tone?: "ok" | "warning"; help?: string }) { return <div className="flex items-start justify-between gap-4 py-3 text-xs"><dt className={`${help ? "cursor-help underline decoration-dotted underline-offset-4" : ""} text-foreground-muted`} title={help} aria-label={help ? `${label}: ${help}` : undefined}>{label}</dt><dd className={`max-w-[65%] break-words text-right font-medium ${tone === "ok" ? "text-emerald-300" : tone === "warning" ? "text-amber-300" : "text-foreground"}`}>{value}</dd></div>; }
+function Stat({ label, value, view, state, help }: { label: string; value: number; view: "servers" | "jobs"; state?: "failed"; help: string }) { const suffix = state ? `&state=${state}` : ""; return <Link href={`/admin/control-plane?view=${view}${suffix}`} className="group bg-surface px-5 py-4 outline-none transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-gold" title={help} aria-label={`${label}: ${value}. ${help} Open ${view}.`}><p className="font-display text-3xl font-semibold text-foreground">{value}</p><p className="mt-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-foreground-muted group-hover:text-gold">{label}</p></Link>; }
 function SectionHeading({ eyebrow, title, count }: { eyebrow: string; title: string; count: number }) { return <div className="flex items-end justify-between gap-4"><div><p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-gold">{eyebrow}</p><h2 className="mt-1 font-display text-3xl font-semibold text-foreground">{title}</h2></div><span className="font-display text-xl text-foreground-muted">{count}</span></div>; }
 function State({ value }: { value: string }) { const good = ["running", "succeeded", "validated", "available", "healthy"].includes(value); const bad = ["failed", "degraded", "revoked", "rejected", "cancelled", "unavailable"].includes(value); const explanation = stateExplanation(value); return <span title={explanation} aria-label={`${value}: ${explanation}`} className={`inline-flex cursor-help border px-2 py-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] ${good ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : bad ? "border-crimson/30 bg-crimson/10 text-red-200" : "border-gold/25 bg-gold/8 text-gold"}`}>{value}</span>; }
 function Empty({ children }: { children: React.ReactNode }) { return <div className="px-6 py-12 text-center text-sm text-foreground-muted">{children}</div>; }
 
-function ReleaseHistoryNote({ hidden }: { hidden: number }) { return hidden > 0 ? <p className="mt-3 text-xs leading-5 text-foreground-muted">Showing installable validated builds. {hidden} non-validated historical {hidden === 1 ? "record is" : "records are"} hidden here; receipts and audit history remain available to the inspect/reject operations.</p> : <p className="mt-3 text-xs leading-5 text-foreground-muted">Only installable validated builds are shown.</p>; }
+function ReleaseHistoryNote({ hidden }: { hidden: number }) { return hidden > 0 ? <p className="mt-3 min-h-10 text-xs leading-5 text-foreground-muted">Showing installable validated builds. {hidden} non-validated historical {hidden === 1 ? "record is" : "records are"} hidden here; receipts and audit history remain available to the inspect/reject operations.</p> : <p className="mt-3 min-h-10 text-xs leading-5 text-foreground-muted">Only installable validated builds are shown.</p>; }
 
-function controlRows(controls: GlobalControls): Array<[string, boolean]> { return [["Provisioning", controls.provisioningPaused], ["Role deletions", controls.roleDeletionsPaused], ["Maintenance", controls.maintenancePaused], ["Automatic backups", controls.automaticBackupsPaused], ["Nightly rollouts", controls.nightlyRolloutsPaused]]; }
+function RuntimeObservation({ server }: { server: ManagedServer }) {
+    const suspendedWhileRunning = server.operationState === "suspended" && server.observedGameState === "running";
+    const runtimeHelp = `Observed VM state is ${server.observedVmState}; the shared host may remain running while a game is stopped. Observed game state is ${server.observedGameState}; this is the latest runner-confirmed game-container state.`;
+    return <div className="text-xs text-foreground-muted" title={runtimeHelp}><p className="cursor-help">VM {server.observedVmState} · Game {server.observedGameState}</p>{suspendedWhileRunning && <p className="mt-1 cursor-help font-semibold text-amber-300" title="The administrative hold is active, but a graceful Stop has not yet been confirmed. Owner operations remain blocked while the stop job or reconciliation completes.">Suspended · stop not confirmed</p>}</div>;
+}
+
+function controlRows(controls: GlobalControls) { return [
+    { label: "Provisioning", paused: controls.provisioningPaused, help: "Controls whether new managed servers may be assigned and initialized. Existing servers are unaffected." },
+    { label: "Role deletions", paused: controls.roleDeletionsPaused, help: "Controls automatic deletion after a Discord entitlement is lost. Checked means those deletions are paused." },
+    { label: "Maintenance", paused: controls.maintenancePaused, help: "Controls scheduled fleet maintenance and release updates. Owner-requested lifecycle actions remain separate." },
+    { label: "Automatic backups", paused: controls.automaticBackupsPaused, help: "Controls scheduled backups. Manual backup requests remain available through their own workflow." },
+    { label: "Nightly rollouts", paused: controls.nightlyRolloutsPaused, help: "Controls automatic deployment of validated Nightly builds. It does not disable already-running Nightly servers." },
+]; }
+function chunk<T>(items: readonly T[], size: number): T[][] { const rows: T[][] = []; for (let index = 0; index < items.length; index += size) rows.push(items.slice(index, index + size)); return rows; }
 function enumOptions(values: readonly string[]): AdminActionOption[] { return values.map((value) => ({ label: value, value })); }
 function discordUsernameMap(users: readonly DiscordUserSummary[]) { return new Map(users.map((user) => [user.discordUserId, user.username])); }
 function formatDiscordUsername(username: string | undefined) { return username ? `@${username}` : "Username unavailable"; }
 function first(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
 function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations"].includes(value ?? "") ? value as View : "overview"; }
+function parseJobState(value: string | undefined): "failed" | "active" | null { return value === "failed" || value === "active" ? value : null; }
 function formatVpsCost(cost: HostingAdminVpsHost["cost"]) {
     if (!cost) return "Unknown";
     const amount = new Intl.NumberFormat("en", { style: "currency", currency: cost.currencyCode }).format(cost.priceInMicrocents / 100_000_000);

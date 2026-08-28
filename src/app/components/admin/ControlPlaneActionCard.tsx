@@ -67,7 +67,8 @@ export function ControlPlaneActionCard({
                 ...(fields.length === 0 ? {} : { input }),
             });
             setResult({ ok: true, message: summarizeResult(response) });
-            router.refresh();
+            if (operation === "onboard-vps-host") router.push("/admin/control-plane?view=vps");
+            else router.refresh();
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : "The operation failed." });
         } finally {
@@ -77,7 +78,7 @@ export function ControlPlaneActionCard({
 
     return (
         <article id={operation} className="flex h-full scroll-mt-6 flex-col border border-white/10 bg-surface p-5">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-4 md:min-h-52">
                 <div>
                     <div className="flex items-center gap-2">
                         <h3 className="font-display text-xl font-semibold text-foreground">{title}</h3>
@@ -286,6 +287,14 @@ function summarizeResult(result: unknown) {
     const job = record.job;
     if (typeof job === "object" && job !== null && typeof (job as Record<string, unknown>).jobId === "string") {
         return `Operation accepted. Job ${(job as Record<string, unknown>).jobId as string}.`;
+    }
+    const onboarding = record.onboarding;
+    if (typeof onboarding === "object" && onboarding !== null) {
+        const state = (onboarding as Record<string, unknown>).state;
+        const stage = (onboarding as Record<string, unknown>).progressStage;
+        if (typeof state === "string" && typeof stage === "string") {
+            return `VPS onboarding ${state}: ${stage}. Progress updates automatically on the VPS page.`;
+        }
     }
     if (typeof record.reviewId === "string" || Object.hasOwn(record, "snapshot")) {
         return JSON.stringify(result, null, 2).slice(0, 12_000);

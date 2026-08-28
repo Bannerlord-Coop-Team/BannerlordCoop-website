@@ -39,6 +39,8 @@ export type HostingJob = {
     runAt: string;
     createdAt: string;
     updatedAt: string;
+    failureAcknowledgedAt?: string | null;
+    failureAcknowledgedBy?: string | null;
 };
 
 export type ReleaseBuild = {
@@ -95,6 +97,13 @@ export type HostingAdminVpsHost = {
     expirationDate: string | null;
     autoRenew: boolean | null;
     providerCheckedAt: string | null;
+    runnerOnboarding: {
+        state: "queued" | "running" | "retry-wait" | "succeeded" | "failed";
+        progressStage: string;
+        errorCode: string | null;
+        sourceCommit: string | null;
+        updatedAt: string;
+    } | null;
 };
 
 export type FleetSummary = {
@@ -127,6 +136,13 @@ export type FleetSummary = {
         missingInstanceCount: number;
         mismatchedInstanceCount: number;
         observedAt: string;
+    };
+    observability: {
+        recentWindowSeconds: number;
+        recentJobFailures: number;
+        recentProviderApiErrors: number;
+        recentBackupFailures: number;
+        overdueBackups: number | null;
     };
 };
 

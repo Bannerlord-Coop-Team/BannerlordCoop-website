@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ReleaseBuild } from "./types";
-import { installableBuilds } from "./presentation";
+import { installableBuilds, overviewStatRowClass } from "./presentation";
 
 function build(buildId: string, validationState: string, sourceRevision: string): ReleaseBuild {
     return {
@@ -26,4 +26,13 @@ test("the normal release catalog keeps only validated builds and their commit re
 
     assert.deepEqual(visible, [validated]);
     assert.equal(visible[0]?.sourceRevision, "a".repeat(40));
+});
+
+test("overview statistic cards fill the final row evenly", () => {
+    assert.equal(overviewStatRowClass(1), "grid-cols-1");
+    assert.match(overviewStatRowClass(2), /sm:grid-cols-2/u);
+    assert.match(overviewStatRowClass(3), /lg:grid-cols-3/u);
+    assert.match(overviewStatRowClass(4), /lg:grid-cols-4/u);
+    assert.throws(() => overviewStatRowClass(0));
+    assert.throws(() => overviewStatRowClass(5));
 });

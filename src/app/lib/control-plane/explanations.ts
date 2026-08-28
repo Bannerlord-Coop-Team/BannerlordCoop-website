@@ -13,6 +13,7 @@ const STATE_EXPLANATIONS: Record<string, string> = {
     failed: "The operation reached a terminal failure and needs administrator review.",
     healthy: "The most recent bounded health evidence passed.",
     maintenance: "The server is inside a controlled update, backup, or maintenance workflow.",
+    "not-onboarded": "The VPS is registered in provider inventory but its managed runner has not completed enrollment.",
     pending: "The build is recorded but is not approved for installation until its receipt is validated.",
     provisioning: "A prepared hosting slot is being assigned and initialized.",
     queued: "The durable job is waiting for a worker lease.",
@@ -75,12 +76,13 @@ const OPERATION_EXPLANATIONS: Record<string, string> = {
     "open-orphan-review": "Reads a previously captured orphan review and its immutable cleanup-group digests.",
     "orphan-review": "Reads a previously captured orphan review and its immutable cleanup-group digests.",
     "reactivate-server": "Clears an administrative hold after current entitlement checks. It does not automatically start the game.",
-    "register-vps-host": "Registers one already-purchased OVH VPS as empty cattle capacity after verifying that the service belongs to the configured OVH account. It never orders, renews, starts, or assigns anything.",
+    "onboard-vps-host": "Verifies one already-purchased OVH VPS, pins its SSH identity, installs and activates every isolated managed-runner slot through private mTLS routes, and publishes capacity only after health proof. It never orders, renews, or cancels the VPS.",
     "reject-build": "Permanently marks a pending build rejected while retaining its receipt and audit history.",
     "replace-provider": "Creates a guarded replacement generation for resize, rebuild, or migration, then cuts over only after backup, restore, and health checks.",
     "reset-password": "Generates or accepts a new game password, stores it through the encrypted secret boundary, and reveals generated output once.",
     "restore-backup": "Restores one exact retained backup only after stale-state, ownership, stopped-state, and compatibility checks.",
     "retry-job": "Moves an eligible failed or retry-wait job back to the durable queue without creating a duplicate operation.",
+    "acknowledge-job-failure": "Acknowledges one exact failed attempt. The job and audit evidence remain retained, but that attempt no longer contributes to the Overview failed-job alert.",
     "review-orphans": "Creates a read-only snapshot of provider resources that do not match current managed state. Review alone never deletes or changes a provider resource.",
     "revoke-build": "Withdraws a validated build from future selection while retaining its immutable receipt and audit history.",
     "rollback-server": "Queues the retained prior-build rollback path with backup and compatibility gates.",
@@ -111,6 +113,18 @@ const DESTRUCTIVE_EXPLANATIONS: Record<string, string> = {
     "transfer-owner": "Ownership, access, and future lifecycle authority move to another Discord account.",
 };
 
+const AUDIT_ACTION_EXPLANATIONS: Record<string, string> = {
+    "hosting.admin.job_failure_acknowledged": "An administrator acknowledged one exact failed job attempt. The job and its audit evidence remain retained.",
+    "hosting.admin.ovhcloud_vps_host_registration_requested": "An administrator requested that an existing OVH VPS be verified and added to managed inventory.",
+    "hosting.admin.ovhcloud_vps_runner_onboarding_requested": "An administrator requested full managed-runner commissioning for an existing OVH VPS.",
+    "hosting.admin.server_create_requested": "An administrator requested assignment of existing managed capacity to a Discord owner.",
+    "hosting.admin.server_reactivated": "An administrator removed the server's administrative hold. Reactivation does not automatically start the game.",
+    "hosting.admin.server_suspended": "An administrator placed the server on hold, blocked owner operations, and queued a graceful game stop.",
+    "hosting.provider.ovhcloud_vps_host_registered": "The control plane verified and recorded an existing OVH VPS as inventory. This event alone does not publish schedulable capacity.",
+    "hosting.reconciliation.scheduled": "The control plane scheduled a desired-versus-observed state comparison for a managed server.",
+    "hosting.runner.ovhcloud_vps_onboarding_succeeded": "Every reviewed runner slot passed installation, private-route, identity, activation, and health gates before capacity was published.",
+};
+
 export function stateExplanation(value: string) {
     return STATE_EXPLANATIONS[value] ?? "This is the control plane's current durable state for the item.";
 }
@@ -125,4 +139,20 @@ export function operationExplanation(operation: string) {
 
 export function destructiveExplanation(operation: string) {
     return DESTRUCTIVE_EXPLANATIONS[operation] ?? "This operation can materially change managed-hosting state and requires confirmation.";
+}
+
+export function auditActionExplanation(action: string) {
+    const exact = AUDIT_ACTION_EXPLANATIONS[action];
+    if (exact) return exact;
+    const readable = action.replace(/^hosting\./u, "").replaceAll(/[._-]+/gu, " ");
+    if (action.startsWith("hosting.job.")) {
+        return `Hash-chained evidence for a durable job transition: ${readable}.`;
+    }
+    if (action.startsWith("hosting.admin.")) {
+        return `Hash-chained evidence for an authorized administrative action: ${readable}.`;
+    }
+    if (action.startsWith("hosting.provider") || action.startsWith("hosting.runner.")) {
+        return `Hash-chained evidence recorded at a provider or managed-runner boundary: ${readable}.`;
+    }
+    return `Hash-chained control-plane evidence: ${readable}.`;
 }
