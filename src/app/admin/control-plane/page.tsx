@@ -3,6 +3,7 @@ import {
     type AdminActionField,
     type AdminActionOption,
 } from "@/app/components/admin/ControlPlaneActionCard";
+import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { hasAdminAccess } from "@/app/lib/auth/access";
 import { ControlPlaneAdminError, requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import {
@@ -254,16 +255,21 @@ function VpsView({ hosts }: { hosts: HostingAdminVpsHost[] }) {
             <SectionHeading eyebrow="OVHcloud inventory" title="VPS hosts" count={hosts.length} />
             <p className="mt-3 text-xs text-foreground-muted">
                 Capacity combines registered control-plane slots with live read-only OVH account billing data.
-                {checkedAt ? ` Provider data checked ${formatDate(checkedAt)}.` : ""}
+                {checkedAt && <> Provider data checked <LocalDateTime value={checkedAt} />.</>}
             </p>
+            <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
+                <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> register an already-purchased OVH VPS. Registration adds empty slots only; it does not buy a VPS, create a user server, or start a container.</p>
+                <Link href="/admin/control-plane?view=operations#register-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Register VPS</Link>
+            </div>
             <div className="mt-6 overflow-x-auto border border-white/10 bg-surface">
                 <table className="w-full min-w-250 text-left text-sm">
                     <thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted">
                         <tr>
                             <th className="p-4">Name</th>
                             <th className="p-4">Region</th>
+                            <th className="p-4">Total Slots</th>
                             <th className="p-4">Running Servers</th>
-                            <th className="p-4">Available Servers</th>
+                            <th className="p-4">Available Slots</th>
                             <th className="p-4">Cost</th>
                             <th className="p-4">Expiration Date</th>
                             <th className="p-4">Auto-Renew</th>
@@ -272,11 +278,15 @@ function VpsView({ hosts }: { hosts: HostingAdminVpsHost[] }) {
                     <tbody className="divide-y divide-white/10">{hosts.map((host) => (
                         <tr key={host.name} className="hover:bg-white/[0.025]">
                             <td className="p-4 font-mono text-xs text-foreground">{host.name}</td>
-                            <td className="p-4 text-xs text-foreground-muted">{host.region}</td>
+                            <td className="p-4 text-xs text-foreground-muted">
+                                <span className="block">{host.region}</span>
+                                <span className="mt-1 block font-mono text-[0.65rem] text-foreground-dim">{host.locationId}</span>
+                            </td>
+                            <td className="p-4 font-display text-xl text-foreground">{host.totalSlots}</td>
                             <td className="p-4 font-display text-xl text-foreground">{host.runningServers}</td>
                             <td className="p-4 font-display text-xl text-foreground">{host.availableServers}</td>
                             <td className="p-4 text-xs text-foreground-muted">{formatVpsCost(host.cost)}</td>
-                            <td className="p-4 text-xs text-foreground-muted">{host.expirationDate ? formatDate(host.expirationDate) : "Unknown"}</td>
+                            <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={host.expirationDate} empty="Unknown" /></td>
                             <td className="p-4"><State value={host.autoRenew === true ? "enabled" : host.autoRenew === false ? "disabled" : "unknown"} /></td>
                         </tr>
                     ))}</tbody>
@@ -306,13 +316,13 @@ function OverviewView({ overview }: { overview: Overview }) {
                 {stats.map((stat) => <Stat key={stat.label} {...stat} />)}
             </section>
             <section className="grid gap-6 lg:grid-cols-2">
-                <Panel title="Provider and reconciliation">
-                    <Definition label="Provider" value={fleet.provider.mode} />
-                    <Definition label="API health" value={fleet.provider.apiHealth} />
-                    <Definition label="Capacity" value={fleet.provider.capacityAvailable ? "Available" : "Unavailable"} />
-                    <Definition label="Managed instances" value={formatNullable(fleet.provider.managedInstanceCount)} />
+                <Panel title="Fleet capacity and reconciliation">
+                    <Definition label="Managed VPS" value={String(fleet.managedVpsCount)} />
+                    <Definition label="Managed Bannerlord server instances" value={String(fleet.usedQuota)} />
+                    <Definition label="Total slots" value={String(fleet.totalSlots)} />
+                    <Definition label="Available slots" value={String(fleet.availableSlots)} />
                     <Definition label="Orphan candidates" value={String(fleet.provider.orphanCandidateCount)} />
-                    <Definition label="Last reconciled" value={formatDate(fleet.lastReconciledAt)} />
+                    <Definition label="Last reconciled" value={<LocalDateTime value={fleet.lastReconciledAt} />} />
                 </Panel>
                 <Panel title="Global controls">
                     {controlRows(controls).map(([label, paused]) => <Definition key={label} label={label} value={paused ? "Paused" : "Enabled"} tone={paused ? "warning" : "ok"} />)}
@@ -347,7 +357,7 @@ function ServersView({ page, query, discordUsers }: { page: HostingPage<ManagedS
                             <td className="p-4 text-xs text-foreground-muted">{server.observedVmState} / {server.observedGameState}</td>
                             <td className="p-4 text-xs text-foreground-muted">{server.releaseChannel}<br />{shortId(server.installedBuildId)}</td>
                             <td className="p-4 text-xs text-foreground-muted">{server.provider}<br />{shortId(server.providerResourceId)}</td>
-                            <td className="p-4 text-xs text-foreground-muted">{formatDate(server.updatedAt)}</td>
+                            <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={server.updatedAt} /></td>
                         </tr>
                     ))}</tbody>
                 </table>
@@ -400,6 +410,14 @@ function OperationsView({ overview, discordUsers }: { overview: Overview; discor
     const plainServerField: AdminActionField = { name: "serverId", label: "Server", kind: "select", required: true, options: serverPlainOptions };
     const compatibilityField: AdminActionField = { name: "allowCompatibilityOverride", label: "Override unknown save compatibility", kind: "checkbox", help: "Use only after reviewing the save and build. This permits an unknown compatibility result; it does not bypass a known incompatibility." };
     const cards: Array<{ group: string; operation: string; title: string; description: string; fields: AdminActionField[]; destructive?: boolean }> = [
+        { group: "Fleet", operation: "register-vps-host", title: "Register existing OVH VPS", description: "Add one already-purchased OVH VPS as empty cattle capacity. The control plane verifies that the service belongs to the configured OVH account and derives the reviewed image; it does not buy, renew, start, assign, or install a user server.", fields: [
+            { name: "serviceName", label: "OVH service name", required: true, placeholder: "vps-example.vps.ovh.us", help: "The exact OVH service name. It must already exist in the authenticated OVH account." },
+            { name: "locationId", label: "Control-plane location ID", required: true, placeholder: "us-east-va", help: "The exact reviewed location ID configured for this control plane, not a display label." },
+            { name: "friendlyRegion", label: "User-facing region", kind: "select", required: true, options: enumOptions(["germany", "united-kingdom", "spain", "united-states", "europe-automatic"]), help: "The region owners see when selecting placement." },
+            { name: "vCpu", label: "vCPU count", kind: "number", required: true, minimum: 2, maximum: 64, help: "Capacity is calculated as floor(vCPU / 2): one Bannerlord slot per two vCPUs." },
+            { name: "publicIpv4", label: "Public IPv4", required: true, placeholder: "15.204.120.17", help: "The VPS public IPv4 used by the reviewed runner-enrollment workflow. Private and reserved addresses are rejected." },
+            reasonField,
+        ] },
         { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
             discordUserField("ownerDiscordUserId", "Owner Discord username or ID"), { name: "ownerRoleIds", label: "Current Discord role IDs", valueType: "csv", placeholder: "Comma separated", help: "Current entitlement roles are rechecked by the control plane; these values cannot grant an entitlement on their own." },
             { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: enumOptions(["germany", "united-kingdom", "spain", "united-states", "europe-automatic"]), help: "The scheduler uses only prepared slots in this region. If none are available, the request fails; no VPS is purchased automatically." },
@@ -442,13 +460,13 @@ function OperationsView({ overview, discordUsers }: { overview: Overview; discor
     return <div className="mt-8 space-y-12">{groups.map((group) => <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={cards.filter((card) => card.group === group).length} /><div className="grid auto-rows-fr gap-5 md:grid-cols-2 xl:grid-cols-3">{cards.filter((card) => card.group === group).map((card) => <ControlPlaneActionCard key={card.operation} {...card} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div></section>)}</div>;
 }
 
-function JobsTable({ jobs }: { jobs: HostingJob[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-230 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Action</th><th className="p-4">State</th><th className="p-4">Server</th><th className="p-4">Progress</th><th className="p-4">Attempts</th><th className="p-4">Updated</th></tr></thead><tbody className="divide-y divide-white/10">{jobs.map((job) => { const explanation = jobActionExplanation(job.action); return <tr key={job.jobId}><td className="p-4"><p className="cursor-help font-semibold text-foreground" title={explanation} aria-label={`${job.action}: ${explanation}`}>{job.action}</p><p className="font-mono text-[0.62rem] text-foreground-dim">{job.jobId}</p></td><td className="p-4"><State value={job.state} /></td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(job.serverId)}</td><td className="p-4 text-xs text-foreground-muted">{job.progressStage}{job.errorCode ? ` · ${job.errorCode}` : ""}</td><td className="p-4 text-xs text-foreground-muted">{job.attemptCount}/{job.maximumAttempts}</td><td className="p-4 text-xs text-foreground-muted">{formatDate(job.updatedAt)}</td></tr>; })}</tbody></table>{jobs.length === 0 && <Empty>No jobs in this view.</Empty>}</div>; }
-function BackupsTable({ backups }: { backups: Backup[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-200 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Backup</th><th className="p-4">Type</th><th className="p-4">State</th><th className="p-4">Size</th><th className="p-4">Created</th><th className="p-4">Expires</th></tr></thead><tbody className="divide-y divide-white/10">{backups.map((backup) => <tr key={backup.backupId}><td className="p-4 font-mono text-xs text-foreground-muted">{backup.backupId}</td><td className="p-4 text-xs text-foreground-muted">{backup.backupType}</td><td className="p-4"><State value={backup.restoreState} /></td><td className="p-4 text-xs text-foreground-muted">{formatBytes(backup.byteSize)}</td><td className="p-4 text-xs text-foreground-muted">{formatDate(backup.createdAt)}</td><td className="p-4 text-xs text-foreground-muted">{formatDate(backup.retentionExpiresAt)}</td></tr>)}</tbody></table>{backups.length === 0 && <Empty>No retained backups.</Empty>}</div>; }
-function AuditTable({ events }: { events: AuditEvent[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-240 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Time</th><th className="p-4">Action</th><th className="p-4">Actor</th><th className="p-4">Server</th><th className="p-4">Reason</th><th className="p-4">Correlation</th></tr></thead><tbody className="divide-y divide-white/10">{events.map((event) => <tr key={event.eventId}><td className="p-4 text-xs text-foreground-muted">{formatDate(event.occurredAt)}</td><td className="p-4 text-xs font-semibold text-foreground">{event.action}</td><td className="p-4 text-xs text-foreground-muted">{event.actorType}<br />{shortId(event.actorId)}</td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(event.targetServerId)}</td><td className="max-w-80 p-4 text-xs text-foreground-muted">{event.reason ?? "—"}</td><td className="p-4 font-mono text-[0.62rem] text-foreground-dim">{shortId(event.correlationId)}</td></tr>)}</tbody></table>{events.length === 0 && <Empty>No audit events in this view.</Empty>}</div>; }
-function BuildTable({ builds }: { builds: ReleaseBuild[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-180 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Version</th><th className="p-4">Commit</th><th className="p-4">Validation</th><th className="p-4">Game</th><th className="p-4">Published</th></tr></thead><tbody className="divide-y divide-white/10">{builds.map((build) => <tr key={build.buildId}><td className="p-4"><p className="font-semibold text-foreground">{build.version}</p><p className="font-mono text-[0.62rem] text-foreground-dim">{build.buildId}</p></td><td className="p-4 font-mono text-xs text-foreground-muted" title={build.sourceRevision}>{shortRevision(build.sourceRevision)}</td><td className="p-4"><State value={build.validationState} /></td><td className="p-4 text-xs text-foreground-muted">{build.supportedGameVersion}</td><td className="p-4 text-xs text-foreground-muted">{formatDate(build.publishedAt)}</td></tr>)}</tbody></table>{builds.length === 0 && <Empty>No validated builds in this channel.</Empty>}</div>; }
+function JobsTable({ jobs }: { jobs: HostingJob[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-230 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Action</th><th className="p-4">State</th><th className="p-4">Server</th><th className="p-4">Progress</th><th className="p-4">Attempts</th><th className="p-4">Updated</th></tr></thead><tbody className="divide-y divide-white/10">{jobs.map((job) => { const explanation = jobActionExplanation(job.action); return <tr key={job.jobId}><td className="p-4"><p className="cursor-help font-semibold text-foreground" title={explanation} aria-label={`${job.action}: ${explanation}`}>{job.action}</p><p className="font-mono text-[0.62rem] text-foreground-dim">{job.jobId}</p></td><td className="p-4"><State value={job.state} /></td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(job.serverId)}</td><td className="p-4 text-xs text-foreground-muted">{job.progressStage}{job.errorCode ? ` · ${job.errorCode}` : ""}</td><td className="p-4 text-xs text-foreground-muted">{job.attemptCount}/{job.maximumAttempts}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={job.updatedAt} /></td></tr>; })}</tbody></table>{jobs.length === 0 && <Empty>No jobs in this view.</Empty>}</div>; }
+function BackupsTable({ backups }: { backups: Backup[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-200 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Backup</th><th className="p-4">Type</th><th className="p-4">State</th><th className="p-4">Size</th><th className="p-4">Created</th><th className="p-4">Expires</th></tr></thead><tbody className="divide-y divide-white/10">{backups.map((backup) => <tr key={backup.backupId}><td className="p-4 font-mono text-xs text-foreground-muted">{backup.backupId}</td><td className="p-4 text-xs text-foreground-muted">{backup.backupType}</td><td className="p-4"><State value={backup.restoreState} /></td><td className="p-4 text-xs text-foreground-muted">{formatBytes(backup.byteSize)}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={backup.createdAt} /></td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={backup.retentionExpiresAt} /></td></tr>)}</tbody></table>{backups.length === 0 && <Empty>No retained backups.</Empty>}</div>; }
+function AuditTable({ events }: { events: AuditEvent[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-240 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Time</th><th className="p-4">Action</th><th className="p-4">Actor</th><th className="p-4">Server</th><th className="p-4">Reason</th><th className="p-4">Correlation</th></tr></thead><tbody className="divide-y divide-white/10">{events.map((event) => <tr key={event.eventId}><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={event.occurredAt} /></td><td className="p-4 text-xs font-semibold text-foreground">{event.action}</td><td className="p-4 text-xs text-foreground-muted">{event.actorType}<br />{shortId(event.actorId)}</td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(event.targetServerId)}</td><td className="max-w-80 p-4 text-xs text-foreground-muted">{event.reason ?? "—"}</td><td className="p-4 font-mono text-[0.62rem] text-foreground-dim">{shortId(event.correlationId)}</td></tr>)}</tbody></table>{events.length === 0 && <Empty>No audit events in this view.</Empty>}</div>; }
+function BuildTable({ builds }: { builds: ReleaseBuild[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-180 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Version</th><th className="p-4">Commit</th><th className="p-4">Validation</th><th className="p-4">Game</th><th className="p-4">Published</th></tr></thead><tbody className="divide-y divide-white/10">{builds.map((build) => <tr key={build.buildId}><td className="p-4"><p className="font-semibold text-foreground">{build.version}</p><p className="font-mono text-[0.62rem] text-foreground-dim">{build.buildId}</p></td><td className="p-4 font-mono text-xs text-foreground-muted" title={build.sourceRevision}>{shortRevision(build.sourceRevision)}</td><td className="p-4"><State value={build.validationState} /></td><td className="p-4 text-xs text-foreground-muted">{build.supportedGameVersion}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={build.publishedAt} /></td></tr>)}</tbody></table>{builds.length === 0 && <Empty>No validated builds in this channel.</Empty>}</div>; }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <section className="border border-white/10 bg-surface p-5"><h2 className="font-display text-2xl font-semibold text-foreground">{title}</h2><dl className="mt-4 divide-y divide-white/10">{children}</dl></section>; }
-function Definition({ label, value, tone }: { label: string; value: string; tone?: "ok" | "warning" }) { return <div className="flex items-start justify-between gap-4 py-3 text-xs"><dt className="text-foreground-muted">{label}</dt><dd className={`max-w-[65%] break-words text-right font-medium ${tone === "ok" ? "text-emerald-300" : tone === "warning" ? "text-amber-300" : "text-foreground"}`}>{value}</dd></div>; }
+function Definition({ label, value, tone }: { label: string; value: React.ReactNode; tone?: "ok" | "warning" }) { return <div className="flex items-start justify-between gap-4 py-3 text-xs"><dt className="text-foreground-muted">{label}</dt><dd className={`max-w-[65%] break-words text-right font-medium ${tone === "ok" ? "text-emerald-300" : tone === "warning" ? "text-amber-300" : "text-foreground"}`}>{value}</dd></div>; }
 function Stat({ label, value, view, help }: { label: string; value: number; view: "servers" | "jobs"; help: string }) { return <Link href={`/admin/control-plane?view=${view}`} className="group bg-surface px-5 py-4 outline-none transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-gold" title={help} aria-label={`${label}: ${value}. ${help} Open ${view}.`}><p className="font-display text-3xl font-semibold text-foreground">{value}</p><p className="mt-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-foreground-muted group-hover:text-gold">{label}</p></Link>; }
 function SectionHeading({ eyebrow, title, count }: { eyebrow: string; title: string; count: number }) { return <div className="flex items-end justify-between gap-4"><div><p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-gold">{eyebrow}</p><h2 className="mt-1 font-display text-3xl font-semibold text-foreground">{title}</h2></div><span className="font-display text-xl text-foreground-muted">{count}</span></div>; }
 function State({ value }: { value: string }) { const good = ["running", "succeeded", "validated", "available", "healthy"].includes(value); const bad = ["failed", "degraded", "revoked", "rejected", "cancelled", "unavailable"].includes(value); const explanation = stateExplanation(value); return <span title={explanation} aria-label={`${value}: ${explanation}`} className={`inline-flex cursor-help border px-2 py-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] ${good ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : bad ? "border-crimson/30 bg-crimson/10 text-red-200" : "border-gold/25 bg-gold/8 text-gold"}`}>{value}</span>; }
@@ -462,7 +480,6 @@ function discordUsernameMap(users: readonly DiscordUserSummary[]) { return new M
 function formatDiscordUsername(username: string | undefined) { return username ? `@${username}` : "Username unavailable"; }
 function first(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
 function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations"].includes(value ?? "") ? value as View : "overview"; }
-function formatDate(value: string | null) { return value ? new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "Never"; }
 function formatVpsCost(cost: HostingAdminVpsHost["cost"]) {
     if (!cost) return "Unknown";
     const amount = new Intl.NumberFormat("en", { style: "currency", currency: cost.currencyCode }).format(cost.priceInMicrocents / 100_000_000);
@@ -473,7 +490,6 @@ function formatVpsCost(cost: HostingAdminVpsHost["cost"]) {
             : `${cost.interval} × ${cost.duration}`;
     return `${amount} / ${cadence}`;
 }
-function formatNullable(value: number | null) { return value === null ? "Unknown" : String(value); }
 function formatBytes(value: number) { return value < 1_048_576 ? `${Math.round(value / 1024)} KiB` : `${(value / 1_048_576).toFixed(1)} MiB`; }
 function shortId(value: string | null) { return value ? (value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value) : "—"; }
 function shortRevision(value: string) { return value.slice(0, 12); }

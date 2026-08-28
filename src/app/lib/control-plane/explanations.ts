@@ -75,6 +75,7 @@ const OPERATION_EXPLANATIONS: Record<string, string> = {
     "open-orphan-review": "Reads a previously captured orphan review and its immutable cleanup-group digests.",
     "orphan-review": "Reads a previously captured orphan review and its immutable cleanup-group digests.",
     "reactivate-server": "Clears an administrative hold after current entitlement checks. It does not automatically start the game.",
+    "register-vps-host": "Registers one already-purchased OVH VPS as empty cattle capacity after verifying that the service belongs to the configured OVH account. It never orders, renews, starts, or assigns anything.",
     "reject-build": "Permanently marks a pending build rejected while retaining its receipt and audit history.",
     "replace-provider": "Creates a guarded replacement generation for resize, rebuild, or migration, then cuts over only after backup, restore, and health checks.",
     "reset-password": "Generates or accepts a new game password, stores it through the encrypted secret boundary, and reveals generated output once.",

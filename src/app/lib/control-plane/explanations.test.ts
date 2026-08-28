@@ -19,6 +19,8 @@ test("explains reconciliation and OVH assignment boundaries", () => {
     assert.match(operationExplanation("review-orphans"), /never deletes/iu);
     assert.match(operationExplanation("create-server"), /never purchases/iu);
     assert.match(operationExplanation("create-server"), /fails without creating or billing/iu);
+    assert.match(operationExplanation("register-vps-host"), /already-purchased/iu);
+    assert.match(operationExplanation("register-vps-host"), /never orders/iu);
 });
 
 test("gives destructive cards a concrete warning", () => {
