@@ -34,3 +34,10 @@ test("every control-plane view has a view-specific skeleton", () => {
         assert.match(html, /animate-pulse/);
     }
 });
+
+test("the overview skeleton mirrors the hydrated statistic rows", () => {
+    const html = renderToStaticMarkup(<ControlPlaneViewSkeleton view="overview" />);
+
+    assert.equal(html.match(/bg-surface px-5 py-4/g)?.length, 10);
+    assert.match(html, /class="grid gap-px grid-cols-1 sm:grid-cols-2"/);
+});

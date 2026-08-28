@@ -1,3 +1,5 @@
+import { overviewStatRowClass } from "@/app/lib/control-plane/presentation";
+
 export type ControlPlaneView =
     | "overview"
     | "vps"
@@ -62,13 +64,19 @@ export function ControlPlaneViewSkeleton({ view }: { view: ControlPlaneView }) {
 }
 
 function OverviewSkeleton() {
+    const statRows = [4, 4, 2] as const;
+
     return (
         <div className="space-y-8">
-            <div className="grid gap-px border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
-                {Array.from({ length: 9 }, (_, index) => (
-                    <div key={index} className="bg-surface px-5 py-4">
-                        <Skeleton className="h-9 w-12" />
-                        <Skeleton className="mt-2 h-3 w-24" />
+            <div className="space-y-px border border-white/10 bg-white/10">
+                {statRows.map((count, rowIndex) => (
+                    <div key={rowIndex} className={`grid gap-px ${overviewStatRowClass(count)}`}>
+                        {Array.from({ length: count }, (_, cardIndex) => (
+                            <div key={cardIndex} className="bg-surface px-5 py-4">
+                                <Skeleton className="h-9 w-12" />
+                                <Skeleton className="mt-2 h-3 w-24" />
+                            </div>
+                        ))}
                     </div>
                 ))}
             </div>
