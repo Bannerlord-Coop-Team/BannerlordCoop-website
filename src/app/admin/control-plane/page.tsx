@@ -33,6 +33,11 @@ import {
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import {
+    ControlPlaneViewSkeleton,
+    type ControlPlaneView,
+} from "@/app/admin/control-plane/skeleton";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +46,7 @@ export const metadata: Metadata = {
     description: "Operate the Bannerlord Coop managed-hosting control plane.",
 };
 
-type View = "overview" | "vps" | "servers" | "server" | "jobs" | "releases" | "audit" | "operations";
+type View = ControlPlaneView;
 type PageProps = {
     searchParams: Promise<{
         view?: string | string[];
@@ -64,16 +69,6 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
     const query = (first(params.q) ?? "").trim().slice(0, 100);
     const serverId = (first(params.serverId) ?? "").trim();
     const token = sessionData.session.access_token;
-    let data: unknown = null;
-    let error = "";
-    try {
-        data = await loadView(token, view, query, serverId);
-    } catch (cause) {
-        console.error("Control plane admin view failed to load", cause);
-        error = cause instanceof ControlPlaneAdminError
-            ? cause.message
-            : "The control plane view could not be loaded.";
-    }
 
     return (
         <main className="min-h-svh bg-background">
@@ -109,22 +104,61 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
                 </div>
 
                 <ViewTabs active={view} />
-                {error && (
-                    <div role="alert" className="mt-7 border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
-                        <p>{error}</p>
-                        <p className="mt-1 text-xs text-red-200/70">No direct database or provider fallback was attempted.</p>
-                    </div>
-                )}
-                {!error && view === "overview" && <OverviewView overview={data as Overview} />}
-                {!error && view === "vps" && <VpsView hosts={data as HostingAdminVpsHost[]} />}
-                {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} />}
-                {!error && view === "server" && <ServerView result={data as ServerDashboardResult} />}
-                {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} />}
-                {!error && view === "releases" && <ReleasesView data={data as { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }} />}
-                {!error && view === "audit" && <AuditView page={data as HostingPage<AuditEvent>} />}
-                {!error && view === "operations" && <OperationsView overview={data as Overview} />}
+                <Suspense
+                    key={`${view}:${query}:${serverId}`}
+                    fallback={<ControlPlaneViewSkeleton view={view} />}
+                >
+                    <ControlPlaneViewContent
+                        token={token}
+                        view={view}
+                        query={query}
+                        serverId={serverId}
+                    />
+                </Suspense>
             </div>
         </main>
+    );
+}
+
+async function ControlPlaneViewContent({
+    token,
+    view,
+    query,
+    serverId,
+}: {
+    token: string;
+    view: View;
+    query: string;
+    serverId: string;
+}) {
+    let data: unknown = null;
+    let error = "";
+    try {
+        data = await loadView(token, view, query, serverId);
+    } catch (cause) {
+        console.error("Control plane admin view failed to load", cause);
+        error = cause instanceof ControlPlaneAdminError
+            ? cause.message
+            : "The control plane view could not be loaded.";
+    }
+
+    return (
+        <>
+            {error && (
+                <div role="alert" className="mt-7 border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
+                    <p>{error}</p>
+                    <p className="mt-1 text-xs text-red-200/70">No direct database or provider fallback was attempted.</p>
+                </div>
+            )}
+            {!error && view === "overview" && <OverviewView overview={data as Overview} />}
+            {!error && view === "vps" && <VpsView hosts={data as HostingAdminVpsHost[]} />}
+            {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} />}
+            {!error && view === "server" && <ServerView result={data as ServerDashboardResult} />}
+            {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} />}
+            {!error && view === "releases" && <ReleasesView data={data as { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }} />}
+            {!error && view === "audit" && <AuditView page={data as HostingPage<AuditEvent>} />}
+            {!error && view === "operations" && <OperationsView overview={data as Overview} />}
+        </>
     );
 }
 

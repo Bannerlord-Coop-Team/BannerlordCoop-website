@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "test": "tsx --test src/app/lib/auth/redirect.test.ts src/app/lib/auth/roles.test.ts src/app/lib/hosting/servers.test.ts src/app/lib/hosting/server-names.test.ts src/app/lib/console/access.test.ts src/app/lib/console/catalog.test.ts src/app/lib/control-plane/client.test.ts src/app/lib/ionos/resources.test.ts src/app/cheats/locale.test.ts nightly-gateway/src/core.test.ts nightly-gateway/src/database.test.ts nightly-gateway/src/pin.test.ts supabase/functions/control-plane-admin/index.test.ts && node --test services/console-gateway/access.test.mjs nightly-gateway/sync-installer.test.mjs",
+    "test": "tsx --test src/app/lib/auth/redirect.test.ts src/app/lib/auth/roles.test.ts src/app/lib/hosting/servers.test.ts src/app/lib/hosting/server-names.test.ts src/app/lib/console/access.test.ts src/app/lib/console/catalog.test.ts src/app/lib/control-plane/client.test.ts src/app/admin/control-plane/skeleton.test.tsx src/app/lib/ionos/resources.test.ts src/app/cheats/locale.test.ts nightly-gateway/src/core.test.ts nightly-gateway/src/database.test.ts nightly-gateway/src/pin.test.ts supabase/functions/control-plane-admin/index.test.ts && node --test services/console-gateway/access.test.mjs nightly-gateway/sync-installer.test.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
