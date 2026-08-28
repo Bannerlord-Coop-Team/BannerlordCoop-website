@@ -76,7 +76,7 @@ export function ControlPlaneActionCard({
     }
 
     return (
-        <article className="flex h-full flex-col border border-white/10 bg-surface p-5">
+        <article id={operation} className="flex h-full scroll-mt-6 flex-col border border-white/10 bg-surface p-5">
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-2">

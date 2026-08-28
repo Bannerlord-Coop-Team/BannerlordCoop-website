@@ -81,7 +81,9 @@ export type HostingPage<T> = { items: T[]; nextCursor: string | null };
 
 export type HostingAdminVpsHost = {
     name: string;
+    locationId: string;
     region: string;
+    totalSlots: number;
     runningServers: number;
     availableServers: number;
     cost: {
@@ -99,6 +101,9 @@ export type FleetSummary = {
     entitledUsers: number;
     totalEffectiveQuota: number;
     usedQuota: number;
+    managedVpsCount: number;
+    totalSlots: number;
+    availableSlots: number;
     running: number;
     stopped: number;
     provisioning: number;
