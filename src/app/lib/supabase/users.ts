@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdminClient } from "@/app/lib/supabase/admin";
+import { uniqueDiscordUsers } from "@/app/lib/supabase/discord-users";
 import type { User } from "@supabase/supabase-js";
 
 export const AUTH_USERS_PAGE_SIZE = 1000;
@@ -25,4 +26,9 @@ export async function listSupabaseUsers() {
     }
 
     return { users, truncated };
+}
+
+export async function listDiscordUsers() {
+    const { users, truncated } = await listSupabaseUsers();
+    return { users: uniqueDiscordUsers(users), truncated };
 }
