@@ -65,7 +65,7 @@ function OverviewSkeleton() {
     return (
         <div className="space-y-8">
             <div className="grid gap-px border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
-                {Array.from({ length: 8 }, (_, index) => (
+                {Array.from({ length: 9 }, (_, index) => (
                     <div key={index} className="bg-surface px-5 py-4">
                         <Skeleton className="h-9 w-12" />
                         <Skeleton className="mt-2 h-3 w-24" />
@@ -127,8 +127,8 @@ function OperationsSkeleton() {
 function ReleaseSkeleton() {
     return (
         <div className="space-y-10">
-            <div><HeadingSkeleton /><TableRowsSkeleton columns={4} rows={4} /></div>
-            <div><HeadingSkeleton /><TableRowsSkeleton columns={4} rows={4} /></div>
+            <div><HeadingSkeleton /><TableRowsSkeleton columns={5} rows={4} /></div>
+            <div><HeadingSkeleton /><TableRowsSkeleton columns={5} rows={4} /></div>
         </div>
     );
 }

@@ -4,17 +4,19 @@
 
 The page provides:
 
-- fleet health, provider capacity, reconciliation, and global controls;
+- clickable fleet health summaries, provider capacity, reconciliation, and global controls;
 - registered OVH VPS capacity plus live read-only cost, expiration, and auto-renew metadata;
-- searchable servers with desired/observed state, runtime, release, save, backup, and audit detail;
-- durable job state and retry/cancellation controls;
-- Stable and Nightly release catalogs and validation/revocation actions;
+- searchable servers with Discord usernames, durable state explanations, desired/observed state, runtime, release, save, backup, and audit detail;
+- durable job state and action explanations plus retry/cancellation controls;
+- installable validated Stable and Nightly release catalogs, source commit revisions, and validation/revocation actions;
 - lifecycle, update, rollback, restore, diagnostics, password, suspension, and deletion controls;
 - ownership transfer, manager access, quota, provider replacement, and server creation;
 - bounded provider orphan review/cleanup, fleet reconciliation, batch maintenance, and owner announcements; and
 - the hash-chained audit history.
 
 The website does not query the private `control_plane` schema, call OVH, connect to runner agents, or construct container operations. Browser request UUIDs become the control-plane correlation and idempotency identity. Server and job mutations carry the current `updatedAt` value selected from the page, so stale forms fail rather than overwrite newer state.
+
+The administrator presentation resolves Discord usernames only from bounded Supabase Auth accounts that signed in with Discord. Numeric Discord IDs remain visible and accepted as a fallback. Server creation assigns an existing prepared OVH slot in the selected region; it never orders a VPS, and unavailable capacity fails without creating or billing anything. The normal Releases view hides non-validated history, but pending, rejected, and revoked receipts remain retained for explicit inspection and audit rather than being deleted.
 
 Deploy the Edge Function from the repository root:
 
