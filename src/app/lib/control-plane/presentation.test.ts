@@ -2,11 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ReleaseBuild } from "./types";
 import {
+    fieldRequirementLabel,
     installableBuilds,
     operationCardRowClass,
     operationCardRows,
     overviewStatRowClass,
 } from "./presentation";
+
+test("operation fields explicitly identify required and optional inputs", () => {
+    assert.equal(fieldRequirementLabel(true), "Required");
+    assert.equal(fieldRequirementLabel(false), "Optional");
+});
 
 function build(buildId: string, validationState: string, sourceRevision: string): ReleaseBuild {
     return {

@@ -121,6 +121,12 @@ export type HostingAdminVpsHost = {
 export type HostingAdminVpsInventory = {
     controlPlaneHost: HostingAdminHostResources | null;
     hosts: HostingAdminVpsHost[];
+    availableServiceNames: string[];
+};
+
+export type OperationsData = {
+    overview: Overview;
+    inventory: HostingAdminVpsInventory;
 };
 
 export type FleetSummary = {
