@@ -15,7 +15,12 @@ import {
     operationExplanation,
     stateExplanation,
 } from "@/app/lib/control-plane/explanations";
-import { installableBuilds, overviewStatRowClass } from "@/app/lib/control-plane/presentation";
+import {
+    installableBuilds,
+    operationCardRowClass,
+    operationCardRows,
+    overviewStatRowClass,
+} from "@/app/lib/control-plane/presentation";
 import type {
     AuditEvent,
     Backup,
@@ -337,10 +342,10 @@ function OverviewView({ overview }: { overview: Overview }) {
             </section>
             <section className="grid gap-6 lg:grid-cols-2">
                 <Panel title="Fleet capacity and reconciliation" help="Physical VPS capacity, assigned game-server slots, and the latest comparison between desired state and provider/runner evidence.">
-                    <Definition label="Managed VPS" value={String(fleet.managedVpsCount)} help="VPS hosts whose managed runner onboarding completed successfully and whose slots are eligible for scheduling." />
+                    <Definition label="Managed VPS" value={String(fleet.managedVpsCount)} help="Runner-onboarded VPS hosts plus legacy registered hosts that still own a managed slot." />
                     <Definition label="Managed Bannerlord server instances" value={String(fleet.usedQuota)} help="Slots currently assigned to Discord owners as managed Bannerlord servers." />
-                    <Definition label="Total slots" value={String(fleet.totalSlots)} help="Total supported game-server slots across enrolled hosts. Capacity is one slot per two vCPUs." />
-                    <Definition label="Available slots" value={String(fleet.availableSlots)} help="Enrolled slots that are not currently assigned to a managed server." />
+                    <Definition label="Total slots" value={String(fleet.totalSlots)} help="Declared game-server capacity across managed VPS inventory. Capacity is one slot per two vCPUs." />
+                    <Definition label="Available slots" value={String(fleet.availableSlots)} help="Prepared, healthy runner slots that are ready to be assigned to a managed server." />
                     <Definition label="Orphan candidates" value={String(fleet.provider.orphanCandidateCount)} help="Provider resources that appear to belong to this fleet but do not currently match durable control-plane ownership." />
                     <Definition label="Last reconciled" value={<LocalDateTime value={fleet.lastReconciledAt} />} help="When the latest complete desired-versus-observed fleet comparison finished." />
                 </Panel>
@@ -485,7 +490,11 @@ function OperationsView({ overview, discordUsers }: { overview: Overview; discor
         ...(["inspect", "validate", "reject", "revoke"] as const).map((verb) => ({ group: "Releases and communication", operation: `${verb}-build`, title: `${capitalize(verb)} build`, description: `${capitalize(verb)} one exact release catalog build with an audit reason.`, destructive: verb === "reject" || verb === "revoke", fields: [{ name: "buildId", label: "Build", kind: "select" as const, required: true, options: buildOptions }, reasonField] })),
     ];
     const groups = [...new Set(cards.map((card) => card.group))];
-    return <div className="mt-8 space-y-12">{groups.map((group) => <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={cards.filter((card) => card.group === group).length} /><div className="grid auto-rows-fr gap-5 md:grid-cols-2 xl:grid-cols-3">{cards.filter((card) => card.group === group).map((card) => <ControlPlaneActionCard key={card.operation} {...card} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div></section>)}</div>;
+    return <div className="mt-8 space-y-12">{groups.map((group) => {
+        const groupCards = cards.filter((card) => card.group === group);
+        const rows = operationCardRows(groupCards);
+        return <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={groupCards.length} /><div className="mt-5 space-y-5">{rows.map((row, rowIndex) => <div key={row.map((card) => card.operation).join(":")} className={`grid gap-5 ${operationCardRowClass(row.length)}`}>{row.map((card) => <ControlPlaneActionCard key={card.operation} {...card} alignHeader={group === "Fleet" && rowIndex === 0} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div>)}</div></section>;
+    })}</div>;
 }
 
 function JobsTable({ jobs, allowFailureAcknowledgement = false }: { jobs: HostingJob[]; allowFailureAcknowledgement?: boolean }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-240 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Action</th><th className="p-4">State</th><th className="p-4">Server</th><th className="p-4">Progress</th><th className="p-4">Attempts</th><th className="p-4">Updated</th>{allowFailureAcknowledgement && <th className="p-4">Alert</th>}</tr></thead><tbody className="divide-y divide-white/10">{jobs.map((job) => { const explanation = jobActionExplanation(job.action); return <tr key={job.jobId} className={job.failureAcknowledgedAt ? "opacity-60" : undefined}><td className="p-4"><p className="cursor-help font-semibold text-foreground" title={explanation} aria-label={`${job.action}: ${explanation}`}>{job.action}</p><p className="font-mono text-[0.62rem] text-foreground-dim">{job.jobId}</p></td><td className="p-4"><State value={job.state} /></td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(job.serverId)}</td><td className="p-4 text-xs text-foreground-muted">{job.progressStage}{job.errorCode ? ` · ${job.errorCode}` : ""}</td><td className="p-4 text-xs text-foreground-muted">{job.attemptCount}/{job.maximumAttempts}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={job.updatedAt} /></td>{allowFailureAcknowledgement && <td className="p-4">{job.failureAcknowledgedAt ? <span className="cursor-help text-xs text-foreground-muted" title={`Acknowledged ${job.failureAcknowledgedAt}`}>Silenced</span> : <JobFailureAcknowledgeButton jobId={job.jobId} expectedUpdatedAt={job.updatedAt} />}</td>}</tr>; })}</tbody></table>{jobs.length === 0 && <Empty>No jobs in this view.</Empty>}</div>; }

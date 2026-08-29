@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ReleaseBuild } from "./types";
-import { installableBuilds, overviewStatRowClass } from "./presentation";
+import {
+    installableBuilds,
+    operationCardRowClass,
+    operationCardRows,
+    overviewStatRowClass,
+} from "./presentation";
 
 function build(buildId: string, validationState: string, sourceRevision: string): ReleaseBuild {
     return {
@@ -35,4 +40,41 @@ test("overview statistic cards fill the final row evenly", () => {
     assert.match(overviewStatRowClass(4), /lg:grid-cols-4/u);
     assert.throws(() => overviewStatRowClass(0));
     assert.throws(() => overviewStatRowClass(5));
+});
+
+test("operation cards group similar input density into balanced rows", () => {
+    const cards = [
+        { operation: "onboard", fields: Array.from({ length: 7 }) },
+        { operation: "create", fields: Array.from({ length: 6 }) },
+        { operation: "force", fields: [] },
+        { operation: "review", fields: [] },
+        { operation: "open-review", fields: [true] },
+        { operation: "cleanup", fields: Array.from({ length: 3 }) },
+        { operation: "controls", fields: Array.from({ length: 6 }) },
+    ];
+
+    assert.deepEqual(
+        operationCardRows(cards).map((row) => row.map((card) => card.operation)),
+        [
+            ["onboard", "create"],
+            ["controls", "cleanup"],
+            ["open-review", "force", "review"],
+        ],
+    );
+    assert.deepEqual(
+        operationCardRows([
+            { operation: "retry", fields: [true, true] },
+            { operation: "cancel", fields: [true, true] },
+            { operation: "diagnostics", fields: [true] },
+        ]).map((row) => row.map((card) => card.operation)),
+        [["retry", "cancel"], ["diagnostics"]],
+    );
+});
+
+test("operation card rows expand to their row width", () => {
+    assert.equal(operationCardRowClass(1), "grid-cols-1");
+    assert.match(operationCardRowClass(2), /md:grid-cols-2/u);
+    assert.match(operationCardRowClass(3), /xl:grid-cols-3/u);
+    assert.throws(() => operationCardRowClass(0));
+    assert.throws(() => operationCardRowClass(4));
 });
