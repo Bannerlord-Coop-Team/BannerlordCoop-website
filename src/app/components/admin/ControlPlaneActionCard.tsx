@@ -33,7 +33,6 @@ export function ControlPlaneActionCard({
     description,
     fields,
     destructive = false,
-    alignHeader = false,
     help,
     destructiveReason,
 }: {
@@ -42,7 +41,6 @@ export function ControlPlaneActionCard({
     description: string;
     fields: AdminActionField[];
     destructive?: boolean;
-    alignHeader?: boolean;
     help?: string;
     destructiveReason?: string;
 }) {
@@ -80,7 +78,7 @@ export function ControlPlaneActionCard({
 
     return (
         <article id={operation} className="flex h-full scroll-mt-6 flex-col border border-white/10 bg-surface p-5">
-            <div className={`flex items-start justify-between gap-4 ${alignHeader ? "md:min-h-52" : ""}`}>
+            <div className="flex items-start justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-2">
                         <h3 className="font-display text-xl font-semibold text-foreground">{title}</h3>

@@ -5,6 +5,7 @@ import {
 } from "@/app/components/admin/ControlPlaneActionCard";
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { JobFailureAcknowledgeButton } from "@/app/components/admin/JobFailureAcknowledgeButton";
+import { JobFailuresAcknowledgeButton } from "@/app/components/admin/JobFailuresAcknowledgeButton";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
 import { hasAdminAccess } from "@/app/lib/auth/access";
 import { ControlPlaneAdminError, requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
@@ -25,7 +26,9 @@ import type {
     AuditEvent,
     Backup,
     GlobalControls,
+    HostingAdminHostResources,
     HostingAdminVpsHost,
+    HostingAdminVpsInventory,
     HostingJob,
     HostingPage,
     ManagedServer,
@@ -65,12 +68,21 @@ export const metadata: Metadata = {
 };
 
 type View = ControlPlaneView;
+const JOB_ACTION_FILTERS = [
+    "backup", "console-command", "delete", "delete-save", "export-data", "export-save",
+    "force-stop", "import-save", "migrate-region", "provision", "reactivate", "rebuild",
+    "reboot", "reboot-vm", "reconcile", "reset-password", "resize", "restart", "restart-game",
+    "restore", "rollback", "start", "stop", "suspend", "transfer", "update",
+] as const;
 type PageProps = {
     searchParams: Promise<{
         view?: string | string[];
         q?: string | string[];
         serverId?: string | string[];
         state?: string | string[];
+        action?: string | string[];
+        alert?: string | string[];
+        cursor?: string | string[];
     }>;
 };
 
@@ -88,6 +100,9 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
     const query = (first(params.q) ?? "").trim().slice(0, 100);
     const serverId = (first(params.serverId) ?? "").trim();
     const jobState = parseJobState(first(params.state));
+    const jobAction = parseJobAction(first(params.action));
+    const unacknowledgedOnly = first(params.alert) === "unacknowledged";
+    const jobCursor = parseCursor(first(params.cursor));
     const token = sessionData.session.access_token;
 
     return (
@@ -125,7 +140,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
 
                 <ViewTabs active={view} />
                 <Suspense
-                    key={`${view}:${query}:${serverId}:${jobState ?? "all"}`}
+                    key={`${view}:${query}:${serverId}:${jobState ?? "all"}:${jobAction ?? "all"}:${unacknowledgedOnly ? "unacknowledged" : "any"}:${jobCursor ?? "newest"}`}
                     fallback={<ControlPlaneViewSkeleton view={view} />}
                 >
                     <ControlPlaneViewContent
@@ -134,6 +149,9 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
                         query={query}
                         serverId={serverId}
                         jobState={jobState}
+                        jobAction={jobAction}
+                        unacknowledgedOnly={unacknowledgedOnly}
+                        jobCursor={jobCursor}
                     />
                 </Suspense>
             </div>
@@ -147,12 +165,18 @@ async function ControlPlaneViewContent({
     query,
     serverId,
     jobState,
+    jobAction,
+    unacknowledgedOnly,
+    jobCursor,
 }: {
     token: string;
     view: View;
     query: string;
     serverId: string;
     jobState: "failed" | "active" | null;
+    jobAction: string | null;
+    unacknowledgedOnly: boolean;
+    jobCursor: string | null;
 }) {
     let data: unknown = null;
     let discordUsers: DiscordUserSummary[] = [];
@@ -160,7 +184,7 @@ async function ControlPlaneViewContent({
     try {
         const needsDiscordUsers = view === "servers" || view === "server" || view === "operations";
         const [viewResult, usersResult] = await Promise.allSettled([
-            loadView(token, view, query, serverId, jobState),
+            loadView(token, view, query, serverId, jobState, jobAction, unacknowledgedOnly, jobCursor),
             needsDiscordUsers ? listDiscordUsers() : Promise.resolve({ users: [], truncated: false }),
         ]);
         if (viewResult.status === "rejected") throw viewResult.reason;
@@ -186,10 +210,10 @@ async function ControlPlaneViewContent({
                 </div>
             )}
             {!error && view === "overview" && <OverviewView overview={data as Overview} />}
-            {!error && view === "vps" && <VpsView hosts={data as HostingAdminVpsHost[]} />}
+            {!error && view === "vps" && <VpsView inventory={data as HostingAdminVpsInventory} />}
             {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} discordUsers={discordUsers} />}
             {!error && view === "server" && <ServerView result={data as ServerDashboardResult} discordUsers={discordUsers} />}
-            {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} state={jobState} />}
+            {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} state={jobState} action={jobAction} unacknowledgedOnly={unacknowledgedOnly} cursor={jobCursor} serverId={serverId} />}
             {!error && view === "releases" && <ReleasesView data={data as { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }} />}
             {!error && view === "audit" && <AuditView page={data as HostingPage<AuditEvent>} />}
             {!error && view === "operations" && <OperationsView overview={data as Overview} discordUsers={discordUsers} />}
@@ -197,13 +221,13 @@ async function ControlPlaneViewContent({
     );
 }
 
-async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null) {
+async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null) {
     switch (view) {
         case "overview":
         case "operations":
             return requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" });
         case "vps":
-            return requestControlPlaneAdmin<HostingAdminVpsHost[]>({ accessToken: token, operation: "vps-hosts" });
+            return requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts" });
         case "servers":
             return requestControlPlaneAdmin<HostingPage<ManagedServer>>({
                 accessToken: token,
@@ -222,8 +246,10 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 accessToken: token,
                 operation: "jobs",
                 input: {
-                    filter: jobState === "failed" ? { state: "failed" } : jobState === "active" ? { activeOnly: true } : {},
-                    cursor: null,
+                    filter: jobState === "failed"
+                        ? { state: "failed", ...(jobAction ? { action: jobAction } : {}), ...(serverId ? { serverId } : {}), ...(unacknowledgedOnly ? { failureAcknowledged: false } : {}) }
+                        : jobState === "active" ? { activeOnly: true } : {},
+                    cursor: jobCursor,
                     limit: 100,
                 },
             });
@@ -265,7 +291,8 @@ function ViewTabs({ active }: { active: View }) {
     );
 }
 
-function VpsView({ hosts }: { hosts: HostingAdminVpsHost[] }) {
+function VpsView({ inventory }: { inventory: HostingAdminVpsInventory }) {
+    const { controlPlaneHost, hosts } = inventory;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
     return (
         <section className="mt-8">
@@ -277,6 +304,10 @@ function VpsView({ hosts }: { hosts: HostingAdminVpsHost[] }) {
             <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
                 <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased OVH VPS. The durable workflow verifies account ownership, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
                 <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
+            </div>
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+                <HostResourcesCard name="Oracle control plane" resources={controlPlaneHost} />
+                {hosts.map((host) => <HostResourcesCard key={host.name} name={host.name} resources={host.resources} />)}
             </div>
             <div className="mt-6 overflow-x-auto border border-white/10 bg-surface">
                 <table className="w-full min-w-250 text-left text-sm">
@@ -319,16 +350,16 @@ function VpsView({ hosts }: { hosts: HostingAdminVpsHost[] }) {
 function OverviewView({ overview }: { overview: Overview }) {
     const { fleet, controls } = overview;
     const stats = [
-        { label: "Running", value: fleet.running, view: "servers", help: stateExplanation("running") },
-        { label: "Stopped", value: fleet.stopped, view: "servers", help: stateExplanation("stopped") },
-        { label: "Suspended", value: fleet.suspended, view: "servers", help: stateExplanation("suspended") },
-        { label: "Provisioning", value: fleet.provisioning, view: "servers", help: stateExplanation("provisioning") },
-        { label: "Failed / degraded", value: fleet.failedOrDegraded, view: "servers", help: `${stateExplanation("failed")} ${stateExplanation("degraded")}` },
-        { label: "Active jobs", value: fleet.activeJobs, view: "jobs", help: "Durable jobs that are queued, running, or waiting to retry." },
-        { label: "Unhealthy agents", value: fleet.agentUnhealthyOrUnknown, view: "servers", help: "Servers whose runner agent is unhealthy or lacks current trustworthy evidence." },
-        { label: "Pending deletion", value: fleet.pendingDeletion, view: "servers", help: stateExplanation("deletion-pending") },
-        { label: "Backup failures", value: fleet.backupFailures, view: "jobs", help: "Recent backup jobs that need administrator review." },
-        { label: "Failed jobs", value: fleet.observability.recentJobFailures, view: "jobs", state: "failed", help: "Failed jobs in the current observability window that have not been acknowledged by an administrator." },
+        { label: "Running", value: fleet.running, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("running") },
+        { label: "Stopped", value: fleet.stopped, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("stopped") },
+        { label: "Suspended", value: fleet.suspended, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("suspended") },
+        { label: "Provisioning", value: fleet.provisioning, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("provisioning") },
+        { label: "Failed / degraded", value: fleet.failedOrDegraded, href: "/admin/control-plane?view=servers", destination: "servers", help: `${stateExplanation("failed")} ${stateExplanation("degraded")}` },
+        { label: "Active jobs", value: fleet.activeJobs, href: "/admin/control-plane?view=jobs&state=active", destination: "jobs", help: "Durable jobs that are queued, running, or waiting to retry." },
+        { label: "Unhealthy agents", value: fleet.agentUnhealthyOrUnknown, href: "/admin/control-plane?view=servers", destination: "servers", help: "Servers whose runner agent is unhealthy or lacks current trustworthy evidence." },
+        { label: "Pending deletion", value: fleet.pendingDeletion, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("deletion-pending") },
+        { label: "Backup failures", value: fleet.backupFailures, href: "/admin/control-plane?view=jobs&state=failed&action=backup&alert=unacknowledged", destination: "failed backup jobs", help: "Unacknowledged failed backup jobs that need administrator review." },
+        { label: "Failed jobs", value: fleet.observability.recentJobFailures, href: "/admin/control-plane?view=jobs&state=failed&alert=unacknowledged", destination: "failed jobs", help: "Failed jobs in the current observability window that have not been acknowledged by an administrator." },
     ] as const;
     const statRows = chunk(stats, 4);
     return (
@@ -412,13 +443,72 @@ function ServerView({ result, discordUsers }: { result: ServerDashboardResult; d
     );
 }
 
-function JobsView({ page, state }: { page: HostingPage<HostingJob>; state: "failed" | "active" | null }) {
+function JobsView({
+    page,
+    state,
+    action,
+    unacknowledgedOnly,
+    cursor,
+    serverId,
+}: {
+    page: HostingPage<HostingJob>;
+    state: "failed" | "active" | null;
+    action: string | null;
+    unacknowledgedOnly: boolean;
+    cursor: string | null;
+    serverId: string;
+}) {
     const filters = [
         { label: "All", href: "/admin/control-plane?view=jobs", active: state === null },
         { label: "Active", href: "/admin/control-plane?view=jobs&state=active", active: state === "active" },
         { label: "Failed", href: "/admin/control-plane?view=jobs&state=failed", active: state === "failed" },
     ];
-    return <section className="mt-8"><div className="flex flex-wrap items-end justify-between gap-4"><SectionHeading eyebrow="Durable queue" title={state === "failed" ? "Failed jobs" : state === "active" ? "Active jobs" : "Jobs"} count={page.items.length} /><nav aria-label="Job filters" className="flex gap-2">{filters.map((filter) => <Link key={filter.label} href={filter.href} aria-current={filter.active ? "page" : undefined} className={`border px-3 py-2 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] ${filter.active ? "border-gold/40 bg-gold/10 text-gold" : "border-white/10 text-foreground-muted hover:border-white/25 hover:text-foreground"}`}>{filter.label}</Link>)}</nav></div>{state === "failed" && <p className="mt-3 max-w-3xl text-xs leading-5 text-foreground-muted">Silencing acknowledges only the exact failed attempt. It remains in durable job and audit history, but no longer contributes to the Overview failed-job alert. A later failure after retry is a new alert.</p>}<JobsTable jobs={page.items} allowFailureAcknowledgement={state === "failed"} /></section>;
+    const currentFilter = {
+        state: "failed",
+        ...(action ? { action } : {}),
+        ...(serverId ? { serverId } : {}),
+        ...(unacknowledgedOnly ? { failureAcknowledged: false } : {}),
+    };
+    const base = new URLSearchParams({ view: "jobs", ...(state ? { state } : {}), ...(action ? { action } : {}), ...(serverId ? { serverId } : {}), ...(unacknowledgedOnly ? { alert: "unacknowledged" } : {}) });
+    const older = page.nextCursor ? new URLSearchParams(base) : null;
+    if (older && page.nextCursor) older.set("cursor", page.nextCursor);
+    return (
+        <section className="mt-8">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+                <SectionHeading eyebrow="Durable queue" title={state === "failed" ? "Failed jobs" : state === "active" ? "Active jobs" : "Jobs"} count={page.items.length} />
+                <nav aria-label="Job filters" className="flex gap-2">{filters.map((filter) => <Link key={filter.label} href={filter.href} aria-current={filter.active ? "page" : undefined} className={`border px-3 py-2 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] ${filter.active ? "border-gold/40 bg-gold/10 text-gold" : "border-white/10 text-foreground-muted hover:border-white/25 hover:text-foreground"}`}>{filter.label}</Link>)}</nav>
+            </div>
+            {state === "failed" && (
+                <div className="mt-4 flex flex-col gap-4 border border-white/10 bg-surface p-4 lg:flex-row lg:items-end lg:justify-between">
+                    <form method="get" className="grid flex-1 gap-3 sm:grid-cols-2 lg:max-w-2xl">
+                        <input type="hidden" name="view" value="jobs" />
+                        <input type="hidden" name="state" value="failed" />
+                        {serverId && <input type="hidden" name="serverId" value={serverId} />}
+                        <label className="text-xs text-foreground-muted">Action
+                            <select name="action" defaultValue={action ?? ""} className="mt-1.5 min-h-10 w-full border border-white/15 bg-background px-3 text-xs text-foreground outline-none focus:border-gold">
+                                <option value="">All actions</option>
+                                {JOB_ACTION_FILTERS.map((value) => <option key={value} value={value}>{value}</option>)}
+                            </select>
+                        </label>
+                        <label className="text-xs text-foreground-muted">Alert status
+                            <select name="alert" defaultValue={unacknowledgedOnly ? "unacknowledged" : ""} className="mt-1.5 min-h-10 w-full border border-white/15 bg-background px-3 text-xs text-foreground outline-none focus:border-gold">
+                                <option value="">All failures</option>
+                                <option value="unacknowledged">Needs review</option>
+                            </select>
+                        </label>
+                        <button className="min-h-10 border border-crimson bg-crimson px-4 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-white sm:col-span-2">Apply filters</button>
+                    </form>
+                    <JobFailuresAcknowledgeButton filter={currentFilter} disabled={!page.items.some((job) => !job.failureAcknowledgedAt)} />
+                </div>
+            )}
+            {state === "failed" && <p className="mt-3 max-w-3xl text-xs leading-5 text-foreground-muted">Silencing acknowledges matching failed attempts. Jobs and audit evidence remain durable, while acknowledged attempts stop contributing to Overview failure alerts. A later failed retry creates a new alert.</p>}
+            <JobsTable jobs={page.items} allowFailureAcknowledgement={state === "failed"} />
+            <nav aria-label="Job pages" className="mt-4 flex justify-end gap-2">
+                {cursor && <Link href={`/admin/control-plane?${base.toString()}`} className="border border-white/15 px-4 py-2 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-foreground-muted hover:border-gold/40 hover:text-gold">Newest jobs</Link>}
+                {older && <Link href={`/admin/control-plane?${older.toString()}`} className="border border-white/15 px-4 py-2 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-foreground-muted hover:border-gold/40 hover:text-gold">Older jobs</Link>}
+            </nav>
+        </section>
+    );
 }
 function AuditView({ page }: { page: HostingPage<AuditEvent> }) { return <section className="mt-8"><SectionHeading eyebrow="Hash-chained history" title="Audit events" count={page.items.length} /><AuditTable events={page.items} /></section>; }
 
@@ -493,7 +583,7 @@ function OperationsView({ overview, discordUsers }: { overview: Overview; discor
     return <div className="mt-8 space-y-12">{groups.map((group) => {
         const groupCards = cards.filter((card) => card.group === group);
         const rows = operationCardRows(groupCards);
-        return <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={groupCards.length} /><div className="mt-5 space-y-5">{rows.map((row, rowIndex) => <div key={row.map((card) => card.operation).join(":")} className={`grid gap-5 ${operationCardRowClass(row.length)}`}>{row.map((card) => <ControlPlaneActionCard key={card.operation} {...card} alignHeader={group === "Fleet" && rowIndex === 0} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div>)}</div></section>;
+        return <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={groupCards.length} /><div className="mt-5 space-y-5">{rows.map((row) => <div key={row.map((card) => card.operation).join(":")} className={`grid gap-5 ${operationCardRowClass(row.length)}`}>{row.map((card) => <ControlPlaneActionCard key={card.operation} {...card} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div>)}</div></section>;
     })}</div>;
 }
 
@@ -502,9 +592,27 @@ function BackupsTable({ backups }: { backups: Backup[] }) { return <div classNam
 function AuditTable({ events }: { events: AuditEvent[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-240 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Time</th><th className="p-4">Action</th><th className="p-4">Actor</th><th className="p-4">Server</th><th className="p-4">Reason</th><th className="p-4">Correlation</th></tr></thead><tbody className="divide-y divide-white/10">{events.map((event) => { const explanation = auditActionExplanation(event.action); return <tr key={event.eventId} className="cursor-help hover:bg-white/[0.025]" title={explanation} aria-label={`${event.action}: ${explanation}`}><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={event.occurredAt} /></td><td className="p-4 text-xs font-semibold text-foreground underline decoration-dotted underline-offset-4">{event.action}</td><td className="p-4 text-xs text-foreground-muted">{event.actorType}<br />{shortId(event.actorId)}</td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(event.targetServerId)}</td><td className="max-w-80 p-4 text-xs text-foreground-muted">{event.reason ?? "—"}</td><td className="p-4 font-mono text-[0.62rem] text-foreground-dim">{shortId(event.correlationId)}</td></tr>; })}</tbody></table>{events.length === 0 && <Empty>No audit events in this view.</Empty>}</div>; }
 function BuildTable({ builds }: { builds: ReleaseBuild[] }) { return <div className="mt-4 border border-white/10 bg-surface"><table className="w-full table-fixed text-left text-sm"><colgroup><col className="w-[28%]" /><col className="w-[17%]" /><col className="w-[20%]" /><col className="w-[12%]" /><col className="w-[23%]" /></colgroup><thead className="border-b border-white/10 font-label text-[0.6rem] uppercase tracking-[0.09em] text-foreground-muted"><tr><th className="px-2 py-4 sm:px-4">Version</th><th className="px-2 py-4 sm:px-4">Commit</th><th className="px-2 py-4 sm:px-4">Validation</th><th className="px-2 py-4 sm:px-4">Game</th><th className="px-2 py-4 sm:px-4">Published</th></tr></thead><tbody className="divide-y divide-white/10">{builds.map((build) => <tr key={build.buildId}><td className="min-w-0 px-2 py-4 sm:px-4"><p className="truncate font-semibold text-foreground" title={build.version}>{build.version}</p><p className="truncate font-mono text-[0.6rem] text-foreground-dim" title={build.buildId}>{shortId(build.buildId)}</p></td><td className="break-all px-2 py-4 font-mono text-xs text-foreground-muted sm:px-4" title={build.sourceRevision}>{shortRevision(build.sourceRevision)}</td><td className="px-2 py-4 sm:px-4"><State value={build.validationState} /></td><td className="break-words px-2 py-4 text-xs text-foreground-muted sm:px-4">{build.supportedGameVersion}</td><td className="px-2 py-4 text-xs text-foreground-muted sm:px-4"><LocalDateTime value={build.publishedAt} /></td></tr>)}</tbody></table>{builds.length === 0 && <Empty>No validated builds in this channel.</Empty>}</div>; }
 
+function HostResourcesCard({ name, resources }: { name: string; resources: HostingAdminHostResources | null }) {
+    return (
+        <section className="border border-white/10 bg-surface p-5">
+            <div className="flex items-start justify-between gap-4">
+                <div><p className="font-label text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-gold">System resources</p><h3 className="mt-1 break-all font-display text-xl font-semibold text-foreground">{name}</h3></div>
+                <State value={resources ? "available" : "unavailable"} />
+            </div>
+            {resources ? <dl className="mt-4 grid gap-x-5 sm:grid-cols-2">
+                <Definition label="Disk" value={`${formatStorageBytes(resources.diskUsedBytes)} used · ${formatStorageBytes(resources.diskFreeBytes)} free`} help={`Total filesystem capacity: ${formatStorageBytes(resources.diskTotalBytes)}.`} />
+                <Definition label="Memory" value={`${formatStorageBytes(resources.memoryUsedBytes)} / ${formatStorageBytes(resources.memoryTotalBytes)}`} help="Current host memory use and total physical memory." />
+                <Definition label="CPU load" value={`${resources.cpuPercent.toFixed(1)}%`} help="One-minute load average normalized by the host CPU count; this is a load estimate, not billing data." />
+                <Definition label="Uptime" value={formatUptime(resources.uptimeSeconds)} help="Elapsed host uptime at the observation time." />
+                <Definition label="Observed" value={<LocalDateTime value={resources.observedAt} />} help="When the host supplied this bounded resource snapshot." />
+            </dl> : <p className="mt-4 text-xs leading-5 text-foreground-muted">No current trusted resource observation is available. For a managed VPS this normally means its runner route is not active yet.</p>}
+        </section>
+    );
+}
+
 function Panel({ title, children, help }: { title: string; children: React.ReactNode; help?: string }) { return <section className="border border-white/10 bg-surface p-5"><h2 className={`font-display text-2xl font-semibold text-foreground ${help ? "cursor-help" : ""}`} title={help}>{title}</h2><dl className="mt-4 divide-y divide-white/10">{children}</dl></section>; }
 function Definition({ label, value, tone, help }: { label: string; value: React.ReactNode; tone?: "ok" | "warning"; help?: string }) { return <div className="flex items-start justify-between gap-4 py-3 text-xs"><dt className={`${help ? "cursor-help underline decoration-dotted underline-offset-4" : ""} text-foreground-muted`} title={help} aria-label={help ? `${label}: ${help}` : undefined}>{label}</dt><dd className={`max-w-[65%] break-words text-right font-medium ${tone === "ok" ? "text-emerald-300" : tone === "warning" ? "text-amber-300" : "text-foreground"}`}>{value}</dd></div>; }
-function Stat({ label, value, view, state, help }: { label: string; value: number; view: "servers" | "jobs"; state?: "failed"; help: string }) { const suffix = state ? `&state=${state}` : ""; return <Link href={`/admin/control-plane?view=${view}${suffix}`} className="group bg-surface px-5 py-4 outline-none transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-gold" title={help} aria-label={`${label}: ${value}. ${help} Open ${view}.`}><p className="font-display text-3xl font-semibold text-foreground">{value}</p><p className="mt-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-foreground-muted group-hover:text-gold">{label}</p></Link>; }
+function Stat({ label, value, href, destination, help }: { label: string; value: number; href: string; destination: string; help: string }) { return <Link href={href} className="group bg-surface px-5 py-4 outline-none transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-gold" title={help} aria-label={`${label}: ${value}. ${help} Open ${destination}.`}><p className="font-display text-3xl font-semibold text-foreground">{value}</p><p className="mt-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-foreground-muted group-hover:text-gold">{label}</p></Link>; }
 function SectionHeading({ eyebrow, title, count }: { eyebrow: string; title: string; count: number }) { return <div className="flex items-end justify-between gap-4"><div><p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-gold">{eyebrow}</p><h2 className="mt-1 font-display text-3xl font-semibold text-foreground">{title}</h2></div><span className="font-display text-xl text-foreground-muted">{count}</span></div>; }
 function State({ value }: { value: string }) { const good = ["running", "succeeded", "validated", "available", "healthy"].includes(value); const bad = ["failed", "degraded", "revoked", "rejected", "cancelled", "unavailable"].includes(value); const explanation = stateExplanation(value); return <span title={explanation} aria-label={`${value}: ${explanation}`} className={`inline-flex cursor-help border px-2 py-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] ${good ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : bad ? "border-crimson/30 bg-crimson/10 text-red-200" : "border-gold/25 bg-gold/8 text-gold"}`}>{value}</span>; }
 function Empty({ children }: { children: React.ReactNode }) { return <div className="px-6 py-12 text-center text-sm text-foreground-muted">{children}</div>; }
@@ -514,7 +622,11 @@ function ReleaseHistoryNote({ hidden }: { hidden: number }) { return hidden > 0 
 function RuntimeObservation({ server }: { server: ManagedServer }) {
     const suspendedWhileRunning = server.operationState === "suspended" && server.observedGameState === "running";
     const runtimeHelp = `Observed VM state is ${server.observedVmState}; the shared host may remain running while a game is stopped. Observed game state is ${server.observedGameState}; this is the latest runner-confirmed game-container state.`;
-    return <div className="text-xs text-foreground-muted" title={runtimeHelp}><p className="cursor-help">VM {server.observedVmState} · Game {server.observedGameState}</p>{suspendedWhileRunning && <p className="mt-1 cursor-help font-semibold text-amber-300" title="The administrative hold is active, but a graceful Stop has not yet been confirmed. Owner operations remain blocked while the stop job or reconciliation completes.">Suspended · stop not confirmed</p>}</div>;
+    const failedStopHref = `/admin/control-plane?view=jobs&state=failed&action=stop&serverId=${encodeURIComponent(server.serverId)}`;
+    const stopHelp = server.provider === "experiment-host"
+        ? "This retired experiment-provider server cannot be operated by the current OVH-only runtime. Its last Stop failed and automatic OVH reconciliation intentionally excludes it."
+        : "The administrative hold is active, but the runner has not confirmed a graceful Stop. Review the failed Stop evidence.";
+    return <div className="text-xs text-foreground-muted" title={runtimeHelp}><p className="cursor-help">VM {server.observedVmState} · Game {server.observedGameState}</p>{suspendedWhileRunning && <Link href={failedStopHref} className="mt-1 block cursor-help font-semibold text-amber-300 underline decoration-dotted underline-offset-4" title={stopHelp}>Suspended · stop not confirmed</Link>}</div>;
 }
 
 function controlRows(controls: GlobalControls) { return [
@@ -531,6 +643,8 @@ function formatDiscordUsername(username: string | undefined) { return username ?
 function first(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
 function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations"].includes(value ?? "") ? value as View : "overview"; }
 function parseJobState(value: string | undefined): "failed" | "active" | null { return value === "failed" || value === "active" ? value : null; }
+function parseJobAction(value: string | undefined): string | null { return JOB_ACTION_FILTERS.includes(value as typeof JOB_ACTION_FILTERS[number]) ? value ?? null : null; }
+function parseCursor(value: string | undefined): string | null { const normalized = value?.trim() ?? ""; return normalized.length > 0 && normalized.length <= 4_096 ? normalized : null; }
 function formatVpsCost(cost: HostingAdminVpsHost["cost"]) {
     if (!cost) return "Unknown";
     const amount = new Intl.NumberFormat("en", { style: "currency", currency: cost.currencyCode }).format(cost.priceInMicrocents / 100_000_000);
@@ -542,6 +656,8 @@ function formatVpsCost(cost: HostingAdminVpsHost["cost"]) {
     return `${amount} / ${cadence}`;
 }
 function formatBytes(value: number) { return value < 1_048_576 ? `${Math.round(value / 1024)} KiB` : `${(value / 1_048_576).toFixed(1)} MiB`; }
+function formatStorageBytes(value: number) { return value >= 1_073_741_824 ? `${(value / 1_073_741_824).toFixed(1)} GiB` : formatBytes(value); }
+function formatUptime(seconds: number) { const days = Math.floor(seconds / 86_400); const hours = Math.floor((seconds % 86_400) / 3_600); return days > 0 ? `${days}d ${hours}h` : `${hours}h`; }
 function shortId(value: string | null) { return value ? (value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value) : "—"; }
 function shortRevision(value: string) { return value.slice(0, 12); }
 function capitalize(value: string) { return value[0]?.toUpperCase() + value.slice(1); }

@@ -81,6 +81,17 @@ export type AuditEvent = {
 
 export type HostingPage<T> = { items: T[]; nextCursor: string | null };
 
+export type HostingAdminHostResources = {
+    observedAt: string;
+    uptimeSeconds: number;
+    cpuPercent: number;
+    memoryUsedBytes: number;
+    memoryTotalBytes: number;
+    diskUsedBytes: number;
+    diskFreeBytes: number;
+    diskTotalBytes: number;
+};
+
 export type HostingAdminVpsHost = {
     name: string;
     locationId: string;
@@ -97,6 +108,7 @@ export type HostingAdminVpsHost = {
     expirationDate: string | null;
     autoRenew: boolean | null;
     providerCheckedAt: string | null;
+    resources: HostingAdminHostResources | null;
     runnerOnboarding: {
         state: "queued" | "running" | "retry-wait" | "succeeded" | "failed";
         progressStage: string;
@@ -104,6 +116,11 @@ export type HostingAdminVpsHost = {
         sourceCommit: string | null;
         updatedAt: string;
     } | null;
+};
+
+export type HostingAdminVpsInventory = {
+    controlPlaneHost: HostingAdminHostResources | null;
+    hosts: HostingAdminVpsHost[];
 };
 
 export type FleetSummary = {
