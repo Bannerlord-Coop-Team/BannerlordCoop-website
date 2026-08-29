@@ -4,6 +4,7 @@ import { CircleHelp, LoaderCircle, Play, TriangleAlert } from "lucide-react";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { resolveDiscordUserReference } from "@/app/lib/supabase/discord-users";
+import { fieldRequirementLabel } from "@/app/lib/control-plane/presentation";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -47,6 +48,11 @@ export function ControlPlaneActionCard({
     const router = useRouter();
     const [pending, setPending] = useState(false);
     const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+    const unavailableField = fields.find((field) => (
+        field.required === true
+        && ["select", "server", "job"].includes(field.kind ?? "")
+        && (field.options?.length ?? 0) === 0
+    ));
 
     async function submit(formData: FormData) {
         if (destructive && !window.confirm(`Run “${title}”? The control plane will enforce its current-state and confirmation gates.`)) {
@@ -100,14 +106,15 @@ export function ControlPlaneActionCard({
                 <div className="grid gap-3">
                     {fields.map((field) => <ActionField key={field.name} field={field} />)}
                 </div>
+                {unavailableField && <p className="mt-3 text-xs leading-5 text-amber-300">No eligible {unavailableField.label.toLowerCase()} is currently available.</p>}
                 <div className="mt-auto pt-4">
                     <button
                         type="submit"
-                        disabled={pending}
+                        disabled={pending || unavailableField !== undefined}
                         className="inline-flex min-h-10 w-full items-center justify-center gap-2 border border-crimson bg-crimson px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:bg-crimson-hover disabled:cursor-wait disabled:opacity-60"
                     >
                         {pending ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <Play aria-hidden="true" className="size-3.5" />}
-                        {pending ? "Working" : "Run"}
+                        {pending ? "Working" : unavailableField ? "Unavailable" : "Run"}
                     </button>
                 </div>
             </form>
@@ -133,12 +140,12 @@ function ActionField({ field }: { field: AdminActionField }) {
                     defaultChecked={field.defaultValue === true}
                     className="size-4 accent-crimson"
                 />
-                <span>{field.label}</span>
+                <span>{field.label}</span><FieldRequirement required={field.required === true} />
                 {field.help && <HelpIcon label={`${field.label}: ${field.help}`} help={field.help} />}
             </label>
         );
     }
-    const label = <span className="inline-flex items-center gap-1.5 font-label text-[0.6rem] font-semibold uppercase tracking-[0.13em] text-foreground-muted">{field.label}{field.help && <HelpIcon label={`${field.label}: ${field.help}`} help={field.help} />}</span>;
+    const label = <span className="inline-flex items-center gap-1.5 font-label text-[0.6rem] font-semibold uppercase tracking-[0.13em] text-foreground-muted">{field.label}<FieldRequirement required={field.required === true} />{field.help && <HelpIcon label={`${field.label}: ${field.help}`} help={field.help} />}</span>;
     const className = "mt-1.5 min-h-10 w-full border border-white/15 bg-background px-3 text-xs text-foreground outline-none placeholder:text-foreground-dim focus:border-gold";
     if (field.kind === "textarea") {
         return <label>{label}<textarea name={field.name} required={field.required} placeholder={field.placeholder} defaultValue={String(field.defaultValue ?? "")} rows={3} className={`${className} py-2`} /></label>;
@@ -148,7 +155,7 @@ function ActionField({ field }: { field: AdminActionField }) {
             <label>
                 {label}
                 <select name={field.name} required={field.required} defaultValue={String(field.defaultValue ?? "")} className={className}>
-                    {!field.required && <option value="">None</option>}
+                    {field.required ? <option value="" disabled>{field.options?.length ? "Select…" : "No options available"}</option> : <option value="">None</option>}
                     {field.options?.map((option) => (
                         <option
                             key={`${option.value}:${option.updatedAt ?? ""}`}
@@ -198,6 +205,10 @@ function ActionField({ field }: { field: AdminActionField }) {
             />
         </label>
     );
+}
+
+function FieldRequirement({ required }: { required: boolean }) {
+    return <span className={`border px-1.5 py-0.5 text-[0.5rem] tracking-[0.08em] ${required ? "border-gold/30 text-gold" : "border-white/10 text-foreground-dim"}`}>{fieldRequirementLabel(required)}</span>;
 }
 
 function buildInput(fields: AdminActionField[], formData: FormData) {

@@ -32,6 +32,7 @@ import type {
     HostingJob,
     HostingPage,
     ManagedServer,
+    OperationsData,
     Overview,
     ReleaseBuild,
     ServerDashboardResult,
@@ -216,7 +217,7 @@ async function ControlPlaneViewContent({
             {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} state={jobState} action={jobAction} unacknowledgedOnly={unacknowledgedOnly} cursor={jobCursor} serverId={serverId} />}
             {!error && view === "releases" && <ReleasesView data={data as { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }} />}
             {!error && view === "audit" && <AuditView page={data as HostingPage<AuditEvent>} />}
-            {!error && view === "operations" && <OperationsView overview={data as Overview} discordUsers={discordUsers} />}
+            {!error && view === "operations" && <OperationsView data={data as OperationsData} discordUsers={discordUsers} />}
         </>
     );
 }
@@ -224,8 +225,14 @@ async function ControlPlaneViewContent({
 async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null) {
     switch (view) {
         case "overview":
-        case "operations":
             return requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" });
+        case "operations": {
+            const [overview, inventory] = await Promise.all([
+                requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" }),
+                requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts" }),
+            ]);
+            return { overview, inventory } satisfies OperationsData;
+        }
         case "vps":
             return requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts" });
         case "servers":
@@ -293,12 +300,13 @@ function ViewTabs({ active }: { active: View }) {
 
 function VpsView({ inventory }: { inventory: HostingAdminVpsInventory }) {
     const { controlPlaneHost, hosts } = inventory;
+    const availableServiceNames = Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : [];
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
     return (
         <section className="mt-8">
             <SectionHeading eyebrow="OVHcloud inventory" title="VPS hosts" count={hosts.length} />
             <p className="mt-3 text-xs text-foreground-muted">
-                Capacity combines registered control-plane slots with live read-only OVH account billing data.
+                Capacity combines registered control-plane slots with live read-only OVH account billing data. {availableServiceNames.length} authenticated OVH {availableServiceNames.length === 1 ? "VPS is" : "VPS products are"} available to onboard.
                 {checkedAt && <> Provider data checked <LocalDateTime value={checkedAt} />.</>}
             </p>
             <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
@@ -520,29 +528,27 @@ function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nig
     return <div className="mt-8 grid gap-8 xl:grid-cols-2"><section><SectionHeading eyebrow="Validated release channel" title="Stable" count={stable.length} /><ReleaseHistoryNote hidden={hiddenStable} /><BuildTable builds={stable} /></section><section><SectionHeading eyebrow="Validated release channel" title="Nightly" count={nightly.length} /><ReleaseHistoryNote hidden={hiddenNightly} /><BuildTable builds={nightly} /></section></div>;
 }
 
-function OperationsView({ overview, discordUsers }: { overview: Overview; discordUsers: DiscordUserSummary[] }) {
+function OperationsView({ data, discordUsers }: { data: OperationsData; discordUsers: DiscordUserSummary[] }) {
+    const { overview, inventory } = data;
     const serverOptions: AdminActionOption[] = overview.servers.items.map((server) => ({ label: `${server.displayName} · ${server.operationState}`, value: server.serverId, updatedAt: server.updatedAt }));
     const serverPlainOptions = serverOptions.map(({ label, value }) => ({ label, value }));
     const jobOptions: AdminActionOption[] = overview.jobs.items.map((job) => ({ label: `${job.action} · ${job.state} · ${shortId(job.jobId)}`, value: job.jobId, updatedAt: job.updatedAt }));
     const buildOptions = [...overview.stableBuilds.items, ...overview.nightlyBuilds.items].map((build) => ({ label: `${build.channel} · ${build.version} · ${build.validationState}`, value: build.buildId }));
     const discordUserOptions: AdminActionOption[] = discordUsers.map((user) => ({ label: user.username, value: user.discordUserId }));
+    const availableVpsOptions: AdminActionOption[] = (Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : []).map((serviceName) => ({ label: serviceName, value: serviceName }));
     const discordUserField = (name: string, label: string): AdminActionField => ({ name, label, kind: "discord-user", required: true, options: discordUserOptions, help: "Enter the account's unique Discord username or its numeric Discord user ID. The username must belong to a user who has signed into this website with Discord." });
     const reasonField: AdminActionField = { name: "reason", label: "Reason", kind: "textarea", required: true, placeholder: "Why this administrative action is necessary", help: "Stored in the immutable administrative audit event." };
     const serverField: AdminActionField = { name: "serverId", label: "Server", kind: "server", required: true, options: serverOptions, help: "The selected row carries its current update generation so a stale action fails safely." };
     const plainServerField: AdminActionField = { name: "serverId", label: "Server", kind: "select", required: true, options: serverPlainOptions };
     const compatibilityField: AdminActionField = { name: "allowCompatibilityOverride", label: "Override unknown save compatibility", kind: "checkbox", help: "Use only after reviewing the save and build. This permits an unknown compatibility result; it does not bypass a known incompatibility." };
     const cards: Array<{ group: string; operation: string; title: string; description: string; fields: AdminActionField[]; destructive?: boolean }> = [
-        { group: "Fleet", operation: "onboard-vps-host", title: "Onboard existing OVH VPS", description: "Turn one already-purchased OVH VPS into ready managed capacity. This durable workflow verifies the OVH service, pins its SSH identity, installs the reviewed rootless Podman runner, prepares every isolated slot, establishes private routes, enrolls mTLS identities, activates agents, and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.", fields: [
-            { name: "serviceName", label: "OVH service name", required: true, placeholder: "vps-example.vps.ovh.us", help: "The exact OVH service name. It must already exist in the authenticated OVH account." },
-            { name: "locationId", label: "Control-plane location ID", required: true, placeholder: "us-east-va", help: "The exact reviewed location ID configured for this control plane, not a display label." },
-            { name: "friendlyRegion", label: "User-facing region", kind: "select", required: true, options: enumOptions(["germany", "united-kingdom", "spain", "united-states", "europe-automatic"]), help: "The region owners see when selecting placement." },
-            { name: "vCpu", label: "vCPU count", kind: "number", required: true, minimum: 2, maximum: 64, help: "Capacity is calculated as floor(vCPU / 2): one Bannerlord slot per two vCPUs." },
-            { name: "publicIpv4", label: "Public IPv4", required: true, placeholder: "15.204.120.17", help: "The VPS public IPv4 used by the reviewed runner-enrollment workflow. Private and reserved addresses are rejected." },
+        { group: "Fleet", operation: "onboard-vps-host", title: "Onboard existing OVH VPS", description: "Select one already-purchased VPS discovered from the authenticated OVH account. The control plane derives and validates its service identity, reviewed location, region, vCPU capacity, and primary public IPv4; then it pins SSH identity, installs every managed runner slot, establishes private mTLS routes, and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.", fields: [
+            { name: "serviceName", label: "Available OVH VPS", kind: "select", required: true, options: availableVpsOptions, defaultValue: availableVpsOptions.length === 1 ? availableVpsOptions[0]!.value : "", help: "Only VPS products discovered in the authenticated OVH account and not already registered are shown. Provider details are read and validated again when you submit." },
             { name: "hostPublicKey", label: "SSH host public key", kind: "textarea", required: true, placeholder: "ssh-ed25519 AAAA…", help: "Paste the VPS's exact Ed25519 SSH host public key from the OVH console or another authenticated source. This is not a secret. The VPS must be Debian 12 and already authorize the control plane's existing operator SSH public key for either root or the default debian account with passwordless sudo; the workflow installs the remaining OS and runner prerequisites." },
             reasonField,
         ] },
-        { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
-            discordUserField("ownerDiscordUserId", "Owner Discord username or ID"), { name: "ownerRoleIds", label: "Current Discord role IDs", valueType: "csv", placeholder: "Comma separated", help: "Current entitlement roles are rechecked by the control plane; these values cannot grant an entitlement on their own." },
+        { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity. The owner's current entitlement comes from the control plane's authoritative Discord-role reconciliation, so no role IDs are entered here. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
+            discordUserField("ownerDiscordUserId", "Owner Discord username or ID"),
             { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: enumOptions(["germany", "united-kingdom", "spain", "united-states", "europe-automatic"]), help: "The scheduler uses only prepared slots in this region. If none are available, the request fails; no VPS is purchased automatically." },
             { name: "releaseChannel", label: "Release", kind: "select", required: true, options: enumOptions(["stable", "nightly"]) }, { name: "maintenanceSlot", label: "Maintenance slot", kind: "select", required: true, options: enumOptions(["03:00-04:00", "10:00-11:00", "18:00-19:00"]) },
         ] },
