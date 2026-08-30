@@ -1,16 +1,13 @@
 import { Download, Server, Swords, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { ActiveGroups } from "@/app/components/home/community/ActiveGroups";
 import { StatCard } from "@/app/components/home/community/StatCard";
 import { ScrollReveal } from "@/app/components/motion/ScrollReveal";
-import type { CoopServer } from "@/app/components/utils/types/server.types";
 
 type CommunityStatsProps = {
     playersOnline: number | null;
     dedicatedServersCount: number | null;
-    battlesToday: number | null;
+    battlesFoughtTotal: number | null;
     totalDownloads: number | null;
-    servers: CoopServer[];
 };
 
 type Stat = {
@@ -22,12 +19,45 @@ type Stat = {
     icon: LucideIcon;
 };
 
-export function CommunityStats({ playersOnline, dedicatedServersCount, battlesToday, totalDownloads, servers }: CommunityStatsProps) {
+export function CommunityStats({
+    playersOnline,
+    dedicatedServersCount,
+    battlesFoughtTotal,
+    totalDownloads,
+}: CommunityStatsProps) {
     const stats: Stat[] = [
-        { label: "Players Online", description: "Across all active servers", value: playersOnline, status: "Pending", icon: Users },
-        { label: "Dedicated Servers", description: "Reporting to the network", value: dedicatedServersCount, status: "Pending", icon: Server },
-        { label: "Battles Fought", description: "Since 00:00 UTC", value: battlesToday, status: "Pending", icon: Swords },
-        { label: "Total Downloads", description: "Across all releases", value: totalDownloads, status: "Pending", icon: Download },
+        {
+            label: "Players Online",
+            description: "Across all reporting servers",
+            value: playersOnline,
+            status: playersOnline === null ? "Unavailable" : "Live",
+            isLive: playersOnline !== null,
+            icon: Users,
+        },
+        {
+            label: "Dedicated Servers",
+            description: "Reporting to the network",
+            value: dedicatedServersCount,
+            status: dedicatedServersCount === null ? "Unavailable" : "Live",
+            isLive: dedicatedServersCount !== null,
+            icon: Server,
+        },
+        {
+            label: "Battles Fought",
+            description: "Across all recorded battles",
+            value: battlesFoughtTotal,
+            status: battlesFoughtTotal === null ? "Unavailable" : "Live",
+            isLive: battlesFoughtTotal !== null,
+            icon: Swords,
+        },
+        {
+            label: "Total Downloads",
+            description: "Across all platforms",
+            value: totalDownloads,
+            status: totalDownloads === null ? "Unavailable" : "Live",
+            isLive: totalDownloads !== null,
+            icon: Download,
+        },
     ];
 
     return (
@@ -52,7 +82,6 @@ export function CommunityStats({ playersOnline, dedicatedServersCount, battlesTo
                         </div>
                     ))}
                 </div>
-                <ActiveGroups servers={servers} />
             </div>
         </section>
     );

@@ -85,7 +85,7 @@ export function CoopFeatures() {
     return (
         <section
             id="features"
-            className="relative overflow-hidden border-b border-white/10 bg-background py-16 sm:py-20 lg:py-28 2xl:py-32"
+            className="relative overflow-hidden border-b border-white/10 bg-surface py-16 sm:py-20 lg:py-28 2xl:py-32"
             aria-labelledby="campaign-features-heading"
         >
             <div
@@ -107,10 +107,10 @@ export function CoopFeatures() {
                             id="campaign-features-heading"
                             className="mt-4 max-w-4xl font-display text-4xl font-semibold uppercase leading-[0.92] tracking-[-0.03em] text-foreground min-[380px]:text-5xl sm:text-6xl lg:text-7xl 2xl:text-8xl"
                         >
-                            Play Bannerlord.
+                            Play Bannerlord
                             <br />
                             <span className="text-gold">
-                                With Your Friends.
+                                With Your Friends
                             </span>
                         </h2>
                     </div>

@@ -2,7 +2,7 @@ export type ChannelVideo = {
     href: string;
 };
 
-export type YouTubeVideo = {
+export type MediaVideo = {
     id: string;
     title: string;
     description: string;
@@ -12,6 +12,8 @@ export type YouTubeVideo = {
     category: string;
     duration: string | null;
 };
+
+export type YouTubeVideo = MediaVideo;
 
 export type ContentCreator = {
     channelId: string;

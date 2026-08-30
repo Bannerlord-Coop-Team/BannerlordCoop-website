@@ -3,13 +3,35 @@ import Image from "next/image";
 import Link from "next/link";
 import { ScrollReveal } from "@/app/components/motion/ScrollReveal";
 import { VideoCarousel } from "@/app/components/home/media/VideoCarousel";
-import type { ChannelVideo, ContentCreator } from "@/app/components/utils/types/media.types";
+import type {
+    ChannelVideo,
+    ContentCreator,
+    MediaVideo,
+} from "@/app/components/utils/types/media.types";
 import { getYouTubeCreators, getYouTubeVideos } from "@/app/lib/youtube";
 
 // Add official YouTube video links here.
 const channelVideos: ChannelVideo[] = [
+    { href: "https://www.youtube.com/watch?v=Au-oT5KKj0w" },
+    { href: "https://www.youtube.com/watch?v=mJ7hZ0-BkZs" },
+    { href: "https://www.youtube.com/watch?v=HNiozn0_FZs" },
+    { href: "https://www.youtube.com/watch?v=PNBfJXMTHII" },
+    { href: "https://www.youtube.com/watch?v=6Y9rNAQN8Jg" },
+    { href: "https://www.youtube.com/watch?v=U0F0LIfOBYQ" },
+];
+
+const featuredVideos: MediaVideo[] = [
     {
-        href: "https://www.youtube.com/watch?v=laZM967Eals",
+        id: "twitch-2827818732",
+        title: "Bannerlord Coop — L'empire contre-attaque!",
+        description:
+            "Watch CaptainFRACAS play Bannerlord Coop at maximum difficulty, starting at the highlighted moment.",
+        thumbnail:
+            "https://static-cdn.jtvnw.net/cf_vods/d3stzm2eumvgb4/95c2e4eed29530aa15e1_captainfracas_317326941667_1784898206//thumb/thumb0-640x360.jpg",
+        thumbnailAlt: "Bannerlord Coop Twitch VOD by CaptainFRACAS",
+        href: "https://www.twitch.tv/videos/2827818732?t=04h20m50s",
+        category: "CaptainFRACAS on Twitch",
+        duration: "7:06:10",
     },
 ];
 
@@ -27,11 +49,12 @@ export async function CommunityMedia() {
             contentCreators.map((creator) => creator.channelId),
         ),
     ]);
+    const carouselVideos = [...videos, ...featuredVideos];
 
     return (
         <section
             id="media"
-            className="relative overflow-hidden border-b border-white/10 bg-surface py-16 sm:py-20 lg:py-28 2xl:py-32"
+            className="relative overflow-hidden border-b border-white/10 bg-background py-16 sm:py-20 lg:py-28 2xl:py-32"
             aria-labelledby="community-media-heading"
         >
             <div
@@ -59,12 +82,12 @@ export async function CommunityMedia() {
                     </p>
                 </ScrollReveal>
 
-                {videos.length > 0 && (
+                {carouselVideos.length > 0 && (
                     <div className="mt-10 sm:mt-12 lg:mt-14">
                         <div className="flex items-end justify-between gap-6 border-b border-white/10 pb-5">
                             <div>
                                 <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
-                                    Official Videos
+                                    Featured Videos
                                 </p>
                                 <h3 className="mt-2 font-display text-3xl font-semibold uppercase text-foreground sm:text-4xl">
                                     Latest Videos
@@ -78,20 +101,20 @@ export async function CommunityMedia() {
                             />
                         </div>
 
-                        <VideoCarousel videos={videos} />
+                        <VideoCarousel videos={carouselVideos} />
                     </div>
                 )}
 
                 {creators.length > 0 && (
                     <div className="mt-14 sm:mt-16 lg:mt-20">
-                    <div className="border-b border-white/10 pb-5">
-                        <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
-                            Community
-                        </p>
-                        <h3 className="mt-2 font-display text-3xl font-semibold uppercase text-foreground sm:text-4xl">
-                            Featured Content Creators
-                        </h3>
-                    </div>
+                        <div className="border-b border-white/10 pb-5">
+                            <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
+                                Community
+                            </p>
+                            <h3 className="mt-2 font-display text-3xl font-semibold uppercase text-foreground sm:text-4xl">
+                                Featured Content Creators
+                            </h3>
+                        </div>
 
                         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                             {creators.map((creator, index) => (
