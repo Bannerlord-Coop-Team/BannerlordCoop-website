@@ -116,12 +116,21 @@ export type HostingAdminVpsHost = {
         sourceCommit: string | null;
         updatedAt: string;
     } | null;
+    runnerUpdate?: {
+        state: "queued" | "running" | "retry-wait" | "succeeded" | "failed";
+        progressStage: string;
+        errorCode: string | null;
+        targetSourceCommit: string;
+        priorSourceCommit: string;
+        updatedAt: string;
+    } | null;
 };
 
 export type HostingAdminVpsInventory = {
     controlPlaneHost: HostingAdminHostResources | null;
     hosts: HostingAdminVpsHost[];
     availableServiceNames: string[];
+    runnerTargetSourceCommit?: string | null;
 };
 
 export type OperationsData = {

@@ -93,6 +93,7 @@ const OPERATION_EXPLANATIONS: Record<string, string> = {
     "set-manager": "Grants or revokes bounded manager access. Managers do not receive ownership, deletion, export, or administrative capabilities.",
     "suspend-server": "Places an administrative hold on the server, blocks owner operations, cancels unsafe expanding jobs, and queues a graceful stop.",
     "transfer-owner": "Transfers ownership only after recipient entitlement, quota, active-job, and provider-generation checks.",
+    "update-vps-runner": "Deploys the control plane's current reviewed runner revision across every isolated slot on one onboarded VPS. The durable workflow quiesces and restores the slots, verifies build and save continuity, and rolls back on failed validation; it accepts no browser-supplied SSH or executable input.",
     "update-server": "Resolves the selected channel to a validated immutable build and queues a guarded update when a newer eligible build exists.",
     "update-settings": "Changes the release channel or maintenance window with a stale-state guard; it does not immediately install a build.",
     "validate-build": "Re-verifies the exact persisted release receipt and promotes a pending build only if all provenance and artifact checks still agree.",
@@ -117,12 +118,16 @@ const AUDIT_ACTION_EXPLANATIONS: Record<string, string> = {
     "hosting.admin.job_failure_acknowledged": "An administrator acknowledged one exact failed job attempt. The job and its audit evidence remain retained.",
     "hosting.admin.ovhcloud_vps_host_registration_requested": "An administrator requested that an existing OVH VPS be verified and added to managed inventory.",
     "hosting.admin.ovhcloud_vps_runner_onboarding_requested": "An administrator requested full managed-runner commissioning for an existing OVH VPS.",
+    "hosting.admin.ovhcloud_vps_runner_update_requested": "An administrator requested a transactional host-wide managed-runner update to the control plane's reviewed revision.",
     "hosting.admin.server_create_requested": "An administrator requested assignment of existing managed capacity to a Discord owner.",
     "hosting.admin.server_reactivated": "An administrator removed the server's administrative hold. Reactivation does not automatically start the game.",
     "hosting.admin.server_suspended": "An administrator placed the server on hold, blocked owner operations, and queued a graceful game stop.",
     "hosting.provider.ovhcloud_vps_host_registered": "The control plane verified and recorded an existing OVH VPS as inventory. This event alone does not publish schedulable capacity.",
     "hosting.reconciliation.scheduled": "The control plane scheduled a desired-versus-observed state comparison for a managed server.",
     "hosting.runner.ovhcloud_vps_onboarding_succeeded": "Every reviewed runner slot passed installation, private-route, identity, activation, and health gates before capacity was published.",
+    "hosting.runner.ovhcloud_vps_update_succeeded": "Every isolated slot passed revision, identity, build, save, and capability continuity checks after the runner update.",
+    "hosting.runner.ovhcloud_vps_update_failed": "A managed-runner update stopped safely after a terminal failure and retained its evidence and rollback target.",
+    "hosting.runner.ovhcloud_vps_update_retry_scheduled": "A retryable managed-runner update failure was retained and scheduled for bounded recovery.",
 };
 
 export function stateExplanation(value: string) {

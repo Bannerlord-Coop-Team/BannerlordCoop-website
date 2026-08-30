@@ -301,6 +301,7 @@ function ViewTabs({ active }: { active: View }) {
 function VpsView({ inventory }: { inventory: HostingAdminVpsInventory }) {
     const { controlPlaneHost, hosts } = inventory;
     const availableServiceNames = Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : [];
+    const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
     return (
         <section className="mt-8">
@@ -345,7 +346,7 @@ function VpsView({ inventory }: { inventory: HostingAdminVpsInventory }) {
                             <td className="p-4 text-xs text-foreground-muted">{formatVpsCost(host.cost)}</td>
                             <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={host.expirationDate} empty="Unknown" /></td>
                             <td className="p-4"><State value={host.autoRenew === true ? "enabled" : host.autoRenew === false ? "disabled" : "unknown"} /></td>
-                            <td className="p-4"><RunnerOnboardingStatus onboarding={host.runnerOnboarding} /></td>
+                            <td className="p-4"><RunnerOnboardingStatus serviceName={host.name} runningServers={host.runningServers} targetSourceCommit={runnerTargetSourceCommit} onboarding={host.runnerOnboarding} update={host.runnerUpdate ?? null} /></td>
                         </tr>
                     ))}</tbody>
                 </table>
