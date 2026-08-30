@@ -6,22 +6,29 @@ import { CommunityMedia } from "@/app/components/home/media/CommunityMedia";
 import { DownloadSection } from "@/app/components/home/modulesection/DownloadSection";
 import { Footer } from "@/app/components/layout/Footer";
 import { Navbar } from "@/app/components/layout/Navbar";
+import { getNetworkStats } from "@/app/lib/network-stats";
 
-export default function Home() {
+export default async function Home() {
+    const {
+        playersOnline,
+        dedicatedServersCount,
+        battlesFoughtTotal,
+        totalDownloads,
+    } = await getNetworkStats();
+
     return (
         <>
             <Navbar />
             <main>
                 <Hero />
                 <CommunityStats
-                    playersOnline={null}
-                    dedicatedServersCount={null}
-                    battlesToday={null}
-                    totalDownloads={null}
-                    servers={[]}
+                    playersOnline={playersOnline}
+                    dedicatedServersCount={dedicatedServersCount}
+                    battlesFoughtTotal={battlesFoughtTotal}
+                    totalDownloads={totalDownloads}
                 />
-                <CoopFeatures />
                 <CommunityMedia />
+                <CoopFeatures />
                 <AboutProject />
                 <DownloadSection />
             </main>

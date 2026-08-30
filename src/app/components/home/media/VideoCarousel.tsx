@@ -4,10 +4,10 @@ import { ChevronLeft, ChevronRight, Play } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { YouTubeVideo } from "@/app/components/utils/types/media.types";
+import type { MediaVideo } from "@/app/components/utils/types/media.types";
 
 type VideoCarouselProps = {
-    videos: YouTubeVideo[];
+    videos: MediaVideo[];
 };
 
 export function VideoCarousel({ videos }: VideoCarouselProps) {
@@ -23,13 +23,13 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
             return;
         }
 
-        const maxScrollLeft = Math.max(0, carousel.scrollWidth - carousel.clientWidth);
-        const nextPageCount = Math.max(1, Math.ceil(maxScrollLeft / carousel.clientWidth) + 1);
+        const nextPageCount = Math.max(
+            1,
+            Math.round(carousel.scrollWidth / carousel.clientWidth),
+        );
         const nextActivePage = Math.min(
             nextPageCount - 1,
-            maxScrollLeft === 0
-                ? 0
-                : Math.round((carousel.scrollLeft / maxScrollLeft) * (nextPageCount - 1)),
+            Math.round(carousel.scrollLeft / carousel.clientWidth),
         );
 
         setPageCount(nextPageCount);
@@ -62,11 +62,8 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
             "(prefers-reduced-motion: reduce)",
         ).matches;
 
-        const maxScrollLeft = Math.max(0, carousel.scrollWidth - carousel.clientWidth);
         carousel.scrollTo({
-            left: pageCount === 1
-                ? 0
-                : (targetPage / (pageCount - 1)) * maxScrollLeft,
+            left: targetPage * carousel.clientWidth,
             behavior: reduceMotion ? "auto" : "smooth",
         });
         setActivePage(targetPage);
@@ -82,7 +79,7 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
                         ? "grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col gap-4 overflow-x-auto overscroll-x-contain scrollbar-none lg:auto-cols-[calc((100%-1rem)/2)]"
                         : "grid gap-4 lg:grid-cols-2"
                 }
-                aria-label={isCarousel ? "Official video carousel" : undefined}
+                aria-label={isCarousel ? "Bannerlord Coop video carousel" : undefined}
             >
                 {videos.map((video) => (
                     <VideoCard
@@ -148,7 +145,7 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
 }
 
 type VideoCardProps = {
-    video: YouTubeVideo;
+    video: MediaVideo;
     isCarousel: boolean;
 };
 

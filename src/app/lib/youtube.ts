@@ -42,6 +42,12 @@ type YouTubeVideoResponse = {
     }>;
 };
 
+type YouTubeOEmbedResponse = {
+    title?: string;
+    author_name?: string;
+    thumbnail_url?: string;
+};
+
 export async function getYouTubeCreators(
     channelIds: string[],
 ): Promise<YouTubeCreator[]> {
@@ -120,8 +126,12 @@ export async function getYouTubeVideos(
         ...new Set(videoUrls.map(getYouTubeVideoId).filter(isString)),
     ];
 
-    if (!apiKey || videoIds.length === 0) {
+    if (videoIds.length === 0) {
         return [];
+    }
+
+    if (!apiKey) {
+        return getYouTubeOEmbedVideos(videoIds);
     }
 
     const parameters = new URLSearchParams({
@@ -142,46 +152,126 @@ export async function getYouTubeVideos(
 
         if (!response.ok) {
             console.error(
-                `YouTube video request failed with status ${response.status}.`,
+                `YouTube video request failed with status ${response.status}. Falling back to oEmbed.`,
             );
-            return [];
+            return getYouTubeOEmbedVideos(videoIds);
         }
 
         const data = (await response.json()) as YouTubeVideoResponse;
 
-        return (data.items ?? []).flatMap((video) => {
-            const title = video.snippet?.title;
-            const thumbnails = video.snippet?.thumbnails;
-            const thumbnail =
-                thumbnails?.maxres?.url ??
-                thumbnails?.standard?.url ??
-                thumbnails?.high?.url ??
-                thumbnails?.medium?.url ??
-                thumbnails?.default?.url;
+        const videosById = new Map(
+            (data.items ?? []).flatMap((video) => {
+                const title = video.snippet?.title;
+                const thumbnails = video.snippet?.thumbnails;
+                const thumbnail =
+                    thumbnails?.maxres?.url ??
+                    thumbnails?.standard?.url ??
+                    thumbnails?.high?.url ??
+                    thumbnails?.medium?.url ??
+                    thumbnails?.default?.url;
 
-            if (!title || !thumbnail) {
-                return [];
-            }
+                if (!title || !thumbnail) {
+                    return [];
+                }
 
-            return [{
-                id: video.id,
-                title,
-                description: createDescriptionExcerpt(
-                    video.snippet?.description,
-                ),
-                thumbnail,
-                thumbnailAlt: `${title} video thumbnail`,
-                href: `https://www.youtube.com/watch?v=${video.id}`,
-                category: video.snippet?.channelTitle ?? "YouTube",
-                duration: formatYouTubeDuration(
-                    video.contentDetails?.duration,
-                ),
-            }];
+                const result: YouTubeVideo = {
+                    id: video.id,
+                    title,
+                    description: createDescriptionExcerpt(
+                        video.snippet?.description,
+                    ),
+                    thumbnail,
+                    thumbnailAlt: `${title} video thumbnail`,
+                    href: `https://www.youtube.com/watch?v=${video.id}`,
+                    category: video.snippet?.channelTitle ?? "YouTube",
+                    duration: formatYouTubeDuration(
+                        video.contentDetails?.duration,
+                    ),
+                };
+
+                return [[video.id, result] as const];
+            }),
+        );
+        const missingVideoIds = videoIds.filter((id) => !videosById.has(id));
+        const fallbackVideos = await getYouTubeOEmbedVideos(missingVideoIds);
+
+        for (const video of fallbackVideos) {
+            videosById.set(video.id, video);
+        }
+
+        return videoIds.flatMap((id) => {
+            const video = videosById.get(id);
+            return video ? [video] : [];
         });
     } catch (error) {
-        console.error("Unable to retrieve YouTube video details.", error);
-        return [];
+        console.error(
+            "Unable to retrieve YouTube video details. Falling back to oEmbed.",
+            error,
+        );
+        return getYouTubeOEmbedVideos(videoIds);
     }
+}
+
+async function getYouTubeOEmbedVideos(
+    videoIds: string[],
+): Promise<YouTubeVideo[]> {
+    return Promise.all(
+        videoIds.map(async (id): Promise<YouTubeVideo> => {
+            const href = `https://www.youtube.com/watch?v=${id}`;
+            const parameters = new URLSearchParams({
+                url: href,
+                format: "json",
+            });
+
+            try {
+                const response = await fetch(
+                    `https://www.youtube.com/oembed?${parameters}`,
+                    {
+                        next: {
+                            revalidate: 86400,
+                        },
+                    },
+                );
+
+                if (!response.ok) {
+                    return createYouTubeVideoFallback(id);
+                }
+
+                const data = (await response.json()) as YouTubeOEmbedResponse;
+                const title = data.title?.trim() || "Bannerlord Coop Video";
+
+                return {
+                    id,
+                    title,
+                    description: "",
+                    thumbnail:
+                        data.thumbnail_url ??
+                        `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+                    thumbnailAlt: `${title} video thumbnail`,
+                    href,
+                    category: data.author_name?.trim() || "YouTube",
+                    duration: null,
+                };
+            } catch {
+                return createYouTubeVideoFallback(id);
+            }
+        }),
+    );
+}
+
+function createYouTubeVideoFallback(id: string): YouTubeVideo {
+    const title = "Bannerlord Coop Video";
+
+    return {
+        id,
+        title,
+        description: "",
+        thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+        thumbnailAlt: `${title} thumbnail`,
+        href: `https://www.youtube.com/watch?v=${id}`,
+        category: "YouTube",
+        duration: null,
+    };
 }
 
 function getYouTubeVideoId(videoUrl: string): string | null {
