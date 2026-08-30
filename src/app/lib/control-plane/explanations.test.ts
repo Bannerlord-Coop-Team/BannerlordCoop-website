@@ -23,6 +23,8 @@ test("explains reconciliation and OVH assignment boundaries", () => {
     assert.match(operationExplanation("onboard-vps-host"), /already-purchased/iu);
     assert.match(operationExplanation("onboard-vps-host"), /health proof/iu);
     assert.match(operationExplanation("onboard-vps-host"), /never orders/iu);
+    assert.match(operationExplanation("update-vps-runner"), /every isolated slot/iu);
+    assert.match(operationExplanation("update-vps-runner"), /no browser-supplied ssh/iu);
 });
 
 test("gives destructive cards a concrete warning", () => {
