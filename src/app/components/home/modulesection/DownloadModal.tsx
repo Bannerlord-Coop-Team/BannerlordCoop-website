@@ -28,7 +28,11 @@ const downloadSources = [
     },
 ] as const;
 
-export function DownloadModal() {
+type DownloadModalProps = {
+    trigger?: "section" |"navbar";
+}
+
+export function DownloadModal({trigger = "section"} : DownloadModalProps) {
     const [isOpen, setIsOpen] = useState(false);
     const dialogRef = useRef<HTMLDivElement>(null);
     const openButtonRef = useRef<HTMLButtonElement>(null);
@@ -84,10 +88,12 @@ export function DownloadModal() {
                 ref={openButtonRef}
                 type="button"
                 onClick={() => setIsOpen(true)}
-                className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-sm border border-crimson bg-crimson px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-white transition-colors duration-300 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-13 sm:w-auto sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
-            >
-                <Download aria-hidden="true" className="size-4" strokeWidth={1.75} />
-                Download The Mod
+                className={trigger === "navbar"
+                    ? "inline-flex min-h-10 items-center rounded-sm border border-crimson bg-crimson px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]"
+                    : "inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-sm border border-crimson bg-crimson px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-white transition-colors duration-300 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-13 sm:w-auto sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
+                }>
+                {trigger === "section" && (<Download aria-hidden="true" className="size-4" strokeWidth={1.75} />)}
+                {trigger === "navbar" ? "Download" : "Download The Mod"}
             </button>
 
             {isOpen && (
@@ -100,6 +106,7 @@ export function DownloadModal() {
                     }}
                 >
                     <div
+                        id="download-modal"
                         ref={dialogRef}
                         role="dialog"
                         aria-modal="true"
