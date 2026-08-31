@@ -4,6 +4,7 @@ import { hasAdminAccess } from "@/app/lib/auth/access";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { Swords } from "lucide-react";
 import Link from "next/link";
+import {DownloadModal} from "@/app/components/home/modulesection/DownloadModal.tsx";
 
 const navigation = [
     {
@@ -96,12 +97,7 @@ export async function Navbar() {
                         </li>
 
                         <li className="flex items-center gap-3">
-                            <a
-                                href="#download"
-                                className="inline-flex min-h-10 items-center rounded-sm border border-crimson bg-crimson px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]"
-                            >
-                                Download
-                            </a>
+                            <DownloadModal trigger="navbar"/>
 
                             {isAuthenticated ? (
                                 <form action={signOut}>
