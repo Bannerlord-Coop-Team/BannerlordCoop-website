@@ -74,6 +74,34 @@ body {
 a {
   text-decoration: none;
 }
+
+@keyframes control-plane-card-target {
+  0%, 100% {
+    border-color: rgba(232, 228, 218, 0.1);
+    box-shadow: 0 0 0 0 rgba(170, 151, 96, 0);
+  }
+  18%, 62% {
+    border-color: rgba(170, 151, 96, 0.95);
+    box-shadow: 0 0 0 4px rgba(170, 151, 96, 0.18), 0 0 36px rgba(170, 151, 96, 0.14);
+  }
+  40%, 82% {
+    border-color: rgba(170, 151, 96, 0.35);
+    box-shadow: 0 0 0 1px rgba(170, 151, 96, 0.06);
+  }
+}
+
+.control-plane-card-targeted {
+  animation: control-plane-card-target 2.6s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control-plane-card-targeted {
+    animation: none;
+    border-color: rgba(170, 151, 96, 0.95);
+    box-shadow: 0 0 0 3px rgba(170, 151, 96, 0.18);
+  }
+}
+
 button,
 a {
   -webkit-tap-highlight-color: transparent;

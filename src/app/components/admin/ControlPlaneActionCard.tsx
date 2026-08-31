@@ -4,9 +4,12 @@ import { CircleHelp, LoaderCircle, Play, TriangleAlert } from "lucide-react";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { resolveDiscordUserReference } from "@/app/lib/supabase/discord-users";
-import { fieldRequirementLabel } from "@/app/lib/control-plane/presentation";
+import {
+    fieldRequirementLabel,
+    operationTargetMatchesHash,
+} from "@/app/lib/control-plane/presentation";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type AdminActionOption = {
     label: string;
@@ -46,13 +49,44 @@ export function ControlPlaneActionCard({
     destructiveReason?: string;
 }) {
     const router = useRouter();
+    const cardRef = useRef<HTMLElement>(null);
     const [pending, setPending] = useState(false);
     const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+    const [isTargeted, setIsTargeted] = useState(false);
     const unavailableField = fields.find((field) => (
         field.required === true
         && ["select", "server", "job"].includes(field.kind ?? "")
         && (field.options?.length ?? 0) === 0
     ));
+
+    useEffect(() => {
+        let animationFrame: number | null = null;
+        let highlightTimer: number | null = null;
+
+        function revealTarget() {
+            if (!operationTargetMatchesHash(window.location.hash, operation)) return;
+            if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
+            if (highlightTimer !== null) window.clearTimeout(highlightTimer);
+            setIsTargeted(false);
+            animationFrame = window.requestAnimationFrame(() => {
+                const card = cardRef.current;
+                if (!card) return;
+                const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                card.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+                card.focus({ preventScroll: true });
+                setIsTargeted(true);
+                highlightTimer = window.setTimeout(() => setIsTargeted(false), 2_600);
+            });
+        }
+
+        revealTarget();
+        window.addEventListener("hashchange", revealTarget);
+        return () => {
+            window.removeEventListener("hashchange", revealTarget);
+            if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
+            if (highlightTimer !== null) window.clearTimeout(highlightTimer);
+        };
+    }, [operation]);
 
     async function submit(formData: FormData) {
         if (destructive && !window.confirm(`Run “${title}”? The control plane will enforce its current-state and confirmation gates.`)) {
@@ -83,7 +117,12 @@ export function ControlPlaneActionCard({
     }
 
     return (
-        <article id={operation} className="flex h-full scroll-mt-6 flex-col border border-white/10 bg-surface p-5">
+        <article
+            ref={cardRef}
+            id={operation}
+            tabIndex={-1}
+            className={`flex h-full scroll-mt-6 flex-col border border-white/10 bg-surface p-5 outline-none ${isTargeted ? "control-plane-card-targeted" : ""}`}
+        >
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-2">

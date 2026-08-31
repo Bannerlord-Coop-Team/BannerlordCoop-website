@@ -8,6 +8,15 @@ export function fieldRequirementLabel(required: boolean) {
     return required ? "Required" : "Optional";
 }
 
+export function operationTargetMatchesHash(hash: string, operation: string) {
+    const fragment = hash.startsWith("#") ? hash.slice(1) : hash;
+    try {
+        return decodeURIComponent(fragment) === operation;
+    } catch {
+        return false;
+    }
+}
+
 export function overviewStatRowClass(count: number) {
     if (count === 1) return "grid-cols-1";
     if (count === 2) return "grid-cols-1 sm:grid-cols-2";
