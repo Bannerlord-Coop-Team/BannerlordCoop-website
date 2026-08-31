@@ -6,12 +6,20 @@ import {
     installableBuilds,
     operationCardRowClass,
     operationCardRows,
+    operationTargetMatchesHash,
     overviewStatRowClass,
 } from "./presentation";
 
 test("operation fields explicitly identify required and optional inputs", () => {
     assert.equal(fieldRequirementLabel(true), "Required");
     assert.equal(fieldRequirementLabel(false), "Optional");
+});
+
+test("operation deep links match their rendered card after hydration", () => {
+    assert.equal(operationTargetMatchesHash("#onboard-vps-host", "onboard-vps-host"), true);
+    assert.equal(operationTargetMatchesHash("#onboard%2Dvps%2Dhost", "onboard-vps-host"), true);
+    assert.equal(operationTargetMatchesHash("#create-server", "onboard-vps-host"), false);
+    assert.equal(operationTargetMatchesHash("#%E0%A4%A", "onboard-vps-host"), false);
 });
 
 function build(buildId: string, validationState: string, sourceRevision: string): ReleaseBuild {
