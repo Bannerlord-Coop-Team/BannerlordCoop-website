@@ -154,13 +154,6 @@ export function MobileNavigation({
                             >
                                 Discord
                             </a>
-                            <a
-                                href="#download"
-                                onClick={closeMenu}
-                                className="inline-flex min-h-12 items-center justify-center rounded-sm border border-crimson bg-crimson font-label text-sm font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover"
-                            >
-                                Download
-                            </a>
                             {isAuthenticated ? (
                                 <form action={signOut} onSubmit={closeMenu}>
                                     <button
