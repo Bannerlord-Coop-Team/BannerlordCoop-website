@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { ReleaseBuild } from "./types";
 import {
@@ -83,6 +84,33 @@ test("operation cards group similar input density into balanced rows", () => {
         ]).map((row) => row.map((card) => card.operation)),
         [["retry", "cancel"], ["diagnostics"]],
     );
+});
+
+test("fleet onboarding and server creation remain paired after onboarding becomes one-click", () => {
+    const cards = [
+        { operation: "onboard", fields: [true] },
+        { operation: "create", fields: Array.from({ length: 5 }) },
+        { operation: "controls", fields: Array.from({ length: 6 }) },
+        { operation: "force", fields: [] },
+    ];
+
+    assert.deepEqual(
+        operationCardRows(cards, 2).map((row) => row.map((card) => card.operation)),
+        [["onboard", "create"], ["controls"], ["force"]],
+    );
+});
+
+test("failed and legacy runner rows expose the typed service-only onboarding action", async () => {
+    const source = await readFile(
+        new URL("../../components/admin/RunnerOnboardingStatus.tsx", import.meta.url),
+        "utf8",
+    );
+
+    assert.match(source, /operation: "onboard-vps-host"/u);
+    assert.match(source, /input: \{ serviceName \}/u);
+    assert.match(source, /Retry onboarding/u);
+    assert.match(source, /Onboard runner/u);
+    assert.doesNotMatch(source, /hostPublicKey/u);
 });
 
 test("operation card rows expand to their row width", () => {

@@ -65,8 +65,43 @@ export function RunnerOnboardingStatus({
         }
     }
 
+    async function requestOnboarding() {
+        setSubmitting(true);
+        setRequestError("");
+        try {
+            const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+            if (!session?.access_token) throw new Error("Authentication is required.");
+            await requestControlPlaneAdmin({
+                accessToken: session.access_token,
+                requestId: crypto.randomUUID(),
+                operation: "onboard-vps-host",
+                input: { serviceName },
+            });
+            router.refresh();
+        } catch (error) {
+            setRequestError(error instanceof Error ? error.message : "Runner onboarding could not be requested.");
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
     if (onboarding === null) {
-        return <span title="The VPS is registered as provider inventory but has no managed-runner enrollment." className="inline-flex cursor-help border border-gold/25 bg-gold/8 px-2 py-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-gold">Not onboarded</span>;
+        return (
+            <div>
+                <span title="The VPS is registered as provider inventory but has no managed-runner enrollment." className="inline-flex cursor-help border border-gold/25 bg-gold/8 px-2 py-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-gold">Not onboarded</span>
+                <button
+                    type="button"
+                    onClick={requestOnboarding}
+                    disabled={submitting}
+                    title="Run the complete managed-runner enrollment using provider-derived topology and automatic first-contact host-key pinning."
+                    className="mt-3 inline-flex min-h-9 w-full items-center justify-center gap-2 border border-gold/35 px-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:bg-gold/10 disabled:cursor-wait disabled:opacity-60"
+                >
+                    {submitting ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : <RefreshCw aria-hidden="true" className="size-3.5" />}
+                    {submitting ? "Requesting" : "Onboard runner"}
+                </button>
+                {requestError && <p role="alert" className="mt-2 max-w-56 text-[0.65rem] text-red-200">{requestError}</p>}
+            </div>
+        );
     }
     const good = onboarding.state === "succeeded";
     const bad = onboarding.state === "failed";
@@ -96,6 +131,18 @@ export function RunnerOnboardingStatus({
                 </div>
             )}
             {(onboardingPending || updatePending) && <p className="mt-2 text-[0.58rem] uppercase tracking-[0.08em] text-gold/70">Refreshing progress automatically</p>}
+            {bad && (
+                <button
+                    type="button"
+                    onClick={requestOnboarding}
+                    disabled={submitting}
+                    title="Retry the complete managed-runner enrollment with the durable pinned host identity and a fresh request ID."
+                    className="mt-3 inline-flex min-h-9 w-full items-center justify-center gap-2 border border-gold/35 px-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:bg-gold/10 disabled:cursor-wait disabled:opacity-60"
+                >
+                    {submitting ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : <RefreshCw aria-hidden="true" className="size-3.5" />}
+                    {submitting ? "Requesting" : "Retry onboarding"}
+                </button>
+            )}
             {good && (
                 <button
                     type="button"
