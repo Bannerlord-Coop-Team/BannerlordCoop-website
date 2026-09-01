@@ -23,8 +23,8 @@ export const metadata: Metadata = {
         images: [
             {
                 url: "/images/banner.png",
-                width: 1080,
-                height: 1080,
+                width: 1200,
+                height: 630,
                 alt: "Bannerlord Coop",
             },
         ],
