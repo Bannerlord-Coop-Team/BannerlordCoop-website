@@ -64,7 +64,7 @@ function firstValue(value: string | string[] | undefined) {
 }
 
 export const metadata: Metadata = {
-    title: "Manage Server | Bannerlord Coop",
+    title: "Manage Server",
     description: "Manage a Bannerlord Coop server."
 };
 

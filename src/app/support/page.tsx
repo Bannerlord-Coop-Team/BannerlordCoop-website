@@ -3,7 +3,7 @@ import { Navbar } from "@/app/components/layout/Navbar";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Support Bannerlord Coop | Bannerlord Coop",
+    title: "Support The Project",
     description:
         "Support the volunteer team behind Bannerlord Coop through Patreon, Buy Me a Coffee, PayPal, Afdian, or Boosty.",
 };

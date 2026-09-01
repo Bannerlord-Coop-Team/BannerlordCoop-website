@@ -36,15 +36,31 @@ export async function generateMetadata({ searchParams }: CheatsPageProps): Promi
     const locale = await resolveCheatsLocale(searchParams);
     const { ui } = getCheatsMessages(locale);
 
+    const canonical = locale === "zh-CN" ? "/cheats?lang=zh-CN" : "/cheats";
+
     return {
         title: ui.metadataTitle,
         description: ui.metadataDescription,
         alternates: {
+            canonical,
             languages: {
                 en: "/cheats",
                 "zh-CN": "/cheats?lang=zh-CN",
             },
         },
+
+        openGraph: {
+            type: "website",
+            url: canonical,
+            title: ui.metadataTitle,
+            description: ui.metadataDescription,
+        },
+
+        twitter: {
+            card: "summary_large_image",
+            title: ui.metadataTitle,
+            description: ui.metadataDescription,
+        }
     };
 }
 

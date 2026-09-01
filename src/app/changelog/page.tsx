@@ -9,7 +9,7 @@ import { ArrowUpRight, CalendarDays, GitBranch } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Changelog | Bannerlord Coop",
+    title: "Changelog",
     description:
         "Read the latest Bannerlord Coop releases, improvements, and bug fixes.",
 };

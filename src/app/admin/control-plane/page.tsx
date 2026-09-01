@@ -64,7 +64,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-    title: "Control Plane | Bannerlord Coop",
+    title: "Control Plane",
     description: "Operate the Bannerlord Coop managed-hosting control plane.",
 };
 

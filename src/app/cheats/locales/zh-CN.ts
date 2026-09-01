@@ -2,7 +2,7 @@ import type { CheatsMessages } from "@/app/cheats/locale";
 
 export const zhCNMessages: Omit<CheatsMessages, "commands"> = {
     ui: {
-        metadataTitle: "作弊指令 | Bannerlord Coop",
+        metadataTitle: "作弊指令",
         metadataDescription: "搜索 Bannerlord Coop 调试控制台指令并复制用法。",
         eyebrow: "调试控制台",
         title: "作弊指令",
