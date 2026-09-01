@@ -53,6 +53,7 @@ export async function getGitHubReleases(): Promise<GitHubReleaseResult> {
         const response = await fetch(
             `${GITHUB_RELEASES_API_URL}?${parameters}`,
             {
+                headers,
                 next: {
                     revalidate: 3600,
                 },
