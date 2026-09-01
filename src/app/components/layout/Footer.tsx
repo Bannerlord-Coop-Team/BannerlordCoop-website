@@ -22,6 +22,10 @@ const navigationLinks = [
         label: "Cheats",
         href: "/cheats",
     },
+    {
+        label: "Changelog",
+        href: "/changelog",
+    }
 ];
 
 const communityLinks = [
