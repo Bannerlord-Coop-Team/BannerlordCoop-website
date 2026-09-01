@@ -24,9 +24,39 @@ const barlowCondensed = Barlow_Condensed({
 
 
 export const metadata: Metadata = {
-  title: "Bannerlord Coop",
-  description: "Play the Mount & Blade II: Bannerlord campaign with friends.",
+  metadataBase: new URL("https://bannerlordcoop.com"),
+
+  title: {
+    default: "Bannerlord Coop",
+    template: "%s | Bannerlord Coop",
+  },
+
+  description: "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
+
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    siteName: "Bannerlord Coop",
+    title: "Bannerlord Coop",
+    description: "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
+    images: [
+      {
+        url: "/images/banner.png",
+        width: 1080,
+        height: 1080,
+        alt: "Bannerlord Coop",
+      },
+    ],
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: "Bannerlord Coop",
+    description: "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
+    images: ["/images/banner.png"],
+  }
 };
+
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

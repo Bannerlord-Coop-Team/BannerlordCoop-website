@@ -7,6 +7,26 @@ import { DownloadSection } from "@/app/components/home/modulesection/DownloadSec
 import { Footer } from "@/app/components/layout/Footer";
 import { Navbar } from "@/app/components/layout/Navbar";
 import { getNetworkStats } from "@/app/lib/network-stats";
+import type {Metadata} from "next";
+
+export const metadata: Metadata = {
+    alternates: {
+        canonical: "/",
+    },
+
+    openGraph: {
+        url: "/",
+        title: "Bannerlord Coop",
+        description:
+            "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
+    },
+
+    twitter: {
+        title: "Bannerlord Coop",
+        description:
+            "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
+    },
+}
 
 export default async function Home() {
     const {
