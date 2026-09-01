@@ -39,15 +39,20 @@ export type GitHubReleaseResult = {
 
 export async function getGitHubReleases(): Promise<GitHubReleaseResult> {
     const parameters = new URLSearchParams({per_page: String(RELEASE_LIMIT), page: "1",});
+    const githubToken = process.env.GITHUB_TOKEN?.trim();
+
+    const headers: Record<string, string> = {
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "BannerlordCoop-Website",
+    };
+
+    if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
 
     try {
         const response = await fetch(
             `${GITHUB_RELEASES_API_URL}?${parameters}`,
             {
-                headers: {
-                    Accept: "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                },
                 next: {
                     revalidate: 3600,
                 },
