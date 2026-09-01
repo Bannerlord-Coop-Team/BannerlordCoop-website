@@ -2,7 +2,7 @@ import type { CheatsMessages } from "@/app/cheats/locale";
 
 export const enMessages: Omit<CheatsMessages, "commands"> = {
     ui: {
-        metadataTitle: "Cheats | Bannerlord Coop",
+        metadataTitle: "Cheats",
         metadataDescription: "Search Bannerlord Coop debug console commands and copy their usage.",
         eyebrow: "Debug console",
         title: "Cheats",

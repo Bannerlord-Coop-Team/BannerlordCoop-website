@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-    title: "Sign In | Bannerlord Coop",
+    title: "Sign In",
     description: "Sign in to your Bannerlord Coop account.",
 };
 

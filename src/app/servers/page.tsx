@@ -24,7 +24,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-    title: "Servers | Bannerlord Coop",
+    title: "Servers",
     description: "Browse and join Bannerlord Coop servers.",
 };
 

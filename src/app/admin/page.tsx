@@ -13,7 +13,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-    title: "Member Administration | Bannerlord Coop",
+    title: "Member Administration",
     description: "Manage Bannerlord Coop member roles.",
 };
 
