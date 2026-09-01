@@ -15,18 +15,29 @@ export const metadata: Metadata = {
     },
 
     openGraph: {
+        type: "website",
         url: "/",
         title: "Bannerlord Coop",
         description:
             "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
+        images: [
+            {
+                url: "/images/banner.png",
+                width: 1080,
+                height: 1080,
+                alt: "Bannerlord Coop",
+            },
+        ],
     },
 
     twitter: {
+        card: "summary_large_image",
         title: "Bannerlord Coop",
         description:
             "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
+        images: ["/images/banner.png"],
     },
-}
+};
 
 export default async function Home() {
     const {
