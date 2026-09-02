@@ -260,6 +260,7 @@ test("sponsor claims tolerate omitted or opaque Origin headers without allowing 
 
 test("artifact keys are limited to the two release namespaces", () => {
     assert.equal(isAllowedArtifactKey("nightly/Coop.7z"), true);
+    assert.equal(isAllowedArtifactKey(`nightly/clients/${"a".repeat(40)}/${"b".repeat(64)}/Coop.7z`), true);
     assert.equal(isAllowedArtifactKey("release/123/client/a/Coop.7z"), true);
     assert.equal(isAllowedArtifactKey(`windows/base/v1/${"a".repeat(64)}/${"b".repeat(64)}/server-base.7z`), true);
     assert.equal(isAllowedArtifactKey("windows/other/file.7z"), false);
@@ -301,9 +302,10 @@ test("legacy artifact URLs must use the exact fixed origin", () => {
 });
 
 test("manifest URLs are rewritten to authenticated gateway paths", () => {
+    const clientKey = `nightly/clients/${"a".repeat(40)}/${"b".repeat(64)}/Coop.7z`;
     const manifest = rewriteManifestArtifactUrls({
         version: 1,
-        client: { publicUrl: `${legacy}/nightly/Coop.7z` },
+        client: { key: clientKey, publicUrl: `${legacy}/${clientKey}` },
         server: {
             publicUrl: `${legacy}/nightly/BannerlordCoop-DedicatedServer-Win64.7z`,
             incremental: {
@@ -316,7 +318,7 @@ test("manifest URLs are rewritten to authenticated gateway paths", () => {
     }, gateway, legacy);
     assert.equal(manifest.client && typeof manifest.client === "object" && !Array.isArray(manifest.client)
         ? manifest.client.publicUrl
-        : null, `${gateway}/v1/artifacts/nightly/Coop.7z`);
+        : null, `${gateway}/v1/artifacts/${clientKey}`);
 });
 
 test("gateway pages use the site brand without weakening page security", () => {

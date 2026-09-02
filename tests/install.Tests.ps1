@@ -167,6 +167,30 @@ $clientResult = Get-ReleaseManifest $true
 if ($clientResult.client.publicUrl -ne $script:ClientArchiveUri) {
     throw 'A valid standalone client manifest was rejected.'
 }
+$immutableManifest = $validManifest.PSObject.Copy()
+$immutableManifest.client = $validManifest.client.PSObject.Copy()
+$immutableManifest.client.publicUrl = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/clients/$($immutableManifest.headSha)/$($immutableManifest.client.sha256)/Coop.7z"
+$script:ManifestResponse = $immutableManifest
+$immutableResult = Get-ReleaseManifest
+if ($immutableResult.client.publicUrl -ne $immutableManifest.client.publicUrl) {
+    throw 'A valid content-addressed client manifest was rejected.'
+}
+$script:ManifestResponse = $immutableManifest.PSObject.Copy()
+$script:ManifestResponse.client = $immutableManifest.client.PSObject.Copy()
+$script:ManifestResponse.client.publicUrl = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/clients/$('c' * 40)/$($immutableManifest.client.sha256)/Coop.7z"
+$rejected = $false
+try { Get-ReleaseManifest | Out-Null } catch { $rejected = $true }
+if (-not $rejected) {
+    throw 'A client artifact URL bound to the wrong commit was accepted.'
+}
+$script:ManifestResponse = $immutableManifest.PSObject.Copy()
+$script:ManifestResponse.client = $immutableManifest.client.PSObject.Copy()
+$script:ManifestResponse.client.publicUrl = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/clients/$($immutableManifest.headSha)/$('d' * 64)/Coop.7z"
+$rejected = $false
+try { Get-ReleaseManifest | Out-Null } catch { $rejected = $true }
+if (-not $rejected) {
+    throw 'A client artifact URL bound to the wrong archive digest was accepted.'
+}
 $script:ManifestResponse = $validManifest.PSObject.Copy()
 $script:ManifestResponse.client = $validManifest.client.PSObject.Copy()
 $script:ManifestResponse.client.publicUrl = 'https://example.invalid/Coop.7z'

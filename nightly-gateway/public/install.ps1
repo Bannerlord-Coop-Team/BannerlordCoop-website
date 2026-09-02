@@ -1232,6 +1232,25 @@ function Get-UnpublishedNightlyMessage {
     return "Last night's supporter client and dedicated-server nightly is not available yet. Nightlies usually finish after midnight Central and appear in Discord #nightly-releases. Wait for today's post, then run the installer again."
 }
 
+function Test-NightlyClientArtifactUri {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][string]$HeadSha,
+        [Parameter(Mandatory = $true)][string]$Sha256
+    )
+
+    if ($Uri -ceq $script:ClientArchiveUri) { return $true }
+    if ($HeadSha -notmatch '^[a-f0-9]{40}$' -or $Sha256 -notmatch '^[a-f0-9]{64}$') {
+        return $false
+    }
+    try { $parsed = [Uri]$Uri } catch { return $false }
+    if ($parsed.Scheme -cne 'https' -or
+        $parsed.Authority -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        -not [string]::IsNullOrEmpty($parsed.Query) -or
+        -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
+    return $parsed.AbsolutePath -ceq "/v1/artifacts/nightly/clients/$HeadSha/$Sha256/Coop.7z"
+}
+
 function Get-ReleaseManifest {
     param([bool]$ClientOnly = $false)
 
@@ -1260,7 +1279,15 @@ function Get-ReleaseManifest {
         $release = $manifest.($entry.Name)
         $bytes = 0L
         $validBytes = [long]::TryParse([string]$release.bytes, [ref]$bytes)
-        if ([string]$release.publicUrl -cne $entry.Uri -or
+        $validUri = if ($entry.Name -eq 'client') {
+            Test-NightlyClientArtifactUri `
+                -Uri ([string]$release.publicUrl) `
+                -HeadSha ([string]$manifest.headSha) `
+                -Sha256 ([string]$release.sha256)
+        } else {
+            [string]$release.publicUrl -ceq $entry.Uri
+        }
+        if (-not $validUri -or
             [string]$release.sha256 -notmatch '^[a-f0-9]{64}$' -or
             -not $validBytes -or $bytes -le 0 -or $bytes -gt $entry.Maximum -or
             [string]$release.fileName -notmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,199}\.7z$') {
