@@ -26,6 +26,19 @@ export type ManagedServer = {
     updatedAt: string;
 };
 
+export type MyServerSummary = Pick<
+    ManagedServer,
+    | "serverId"
+    | "displayName"
+    | "friendlyRegion"
+    | "operationState"
+    | "observedGameState"
+    | "releaseChannel"
+    | "updatedAt"
+> & {
+    accessRole: "owner" | "manager" | "support" | "admin";
+};
+
 export type HostingJob = {
     jobId: string;
     serverId: string;

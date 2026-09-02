@@ -4,14 +4,12 @@ import {
     ServerDirectoryTable,
     type ManagedServerDirectoryEntry,
 } from "@/app/components/servers/ServerDirectoryTable";
-import {
-    getLiveConsoleAccessLevel,
-    getMemberRole,
-    hasHostedServerAccess,
-} from "@/app/lib/auth/access";
+import { getLiveConsoleAccessLevel } from "@/app/lib/auth/access";
 import { listLiveConsoleServers } from "@/app/lib/console/servers";
+import type { MyServerSummary } from "@/app/lib/control-plane/types";
+import { listAllMyServers } from "@/app/lib/hosting/my-servers";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
-import { getAllServers, getServersForRole } from "@/app/lib/hosting/servers";
+import { getAllServers } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
     CircleAlert,
@@ -23,6 +21,8 @@ import type { User } from "@supabase/supabase-js";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
     title: "Servers",
     description: "Browse and join Bannerlord Coop servers.",
@@ -30,17 +30,20 @@ export const metadata: Metadata = {
 
 export default async function ServersPage() {
     let user: User | null = null;
+    let accessToken: string | null = null;
 
     try {
         const supabase = await getSupabaseServerClient();
-        const { data } = await supabase.auth.getUser();
-        user = data.user;
+        const [{ data: userData }, { data: sessionData }] = await Promise.all([
+            supabase.auth.getUser(),
+            supabase.auth.getSession(),
+        ]);
+        user = userData.user;
+        accessToken = sessionData.session?.access_token ?? null;
     } catch {
         // Keep the public server directory available when auth is not configured.
     }
 
-    const role = user ? getMemberRole(user) : null;
-    const canManageServers = user ? hasHostedServerAccess(user) : false;
     const accessibleLiveServers = user
         ? listLiveConsoleServers().filter((server) =>
             getLiveConsoleAccessLevel(user, server.id),
@@ -57,13 +60,27 @@ export default async function ServersPage() {
             connectionType: "Direct",
             joinUrl: `bannerlordcoop://join/${server.id}`,
             players: null,
+            manageUrl: `/servers/${encodeURIComponent(server.id)}`,
         }),
     );
-    const hostedServers = role && canManageServers ? getServersForRole(role) : [];
-    const managedServers: ManagedServerDirectoryEntry[] = [
+    let managedServersError = "";
+    let controlPlaneServers: ManagedServerDirectoryEntry[] = [];
+    if (user) {
+        if (!accessToken) {
+            managedServersError = "Your authenticated server session is unavailable. Please sign in again.";
+        } else {
+            try {
+                controlPlaneServers = (await listAllMyServers(accessToken)).map(toDirectoryServer);
+            } catch (error) {
+                console.error("Managed server inventory failed to load", error);
+                managedServersError = "Managed servers could not be loaded right now.";
+            }
+        }
+    }
+    const managedServers = uniqueServers([
+        ...controlPlaneServers,
         ...liveServers,
-        ...hostedServers,
-    ];
+    ]);
     const managedServerCount = managedServers.length;
     const allServers = getAllServers();
     const onlineServers = allServers.filter((server) => server.status === "Online");
@@ -101,7 +118,7 @@ export default async function ServersPage() {
                     <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
                     <p>
                         <strong className="font-semibold text-foreground">Infrastructure preview:</strong>{" "}
-                        server availability and player counts are placeholder data. Join links will open the Bannerlord Coop client when integration is available.
+                        public directory availability and player counts are placeholder data. Signed-in account assignments under My Servers come from the authenticated control plane when it is available.
                     </p>
                 </div>
 
@@ -117,20 +134,28 @@ export default async function ServersPage() {
                         </div>
                         {user && (
                             <p className="text-sm text-foreground-muted">
-                                {managedServerCount} {managedServerCount === 1 ? "server" : "servers"} available to manage
+                                {managedServerCount} {managedServerCount === 1 ? "server" : "servers"} associated with your account
                             </p>
                         )}
                     </div>
                     {user ? (
-                        <ServerDirectoryTable
-                            servers={managedServers}
-                            showManage
-                            emptyMessage="You do not own or operate any servers yet."
-                        />
+                        <div>
+                            {managedServersError && (
+                                <p role="alert" className="mb-4 border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
+                                    {managedServersError}
+                                </p>
+                            )}
+                            <ServerDirectoryTable
+                                servers={managedServers}
+                                emptyMessage={managedServersError
+                                    ? "No managed-server data is currently available."
+                                    : "You do not own or operate any servers yet."}
+                            />
+                        </div>
                     ) : (
                         <div className="flex min-h-36 flex-col items-center justify-center gap-4 border border-dashed border-white/15 bg-surface px-6 text-center">
                             <p className="text-sm text-foreground-muted">
-                                Sign in to view and manage your servers.
+                                Sign in to view servers associated with your account.
                             </p>
                             <Link
                                 href="/login?next=/servers"
@@ -162,6 +187,24 @@ export default async function ServersPage() {
             </main>
         </>
     );
+}
+
+function toDirectoryServer(server: MyServerSummary): ManagedServerDirectoryEntry {
+    const isRunning = server.observedGameState === "running";
+    const isStopped = server.observedGameState === "stopped"
+        || ["stopped", "suspended"].includes(server.operationState);
+    return {
+        id: server.serverId,
+        name: server.displayName,
+        status: isRunning ? "Online" : isStopped ? "Offline" : "Unknown",
+        connectionType: "Direct",
+        joinUrl: `bannerlordcoop://join/${encodeURIComponent(server.serverId)}`,
+        players: null,
+    };
+}
+
+function uniqueServers(servers: readonly ManagedServerDirectoryEntry[]) {
+    return [...new Map(servers.map((server) => [server.id, server])).values()];
 }
 
 function DirectoryStat({
