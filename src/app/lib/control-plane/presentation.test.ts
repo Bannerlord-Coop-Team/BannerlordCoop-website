@@ -17,6 +17,19 @@ test("operation fields explicitly identify required and optional inputs", () => 
     assert.equal(fieldRequirementLabel(false), "Optional");
 });
 
+test("administrator reason fields are optional and explain the audit fallback", async () => {
+    const source = await readFile(
+        new URL("../../admin/control-plane/page.tsx", import.meta.url),
+        "utf8",
+    );
+    const declaration = source.match(/const reasonField: AdminActionField = \{[^\n]+\};/u)?.[0];
+
+    assert.ok(declaration);
+    assert.doesNotMatch(declaration, /required: true/u);
+    assert.match(declaration, /Optional context/u);
+    assert.match(declaration, /fixed portal-action reason/u);
+});
+
 test("operation deep links match their rendered card after hydration", () => {
     assert.equal(operationTargetMatchesHash("#onboard-vps-host", "onboard-vps-host"), true);
     assert.equal(operationTargetMatchesHash("#onboard%2Dvps%2Dhost", "onboard-vps-host"), true);
