@@ -9,6 +9,7 @@ import {
     operationCardRows,
     operationTargetMatchesHash,
     overviewStatRowClass,
+    presentControlPlaneOperationResult,
 } from "./presentation";
 
 test("operation fields explicitly identify required and optional inputs", () => {
@@ -21,6 +22,71 @@ test("operation deep links match their rendered card after hydration", () => {
     assert.equal(operationTargetMatchesHash("#onboard%2Dvps%2Dhost", "onboard-vps-host"), true);
     assert.equal(operationTargetMatchesHash("#create-server", "onboard-vps-host"), false);
     assert.equal(operationTargetMatchesHash("#%E0%A4%A", "onboard-vps-host"), false);
+});
+
+test("create-server success explains stopped state without hiding its one-time password", () => {
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    const presented = presentControlPlaneOperationResult("create-server", {
+        outcome: "assigned",
+        generatedPassword: "one-time-password",
+        job: null,
+        server: {
+            serverId,
+            displayName: "Calradia",
+            operationState: "stopped",
+        },
+    });
+
+    assert.match(presented.message, /created in stopped state/iu);
+    assert.match(presented.message, /does not start Bannerlord/iu);
+    assert.match(presented.message, /one-time-password/u);
+    assert.deepEqual(presented.links, [
+        {
+            href: `/admin/control-plane?view=server&serverId=${serverId}`,
+            label: "View server status",
+        },
+        {
+            href: "/admin/control-plane?view=operations#server-operation",
+            label: "Open lifecycle controls",
+        },
+    ]);
+});
+
+test("durable job success exposes live progress destinations", () => {
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    const jobId = "22222222-2222-4222-8222-222222222222";
+    const presented = presentControlPlaneOperationResult("server-operation", {
+        job: {
+            jobId,
+            serverId,
+            action: "start",
+            state: "queued",
+            progressStage: "queued",
+        },
+    });
+
+    assert.equal(
+        presented.message,
+        `start job ${jobId} is queued at queued. Progress refreshes automatically on its server and Jobs pages.`,
+    );
+    assert.deepEqual(presented.links, [
+        {
+            href: `/admin/control-plane?view=server&serverId=${serverId}`,
+            label: "View server status",
+        },
+        {
+            href: `/admin/control-plane?view=jobs&serverId=${serverId}`,
+            label: "Track job progress",
+        },
+    ]);
+});
+
+test("result links reject untrusted non-UUID identifiers", () => {
+    const presented = presentControlPlaneOperationResult("server-operation", {
+        job: { jobId: "../job", serverId: "javascript:alert(1)" },
+    });
+
+    assert.deepEqual(presented.links, []);
 });
 
 function build(buildId: string, validationState: string, sourceRevision: string): ReleaseBuild {

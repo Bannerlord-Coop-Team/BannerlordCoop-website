@@ -7,7 +7,10 @@ import { resolveDiscordUserReference } from "@/app/lib/supabase/discord-users";
 import {
     fieldRequirementLabel,
     operationTargetMatchesHash,
+    presentControlPlaneOperationResult,
+    type ControlPlaneOperationResultLink,
 } from "@/app/lib/control-plane/presentation";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -51,7 +54,11 @@ export function ControlPlaneActionCard({
     const router = useRouter();
     const cardRef = useRef<HTMLElement>(null);
     const [pending, setPending] = useState(false);
-    const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+    const [result, setResult] = useState<{
+        ok: boolean;
+        message: string;
+        links: ControlPlaneOperationResultLink[];
+    } | null>(null);
     const [isTargeted, setIsTargeted] = useState(false);
     const unavailableField = fields.find((field) => (
         field.required === true
@@ -106,11 +113,15 @@ export function ControlPlaneActionCard({
                 operation,
                 ...(fields.length === 0 ? {} : { input }),
             });
-            setResult({ ok: true, message: summarizeResult(response) });
+            setResult({ ok: true, ...presentControlPlaneOperationResult(operation, response) });
             if (operation === "onboard-vps-host") router.push("/admin/control-plane?view=vps");
             else router.refresh();
         } catch (error) {
-            setResult({ ok: false, message: error instanceof Error ? error.message : "The operation failed." });
+            setResult({
+                ok: false,
+                message: error instanceof Error ? error.message : "The operation failed.",
+                links: [],
+            });
         } finally {
             setPending(false);
         }
@@ -164,17 +175,29 @@ export function ControlPlaneActionCard({
                 </div>
             </form>
             {result && (
-                <p
+                <div
                     role={result.ok ? "status" : "alert"}
-                    className={`mt-4 max-h-80 overflow-auto whitespace-pre-wrap break-words border-l-2 px-3 py-2 font-mono text-xs leading-5 ${result.ok ? "border-emerald-500 bg-emerald-500/10 text-emerald-200" : "border-crimson bg-crimson/10 text-red-200"}`}
+                    className={`mt-4 max-h-80 overflow-auto break-words border-l-2 px-3 py-2 text-xs leading-5 ${result.ok ? "border-emerald-500 bg-emerald-500/10 text-emerald-200" : "border-crimson bg-crimson/10 text-red-200"}`}
                 >
-                    {result.message}
-                </p>
+                    <p className="whitespace-pre-wrap font-mono">{result.message}</p>
+                    {result.links.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            {result.links.map((link) => (
+                                <Link
+                                    key={`${link.label}:${link.href}`}
+                                    href={link.href}
+                                    className="border border-emerald-300/35 px-3 py-1.5 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-emerald-100 transition-colors hover:bg-emerald-300/10"
+                                >
+                                    {link.label}
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                </div>
             )}
         </article>
     );
 }
-
 function ActionField({ field }: { field: AdminActionField }) {
     if (field.kind === "checkbox") {
         return (
@@ -251,7 +274,6 @@ function ActionField({ field }: { field: AdminActionField }) {
         </label>
     );
 }
-
 function FieldRequirement({ required }: { required: boolean }) {
     return <span className={`border px-1.5 py-0.5 text-[0.5rem] tracking-[0.08em] ${required ? "border-gold/30 text-gold" : "border-white/10 text-foreground-dim"}`}>{fieldRequirementLabel(required)}</span>;
 }
@@ -333,28 +355,4 @@ function normalizeOperationInput(operation: string, input: Record<string, unknow
             delete selection.targetImageId;
         }
     }
-}
-
-function summarizeResult(result: unknown) {
-    if (typeof result !== "object" || result === null) return "Operation completed.";
-    const record = result as Record<string, unknown>;
-    if (typeof record.generatedPassword === "string") {
-        return `Operation completed. Generated password: ${record.generatedPassword} (copy it now; it is not shown again).`;
-    }
-    const job = record.job;
-    if (typeof job === "object" && job !== null && typeof (job as Record<string, unknown>).jobId === "string") {
-        return `Operation accepted. Job ${(job as Record<string, unknown>).jobId as string}.`;
-    }
-    const onboarding = record.onboarding;
-    if (typeof onboarding === "object" && onboarding !== null) {
-        const state = (onboarding as Record<string, unknown>).state;
-        const stage = (onboarding as Record<string, unknown>).progressStage;
-        if (typeof state === "string" && typeof stage === "string") {
-            return `VPS onboarding ${state}: ${stage}. Progress updates automatically on the VPS page.`;
-        }
-    }
-    if (typeof record.reviewId === "string" || Object.hasOwn(record, "snapshot")) {
-        return JSON.stringify(result, null, 2).slice(0, 12_000);
-    }
-    return "Operation completed and the dashboard has been refreshed.";
 }
