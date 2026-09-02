@@ -153,7 +153,13 @@ export function ControlPlaneActionCard({
                         className="inline-flex min-h-10 w-full items-center justify-center gap-2 border border-crimson bg-crimson px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:bg-crimson-hover disabled:cursor-wait disabled:opacity-60"
                     >
                         {pending ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <Play aria-hidden="true" className="size-3.5" />}
-                        {pending ? "Working" : unavailableField ? "Unavailable" : "Run"}
+                        {pending
+                            ? "Working"
+                            : unavailableField
+                                ? "Unavailable"
+                                : operation === "onboard-vps-host"
+                                    ? "Onboard VPS"
+                                    : "Run"}
                     </button>
                 </div>
             </form>
@@ -309,6 +315,7 @@ function setPath(target: Record<string, unknown>, path: string, value: unknown) 
 }
 
 function normalizeOperationInput(operation: string, input: Record<string, unknown>) {
+    if (operation === "onboard-vps-host") input.mode = "enroll";
     if (operation === "reset-password") {
         const choice = input.choice as Record<string, unknown> | undefined;
         if (choice?.kind === "generated") delete choice.password;
