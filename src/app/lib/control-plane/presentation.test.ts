@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { ReleaseBuild } from "./types";
 import {
+    adminActionOptionValue,
     fieldRequirementLabel,
     installableBuilds,
     operationCardRowClass,
@@ -10,6 +11,7 @@ import {
     operationTargetMatchesHash,
     overviewStatRowClass,
     presentControlPlaneOperationResult,
+    serverLifecycleOperationHref,
 } from "./presentation";
 
 test("operation fields explicitly identify required and optional inputs", () => {
@@ -22,6 +24,18 @@ test("operation deep links match their rendered card after hydration", () => {
     assert.equal(operationTargetMatchesHash("#onboard%2Dvps%2Dhost", "onboard-vps-host"), true);
     assert.equal(operationTargetMatchesHash("#create-server", "onboard-vps-host"), false);
     assert.equal(operationTargetMatchesHash("#%E0%A4%A", "onboard-vps-host"), false);
+});
+
+test("server rows deep-link to a highlighted lifecycle operation", () => {
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    assert.equal(
+        serverLifecycleOperationHref(serverId),
+        `/admin/control-plane?view=operations&serverId=${serverId}#server-operation`,
+    );
+    assert.equal(
+        adminActionOptionValue("server", { value: serverId, updatedAt: "2026-09-02T15:00:00.000Z" }),
+        JSON.stringify({ id: serverId, updatedAt: "2026-09-02T15:00:00.000Z" }),
+    );
 });
 
 test("create-server success explains stopped state without hiding its one-time password", () => {
@@ -149,6 +163,20 @@ test("operation cards group similar input density into balanced rows", () => {
             { operation: "diagnostics", fields: [true] },
         ]).map((row) => row.map((card) => card.operation)),
         [["retry", "cancel"], ["diagnostics"]],
+    );
+});
+
+test("a prioritized lifecycle card remains first without occupying its own row", () => {
+    const cards = [
+        { operation: "lifecycle", layoutPriority: 1, fields: Array.from({ length: 3 }) },
+        { operation: "replace", fields: Array.from({ length: 6 }) },
+        { operation: "settings", fields: Array.from({ length: 4 }) },
+        { operation: "backup", fields: Array.from({ length: 2 }) },
+    ];
+
+    assert.deepEqual(
+        operationCardRows(cards).map((row) => row.map((card) => card.operation)),
+        [["lifecycle", "replace"], ["settings", "backup"]],
     );
 });
 

@@ -27,6 +27,19 @@ export function operationTargetMatchesHash(hash: string, operation: string) {
     }
 }
 
+export function serverLifecycleOperationHref(serverId: string) {
+    return `/admin/control-plane?view=operations&serverId=${encodeURIComponent(serverId)}#server-operation`;
+}
+
+export function adminActionOptionValue(
+    kind: string | undefined,
+    option: { value: string; updatedAt?: string },
+) {
+    return kind === "server" || kind === "job"
+        ? JSON.stringify({ id: option.value, updatedAt: option.updatedAt })
+        : option.value;
+}
+
 export function presentControlPlaneOperationResult(
     operation: string,
     result: unknown,
@@ -107,14 +120,21 @@ export function overviewStatRowClass(count: number) {
     throw new Error("Overview statistic rows must contain one through four cards.");
 }
 
-export function operationCardRows<T extends { fields: readonly unknown[] }>(cards: readonly T[], pinnedLeadCount = 0): T[][] {
+export function operationCardRows<T extends {
+    fields: readonly unknown[];
+    layoutPriority?: number;
+}>(cards: readonly T[], pinnedLeadCount = 0): T[][] {
     if (!Number.isSafeInteger(pinnedLeadCount) || pinnedLeadCount < 0 || pinnedLeadCount > cards.length) {
         throw new Error("Pinned operation-card count is invalid.");
     }
     const pinned = cards.slice(0, pinnedLeadCount);
     const ranked = cards.slice(pinnedLeadCount)
         .map((card, index) => ({ card, index }))
-        .sort((left, right) => right.card.fields.length - left.card.fields.length || left.index - right.index)
+        .sort((left, right) => (
+            (right.card.layoutPriority ?? 0) - (left.card.layoutPriority ?? 0)
+            || right.card.fields.length - left.card.fields.length
+            || left.index - right.index
+        ))
         .map(({ card }) => card);
     const inputCards = ranked.filter((card) => card.fields.length >= 2);
     const compactCards = ranked.filter((card) => card.fields.length < 2);

@@ -5,6 +5,7 @@ import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { resolveDiscordUserReference } from "@/app/lib/supabase/discord-users";
 import {
+    adminActionOptionValue,
     fieldRequirementLabel,
     operationTargetMatchesHash,
     presentControlPlaneOperationResult,
@@ -227,9 +228,7 @@ function ActionField({ field }: { field: AdminActionField }) {
                     {field.options?.map((option) => (
                         <option
                             key={`${option.value}:${option.updatedAt ?? ""}`}
-                            value={field.kind === "server" || field.kind === "job"
-                                ? JSON.stringify({ id: option.value, updatedAt: option.updatedAt })
-                                : option.value}
+                            value={adminActionOptionValue(field.kind, option)}
                         >
                             {option.label}
                         </option>
