@@ -11,6 +11,7 @@ export type ManagedServerDirectoryEntry = Omit<
 > & {
     players: number | null;
     status: HostedServerStatus | "Unknown";
+    manageUrl?: string;
 };
 
 type ServerDirectoryTableProps = {
@@ -60,6 +61,9 @@ export function ServerDirectoryTable({
                 <tbody>
                     {servers.map((server) => {
                         const isOnline = server.status === "Online";
+                        const manageUrl = server.manageUrl ?? (showManage
+                            ? `/servers/${encodeURIComponent(server.id)}`
+                            : null);
 
                         return (
                             <tr key={server.id} className="group border-b border-white/10 last:border-b-0 hover:bg-white/[0.025]">
@@ -107,9 +111,9 @@ export function ServerDirectoryTable({
                                                 Join
                                             </button>
                                         )}
-                                        {showManage && (
+                                        {manageUrl && (
                                             <Link
-                                                href={`/servers/${encodeURIComponent(server.id)}`}
+                                                href={manageUrl}
                                                 className="inline-flex min-h-10 items-center justify-center gap-1.5 border border-gold/35 bg-gold/[0.07] px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                                             >
                                                 Manage
