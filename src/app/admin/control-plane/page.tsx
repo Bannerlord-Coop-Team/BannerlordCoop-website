@@ -587,7 +587,7 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
     const groups = [...new Set(cards.map((card) => card.group))];
     return <div className="mt-8 space-y-12">{groups.map((group) => {
         const groupCards = cards.filter((card) => card.group === group);
-        const rows = operationCardRows(groupCards);
+        const rows = operationCardRows(groupCards, group === "Fleet" ? 2 : 0);
         return <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={groupCards.length} /><div className="mt-5 space-y-5">{rows.map((row) => <div key={row.map((card) => card.operation).join(":")} className={`grid gap-5 ${operationCardRowClass(row.length)}`}>{row.map((card) => <ControlPlaneActionCard key={card.operation} {...card} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div>)}</div></section>;
     })}</div>;
 }

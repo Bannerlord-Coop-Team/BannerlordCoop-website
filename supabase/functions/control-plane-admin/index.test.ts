@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createControlPlaneAdminHandler } from "../_shared/control-plane-admin.ts";
+import {
+    CONTROL_PLANE_ADMIN_UPSTREAM_TIMEOUT_MILLISECONDS,
+    createControlPlaneAdminHandler,
+} from "../_shared/control-plane-admin.ts";
 
 const REQUEST_ID = "11111111-1111-4111-8111-111111111111";
 const TOKEN = "access-token-with-enough-characters";
@@ -14,6 +17,10 @@ const ADMIN = {
         identity_data: { provider_id: "763278507085922325" },
     }],
 };
+
+test("keeps the upstream budget above bounded OVH discovery and below the browser budget", () => {
+    assert.equal(CONTROL_PLANE_ADMIN_UPSTREAM_TIMEOUT_MILLISECONDS, 65_000);
+});
 
 test("allows only the configured browser origin", async () => {
     const handler = createHandler(async () => new Response(null, { status: 500 }));

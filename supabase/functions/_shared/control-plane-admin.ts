@@ -3,6 +3,9 @@ const MAXIMUM_AUTH_RESPONSE_BYTES = 512 * 1024;
 const MAXIMUM_UPSTREAM_RESPONSE_BYTES = 8 * 1_048_576;
 const DISCORD_SNOWFLAKE = /^[1-9][0-9]{16,19}$/u;
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const MAXIMUM_AUTH_TIMEOUT_MILLISECONDS = 30_000;
+const MAXIMUM_UPSTREAM_TIMEOUT_MILLISECONDS = 65_000;
+export const CONTROL_PLANE_ADMIN_UPSTREAM_TIMEOUT_MILLISECONDS = 65_000;
 
 export type ControlPlaneAdminHandlerOptions = {
     allowedOrigins: readonly string[];
@@ -25,8 +28,14 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
         throw new Error("Supabase publishable key is invalid");
     }
     const fetchImplementation = options.fetchImplementation ?? fetch;
-    const authTimeoutMilliseconds = boundedTimeout(options.authTimeoutMilliseconds ?? 10_000);
-    const upstreamTimeoutMilliseconds = boundedTimeout(options.upstreamTimeoutMilliseconds ?? 30_000);
+    const authTimeoutMilliseconds = boundedTimeout(
+        options.authTimeoutMilliseconds ?? 10_000,
+        MAXIMUM_AUTH_TIMEOUT_MILLISECONDS,
+    );
+    const upstreamTimeoutMilliseconds = boundedTimeout(
+        options.upstreamTimeoutMilliseconds ?? CONTROL_PLANE_ADMIN_UPSTREAM_TIMEOUT_MILLISECONDS,
+        MAXIMUM_UPSTREAM_TIMEOUT_MILLISECONDS,
+    );
 
     return async (request: Request): Promise<Response> => {
         const origin = request.headers.get("origin");
@@ -129,8 +138,8 @@ function validateOrigin(raw: string): string {
     return url.origin;
 }
 
-function boundedTimeout(value: number) {
-    if (!Number.isSafeInteger(value) || value < 1_000 || value > 30_000) throw new Error("Timeout is invalid");
+function boundedTimeout(value: number, maximum: number) {
+    if (!Number.isSafeInteger(value) || value < 1_000 || value > maximum) throw new Error("Timeout is invalid");
     return value;
 }
 

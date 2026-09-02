@@ -1,4 +1,5 @@
 const MAXIMUM_RESPONSE_BYTES = 8 * 1_048_576;
+export const CONTROL_PLANE_ADMIN_BROWSER_TIMEOUT_MILLISECONDS = 90_000;
 
 export class ControlPlaneAdminError extends Error {
     constructor(
@@ -45,7 +46,7 @@ export async function requestControlPlaneAdmin<T>(options: {
             },
             body,
             cache: "no-store",
-            signal: AbortSignal.timeout(30_000),
+            signal: AbortSignal.timeout(CONTROL_PLANE_ADMIN_BROWSER_TIMEOUT_MILLISECONDS),
         });
     } catch {
         throw new ControlPlaneAdminError(
