@@ -76,7 +76,7 @@ const OPERATION_EXPLANATIONS: Record<string, string> = {
     "open-orphan-review": "Reads a previously captured orphan review and its immutable cleanup-group digests.",
     "orphan-review": "Reads a previously captured orphan review and its immutable cleanup-group digests.",
     "reactivate-server": "Clears an administrative hold after current entitlement checks. It does not automatically start the game.",
-    "onboard-vps-host": "Verifies one already-purchased OVH VPS, pins its SSH identity, installs and activates every isolated managed-runner slot through private mTLS routes, and publishes capacity only after health proof. It never orders, renews, or cancels the VPS.",
+    "onboard-vps-host": "Verifies one already-purchased OVH VPS from authenticated account inventory, pins the Ed25519 SSH identity presented at its provider-derived public IP on first contact, uses the preinstalled fleet key, hardens the host, installs and activates every isolated managed-runner slot through private mTLS routes, and publishes capacity only after health proof. It never orders, renews, or cancels the VPS, and accepts no browser-supplied host identity or topology.",
     "reject-build": "Permanently marks a pending build rejected while retaining its receipt and audit history.",
     "replace-provider": "Creates a guarded replacement generation for resize, rebuild, or migration, then cuts over only after backup, restore, and health checks.",
     "reset-password": "Generates or accepts a new game password, stores it through the encrypted secret boundary, and reveals generated output once.",

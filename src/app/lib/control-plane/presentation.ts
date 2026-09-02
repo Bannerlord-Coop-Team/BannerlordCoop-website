@@ -25,15 +25,23 @@ export function overviewStatRowClass(count: number) {
     throw new Error("Overview statistic rows must contain one through four cards.");
 }
 
-export function operationCardRows<T extends { fields: readonly unknown[] }>(cards: readonly T[]): T[][] {
-    const ranked = cards
+export function operationCardRows<T extends { fields: readonly unknown[] }>(cards: readonly T[], pinnedLeadCount = 0): T[][] {
+    if (!Number.isSafeInteger(pinnedLeadCount) || pinnedLeadCount < 0 || pinnedLeadCount > cards.length) {
+        throw new Error("Pinned operation-card count is invalid.");
+    }
+    const pinned = cards.slice(0, pinnedLeadCount);
+    const ranked = cards.slice(pinnedLeadCount)
         .map((card, index) => ({ card, index }))
         .sort((left, right) => right.card.fields.length - left.card.fields.length || left.index - right.index)
         .map(({ card }) => card);
     const inputCards = ranked.filter((card) => card.fields.length >= 2);
     const compactCards = ranked.filter((card) => card.fields.length < 2);
 
-    return [...balancedRows(inputCards, 3), ...balancedRows(compactCards, 3)];
+    return [
+        ...(pinned.length === 0 ? [] : [pinned]),
+        ...balancedRows(inputCards, 3),
+        ...balancedRows(compactCards, 3),
+    ];
 }
 
 export function operationCardRowClass(count: number) {

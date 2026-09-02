@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { requestControlPlaneAdmin } from "./client";
+import {
+    CONTROL_PLANE_ADMIN_BROWSER_TIMEOUT_MILLISECONDS,
+    requestControlPlaneAdmin,
+} from "./client";
 
 const REQUEST_ID = "11111111-1111-4111-8111-111111111111";
 const ORIGINAL_FETCH = globalThis.fetch;
@@ -8,6 +11,7 @@ const ORIGINAL_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ORIGINAL_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 test("calls the Supabase Edge Function with the current access token", async () => {
+    assert.equal(CONTROL_PLANE_ADMIN_BROWSER_TIMEOUT_MILLISECONDS, 90_000);
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project.supabase.co";
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "publishable-key-with-enough-characters";
     let request: Request | undefined;

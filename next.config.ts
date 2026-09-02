@@ -4,6 +4,7 @@ const GATEWAY_ORIGIN = "https://bannerlordcoop-nightly-gateway.garrett-luskey.wo
 
 const nextConfig: NextConfig = {
   /* config options here */
+    output: process.env.WORKERS_CI === "1" ? "standalone" : undefined,
     async redirects() {
         return [
             {
