@@ -67,7 +67,7 @@ const OPERATION_EXPLANATIONS: Record<string, string> = {
     "cancel-job": "Requests cancellation. A running worker stops only at its next reviewed safe checkpoint.",
     "cleanup-orphan": "Queues cleanup for one exact digest from a prior orphan review. It cannot target new or unreviewed provider resources.",
     "collect-diagnostics": "Collects a bounded, sanitized diagnostic window. Secrets, arbitrary files, and general shell access remain unavailable.",
-    "create-server": "Assigns one free slot from an already registered OVH VPS; it never purchases an OVH product. If no prepared slot exists in the selected region, the request fails without creating or billing anything.",
+    "create-server": "Assigns one free slot from an already registered OVH VPS in stopped state; it never purchases an OVH product or starts Bannerlord. If no prepared slot exists in the selected region, the request fails without creating or billing anything.",
     diagnostics: "Reads the sanitized result of a completed diagnostics job; it cannot read arbitrary runner files.",
     "execute-deletion": "Advances an eligible pending deletion through its final backup, retention, and cleanup gates.",
     "extend-deletion": "Moves an existing pending-deletion deadline forward by the selected bounded duration.",

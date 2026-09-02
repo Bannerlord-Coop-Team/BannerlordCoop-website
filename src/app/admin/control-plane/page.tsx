@@ -7,6 +7,7 @@ import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { JobFailureAcknowledgeButton } from "@/app/components/admin/JobFailureAcknowledgeButton";
 import { JobFailuresAcknowledgeButton } from "@/app/components/admin/JobFailuresAcknowledgeButton";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
+import { ControlPlaneLiveRefresh } from "@/app/components/admin/ControlPlaneLiveRefresh";
 import { hasAdminAccess } from "@/app/lib/auth/access";
 import { ControlPlaneAdminError, requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import {
@@ -434,13 +435,27 @@ function ServersView({ page, query, discordUsers }: { page: HostingPage<ManagedS
 
 function ServerView({ result, discordUsers }: { result: ServerDashboardResult; discordUsers: DiscordUserSummary[] }) {
     const { server } = result.dashboard;
+    const activeJob = result.dashboard.activeJob;
     const username = discordUsernameMap(discordUsers).get(server.ownerDiscordUserId);
     return (
         <div className="mt-8 space-y-8">
+            <ControlPlaneLiveRefresh active={activeJob !== null} label="Refreshing server progress automatically" />
             <section className="flex flex-col justify-between gap-5 border border-white/10 bg-surface p-5 lg:flex-row lg:items-start">
                 <div><p className="font-label text-[0.65rem] uppercase tracking-[0.14em] text-gold">Managed server</p><h2 className="mt-2 font-display text-3xl font-semibold text-foreground">{server.displayName}</h2><p className="mt-2 font-mono text-xs text-foreground-dim">{server.serverId}</p></div>
                 <State value={server.operationState} />
             </section>
+            {activeJob && (
+                <section className="border border-gold/25 bg-gold/8 p-5" aria-live="polite">
+                    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                        <div>
+                            <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-gold">Operation in progress</p>
+                            <p className="mt-2 text-sm text-foreground"><span className="font-semibold">{activeJob.action}</span> · {activeJob.state}</p>
+                            <p className="mt-1 font-mono text-xs text-foreground-muted">{activeJob.progressStage}</p>
+                        </div>
+                        <Link href={`/admin/control-plane?view=jobs&serverId=${encodeURIComponent(server.serverId)}`} className="border border-gold/35 px-4 py-2 text-center font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-gold hover:bg-gold/10">Track job</Link>
+                    </div>
+                </section>
+            )}
             <section className="grid gap-6 lg:grid-cols-3">
                 <Panel title="Ownership"><Definition label="Discord owner" value={formatDiscordUsername(username)} /><Definition label="Discord ID" value={server.ownerDiscordUserId} /><Definition label="Region" value={server.friendlyRegion} /><Definition label="Provider" value={server.provider} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
                 <Panel title="Desired / observed"><Definition label="Desired" value={server.desiredState} /><Definition label="VM" value={server.observedVmState} /><Definition label="Game" value={server.observedGameState} /><Definition label="Agent" value={result.dashboard.runtime?.agentHealthy ? "Healthy" : "Unavailable"} tone={result.dashboard.runtime?.agentHealthy ? "ok" : "warning"} /></Panel>
@@ -467,6 +482,7 @@ function JobsView({
     cursor: string | null;
     serverId: string;
 }) {
+    const hasActiveJobs = page.items.some((job) => ["queued", "running", "retry-wait"].includes(job.state));
     const filters = [
         { label: "All", href: "/admin/control-plane?view=jobs", active: state === null },
         { label: "Active", href: "/admin/control-plane?view=jobs&state=active", active: state === "active" },
@@ -483,6 +499,7 @@ function JobsView({
     if (older && page.nextCursor) older.set("cursor", page.nextCursor);
     return (
         <section className="mt-8">
+            <ControlPlaneLiveRefresh active={hasActiveJobs} label="Refreshing job progress automatically" />
             <div className="flex flex-wrap items-end justify-between gap-4">
                 <SectionHeading eyebrow="Durable queue" title={state === "failed" ? "Failed jobs" : state === "active" ? "Active jobs" : "Jobs"} count={page.items.length} />
                 <nav aria-label="Job filters" className="flex gap-2">{filters.map((filter) => <Link key={filter.label} href={filter.href} aria-current={filter.active ? "page" : undefined} className={`border px-3 py-2 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] ${filter.active ? "border-gold/40 bg-gold/10 text-gold" : "border-white/10 text-foreground-muted hover:border-white/25 hover:text-foreground"}`}>{filter.label}</Link>)}</nav>
@@ -546,7 +563,7 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
         { group: "Fleet", operation: "onboard-vps-host", title: "Onboard existing OVH VPS", description: "Choose one already-purchased VPS, then click Onboard VPS. The control plane revalidates its OVH account identity, location, vCPU capacity, and primary IPv4; acquires and pins its Ed25519 host identity; uses the preinstalled fleet-operator key; installs and hardens every managed runner slot; establishes private mTLS routes; and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.", fields: [
             { name: "serviceName", label: "Available OVH VPS", kind: "select", required: true, options: availableVpsOptions, defaultValue: availableVpsOptions.length === 1 ? availableVpsOptions[0]!.value : "", help: "Only unregistered VPS products discovered in the authenticated OVH account are shown. Select the saved bannerlord-fleet-operator key when installing the VPS; no SSH key, IP address, vCPU count, region, or audit reason is entered here." },
         ] },
-        { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity. The owner's current entitlement comes from the control plane's authoritative Discord-role reconciliation, so no role IDs are entered here. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
+        { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity in stopped state. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from authoritative Discord-role reconciliation. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
             discordUserField("ownerDiscordUserId", "Owner Discord username or ID"),
             { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: enumOptions(["germany", "united-kingdom", "spain", "united-states", "europe-automatic"]), help: "The scheduler uses only prepared slots in this region. If none are available, the request fails; no VPS is purchased automatically." },
             { name: "releaseChannel", label: "Release", kind: "select", required: true, options: enumOptions(["stable", "nightly"]) }, { name: "maintenanceSlot", label: "Maintenance slot", kind: "select", required: true, options: enumOptions(["03:00-04:00", "10:00-11:00", "18:00-19:00"]) },
