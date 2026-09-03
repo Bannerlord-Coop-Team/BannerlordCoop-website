@@ -23,12 +23,13 @@ export function discordUserSummary(user: User): DiscordUserSummary | null {
         identityData.user_name,
         identityData.username,
         identityData.preferred_username,
-        identityData.name,
         metadata.user_name,
         metadata.username,
-        metadata.name,
+        metadata.preferred_username,
         identityData.full_name,
         metadata.full_name,
+        identityData.name,
+        metadata.name,
     ]);
     if (!rawUsername) return null;
     const username = rawUsername.endsWith("#0") ? rawUsername.slice(0, -2) : rawUsername;

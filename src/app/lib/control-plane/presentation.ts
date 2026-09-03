@@ -30,6 +30,10 @@ export function fieldRequirementLabel(required: boolean) {
     return required ? "Required" : "Optional";
 }
 
+export function formatDiscordOwner(username: string | undefined, discordUserId: string) {
+    return `${username ?? "Username unavailable"} (${discordUserId})`;
+}
+
 export function createServerRegionOptions(
     hosts: readonly Pick<HostingAdminVpsHost, "region" | "availableServers">[],
 ) {
