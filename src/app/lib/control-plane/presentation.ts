@@ -53,6 +53,15 @@ export function maintenanceSlotOptions() {
     }));
 }
 
+export function applyControlPlaneOperationDefaults(
+    operation: string,
+    input: Record<string, unknown>,
+) {
+    if (operation === "create-server" && input.releaseChannel === undefined) {
+        input.releaseChannel = "stable";
+    }
+}
+
 export function operationTargetMatchesHash(hash: string, operation: string) {
     const fragment = hash.startsWith("#") ? hash.slice(1) : hash;
     try {

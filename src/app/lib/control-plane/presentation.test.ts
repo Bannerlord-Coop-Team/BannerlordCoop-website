@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { ReleaseBuild } from "./types";
 import {
+    applyControlPlaneOperationDefaults,
     createServerRegionOptions,
     fieldRequirementLabel,
     installableBuilds,
@@ -37,6 +38,25 @@ test("maintenance choices show their authoritative timezone without changing pro
         { value: "10:00-11:00", label: "10:00–11:00 America/Chicago" },
         { value: "18:00-19:00", label: "18:00–19:00 America/Chicago" },
     ]);
+});
+
+test("the website creates servers on Stable without asking for a redundant release choice", async () => {
+    const input: Record<string, unknown> = { displayName: "Calradia" };
+    applyControlPlaneOperationDefaults("create-server", input);
+    assert.deepEqual(input, { displayName: "Calradia", releaseChannel: "stable" });
+
+    const unrelated: Record<string, unknown> = { action: "start" };
+    applyControlPlaneOperationDefaults("server-operation", unrelated);
+    assert.deepEqual(unrelated, { action: "start" });
+
+    const source = await readFile(
+        new URL("../../admin/control-plane/page.tsx", import.meta.url),
+        "utf8",
+    );
+    const createCard = source.match(/operation: "create-server"[\s\S]+?operation: "force-reconcile"/u)?.[0];
+    assert.ok(createCard);
+    assert.doesNotMatch(createCard, /name: "releaseChannel"/u);
+    assert.match(createCard, /New servers use Stable by default/u);
 });
 
 test("operation fields explicitly identify required and optional inputs", () => {

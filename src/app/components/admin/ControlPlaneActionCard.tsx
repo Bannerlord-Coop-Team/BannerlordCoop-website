@@ -5,6 +5,7 @@ import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { resolveDiscordUserReference } from "@/app/lib/supabase/discord-users";
 import {
+    applyControlPlaneOperationDefaults,
     fieldRequirementLabel,
     operationTargetMatchesHash,
     presentControlPlaneOperationResult,
@@ -104,6 +105,7 @@ export function ControlPlaneActionCard({
         const requestId = crypto.randomUUID();
         try {
             const input = buildInput(fields, formData);
+            applyControlPlaneOperationDefaults(operation, input);
             normalizeOperationInput(operation, input);
             const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
             if (!session?.access_token) throw new Error("Authentication is required.");
