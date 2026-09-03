@@ -5,7 +5,7 @@ const MAXIMUM_OPERATION_RESPONSE_BYTES = 64 * 1_024;
 const MAXIMUM_LIMIT = 100;
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/u;
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const SERVER_OPERATIONS = new Set(["start", "stop", "restart-game"]);
 const SAFE_ERROR_CODE = /^[a-z][a-z0-9_-]{0,63}$/u;
 
@@ -85,6 +85,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 headers: {
                     authorization: `Bearer ${token}`,
                     "content-type": "application/json",
+                    "x-request-id": requestId,
                 },
                 body: upstreamBody,
                 signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),

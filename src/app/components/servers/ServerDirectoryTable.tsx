@@ -1,4 +1,5 @@
 import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
+import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import type {
     DirectoryServer,
     HostedServerStatus,
@@ -45,7 +46,7 @@ export function ServerDirectoryTable({
         );
     }
 
-    return (
+    const table = (
         <div className="overflow-x-auto border border-white/10 bg-surface">
             <table className="w-full min-w-240 border-collapse text-left">
                 <thead className="border-b border-white/10 bg-white/[0.025]">
@@ -144,4 +145,7 @@ export function ServerDirectoryTable({
             </table>
         </div>
     );
+    return servers.some((server) => server.lifecycle !== undefined)
+        ? <ManagedServerPollingProvider>{table}</ManagedServerPollingProvider>
+        : table;
 }

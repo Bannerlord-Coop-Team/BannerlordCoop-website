@@ -1,8 +1,8 @@
 "use client";
 
+import { useManagedServerPolling } from "@/app/components/servers/ManagedServerPollingProvider";
 import { operateManagedServer } from "@/app/servers/managed-server-actions";
 import { Power, RotateCw, Square } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 const TRANSITIONAL_STATES = new Set([
@@ -32,28 +32,23 @@ export function ManagedServerControls({
     operationState,
     expectedUpdatedAt,
 }: ManagedServerControlsProps) {
-    const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [pendingOperation, setPendingOperation] = useState<Operation | null>(null);
     const [message, setMessage] = useState("");
-    const [pollingFromState, setPollingFromState] = useState<string | null>(null);
+    const { session: pollingSession, beginPolling, endPolling } = useManagedServerPolling();
     const canOperate = accessRole === "owner" || accessRole === "manager";
     const stateIsTransitional = TRANSITIONAL_STATES.has(operationState);
 
     useEffect(() => {
-        if (pollingFromState === null && !stateIsTransitional) return;
         if (
-            pollingFromState !== null
-            && operationState !== pollingFromState
-            && !stateIsTransitional
+            pollingSession === null
+            || pollingSession.serverId !== serverId
+            || stateIsTransitional
+            || expectedUpdatedAt === pollingSession.initialUpdatedAt
         ) return;
-        const interval = window.setInterval(() => router.refresh(), 4_000);
-        const timeout = window.setTimeout(() => setPollingFromState(null), 60_000);
-        return () => {
-            window.clearInterval(interval);
-            window.clearTimeout(timeout);
-        };
-    }, [operationState, pollingFromState, router, stateIsTransitional]);
+        const timeout = window.setTimeout(() => endPolling(serverId), 0);
+        return () => window.clearTimeout(timeout);
+    }, [endPolling, expectedUpdatedAt, pollingSession, serverId, stateIsTransitional]);
 
     if (!canOperate) {
         return (
@@ -63,7 +58,7 @@ export function ManagedServerControls({
         );
     }
 
-    const busy = isPending || stateIsTransitional;
+    const busy = isPending || stateIsTransitional || pollingSession !== null;
     const canStart = ["stopped", "failed", "degraded"].includes(operationState);
     const canStop = ["running", "starting", "failed", "degraded"].includes(operationState);
     const canRestart = ["running", "degraded"].includes(operationState);
@@ -79,17 +74,19 @@ export function ManagedServerControls({
         setMessage("");
         setPendingOperation(operation);
         startTransition(async () => {
-            const result = await operateManagedServer({
-                serverId,
-                action: operation,
-                expectedUpdatedAt,
-                requestId: crypto.randomUUID(),
-            });
-            setMessage(result.message);
-            setPendingOperation(null);
-            if (result.ok) {
-                setPollingFromState(operationState);
-                router.refresh();
+            try {
+                const result = await operateManagedServer({
+                    serverId,
+                    action: operation,
+                    expectedUpdatedAt,
+                    requestId: crypto.randomUUID(),
+                });
+                setMessage(result.message);
+                if (result.ok) beginPolling(serverId, expectedUpdatedAt);
+            } catch {
+                setMessage("The server operation could not be submitted right now.");
+            } finally {
+                setPendingOperation(null);
             }
         });
     }

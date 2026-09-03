@@ -39,6 +39,7 @@ test("routes a bounded list request through my-servers without caller identity f
     assert.equal(upstreamRequest?.url, "https://control-plane.example.test/v1/user/control-plane");
     assert.equal(upstreamRequest?.method, "POST");
     assert.equal(upstreamRequest?.headers.get("authorization"), `Bearer ${TOKEN}`);
+    assert.equal(upstreamRequest?.headers.get("x-request-id"), REQUEST_ID);
     assert.equal(upstreamRequest?.headers.get("apikey"), null);
     assert.deepEqual(upstreamBody, {
         version: 1,
@@ -128,6 +129,11 @@ test("rejects missing authentication and unsupported inputs before upstream", as
             serverId: "22222222-2222-4222-8222-222222222222",
             action: "stop",
             expectedUpdatedAt: "not-a-time",
+        }),
+        operationRequest({
+            serverId: "22222222-2222-4222-8222-222222222222",
+            action: "stop",
+            expectedUpdatedAt: "2026-09-02T16:45:07.479+02:00",
         }),
         operationRequest({
             serverId: "22222222-2222-4222-8222-222222222222",
