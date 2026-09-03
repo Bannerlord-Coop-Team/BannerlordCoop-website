@@ -3,14 +3,61 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { ReleaseBuild } from "./types";
 import {
+    applyControlPlaneOperationDefaults,
+    createServerRegionOptions,
     fieldRequirementLabel,
     installableBuilds,
+    MAINTENANCE_TIME_ZONE,
+    maintenanceSlotOptions,
     operationCardRowClass,
     operationCardRows,
     operationTargetMatchesHash,
     overviewStatRowClass,
     presentControlPlaneOperationResult,
 } from "./presentation";
+
+test("create-server regions come only from registered hosts with available prepared slots", () => {
+    assert.deepEqual(createServerRegionOptions([
+        { region: "united-states", availableServers: 2 },
+        { region: "germany", availableServers: 1 },
+        { region: "united-states", availableServers: 1 },
+        { region: "spain", availableServers: 0 },
+        { region: "united-kingdom", availableServers: -1 },
+        { region: "unexpected", availableServers: 5 },
+    ]), [
+        { value: "germany", label: "Germany" },
+        { value: "united-states", label: "United States" },
+    ]);
+    assert.deepEqual(createServerRegionOptions([]), []);
+});
+
+test("maintenance choices show their authoritative timezone without changing protocol values", () => {
+    assert.equal(MAINTENANCE_TIME_ZONE, "America/Chicago");
+    assert.deepEqual(maintenanceSlotOptions(), [
+        { value: "03:00-04:00", label: "03:00–04:00 America/Chicago" },
+        { value: "10:00-11:00", label: "10:00–11:00 America/Chicago" },
+        { value: "18:00-19:00", label: "18:00–19:00 America/Chicago" },
+    ]);
+});
+
+test("the website creates servers on Stable without asking for a redundant release choice", async () => {
+    const input: Record<string, unknown> = { displayName: "Calradia" };
+    applyControlPlaneOperationDefaults("create-server", input);
+    assert.deepEqual(input, { displayName: "Calradia", releaseChannel: "stable" });
+
+    const unrelated: Record<string, unknown> = { action: "start" };
+    applyControlPlaneOperationDefaults("server-operation", unrelated);
+    assert.deepEqual(unrelated, { action: "start" });
+
+    const source = await readFile(
+        new URL("../../admin/control-plane/page.tsx", import.meta.url),
+        "utf8",
+    );
+    const createCard = source.match(/operation: "create-server"[\s\S]+?operation: "force-reconcile"/u)?.[0];
+    assert.ok(createCard);
+    assert.doesNotMatch(createCard, /name: "releaseChannel"/u);
+    assert.match(createCard, /New servers use Stable by default/u);
+});
 
 test("operation fields explicitly identify required and optional inputs", () => {
     assert.equal(fieldRequirementLabel(true), "Required");
