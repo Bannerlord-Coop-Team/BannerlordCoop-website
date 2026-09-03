@@ -3,6 +3,7 @@ import test from "node:test";
 import {
     listAllMyServers,
     MyServersApiError,
+    requestMyServerOperation,
 } from "./my-servers";
 
 const ORIGINAL_FETCH = globalThis.fetch;
@@ -58,6 +59,101 @@ test("loads every owner-scoped managed-server page through the Edge Function", a
         assert.equal(new URL(requests[0]?.url ?? "").pathname, "/functions/v1/my-servers");
         assert.equal(new URL(requests[0]?.url ?? "").searchParams.get("limit"), "100");
         assert.equal(new URL(requests[1]?.url ?? "").searchParams.get("cursor"), "next-page");
+    } finally {
+        restoreEnvironment();
+    }
+});
+
+test("submits a correlated strict server operation through the same Edge boundary", async () => {
+    configureEnvironment();
+    let request: Request | undefined;
+    globalThis.fetch = async (input, init) => {
+        request = new Request(input, init);
+        return Response.json({
+            version: 1,
+            requestId: request.headers.get("x-request-id"),
+            ok: true,
+            result: {
+                outcome: "enqueued",
+                jobId: "55555555-5555-4555-8555-555555555555",
+                action: "restart-game",
+            },
+        });
+    };
+
+    try {
+        const result = await requestMyServerOperation(TOKEN, {
+            serverId: FIRST_SERVER.serverId,
+            action: "restart-game",
+            expectedUpdatedAt: FIRST_SERVER.updatedAt,
+        }, "11111111-1111-4111-8111-111111111111");
+        assert.deepEqual(result, {
+            outcome: "enqueued",
+            jobId: "55555555-5555-4555-8555-555555555555",
+            action: "restart-game",
+        });
+        assert.equal(request?.method, "POST");
+        assert.equal(request?.headers.get("content-type"), "application/json");
+        assert.equal(request?.headers.get("x-request-id"), "11111111-1111-4111-8111-111111111111");
+        assert.deepEqual(JSON.parse(await request?.text() ?? "{}"), {
+            serverId: FIRST_SERVER.serverId,
+            action: "restart-game",
+            expectedUpdatedAt: FIRST_SERVER.updatedAt,
+        });
+    } finally {
+        restoreEnvironment();
+    }
+});
+
+test("rejects an operation response containing additional fields", async () => {
+    configureEnvironment();
+    globalThis.fetch = async (input, init) => {
+        const request = new Request(input, init);
+        return Response.json({
+            version: 1,
+            requestId: request.headers.get("x-request-id"),
+            ok: true,
+            result: {
+                outcome: "enqueued",
+                jobId: "55555555-5555-4555-8555-555555555555",
+                action: "start",
+                providerResourceId: "private-provider-resource",
+            },
+        });
+    };
+
+    try {
+        await assert.rejects(
+            requestMyServerOperation(TOKEN, {
+                serverId: FIRST_SERVER.serverId,
+                action: "start",
+                expectedUpdatedAt: FIRST_SERVER.updatedAt,
+            }, "11111111-1111-4111-8111-111111111111"),
+            (error: unknown) => error instanceof MyServersApiError && error.code === "invalid_response",
+        );
+    } finally {
+        restoreEnvironment();
+    }
+});
+
+test("rejects an invalid lifecycle idempotency request ID before fetch", async () => {
+    configureEnvironment();
+    let called = false;
+    globalThis.fetch = async () => {
+        called = true;
+        return new Response();
+    };
+
+    try {
+        await assert.rejects(
+            requestMyServerOperation(TOKEN, {
+                serverId: FIRST_SERVER.serverId,
+                action: "start",
+                expectedUpdatedAt: FIRST_SERVER.updatedAt,
+            }, "not-a-request-id"),
+            (error: unknown) => error instanceof MyServersApiError && error.code === "invalid_request",
+        );
+        assert.equal(called, false);
     } finally {
         restoreEnvironment();
     }

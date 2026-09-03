@@ -27,8 +27,17 @@ npx supabase secrets set --project-ref <project-ref> \
   CONTROL_PLANE_ADMIN_URL=https://control-plane.example.com \
   CONTROL_PLANE_WEB_ORIGINS=https://bannerlordcoop.com,https://bannerlordcoop.netlify.app
 npx supabase functions deploy control-plane-admin --project-ref <project-ref>
+npx supabase functions deploy my-servers --project-ref <project-ref>
 ```
 
-`CONTROL_PLANE_ADMIN_URL` is the Oracle adapter's HTTPS origin; the function appends the fixed `/v1/admin/control-plane` path. `CONTROL_PLANE_WEB_ORIGINS` is a comma-separated exact allowlist of HTTPS browser origins. Neither value may contain credentials, query parameters, fragments, or path prefixes. JWT verification remains enabled in `supabase/config.toml`.
+The `my-servers` function accepts authenticated GET inventory requests and
+strict POST lifecycle requests for Start, Stop, or game-container Restart.
+Only current durable owner and manager access can enqueue an operation; support
+and server-level admin access remain read-only. Requests carry the current
+`updatedAt` value, and the control plane derives idempotency from the request
+UUID while rechecking access again when the durable job executes. Stop never
+powers off the VPS, and Restart never becomes a VM reboot.
+
+`CONTROL_PLANE_ADMIN_URL` is the Oracle adapter's HTTPS origin; each function appends its fixed `/v1/admin/control-plane` or `/v1/user/control-plane` path. `CONTROL_PLANE_WEB_ORIGINS` is a comma-separated exact allowlist of HTTPS browser origins. Neither value may contain credentials, query parameters, fragments, or path prefixes. JWT verification remains enabled in `supabase/config.toml`.
 
 The website itself needs only the existing public Supabase URL and publishable key. It does not need an Oracle URL or control-plane credential in Netlify.

@@ -200,11 +200,28 @@ function toDirectoryServer(server: MyServerSummary): ManagedServerDirectoryEntry
         connectionType: "Direct",
         joinUrl: `bannerlordcoop://join/${encodeURIComponent(server.serverId)}`,
         players: null,
+        lifecycle: {
+            accessRole: server.accessRole,
+            operationState: server.operationState,
+            updatedAt: server.updatedAt,
+        },
     };
 }
 
 function uniqueServers(servers: readonly ManagedServerDirectoryEntry[]) {
-    return [...new Map(servers.map((server) => [server.id, server])).values()];
+    const unique = new Map<string, ManagedServerDirectoryEntry>();
+    for (const server of servers) {
+        const existing = unique.get(server.id);
+        unique.set(server.id, existing === undefined
+            ? server
+            : {
+                ...server,
+                ...existing,
+                manageUrl: server.manageUrl ?? existing.manageUrl,
+                lifecycle: existing.lifecycle ?? server.lifecycle,
+            });
+    }
+    return [...unique.values()];
 }
 
 function DirectoryStat({

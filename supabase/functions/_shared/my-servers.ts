@@ -1,7 +1,12 @@
 const MAXIMUM_URL_LENGTH = 4_096;
-const MAXIMUM_RESPONSE_BYTES = 8 * 1_048_576;
+const MAXIMUM_REQUEST_BYTES = 16 * 1_024;
+const MAXIMUM_LIST_RESPONSE_BYTES = 8 * 1_048_576;
+const MAXIMUM_OPERATION_RESPONSE_BYTES = 64 * 1_024;
 const MAXIMUM_LIMIT = 100;
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/u;
+const SERVER_OPERATIONS = new Set(["start", "stop", "restart-game"]);
 
 export type MyServersHandlerOptions = {
     allowedOrigins: readonly string[];
@@ -38,12 +43,6 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 headers: { ...cors, "cache-control": "private, no-store", "x-request-id": requestId },
             });
         }
-        if (request.method !== "GET") {
-            return errorResponse(405, requestId, "method_not_allowed", "Only GET is allowed.", false, cors);
-        }
-        if (request.body !== null) {
-            return errorResponse(400, requestId, "invalid_request", "GET requests cannot contain a body.", false, cors);
-        }
         const token = bearerToken(request.headers.get("authorization"));
         if (token === null) {
             return errorResponse(401, requestId, "unauthenticated", "Authentication is required.", false, cors);
@@ -52,19 +51,31 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             return errorResponse(414, requestId, "request_too_large", "The request URL is too large.", false, cors);
         }
 
-        let input: { cursor: string | null; limit: number };
+        let upstreamRequest: { operation: "my-servers" | "server-operation"; input: unknown };
         try {
-            input = listInput(request.url);
-        } catch {
+            upstreamRequest = request.method === "GET"
+                ? listRequest(request)
+                : request.method === "POST"
+                    ? await operationRequest(request)
+                    : (() => { throw new MethodNotAllowedError(); })();
+        } catch (error) {
+            if (error instanceof MethodNotAllowedError) {
+                return errorResponse(405, requestId, "method_not_allowed", "Only GET and POST are allowed.", false, cors);
+            }
+            if (error instanceof RequestTooLargeError) {
+                return errorResponse(413, requestId, "request_too_large", "The request body is too large.", false, cors);
+            }
+            if (error instanceof ContentTypeError) {
+                return errorResponse(415, requestId, "invalid_content_type", "JSON is required.", false, cors);
+            }
             return errorResponse(400, requestId, "invalid_request", "The server request is invalid.", false, cors);
         }
+
         const upstreamBody = JSON.stringify({
             version: 1,
             requestId,
-            operation: "my-servers",
-            input,
+            ...upstreamRequest,
         });
-
         let upstream: Response;
         try {
             upstream = await fetchImplementation(controlPlaneEndpoint, {
@@ -90,7 +101,12 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
 
         let responseBody: string;
         try {
-            responseBody = await readBoundedText(upstream, MAXIMUM_RESPONSE_BYTES);
+            responseBody = await readBoundedText(
+                upstream,
+                upstreamRequest.operation === "my-servers"
+                    ? MAXIMUM_LIST_RESPONSE_BYTES
+                    : MAXIMUM_OPERATION_RESPONSE_BYTES,
+            );
             const envelope: unknown = JSON.parse(responseBody);
             if (!isControlPlaneEnvelope(envelope, requestId)) {
                 throw new Error("Invalid control-plane envelope");
@@ -118,8 +134,9 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
     };
 }
 
-function listInput(rawUrl: string) {
-    const url = new URL(rawUrl);
+function listRequest(request: Request) {
+    if (request.body !== null) throw new Error("GET requests cannot contain a body");
+    const url = new URL(request.url);
     for (const key of url.searchParams.keys()) {
         if (key !== "limit" && key !== "cursor") throw new Error("Unsupported query parameter");
     }
@@ -132,7 +149,46 @@ function listInput(rawUrl: string) {
     if (cursor !== null && (cursor.length < 1 || cursor.length > 2_048)) {
         throw new Error("Invalid cursor");
     }
-    return { cursor, limit };
+    return { operation: "my-servers" as const, input: { cursor, limit } };
+}
+
+async function operationRequest(request: Request) {
+    if ([...new URL(request.url).searchParams.keys()].length !== 0) {
+        throw new Error("Operation query parameters are unsupported");
+    }
+    if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+        throw new ContentTypeError();
+    }
+    const text = await readBoundedText(request, MAXIMUM_REQUEST_BYTES);
+    let value: unknown;
+    try {
+        value = JSON.parse(text);
+    } catch {
+        throw new Error("Invalid JSON");
+    }
+    if (!isRecord(value) || !hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {
+        throw new Error("Invalid operation");
+    }
+    if (typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)) {
+        throw new Error("Invalid server ID");
+    }
+    if (typeof value.action !== "string" || !SERVER_OPERATIONS.has(value.action)) {
+        throw new Error("Invalid operation action");
+    }
+    if (
+        typeof value.expectedUpdatedAt !== "string"
+        || value.expectedUpdatedAt.length > 64
+        || !ISO_TIMESTAMP.test(value.expectedUpdatedAt)
+        || !Number.isFinite(Date.parse(value.expectedUpdatedAt))
+    ) throw new Error("Invalid expected update time");
+    return {
+        operation: "server-operation" as const,
+        input: {
+            serverId: value.serverId,
+            action: value.action,
+            expectedUpdatedAt: value.expectedUpdatedAt,
+        },
+    };
 }
 
 function parseLimit(raw: string) {
@@ -168,7 +224,7 @@ function bearerToken(header: string | null) {
 function corsHeaders(origin: string) {
     return {
         "access-control-allow-headers": "authorization, apikey, content-type, x-client-info, x-request-id",
-        "access-control-allow-methods": "GET, OPTIONS",
+        "access-control-allow-methods": "GET, POST, OPTIONS",
         "access-control-allow-origin": origin,
         "access-control-expose-headers": "x-request-id",
         "access-control-max-age": "600",
@@ -197,11 +253,17 @@ function errorResponse(
     );
 }
 
-async function readBoundedText(response: Response, maximumBytes: number) {
-    const declaredLength = response.headers.get("content-length");
-    if (declaredLength !== null && Number(declaredLength) > maximumBytes) throw new ResponseTooLargeError();
-    if (response.body === null) return "";
-    const reader = response.body.getReader();
+async function readBoundedText(
+    source: { headers: Headers; body: ReadableStream<Uint8Array> | null },
+    maximumBytes: number,
+) {
+    const declaredLength = source.headers.get("content-length");
+    if (
+        declaredLength !== null
+        && (!/^(?:0|[1-9][0-9]*)$/u.test(declaredLength) || Number(declaredLength) > maximumBytes)
+    ) throw new RequestTooLargeError();
+    if (source.body === null) return "";
+    const reader = source.body.getReader();
     const chunks: Uint8Array[] = [];
     let total = 0;
     while (true) {
@@ -210,7 +272,7 @@ async function readBoundedText(response: Response, maximumBytes: number) {
         total += value.byteLength;
         if (total > maximumBytes) {
             await reader.cancel();
-            throw new ResponseTooLargeError();
+            throw new RequestTooLargeError();
         }
         chunks.push(value);
     }
@@ -234,8 +296,15 @@ function isControlPlaneEnvelope(value: unknown, requestId: string) {
         && typeof value.error.retryable === "boolean";
 }
 
+function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]) {
+    const keys = Object.keys(value).sort();
+    return keys.length === expected.length && keys.every((key, index) => key === expected[index]);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-class ResponseTooLargeError extends Error {}
+class RequestTooLargeError extends Error {}
+class ContentTypeError extends Error {}
+class MethodNotAllowedError extends Error {}
