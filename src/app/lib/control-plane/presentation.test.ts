@@ -3,14 +3,41 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { ReleaseBuild } from "./types";
 import {
+    createServerRegionOptions,
     fieldRequirementLabel,
     installableBuilds,
+    MAINTENANCE_TIME_ZONE,
+    maintenanceSlotOptions,
     operationCardRowClass,
     operationCardRows,
     operationTargetMatchesHash,
     overviewStatRowClass,
     presentControlPlaneOperationResult,
 } from "./presentation";
+
+test("create-server regions come only from registered hosts with available prepared slots", () => {
+    assert.deepEqual(createServerRegionOptions([
+        { region: "united-states", availableServers: 2 },
+        { region: "germany", availableServers: 1 },
+        { region: "united-states", availableServers: 1 },
+        { region: "spain", availableServers: 0 },
+        { region: "united-kingdom", availableServers: -1 },
+        { region: "unexpected", availableServers: 5 },
+    ]), [
+        { value: "germany", label: "Germany" },
+        { value: "united-states", label: "United States" },
+    ]);
+    assert.deepEqual(createServerRegionOptions([]), []);
+});
+
+test("maintenance choices show their authoritative timezone without changing protocol values", () => {
+    assert.equal(MAINTENANCE_TIME_ZONE, "America/Chicago");
+    assert.deepEqual(maintenanceSlotOptions(), [
+        { value: "03:00-04:00", label: "03:00–04:00 America/Chicago" },
+        { value: "10:00-11:00", label: "10:00–11:00 America/Chicago" },
+        { value: "18:00-19:00", label: "18:00–19:00 America/Chicago" },
+    ]);
+});
 
 test("operation fields explicitly identify required and optional inputs", () => {
     assert.equal(fieldRequirementLabel(true), "Required");
