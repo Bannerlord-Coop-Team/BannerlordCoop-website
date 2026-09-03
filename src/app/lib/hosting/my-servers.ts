@@ -6,6 +6,7 @@ import type {
 const MAXIMUM_RESPONSE_BYTES = 8 * 1_048_576;
 const MAXIMUM_PAGES = 10;
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const SAFE_ERROR_CODE = /^[a-z][a-z0-9_-]{0,63}$/u;
 
 export type MyServerOperation = "start" | "stop" | "restart-game";
 
@@ -136,10 +137,17 @@ async function requestMyServersApi(
     }
     if (!envelope.ok) {
         const error = envelope.error;
-        if (!isRecord(error) || typeof error.code !== "string" || typeof error.message !== "string") {
-            throw invalidResponse();
-        }
-        throw new MyServersApiError(error.code, error.message, error.retryable === true);
+        if (
+            !isRecord(error)
+            || typeof error.code !== "string"
+            || !SAFE_ERROR_CODE.test(error.code)
+            || typeof error.message !== "string"
+            || error.message.length < 1
+            || error.message.length > 512
+            || /[\p{Cc}\p{Cf}]/u.test(error.message)
+            || typeof error.retryable !== "boolean"
+        ) throw invalidResponse();
+        throw new MyServersApiError(error.code, error.message, error.retryable);
     }
     if (!response.ok || !Object.hasOwn(envelope, "result")) throw invalidResponse();
     return envelope.result;

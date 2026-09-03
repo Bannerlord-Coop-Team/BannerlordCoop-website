@@ -7,6 +7,7 @@ const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/u;
 const SERVER_OPERATIONS = new Set(["start", "stop", "restart-game"]);
+const SAFE_ERROR_CODE = /^[a-z][a-z0-9_-]{0,63}$/u;
 
 export type MyServersHandlerOptions = {
     allowedOrigins: readonly string[];
@@ -292,7 +293,11 @@ function isControlPlaneEnvelope(value: unknown, requestId: string) {
     if (value.ok) return Object.hasOwn(value, "result");
     if (!isRecord(value.error)) return false;
     return typeof value.error.code === "string"
+        && SAFE_ERROR_CODE.test(value.error.code)
         && typeof value.error.message === "string"
+        && value.error.message.length >= 1
+        && value.error.message.length <= 512
+        && !/[\p{Cc}\p{Cf}]/u.test(value.error.message)
         && typeof value.error.retryable === "boolean";
 }
 
