@@ -6,6 +6,7 @@ import {
     applyControlPlaneOperationDefaults,
     createServerRegionOptions,
     fieldRequirementLabel,
+    formatDiscordOwner,
     installableBuilds,
     MAINTENANCE_TIME_ZONE,
     maintenanceSlotOptions,
@@ -62,6 +63,17 @@ test("the website creates servers on Stable without asking for a redundant relea
 test("operation fields explicitly identify required and optional inputs", () => {
     assert.equal(fieldRequirementLabel(true), "Required");
     assert.equal(fieldRequirementLabel(false), "Optional");
+});
+
+test("server ownership combines the Discord username and durable user id", () => {
+    assert.equal(
+        formatDiscordOwner("shot_up", "763278507085922325"),
+        "shot_up (763278507085922325)",
+    );
+    assert.equal(
+        formatDiscordOwner(undefined, "763278507085922325"),
+        "Username unavailable (763278507085922325)",
+    );
 });
 
 test("administrator reason fields are optional and explain the audit fallback", async () => {

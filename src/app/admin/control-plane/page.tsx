@@ -19,6 +19,7 @@ import {
 } from "@/app/lib/control-plane/explanations";
 import {
     createServerRegionOptions,
+    formatDiscordOwner,
     installableBuilds,
     MAINTENANCE_TIME_ZONE,
     maintenanceSlotOptions,
@@ -460,7 +461,7 @@ function ServerView({ result, discordUsers }: { result: ServerDashboardResult; d
                 </section>
             )}
             <section className="grid gap-6 lg:grid-cols-3">
-                <Panel title="Ownership"><Definition label="Discord owner" value={formatDiscordUsername(username)} /><Definition label="Discord ID" value={server.ownerDiscordUserId} /><Definition label="Region" value={server.friendlyRegion} /><Definition label="Provider" value={server.provider} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
+                <Panel title="Ownership"><Definition label="Discord owner" value={formatDiscordOwner(username, server.ownerDiscordUserId)} /><Definition label="Region" value={server.friendlyRegion} /><Definition label="Provider" value={server.provider} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
                 <Panel title="Desired / observed"><Definition label="Desired" value={server.desiredState} /><Definition label="VM" value={server.observedVmState} /><Definition label="Game" value={server.observedGameState} /><Definition label="Agent" value={result.dashboard.runtime?.agentHealthy ? "Healthy" : "Unavailable"} tone={result.dashboard.runtime?.agentHealthy ? "ok" : "warning"} /></Panel>
                 <Panel title="Composition"><Definition label="Channel" value={server.releaseChannel} /><Definition label="Installed" value={server.installedBuildId ?? "None"} /><Definition label="Desired" value={server.desiredBuildId ?? "None"} /><Definition label="Pinned" value={server.pinnedBuildId ?? "None"} /><Definition label="Save" value={result.dashboard.activeSave?.displayName ?? "Default bootstrap pending"} /></Panel>
             </section>

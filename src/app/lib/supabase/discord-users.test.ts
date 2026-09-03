@@ -11,7 +11,7 @@ test("reads the unique Discord username and provider id from Supabase metadata",
     assert.deepEqual(discordUserSummary(user("auth-1", {
         provider_id: "763278507085922325",
         full_name: "shot_up",
-        name: "shot_up#0",
+        name: "discord-user",
     })), {
         discordUserId: "763278507085922325",
         username: "shot_up",
