@@ -188,7 +188,7 @@ async function ControlPlaneViewContent({
     let discordUsers: DiscordUserSummary[] = [];
     let error = "";
     try {
-        const needsDiscordUsers = view === "servers" || view === "server" || view === "operations";
+        const needsDiscordUsers = view === "vps" || view === "servers" || view === "server" || view === "operations";
         const [viewResult, usersResult] = await Promise.allSettled([
             loadView(token, view, query, serverId, jobState, jobAction, unacknowledgedOnly, jobCursor),
             needsDiscordUsers ? listDiscordUsers() : Promise.resolve({ users: [], truncated: false }),
@@ -216,7 +216,7 @@ async function ControlPlaneViewContent({
                 </div>
             )}
             {!error && view === "overview" && <OverviewView overview={data as Overview} />}
-            {!error && view === "vps" && <VpsView inventory={data as HostingAdminVpsInventory} />}
+            {!error && view === "vps" && <VpsView inventory={data as HostingAdminVpsInventory} discordUsers={discordUsers} />}
             {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} discordUsers={discordUsers} />}
             {!error && view === "server" && <ServerView result={data as ServerDashboardResult} discordUsers={discordUsers} />}
             {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} state={jobState} action={jobAction} unacknowledgedOnly={unacknowledgedOnly} cursor={jobCursor} serverId={serverId} />}
@@ -303,8 +303,9 @@ function ViewTabs({ active }: { active: View }) {
     );
 }
 
-function VpsView({ inventory }: { inventory: HostingAdminVpsInventory }) {
+function VpsView({ inventory, discordUsers }: { inventory: HostingAdminVpsInventory; discordUsers: DiscordUserSummary[] }) {
     const { controlPlaneHost, hosts } = inventory;
+    const usernames = discordUsernameMap(discordUsers);
     const availableServiceNames = Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : [];
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
@@ -319,38 +320,37 @@ function VpsView({ inventory }: { inventory: HostingAdminVpsInventory }) {
                 <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased OVH VPS. The durable workflow verifies account ownership, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
                 <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
             </div>
-            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div className="mt-6">
                 <HostResourcesCard name="Oracle control plane" resources={controlPlaneHost} />
-                {hosts.map((host) => <HostResourcesCard key={host.name} name={host.name} resources={host.resources} />)}
             </div>
             <div className="mt-6 overflow-x-auto border border-white/10 bg-surface">
-                <table className="w-full min-w-250 text-left text-sm">
+                <table className="w-full min-w-300 table-fixed text-left text-sm">
+                    <colgroup><col className="w-[16%]" /><col className="w-[11%]" /><col className="w-[22%]" /><col className="w-[23%]" /><col className="w-[13%]" /><col className="w-[15%]" /></colgroup>
                     <thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted">
                         <tr>
-                            <th className="p-4">Name</th>
-                            <th className="p-4">Region</th>
-                            <th className="p-4">Total Slots</th>
-                            <th className="p-4">Running Servers</th>
-                            <th className="p-4">Available Slots</th>
-                            <th className="p-4">Cost</th>
-                            <th className="p-4">Expiration Date</th>
-                            <th className="p-4">Auto-Renew</th>
+                            <th className="p-4">Host</th>
+                            <th className="p-4">Capacity</th>
+                            <th className="p-4">Occupied slots</th>
+                            <th className="p-4">System resources</th>
+                            <th className="p-4">Billing</th>
                             <th className="p-4">Runner</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">{hosts.map((host) => (
-                        <tr key={host.name} className="hover:bg-white/[0.025]">
-                            <td className="p-4 font-mono text-xs text-foreground">{host.name}</td>
-                            <td className="p-4 text-xs text-foreground-muted">
-                                <span className="block">{host.region}</span>
-                                <span className="mt-1 block font-mono text-[0.65rem] text-foreground-dim">{host.locationId}</span>
+                        <tr key={host.name} className="align-top hover:bg-white/[0.025]">
+                            <td className="p-4">
+                                <p className="break-all font-mono text-xs text-foreground">{host.name}</p>
+                                <p className="mt-2 text-xs text-foreground-muted">{host.region}</p>
+                                <p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{host.locationId}</p>
                             </td>
-                            <td className="p-4 font-display text-xl text-foreground">{host.totalSlots}</td>
-                            <td className="p-4 font-display text-xl text-foreground">{host.runningServers}</td>
-                            <td className="p-4 font-display text-xl text-foreground">{host.availableServers}</td>
-                            <td className="p-4 text-xs text-foreground-muted">{formatVpsCost(host.cost)}</td>
-                            <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={host.expirationDate} empty="Unknown" /></td>
-                            <td className="p-4"><State value={host.autoRenew === true ? "enabled" : host.autoRenew === false ? "disabled" : "unknown"} /></td>
+                            <td className="p-4"><VpsCapacity host={host} /></td>
+                            <td className="p-4"><OccupiedVpsSlots host={host} usernames={usernames} /></td>
+                            <td className="p-4"><InlineHostResources resources={host.resources} /></td>
+                            <td className="p-4 text-xs text-foreground-muted">
+                                <p className="font-semibold text-foreground">{formatVpsCost(host.cost)}</p>
+                                <p className="mt-3"><span className="block text-[0.6rem] uppercase tracking-[0.1em] text-foreground-dim">Expires</span><LocalDateTime value={host.expirationDate} empty="Unknown" /></p>
+                                <div className="mt-3"><span className="mb-1 block text-[0.6rem] uppercase tracking-[0.1em] text-foreground-dim">Auto-renew</span><State value={host.autoRenew === true ? "enabled" : host.autoRenew === false ? "disabled" : "unknown"} /></div>
+                            </td>
                             <td className="p-4"><RunnerOnboardingStatus serviceName={host.name} runningServers={host.runningServers} targetSourceCommit={runnerTargetSourceCommit} onboarding={host.runnerOnboarding} update={host.runnerUpdate ?? null} /></td>
                         </tr>
                     ))}</tbody>
@@ -619,6 +619,21 @@ function JobsTable({ jobs, allowFailureAcknowledgement = false }: { jobs: Hostin
 function BackupsTable({ backups }: { backups: Backup[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-200 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Backup</th><th className="p-4">Type</th><th className="p-4">State</th><th className="p-4">Size</th><th className="p-4">Created</th><th className="p-4">Expires</th></tr></thead><tbody className="divide-y divide-white/10">{backups.map((backup) => <tr key={backup.backupId}><td className="p-4 font-mono text-xs text-foreground-muted">{backup.backupId}</td><td className="p-4 text-xs text-foreground-muted">{backup.backupType}</td><td className="p-4"><State value={backup.restoreState} /></td><td className="p-4 text-xs text-foreground-muted">{formatBytes(backup.byteSize)}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={backup.createdAt} /></td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={backup.retentionExpiresAt} /></td></tr>)}</tbody></table>{backups.length === 0 && <Empty>No retained backups.</Empty>}</div>; }
 function AuditTable({ events }: { events: AuditEvent[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-240 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Time</th><th className="p-4">Action</th><th className="p-4">Actor</th><th className="p-4">Server</th><th className="p-4">Reason</th><th className="p-4">Correlation</th></tr></thead><tbody className="divide-y divide-white/10">{events.map((event) => { const explanation = auditActionExplanation(event.action); return <tr key={event.eventId} className="cursor-help hover:bg-white/[0.025]" title={explanation} aria-label={`${event.action}: ${explanation}`}><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={event.occurredAt} /></td><td className="p-4 text-xs font-semibold text-foreground underline decoration-dotted underline-offset-4">{event.action}</td><td className="p-4 text-xs text-foreground-muted">{event.actorType}<br />{shortId(event.actorId)}</td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(event.targetServerId)}</td><td className="max-w-80 p-4 text-xs text-foreground-muted">{event.reason ?? "—"}</td><td className="p-4 font-mono text-[0.62rem] text-foreground-dim">{shortId(event.correlationId)}</td></tr>; })}</tbody></table>{events.length === 0 && <Empty>No audit events in this view.</Empty>}</div>; }
 function BuildTable({ builds }: { builds: ReleaseBuild[] }) { return <div className="mt-4 border border-white/10 bg-surface"><table className="w-full table-fixed text-left text-sm"><colgroup><col className="w-[28%]" /><col className="w-[17%]" /><col className="w-[20%]" /><col className="w-[12%]" /><col className="w-[23%]" /></colgroup><thead className="border-b border-white/10 font-label text-[0.6rem] uppercase tracking-[0.09em] text-foreground-muted"><tr><th className="px-2 py-4 sm:px-4">Version</th><th className="px-2 py-4 sm:px-4">Commit</th><th className="px-2 py-4 sm:px-4">Validation</th><th className="px-2 py-4 sm:px-4">Game</th><th className="px-2 py-4 sm:px-4">Published</th></tr></thead><tbody className="divide-y divide-white/10">{builds.map((build) => <tr key={build.buildId}><td className="min-w-0 px-2 py-4 sm:px-4"><p className="truncate font-semibold text-foreground" title={build.version}>{build.version}</p><p className="truncate font-mono text-[0.6rem] text-foreground-dim" title={build.buildId}>{shortId(build.buildId)}</p></td><td className="break-all px-2 py-4 font-mono text-xs text-foreground-muted sm:px-4" title={build.sourceRevision}>{shortRevision(build.sourceRevision)}</td><td className="px-2 py-4 sm:px-4"><State value={build.validationState} /></td><td className="break-words px-2 py-4 text-xs text-foreground-muted sm:px-4">{build.supportedGameVersion}</td><td className="px-2 py-4 text-xs text-foreground-muted sm:px-4"><LocalDateTime value={build.publishedAt} /></td></tr>)}</tbody></table>{builds.length === 0 && <Empty>No validated builds in this channel.</Empty>}</div>; }
+
+function VpsCapacity({ host }: { host: HostingAdminVpsHost }) {
+    return <dl className="space-y-2 text-xs"><div className="flex items-center justify-between gap-3"><dt className="text-foreground-muted">Total</dt><dd className="font-display text-lg text-foreground">{host.totalSlots}</dd></div><div className="flex items-center justify-between gap-3"><dt className="text-foreground-muted">Running</dt><dd className="font-display text-lg text-foreground">{host.runningServers}</dd></div><div className="flex items-center justify-between gap-3"><dt className="text-foreground-muted">Available</dt><dd className="font-display text-lg text-foreground">{host.availableServers}</dd></div></dl>;
+}
+
+function OccupiedVpsSlots({ host, usernames }: { host: HostingAdminVpsHost; usernames: Map<string, string> }) {
+    const slots = Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
+    if (slots.length === 0) return <p className="text-xs leading-5 text-foreground-muted">No occupied slots.</p>;
+    return <ul className="space-y-3">{slots.map((slot) => <li key={`${slot.slotIndex}:${slot.serverId}`} className="border-l-2 border-gold/30 pl-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-label text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-gold">Slot {slot.slotIndex + 1} · UDP {slot.gamePort}</p><State value={slot.operationState} /></div><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="mt-1 block break-words text-xs font-semibold text-foreground hover:text-gold hover:underline">{slot.displayName}</Link><p className="mt-1 break-all font-mono text-[0.62rem] text-foreground-muted">{formatDiscordOwner(usernames.get(slot.ownerDiscordUserId), slot.ownerDiscordUserId)}</p></li>)}</ul>;
+}
+
+function InlineHostResources({ resources }: { resources: HostingAdminHostResources | null }) {
+    if (!resources) return <div><State value="unavailable" /><p className="mt-2 text-xs leading-5 text-foreground-muted">No current trusted runner observation.</p></div>;
+    return <div><State value="available" /><dl className="mt-3 space-y-2 text-xs"><div><dt className="text-foreground-dim">Disk</dt><dd className="mt-0.5 text-foreground-muted">{formatStorageBytes(resources.diskUsedBytes)} used · {formatStorageBytes(resources.diskFreeBytes)} free</dd></div><div><dt className="text-foreground-dim">Memory</dt><dd className="mt-0.5 text-foreground-muted">{formatStorageBytes(resources.memoryUsedBytes)} / {formatStorageBytes(resources.memoryTotalBytes)}</dd></div><div className="flex flex-wrap gap-x-4 gap-y-1"><div><dt className="text-foreground-dim">CPU load</dt><dd className="text-foreground-muted">{resources.cpuPercent.toFixed(1)}%</dd></div><div><dt className="text-foreground-dim">Uptime</dt><dd className="text-foreground-muted">{formatUptime(resources.uptimeSeconds)}</dd></div></div><div><dt className="text-foreground-dim">Observed</dt><dd className="text-foreground-muted"><LocalDateTime value={resources.observedAt} /></dd></div></dl></div>;
+}
 
 function HostResourcesCard({ name, resources }: { name: string; resources: HostingAdminHostResources | null }) {
     return (
