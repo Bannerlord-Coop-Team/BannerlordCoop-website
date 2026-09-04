@@ -112,6 +112,14 @@ export type HostingAdminVpsHost = {
     totalSlots: number;
     runningServers: number;
     availableServers: number;
+    occupiedSlots: Array<{
+        slotIndex: number;
+        gamePort: number;
+        serverId: string;
+        displayName: string;
+        ownerDiscordUserId: string;
+        operationState: string;
+    }>;
     cost: {
         priceInMicrocents: number;
         currencyCode: string;

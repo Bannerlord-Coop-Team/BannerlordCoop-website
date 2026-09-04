@@ -76,6 +76,21 @@ test("server ownership combines the Discord username and durable user id", () =>
     );
 });
 
+test("the VPS view presents slot occupants and resources with their owning host", async () => {
+    const source = await readFile(
+        new URL("../../admin/control-plane/page.tsx", import.meta.url),
+        "utf8",
+    );
+
+    assert.match(source, /needsDiscordUsers = view === "vps"/u);
+    assert.match(source, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\} \/>/u);
+    assert.doesNotMatch(source, /hosts\.map\(\(host\) => <HostResourcesCard/u);
+    assert.match(source, /<OccupiedVpsSlots host=\{host\} usernames=\{usernames\} \/>/u);
+    assert.match(source, /<InlineHostResources resources=\{host\.resources\} \/>/u);
+    assert.match(source, /formatDiscordOwner\(usernames\.get\(slot\.ownerDiscordUserId\), slot\.ownerDiscordUserId\)/u);
+    assert.match(source, /view=server&serverId=\$\{encodeURIComponent\(slot\.serverId\)\}/u);
+});
+
 test("administrator reason fields are optional and explain the audit fallback", async () => {
     const source = await readFile(
         new URL("../../admin/control-plane/page.tsx", import.meta.url),
