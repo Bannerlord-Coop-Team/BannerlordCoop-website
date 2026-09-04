@@ -92,8 +92,8 @@ export function ManagedServerControls({
     }
 
     return (
-        <div className="flex min-w-72 flex-col items-end gap-2">
-            <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-col items-start gap-2">
+            <div className="flex flex-wrap items-center gap-2">
                 <ControlButton
                     label="Start"
                     icon={Power}
@@ -119,7 +119,7 @@ export function ManagedServerControls({
             {message && (
                 <p
                     aria-live="polite"
-                    className="max-w-72 text-right text-xs leading-5 text-foreground-muted"
+                    className="max-w-xl text-left text-xs leading-5 text-foreground-muted"
                 >
                     {message}
                 </p>
