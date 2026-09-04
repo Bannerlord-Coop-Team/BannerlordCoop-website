@@ -5,6 +5,16 @@ import type {
 
 const MAXIMUM_RESPONSE_BYTES = 8 * 1_048_576;
 const MAXIMUM_PAGES = 10;
+const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const SAFE_ERROR_CODE = /^[a-z][a-z0-9_-]{0,63}$/u;
+
+export type MyServerOperation = "start" | "stop" | "restart-game";
+
+export type MyServerOperationResult = {
+    outcome: "enqueued" | "existing";
+    jobId: string;
+    action: MyServerOperation;
+};
 
 export class MyServersApiError extends Error {
     constructor(
@@ -41,22 +51,69 @@ export async function listAllMyServers(accessToken: string): Promise<MyServerSum
     );
 }
 
+export async function requestMyServerOperation(
+    accessToken: string,
+    input: {
+        serverId: string;
+        action: MyServerOperation;
+        expectedUpdatedAt: string;
+    },
+    requestId: string,
+): Promise<MyServerOperationResult> {
+    if (!REQUEST_ID.test(requestId)) {
+        throw new MyServersApiError("invalid_request", "The server operation request ID is invalid.");
+    }
+    const result = await requestMyServersApi(accessToken, {
+        method: "POST",
+        body: JSON.stringify(input),
+        requestId,
+    });
+    if (
+        !isRecord(result)
+        || !hasExactKeys(result, ["action", "jobId", "outcome"])
+        || !["enqueued", "existing"].includes(String(result.outcome))
+        || typeof result.jobId !== "string"
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(result.jobId)
+        || result.action !== input.action
+    ) throw invalidResponse();
+    return result as MyServerOperationResult;
+}
+
 async function requestMyServers(accessToken: string, cursor: string | null): Promise<unknown> {
+    return requestMyServersApi(accessToken, {
+        method: "GET",
+        configureEndpoint(endpoint) {
+            endpoint.searchParams.set("limit", "100");
+            if (cursor !== null) endpoint.searchParams.set("cursor", cursor);
+        },
+    });
+}
+
+async function requestMyServersApi(
+    accessToken: string,
+    request: {
+        method: "GET" | "POST";
+        body?: string;
+        requestId?: string;
+        configureEndpoint?: (endpoint: URL) => void;
+    },
+): Promise<unknown> {
     const { endpoint, publishableKey } = myServersEndpoint();
-    const requestId = crypto.randomUUID();
-    endpoint.searchParams.set("limit", "100");
-    if (cursor !== null) endpoint.searchParams.set("cursor", cursor);
+    request.configureEndpoint?.(endpoint);
+    const requestId = request.requestId ?? crypto.randomUUID();
 
     let response: Response;
     try {
         response = await fetch(endpoint, {
-            method: "GET",
+            method: request.method,
             headers: {
                 accept: "application/json",
                 apikey: publishableKey,
                 authorization: `Bearer ${accessToken}`,
+                ...(request.body === undefined ? {} : { "content-type": "application/json" }),
                 "x-request-id": requestId,
             },
+            ...(request.body === undefined ? {} : { body: request.body }),
             cache: "no-store",
             signal: AbortSignal.timeout(30_000),
         });
@@ -80,10 +137,17 @@ async function requestMyServers(accessToken: string, cursor: string | null): Pro
     }
     if (!envelope.ok) {
         const error = envelope.error;
-        if (!isRecord(error) || typeof error.code !== "string" || typeof error.message !== "string") {
-            throw invalidResponse();
-        }
-        throw new MyServersApiError(error.code, error.message, error.retryable === true);
+        if (
+            !isRecord(error)
+            || typeof error.code !== "string"
+            || !SAFE_ERROR_CODE.test(error.code)
+            || typeof error.message !== "string"
+            || error.message.length < 1
+            || error.message.length > 512
+            || /[\p{Cc}\p{Cf}]/u.test(error.message)
+            || typeof error.retryable !== "boolean"
+        ) throw invalidResponse();
+        throw new MyServersApiError(error.code, error.message, error.retryable);
     }
     if (!response.ok || !Object.hasOwn(envelope, "result")) throw invalidResponse();
     return envelope.result;
@@ -129,6 +193,11 @@ async function readBoundedText(response: Response, maximumBytes: number) {
 
 function invalidResponse(message = "The managed-server API returned an invalid response.") {
     return new MyServersApiError("invalid_response", message, true);
+}
+
+function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]) {
+    const keys = Object.keys(value).sort();
+    return keys.length === expected.length && keys.every((key, index) => key === expected[index]);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

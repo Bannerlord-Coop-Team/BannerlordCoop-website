@@ -14,7 +14,7 @@ test("allows only configured browser origins", async () => {
     }));
     assert.equal(allowed.status, 204);
     assert.equal(allowed.headers.get("access-control-allow-origin"), ORIGIN);
-    assert.equal(allowed.headers.get("access-control-allow-methods"), "GET, OPTIONS");
+    assert.equal(allowed.headers.get("access-control-allow-methods"), "GET, POST, OPTIONS");
 
     const denied = await handler(new Request("https://function.example.test", {
         method: "OPTIONS",
@@ -39,12 +39,44 @@ test("routes a bounded list request through my-servers without caller identity f
     assert.equal(upstreamRequest?.url, "https://control-plane.example.test/v1/user/control-plane");
     assert.equal(upstreamRequest?.method, "POST");
     assert.equal(upstreamRequest?.headers.get("authorization"), `Bearer ${TOKEN}`);
+    assert.equal(upstreamRequest?.headers.get("x-request-id"), REQUEST_ID);
     assert.equal(upstreamRequest?.headers.get("apikey"), null);
     assert.deepEqual(upstreamBody, {
         version: 1,
         requestId: REQUEST_ID,
         operation: "my-servers",
         input: { cursor: "next-page", limit: 25 },
+    });
+});
+
+test("routes a strict lifecycle operation without caller authority", async () => {
+    let upstreamRequest: Request | undefined;
+    const handler = createHandler(async (input, init) => {
+        upstreamRequest = new Request(input, init);
+        return successEnvelope({
+            outcome: "enqueued",
+            jobId: "55555555-5555-4555-8555-555555555555",
+            action: "restart-game",
+        });
+    });
+    const response = await handler(operationRequest({
+        serverId: "22222222-2222-4222-8222-222222222222",
+        action: "restart-game",
+        expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+    }));
+    const upstreamBody = JSON.parse(await upstreamRequest?.text() ?? "{}");
+
+    assert.equal(response.status, 200);
+    assert.equal(upstreamRequest?.method, "POST");
+    assert.deepEqual(upstreamBody, {
+        version: 1,
+        requestId: REQUEST_ID,
+        operation: "server-operation",
+        input: {
+            serverId: "22222222-2222-4222-8222-222222222222",
+            action: "restart-game",
+            expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+        },
     });
 });
 
@@ -68,10 +100,60 @@ test("rejects missing authentication and unsupported inputs before upstream", as
         listRequest("?cursor=first&cursor=second"),
         listRequest("?cursor="),
         listRequest(`?cursor=${"x".repeat(4_100)}`),
-        listRequest("", "POST"),
+        listRequest("", "PUT"),
+        new Request("https://function.example.test", {
+            method: "POST",
+            headers: {
+                authorization: `Bearer ${TOKEN}`,
+                origin: ORIGIN,
+                "x-request-id": REQUEST_ID,
+            },
+            body: "{}",
+        }),
+        operationRequest({
+            serverId: "22222222-2222-4222-8222-222222222222",
+            action: "start",
+            expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+        }, "?ownerDiscordUserId=192469416892432384"),
+        operationRequest({
+            serverId: "22222222-2222-4222-8222-222222222222",
+            action: "delete",
+            expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+        }),
+        operationRequest({
+            serverId: "not-a-server",
+            action: "start",
+            expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+        }),
+        operationRequest({
+            serverId: "22222222-2222-4222-8222-222222222222",
+            action: "stop",
+            expectedUpdatedAt: "not-a-time",
+        }),
+        operationRequest({
+            serverId: "22222222-2222-4222-8222-222222222222",
+            action: "stop",
+            expectedUpdatedAt: "2026-09-02T16:45:07.479+02:00",
+        }),
+        operationRequest({
+            serverId: "22222222-2222-4222-8222-222222222222",
+            action: "start",
+            expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+            roleIds: ["1286659364455252022"],
+        }),
+        new Request("https://function.example.test", {
+            method: "POST",
+            headers: {
+                authorization: `Bearer ${TOKEN}`,
+                "content-type": "application/json",
+                origin: ORIGIN,
+                "x-request-id": REQUEST_ID,
+            },
+            body: "x".repeat(16 * 1_024 + 1),
+        }),
     ]) {
         const response = await handler(request);
-        assert.ok([400, 405, 414].includes(response.status));
+        assert.ok([400, 405, 413, 414, 415].includes(response.status));
     }
     assert.equal(calls, 0);
 });
@@ -129,5 +211,18 @@ function listRequest(query = "", method = "GET") {
             origin: ORIGIN,
             "x-request-id": REQUEST_ID,
         },
+    });
+}
+
+function operationRequest(input: Record<string, unknown>, query = "") {
+    return new Request(`https://function.example.test${query}`, {
+        method: "POST",
+        headers: {
+            authorization: `Bearer ${TOKEN}`,
+            "content-type": "application/json",
+            origin: ORIGIN,
+            "x-request-id": REQUEST_ID,
+        },
+        body: JSON.stringify(input),
     });
 }
