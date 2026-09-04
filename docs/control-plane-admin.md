@@ -32,8 +32,13 @@ npx supabase functions deploy my-servers --project-ref <project-ref>
 
 The `my-servers` function accepts authenticated GET inventory requests and
 strict POST lifecycle requests for Start, Stop, or game-container Restart.
-Only current durable owner and manager access can enqueue an operation; support
-and server-level admin access remain read-only. Requests carry the current
+**My Servers** is an inventory and navigation surface; each durable-access row
+links to `/servers/[serverId]`, where the lifecycle controls are rendered from
+the freshly loaded authoritative summary. The detail route grants no authority
+from the URL: it lists through the authenticated Edge boundary and renders a
+matching server only when that current user can access it. Only current durable
+owner and manager access can enqueue an operation; support and server-level
+admin access remain read-only. Requests carry the current
 exact UTC-millisecond `updatedAt` value, and the control plane derives idempotency
 from the request UUID while rechecking access when the durable job begins.
 After acceptance, one shared page poller disables lifecycle controls and refreshes

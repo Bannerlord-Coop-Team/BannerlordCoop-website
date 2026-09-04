@@ -1,6 +1,8 @@
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
 import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
 import { LiveServerConsole } from "@/app/components/servers/LiveServerConsole";
+import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
+import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import { ServerControlPanel } from "@/app/components/servers/ServerControlPanel";
 import {
     getLiveConsoleAccessLevel,
@@ -20,6 +22,8 @@ import {
     type LiveConsoleServer,
 } from "@/app/lib/console/servers";
 import { hasServerFleetAccess } from "@/app/lib/auth/roles";
+import type { MyServerSummary } from "@/app/lib/control-plane/types";
+import { listAllMyServers } from "@/app/lib/hosting/my-servers";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -59,9 +63,18 @@ const accessLabels: Record<LiveConsoleAccessLevel, string> = {
     operator: "Operator",
 };
 
+const managedAccessLabels: Record<MyServerSummary["accessRole"], string> = {
+    admin: "Read-only administrator",
+    manager: "Manager",
+    owner: "Owner",
+    support: "Read-only support",
+};
+
 function firstValue(value: string | string[] | undefined) {
     return Array.isArray(value) ? value[0] : value;
 }
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
     title: "Manage Server",
@@ -72,27 +85,46 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     const [{ serverId }, query] = await Promise.all([params, searchParams]);
     const liveServer = getLiveConsoleServer(serverId);
     const supabase = await getSupabaseServerClient();
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
+    const [{ data: userData }, { data: sessionData }] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.auth.getSession(),
+    ]);
+    const user = userData.user;
 
     if (!user) redirect(`/login?next=/servers/${encodeURIComponent(serverId)}`);
 
+    let managedServer: MyServerSummary | null = null;
+    const accessToken = sessionData.session?.access_token ?? null;
+    if (accessToken !== null) {
+        try {
+            managedServer = (await listAllMyServers(accessToken))
+                .find((server) => server.serverId === serverId) ?? null;
+        } catch (error) {
+            console.error("Managed server detail failed to load", error);
+        }
+    }
+
     if (liveServer) {
         const accessLevel = getLiveConsoleAccessLevel(user, liveServer.id);
-        if (!accessLevel) redirect("/servers");
+        if (accessLevel) {
+            const displayNames = await getServerDisplayNames([liveServer.id]);
+            return (
+                <LiveServerManagementPage
+                    accessError={firstValue(query.accessError)}
+                    accessLevel={accessLevel}
+                    accessUpdated={firstValue(query.accessUpdated)}
+                    managedServer={managedServer}
+                    server={{
+                        ...liveServer,
+                        name: displayNames.get(liveServer.id) ?? liveServer.name,
+                    }}
+                />
+            );
+        }
+    }
 
-        const displayNames = await getServerDisplayNames([liveServer.id]);
-        return (
-            <LiveServerManagementPage
-                accessError={firstValue(query.accessError)}
-                accessLevel={accessLevel}
-                accessUpdated={firstValue(query.accessUpdated)}
-                server={{
-                    ...liveServer,
-                    name: displayNames.get(liveServer.id) ?? liveServer.name,
-                }}
-            />
-        );
+    if (managedServer !== null) {
+        return <ManagedServerManagementPage server={managedServer} />;
     }
 
     if (!hasHostedServerAccess(user)) redirect("/");
@@ -239,15 +271,120 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     );
 }
 
+function ManagedServerManagementPage({ server }: { server: MyServerSummary }) {
+    return (
+        <main className="min-h-svh bg-background">
+            <header className="border-b border-white/10 bg-surface">
+                <div className="site-container flex min-h-18 items-center justify-between gap-4 py-3">
+                    <Link
+                        href="/servers"
+                        className="inline-flex items-center gap-2 font-label text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted transition-colors hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                    >
+                        <ArrowLeft aria-hidden="true" className="size-4" />
+                        All servers
+                    </Link>
+                    <div className="flex items-center gap-2 text-gold">
+                        <CloudCog aria-hidden="true" className="size-5" />
+                        <span className="font-label text-xs font-semibold uppercase tracking-[0.18em]">
+                            Management console
+                        </span>
+                    </div>
+                </div>
+            </header>
+
+            <div className="site-container py-10 sm:py-14">
+                <section className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end" aria-labelledby="server-heading">
+                    <div>
+                        <p className="font-label text-xs font-semibold uppercase tracking-[0.22em] text-gold">
+                            Managed server
+                        </p>
+                        <h1 id="server-heading" className="mt-3 font-display text-4xl font-semibold text-foreground sm:text-5xl">
+                            {server.displayName}
+                        </h1>
+                        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-foreground-muted">
+                            <span className="inline-flex items-center gap-1.5">
+                                <MapPin aria-hidden="true" className="size-4 text-gold-muted" />
+                                {formatManagedValue(server.friendlyRegion)}
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                                <Container aria-hidden="true" className="size-4 text-gold-muted" />
+                                Game container
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 rounded-sm border border-gold/25 bg-gold/[0.07] px-4 py-3">
+                        <ShieldCheck aria-hidden="true" className="size-5 text-gold" />
+                        <div>
+                            <p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted">
+                                Management access
+                            </p>
+                            <p className="mt-0.5 font-display text-xl font-semibold text-foreground">
+                                {managedAccessLabels[server.accessRole]}
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <div className="mt-8 flex gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3.5 text-sm leading-6 text-foreground-muted">
+                    <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
+                    <p>
+                        <strong className="font-semibold text-foreground">Managed lifecycle controls.</strong>{" "}
+                        Start, Stop, and Restart affect only this server&apos;s game container. They never reboot or power off the VPS.
+                    </p>
+                </div>
+
+                <section className="mt-8 grid gap-3 sm:grid-cols-3" aria-label="Server status">
+                    <ResourceCard icon={Container} label="Game state" value={formatManagedValue(server.observedGameState)} />
+                    <ResourceCard icon={CloudCog} label="Lifecycle" value={formatManagedValue(server.operationState)} />
+                    <ResourceCard icon={Database} label="Release channel" value={formatManagedValue(server.releaseChannel)} />
+                </section>
+
+                <ManagedServerLifecycleSection server={server} />
+            </div>
+        </main>
+    );
+}
+
+function ManagedServerLifecycleSection({ server }: { server: MyServerSummary }) {
+    return (
+        <section id="server-lifecycle" className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-lifecycle-heading">
+            <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
+                Lifecycle
+            </p>
+            <h2 id="server-lifecycle-heading" className="mt-2 font-display text-2xl font-semibold text-foreground sm:text-3xl">
+                Server controls
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
+                Current state: <strong className="font-semibold text-foreground">{formatManagedValue(server.operationState)}</strong>.
+                Disruptive operations require confirmation and may wait for backups or other durable work to finish.
+            </p>
+            <div className="mt-5">
+                <ManagedServerPollingProvider>
+                    <ManagedServerControls
+                        serverId={server.serverId}
+                        displayName={server.displayName}
+                        accessRole={server.accessRole}
+                        operationState={server.operationState}
+                        expectedUpdatedAt={server.updatedAt}
+                    />
+                </ManagedServerPollingProvider>
+            </div>
+        </section>
+    );
+}
+
 async function LiveServerManagementPage({
     accessError,
     accessLevel,
     accessUpdated,
+    managedServer,
     server,
 }: {
     accessError?: string;
     accessLevel: LiveConsoleAccessLevel;
     accessUpdated?: string;
+    managedServer: MyServerSummary | null;
     server: LiveConsoleServer;
 }) {
     const canManageAssignments = accessLevel === "admin" || accessLevel === "owner";
@@ -359,6 +496,8 @@ async function LiveServerManagementPage({
                     <ResourceCard icon={Container} label="Node" value={server.nodeId} />
                 </section>
 
+                {managedServer !== null && <ManagedServerLifecycleSection server={managedServer} />}
+
                 {canManageAssignments && (
                     <section id="server-access" className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-access-heading">
                         <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
@@ -402,6 +541,13 @@ async function LiveServerManagementPage({
             </div>
         </main>
     );
+}
+
+function formatManagedValue(value: string) {
+    return value
+        .split("-")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
 }
 
 function ResourceCard({
