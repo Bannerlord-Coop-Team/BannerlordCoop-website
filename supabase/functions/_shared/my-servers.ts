@@ -3,6 +3,7 @@ const MAXIMUM_REQUEST_BYTES = 16 * 1_024;
 const MAXIMUM_LIST_RESPONSE_BYTES = 8 * 1_048_576;
 const MAXIMUM_OPERATION_RESPONSE_BYTES = 64 * 1_024;
 const MAXIMUM_LIMIT = 100;
+const MAXIMUM_BACKUP_LIMIT = 50;
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
@@ -15,6 +16,20 @@ export type MyServersHandlerOptions = {
     fetchImplementation?: typeof fetch;
     upstreamTimeoutMilliseconds?: number;
 };
+
+type UpstreamRequest =
+    | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
+    | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
+    | { operation: "server-backup-status"; input: { serverId: string } }
+    | {
+        operation: "server-operation";
+        input: { serverId: string; action: string; expectedUpdatedAt: string };
+    }
+    | { operation: "create-backup"; input: { serverId: string; expectedUpdatedAt: string } }
+    | {
+        operation: "restore-backup";
+        input: { serverId: string; backupId: string; expectedUpdatedAt: string };
+    };
 
 export function createMyServersHandler(options: MyServersHandlerOptions) {
     const allowedOrigins = new Set(options.allowedOrigins.map(validateOrigin));
@@ -52,7 +67,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             return errorResponse(414, requestId, "request_too_large", "The request URL is too large.", false, cors);
         }
 
-        let upstreamRequest: { operation: "my-servers" | "server-operation"; input: unknown };
+        let upstreamRequest: UpstreamRequest;
         try {
             upstreamRequest = request.method === "GET"
                 ? listRequest(request)
@@ -105,7 +120,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         try {
             responseBody = await readBoundedText(
                 upstream,
-                upstreamRequest.operation === "my-servers"
+                upstreamRequest.operation === "my-servers" || upstreamRequest.operation === "server-backups"
                     ? MAXIMUM_LIST_RESPONSE_BYTES
                     : MAXIMUM_OPERATION_RESPONSE_BYTES,
             );
@@ -136,25 +151,44 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
     };
 }
 
-function listRequest(request: Request) {
+function listRequest(request: Request): UpstreamRequest {
     if (request.body !== null) throw new Error("GET requests cannot contain a body");
     const url = new URL(request.url);
-    for (const key of url.searchParams.keys()) {
-        if (key !== "limit" && key !== "cursor") throw new Error("Unsupported query parameter");
+    const resourceValues = url.searchParams.getAll("resource");
+    if (resourceValues.length > 1) throw new Error("Duplicate resource parameter");
+    const resource = resourceValues[0] ?? null;
+
+    if (resource === null) {
+        assertQueryParameters(url, ["cursor", "limit"]);
+        return {
+            operation: "my-servers",
+            input: readPageInput(url, MAXIMUM_LIMIT),
+        };
     }
-    if (url.searchParams.getAll("limit").length > 1 || url.searchParams.getAll("cursor").length > 1) {
-        throw new Error("Duplicate query parameter");
+
+    if (resource === "backups") {
+        assertQueryParameters(url, ["cursor", "limit", "resource", "serverId"]);
+        return {
+            operation: "server-backups",
+            input: {
+                serverId: readServerId(url),
+                ...readPageInput(url, MAXIMUM_BACKUP_LIMIT),
+            },
+        };
     }
-    const rawLimit = url.searchParams.get("limit");
-    const limit = rawLimit === null ? MAXIMUM_LIMIT : parseLimit(rawLimit);
-    const cursor = url.searchParams.get("cursor");
-    if (cursor !== null && (cursor.length < 1 || cursor.length > 2_048)) {
-        throw new Error("Invalid cursor");
+
+    if (resource === "backup-status") {
+        assertQueryParameters(url, ["resource", "serverId"]);
+        return {
+            operation: "server-backup-status",
+            input: { serverId: readServerId(url) },
+        };
     }
-    return { operation: "my-servers" as const, input: { cursor, limit } };
+
+    throw new Error("Unsupported resource");
 }
 
-async function operationRequest(request: Request) {
+async function operationRequest(request: Request): Promise<UpstreamRequest> {
     if ([...new URL(request.url).searchParams.keys()].length !== 0) {
         throw new Error("Operation query parameters are unsupported");
     }
@@ -168,35 +202,97 @@ async function operationRequest(request: Request) {
     } catch {
         throw new Error("Invalid JSON");
     }
-    if (!isRecord(value) || !hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {
+    if (!isRecord(value) || typeof value.action !== "string") {
         throw new Error("Invalid operation");
     }
     if (typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)) {
         throw new Error("Invalid server ID");
     }
-    if (typeof value.action !== "string" || !SERVER_OPERATIONS.has(value.action)) {
-        throw new Error("Invalid operation action");
+    if (SERVER_OPERATIONS.has(value.action)) {
+        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {
+            throw new Error("Invalid lifecycle operation");
+        }
+        assertExpectedUpdatedAt(value.expectedUpdatedAt);
+        return {
+            operation: "server-operation",
+            input: {
+                serverId: value.serverId,
+                action: value.action,
+                expectedUpdatedAt: value.expectedUpdatedAt as string,
+            },
+        };
     }
-    if (
-        typeof value.expectedUpdatedAt !== "string"
-        || value.expectedUpdatedAt.length > 64
-        || !ISO_TIMESTAMP.test(value.expectedUpdatedAt)
-        || !Number.isFinite(Date.parse(value.expectedUpdatedAt))
-    ) throw new Error("Invalid expected update time");
-    return {
-        operation: "server-operation" as const,
-        input: {
-            serverId: value.serverId,
-            action: value.action,
-            expectedUpdatedAt: value.expectedUpdatedAt,
-        },
-    };
+    if (value.action === "create-backup") {
+        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {
+            throw new Error("Invalid backup operation");
+        }
+        assertExpectedUpdatedAt(value.expectedUpdatedAt);
+        return {
+            operation: "create-backup",
+            input: {
+                serverId: value.serverId,
+                expectedUpdatedAt: value.expectedUpdatedAt as string,
+            },
+        };
+    }
+    if (value.action === "restore-backup") {
+        if (
+            !hasExactKeys(value, ["action", "backupId", "expectedUpdatedAt", "serverId"])
+            || typeof value.backupId !== "string"
+            || !SERVER_ID.test(value.backupId)
+        ) throw new Error("Invalid restore operation");
+        assertExpectedUpdatedAt(value.expectedUpdatedAt);
+        return {
+            operation: "restore-backup",
+            input: {
+                serverId: value.serverId,
+                backupId: value.backupId,
+                expectedUpdatedAt: value.expectedUpdatedAt as string,
+            },
+        };
+    }
+    throw new Error("Invalid operation action");
 }
 
-function parseLimit(raw: string) {
+function assertQueryParameters(url: URL, allowed: readonly string[]) {
+    const allowedSet = new Set(allowed);
+    for (const key of url.searchParams.keys()) {
+        if (!allowedSet.has(key)) throw new Error("Unsupported query parameter");
+    }
+    for (const key of allowed) {
+        if (url.searchParams.getAll(key).length > 1) throw new Error("Duplicate query parameter");
+    }
+}
+
+function readPageInput(url: URL, maximumLimit: number) {
+    const rawLimit = url.searchParams.get("limit");
+    const limit = rawLimit === null ? maximumLimit : parseLimit(rawLimit, maximumLimit);
+    const cursor = url.searchParams.get("cursor");
+    if (cursor !== null && (cursor.length < 1 || cursor.length > 2_048)) {
+        throw new Error("Invalid cursor");
+    }
+    return { cursor, limit };
+}
+
+function readServerId(url: URL) {
+    const serverId = url.searchParams.get("serverId");
+    if (serverId === null || !SERVER_ID.test(serverId)) throw new Error("Invalid server ID");
+    return serverId;
+}
+
+function assertExpectedUpdatedAt(value: unknown): asserts value is string {
+    if (
+        typeof value !== "string"
+        || value.length > 64
+        || !ISO_TIMESTAMP.test(value)
+        || !Number.isFinite(Date.parse(value))
+    ) throw new Error("Invalid expected update time");
+}
+
+function parseLimit(raw: string, maximumLimit: number) {
     if (!/^[1-9][0-9]*$/u.test(raw)) throw new Error("Invalid limit");
     const value = Number(raw);
-    if (!Number.isSafeInteger(value) || value > MAXIMUM_LIMIT) throw new Error("Invalid limit");
+    if (!Number.isSafeInteger(value) || value > maximumLimit) throw new Error("Invalid limit");
     return value;
 }
 

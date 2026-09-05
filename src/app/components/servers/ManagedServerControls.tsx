@@ -43,6 +43,7 @@ export function ManagedServerControls({
         if (
             pollingSession === null
             || pollingSession.serverId !== serverId
+            || pollingSession.statusSource !== "server"
             || stateIsTransitional
             || expectedUpdatedAt === pollingSession.initialUpdatedAt
         ) return;
@@ -82,7 +83,7 @@ export function ManagedServerControls({
                     requestId: crypto.randomUUID(),
                 });
                 setMessage(result.message);
-                if (result.ok) beginPolling(serverId, expectedUpdatedAt);
+                if (result.ok) beginPolling(serverId, expectedUpdatedAt, result.jobId);
             } catch {
                 setMessage("The server operation could not be submitted right now.");
             } finally {

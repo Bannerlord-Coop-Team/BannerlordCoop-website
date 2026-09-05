@@ -17,12 +17,20 @@ const POLL_TIMEOUT_MILLISECONDS = 60_000;
 type PollingSession = {
     serverId: string;
     initialUpdatedAt: string;
+    jobId: string | null;
+    statusSource: "server" | "backup";
     deadline: number;
 };
 
 type ManagedServerPollingContextValue = {
     session: PollingSession | null;
-    beginPolling: (serverId: string, initialUpdatedAt: string) => void;
+    beginPolling: (
+        serverId: string,
+        initialUpdatedAt: string,
+        jobId?: string,
+        statusSource?: "server" | "backup",
+    ) => void;
+    attachJob: (serverId: string, jobId: string) => void;
     endPolling: (serverId: string) => void;
 };
 
@@ -32,14 +40,29 @@ export function ManagedServerPollingProvider({ children }: { children: ReactNode
     const router = useRouter();
     const [session, setSession] = useState<PollingSession | null>(null);
 
-    const beginPolling = useCallback((serverId: string, initialUpdatedAt: string) => {
+    const beginPolling = useCallback((
+        serverId: string,
+        initialUpdatedAt: string,
+        jobId?: string,
+        statusSource: "server" | "backup" = "server",
+    ) => {
         setSession({
             serverId,
             initialUpdatedAt,
+            jobId: jobId ?? null,
+            statusSource,
             deadline: Date.now() + POLL_TIMEOUT_MILLISECONDS,
         });
         router.refresh();
     }, [router]);
+
+    const attachJob = useCallback((serverId: string, jobId: string) => {
+        setSession((current) => current?.serverId === serverId
+            && current.statusSource === "backup"
+            && current.jobId === null
+            ? { ...current, jobId }
+            : current);
+    }, []);
 
     const endPolling = useCallback((serverId: string) => {
         setSession((current) => current?.serverId === serverId ? null : current);
@@ -58,7 +81,8 @@ export function ManagedServerPollingProvider({ children }: { children: ReactNode
         };
     }, [router, session]);
 
-    const value = useMemo(() => ({ session, beginPolling, endPolling }), [
+    const value = useMemo(() => ({ session, beginPolling, attachJob, endPolling }), [
+        attachJob,
         beginPolling,
         endPolling,
         session,
