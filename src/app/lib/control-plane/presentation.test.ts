@@ -15,20 +15,34 @@ import {
     operationTargetMatchesHash,
     overviewStatRowClass,
     presentControlPlaneOperationResult,
+    serverRegionOptions,
 } from "./presentation";
+
+test("server regions use the approved display order and protocol values", () => {
+    assert.deepEqual(serverRegionOptions(), [
+        { value: "us-west", label: "US-West" },
+        { value: "us-east", label: "US-East" },
+        { value: "france", label: "France" },
+        { value: "germany", label: "Germany" },
+        { value: "united-kingdom", label: "United Kingdom" },
+        { value: "poland", label: "Poland" },
+    ]);
+});
 
 test("create-server regions come only from registered hosts with available prepared slots", () => {
     assert.deepEqual(createServerRegionOptions([
-        { region: "united-states", availableServers: 2 },
+        { region: "poland", availableServers: 1 },
+        { region: "us-east", availableServers: 2 },
         { region: "germany", availableServers: 1 },
-        { region: "united-states", availableServers: 1 },
-        { region: "spain", availableServers: 0 },
-        { region: "united-kingdom", availableServers: -1 },
+        { region: "us-west", availableServers: 1 },
+        { region: "france", availableServers: 1 },
+        { region: "united-kingdom", availableServers: 1 },
+        { region: "us-east", availableServers: 1 },
+        { region: "spain", availableServers: 5 },
+        { region: "united-states", availableServers: 5 },
+        { region: "europe-automatic", availableServers: 5 },
         { region: "unexpected", availableServers: 5 },
-    ]), [
-        { value: "germany", label: "Germany" },
-        { value: "united-states", label: "United States" },
-    ]);
+    ]), serverRegionOptions());
     assert.deepEqual(createServerRegionOptions([]), []);
 });
 

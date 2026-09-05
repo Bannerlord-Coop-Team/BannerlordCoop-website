@@ -1,11 +1,12 @@
 import type { HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
 
-const CREATE_SERVER_REGION_LABELS = {
+const SERVER_REGION_LABELS = {
+    "us-west": "US-West",
+    "us-east": "US-East",
+    france: "France",
     germany: "Germany",
     "united-kingdom": "United Kingdom",
-    spain: "Spain",
-    "united-states": "United States",
-    "europe-automatic": "Europe (automatic)",
+    poland: "Poland",
 } as const;
 
 const MAINTENANCE_SLOTS = ["03:00-04:00", "10:00-11:00", "18:00-19:00"] as const;
@@ -34,6 +35,10 @@ export function formatDiscordOwner(username: string | undefined, discordUserId: 
     return `${username ?? "Username unavailable"} (${discordUserId})`;
 }
 
+export function serverRegionOptions() {
+    return Object.entries(SERVER_REGION_LABELS).map(([value, label]) => ({ value, label }));
+}
+
 export function createServerRegionOptions(
     hosts: readonly Pick<HostingAdminVpsHost, "region" | "availableServers">[],
 ) {
@@ -41,13 +46,12 @@ export function createServerRegionOptions(
         hosts
             .filter((host) => Number.isSafeInteger(host.availableServers) && host.availableServers > 0)
             .map((host) => host.region)
-            .filter((region): region is keyof typeof CREATE_SERVER_REGION_LABELS => (
-                Object.hasOwn(CREATE_SERVER_REGION_LABELS, region)
+            .filter((region): region is keyof typeof SERVER_REGION_LABELS => (
+                Object.hasOwn(SERVER_REGION_LABELS, region)
             )),
     );
-    return Object.entries(CREATE_SERVER_REGION_LABELS)
-        .filter(([region]) => regionsWithAvailableCapacity.has(region as keyof typeof CREATE_SERVER_REGION_LABELS))
-        .map(([value, label]) => ({ value, label }));
+    return serverRegionOptions()
+        .filter(({ value }) => regionsWithAvailableCapacity.has(value as keyof typeof SERVER_REGION_LABELS));
 }
 
 export function maintenanceSlotOptions() {
