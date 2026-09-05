@@ -103,10 +103,10 @@ short_sha() {
 }
 
 display_date() {
-    python3 -c "
+    python3 - "$1" "$2" <<'PY'
 from datetime import datetime, timezone
-release='''$1'''
-built='''$2'''
+import sys
+release, built = sys.argv[1:3]
 if not built:
     print(release)
     raise SystemExit
@@ -116,7 +116,43 @@ try:
     print(stamp.astimezone(ZoneInfo('America/Chicago')).strftime('%Y-%m-%d'))
 except Exception:
     print(release)
-"
+PY
+}
+
+check_client_url() {
+    # Match Test-NightlyClientArtifactUri in install.ps1. The immutable URL
+    # must identify both this release's commit and its exact archive bytes.
+    [ "$CLIENT_URL" = "$CLIENT_ARCHIVE_URI" ] || \
+        [ "$CLIENT_URL" = "$GATEWAY/v1/artifacts/nightly/clients/$HEAD_SHA/$CLIENT_SHA/Coop.7z" ] \
+        || die "The nightly client release metadata is invalid."
+}
+
+token_poll_decision() {
+    local status=$1 response=$2 error token token_type
+    error=$(json_get error < "$response" 2>/dev/null) || error=''
+    if [ "$status" = 200 ]; then
+        token=$(json_get access_token < "$response" 2>/dev/null) || token=''
+        token_type=$(json_get token_type < "$response" 2>/dev/null) || token_type=''
+        if [ "$token_type" = Bearer ] && [[ $token =~ ^[A-Za-z0-9_-]{43}$ ]]; then
+            TOKEN=$token
+            return 0
+        fi
+    fi
+    # Some proxies turn HTTP 428 into 200 while preserving the pending JSON.
+    if [ "$status" = 428 ] || [ "$error" = authorization_pending ]; then
+        return 0
+    fi
+    if [ "$status" = 403 ] || [ "$error" = access_denied ] || [ "$error" = supporter_role_required ]; then
+        die "Discord access was denied. The Tester role, a current Patreon, Boosty, or Afdian supporter role, or an active sponsored-account seat is required."
+    fi
+    if [ "$status" = 409 ] || [ "$error" = already_used ]; then
+        die "This Discord verification was already used. Close extra installer windows and run the installer again."
+    fi
+    if [ "$status" = 400 ] || [ "$status" = 401 ] || [ "$error" = expired_token ] || [ "$error" = invalid_request ]; then
+        die "The Discord verification expired. Run the installer again to start a new check."
+    fi
+    [ "$status" != 200 ] || die "The nightly authorization token is invalid."
+    die "Could not check Discord verification (HTTP $status). Run the installer again."
 }
 
 check_url() {
@@ -139,16 +175,17 @@ check_url() {
     fi
 }
 
-for required in curl python3 sha256sum mktemp stat awk df pgrep seq; do
+for required in curl python3 sha256sum mktemp stat awk df pgrep; do
     command -v "$required" >/dev/null 2>&1 || die "Required command not found: $required" \
         "These are all standard on any distro."
 done
 
 EXTRACTOR=''
-command -v 7z >/dev/null 2>&1 && EXTRACTOR=7z
+command -v 7zz >/dev/null 2>&1 && EXTRACTOR=7zz
+[ -z "$EXTRACTOR" ] && command -v 7z >/dev/null 2>&1 && EXTRACTOR=7z
 [ -z "$EXTRACTOR" ] && command -v bsdtar >/dev/null 2>&1 && EXTRACTOR=bsdtar
-[ -n "$EXTRACTOR" ] || die "Need 7z or bsdtar to extract the archives." \
-    "Install p7zip, or libarchive which provides bsdtar."
+[ -n "$EXTRACTOR" ] || die "Need 7zz, 7z, or bsdtar to extract the archives." \
+    "Install 7-Zip, p7zip, or libarchive which provides bsdtar."
 
 printf 'BannerlordCoop nightly installer\n'
 printf 'This downloads and installs the latest completed Supporter and Tester nightly for you.\n'
@@ -174,7 +211,7 @@ PROGRESS=0
 Z_Q=()
 if [ -t 2 ]; then
     PROGRESS=1
-    if [ "$EXTRACTOR" = 7z ] && 7z 2>&1 | grep -q 'bs{o|e|p}'; then
+    if [ "$EXTRACTOR" != bsdtar ] && "$EXTRACTOR" 2>&1 | grep -q 'bs{o|e|p}'; then
         Z_Q=(-bso0 -bsp1)
     fi
 fi
@@ -204,9 +241,9 @@ unz() {
     if [ "$EXTRACTOR" = bsdtar ]; then
         bsdtar -xf "$1" -C "$2"
     elif [ ${#Z_Q[@]} -gt 0 ]; then
-        7z x -y "${Z_Q[@]}" -o"$2" "$1"
+        "$EXTRACTOR" x -y "${Z_Q[@]}" -o"$2" "$1"
     else
-        7z x -y -o"$2" "$1" >/dev/null
+        "$EXTRACTOR" x -y -o"$2" "$1" >/dev/null
     fi
 }
 
@@ -314,20 +351,17 @@ printf '\nNightly access verification\n'
 printf 'Nightly builds are for Testers, current Patreon, Boosty, or Afdian supporters, and up to 10 Discord accounts sponsored by each eligible member.\n'
 printf 'A browser will open so Discord can verify access for this install or update.\n'
 
-sess=$(curl -sS --max-time 30 -X POST "$GATEWAY/v1/device/sessions" \
-    -H 'Content-Type: application/x-www-form-urlencoded' -d '') \
+sess=$(curl -fsS --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 30 \
+    -X POST "$GATEWAY/v1/device/sessions" \
+    -H 'Content-Type: application/x-www-form-urlencoded' -d 'client=installer') \
     || die "Could not reach the nightly authorization service."
 DEVICE_CODE=$(printf '%s' "$sess" | json_get device_code)
 USER_CODE=$(printf '%s' "$sess" | json_get user_code)
 VERIFY_URI=$(printf '%s' "$sess" | json_get verification_uri)
 INTERVAL=$(printf '%s' "$sess" | json_get interval)
 EXPIRES=$(printf '%s' "$sess" | json_get expires_in)
-case "$DEVICE_CODE" in
-    [A-Za-z0-9_-][A-Za-z0-9_-][A-Za-z0-9_-]*)
-        [ ${#DEVICE_CODE} -eq 43 ] || die "The nightly authorization service returned an invalid response."
-        ;;
-    *) die "The nightly authorization service returned an invalid response." ;;
-esac
+[[ $DEVICE_CODE =~ ^[A-Za-z0-9_-]{43}$ ]] \
+    || die "The nightly authorization service returned an invalid response."
 case "$USER_CODE" in
     [A-Z2-9][A-Z2-9][A-Z2-9][A-Z2-9]-[A-Z2-9][A-Z2-9][A-Z2-9][A-Z2-9]) ;;
     *) die "The nightly authorization service returned an invalid response." ;;
@@ -347,37 +381,21 @@ if command -v xdg-open >/dev/null 2>&1; then
 fi
 printf 'If no browser opens, go to:\n  %s\n' "$VERIFY_URI"
 
-for _ in $(seq 1 $(( EXPIRES / INTERVAL ))); do
+AUTH_WORK=$(mktemp -d "${TMPDIR:-/tmp}/bannerlordcoop-auth-XXXXXX") \
+    || die "Cannot create an authorization work directory."
+trap 'rm -rf "$AUTH_WORK"' EXIT
+deadline=$(( $(date +%s) + EXPIRES ))
+while [ "$(date +%s)" -lt "$deadline" ]; do
     sleep "$INTERVAL"
-    tf=$(mktemp)
-    st=$(curl -sS --max-time 30 -o "$tf" -w '%{http_code}' \
+    tf="$AUTH_WORK/token.json"
+    st=$(curl -sS --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 30 -o "$tf" -w '%{http_code}' \
         -X POST "$GATEWAY/v1/device/token" \
         -H 'Content-Type: application/x-www-form-urlencoded' \
-        --data-urlencode "device_code=$DEVICE_CODE")
-    case "$st" in
-        200)
-            TOKEN=$(json_get access_token < "$tf")
-            TOKEN_TYPE=$(json_get token_type < "$tf")
-            rm -f "$tf"
-            [ "$TOKEN_TYPE" = Bearer ] || die "The nightly authorization token is invalid."
-            case "$TOKEN" in
-                [A-Za-z0-9_-][A-Za-z0-9_-]*)
-                    [ ${#TOKEN} -eq 43 ] || die "The nightly authorization token is invalid."
-                    ;;
-                *) die "The nightly authorization token is invalid." ;;
-            esac
-            break
-            ;;
-        403)
-            rm -f "$tf"
-            die "Discord access was denied. The Tester role, a current Patreon, Boosty, or Afdian supporter role, or an active sponsored-account seat is required."
-            ;;
-        400|401)
-            rm -f "$tf"
-            die "The Discord verification expired. Run the installer again to start a new check."
-            ;;
-        *) rm -f "$tf" ;;
-    esac
+        --data-urlencode "device_code=$DEVICE_CODE") \
+        || die "Could not reach the nightly authorization service."
+    token_poll_decision "$st" "$tf"
+    rm -f "$tf"
+    [ -z "$TOKEN" ] || break
 done
 [ -n "$TOKEN" ] || die "Discord verification timed out. Run the installer again when you are ready to authorize it."
 printf 'Nightly access verified.\n'
@@ -386,7 +404,7 @@ AUTH=(-H "Authorization: Bearer $TOKEN")
 MANIFEST_URI="$GATEWAY/v1/manifests/release"
 [ "$WANT_SERVER" = 0 ] && MANIFEST_URI="$GATEWAY/v1/manifests/client"
 printf 'Checking the latest completed nightly release...\n'
-mf=$(mktemp)
+mf="$AUTH_WORK/manifest.json"
 st=$(curl -sS --max-time 60 "${AUTH[@]}" -o "$mf" -w '%{http_code}' "$MANIFEST_URI")
 if [ "$st" != 200 ]; then
     rm -f "$mf"
@@ -433,27 +451,23 @@ esac
 is_hex40 "$HEAD_SHA" || die "The nightly release manifest is invalid."
 printf 'Latest nightly: %s (%s)\n' "$(display_date "$REL_DATE" "$BUILT_AT")" "$(short_sha "$HEAD_SHA")"
 
-[ "$CLIENT_URL" = "$CLIENT_ARCHIVE_URI" ] || die "The nightly client release metadata is invalid."
+check_client_url
 is_hex64 "$CLIENT_SHA" || die "The nightly client release metadata is invalid."
 is_num "$CLIENT_BYTES" && [ "$CLIENT_BYTES" -gt 0 ] && [ "$CLIENT_BYTES" -le "$MAX_CLIENT" ] \
     || die "The nightly client release metadata is invalid."
-case "$CLIENT_NAME" in
-    [A-Za-z0-9]*.7z) ;;
-    *) die "The nightly client release metadata is invalid." ;;
-esac
+[[ $CLIENT_NAME =~ ^[A-Za-z0-9][A-Za-z0-9\ ._-]{0,199}\.7z$ ]] \
+    || die "The nightly client release metadata is invalid."
 
 if [ "$WANT_SERVER" = 1 ]; then
     [ "$FULL_URL" = "$SERVER_ARCHIVE_URI" ] || die "The nightly server release metadata is invalid."
     is_hex64 "$FULL_SHA" || die "The nightly server release metadata is invalid."
     is_num "$FULL_BYTES" && [ "$FULL_BYTES" -gt 0 ] && [ "$FULL_BYTES" -le "$MAX_SERVER" ] \
         || die "The nightly server release metadata is invalid."
-    case "$FULL_NAME" in
-        [A-Za-z0-9]*.7z) ;;
-        *) die "The nightly server release metadata is invalid." ;;
-    esac
+    [[ $FULL_NAME =~ ^[A-Za-z0-9][A-Za-z0-9\ ._-]{0,199}\.7z$ ]] \
+        || die "The nightly server release metadata is invalid."
     if [ -n "$INC_LAYOUT" ] || [ -n "$INC_FP" ]; then
         [ "$INC_LAYOUT" = base-overlay-v1 ] || die "The incremental Windows server release metadata is invalid."
-        [ -z "$INC_VER" ] || [ "$INC_VER" = 1 ] || die "The incremental Windows server release metadata is invalid."
+        [ "$INC_VER" = 1 ] || die "The incremental Windows server release metadata is invalid."
         is_hex64 "$INC_FP" || die "The incremental Windows server release metadata is invalid."
         compat_count=0
         seen=''
@@ -477,8 +491,10 @@ EOF
             || die "The incremental Windows server base metadata is invalid."
         is_num "$UPD_BYTES" && [ "$UPD_BYTES" -gt 0 ] && [ "$UPD_BYTES" -le "$MAX_UPDATE" ] \
             || die "The incremental Windows server update metadata is invalid."
-        case "$BASE_NAME" in [A-Za-z0-9]*.7z) ;; *) die "The incremental Windows server base metadata is invalid." ;; esac
-        case "$UPD_NAME" in [A-Za-z0-9]*.7z) ;; *) die "The incremental Windows server update metadata is invalid." ;; esac
+        [[ $BASE_NAME =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$ ]] \
+            || die "The incremental Windows server base metadata is invalid."
+        [[ $UPD_NAME =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$ ]] \
+            || die "The incremental Windows server update metadata is invalid."
     fi
 fi
 
@@ -502,7 +518,7 @@ WORK=''
 [ -n "$WORK_BASE" ] && WORK=$(mktemp -d "$WORK_BASE/.bannerlordcoop-installer-XXXXXX" 2>/dev/null || true)
 [ -n "$WORK" ] || WORK=$(mktemp -d "${TMPDIR:-/tmp}/bannerlordcoop-installer-XXXXXX") \
     || die "Cannot create a work directory."
-trap 'rm -rf "$WORK"' EXIT
+trap 'rm -rf "$AUTH_WORK" "$WORK"' EXIT
 
 need_space() {
     local want=$1 path=$2 what=$3 parent avail
@@ -646,7 +662,7 @@ EOF
 
 install_client() {
     printf '\nInstalling the Coop client mod...\n'
-    get "$CLIENT_ARCHIVE_URI" "$WORK/Coop.7z" "$CLIENT_BYTES" "$CLIENT_SHA" "Coop client"
+    get "$CLIENT_URL" "$WORK/Coop.7z" "$CLIENT_BYTES" "$CLIENT_SHA" "Coop client"
     unz "$WORK/Coop.7z" "$WORK/client-stage" "Coop client" || die "Could not extract the client archive."
     local staged="$WORK/client-stage/Coop"
     [ -f "$staged/SubModule.xml" ] && [ -f "$staged/bin/Win64_Shipping_Client/Coop.Core.dll" ] \
@@ -657,7 +673,7 @@ install_client() {
 }
 
 overlay_owned() {
-    local stage=$1
+    local stage=$1 installed_base=$2
     local required=(
         "BannerlordCoopServer.exe"
         "engine/Modules/Coop"
@@ -702,9 +718,12 @@ overlay_owned() {
         if [ "$relative" = "server-data/mod-config.json" ] && [ -f "$SERVER_DIR/$relative" ]; then
             continue
         fi
-        rm -rf "${SERVER_DIR:?}/$relative"
-        mkdir -p "$SERVER_DIR/$(dirname "$relative")"
-        if ! cp -a "$stage/$relative" "$SERVER_DIR/$relative"; then
+        # Include the current target before any destructive operation, just as
+        # Windows does: a failed copy may already have removed or changed it.
+        applied+=("$relative")
+        if ! { rm -rf "${SERVER_DIR:?}/$relative" && \
+            mkdir -p "$SERVER_DIR/$(dirname "$relative")" && \
+            cp -a "$stage/$relative" "$SERVER_DIR/$relative"; }; then
             for done in "${applied[@]}"; do
                 rm -rf "${SERVER_DIR:?}/$done"
                 [ -e "$WORK/rollback/$done" ] && {
@@ -714,9 +733,8 @@ overlay_owned() {
             done
             die "The server update failed and was rolled back."
         fi
-        applied+=("$relative")
     done
-    if ! assert_stage "$SERVER_DIR"; then
+    if ! assert_stage "$SERVER_DIR" || ! write_state "$SERVER_DIR" "$installed_base"; then
         for done in "${applied[@]}"; do
             rm -rf "${SERVER_DIR:?}/$done"
             [ -e "$WORK/rollback/$done" ] && {
@@ -763,9 +781,7 @@ install_server() {
         || die "Could not extract the update."
 
     if [ "$same_base" = 1 ]; then
-        overlay_owned "$WORK/update-stage"
-        write_state "$SERVER_DIR" "$state_base" \
-            || die "The update applied but the install marker could not be written."
+        overlay_owned "$WORK/update-stage" "$state_base"
         printf 'Dedicated server updated without downloading the unchanged engine and assets.\n'
         return 0
     fi
@@ -781,7 +797,8 @@ install_server() {
         cp -a "$SERVER_DIR/server-data/." "$WORK/complete-stage/server-data/" \
             || die "Could not preserve server-data (your saves and config)."
     fi
-    write_state "$WORK/complete-stage" "$BASE_SHA"
+    write_state "$WORK/complete-stage" "$BASE_SHA" \
+        || die "The install marker could not be written."
     publish_dir "$WORK/complete-stage" "$SERVER_DIR" keep
     printf 'Dedicated server installed with an incremental-update base.\n'
     [ -d "$SERVER_DIR.previous" ] && printf 'The previous installation is retained for rollback at %s.previous\n' "$SERVER_DIR"
