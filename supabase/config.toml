@@ -19,3 +19,6 @@ enabled = false
 
 [functions.control-plane-admin]
 verify_jwt = true
+
+[functions.my-servers]
+verify_jwt = true

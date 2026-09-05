@@ -26,6 +26,19 @@ export type ManagedServer = {
     updatedAt: string;
 };
 
+export type MyServerSummary = Pick<
+    ManagedServer,
+    | "serverId"
+    | "displayName"
+    | "friendlyRegion"
+    | "operationState"
+    | "observedGameState"
+    | "releaseChannel"
+    | "updatedAt"
+> & {
+    accessRole: "owner" | "manager" | "support" | "admin";
+};
+
 export type HostingJob = {
     jobId: string;
     serverId: string;
@@ -99,6 +112,14 @@ export type HostingAdminVpsHost = {
     totalSlots: number;
     runningServers: number;
     availableServers: number;
+    occupiedSlots: Array<{
+        slotIndex: number;
+        gamePort: number;
+        serverId: string;
+        displayName: string;
+        ownerDiscordUserId: string;
+        operationState: string;
+    }>;
     cost: {
         priceInMicrocents: number;
         currencyCode: string;

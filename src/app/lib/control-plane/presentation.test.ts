@@ -4,8 +4,13 @@ import test from "node:test";
 import type { ReleaseBuild } from "./types";
 import {
     adminActionOptionValue,
+    applyControlPlaneOperationDefaults,
+    createServerRegionOptions,
     fieldRequirementLabel,
+    formatDiscordOwner,
     installableBuilds,
+    MAINTENANCE_TIME_ZONE,
+    maintenanceSlotOptions,
     operationCardRowClass,
     operationCardRows,
     operationTargetMatchesHash,
@@ -14,9 +19,91 @@ import {
     serverLifecycleOperationHref,
 } from "./presentation";
 
+test("create-server regions come only from registered hosts with available prepared slots", () => {
+    assert.deepEqual(createServerRegionOptions([
+        { region: "united-states", availableServers: 2 },
+        { region: "germany", availableServers: 1 },
+        { region: "united-states", availableServers: 1 },
+        { region: "spain", availableServers: 0 },
+        { region: "united-kingdom", availableServers: -1 },
+        { region: "unexpected", availableServers: 5 },
+    ]), [
+        { value: "germany", label: "Germany" },
+        { value: "united-states", label: "United States" },
+    ]);
+    assert.deepEqual(createServerRegionOptions([]), []);
+});
+
+test("maintenance choices show their authoritative timezone without changing protocol values", () => {
+    assert.equal(MAINTENANCE_TIME_ZONE, "America/Chicago");
+    assert.deepEqual(maintenanceSlotOptions(), [
+        { value: "03:00-04:00", label: "03:00–04:00 America/Chicago" },
+        { value: "10:00-11:00", label: "10:00–11:00 America/Chicago" },
+        { value: "18:00-19:00", label: "18:00–19:00 America/Chicago" },
+    ]);
+});
+
+test("the website creates servers on Stable without asking for a redundant release choice", async () => {
+    const input: Record<string, unknown> = { displayName: "Calradia" };
+    applyControlPlaneOperationDefaults("create-server", input);
+    assert.deepEqual(input, { displayName: "Calradia", releaseChannel: "stable" });
+
+    const unrelated: Record<string, unknown> = { action: "start" };
+    applyControlPlaneOperationDefaults("server-operation", unrelated);
+    assert.deepEqual(unrelated, { action: "start" });
+
+    const source = await readFile(
+        new URL("../../admin/control-plane/page.tsx", import.meta.url),
+        "utf8",
+    );
+    const createCard = source.match(/operation: "create-server"[\s\S]+?operation: "force-reconcile"/u)?.[0];
+    assert.ok(createCard);
+    assert.doesNotMatch(createCard, /name: "releaseChannel"/u);
+    assert.match(createCard, /New servers use Stable by default/u);
+});
+
 test("operation fields explicitly identify required and optional inputs", () => {
     assert.equal(fieldRequirementLabel(true), "Required");
     assert.equal(fieldRequirementLabel(false), "Optional");
+});
+
+test("server ownership combines the Discord username and durable user id", () => {
+    assert.equal(
+        formatDiscordOwner("shot_up", "763278507085922325"),
+        "shot_up (763278507085922325)",
+    );
+    assert.equal(
+        formatDiscordOwner(undefined, "763278507085922325"),
+        "Username unavailable (763278507085922325)",
+    );
+});
+
+test("the VPS view presents slot occupants and resources with their owning host", async () => {
+    const source = await readFile(
+        new URL("../../admin/control-plane/page.tsx", import.meta.url),
+        "utf8",
+    );
+
+    assert.match(source, /needsDiscordUsers = view === "vps"/u);
+    assert.match(source, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\} \/>/u);
+    assert.doesNotMatch(source, /hosts\.map\(\(host\) => <HostResourcesCard/u);
+    assert.match(source, /<OccupiedVpsSlots host=\{host\} usernames=\{usernames\} \/>/u);
+    assert.match(source, /<InlineHostResources resources=\{host\.resources\} \/>/u);
+    assert.match(source, /formatDiscordOwner\(usernames\.get\(slot\.ownerDiscordUserId\), slot\.ownerDiscordUserId\)/u);
+    assert.match(source, /view=server&serverId=\$\{encodeURIComponent\(slot\.serverId\)\}/u);
+});
+
+test("administrator reason fields are optional and explain the audit fallback", async () => {
+    const source = await readFile(
+        new URL("../../admin/control-plane/page.tsx", import.meta.url),
+        "utf8",
+    );
+    const declaration = source.match(/const reasonField: AdminActionField = \{[^\n]+\};/u)?.[0];
+
+    assert.ok(declaration);
+    assert.doesNotMatch(declaration, /required: true/u);
+    assert.match(declaration, /Optional context/u);
+    assert.match(declaration, /fixed portal-action reason/u);
 });
 
 test("operation deep links match their rendered card after hydration", () => {

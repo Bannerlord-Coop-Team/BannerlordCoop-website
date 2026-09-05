@@ -11,6 +11,7 @@ export type ManagedServerDirectoryEntry = Omit<
 > & {
     players: number | null;
     status: HostedServerStatus | "Unknown";
+    manageUrl?: string;
 };
 
 type ServerDirectoryTableProps = {
@@ -40,7 +41,7 @@ export function ServerDirectoryTable({
 
     return (
         <div className="overflow-x-auto border border-white/10 bg-surface">
-            <table className="w-full min-w-170 border-collapse text-left">
+            <table className="w-full min-w-240 border-collapse text-left">
                 <thead className="border-b border-white/10 bg-white/[0.025]">
                     <tr>
                         <th scope="col" className="px-5 py-3.5 font-label text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-foreground-dim sm:px-6">
@@ -60,6 +61,9 @@ export function ServerDirectoryTable({
                 <tbody>
                     {servers.map((server) => {
                         const isOnline = server.status === "Online";
+                        const manageUrl = server.manageUrl ?? (showManage
+                            ? `/servers/${encodeURIComponent(server.id)}`
+                            : null);
 
                         return (
                             <tr key={server.id} className="group border-b border-white/10 last:border-b-0 hover:bg-white/[0.025]">
@@ -88,7 +92,7 @@ export function ServerDirectoryTable({
                                     </span>
                                 </td>
                                 <td className="px-5 py-4 sm:px-6 sm:py-5">
-                                    <div className="flex items-center justify-end gap-2">
+                                    <div className="flex flex-wrap items-start justify-end gap-2">
                                         {isOnline ? (
                                             <a
                                                 href={server.joinUrl}
@@ -107,9 +111,9 @@ export function ServerDirectoryTable({
                                                 Join
                                             </button>
                                         )}
-                                        {showManage && (
+                                        {manageUrl && (
                                             <Link
-                                                href={`/servers/${encodeURIComponent(server.id)}`}
+                                                href={manageUrl}
                                                 className="inline-flex min-h-10 items-center justify-center gap-1.5 border border-gold/35 bg-gold/[0.07] px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                                             >
                                                 Manage

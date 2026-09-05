@@ -1,4 +1,16 @@
-import type { ReleaseBuild } from "@/app/lib/control-plane/types";
+import type { HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
+
+const CREATE_SERVER_REGION_LABELS = {
+    germany: "Germany",
+    "united-kingdom": "United Kingdom",
+    spain: "Spain",
+    "united-states": "United States",
+    "europe-automatic": "Europe (automatic)",
+} as const;
+
+const MAINTENANCE_SLOTS = ["03:00-04:00", "10:00-11:00", "18:00-19:00"] as const;
+
+export const MAINTENANCE_TIME_ZONE = "America/Chicago";
 
 export type ControlPlaneOperationResultLink = {
     href: string;
@@ -16,6 +28,42 @@ export function installableBuilds(builds: readonly ReleaseBuild[]) {
 
 export function fieldRequirementLabel(required: boolean) {
     return required ? "Required" : "Optional";
+}
+
+export function formatDiscordOwner(username: string | undefined, discordUserId: string) {
+    return `${username ?? "Username unavailable"} (${discordUserId})`;
+}
+
+export function createServerRegionOptions(
+    hosts: readonly Pick<HostingAdminVpsHost, "region" | "availableServers">[],
+) {
+    const regionsWithAvailableCapacity = new Set(
+        hosts
+            .filter((host) => Number.isSafeInteger(host.availableServers) && host.availableServers > 0)
+            .map((host) => host.region)
+            .filter((region): region is keyof typeof CREATE_SERVER_REGION_LABELS => (
+                Object.hasOwn(CREATE_SERVER_REGION_LABELS, region)
+            )),
+    );
+    return Object.entries(CREATE_SERVER_REGION_LABELS)
+        .filter(([region]) => regionsWithAvailableCapacity.has(region as keyof typeof CREATE_SERVER_REGION_LABELS))
+        .map(([value, label]) => ({ value, label }));
+}
+
+export function maintenanceSlotOptions() {
+    return MAINTENANCE_SLOTS.map((value) => ({
+        value,
+        label: `${value.replace("-", "–")} ${MAINTENANCE_TIME_ZONE}`,
+    }));
+}
+
+export function applyControlPlaneOperationDefaults(
+    operation: string,
+    input: Record<string, unknown>,
+) {
+    if (operation === "create-server" && input.releaseChannel === undefined) {
+        input.releaseChannel = "stable";
+    }
 }
 
 export function operationTargetMatchesHash(hash: string, operation: string) {
