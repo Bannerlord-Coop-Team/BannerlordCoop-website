@@ -157,6 +157,7 @@ export type HostingAdminVpsInventory = {
 export type OperationsData = {
     overview: Overview;
     inventory: HostingAdminVpsInventory;
+    selectedServer: ManagedServer | null;
 };
 
 export type FleetSummary = {
