@@ -39,6 +39,34 @@ export type MyServerSummary = Pick<
     accessRole: "owner" | "manager" | "support" | "admin";
 };
 
+export type MyServerBackupSummary = {
+    backupId: string;
+    backupType: string;
+    byteSize: number;
+    createdAt: string;
+    retentionExpiresAt: string;
+    restoreState: string;
+    restoredAt: string | null;
+    canRestore: boolean;
+};
+
+export type MyServerBackupJob = {
+    jobId: string;
+    action: "backup" | "restore";
+    state: "queued" | "running" | "retry-wait" | "succeeded" | "failed" | "cancelled";
+    progress: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type MyServerBackupStatus = {
+    serverId: string;
+    updatedAt: string;
+    operationState: string;
+    observedGameState: string;
+    job: MyServerBackupJob | null;
+};
+
 export type HostingJob = {
     jobId: string;
     serverId: string;

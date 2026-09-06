@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+    getMyServerBackupStatus,
+    listAllMyServerBackups,
     listAllMyServers,
     MyServersApiError,
+    requestMyServerBackupOperation,
     requestMyServerOperation,
 } from "./my-servers";
 
@@ -11,6 +14,16 @@ const ORIGINAL_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ORIGINAL_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const TOKEN = "access-token-with-enough-characters";
 const FIRST_SERVER = server("4789e6c3-708e-44d1-ab83-b68c705a6022", "Official EU Campaign");
+const BACKUP = {
+    backupId: "33333333-3333-4333-8333-333333333333",
+    backupType: "manual",
+    byteSize: 1_048_576,
+    createdAt: "2026-09-02T14:45:07.479Z",
+    retentionExpiresAt: "2026-10-02T14:45:07.479Z",
+    restoreState: "available",
+    restoredAt: null,
+    canRestore: true,
+};
 const SECOND_SERVER = {
     ...server("b62b3f49-61a2-40be-816b-b83dbd0b4fee", "Official US Campaign"),
     accessRole: "support" as const,
@@ -64,6 +77,79 @@ test("loads every owner-scoped managed-server page through the Edge Function", a
     }
 });
 
+test("loads and validates bounded server-scoped backup pages", async () => {
+    configureEnvironment();
+    const requests: Request[] = [];
+    globalThis.fetch = async (input, init) => {
+        const request = new Request(input, init);
+        requests.push(request);
+        const requestId = request.headers.get("x-request-id");
+        const cursor = new URL(request.url).searchParams.get("cursor");
+        return Response.json({
+            version: 1,
+            requestId,
+            ok: true,
+            result: cursor
+                ? { items: [{ ...BACKUP, backupId: "44444444-4444-4444-8444-444444444444" }], nextCursor: null }
+                : { items: [BACKUP], nextCursor: "next-page" },
+        });
+    };
+
+    try {
+        const result = await listAllMyServerBackups(TOKEN, FIRST_SERVER.serverId);
+        assert.deepEqual(result.map((item) => item.backupId), [
+            BACKUP.backupId,
+            "44444444-4444-4444-8444-444444444444",
+        ]);
+        assert.equal(requests.length, 2);
+        const endpoint = new URL(requests[0]?.url ?? "");
+        assert.equal(endpoint.searchParams.get("resource"), "backups");
+        assert.equal(endpoint.searchParams.get("serverId"), FIRST_SERVER.serverId);
+        assert.equal(endpoint.searchParams.get("limit"), "50");
+        assert.equal(new URL(requests[1]?.url ?? "").searchParams.get("cursor"), "next-page");
+    } finally {
+        restoreEnvironment();
+    }
+});
+
+test("loads a sanitized durable backup-operation status", async () => {
+    configureEnvironment();
+    let request: Request | undefined;
+    globalThis.fetch = async (input, init) => {
+        request = new Request(input, init);
+        return Response.json({
+            version: 1,
+            requestId: request.headers.get("x-request-id"),
+            ok: true,
+            result: {
+                serverId: FIRST_SERVER.serverId,
+                updatedAt: "2026-09-02T14:46:07.479Z",
+                operationState: "maintenance",
+                observedGameState: "stopped",
+                job: {
+                    jobId: "55555555-5555-4555-8555-555555555555",
+                    action: "restore",
+                    state: "running",
+                    progress: "Validating the selected save backup",
+                    createdAt: "2026-09-02T14:45:37.479Z",
+                    updatedAt: "2026-09-02T14:46:07.479Z",
+                },
+            },
+        });
+    };
+
+    try {
+        const result = await getMyServerBackupStatus(TOKEN, FIRST_SERVER.serverId);
+        assert.equal(result.job?.action, "restore");
+        assert.equal(result.job?.state, "running");
+        const endpoint = new URL(request?.url ?? "");
+        assert.equal(endpoint.searchParams.get("resource"), "backup-status");
+        assert.equal(endpoint.searchParams.get("serverId"), FIRST_SERVER.serverId);
+    } finally {
+        restoreEnvironment();
+    }
+});
+
 test("submits a correlated strict server operation through the same Edge boundary", async () => {
     configureEnvironment();
     let request: Request | undefined;
@@ -98,6 +184,58 @@ test("submits a correlated strict server operation through the same Edge boundar
         assert.deepEqual(JSON.parse(await request?.text() ?? "{}"), {
             serverId: FIRST_SERVER.serverId,
             action: "restart-game",
+            expectedUpdatedAt: FIRST_SERVER.updatedAt,
+        });
+    } finally {
+        restoreEnvironment();
+    }
+});
+
+test("submits closed create and restore backup operations", async () => {
+    configureEnvironment();
+    const requests: Request[] = [];
+    globalThis.fetch = async (input, init) => {
+        const request = new Request(input, init);
+        requests.push(request);
+        const body = JSON.parse(await request.clone().text());
+        return Response.json({
+            version: 1,
+            requestId: request.headers.get("x-request-id"),
+            ok: true,
+            result: {
+                outcome: "enqueued",
+                jobId: requests.length === 1
+                    ? "55555555-5555-4555-8555-555555555555"
+                    : "66666666-6666-4666-8666-666666666666",
+                action: body.action === "create-backup" ? "backup" : "restore",
+            },
+        });
+    };
+
+    try {
+        const created = await requestMyServerBackupOperation(TOKEN, {
+            serverId: FIRST_SERVER.serverId,
+            action: "create-backup",
+            expectedUpdatedAt: FIRST_SERVER.updatedAt,
+        }, "11111111-1111-4111-8111-111111111111");
+        const restored = await requestMyServerBackupOperation(TOKEN, {
+            serverId: FIRST_SERVER.serverId,
+            backupId: BACKUP.backupId,
+            action: "restore-backup",
+            expectedUpdatedAt: FIRST_SERVER.updatedAt,
+        }, "22222222-2222-4222-8222-222222222222");
+
+        assert.equal(created.action, "backup");
+        assert.equal(restored.action, "restore");
+        assert.deepEqual(JSON.parse(await requests[0]?.text() ?? "{}"), {
+            serverId: FIRST_SERVER.serverId,
+            action: "create-backup",
+            expectedUpdatedAt: FIRST_SERVER.updatedAt,
+        });
+        assert.deepEqual(JSON.parse(await requests[1]?.text() ?? "{}"), {
+            serverId: FIRST_SERVER.serverId,
+            backupId: BACKUP.backupId,
+            action: "restore-backup",
             expectedUpdatedAt: FIRST_SERVER.updatedAt,
         });
     } finally {
@@ -154,6 +292,73 @@ test("rejects an invalid lifecycle idempotency request ID before fetch", async (
             (error: unknown) => error instanceof MyServersApiError && error.code === "invalid_request",
         );
         assert.equal(called, false);
+    } finally {
+        restoreEnvironment();
+    }
+});
+
+test("rejects private and malformed backup response data", async () => {
+    configureEnvironment();
+    const invalidItems = [
+        { ...BACKUP, serverId: SECOND_SERVER.serverId },
+        { ...BACKUP, objectKey: "private/backup-object" },
+        { ...BACKUP, createdAt: "2026-09-02T16:45:07.479+02:00" },
+        { ...BACKUP, restoreState: "usable" },
+        { ...BACKUP, canRestore: "yes" },
+    ];
+
+    try {
+        for (const item of invalidItems) {
+            globalThis.fetch = async (input, init) => {
+                const request = new Request(input, init);
+                return Response.json({
+                    version: 1,
+                    requestId: request.headers.get("x-request-id"),
+                    ok: true,
+                    result: { items: [item], nextCursor: null },
+                });
+            };
+            await assert.rejects(
+                listAllMyServerBackups(TOKEN, FIRST_SERVER.serverId),
+                (error: unknown) => error instanceof MyServersApiError && error.code === "invalid_response",
+            );
+        }
+    } finally {
+        restoreEnvironment();
+    }
+});
+
+test("rejects malformed or overbroad backup status", async () => {
+    configureEnvironment();
+    globalThis.fetch = async (input, init) => {
+        const request = new Request(input, init);
+        return Response.json({
+            version: 1,
+            requestId: request.headers.get("x-request-id"),
+            ok: true,
+            result: {
+                serverId: FIRST_SERVER.serverId,
+                updatedAt: "2026-09-02T14:46:07.479Z",
+                operationState: "maintenance",
+                observedGameState: "stopped",
+                job: {
+                    jobId: "55555555-5555-4555-8555-555555555555",
+                    action: "rollback",
+                    state: "running",
+                    progress: "Private raw stage",
+                    createdAt: "2026-09-02T14:45:37.479Z",
+                    updatedAt: "2026-09-02T14:46:07.479Z",
+                    requestPayload: { providerResourceId: "private-provider-resource" },
+                },
+            },
+        });
+    };
+
+    try {
+        await assert.rejects(
+            getMyServerBackupStatus(TOKEN, FIRST_SERVER.serverId),
+            (error: unknown) => error instanceof MyServersApiError && error.code === "invalid_response",
+        );
     } finally {
         restoreEnvironment();
     }

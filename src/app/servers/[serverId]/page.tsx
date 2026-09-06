@@ -1,6 +1,7 @@
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
 import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
 import { LiveServerConsole } from "@/app/components/servers/LiveServerConsole";
+import { ManagedServerBackups } from "@/app/components/servers/ManagedServerBackups";
 import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import { ServerControlPanel } from "@/app/components/servers/ServerControlPanel";
@@ -23,7 +24,11 @@ import {
 } from "@/app/lib/console/servers";
 import { hasServerFleetAccess } from "@/app/lib/auth/roles";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
-import { listAllMyServers } from "@/app/lib/hosting/my-servers";
+import {
+    getMyServerBackupStatus,
+    listAllMyServerBackups,
+    listAllMyServers,
+} from "@/app/lib/hosting/my-servers";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -48,6 +53,7 @@ import {
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 type ServerPageProps = {
     params: Promise<{ serverId: string }>;
@@ -112,7 +118,9 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
                 <LiveServerManagementPage
                     accessError={firstValue(query.accessError)}
                     accessLevel={accessLevel}
+                    accessToken={accessToken}
                     accessUpdated={firstValue(query.accessUpdated)}
+                    userId={user.id}
                     managedServer={managedServer}
                     server={{
                         ...liveServer,
@@ -123,8 +131,8 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
         }
     }
 
-    if (managedServer !== null) {
-        return <ManagedServerManagementPage server={managedServer} />;
+    if (managedServer !== null && accessToken !== null) {
+        return <ManagedServerManagementPage userId={user.id} accessToken={accessToken} server={managedServer} />;
     }
 
     if (!hasHostedServerAccess(user)) redirect("/");
@@ -271,7 +279,15 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     );
 }
 
-function ManagedServerManagementPage({ server }: { server: MyServerSummary }) {
+function ManagedServerManagementPage({
+    userId,
+    accessToken,
+    server,
+}: {
+    userId: string;
+    accessToken: string;
+    server: MyServerSummary;
+}) {
     return (
         <main className="min-h-svh bg-background">
             <header className="border-b border-white/10 bg-surface">
@@ -340,9 +356,28 @@ function ManagedServerManagementPage({ server }: { server: MyServerSummary }) {
                     <ResourceCard icon={Database} label="Release channel" value={formatManagedValue(server.releaseChannel)} />
                 </section>
 
-                <ManagedServerLifecycleSection server={server} />
+                <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
             </div>
         </main>
+    );
+}
+
+function ManagedServerSections({
+    userId,
+    accessToken,
+    server,
+}: {
+    userId: string;
+    accessToken: string;
+    server: MyServerSummary;
+}) {
+    return (
+        <ManagedServerPollingProvider>
+            <ManagedServerLifecycleSection server={server} />
+            <Suspense fallback={<ManagedServerBackupsSkeleton />}>
+                <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
+            </Suspense>
+        </ManagedServerPollingProvider>
     );
 }
 
@@ -360,29 +395,104 @@ function ManagedServerLifecycleSection({ server }: { server: MyServerSummary }) 
                 Disruptive operations require confirmation and may wait for backups or other durable work to finish.
             </p>
             <div className="mt-5">
-                <ManagedServerPollingProvider>
-                    <ManagedServerControls
-                        serverId={server.serverId}
-                        displayName={server.displayName}
-                        accessRole={server.accessRole}
-                        operationState={server.operationState}
-                        expectedUpdatedAt={server.updatedAt}
-                    />
-                </ManagedServerPollingProvider>
+                <ManagedServerControls
+                    serverId={server.serverId}
+                    displayName={server.displayName}
+                    accessRole={server.accessRole}
+                    operationState={server.operationState}
+                    expectedUpdatedAt={server.updatedAt}
+                />
             </div>
         </section>
     );
 }
 
+async function ManagedServerBackupsSection({
+    userId,
+    accessToken,
+    server,
+}: {
+    userId: string;
+    accessToken: string;
+    server: MyServerSummary;
+}) {
+    if (server.accessRole === "support" || server.accessRole === "admin") {
+        return (
+            <section id="server-backups" className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-backups-heading">
+                <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
+                    Save protection
+                </p>
+                <h2 id="server-backups-heading" className="mt-2 font-display text-2xl font-semibold text-foreground sm:text-3xl">
+                    Backups and restore
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-foreground-muted">
+                    Backup history and save restore require owner or manager access. Your current access remains read-only.
+                </p>
+            </section>
+        );
+    }
+
+    const [backupsResult, statusResult] = await Promise.allSettled([
+        listAllMyServerBackups(accessToken, server.serverId),
+        getMyServerBackupStatus(accessToken, server.serverId),
+    ]);
+    const backups = backupsResult.status === "fulfilled" ? backupsResult.value : [];
+    const status = statusResult.status === "fulfilled" ? statusResult.value : null;
+    const loadError = backupsResult.status === "rejected" || statusResult.status === "rejected"
+        ? "Backup history or durable progress could not be loaded. Refresh before submitting another backup operation."
+        : undefined;
+    if (backupsResult.status === "rejected") {
+        console.error("Managed server backups failed to load");
+    }
+    if (statusResult.status === "rejected") {
+        console.error("Managed server backup status failed to load");
+    }
+
+    return (
+        <section id="server-backups" className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-backups-heading">
+            <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
+                Save protection
+            </p>
+            <h2 id="server-backups-heading" className="mt-2 font-display text-2xl font-semibold text-foreground sm:text-3xl">
+                Backups and restore
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
+                Create an off-host backup or restore earlier campaign progress. Save restore never downgrades the installed game or mod version.
+            </p>
+            <ManagedServerBackups
+                userId={userId}
+                backups={backups}
+                loadError={loadError}
+                server={server}
+                status={status}
+            />
+        </section>
+    );
+}
+
+function ManagedServerBackupsSkeleton() {
+    return (
+        <section className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-busy="true" aria-label="Loading save backups">
+            <div className="h-3 w-28 animate-pulse bg-white/10" />
+            <div className="mt-3 h-8 w-64 max-w-full animate-pulse bg-white/10" />
+            <div className="mt-5 h-20 animate-pulse border border-white/10 bg-white/[0.02]" />
+        </section>
+    );
+}
+
 async function LiveServerManagementPage({
+    userId,
     accessError,
     accessLevel,
+    accessToken,
     accessUpdated,
     managedServer,
     server,
 }: {
+    userId: string;
     accessError?: string;
     accessLevel: LiveConsoleAccessLevel;
+    accessToken: string | null;
     accessUpdated?: string;
     managedServer: MyServerSummary | null;
     server: LiveConsoleServer;
@@ -496,7 +606,9 @@ async function LiveServerManagementPage({
                     <ResourceCard icon={Container} label="Node" value={server.nodeId} />
                 </section>
 
-                {managedServer !== null && <ManagedServerLifecycleSection server={managedServer} />}
+                {managedServer !== null && accessToken !== null && (
+                    <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} />
+                )}
 
                 {canManageAssignments && (
                     <section id="server-access" className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-access-heading">

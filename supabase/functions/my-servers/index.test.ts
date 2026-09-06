@@ -80,6 +80,92 @@ test("routes a strict lifecycle operation without caller authority", async () =>
     });
 });
 
+test("routes bounded backup history and status requests through closed operations", async () => {
+    const upstreamBodies: unknown[] = [];
+    const handler = createHandler(async (input, init) => {
+        const request = new Request(input, init);
+        upstreamBodies.push(JSON.parse(await request.text()));
+        return successEnvelope({ items: [], nextCursor: null });
+    });
+
+    const backups = await handler(listRequest(
+        "?resource=backups&serverId=22222222-2222-4222-8222-222222222222&limit=25&cursor=next-page",
+    ));
+    const status = await handler(listRequest(
+        "?resource=backup-status&serverId=22222222-2222-4222-8222-222222222222",
+    ));
+
+    assert.equal(backups.status, 200);
+    assert.equal(status.status, 200);
+    assert.deepEqual(upstreamBodies, [
+        {
+            version: 1,
+            requestId: REQUEST_ID,
+            operation: "server-backups",
+            input: {
+                serverId: "22222222-2222-4222-8222-222222222222",
+                cursor: "next-page",
+                limit: 25,
+            },
+        },
+        {
+            version: 1,
+            requestId: REQUEST_ID,
+            operation: "server-backup-status",
+            input: { serverId: "22222222-2222-4222-8222-222222222222" },
+        },
+    ]);
+});
+
+test("maps create and restore requests without forwarding a control-plane method", async () => {
+    const upstreamBodies: unknown[] = [];
+    const handler = createHandler(async (input, init) => {
+        const request = new Request(input, init);
+        upstreamBodies.push(JSON.parse(await request.text()));
+        return successEnvelope({
+            outcome: "enqueued",
+            jobId: "55555555-5555-4555-8555-555555555555",
+            action: upstreamBodies.length === 1 ? "backup" : "restore",
+        });
+    });
+
+    const create = await handler(operationRequest({
+        serverId: "22222222-2222-4222-8222-222222222222",
+        action: "create-backup",
+        expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+    }));
+    const restore = await handler(operationRequest({
+        serverId: "22222222-2222-4222-8222-222222222222",
+        backupId: "33333333-3333-4333-8333-333333333333",
+        action: "restore-backup",
+        expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+    }));
+
+    assert.equal(create.status, 200);
+    assert.equal(restore.status, 200);
+    assert.deepEqual(upstreamBodies, [
+        {
+            version: 1,
+            requestId: REQUEST_ID,
+            operation: "create-backup",
+            input: {
+                serverId: "22222222-2222-4222-8222-222222222222",
+                expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+            },
+        },
+        {
+            version: 1,
+            requestId: REQUEST_ID,
+            operation: "restore-backup",
+            input: {
+                serverId: "22222222-2222-4222-8222-222222222222",
+                backupId: "33333333-3333-4333-8333-333333333333",
+                expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+            },
+        },
+    ]);
+});
+
 test("rejects missing authentication and unsupported inputs before upstream", async () => {
     let calls = 0;
     const handler = createHandler(async () => {
@@ -100,6 +186,11 @@ test("rejects missing authentication and unsupported inputs before upstream", as
         listRequest("?cursor=first&cursor=second"),
         listRequest("?cursor="),
         listRequest(`?cursor=${"x".repeat(4_100)}`),
+        listRequest("?resource=backups"),
+        listRequest("?resource=backups&serverId=22222222-2222-4222-8222-222222222222&limit=51"),
+        listRequest("?resource=backups&resource=backup-status&serverId=22222222-2222-4222-8222-222222222222"),
+        listRequest("?resource=backup-status&serverId=22222222-2222-4222-8222-222222222222&cursor=forged"),
+        listRequest("?resource=server-backups&serverId=22222222-2222-4222-8222-222222222222"),
         listRequest("", "PUT"),
         new Request("https://function.example.test", {
             method: "POST",
@@ -140,6 +231,30 @@ test("rejects missing authentication and unsupported inputs before upstream", as
             action: "start",
             expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
             roleIds: ["1286659364455252022"],
+        }),
+        operationRequest({
+            serverId: "22222222-2222-4222-8222-222222222222",
+            action: "create-backup",
+            expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+            actorDiscordUserId: "192469416892432384",
+        }),
+        operationRequest({
+            serverId: "22222222-2222-4222-8222-222222222222",
+            action: "restore-backup",
+            expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+        }),
+        operationRequest({
+            serverId: "22222222-2222-4222-8222-222222222222",
+            backupId: "not-a-backup",
+            action: "restore-backup",
+            expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+        }),
+        operationRequest({
+            serverId: "22222222-2222-4222-8222-222222222222",
+            backupId: "33333333-3333-4333-8333-333333333333",
+            action: "restore-backup",
+            expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+            operation: "rollback-server",
         }),
         new Request("https://function.example.test", {
             method: "POST",
