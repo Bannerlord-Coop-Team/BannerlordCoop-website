@@ -56,7 +56,7 @@ test("the website creates servers on Stable without asking for a redundant relea
         new URL("../../admin/control-plane/page.tsx", import.meta.url),
         "utf8",
     );
-    const createCard = source.match(/operation: "create-server"[\s\S]+?operation: "force-reconcile"/u)?.[0];
+    const createCard = source.match(/operation: "create-server"[\s\S]+?operation: "set-global-controls"/u)?.[0];
     assert.ok(createCard);
     assert.doesNotMatch(createCard, /name: "releaseChannel"/u);
     assert.match(createCard, /New servers use Stable by default/u);
