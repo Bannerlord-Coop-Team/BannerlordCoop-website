@@ -52,3 +52,26 @@ Restart never becomes a VM reboot.
 `CONTROL_PLANE_ADMIN_URL` is the Oracle adapter's HTTPS origin; each function appends its fixed `/v1/admin/control-plane` or `/v1/user/control-plane` path. `CONTROL_PLANE_WEB_ORIGINS` is a comma-separated exact allowlist of HTTPS browser origins. Neither value may contain credentials, query parameters, fragments, or path prefixes. JWT verification remains enabled in `supabase/config.toml`.
 
 The website itself needs only the existing public Supabase URL and publishable key. It does not need an Oracle URL or control-plane credential in Netlify.
+
+## Simplified server operations
+
+Update server includes build selection: keep the current selection, install the
+latest release and remove a pin, or install and pin a specific release. Only
+installable builds in the selected server's channel are offered. Selection and
+pinning are a single control-plane transaction. Deploy the control-plane version
+supporting optional `update-server.input.buildId` before publishing this website.
+
+Reinstall previous build installs and pins the preceding channel release while
+keeping the current campaign. Restore backup instead replaces the campaign with
+an older snapshot. Selecting a server loads a bounded backup page; the list shows
+creation time, type, size, and build, with expiry in the selected backup details.
+Older pages, empty lists, request failures, and retries are supported. Changing
+servers clears the selected backup and ignores late responses from the previous
+server. In-game date is not yet recorded in the backup catalog.
+
+Orphan cleanup/review, forced reconciliation, provider-generation replacement,
+and build inspect/validate/reject/revoke are removed from everyday Operations.
+Their backend operator APIs and durable audit history remain intact. Releases
+is a read-only view of installable builds; approval belongs to the release pipeline.
+Missing save compatibility metadata is assumed compatible without a checkbox;
+safety backups, integrity checks, and known incompatibility checks remain.
