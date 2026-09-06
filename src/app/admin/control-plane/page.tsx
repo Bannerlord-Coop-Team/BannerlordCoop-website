@@ -1,3 +1,4 @@
+import { ServerResourceUsage } from "@/app/components/admin/ServerResourceUsage";
 import {
     ControlPlaneActionCard,
     type AdminActionField,
@@ -652,7 +653,7 @@ function VpsCapacity({ host }: { host: HostingAdminVpsHost }) {
 function OccupiedVpsSlots({ host, usernames }: { host: HostingAdminVpsHost; usernames: Map<string, string> }) {
     const slots = Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
     if (slots.length === 0) return <p className="text-xs leading-5 text-foreground-muted">No occupied slots.</p>;
-    return <ul className="space-y-3">{slots.map((slot) => <li key={`${slot.slotIndex}:${slot.serverId}`} className="border-l-2 border-gold/30 pl-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-label text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-gold">Slot {slot.slotIndex + 1} · UDP {slot.gamePort}</p><State value={slot.operationState} /></div><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="mt-1 block break-words text-xs font-semibold text-foreground hover:text-gold hover:underline">{slot.displayName}</Link><p className="mt-1 break-all font-mono text-[0.62rem] text-foreground-muted">{formatDiscordOwner(usernames.get(slot.ownerDiscordUserId), slot.ownerDiscordUserId)}</p></li>)}</ul>;
+    return <ul className="space-y-3">{slots.map((slot) => <li key={`${slot.slotIndex}:${slot.serverId}`} className="border-l-2 border-gold/30 pl-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-label text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-gold">Slot {slot.slotIndex + 1} · UDP {slot.gamePort}</p><State value={slot.operationState} /></div><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="mt-1 block break-words text-xs font-semibold text-foreground hover:text-gold hover:underline">{slot.displayName}</Link><p className="mt-1 break-all font-mono text-[0.62rem] text-foreground-muted">{formatDiscordOwner(usernames.get(slot.ownerDiscordUserId), slot.ownerDiscordUserId)}</p><ServerResourceUsage resources={slot.resources} /></li>)}</ul>;
 }
 
 function InlineHostResources({ resources }: { resources: HostingAdminHostResources | null }) {
