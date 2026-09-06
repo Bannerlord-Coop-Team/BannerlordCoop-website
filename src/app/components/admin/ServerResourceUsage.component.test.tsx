@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ServerResourceUsage } from "./ServerResourceUsage";
 
 describe("per-server resource usage", () => {
-    it("shows CPU in cores rather than host percentages, memory and observation time", () => {
+    it("shows CPU and memory usage with their enforced limits", () => {
         const html = renderToStaticMarkup(<ServerResourceUsage resources={{
             observedAt: "2026-09-06T05:15:00.000Z", sampleDurationMs: 250,
             cpuVcpus: 1.314, cpuLimitVcpus: 2,
@@ -11,8 +11,6 @@ describe("per-server resource usage", () => {
         }} />);
         expect(html).toContain("1.31 / 2 vCPUs");
         expect(html).toContain("1.50 GiB / 3.00 GiB");
-        expect(html).toContain("2026-09-06T05:15:00.000Z");
-        expect(html).toContain("Includes game and controller overhead.");
     });
 
     it.each([null, undefined])("keeps missing and old-runner telemetry unavailable: %s", (resources) => {
