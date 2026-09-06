@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ManagedServerBackups } from "@/app/components/servers/ManagedServerBackups";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
+import { managedServerBackupIntentKey } from "@/app/servers/managed-server-backup-intent";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import type { MyServerBackupStatus, MyServerBackupSummary, MyServerSummary } from "@/app/lib/control-plane/types";
 
@@ -62,6 +63,7 @@ beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-02T15:00:00.000Z"));
     vi.resetAllMocks();
+    window.sessionStorage.clear();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     authenticate.mockResolvedValue({ auth: {
         getUser: async () => ({ data: { user: { id: "user" } } }),
@@ -85,10 +87,12 @@ async function render(
     status: MyServerBackupStatus | null = null,
     backups: MyServerBackupSummary[] = [backup],
     currentServer = server,
+    userId = "user",
+    loadError?: string,
 ) {
     await act(async () => root.render(
         <ManagedServerPollingProvider>
-            <ManagedServerBackups server={currentServer} backups={backups} status={status} />
+            <ManagedServerBackups userId={userId} server={currentServer} backups={backups} status={status} loadError={loadError} />
         </ManagedServerPollingProvider>,
     ));
     await advance(0);
@@ -224,4 +228,135 @@ it.each(["support", "admin"] as const)("does not expose backup mutations to %s a
     expect(container.textContent).toContain("Read-only access");
     expect(container.textContent).not.toContain("Restore save");
     expect(container.textContent).not.toContain("Create backup");
+});
+
+const intentKey = managedServerBackupIntentKey("user", server.serverId);
+
+describe("ManagedServerBackups session recovery", () => {
+    it.each(["managed-only redirect", "live overlap removal"])("replays the exact lost restore after polling causes %s and recovery", async (removal) => {
+        request.mockImplementationOnce(async () => {
+            // Storage must be durable before the first request can be accepted.
+            expect(JSON.parse(window.sessionStorage.getItem(intentKey)!)).toMatchObject({
+                serverId: server.serverId, backupId: backup.backupId,
+                action: "restore-backup", expectedUpdatedAt: server.updatedAt,
+            });
+            throw new Error("Accepted response lost");
+        });
+        await render();
+        router.refresh.mockImplementationOnce(() => root.render(
+            removal === "managed-only redirect"
+                ? <p>Server directory after inventory failure</p>
+                : <ManagedServerPollingProvider><p>Live console without managed inventory</p></ManagedServerPollingProvider>,
+        ));
+        await click("Restore save");
+        const original = request.mock.calls[0];
+        expect(container.textContent).not.toContain("Retry pending request");
+        expect(window.sessionStorage.getItem(intentKey)).not.toBeNull();
+
+        // Destroy the entire React root too: only session storage survives recovery.
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await render(null, [], { ...server, updatedAt: "2026-09-02T16:00:00.000Z" });
+        expect(button("Create backup").disabled).toBe(true);
+        request.mockResolvedValueOnce({ outcome: "existing", jobId: activeStatus.job!.jobId, action: "restore" });
+        await click("Retry pending request");
+        expect(request).toHaveBeenCalledTimes(2);
+        expect(request.mock.calls[1]).toEqual(original);
+        expect(window.sessionStorage.getItem(intentKey)).toBeNull();
+        expect(container.textContent).toContain("That restore request was already accepted.");
+    });
+
+    it("gates mutations before rehydration", async () => {
+        await act(async () => root.render(
+            <ManagedServerPollingProvider>
+                <ManagedServerBackups userId="user" server={server} backups={[backup]} status={null} />
+            </ManagedServerPollingProvider>,
+        ));
+        expect(button("Create backup").disabled).toBe(true);
+        expect(button("Restore save").disabled).toBe(true);
+        await advance(0);
+        expect(button("Create backup").disabled).toBe(false);
+    });
+
+    it.each(["account", "server"])("isolates retained intents on a same-mount %s change", async (scope) => {
+        request.mockRejectedValueOnce(new Error("Accepted response lost"));
+        await render();
+        await click("Restore save");
+        const original = request.mock.calls[0];
+        await advance(60_000);
+        await render(null, [backup], scope === "server"
+            ? { ...server, serverId: "55555555-5555-4555-8555-555555555555" } : server,
+        scope === "account" ? "another-user" : "user");
+        expect(container.textContent).not.toContain("Retry pending request");
+        expect(button("Restore save").disabled).toBe(false);
+        expect(window.sessionStorage.getItem(intentKey)).not.toBeNull();
+        await render();
+        request.mockResolvedValueOnce({ outcome: "existing", jobId: activeStatus.job!.jobId, action: "restore" });
+        await click("Retry pending request");
+        expect(request.mock.calls[1]).toEqual(original);
+    });
+
+    it.each(["support", "admin", "load-error"])("does not use cached intent as authority during %s", async (access) => {
+        request.mockRejectedValueOnce(new Error("Accepted response lost"));
+        await render();
+        await click("Restore save");
+        await act(async () => root.render(null));
+        await render(null, [backup], access === "load-error" ? server : { ...server, accessRole: access as "support" | "admin" },
+            "user", access === "load-error" ? "Backup access unavailable" : undefined);
+        expect(button("Retry pending request").disabled).toBe(true);
+        expect(request).toHaveBeenCalledTimes(1);
+        expect(window.sessionStorage.getItem(intentKey)).not.toBeNull();
+    });
+
+    it.each(["getItem", "setItem", "removeItem"] as const)("fails closed when storage %s throws", async (method) => {
+        const storageFailure = () => { throw new DOMException("Storage unavailable"); };
+        if (method === "getItem") vi.spyOn(Storage.prototype, method).mockImplementation(storageFailure);
+        await render();
+        if (method !== "getItem") {
+            vi.spyOn(Storage.prototype, method).mockImplementation(storageFailure);
+            request.mockResolvedValueOnce({ outcome: "accepted", jobId: activeStatus.job!.jobId, action: "restore" });
+            await click("Restore save");
+        }
+        expect(container.textContent).toContain("recovery storage is unavailable or invalid");
+        expect(button("Create backup").disabled).toBe(true);
+        expect(button("Restore save").disabled).toBe(true);
+        expect(request).toHaveBeenCalledTimes(method === "removeItem" ? 1 : 0);
+        if (method === "removeItem") {
+            expect(window.sessionStorage.getItem(intentKey)).not.toBeNull();
+            expect(button("Retry pending request").disabled).toBe(true);
+        }
+    });
+
+    it("retains a rehydrated intent through an intermediate access rejection", async () => {
+        request.mockRejectedValueOnce(new Error("Accepted response lost"));
+        await render();
+        await click("Restore save");
+        const stored = window.sessionStorage.getItem(intentKey);
+        await act(async () => root.render(null));
+        await render();
+        request.mockRejectedValueOnce(new MyServersApiError("access_denied", "Access removed"));
+        await click("Retry pending request");
+        expect(window.sessionStorage.getItem(intentKey)).toBe(stored);
+        expect(request.mock.calls[1]).toEqual(request.mock.calls[0]);
+    });
+
+    it("clears session storage only after a definite rejection", async () => {
+        request.mockRejectedValueOnce(new MyServersApiError("backup_build_mismatch", "Incompatible"));
+        await render();
+        await click("Restore save");
+        expect(window.sessionStorage.getItem(intentKey)).toBeNull();
+        await act(async () => root.render(null));
+        await render();
+        expect(container.textContent).not.toContain("Retry pending request");
+        expect(button("Restore save").disabled).toBe(false);
+    });
+
+    it("fails closed without deleting malformed stored data", async () => {
+        window.sessionStorage.setItem(intentKey, '{"action":"restore-backup"}');
+        await render();
+        expect(container.textContent).toContain("recovery storage is unavailable or invalid");
+        expect(button("Restore save").disabled).toBe(true);
+        expect(request).not.toHaveBeenCalled();
+        expect(window.sessionStorage.getItem(intentKey)).toBe('{"action":"restore-backup"}');
+    });
 });

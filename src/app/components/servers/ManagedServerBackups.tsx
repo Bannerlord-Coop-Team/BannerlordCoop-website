@@ -15,7 +15,13 @@ import type {
 } from "@/app/lib/control-plane/types";
 import { manageServerBackup } from "@/app/servers/managed-server-backup-actions";
 import type { ManagedServerBackupInput } from "@/app/servers/managed-server-backup-input";
-import { retainManagedServerBackupIntent } from "@/app/servers/managed-server-backup-intent";
+import {
+    clearManagedServerBackupIntent,
+    managedServerBackupIntentKey,
+    readManagedServerBackupIntent,
+    retainManagedServerBackupIntent,
+    storeManagedServerBackupIntent,
+} from "@/app/servers/managed-server-backup-intent";
 import { Archive, LoaderCircle, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 
@@ -36,18 +42,27 @@ const TRANSITIONAL_SERVER_STATES = new Set([
 ]);
 
 type ManagedServerBackupsProps = {
+    userId: string;
     server: MyServerSummary;
     backups: readonly MyServerBackupSummary[];
     status: MyServerBackupStatus | null;
     loadError?: string;
 };
 
-export function ManagedServerBackups({
+export function ManagedServerBackups(props: ManagedServerBackupsProps) {
+    const intentKey = managedServerBackupIntentKey(props.userId, props.server.serverId);
+    return <ManagedServerBackupsSession key={intentKey} {...props} intentKey={intentKey} />;
+}
+
+function ManagedServerBackupsSession({
+    intentKey,
     server,
     backups,
     status,
     loadError,
-}: ManagedServerBackupsProps) {
+}: ManagedServerBackupsProps & { intentKey: string }) {
+    const [intentReady, setIntentReady] = useState(false);
+    const [storageError, setStorageError] = useState(false);
     const [isPending, startTransition] = useTransition();
     const [pendingBackupId, setPendingBackupId] = useState<string | null>(null);
     const [retainedIntent, setRetainedIntent] = useState<ManagedServerBackupInput | null>(null);
@@ -74,6 +89,20 @@ export function ManagedServerBackups({
         && !(status?.job != null
             && status.job.jobId === timedOutSession.jobId
             && TERMINAL_JOB_STATES.has(status.job.state));
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            try {
+                const intent = readManagedServerBackupIntent(window.sessionStorage, intentKey, server.serverId);
+                retainedIntentRef.current = intent;
+                setRetainedIntent(intent);
+                setIntentReady(true);
+            } catch {
+                setStorageError(true);
+            }
+        }, 0);
+        return () => window.clearTimeout(timeout);
+    }, [intentKey, server.serverId]);
 
     useEffect(() => {
         if (activeJob === null || polledJobIds.current.has(activeJob.jobId)) return;
@@ -116,18 +145,31 @@ export function ManagedServerBackups({
         return () => window.clearTimeout(timeout);
     }, [endPolling, pollingSession, server.serverId, status?.job]);
 
-    const busy = isPending
+    const busy = !intentReady || storageError || isPending
         || (pollingSession !== null && retainedIntent === null)
         || activeJob !== null
         || TRANSITIONAL_SERVER_STATES.has(currentServer.operationState);
 
-    function rememberIntent(intent: ManagedServerBackupInput | null) {
-        retainedIntentRef.current = intent;
-        setRetainedIntent(intent);
+    function rememberIntent(intent: ManagedServerBackupInput | null, resolved?: ManagedServerBackupInput) {
+        try {
+            if (intent !== null) {
+                storeManagedServerBackupIntent(window.sessionStorage, intentKey, intent);
+            } else if (resolved !== undefined) {
+                clearManagedServerBackupIntent(window.sessionStorage, intentKey, resolved);
+            }
+            retainedIntentRef.current = intent;
+            setRetainedIntent(intent);
+            return true;
+        } catch {
+            setStorageError(true);
+            return false;
+        }
     }
 
     function submitIntent(intent: ManagedServerBackupInput, pendingId: string) {
-        rememberIntent(intent);
+        if (!canManage || loadError || !intentReady || storageError || isPending) return;
+        // Persist before dispatch: the response or polling refresh can remove this component.
+        if (!rememberIntent(intent)) return;
         setMessage("");
         setPendingBackupId(pendingId);
         startTransition(async () => {
@@ -135,13 +177,13 @@ export function ManagedServerBackups({
                 const result = await manageServerBackup(intent);
                 setMessage(result.message);
                 if (result.ok) {
-                    rememberIntent(null);
+                    rememberIntent(null, intent);
                     polledJobIds.current.add(result.jobId);
                     beginPolling(server.serverId, intent.expectedUpdatedAt, result.jobId, "backup");
                 } else if (result.retrySameRequest) {
                     beginPolling(server.serverId, intent.expectedUpdatedAt, undefined, "backup");
                 } else {
-                    rememberIntent(null);
+                    rememberIntent(null, intent);
                 }
             } catch {
                 setMessage("The submission outcome could not be confirmed. Retry this request to reconcile it without creating a duplicate.");
@@ -201,6 +243,11 @@ export function ManagedServerBackups({
 
     return (
         <div className="mt-5 space-y-4">
+            {storageError && (
+                <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
+                    Backup request recovery storage is unavailable or invalid. Mutations are disabled. Restore session storage access and reload this page; do not clear pending request data.
+                </p>
+            )}
             {loadError && (
                 <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
                     {loadError}
@@ -315,7 +362,7 @@ export function ManagedServerBackups({
                     </p>
                     <button
                         type="button"
-                        disabled={isPending}
+                        disabled={isPending || !intentReady || storageError || !canManage || Boolean(loadError)}
                         onClick={retryPendingRequest}
                         className="inline-flex min-h-9 items-center justify-center border border-gold/35 bg-gold/[0.07] px-3 font-label text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:border-white/10 disabled:text-foreground-dim"
                     >

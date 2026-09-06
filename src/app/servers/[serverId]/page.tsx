@@ -120,6 +120,7 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
                     accessLevel={accessLevel}
                     accessToken={accessToken}
                     accessUpdated={firstValue(query.accessUpdated)}
+                    userId={user.id}
                     managedServer={managedServer}
                     server={{
                         ...liveServer,
@@ -131,7 +132,7 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     }
 
     if (managedServer !== null && accessToken !== null) {
-        return <ManagedServerManagementPage accessToken={accessToken} server={managedServer} />;
+        return <ManagedServerManagementPage userId={user.id} accessToken={accessToken} server={managedServer} />;
     }
 
     if (!hasHostedServerAccess(user)) redirect("/");
@@ -279,9 +280,11 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
 }
 
 function ManagedServerManagementPage({
+    userId,
     accessToken,
     server,
 }: {
+    userId: string;
     accessToken: string;
     server: MyServerSummary;
 }) {
@@ -353,16 +356,18 @@ function ManagedServerManagementPage({
                     <ResourceCard icon={Database} label="Release channel" value={formatManagedValue(server.releaseChannel)} />
                 </section>
 
-                <ManagedServerSections accessToken={accessToken} server={server} />
+                <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
             </div>
         </main>
     );
 }
 
 function ManagedServerSections({
+    userId,
     accessToken,
     server,
 }: {
+    userId: string;
     accessToken: string;
     server: MyServerSummary;
 }) {
@@ -370,7 +375,7 @@ function ManagedServerSections({
         <ManagedServerPollingProvider>
             <ManagedServerLifecycleSection server={server} />
             <Suspense fallback={<ManagedServerBackupsSkeleton />}>
-                <ManagedServerBackupsSection accessToken={accessToken} server={server} />
+                <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
             </Suspense>
         </ManagedServerPollingProvider>
     );
@@ -403,9 +408,11 @@ function ManagedServerLifecycleSection({ server }: { server: MyServerSummary }) 
 }
 
 async function ManagedServerBackupsSection({
+    userId,
     accessToken,
     server,
 }: {
+    userId: string;
     accessToken: string;
     server: MyServerSummary;
 }) {
@@ -453,6 +460,7 @@ async function ManagedServerBackupsSection({
                 Create an off-host backup or restore earlier campaign progress. Save restore never downgrades the installed game or mod version.
             </p>
             <ManagedServerBackups
+                userId={userId}
                 backups={backups}
                 loadError={loadError}
                 server={server}
@@ -473,6 +481,7 @@ function ManagedServerBackupsSkeleton() {
 }
 
 async function LiveServerManagementPage({
+    userId,
     accessError,
     accessLevel,
     accessToken,
@@ -480,6 +489,7 @@ async function LiveServerManagementPage({
     managedServer,
     server,
 }: {
+    userId: string;
     accessError?: string;
     accessLevel: LiveConsoleAccessLevel;
     accessToken: string | null;
@@ -597,7 +607,7 @@ async function LiveServerManagementPage({
                 </section>
 
                 {managedServer !== null && accessToken !== null && (
-                    <ManagedServerSections accessToken={accessToken} server={managedServer} />
+                    <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} />
                 )}
 
                 {canManageAssignments && (
