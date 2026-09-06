@@ -133,6 +133,15 @@ export type HostingAdminHostResources = {
     diskTotalBytes: number;
 };
 
+export type HostingServerResources = {
+    observedAt: string;
+    sampleDurationMs: number;
+    cpuVcpus: number;
+    cpuLimitVcpus: number;
+    memoryUsedBytes: number;
+    memoryLimitBytes: number;
+};
+
 export type HostingAdminVpsHost = {
     name: string;
     locationId: string;
@@ -147,6 +156,7 @@ export type HostingAdminVpsHost = {
         displayName: string;
         ownerDiscordUserId: string;
         operationState: string;
+        resources?: HostingServerResources | null;
     }>;
     cost: {
         priceInMicrocents: number;
