@@ -5,6 +5,8 @@ const UNCERTAIN_ERROR_CODES = new Set([
     "invalid_response",
     "response_too_large",
     "server_api_unavailable",
+    // Actor/input conflicts cannot disprove acceptance of the original request.
+    "request_conflict",
 ]);
 
 export function backupRequestOutcomeIsUncertain(error: unknown) {

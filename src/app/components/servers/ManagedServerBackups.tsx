@@ -55,6 +55,7 @@ export function ManagedServerBackups(props: ManagedServerBackupsProps) {
 }
 
 function ManagedServerBackupsSession({
+    userId,
     intentKey,
     server,
     backups,
@@ -174,7 +175,7 @@ function ManagedServerBackupsSession({
         setPendingBackupId(pendingId);
         startTransition(async () => {
             try {
-                const result = await manageServerBackup(intent);
+                const result = await manageServerBackup(intent, userId);
                 setMessage(result.message);
                 if (result.ok) {
                     rememberIntent(null, intent);

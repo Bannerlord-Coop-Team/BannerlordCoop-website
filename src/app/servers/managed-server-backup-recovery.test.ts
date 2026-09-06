@@ -45,12 +45,12 @@ test("distinguishes uncertain delivery failures from definite typed rejections",
         "invalid_response",
         "response_too_large",
         "server_api_unavailable",
+        "request_conflict",
     ]) {
         assert.equal(backupRequestOutcomeIsUncertain(new MyServersApiError(code, "Uncertain", true)), true);
     }
     for (const code of [
         "backup_build_mismatch",
-        "request_conflict",
         "server_not_found",
         "stale_interaction",
     ]) {

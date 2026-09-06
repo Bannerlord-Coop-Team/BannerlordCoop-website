@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ManagedServerBackups } from "@/app/components/servers/ManagedServerBackups";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import { managedServerBackupIntentKey } from "@/app/servers/managed-server-backup-intent";
+import { manageServerBackup } from "@/app/servers/managed-server-backup-actions";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import type { MyServerBackupStatus, MyServerBackupSummary, MyServerSummary } from "@/app/lib/control-plane/types";
 
@@ -119,7 +120,7 @@ async function click(label: string) {
 describe("ManagedServerBackups action reconciliation", () => {
     it.each([
         "auth-outage", "signed-out", "missing-token", "busy", "rate_limited",
-        "unauthenticated", "identity_unavailable", "access_denied", "server_not_found",
+        "unauthenticated", "identity_unavailable", "access_denied", "server_not_found", "request_conflict",
     ])("retains the exact lost restore through %s and successful replay", async (rejection) => {
         // Exercise the real server action, not a fabricated retrySameRequest result.
         request.mockRejectedValueOnce(new Error("Accepted response was lost"));
@@ -358,5 +359,60 @@ describe("ManagedServerBackups session recovery", () => {
         expect(button("Restore save").disabled).toBe(true);
         expect(request).not.toHaveBeenCalled();
         expect(window.sessionStorage.getItem(intentKey)).toBe('{"action":"restore-backup"}');
+    });
+});
+
+describe("ManagedServerBackups stale authenticated page recovery", () => {
+    it("retains A's restore through B authentication on unchanged A props, conflict, and A recovery", async () => {
+        request.mockRejectedValueOnce(new Error("Accepted response lost"));
+        await render(); // Page remains authenticated as A (user) throughout the cookie change.
+        await click("Restore save");
+        const original = request.mock.calls[0];
+        const stored = window.sessionStorage.getItem(intentKey);
+        expect(JSON.parse(stored!)).toEqual({ ...original[1], requestId: original[2] });
+
+        // Another tab changed the cookie to B; neither props nor the component key changed.
+        authenticate.mockResolvedValueOnce({ auth: {
+            getUser: async () => ({ data: { user: { id: "user-b" } } }),
+            getSession: async () => ({ data: { session: { access_token: "test-only-b" } } }),
+        } });
+        await click("Retry pending request");
+        expect(request).toHaveBeenCalledTimes(1); // B is never dispatched as A's authority.
+        expect(container.textContent).toContain("Your signed-in account changed");
+        expect(window.sessionStorage.getItem(intentKey)).toBe(stored);
+        expect(button("Create backup").disabled).toBe(true);
+
+        // Even if the backend reports an actor/input conflict (including an auth race),
+        // that does not resolve A's previously accepted request.
+        authenticate.mockResolvedValueOnce({ auth: {
+            getUser: async () => ({ data: { user: { id: "user" } } }),
+            getSession: async () => ({ data: { session: { access_token: "test-only-b" } } }),
+        } });
+        request.mockRejectedValueOnce(new MyServersApiError("request_conflict", "Actor conflict"));
+        await click("Retry pending request");
+        expect(request.mock.calls[1]).toEqual(["test-only-b", original[1], original[2]]);
+        expect(window.sessionStorage.getItem(intentKey)).toBe(stored);
+        expect(container.textContent).toContain("unconfirmed outcome");
+
+        await act(async () => root.render(null));
+        await render(null, [], { ...server, updatedAt: "2026-09-02T16:00:00.000Z" });
+        request.mockResolvedValueOnce({ outcome: "existing", jobId: activeStatus.job!.jobId, action: "restore" });
+        await click("Retry pending request");
+        expect(request).toHaveBeenCalledTimes(3);
+        expect(request.mock.calls[2]).toEqual(original);
+        expect(window.sessionStorage.getItem(intentKey)).toBeNull();
+        expect(container.textContent).toContain("That restore request was already accepted.");
+    });
+
+    it.each([undefined, "", "user-b", { id: "user" }])("does not treat caller page identity %j as authority", async (expectedPageUserId) => {
+        const result = await manageServerBackup({
+            serverId: server.serverId,
+            backupId: backup.backupId,
+            action: "restore-backup",
+            expectedUpdatedAt: server.updatedAt,
+            requestId: "11111111-1111-4111-8111-111111111111",
+        }, expectedPageUserId);
+        expect(result).toMatchObject({ ok: false, retrySameRequest: true });
+        expect(request).not.toHaveBeenCalled();
     });
 });

@@ -13,7 +13,7 @@ export type ManagedServerBackupActionResult =
     | { ok: true; message: string; jobId: string }
     | { ok: false; message: string; retrySameRequest: boolean };
 
-export async function manageServerBackup(input: unknown): Promise<ManagedServerBackupActionResult> {
+export async function manageServerBackup(input: unknown, expectedPageUserId: unknown): Promise<ManagedServerBackupActionResult> {
     const parsed = parseManagedServerBackupInput(input);
     if (parsed === null) return rejected("The backup request is invalid.");
 
@@ -26,6 +26,11 @@ export async function manageServerBackup(input: unknown): Promise<ManagedServerB
         ]);
         if (userData.user === null) {
             return uncertain("Please sign in again before managing backups; then retry the pending request.");
+        }
+        // This caller-supplied comparison can only restrict dispatch. Authentication and
+        // backend authorization still derive exclusively from the current session.
+        if (typeof expectedPageUserId !== "string" || expectedPageUserId !== userData.user.id) {
+            return uncertain("Your signed-in account changed. Sign in with the account that submitted this request, then retry the pending request.");
         }
         accessToken = sessionData.session?.access_token ?? null;
     } catch {
@@ -90,7 +95,7 @@ export async function manageServerBackup(input: unknown): Promise<ManagedServerB
             revalidatePath(`/servers/${parsed.serverId}`);
             return rejected("The game could not be verified stopped safely. Refresh its status before trying again.");
         }
-        if (code === "request_conflict" || code === "operation_in_progress") {
+        if (code === "operation_in_progress") {
             revalidatePath(`/servers/${parsed.serverId}`);
             return rejected("Another server operation is active. Wait for its status to finish, then try again.");
         }
