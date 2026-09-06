@@ -4,6 +4,7 @@ import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import {
     canManageServerBackups,
     canRequestServerBackupRestore,
+    restoreDisabledReason,
 } from "@/app/components/servers/managed-server-backup-policy";
 import { useManagedServerPolling } from "@/app/components/servers/ManagedServerPollingProvider";
 import type {
@@ -55,6 +56,7 @@ export function ManagedServerBackups({
     const polledJobIds = useRef(new Set<string>());
     const {
         session: pollingSession,
+        timedOutSession,
         attachJob,
         beginPolling,
         endPolling,
@@ -67,6 +69,11 @@ export function ManagedServerBackups({
         updatedAt: status.updatedAt,
     };
     const canManage = canManageServerBackups(server.accessRole);
+    const statusIsStale = timedOutSession?.serverId === server.serverId
+        && timedOutSession.statusSource === "backup"
+        && !(status?.job != null
+            && status.job.jobId === timedOutSession.jobId
+            && TERMINAL_JOB_STATES.has(status.job.state));
 
     useEffect(() => {
         if (activeJob === null || polledJobIds.current.has(activeJob.jobId)) return;
@@ -202,6 +209,19 @@ export function ManagedServerBackups({
 
             {status?.job && <BackupJobStatus job={status.job} />}
 
+            {statusIsStale && (
+                <div className="flex flex-wrap items-center gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-xs text-foreground-muted">
+                    <p role="status">Automatic status updates paused after one minute. The operation may still be running.</p>
+                    <button
+                        type="button"
+                        onClick={() => beginPolling(server.serverId, currentServer.updatedAt, activeJob?.jobId, "backup")}
+                        className="min-h-9 border border-gold/35 px-3 text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                    >
+                        Refresh status and resume updates
+                    </button>
+                </div>
+            )}
+
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="max-w-2xl text-xs leading-5 text-foreground-muted">
                     Backups are retained off-host. Restoring replaces current campaign progress and never changes the installed game or mod version.
@@ -260,7 +280,7 @@ export function ManagedServerBackups({
                                     )}
                                     {!backup.canRestore && ["available", "restored", "failed"].includes(backup.restoreState) && (
                                         <p className="mt-1 text-xs text-foreground-dim">
-                                            Save-only restore requires a backup from the currently installed game and mod version.
+                                            {restoreDisabledReason(backup)}
                                         </p>
                                     )}
                                 </div>
@@ -351,17 +371,6 @@ function BackupState({ state }: { state: string }) {
 function formatProgress(job: MyServerBackupJob) {
     if (job.state === "retry-wait") return `Waiting to retry safely. ${job.progress}`;
     return job.progress;
-}
-
-function restoreDisabledReason(backup: Pick<MyServerBackupSummary, "canRestore" | "restoreState">) {
-    if (!backup.canRestore && ["available", "restored", "failed"].includes(backup.restoreState)) {
-        return "Save-only restore requires a backup from the currently installed game and mod version.";
-    }
-    if (backup.restoreState === "expired") return "This backup has expired.";
-    if (backup.restoreState === "queued" || backup.restoreState === "restoring") {
-        return "This backup is already part of a restore operation.";
-    }
-    return undefined;
 }
 
 function formatBackupType(value: string) {

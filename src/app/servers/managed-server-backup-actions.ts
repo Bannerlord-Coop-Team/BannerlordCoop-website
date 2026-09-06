@@ -25,14 +25,14 @@ export async function manageServerBackup(input: unknown): Promise<ManagedServerB
             supabase.auth.getSession(),
         ]);
         if (userData.user === null) {
-            return rejected("Please sign in again before managing backups.");
+            return uncertain("Please sign in again before managing backups; then retry the pending request.");
         }
         accessToken = sessionData.session?.access_token ?? null;
     } catch {
-        return rejected("Your authenticated server session is unavailable.");
+        return uncertain("Your authenticated server session is unavailable. Retry the pending request once it recovers.");
     }
     if (accessToken === null) {
-        return rejected("Please sign in again before managing backups.");
+        return uncertain("Please sign in again before managing backups; then retry the pending request.");
     }
 
     try {
@@ -75,7 +75,8 @@ export async function manageServerBackup(input: unknown): Promise<ManagedServerB
             return rejected("The server or backup state changed. Refresh and try again.");
         }
         if (code === "server_not_found" || code === "access_denied") {
-            return rejected("This server is unavailable or your access was removed.");
+            // Authority is checked before replay, so this cannot resolve an earlier submission.
+            return uncertain("This server is unavailable or your access was removed. The pending request remains unconfirmed.");
         }
         if (["backup_not_found", "backup_expired", "backup_unavailable"].includes(code)) {
             revalidatePath(`/servers/${parsed.serverId}`);
@@ -98,9 +99,10 @@ export async function manageServerBackup(input: unknown): Promise<ManagedServerB
             return rejected("That backup operation is not available in the server's current state.");
         }
         if (code === "rate_limited" || code === "busy") {
-            return rejected("Too many requests were submitted. Please wait and try again.");
+            return uncertain("Too many requests were submitted. Please wait and retry the pending request.");
         }
-        return rejected("The backup operation could not be submitted right now.");
+        // Unknown/authentication rejections may happen before idempotency lookup.
+        return uncertain("The backup operation could not be confirmed right now. Retry the pending request.");
     }
 }
 

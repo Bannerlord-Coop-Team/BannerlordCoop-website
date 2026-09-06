@@ -24,6 +24,7 @@ type PollingSession = {
 
 type ManagedServerPollingContextValue = {
     session: PollingSession | null;
+    timedOutSession: PollingSession | null;
     beginPolling: (
         serverId: string,
         initialUpdatedAt: string,
@@ -39,6 +40,7 @@ const ManagedServerPollingContext = createContext<ManagedServerPollingContextVal
 export function ManagedServerPollingProvider({ children }: { children: ReactNode }) {
     const router = useRouter();
     const [session, setSession] = useState<PollingSession | null>(null);
+    const [timedOutSession, setTimedOutSession] = useState<PollingSession | null>(null);
 
     const beginPolling = useCallback((
         serverId: string,
@@ -46,6 +48,7 @@ export function ManagedServerPollingProvider({ children }: { children: ReactNode
         jobId?: string,
         statusSource: "server" | "backup" = "server",
     ) => {
+        setTimedOutSession(null);
         setSession({
             serverId,
             initialUpdatedAt,
@@ -66,6 +69,7 @@ export function ManagedServerPollingProvider({ children }: { children: ReactNode
 
     const endPolling = useCallback((serverId: string) => {
         setSession((current) => current?.serverId === serverId ? null : current);
+        setTimedOutSession((current) => current?.serverId === serverId ? null : current);
     }, []);
 
     useEffect(() => {
@@ -73,6 +77,7 @@ export function ManagedServerPollingProvider({ children }: { children: ReactNode
         const remaining = Math.max(0, session.deadline - Date.now());
         const interval = window.setInterval(() => router.refresh(), POLL_INTERVAL_MILLISECONDS);
         const timeout = window.setTimeout(() => {
+            setTimedOutSession(session);
             setSession((current) => current?.deadline === session.deadline ? null : current);
         }, remaining);
         return () => {
@@ -81,11 +86,12 @@ export function ManagedServerPollingProvider({ children }: { children: ReactNode
         };
     }, [router, session]);
 
-    const value = useMemo(() => ({ session, beginPolling, attachJob, endPolling }), [
+    const value = useMemo(() => ({ session, timedOutSession, beginPolling, attachJob, endPolling }), [
         attachJob,
         beginPolling,
         endPolling,
         session,
+        timedOutSession,
     ]);
 
     return (
