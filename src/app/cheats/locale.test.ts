@@ -54,13 +54,14 @@ test("covers every command category and featured summary in simplified chinese",
         assert.ok(overlay, command.command);
         assert.ok(overlay.name.trim(), command.command);
         assert.ok(overlay.summary.trim(), command.command);
+        assert.equal(localizedCategory(command.category, zh), zh.categories[command.category]);
     }
 
     for (const command of featuredCommandNames) {
-        assert.ok(zh.featured[command], command);
         const source = commands.find((item) => item.command === command);
         assert.ok(source, command);
-        assert.equal(localizedCommandSummary(source, zh, true), zh.featured[command]);
+        assert.equal(localizedCommandSummary(source, zh), zh.commands[command].summary);
+        assert.equal(localizedCommandSummary(source, getCheatsMessages("en")), source.summary);
     }
 });
 
@@ -79,5 +80,60 @@ test("keeps featured commands publishable", () => {
         const source = commands.find((item) => item.command === command);
         assert.ok(source, command);
         assert.equal(isPublishedCheat(source), true, command);
+    }
+});
+
+test("catalog preserves PR3538 metadata, usage and localized argument coverage", () => {
+    assert.equal(commandsData.source.commit, "4d030c26c49b271e77676179571e120698f42f52");
+    assert.equal(commandsData.count, commandsData.commands.length);
+    assert.equal(commandsData.count, 400);
+    assert.equal(new Set(commandsData.commands.map(c => c.command)).size, commandsData.count);
+    assert.equal(commandsData.categories.reduce((sum, c) => sum + c.count, 0), commandsData.count);
+    const zh = getCheatsMessages("zh-CN");
+    assert.deepEqual(Object.keys(zh.commands).sort(), commandsData.commands.map(c => c.command).sort());
+    for (const command of commandsData.commands) {
+        assert.match(command.command, /^coop(?:\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*)+$/);
+        assert.equal(command.command, `${command.group}.${command.name}`);
+        assert.ok(isPublishedCheat(command), command.command);
+        assert.deepEqual(command.aliases, [], command.command);
+        assert.equal(command.usage, command.command + command.arguments.map(a => a.required ? ` <${a.name}>` : ` [<${a.name}>]`).join(""));
+        assert.deepEqual(Object.keys(zh.commands[command.command].arguments), command.arguments.map(a => a.name));
+        for (const argument of command.arguments) {
+            assert.match(zh.commands[command.command].arguments[argument.name], /[\u3400-\u9fff]|^(on|success|Pause|state|open)/);
+        }
+    }
+    const heroId = commandsData.commands.find(c => c.command === "coop.debug.hero.id")!;
+    assert.ok(heroId, "Includes IHeroIdCommand : ICoopCommand implementations");
+    assert.equal(heroId.summary, "Finds registered ids for heroes with an exact display name.");
+    assert.equal(heroId.side, "either");
+    assert.equal(heroId.kind, "inspect");
+    assert.equal(heroId.usage, "coop.debug.hero.id <heroName>");
+    assert.equal(zh.commands[heroId.command].arguments.heroName, "要查找的英雄的完整显示名称。包含多个词的值需加双引号。");
+    const gold = commandsData.commands.find(c => c.command === "coop.debug.hero.set_gold")!;
+    assert.equal(gold.side, "server");
+    assert.equal(gold.summary, "Sets gold for every hero with an exact display name on the server.");
+    assert.equal(commandsData.commands.find(c => c.command === "coop.debug.hero.list")!.side, "either");
+    assert.equal(commandsData.commands.find(c => c.command === "coop.delete_player")!.side, "client");
+    assert.equal(getCheatsMessages("en").ui.sideEither, "Both");
+});
+
+test("featured share links round-trip canonical snake-case commands in both locales", () => {
+    for (const lang of ["en", "zh-CN"] as const) {
+        for (const cheat of featuredCommandNames) {
+            const path = buildCheatsPath(parseCheatsQuery({ cheat, lang }));
+            const query = parseCheatsQuery(Object.fromEntries(new URL(path, "https://example.com").searchParams));
+            assert.equal(query.cheat, cheat);
+            assert.equal(query.lang, lang);
+        }
+    }
+});
+
+test("documentation examples reference published commands", () => {
+    for (const lang of ["en", "zh-CN"] as const) {
+        for (const part of getCheatsMessages(lang).ui.findingIdsParagraphs.flat()) {
+            if ("code" in part && part.code.startsWith("coop.")) {
+                assert.ok(commands.some(c => c.command === part.code.split(" ")[0]), part.code);
+            }
+        }
     }
 });

@@ -1,5 +1,8 @@
-/** Commands compiled only under `#if DEBUG`. Nightly and Workshop builds do not register them. */
+import commandsData from "./commands.json";
+
+/** Current DEBUG-only registrations plus legacy names retained for publication safety. */
 export const debugOnlyCommandNames = [
+    ...commandsData.source.debugOnlyCommands,
     "coop.debug.battle.action_performance",
     "coop.debug.battle.animation_trace",
     "coop.debug.battle.column_reinforcement_fixture",

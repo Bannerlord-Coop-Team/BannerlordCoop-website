@@ -11,6 +11,10 @@ export const enMessages: Omit<CheatsMessages, "commands"> = {
         serverStat: "Server",
         clientStat: "Client",
         consoleTip: "Open the cheat console ingame with Alt + `.",
+        parameters: "Parameters",
+        required: "Required",
+        optional: "Optional",
+        parameterTip: "Replace <parameters> with values; [<parameters>] are optional. Wrap values containing spaces in double quotes.",
         vanillaCampaignWarning: [
             { text: "Vanilla cheats prefixed " },
             { code: "campaign." },
@@ -35,7 +39,7 @@ export const enMessages: Omit<CheatsMessages, "commands"> = {
         sideAll: "Any side",
         sideServer: "Server",
         sideClient: "Client",
-        sideEither: "Either",
+        sideEither: "Both",
         kindAction: "Gameplay",
         kindAudit: "Audit",
         kindInspectBadge: "Inspect",
@@ -53,9 +57,9 @@ export const enMessages: Omit<CheatsMessages, "commands"> = {
             ],
             [
                 { text: "Then run the server command, for example " },
-                { code: "coop.debug.mobileparty.siege_buff Player" },
+                { code: "coop.debug.mobile_party.siege_buff Player" },
                 { text: ". " },
-                { code: "coop.debug.mobileparty.whoami" },
+                { code: "coop.debug.mobile_party.who_am_i" },
                 { text: " also prints your character ids. Hero ids from " },
                 { code: "coop.debug.hero.list" },
                 { text: " are case-sensitive." },
@@ -78,5 +82,4 @@ export const enMessages: Omit<CheatsMessages, "commands"> = {
         languageChinese: "简体中文",
     },
     categories: {},
-    featured: {},
 };

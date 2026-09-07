@@ -1,1798 +1,2725 @@
 {
-  "coop.delete_player": {
-    "name": "删除玩家",
-    "summary": "请求服务器权威删除本地玩家。仅客户端可用。"
-  },
-  "coop.unstuck": {
-    "name": "解除卡住",
-    "summary": "请求服务器把本地玩家部队从囚禁、地图事件、军团、攻城营地和据点中解救出来。仅客户端可用。在控制台输入 coop.unstuck。"
-  },
   "coop.debug.alley.abandon": {
-    "name": "放弃",
-    "summary": "放弃小巷"
+    "name": "在服务器上放弃玩家拥有的小巷。",
+    "summary": "在服务器上放弃玩家拥有的小巷。",
+    "arguments": {
+      "settlement_id": "据点的 StringId。",
+      "alley_index": "从 0 开始的小巷索引。"
+    }
   },
   "coop.debug.alley.attack": {
-    "name": "进攻",
-    "summary": "进攻小巷"
+    "name": "让 AI 对玩家拥有的小巷发起进攻。",
+    "summary": "让 AI 对玩家拥有的小巷发起进攻。",
+    "arguments": {
+      "settlement_id": "据点的 StringId。",
+      "alley_index": "从 0 开始的小巷索引。"
+    }
   },
   "coop.debug.alley.daily_tick": {
-    "name": "每日结算",
-    "summary": "执行小巷每日结算"
+    "name": "执行一次由权威端负责的小巷每日结算。",
+    "summary": "执行一次由权威端负责的小巷每日结算。",
+    "arguments": {}
   },
   "coop.debug.alley.info": {
-    "name": "小巷信息",
-    "summary": "查看小巷信息"
+    "name": "显示小巷的状态。",
+    "summary": "显示小巷的状态。",
+    "arguments": {
+      "settlement_id": "据点的 StringId。",
+      "alley_index": "从 0 开始的小巷索引。"
+    }
   },
   "coop.debug.alley.list": {
-    "name": "列出小巷",
-    "summary": "列出小巷"
+    "name": "列出据点中的小巷。",
+    "summary": "列出据点中的小巷。",
+    "arguments": {
+      "settlement_id": "据点的 StringId。"
+    }
   },
   "coop.debug.alley.my_hero_id": {
-    "name": "我的英雄编号",
-    "summary": "显示我的英雄编号"
+    "name": "显示本地主角的注册 ID。",
+    "summary": "显示本地主角的注册 ID。",
+    "arguments": {}
   },
   "coop.debug.alley.recruit_conversation": {
-    "name": "招募对话",
-    "summary": "打开招募对话"
+    "name": "操控或查看小巷招募对话。",
+    "summary": "操控或查看小巷招募对话。",
+    "arguments": {
+      "action": "state、ask 或 accept 之一。"
+    }
   },
   "coop.debug.alley.recruit_conversation_start": {
-    "name": "开始招募对话",
-    "summary": "开始招募对话"
-  },
-  "coop.debug.alley.recruit_fixture_restore": {
-    "name": "恢复测试夹具",
-    "summary": "恢复招募测试夹具"
-  },
-  "coop.debug.alley.recruit_fixture_start": {
-    "name": "开始测试夹具",
-    "summary": "开始招募测试夹具"
-  },
-  "coop.debug.alley.recruit_fixture_state": {
-    "name": "测试夹具状态",
-    "summary": "查看招募测试夹具状态"
+    "name": "开始与小巷监工对话。",
+    "summary": "开始与小巷监工对话。",
+    "arguments": {
+      "settlement_id": "据点的 StringId。",
+      "alley_index": "从 0 开始的小巷索引。"
+    }
   },
   "coop.debug.alley.recruit_inventory": {
-    "name": "招募背包",
-    "summary": "查看招募背包"
+    "name": "操控或查看小巷招募物品栏界面。",
+    "summary": "操控或查看小巷招募物品栏界面。",
+    "arguments": {
+      "action": "open、trade、complete 或 state 之一。"
+    }
   },
   "coop.debug.alley.recruit_overseer_state": {
-    "name": "招募监工状态",
-    "summary": "查看招募监工状态"
+    "name": "显示小巷监工的任务场景状态。",
+    "summary": "显示小巷监工的任务场景状态。",
+    "arguments": {
+      "settlement_id": "据点的 StringId。",
+      "alley_index": "从 0 开始的小巷索引。"
+    }
   },
   "coop.debug.alley.recruit_roster": {
-    "name": "招募名册",
-    "summary": "查看招募名册"
+    "name": "显示英雄部队的招募名单。",
+    "summary": "显示英雄部队的招募名单。",
+    "arguments": {
+      "hero_registry_id": "已注册的英雄 ID。"
+    }
   },
   "coop.debug.alley.recruit_start_looter_battle": {
-    "name": "开始掠夺者战斗",
-    "summary": "开始掠夺者战斗"
+    "name": "启动小巷招募劫匪战斗测试场景。",
+    "summary": "启动小巷招募劫匪战斗测试场景。",
+    "arguments": {
+      "hero_registry_id": "已注册的测试场景所有者英雄 ID。"
+    }
   },
   "coop.debug.alley.set_owner": {
-    "name": "设置所有者",
-    "summary": "设置小巷所有者"
+    "name": "在服务器上设置小巷的所有者。",
+    "summary": "在服务器上设置小巷的所有者。",
+    "arguments": {
+      "settlement_id": "据点的 StringId。",
+      "alley_index": "从 0 开始的小巷索引。",
+      "hero_registry_id": "已注册的所有者英雄 ID。"
+    }
   },
   "coop.debug.arenas.list_interactions": {
-    "name": "列出互动",
-    "summary": "查看服务器上所有玩家以及客户端当前玩家的竞技场大师互动数据"
+    "name": "列出交互，用于联机调试。",
+    "summary": "列出交互，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.army.create": {
-    "name": "创建军团",
-    "summary": "在服务器和客户端上创建新军团"
+    "name": "在服务器上创建军团。",
+    "summary": "在服务器上创建军团。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。",
+      "target_settlement_id": "已注册的目标据点 ID。",
+      "hero_leader_id": "已注册的领队英雄 ID。",
+      "army_type": "ArmyTypes 的名称或数值。"
+    }
   },
   "coop.debug.army.destroy": {
-    "name": "解散军团",
-    "summary": "在服务器和客户端上删除军团"
+    "name": "在服务器上解散军团。",
+    "summary": "在服务器上解散军团。",
+    "arguments": {
+      "army_id": "已注册的军团 ID。",
+      "disband_reason": "ArmyDispersionReason 的名称或数值。"
+    }
   },
   "coop.debug.army.info": {
-    "name": "军团信息",
-    "summary": "查看军团信息"
+    "name": "显示军团的状态。",
+    "summary": "显示军团的状态。",
+    "arguments": {
+      "army_id": "已注册的军团 ID。"
+    }
   },
   "coop.debug.army.list": {
-    "name": "列出军团",
-    "summary": "列出当前所有军团"
+    "name": "列出已注册的军团。",
+    "summary": "列出已注册的军团。",
+    "arguments": {}
   },
   "coop.debug.army.mobile_party_add": {
-    "name": "加入部队",
-    "summary": "向军团添加一支部队"
+    "name": "将移动部队加入军团。",
+    "summary": "将移动部队加入军团。",
+    "arguments": {
+      "army_id": "已注册的军团 ID。",
+      "mobile_party_id": "已注册的移动部队 ID。"
+    }
   },
   "coop.debug.army.mobile_party_list": {
-    "name": "列出军团部队",
-    "summary": "列出军团中的全部部队"
+    "name": "列出军团中的部队。",
+    "summary": "列出军团中的部队。",
+    "arguments": {
+      "army_id": "已注册的军团 ID。"
+    }
   },
   "coop.debug.army.mobile_party_remove": {
-    "name": "移出部队",
-    "summary": "从军团移除一支部队"
+    "name": "从军团中移除移动部队。",
+    "summary": "从军团中移除移动部队。",
+    "arguments": {
+      "army_id": "已注册的军团 ID。",
+      "mobile_party_id": "已注册的移动部队 ID。"
+    }
   },
   "coop.debug.battle.capture_mount_pose": {
-    "name": "捕获坐骑姿态",
-    "summary": "捕获坐骑姿态"
+    "name": "执行捕获坐骑姿态的调试操作。",
+    "summary": "执行捕获坐骑姿态的调试操作。",
+    "arguments": {
+      "mount_agent_id": "坐骑实体 ID。"
+    }
   },
   "coop.debug.battle.charge_owned_formations": {
-    "name": "所属阵列冲锋",
-    "summary": "令所属阵列冲锋"
+    "name": "执行让所控编队冲锋的调试操作。",
+    "summary": "执行让所控编队冲锋的调试操作。",
+    "arguments": {}
   },
   "coop.debug.battle.focus_ladder": {
-    "name": "对准云梯",
-    "summary": "将镜头对准云梯"
+    "name": "执行聚焦云梯的调试操作。",
+    "summary": "执行聚焦云梯的调试操作。",
+    "arguments": {
+      "machine_id": "器械 ID。"
+    }
   },
   "coop.debug.battle.focus_mount": {
-    "name": "对准坐骑",
-    "summary": "将镜头对准坐骑"
+    "name": "执行聚焦坐骑的调试操作。",
+    "summary": "执行聚焦坐骑的调试操作。",
+    "arguments": {
+      "mount_agent_id": "坐骑实体 ID。"
+    }
   },
   "coop.debug.battle.hold_cavalry": {
-    "name": "骑兵待命",
-    "summary": "令骑兵待命"
+    "name": "执行让骑兵坚守的调试操作。",
+    "summary": "执行让骑兵坚守的调试操作。",
+    "arguments": {}
   },
   "coop.debug.battle.ladder_state": {
-    "name": "云梯状态",
-    "summary": "查看云梯状态"
+    "name": "显示云梯状态。",
+    "summary": "显示云梯状态。",
+    "arguments": {
+      "machine_id": "器械 ID。"
+    }
   },
   "coop.debug.battle.mount_camera_state": {
-    "name": "坐骑镜头状态",
-    "summary": "查看坐骑镜头状态"
+    "name": "显示坐骑镜头状态。",
+    "summary": "显示坐骑镜头状态。",
+    "arguments": {}
   },
   "coop.debug.battle.mount_pose_samples": {
-    "name": "坐骑姿态采样",
-    "summary": "查看坐骑姿态采样状态"
+    "name": "执行坐骑姿态采样的调试操作。",
+    "summary": "执行坐骑姿态采样的调试操作。",
+    "arguments": {
+      "mount_agent_id": "坐骑实体 ID。"
+    }
   },
   "coop.debug.battle.mount_state": {
-    "name": "坐骑状态",
-    "summary": "查看坐骑状态"
+    "name": "显示坐骑状态。",
+    "summary": "显示坐骑状态。",
+    "arguments": {
+      "authority": "权威端。"
+    }
   },
   "coop.debug.battle.move_cavalry": {
-    "name": "移动骑兵",
-    "summary": "移动骑兵"
+    "name": "执行移动骑兵的调试操作。",
+    "summary": "执行移动骑兵的调试操作。",
+    "arguments": {
+      "distance": "距离。"
+    }
   },
   "coop.debug.battle.release_ladder_camera": {
-    "name": "释放云梯镜头",
-    "summary": "释放云梯镜头"
+    "name": "还原或清除云梯镜头释放状态。",
+    "summary": "还原或清除云梯镜头释放状态。",
+    "arguments": {}
   },
   "coop.debug.battle.release_mount_camera": {
-    "name": "释放坐骑镜头",
-    "summary": "释放坐骑镜头"
+    "name": "还原或清除坐骑镜头释放状态。",
+    "summary": "还原或清除坐骑镜头释放状态。",
+    "arguments": {}
+  },
+  "coop.debug.battle.size_state": {
+    "name": "显示战斗规模状态。",
+    "summary": "显示战斗规模状态。",
+    "arguments": {}
   },
   "coop.debug.battle.state": {
-    "name": "战斗状态",
-    "summary": "查看战斗状态"
+    "name": "显示状态。",
+    "summary": "显示状态。",
+    "arguments": {}
   },
   "coop.debug.battle.turn_cavalry": {
-    "name": "转向骑兵",
-    "summary": "令骑兵转向"
+    "name": "执行转向骑兵的调试操作。",
+    "summary": "执行转向骑兵的调试操作。",
+    "arguments": {
+      "degrees": "角度。"
+    }
   },
-  "coop.debug.campaignoptions.AutoAllocateClanMemberPerks": {
-    "name": "自动分配氏族成员天赋",
-    "summary": "获取或设置战役选项：自动分配氏族成员天赋。"
+  "coop.debug.campaign_options.auto_allocate_clan_member_perks": {
+    "name": "执行自动分配家族成员专长的调试操作。",
+    "summary": "执行自动分配家族成员专长的调试操作。",
+    "arguments": {
+      "value": "选项的值。"
+    }
   },
-  "coop.debug.campaignoptions.BattleDeath": {
-    "name": "战斗死亡",
-    "summary": "获取或设置战役选项：战斗死亡。"
+  "coop.debug.campaign_options.battle_death": {
+    "name": "执行战斗死亡的调试操作。",
+    "summary": "执行战斗死亡的调试操作。",
+    "arguments": {
+      "value": "选项的值。"
+    }
   },
-  "coop.debug.campaignoptions.ClanMemberDeathChance": {
-    "name": "氏族成员死亡几率",
-    "summary": "获取或设置战役选项：氏族成员死亡几率。"
+  "coop.debug.campaign_options.clan_member_death_chance": {
+    "name": "执行家族成员死亡概率的调试操作。",
+    "summary": "执行家族成员死亡概率的调试操作。",
+    "arguments": {
+      "value": "选项的值。"
+    }
   },
-  "coop.debug.campaignoptions.CombatAIDifficulty": {
-    "name": "战斗 AI 难度",
-    "summary": "获取或设置战役选项：战斗 AI 难度。"
+  "coop.debug.campaign_options.combat_ai_difficulty": {
+    "name": "执行战斗 AI 难度的调试操作。",
+    "summary": "执行战斗 AI 难度的调试操作。",
+    "arguments": {
+      "value": "选项的值。"
+    }
   },
-  "coop.debug.campaignoptions.IsIronmanMode": {
-    "name": "铁人模式",
-    "summary": "获取或设置战役选项：是否铁人模式。"
+  "coop.debug.campaign_options.is_ironman_mode": {
+    "name": "执行是否启用铁人模式的调试操作。",
+    "summary": "执行是否启用铁人模式的调试操作。",
+    "arguments": {
+      "value": "选项的值。"
+    }
   },
-  "coop.debug.campaignoptions.IsLifeDeathCycleDisabled": {
-    "name": "禁用生死循环",
-    "summary": "获取或设置战役选项：是否禁用生死循环。"
+  "coop.debug.campaign_options.is_life_death_cycle_disabled": {
+    "name": "执行是否禁用生死循环的调试操作。",
+    "summary": "执行是否禁用生死循环的调试操作。",
+    "arguments": {
+      "value": "选项的值。"
+    }
   },
-  "coop.debug.campaignoptions.list": {
-    "name": "列出选项",
-    "summary": "列出战役选项"
+  "coop.debug.campaign_options.list": {
+    "name": "显示列表。",
+    "summary": "显示列表。",
+    "arguments": {}
   },
-  "coop.debug.campaignoptions.PersuasionSuccessChance": {
-    "name": "说服成功几率",
-    "summary": "获取或设置战役选项：说服成功几率。"
+  "coop.debug.campaign_options.persuasion_success_chance": {
+    "name": "执行说服成功率的调试操作。",
+    "summary": "执行说服成功率的调试操作。",
+    "arguments": {
+      "value": "选项的值。"
+    }
   },
-  "coop.debug.campaignoptions.PlayerMapMovementSpeed": {
-    "name": "玩家地图移速",
-    "summary": "获取或设置战役选项：玩家地图移动速度。"
+  "coop.debug.campaign_options.player_map_movement_speed": {
+    "name": "执行玩家地图移动速度的调试操作。",
+    "summary": "执行玩家地图移动速度的调试操作。",
+    "arguments": {
+      "value": "选项的值。"
+    }
   },
-  "coop.debug.campaignoptions.PlayerReceivedDamageDifficulty": {
-    "name": "玩家受伤难度",
-    "summary": "获取或设置战役选项：玩家受到伤害难度。"
+  "coop.debug.campaign_options.player_received_damage_difficulty": {
+    "name": "执行玩家所受伤害难度的调试操作。",
+    "summary": "执行玩家所受伤害难度的调试操作。",
+    "arguments": {
+      "value": "选项的值。"
+    }
   },
-  "coop.debug.campaignoptions.PlayerTroopsReceivedDamage": {
-    "name": "玩家部队受伤",
-    "summary": "获取或设置战役选项：玩家部队受到伤害。"
+  "coop.debug.campaign_options.player_troops_received_damage": {
+    "name": "执行玩家部队所受伤害的调试操作。",
+    "summary": "执行玩家部队所受伤害的调试操作。",
+    "arguments": {
+      "value": "选项的值。"
+    }
   },
-  "coop.debug.campaignoptions.RecruitmentDifficulty": {
-    "name": "招募难度",
-    "summary": "获取或设置战役选项：招募难度。"
+  "coop.debug.campaign_options.recruitment_difficulty": {
+    "name": "执行招募难度的调试操作。",
+    "summary": "执行招募难度的调试操作。",
+    "arguments": {
+      "value": "选项的值。"
+    }
   },
-  "coop.debug.campaignoptions.StealthAndDisguiseDifficulty": {
-    "name": "潜行与伪装难度",
-    "summary": "获取或设置战役选项：潜行与伪装难度。"
+  "coop.debug.campaign_options.stealth_and_disguise_difficulty": {
+    "name": "执行潜行与伪装难度的调试操作。",
+    "summary": "执行潜行与伪装难度的调试操作。",
+    "arguments": {
+      "value": "选项的值。"
+    }
   },
   "coop.debug.player_captivity.captivity_state": {
-    "name": "囚禁状态",
-    "summary": "查看囚禁状态"
+    "name": "显示囚禁状态。",
+    "summary": "显示囚禁状态。",
+    "arguments": {
+      "hero_id": "已注册的玩家英雄 ID。"
+    }
   },
   "coop.debug.player_captivity.capture_player": {
-    "name": "俘虏玩家",
-    "summary": "俘虏玩家"
-  },
-  "coop.debug.player_captivity.capture_player_fixture": {
-    "name": "俘虏玩家夹具",
-    "summary": "俘虏玩家测试夹具"
+    "name": "执行俘虏玩家的调试操作。",
+    "summary": "执行俘虏玩家的调试操作。",
+    "arguments": {
+      "hero_id": "已注册的玩家英雄 ID。",
+      "captor_party_id": "已注册的俘虏者移动部队 ID。"
+    }
   },
   "coop.debug.player_captivity.discard_player_from_party_screen": {
-    "name": "从部队界面丢弃玩家",
-    "summary": "从部队界面丢弃玩家"
+    "name": "执行从部队界面移除玩家的调试操作。",
+    "summary": "执行从部队界面移除玩家的调试操作。",
+    "arguments": {
+      "hero_id": "已注册的玩家英雄 ID。",
+      "captor_party_id": "已注册的俘虏者移动部队 ID。"
+    }
   },
   "coop.debug.player_captivity.liberate_prisoner": {
-    "name": "释放俘虏",
-    "summary": "释放俘虏"
+    "name": "执行解救俘虏的调试操作。",
+    "summary": "执行解救俘虏的调试操作。",
+    "arguments": {
+      "hero_id": "已注册的玩家英雄 ID。"
+    }
   },
   "coop.debug.player_captivity.observe_player": {
-    "name": "观察玩家",
-    "summary": "观察玩家"
-  },
-  "coop.debug.player_captivity.party_fixture_state": {
-    "name": "部队夹具状态",
-    "summary": "查看部队测试夹具状态"
-  },
-  "coop.debug.player_captivity.prepare_visual_test_fixture": {
-    "name": "准备视觉测试夹具",
-    "summary": "准备视觉测试夹具"
+    "name": "执行观察玩家的调试操作。",
+    "summary": "执行观察玩家的调试操作。",
+    "arguments": {
+      "hero_id": "已注册的玩家英雄 ID。"
+    }
   },
   "coop.debug.player_captivity.random_capture_player": {
-    "name": "随机俘虏玩家",
-    "summary": "随机俘虏玩家"
+    "name": "执行随机俘虏玩家的调试操作。",
+    "summary": "执行随机俘虏玩家的调试操作。",
+    "arguments": {
+      "hero_id": "已注册的玩家英雄 ID。"
+    }
   },
   "coop.debug.player_captivity.ransom_player_at_settlement": {
-    "name": "在据点赎回玩家",
-    "summary": "在据点赎回玩家"
+    "name": "执行在据点赎回玩家的调试操作。",
+    "summary": "执行在据点赎回玩家的调试操作。",
+    "arguments": {
+      "hero_id": "已注册的玩家英雄 ID。"
+    }
   },
   "coop.debug.player_captivity.release_player": {
-    "name": "释放玩家",
-    "summary": "释放玩家"
-  },
-  "coop.debug.player_captivity.restore_party_fixture_state": {
-    "name": "恢复部队夹具状态",
-    "summary": "恢复部队测试夹具状态"
-  },
-  "coop.debug.player_captivity.restore_roster_fixture": {
-    "name": "恢复名册夹具",
-    "summary": "恢复名册测试夹具"
-  },
-  "coop.debug.player_captivity.restore_visual_test_fixture": {
-    "name": "恢复视觉测试夹具",
-    "summary": "恢复视觉测试夹具"
+    "name": "执行释放玩家的调试操作。",
+    "summary": "执行释放玩家的调试操作。",
+    "arguments": {
+      "hero_id": "已注册的玩家英雄 ID。"
+    }
   },
   "coop.debug.player_captivity.status": {
-    "name": "俘虏状态",
-    "summary": "查看俘虏状态"
+    "name": "显示状态。",
+    "summary": "显示状态。",
+    "arguments": {
+      "hero_id": "已注册的玩家英雄 ID。"
+    }
   },
   "coop.debug.caravans.view_interacted_caravans": {
-    "name": "查看互动商队",
-    "summary": "在服务器上查看所有玩家互动过的商队，在客户端上查看当前玩家的"
+    "name": "显示曾交互商队的信息。",
+    "summary": "显示曾交互商队的信息。",
+    "arguments": {}
   },
   "coop.debug.caravans.view_looted_caravans": {
-    "name": "查看被劫商队",
-    "summary": "查看被劫商队"
+    "name": "显示被劫掠商队的信息。",
+    "summary": "显示被劫掠商队的信息。",
+    "arguments": {}
   },
   "coop.debug.caravans.view_prohibited_kingdoms": {
-    "name": "查看禁入王国",
-    "summary": "在服务器上查看所有玩家的禁入王国，在客户端上查看当前玩家的"
+    "name": "显示受限制王国的信息。",
+    "summary": "显示受限制王国的信息。",
+    "arguments": {}
   },
   "coop.debug.caravans.view_taken_trade_rumors": {
-    "name": "查看已获贸易传闻",
-    "summary": "在服务器上查看所有玩家已获取贸易传闻的商队，在客户端上查看当前玩家的"
+    "name": "显示已获取贸易传闻的信息。",
+    "summary": "显示已获取贸易传闻的信息。",
+    "arguments": {}
   },
   "coop.debug.caravans.view_trade_action_logs": {
-    "name": "查看贸易操作日志",
-    "summary": "查看贸易操作日志"
+    "name": "显示贸易行为日志。",
+    "summary": "显示贸易行为日志。",
+    "arguments": {}
   },
-  "coop.debug.characterObjects.info": {
-    "name": "角色对象信息",
-    "summary": "反射转储 CharacterObject 的每个字段（并向上走到 BasicCharacterObject，那里有已同步的 _characterTraits / _occupation / _persona），以便对比服务器与客户端截图，确认角色对象同步仍在复制。"
+  "coop.debug.character_objects.info": {
+    "name": "显示信息。",
+    "summary": "显示信息。",
+    "arguments": {
+      "character_id": "已注册的角色 ID。"
+    }
   },
-  "coop.debug.characterObjects.list": {
-    "name": "列出角色对象",
-    "summary": "列出角色对象"
+  "coop.debug.character_objects.list": {
+    "name": "显示列表。",
+    "summary": "显示列表。",
+    "arguments": {}
   },
   "coop.debug.clan.add_companion": {
-    "name": "添加同伴",
-    "summary": "添加同伴"
+    "name": "将已注册的同伴加入家族。",
+    "summary": "将已注册的同伴加入家族。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。",
+      "hero_id": "已注册的同伴英雄 ID。"
+    }
   },
   "coop.debug.clan.add_influence": {
-    "name": "增加影响力",
-    "summary": "通过 ChangeClanInfluenceAction 权威地按给定数量改变氏族影响力，以便 _influence 标量字段库进行复制；两边都用 coop.debug.clan.info 核对。"
+    "name": "为已注册的家族增加影响力。",
+    "summary": "为已注册的家族增加影响力。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。",
+      "amount": "影响力数量。"
+    }
   },
   "coop.debug.clan.add_renown": {
-    "name": "增加声望",
-    "summary": "增加声望"
+    "name": "为已注册的家族增加声望。",
+    "summary": "为已注册的家族增加声望。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。",
+      "renown": "声望数量，须为整数。"
+    }
   },
   "coop.debug.clan.change_clan_kingdom": {
-    "name": "更改氏族所属王国",
-    "summary": "更改氏族所属王国"
+    "name": "将已注册的家族转移到一个王国。",
+    "summary": "将已注册的家族转移到一个王国。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。",
+      "kingdom_id": "已注册的王国 ID。"
+    }
   },
   "coop.debug.clan.change_clan_leader": {
-    "name": "更换族长",
-    "summary": "更换族长"
+    "name": "更换已注册家族的族长。",
+    "summary": "更换已注册家族的族长。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。",
+      "hero_id": "已注册的新族长英雄 ID。"
+    }
   },
   "coop.debug.clan.close": {
-    "name": "关闭氏族界面",
-    "summary": "关闭氏族界面"
+    "name": "在客户端关闭家族界面。",
+    "summary": "在客户端关闭家族界面。",
+    "arguments": {}
   },
   "coop.debug.clan.daily_gold_change": {
-    "name": "每日金币变化",
-    "summary": "查看预计的每日金币变化"
+    "name": "显示家族预计的每日金币变化。",
+    "summary": "显示家族预计的每日金币变化。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。"
+    }
   },
   "coop.debug.clan.destroy_clan": {
-    "name": "摧毁氏族",
-    "summary": "摧毁氏族"
+    "name": "解散已注册的家族。",
+    "summary": "解散已注册的家族。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。"
+    }
   },
   "coop.debug.clan.economy": {
-    "name": "氏族经济",
-    "summary": "只读：打印氏族的战斗经济数值（声望、影响力、族长部队士气、部队总经验）。在主机和客户端用同一氏族编号运行以对比。"
+    "name": "显示家族的战斗经济数值。",
+    "summary": "显示家族的战斗经济数值。",
+    "arguments": {
+      "clan_id_or_name": "可选的家族 ID 或显示名称。包含多个词的名称需加双引号。"
+    }
+  },
+  "coop.debug.clan.field_dump": {
+    "name": "转储已注册家族的所有字段。",
+    "summary": "转储已注册家族的所有字段。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。"
+    }
   },
   "coop.debug.clan.give_influence": {
-    "name": "给予影响力",
-    "summary": "给予影响力"
+    "name": "给予已注册的家族影响力。",
+    "summary": "给予已注册的家族影响力。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。",
+      "amount": "影响力数量。"
+    }
   },
   "coop.debug.clan.info": {
-    "name": "氏族信息",
-    "summary": "显示氏族名称、族长、王国、影响力、声望、等级和成员。"
+    "name": "显示已注册家族的关键信息摘要。",
+    "summary": "显示已注册家族的关键信息摘要。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。"
+    }
   },
   "coop.debug.clan.join_kingdom": {
-    "name": "加入王国",
-    "summary": "加入王国"
+    "name": "让已注册的家族加入王国。",
+    "summary": "让已注册的家族加入王国。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。",
+      "kingdom_id": "已注册的王国 ID。"
+    }
   },
   "coop.debug.clan.leave_kingdom": {
-    "name": "离开王国",
-    "summary": "离开王国"
+    "name": "让已注册的家族脱离所属王国。",
+    "summary": "让已注册的家族脱离所属王国。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。"
+    }
   },
   "coop.debug.clan.list": {
-    "name": "列出氏族",
-    "summary": "列出全部氏族"
+    "name": "列出战役中的家族。",
+    "summary": "列出战役中的家族。",
+    "arguments": {}
   },
   "coop.debug.clan.membership": {
-    "name": "成员关系",
-    "summary": "查看成员关系"
+    "name": "显示家族的王国归属。",
+    "summary": "显示家族的王国归属。",
+    "arguments": {
+      "clan_id": "已注册的家族 ID。"
+    }
   },
   "coop.debug.clan.open": {
-    "name": "打开氏族界面",
-    "summary": "打开氏族界面"
+    "name": "在客户端打开家族界面。",
+    "summary": "在客户端打开家族界面。",
+    "arguments": {}
   },
   "coop.debug.clan.refresh_burst": {
-    "name": "刷新突发",
-    "summary": "刷新突发"
+    "name": "重复发送部队职责刷新消息。",
+    "summary": "重复发送部队职责刷新消息。",
+    "arguments": {
+      "party_id": "已注册的移动部队 ID。",
+      "count": "消息数量，范围为 1 至 500。"
+    }
   },
   "coop.debug.clan.remove_companion": {
-    "name": "移除同伴",
-    "summary": "移除同伴"
+    "name": "从家族中移除已注册的同伴。",
+    "summary": "从家族中移除已注册的同伴。",
+    "arguments": {
+      "hero_id": "已注册的同伴英雄 ID。"
+    }
   },
   "coop.debug.clan.screen_state": {
-    "name": "氏族界面状态",
-    "summary": "查看氏族界面状态"
+    "name": "显示家族界面的状态。",
+    "summary": "显示家族界面的状态。",
+    "arguments": {}
   },
   "coop.debug.clan.select_parties": {
-    "name": "选择部队",
-    "summary": "选择部队"
+    "name": "选择家族界面的部队选项卡。",
+    "summary": "选择家族界面的部队选项卡。",
+    "arguments": {}
   },
   "coop.debug.clan.wage_state": {
-    "name": "工资状态",
-    "summary": "查看工资状态"
+    "name": "显示家族部队的工资状态。",
+    "summary": "显示家族部队的工资状态。",
+    "arguments": {
+      "clan_id": "可选的已注册家族 ID。"
+    }
   },
   "coop.debug.companions.clear_wanderers": {
-    "name": "清除流浪者",
-    "summary": "从地图上清除流浪者以便重新生成"
+    "name": "清除可用的流浪者英雄。",
+    "summary": "清除可用的流浪者英雄。",
+    "arguments": {}
   },
   "coop.debug.companions.close_party_screen": {
-    "name": "关闭部队界面",
-    "summary": "关闭部队界面"
+    "name": "关闭同伴部队界面。",
+    "summary": "关闭同伴部队界面。",
+    "arguments": {}
   },
   "coop.debug.companions.commit_party_screen": {
-    "name": "提交部队界面",
-    "summary": "提交部队界面"
-  },
-  "coop.debug.companions.dismissal_fixture_completion": {
-    "name": "解雇夹具完成",
-    "summary": "解雇测试夹具完成"
-  },
-  "coop.debug.companions.dismissal_fixture_prepare_dismiss": {
-    "name": "解雇夹具准备解雇",
-    "summary": "解雇测试夹具：准备解雇"
-  },
-  "coop.debug.companions.dismissal_fixture_release_encounter": {
-    "name": "解雇夹具释放遭遇",
-    "summary": "解雇测试夹具：释放遭遇"
-  },
-  "coop.debug.companions.dismissal_fixture_request_replacement": {
-    "name": "解雇夹具请求替换",
-    "summary": "解雇测试夹具：请求替换"
-  },
-  "coop.debug.companions.dismissal_fixture_restore": {
-    "name": "恢复解雇夹具",
-    "summary": "恢复解雇测试夹具"
-  },
-  "coop.debug.companions.dismissal_fixture_setup": {
-    "name": "设置解雇夹具",
-    "summary": "设置解雇测试夹具"
-  },
-  "coop.debug.companions.dismissal_fixture_state": {
-    "name": "解雇夹具状态",
-    "summary": "查看解雇测试夹具状态"
-  },
-  "coop.debug.companions.dismissal_fixture_trigger_consequence": {
-    "name": "解雇夹具触发后果",
-    "summary": "解雇测试夹具：触发后果"
+    "name": "提交同伴部队界面的更改。",
+    "summary": "提交同伴部队界面的更改。",
+    "arguments": {}
   },
   "coop.debug.companions.list_wanderers": {
-    "name": "列出流浪者",
-    "summary": "查看游戏中全部流浪者"
+    "name": "列出可用的流浪者英雄。",
+    "summary": "列出可用的流浪者英雄。",
+    "arguments": {}
   },
   "coop.debug.companions.open_party_screen": {
-    "name": "打开部队界面",
-    "summary": "打开部队界面"
-  },
-  "coop.debug.companions.role_fixture_assign_scout": {
-    "name": "角色夹具指定侦察",
-    "summary": "角色测试夹具：指定侦察"
-  },
-  "coop.debug.companions.role_fixture_conversation_state": {
-    "name": "角色夹具对话状态",
-    "summary": "角色测试夹具：对话状态"
-  },
-  "coop.debug.companions.role_fixture_open_conversation": {
-    "name": "角色夹具打开对话",
-    "summary": "角色测试夹具：打开对话"
-  },
-  "coop.debug.companions.role_fixture_prepare_client": {
-    "name": "角色夹具准备客户端",
-    "summary": "角色测试夹具：准备客户端"
-  },
-  "coop.debug.companions.role_fixture_restore": {
-    "name": "恢复角色夹具",
-    "summary": "恢复角色测试夹具"
-  },
-  "coop.debug.companions.role_fixture_setup": {
-    "name": "设置角色夹具",
-    "summary": "设置角色测试夹具"
-  },
-  "coop.debug.companions.role_fixture_state": {
-    "name": "角色夹具状态",
-    "summary": "查看角色测试夹具状态"
+    "name": "打开同伴部队界面。",
+    "summary": "打开同伴部队界面。",
+    "arguments": {}
   },
   "coop.debug.companions.scout_role_state": {
-    "name": "侦察职责状态",
-    "summary": "查看侦察职责状态"
+    "name": "显示部队指派的侦察员。",
+    "summary": "显示部队指派的侦察员。",
+    "arguments": {
+      "party_id": "已注册的移动部队 ID。"
+    }
   },
-  "coop.debug.gamethread.instrument": {
-    "name": "线程检测",
-    "summary": "打开或关闭游戏线程排空检测，或报告当前状态。不带参数时切换当前设置。"
+  "coop.debug.game_thread.instrument": {
+    "name": "执行插桩监测的调试操作。",
+    "summary": "执行插桩监测的调试操作。",
+    "arguments": {
+      "mode": "on、off、toggle 或 status。"
+    }
   },
-  "coop.debug.gamethread.stall": {
-    "name": "停顿",
-    "summary": "使游戏线程停顿"
+  "coop.debug.game_thread.stall": {
+    "name": "执行阻塞游戏线程的调试操作。",
+    "summary": "执行阻塞游戏线程的调试操作。",
+    "arguments": {
+      "milliseconds": "阻塞时长，范围为 1 至 5000 毫秒。"
+    }
   },
   "coop.debug.advance_time": {
-    "name": "推进时间",
-    "summary": "推进时间"
+    "name": "执行推进时间的调试操作。",
+    "summary": "执行推进时间的调试操作。",
+    "arguments": {
+      "days": "要推进的战役天数。"
+    }
   },
   "coop.debug.fix_camera": {
-    "name": "固定镜头",
-    "summary": "固定镜头"
+    "name": "执行修复镜头的调试操作。",
+    "summary": "执行修复镜头的调试操作。",
+    "arguments": {}
   },
   "coop.debug.get_time_mode": {
-    "name": "获取时间模式",
-    "summary": "获取时间模式"
+    "name": "显示获取时间模式的信息。",
+    "summary": "显示获取时间模式的信息。",
+    "arguments": {}
   },
   "coop.debug.set_time_mode": {
-    "name": "设置时间模式",
-    "summary": "设置时间模式"
+    "name": "执行设置时间模式的调试操作。",
+    "summary": "执行设置时间模式的调试操作。",
+    "arguments": {
+      "time_mode": "Pause、Play_1x 或 Play_2x。"
+    }
   },
   "coop.debug.template": {
-    "name": "模板",
-    "summary": "待填写"
+    "name": "执行模板的调试操作。",
+    "summary": "执行模板的调试操作。",
+    "arguments": {}
   },
-  "coop.debug.herodeveloper.addattributepoints": {
-    "name": "增加属性点",
-    "summary": "为英雄增加属性点。示例：coop.debug.herodeveloper.addattributepoints RandomPlayer 10"
+  "coop.debug.hero_developer.add_attribute_points": {
+    "name": "执行增加属性点的调试操作。",
+    "summary": "执行增加属性点的调试操作。",
+    "arguments": {
+      "hero_name_or_id": "英雄的显示名称或 StringId。",
+      "point_count": "属性点数量。"
+    }
   },
-  "coop.debug.herodeveloper.addfocuspoints": {
-    "name": "增加专精点",
-    "summary": "为英雄增加专精点。示例：coop.debug.herodeveloper.addfocuspoints RandomPlayer 10"
+  "coop.debug.hero_developer.add_focus_points": {
+    "name": "执行增加专注点的调试操作。",
+    "summary": "执行增加专注点的调试操作。",
+    "arguments": {
+      "hero_name_or_id": "英雄的显示名称或 StringId。",
+      "point_count": "专注点数量。"
+    }
   },
-  "coop.debug.herodeveloper.addskillxp": {
-    "name": "增加技能经验",
-    "summary": "按技能对象名为英雄增加技能经验。示例：coop.debug.herodeveloper.addskillxp RandomPlayer OneHanded 3000"
+  "coop.debug.hero_developer.add_skill_xp": {
+    "name": "执行增加技能经验的调试操作。",
+    "summary": "执行增加技能经验的调试操作。",
+    "arguments": {
+      "hero_name_or_id": "英雄的显示名称或 StringId。",
+      "skill_name": "技能对象名称。",
+      "xp_amount": "技能经验数量。"
+    }
   },
-  "coop.debug.herodeveloper.resetskills": {
-    "name": "重置技能",
-    "summary": "重置英雄的全部技能，并按等级返还专精点和属性点。示例：coop.debug.herodeveloper.resetskills"
+  "coop.debug.hero_developer.reset_skills": {
+    "name": "执行重置技能的调试操作。",
+    "summary": "执行重置技能的调试操作。",
+    "arguments": {
+      "hero_name_or_id": "英雄的显示名称或 StringId。"
+    }
   },
-  "coop.debug.herodeveloper.stats": {
-    "name": "成长数据",
-    "summary": "输出指定英雄的属性、专精、技能和天赋"
+  "coop.debug.hero_developer.stats": {
+    "name": "显示属性。",
+    "summary": "显示属性。",
+    "arguments": {
+      "hero_name": "英雄的完整显示名称。"
+    }
+  },
+  "coop.debug.hero.add_power": {
+    "name": "在服务器上为已注册的英雄增加权势。",
+    "summary": "在服务器上为已注册的英雄增加权势。",
+    "arguments": {
+      "hero_id": "已注册的英雄 ID。",
+      "power": "权势数量，须为整数。"
+    }
   },
   "coop.debug.hero.audit": {
-    "name": "核对英雄",
-    "summary": "核对英雄"
+    "name": "审计已注册英雄的状态。",
+    "summary": "审计已注册英雄的状态。",
+    "arguments": {}
   },
   "coop.debug.hero.boost_fighter": {
-    "name": "强化战士",
-    "summary": "强化战士"
+    "name": "强化已注册的英雄，用于战斗测试场景。",
+    "summary": "强化已注册的英雄，用于战斗测试场景。",
+    "arguments": {
+      "hero_registry_id": "要强化的已注册英雄 ID。"
+    }
   },
-  "coop.debug.hero.change": {
-    "name": "更改时间戳",
-    "summary": "更改时间戳"
-  },
-  "coop.debug.hero.createHero": {
-    "name": "创建英雄",
-    "summary": "创建新英雄"
+  "coop.debug.hero.create_hero": {
+    "name": "在服务器上根据角色模板创建英雄。",
+    "summary": "在服务器上根据角色模板创建英雄。",
+    "arguments": {
+      "character_object_id": "角色模板的 StringId。",
+      "age": "可选的英雄年龄。"
+    }
   },
   "coop.debug.hero.get_banneritem": {
-    "name": "获取旗帜物品",
-    "summary": "获取英雄的旗帜物品"
+    "name": "显示已注册英雄的旗帜物品。",
+    "summary": "显示已注册英雄的旗帜物品。",
+    "arguments": {
+      "hero_id": "已注册的英雄 ID。"
+    }
   },
   "coop.debug.hero.get_effective_relation": {
-    "name": "获取有效关系",
-    "summary": "获取有效关系"
+    "name": "显示两名已注册英雄之间的实际关系。",
+    "summary": "显示两名已注册英雄之间的实际关系。",
+    "arguments": {
+      "hero1_id": "第一名已注册英雄的 ID。",
+      "hero2_id": "第二名已注册英雄的 ID。"
+    }
   },
   "coop.debug.hero.get_issue": {
-    "name": "获取任务",
-    "summary": "获取英雄的任务"
+    "name": "显示已注册英雄的事务。",
+    "summary": "显示已注册英雄的事务。",
+    "arguments": {
+      "hero_id": "已注册的英雄 ID。"
+    }
   },
   "coop.debug.hero.get_relation": {
-    "name": "获取关系",
-    "summary": "获取关系"
-  },
-  "coop.debug.hero.getChange": {
-    "name": "获取时间戳",
-    "summary": "获取时间戳"
+    "name": "显示两名已注册英雄之间的基础关系。",
+    "summary": "显示两名已注册英雄之间的基础关系。",
+    "arguments": {
+      "hero1_id": "第一名已注册英雄的 ID。",
+      "hero2_id": "第二名已注册英雄的 ID。"
+    }
   },
   "coop.debug.hero.gold_state": {
-    "name": "金币状态",
-    "summary": "查看金币状态"
+    "name": "显示已注册英雄的金币。",
+    "summary": "显示已注册英雄的金币。",
+    "arguments": {
+      "hero_id": "已注册的英雄 ID。"
+    }
+  },
+  "coop.debug.hero.home_settlement_snapshot": {
+    "name": "显示已注册英雄的家乡据点状态。",
+    "summary": "显示已注册英雄的家乡据点状态。",
+    "arguments": {
+      "resolve_missing": "是否解析缺失的家乡据点。"
+    }
   },
   "coop.debug.hero.id": {
-    "name": "查找编号",
-    "summary": "查找编号"
+    "name": "查找显示名称完全匹配的英雄的注册 ID。",
+    "summary": "查找显示名称完全匹配的英雄的注册 ID。",
+    "arguments": {
+      "heroName": "要查找的英雄的完整显示名称。包含多个词的值需加双引号。"
+    }
   },
   "coop.debug.hero.info": {
-    "name": "英雄信息",
-    "summary": "查看英雄信息"
+    "name": "转储已注册英雄的字段。",
+    "summary": "转储已注册英雄的字段。",
+    "arguments": {
+      "hero_id": "已注册的英雄 ID。"
+    }
   },
   "coop.debug.hero.issues": {
-    "name": "任务列表",
-    "summary": "列出全部可用任务"
+    "name": "列出有进行中事务的英雄。",
+    "summary": "列出有进行中事务的英雄。",
+    "arguments": {}
   },
   "coop.debug.hero.list": {
-    "name": "列出英雄",
-    "summary": "列出名称以可选前缀开头的英雄"
+    "name": "列出已注册的英雄，可按显示名称的前缀筛选。",
+    "summary": "列出已注册的英雄，可按显示名称的前缀筛选。",
+    "arguments": {
+      "name_prefix": "可选的显示名称前缀。包含多个词的值需加双引号。"
+    }
   },
   "coop.debug.hero.list_banneritems": {
-    "name": "列出旗帜物品",
-    "summary": "列出全部可用旗帜物品"
+    "name": "列出可用的旗帜物品。",
+    "summary": "列出可用的旗帜物品。",
+    "arguments": {}
   },
   "coop.debug.hero.refresh_volunteers": {
-    "name": "刷新志愿兵",
-    "summary": "对一个据点执行权威的志愿兵刷新。"
+    "name": "在服务器上刷新据点的志愿兵。",
+    "summary": "在服务器上刷新据点的志愿兵。",
+    "arguments": {
+      "settlement_id": "可选的据点 StringId；默认为 town_ES1。"
+    }
   },
   "coop.debug.hero.set_banneritem": {
-    "name": "设置旗帜物品",
-    "summary": "设置英雄的旗帜物品"
+    "name": "在服务器上设置已注册英雄的旗帜物品。",
+    "summary": "在服务器上设置已注册英雄的旗帜物品。",
+    "arguments": {
+      "hero_id": "已注册的英雄 ID。",
+      "banner_item_id": "旗帜物品的 StringId。"
+    }
   },
   "coop.debug.hero.set_effective_relation": {
-    "name": "设置有效关系",
-    "summary": "设置有效关系"
+    "name": "设置两名已注册英雄之间的实际关系。",
+    "summary": "设置两名已注册英雄之间的实际关系。",
+    "arguments": {
+      "hero1_id": "第一名已注册英雄的 ID。",
+      "hero2_id": "第二名已注册英雄的 ID。",
+      "value": "实际关系数值，须为整数。"
+    }
+  },
+  "coop.debug.hero.set_gold": {
+    "name": "在服务器上设置所有显示名称完全匹配的英雄的金币。",
+    "summary": "在服务器上设置所有显示名称完全匹配的英雄的金币。",
+    "arguments": {
+      "hero_name": "英雄的完整显示名称。包含多个词的值需加双引号。",
+      "gold": "金币数值，须为整数。"
+    }
   },
   "coop.debug.hero.set_gold_state": {
-    "name": "设置金币状态",
-    "summary": "设置金币状态"
+    "name": "在服务器上设置已注册英雄的金币，数值不能为负。",
+    "summary": "在服务器上设置已注册英雄的金币，数值不能为负。",
+    "arguments": {
+      "hero_id": "已注册的英雄 ID。",
+      "gold": "金币数值，须为非负整数。"
+    }
   },
   "coop.debug.hero.set_hitpoints": {
-    "name": "设置生命值",
-    "summary": "设置英雄的生命值"
+    "name": "在服务器上设置已注册英雄的生命值。",
+    "summary": "在服务器上设置已注册英雄的生命值。",
+    "arguments": {
+      "hero_id": "已注册的英雄 ID。",
+      "hit_points": "生命值，须为整数。"
+    }
   },
   "coop.debug.hero.set_issue": {
-    "name": "设置任务",
-    "summary": "设置英雄的任务"
+    "name": "在服务器上设置已注册英雄的事务。",
+    "summary": "在服务器上设置已注册英雄的事务。",
+    "arguments": {
+      "hero_id": "已注册的英雄 ID。",
+      "issue_id": "事务的 StringId。"
+    }
   },
   "coop.debug.hero.set_relation": {
-    "name": "设置关系",
-    "summary": "设置关系"
-  },
-  "coop.debug.hero.SetGold": {
-    "name": "设置金币",
-    "summary": "设置金币"
+    "name": "设置两名已注册英雄之间的基础关系。",
+    "summary": "设置两名已注册英雄之间的基础关系。",
+    "arguments": {
+      "hero1_id": "第一名已注册英雄的 ID。",
+      "hero2_id": "第二名已注册英雄的 ID。",
+      "value": "关系数值，须为整数。"
+    }
   },
   "coop.debug.hero.volunteers": {
-    "name": "志愿兵",
-    "summary": "查看目标英雄的可用志愿兵"
+    "name": "列出英雄的志愿兵。",
+    "summary": "列出英雄的志愿兵。",
+    "arguments": {
+      "hero_id": "英雄的 StringId。"
+    }
   },
-  "coop.debug.inventory.giveanimals": {
-    "name": "给予动物",
-    "summary": "按名称给英雄调试用动物"
+  "coop.debug.inventory.give_animals": {
+    "name": "执行给予动物的调试操作。",
+    "summary": "执行给予动物的调试操作。",
+    "arguments": {
+      "hero_name": "英雄的完整显示名称。"
+    }
   },
-  "coop.debug.inventory.givewarhorses": {
-    "name": "给予战马",
-    "summary": "按名称给英雄战马"
+  "coop.debug.inventory.give_warhorses": {
+    "name": "执行给予战马的调试操作。",
+    "summary": "执行给予战马的调试操作。",
+    "arguments": {
+      "hero_name": "英雄的完整显示名称。"
+    }
   },
-  "coop.debug.inventory.heroequipment": {
-    "name": "英雄装备",
-    "summary": "输出指定英雄的战斗、日常和潜行装备编号"
+  "coop.debug.inventory.hero_equipment": {
+    "name": "执行英雄装备的调试操作。",
+    "summary": "执行英雄装备的调试操作。",
+    "arguments": {
+      "hero_name": "英雄的完整显示名称。"
+    }
   },
-  "coop.debug.inventory.itemids": {
-    "name": "物品编号",
-    "summary": "查看玩家背包中的物品编号"
+  "coop.debug.inventory.item_ids": {
+    "name": "执行物品 ID 的调试操作。",
+    "summary": "执行物品 ID 的调试操作。",
+    "arguments": {
+      "hero_name": "英雄的完整显示名称。"
+    }
   },
-  "coop.debug.inventory.itemvalues": {
-    "name": "物品价值",
-    "summary": "查看玩家背包中的物品价值"
+  "coop.debug.inventory.item_values": {
+    "name": "执行物品价值的调试操作。",
+    "summary": "执行物品价值的调试操作。",
+    "arguments": {
+      "hero_name": "英雄的完整显示名称。"
+    }
   },
   "coop.debug.inventory.view_entered_settlements": {
-    "name": "查看进入过的据点",
-    "summary": "在服务器上查看所有玩家进入据点的贸易数据，在客户端上查看当前玩家的"
+    "name": "显示已进入的据点。",
+    "summary": "显示已进入的据点。",
+    "arguments": {}
   },
   "coop.debug.inventory.view_player_trade_data": {
-    "name": "查看玩家贸易数据",
-    "summary": "在服务器上查看所有玩家的贸易数据，在客户端上查看当前玩家的"
+    "name": "显示玩家贸易数据。",
+    "summary": "显示玩家贸易数据。",
+    "arguments": {}
   },
   "coop.debug.inventory.view_player_trade_rumors": {
-    "name": "查看玩家贸易传闻",
-    "summary": "在服务器上查看所有玩家的贸易传闻，在客户端上查看当前玩家的"
+    "name": "显示玩家贸易传闻。",
+    "summary": "显示玩家贸易传闻。",
+    "arguments": {}
   },
   "coop.debug.issues.complete": {
-    "name": "完成",
-    "summary": "完成任务"
+    "name": "执行完成事务的调试操作。",
+    "summary": "执行完成事务的调试操作。",
+    "arguments": {
+      "hero_id": "已注册的事务所有者英雄 ID。",
+      "outcome": "success、cancel、fail、timeout 或 betrayal。"
+    }
   },
   "coop.debug.issues.give": {
-    "name": "给予",
-    "summary": "给予任务"
+    "name": "执行给予事务的调试操作。",
+    "summary": "执行给予事务的调试操作。",
+    "arguments": {
+      "hero_id": "已注册的英雄 ID。",
+      "quest_type_key": "事务类型键。"
+    }
   },
   "coop.debug.issues.list_types": {
-    "name": "列出类型",
-    "summary": "列出任务类型"
+    "name": "显示类型列表。",
+    "summary": "显示类型列表。",
+    "arguments": {}
   },
-  "coop.debug.itemrosters.add_item_burst": {
-    "name": "批量添加物品",
-    "summary": "批量添加物品"
+  "coop.debug.item_rosters.add_item_burst": {
+    "name": "执行批量连续添加物品的调试操作。",
+    "summary": "执行批量连续添加物品的调试操作。",
+    "arguments": {
+      "settlement_id": "据点的 StringId。",
+      "count": "要添加的物品数量，须为正数。"
+    }
   },
-  "coop.debug.itemrosters.add_random_item": {
-    "name": "添加随机物品",
-    "summary": "添加随机物品"
+  "coop.debug.item_rosters.add_random_item": {
+    "name": "执行添加随机物品的调试操作。",
+    "summary": "执行添加随机物品的调试操作。",
+    "arguments": {
+      "settlement_id": "据点的 StringId。"
+    }
   },
-  "coop.debug.itemrosters.export": {
-    "name": "导出",
-    "summary": "导出物品名册"
+  "coop.debug.item_rosters.export": {
+    "name": "执行导出的调试操作。",
+    "summary": "执行导出的调试操作。",
+    "arguments": {
+      "party_or_settlement_id": "部队或据点的 StringId。"
+    }
   },
-  "coop.debug.itemrosters.info": {
-    "name": "名册信息",
-    "summary": "查看物品名册信息"
+  "coop.debug.item_rosters.info": {
+    "name": "显示信息。",
+    "summary": "显示信息。",
+    "arguments": {
+      "party_or_settlement_id": "部队或据点的 StringId。"
+    }
   },
-  "coop.debug.itemobject.data": {
-    "name": "物品数据",
-    "summary": "按字符串编号查看物品对象的选定属性"
+  "coop.debug.item_object.data": {
+    "name": "显示数据。",
+    "summary": "显示数据。",
+    "arguments": {
+      "item_id": "已注册的物品对象 ID。"
+    }
   },
   "coop.debug.kingdom.add_decision": {
-    "name": "添加决议",
-    "summary": "向王国添加一项决议。"
+    "name": "向王国添加支持的决策。",
+    "summary": "向王国添加支持的决策。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。",
+      "proposer_clan_id": "已注册的提议者家族 ID。",
+      "ignore_influence_cost": "是否忽略影响力消耗。",
+      "decision_type": "决策类型。",
+      "decision_arg1": "第一个固定的决策专用参数。",
+      "decision_arg2": "第二个固定的决策专用参数。",
+      "decision_arg3": "第三个固定的决策专用参数。"
+    }
   },
   "coop.debug.kingdom.add_decision_usage": {
-    "name": "添加决议用法",
-    "summary": "列出 add_decision 指令的全部用法。"
+    "name": "列出支持的王国决策参数。",
+    "summary": "列出支持的王国决策参数。",
+    "arguments": {}
   },
   "coop.debug.kingdom.close": {
-    "name": "关闭王国界面",
-    "summary": "关闭王国界面"
+    "name": "在客户端关闭王国界面。",
+    "summary": "在客户端关闭王国界面。",
+    "arguments": {}
   },
   "coop.debug.kingdom.collection_add": {
-    "name": "集合添加",
-    "summary": "在服务器上向已同步的王国集合添加一项，并向客户端广播更改。"
+    "name": "向已同步的王国集合添加一个值。",
+    "summary": "向已同步的王国集合添加一个值。",
+    "arguments": {
+      "collection": "王国集合名称。",
+      "kingdom_id": "已注册的王国 ID。",
+      "value_id": "已注册的值 ID 或提议者家族 ID。",
+      "ignore_influence_cost": "用于 unresolvedDecisions，指定是否忽略影响力。",
+      "decision_type": "用于 unresolvedDecisions，指定决策类型。",
+      "decision_arg1": "第一个固定的决策专用参数。",
+      "decision_arg2": "第二个固定的决策专用参数。",
+      "decision_arg3": "第三个固定的决策专用参数。"
+    }
   },
   "coop.debug.kingdom.collection_list": {
-    "name": "列出集合",
-    "summary": "列出一个已同步的王国集合缓存，供服务器/客户端核对。"
+    "name": "列出已同步的王国集合。",
+    "summary": "列出已同步的王国集合。",
+    "arguments": {
+      "collection": "王国集合名称。",
+      "kingdom_id": "已注册的王国 ID。"
+    }
   },
   "coop.debug.kingdom.collection_remove": {
-    "name": "集合移除",
-    "summary": "在服务器上从已同步的王国集合移除一项，并向客户端广播更改。"
+    "name": "从已同步的王国集合移除一个值。",
+    "summary": "从已同步的王国集合移除一个值。",
+    "arguments": {
+      "collection": "王国集合名称。",
+      "kingdom_id": "已注册的王国 ID。",
+      "value_id_or_index": "已注册的值 ID 或从 1 开始的决策索引。"
+    }
   },
   "coop.debug.kingdom.create": {
-    "name": "创建王国",
-    "summary": "由指定英雄所属氏族创建王国，并通过总督“创建王国”对话框使用的同一通知复制到每个客户端。仅服务器。"
+    "name": "在服务器上为族长创建王国。",
+    "summary": "在服务器上为族长创建王国。",
+    "arguments": {
+      "leader_hero_name": "领队的完整显示名称或 ID。包含多个词的名称需加双引号。",
+      "kingdom_name": "王国的显示名称。包含多个词的值需加双引号。"
+    }
   },
   "coop.debug.kingdom.decisions": {
-    "name": "决议",
-    "summary": "列出进行中的王国决议以及已登记的客户端投票状态。"
+    "name": "列出王国排队中的决策和客户端投票。",
+    "summary": "列出王国排队中的决策和客户端投票。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。"
+    }
   },
   "coop.debug.kingdom.declare_war": {
-    "name": "宣战",
-    "summary": "直接在两个势力之间宣战（在服务器上运行）。相对于王国 AI 可能否决的宣战决议，这是确定的做法。"
+    "name": "在服务器上让两个派系宣战。",
+    "summary": "在服务器上让两个派系宣战。",
+    "arguments": {
+      "faction1_id": "第一个已注册派系的 ID。",
+      "faction2_id": "第二个已注册派系的 ID。"
+    }
   },
   "coop.debug.kingdom.force_player_join_kingdom": {
-    "name": "强制玩家加入王国",
-    "summary": "强制已登记的合作玩家氏族加入一个王国。仅服务器。"
+    "name": "将玩家家族移入王国。",
+    "summary": "将玩家家族移入王国。",
+    "arguments": {
+      "controller_id": "玩家控制器 ID。",
+      "kingdom_id": "已注册的王国 ID。"
+    }
   },
   "coop.debug.kingdom.force_player_vassalage": {
-    "name": "强制玩家称臣",
-    "summary": "强制玩家称臣"
+    "name": "请求让玩家成为王国的封臣。",
+    "summary": "请求让玩家成为王国的封臣。",
+    "arguments": {
+      "controller_id": "玩家控制器 ID。",
+      "kingdom_id": "已注册的王国 ID。",
+      "grant_rewards": "是否给予效忠奖励。"
+    }
   },
   "coop.debug.kingdom.info": {
-    "name": "王国信息",
-    "summary": "反射转储 Kingdom 的每个字段，以便对比服务器与客户端截图，确认王国字段同步仍在复制。"
+    "name": "显示已注册王国的状态。",
+    "summary": "显示已注册王国的状态。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。"
+    }
   },
   "coop.debug.kingdom.list": {
-    "name": "列出王国",
-    "summary": "列出当前全部王国"
+    "name": "列出战役中的王国。",
+    "summary": "列出战役中的王国。",
+    "arguments": {}
   },
   "coop.debug.kingdom.list_decision_outcomes": {
-    "name": "列出决议结果",
-    "summary": "列出排队中王国决议的结果。"
+    "name": "列出王国决策的可能结果。",
+    "summary": "列出王国决策的可能结果。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。",
+      "decision_index": "从 1 开始的决策索引。"
+    }
   },
   "coop.debug.kingdom.list_kingdom_decisions": {
-    "name": "列出王国决议",
-    "summary": "列出指定王国的全部决议。"
+    "name": "列出王国排队中的决策。",
+    "summary": "列出王国排队中的决策。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。"
+    }
   },
   "coop.debug.kingdom.list_policies": {
-    "name": "列出政策",
-    "summary": "列出指定王国的现行政策。用于确认服务器上已结算的政策变更已复制到客户端。"
+    "name": "列出王国的现行政策。",
+    "summary": "列出王国的现行政策。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。"
+    }
   },
   "coop.debug.kingdom.make_peace": {
-    "name": "议和",
-    "summary": "直接在两个势力之间议和（在服务器上运行）。"
+    "name": "在服务器上让两个派系议和。",
+    "summary": "在服务器上让两个派系议和。",
+    "arguments": {
+      "faction1_id": "第一个已注册派系的 ID。",
+      "faction2_id": "第二个已注册派系的 ID。"
+    }
   },
   "coop.debug.kingdom.open": {
-    "name": "打开王国界面",
-    "summary": "打开王国界面"
+    "name": "在客户端打开王国界面。",
+    "summary": "在客户端打开王国界面。",
+    "arguments": {}
   },
   "coop.debug.kingdom.open_decision": {
-    "name": "打开决议界面",
-    "summary": "打开王国决议界面"
+    "name": "打开一个排队中的王国决策。",
+    "summary": "打开一个排队中的王国决策。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。",
+      "decision_index": "从 1 开始的决策索引。"
+    }
+  },
+  "coop.debug.kingdom.policy_timeout_capture": {
+    "name": "保存王国政策超时测试场景的快照。",
+    "summary": "保存王国政策超时测试场景的快照。",
+    "arguments": {}
+  },
+  "coop.debug.kingdom.policy_timeout_restore": {
+    "name": "还原王国政策超时测试场景。",
+    "summary": "还原王国政策超时测试场景。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。",
+      "proposer_clan_id": "已注册的提议者家族 ID。",
+      "policy_id": "已注册的政策 ID。",
+      "policy_was_active": "保存快照时该政策是否生效。"
+    }
+  },
+  "coop.debug.kingdom.policy_timeout_stage": {
+    "name": "布置王国政策超时测试场景。",
+    "summary": "布置王国政策超时测试场景。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。",
+      "proposer_clan_id": "已注册的提议者家族 ID。",
+      "policy_id": "已注册的政策 ID。",
+      "policy_was_active": "保存快照时该政策是否生效。"
+    }
+  },
+  "coop.debug.kingdom.policy_timeout_state": {
+    "name": "显示王国政策超时测试场景的状态。",
+    "summary": "显示王国政策超时测试场景的状态。",
+    "arguments": {}
+  },
+  "coop.debug.kingdom.policy_timeout_verify": {
+    "name": "验证王国政策超时测试场景。",
+    "summary": "验证王国政策超时测试场景。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。",
+      "policy_id": "已注册的政策 ID。",
+      "policy_was_active": "保存快照时该政策是否生效。"
+    }
   },
   "coop.debug.kingdom.remove_decision": {
-    "name": "移除决议",
-    "summary": "从王国移除一项决议"
+    "name": "从王国移除排队中的决策。",
+    "summary": "从王国移除排队中的决策。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。",
+      "decision_index": "从 1 开始的决策索引。"
+    }
   },
   "coop.debug.kingdom.remove_decision_usage": {
-    "name": "移除决议用法",
-    "summary": "返回 remove_decision 指令的用法。"
+    "name": "说明移除王国决策的参数。",
+    "summary": "说明移除王国决策的参数。",
+    "arguments": {}
   },
   "coop.debug.kingdom.resolve_decision": {
-    "name": "结算决议",
-    "summary": "在全部投票完成或共享截止时间到达后，结算排队中的玩家王国决议。"
+    "name": "结算排队中的王国决策。",
+    "summary": "结算排队中的王国决策。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。",
+      "decision_index": "从 1 开始的决策索引。"
+    }
   },
   "coop.debug.kingdom.screen_state": {
-    "name": "王国界面状态",
-    "summary": "查看王国界面状态"
+    "name": "显示王国界面的状态。",
+    "summary": "显示王国界面的状态。",
+    "arguments": {}
   },
   "coop.debug.kingdom.vote_decision": {
-    "name": "投票决议",
-    "summary": "由本地客户端对排队中的王国决议请求投票。"
+    "name": "请求客户端对王国决策投票。",
+    "summary": "请求客户端对王国决策投票。",
+    "arguments": {
+      "kingdom_id": "已注册的王国 ID。",
+      "decision_index": "从 1 开始的决策索引。",
+      "outcome": "从 1 开始的结果索引，或 abstain（弃权）。",
+      "support_weight": "支持权重的名称或数值。",
+      "is_final": "是否为最终投票。"
+    }
   },
   "coop.debug.location.add_character": {
-    "name": "添加角色",
-    "summary": "在服务器和客户端上向地点添加一名角色"
+    "name": "添加角色，用于联机调试。",
+    "summary": "添加角色，用于联机调试。",
+    "arguments": {
+      "locationId": "地点 ID。",
+      "characterObjectId": "角色对象 ID。"
+    }
   },
   "coop.debug.location.add_special_item": {
-    "name": "添加特殊物品",
-    "summary": "在服务器和客户端上向地点添加一件特殊物品"
+    "name": "添加特殊物品，用于联机调试。",
+    "summary": "添加特殊物品，用于联机调试。",
+    "arguments": {
+      "locationId": "地点 ID。",
+      "itemObjectId": "物品对象 ID。"
+    }
   },
   "coop.debug.location.enter": {
-    "name": "进入地点",
-    "summary": "进入地点"
+    "name": "进入相关状态，用于联机调试。",
+    "summary": "进入相关状态，用于联机调试。",
+    "arguments": {
+      "locationId": "地点 ID。"
+    }
   },
   "coop.debug.location.info": {
-    "name": "地点信息",
-    "summary": "显示单个地点的状态"
+    "name": "显示相关状态，用于联机调试。",
+    "summary": "显示相关状态，用于联机调试。",
+    "arguments": {
+      "locationId": "地点 ID。"
+    }
   },
   "coop.debug.location.leave": {
-    "name": "离开地点",
-    "summary": "离开地点"
+    "name": "离开相关状态，用于联机调试。",
+    "summary": "离开相关状态，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.location.list": {
-    "name": "列出地点",
-    "summary": "列出全部已登记地点"
+    "name": "列出相关状态，用于联机调试。",
+    "summary": "列出相关状态，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.location.list_characters": {
-    "name": "列出地点角色",
-    "summary": "列出当前在该地点的角色"
+    "name": "列出角色，用于联机调试。",
+    "summary": "列出角色，用于联机调试。",
+    "arguments": {
+      "locationId": "地点 ID。"
+    }
   },
   "coop.debug.location.list_special_items": {
-    "name": "列出特殊物品",
-    "summary": "列出地点的特殊物品"
+    "name": "列出特殊物品，用于联机调试。",
+    "summary": "列出特殊物品，用于联机调试。",
+    "arguments": {
+      "locationId": "地点 ID。"
+    }
   },
   "coop.debug.location.populate": {
-    "name": "填充地点",
-    "summary": "填充据点的各地点并广播名册快照，如同有玩家部队进入"
+    "name": "执行相关状态的操作，用于联机调试。",
+    "summary": "执行相关状态的操作，用于联机调试。",
+    "arguments": {
+      "settlementStringId": "据点的字符串 ID。"
+    }
   },
   "coop.debug.location.remove_all_characters": {
-    "name": "清除全部角色",
-    "summary": "在服务器和客户端上清空地点的角色列表"
+    "name": "移除所有角色，用于联机调试。",
+    "summary": "移除所有角色，用于联机调试。",
+    "arguments": {
+      "locationId": "地点 ID。"
+    }
   },
   "coop.debug.location.remove_character": {
-    "name": "移除角色",
-    "summary": "在服务器和客户端上从地点移除一名角色"
+    "name": "移除角色，用于联机调试。",
+    "summary": "移除角色，用于联机调试。",
+    "arguments": {
+      "locationId": "地点 ID。",
+      "characterObjectId": "角色对象 ID。"
+    }
   },
   "coop.debug.location.remove_special_item": {
-    "name": "移除特殊物品",
-    "summary": "在服务器和客户端上从地点移除一件特殊物品。原版只会从任务场景内移除特殊物品，因此该指令直接发布移除。"
+    "name": "移除特殊物品，用于联机调试。",
+    "summary": "移除特殊物品，用于联机调试。",
+    "arguments": {
+      "locationId": "地点 ID。",
+      "itemObjectId": "物品对象 ID。"
+    }
   },
   "coop.debug.map_camera.focus_main_party": {
-    "name": "对准主力部队",
-    "summary": "对准主力部队"
+    "name": "执行聚焦主部队的调试操作。",
+    "summary": "执行聚焦主部队的调试操作。",
+    "arguments": {}
   },
   "coop.debug.map_camera.state": {
-    "name": "镜头状态",
-    "summary": "获取镜头状态"
+    "name": "显示状态。",
+    "summary": "显示状态。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.battle_reward_client_state": {
+    "name": "显示客户端战斗奖励的状态。",
+    "summary": "显示客户端战斗奖励的状态。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.choose_battle_mode": {
+    "name": "执行选择战斗模式的调试操作。",
+    "summary": "执行选择战斗模式的调试操作。",
+    "arguments": {
+      "mode": "战斗模式。"
+    }
+  },
+  "coop.debug.map_event.click_deployment_ready": {
+    "name": "执行点击部署就绪的调试操作。",
+    "summary": "执行点击部署就绪的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.collapse_scoreboard_parties": {
+    "name": "执行折叠计分板部队列表的调试操作。",
+    "summary": "执行折叠计分板部队列表的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.complete_encounter_meeting": {
+    "name": "执行完成遭遇会面的调试操作。",
+    "summary": "执行完成遭遇会面的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.conversation_hold_state": {
+    "name": "显示对话保持状态。",
+    "summary": "显示对话保持状态。",
+    "arguments": {
+      "party_base_id": "部队基础对象 ID。"
+    }
+  },
+  "coop.debug.map_event.deployment_state": {
+    "name": "显示部署状态。",
+    "summary": "显示部署状态。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.encounter_state": {
+    "name": "显示遭遇状态。",
+    "summary": "显示遭遇状态。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.enter_current_battle": {
+    "name": "执行进入当前战斗的调试操作。",
+    "summary": "执行进入当前战斗的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.finish_current_encounter": {
+    "name": "执行结束当前遭遇的调试操作。",
+    "summary": "执行结束当前遭遇的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.finish_deployment": {
+    "name": "执行完成部署的调试操作。",
+    "summary": "执行完成部署的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.finish_non_battle_encounter": {
+    "name": "执行结束非战斗遭遇的调试操作。",
+    "summary": "执行结束非战斗遭遇的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.finish_player_encounter": {
+    "name": "执行结束玩家遭遇的调试操作。",
+    "summary": "执行结束玩家遭遇的调试操作。",
+    "arguments": {
+      "controller_id": "控制器 ID。"
+    }
+  },
+  "coop.debug.map_event.get_event": {
+    "name": "显示事件。",
+    "summary": "显示事件。",
+    "arguments": {
+      "map_event_id": "地图事件 ID。"
+    }
+  },
+  "coop.debug.map_event.get_events": {
+    "name": "显示事件列表。",
+    "summary": "显示事件列表。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.join_existing": {
+    "name": "执行加入现有战斗的调试操作。",
+    "summary": "执行加入现有战斗的调试操作。",
+    "arguments": {
+      "map_event_id": "地图事件 ID。",
+      "side": "战斗阵营。"
+    }
+  },
+  "coop.debug.map_event.kill_all_but_one": {
+    "name": "执行仅留一人存活的调试操作。",
+    "summary": "执行仅留一人存活的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.kill_enemy": {
+    "name": "执行击杀敌人的调试操作。",
+    "summary": "执行击杀敌人的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.kill_enemy_team": {
+    "name": "执行击杀敌方队伍的调试操作。",
+    "summary": "执行击杀敌方队伍的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.kill_own_team": {
+    "name": "执行击杀己方队伍的调试操作。",
+    "summary": "执行击杀己方队伍的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.kill_random_troop": {
+    "name": "执行击杀随机士兵的调试操作。",
+    "summary": "执行击杀随机士兵的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.kms": {
+    "name": "执行自杀的调试操作。",
+    "summary": "执行自杀的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.late_join_mode_cleanup": {
+    "name": "执行中途加入模式的清理调试操作。",
+    "summary": "执行中途加入模式的清理调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.late_join_mode_enter": {
+    "name": "执行中途加入模式的进入调试操作。",
+    "summary": "执行中途加入模式的进入调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.late_join_mode_join": {
+    "name": "执行中途加入模式的加入调试操作。",
+    "summary": "执行中途加入模式的加入调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.late_join_mode_state": {
+    "name": "显示中途加入模式的状态。",
+    "summary": "显示中途加入模式的状态。",
+    "arguments": {
+      "controller_id": "控制器 ID。"
+    }
+  },
+  "coop.debug.map_event.leave_battle": {
+    "name": "执行离开战斗的调试操作。",
+    "summary": "执行离开战斗的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.leave_settlement": {
+    "name": "执行离开据点的调试操作。",
+    "summary": "执行离开据点的调试操作。",
+    "arguments": {
+      "controller_id": "控制器 ID。"
+    }
+  },
+  "coop.debug.map_event.list_player_encounter": {
+    "name": "显示玩家遭遇。",
+    "summary": "显示玩家遭遇。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.peace_pursuit_state": {
+    "name": "显示议和后的追击状态。",
+    "summary": "显示议和后的追击状态。",
+    "arguments": {
+      "controller_id": "控制器 ID。",
+      "party_string_id": "部队的字符串 ID。"
+    }
+  },
+  "coop.debug.map_event.player_interaction_state": {
+    "name": "显示玩家交互状态。",
+    "summary": "显示玩家交互状态。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.prisoner_prompt": {
+    "name": "执行俘虏提示的调试操作。",
+    "summary": "执行俘虏提示的调试操作。",
+    "arguments": {
+      "action": "操作。"
+    }
+  },
+  "coop.debug.map_event.prisoner_prompt_state": {
+    "name": "显示俘虏提示的状态。",
+    "summary": "显示俘虏提示的状态。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.request_player_field_battle": {
+    "name": "执行请求玩家野战的调试操作。",
+    "summary": "执行请求玩家野战的调试操作。",
+    "arguments": {
+      "defender_mobile_party_id": "防守方移动部队 ID。"
+    }
+  },
+  "coop.debug.map_event.restore_player_field_battle": {
+    "name": "还原或清除玩家野战的还原状态。",
+    "summary": "还原或清除玩家野战的还原状态。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.retreat_confirmation": {
+    "name": "执行撤退确认的调试操作。",
+    "summary": "执行撤退确认的调试操作。",
+    "arguments": {
+      "action": "操作。"
+    }
+  },
+  "coop.debug.map_event.scoreboard_state": {
+    "name": "显示计分板的状态。",
+    "summary": "显示计分板的状态。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.start_attack_mission": {
+    "name": "执行启动攻击任务场景的调试操作。",
+    "summary": "执行启动攻击任务场景的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.start_looter": {
+    "name": "执行启动劫匪战斗的调试操作。",
+    "summary": "执行启动劫匪战斗的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.start_nearest_bandit_attack": {
+    "name": "执行启动最近匪徒进攻的调试操作。",
+    "summary": "执行启动最近匪徒进攻的调试操作。",
+    "arguments": {
+      "controller_id": "控制器 ID。",
+      "excluded_party_id": "要排除的部队 ID。"
+    }
+  },
+  "coop.debug.map_event.start_nearest_looter": {
+    "name": "执行启动最近劫匪战斗的调试操作。",
+    "summary": "执行启动最近劫匪战斗的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.map_event.start_player_field_battle": {
+    "name": "执行启动玩家野战的调试操作。",
+    "summary": "执行启动玩家野战的调试操作。",
+    "arguments": {
+      "attacker_mobile_party_id": "进攻方移动部队 ID。",
+      "defender_mobile_party_id": "防守方移动部队 ID。"
+    }
+  },
+  "coop.debug.map_event.submit_player_interaction": {
+    "name": "执行提交玩家交互的调试操作。",
+    "summary": "执行提交玩家交互的调试操作。",
+    "arguments": {
+      "option": "选项。"
+    }
+  },
+  "coop.debug.map_event.test_peace_stops_pursuit": {
+    "name": "执行测试议和停止追击的调试操作。",
+    "summary": "执行测试议和停止追击的调试操作。",
+    "arguments": {
+      "controller_id": "控制器 ID。",
+      "party_string_id": "部队的字符串 ID。"
+    }
+  },
+  "coop.debug.map_event.toggle_scoreboard": {
+    "name": "执行切换计分板显示的调试操作。",
+    "summary": "执行切换计分板显示的调试操作。",
+    "arguments": {}
   },
   "coop.debug.mapevent.allow_raid_ai_intervention": {
-    "name": "允许袭击 AI 介入",
-    "summary": "允许袭击 AI 介入"
-  },
-  "coop.debug.mapevent.bandit_attack_fixture_prepare": {
-    "name": "准备土匪袭击夹具",
-    "summary": "准备可还原的精确土匪袭击测试夹具，用于取证。"
-  },
-  "coop.debug.mapevent.bandit_attack_fixture_restore": {
-    "name": "恢复土匪袭击夹具",
-    "summary": "结束土匪袭击并恢复双方部队的原始行为。"
-  },
-  "coop.debug.mapevent.bandit_attack_fixture_start": {
-    "name": "开始土匪袭击夹具",
-    "summary": "由指定土匪部队开始已准备好的服务器权威袭击。"
-  },
-  "coop.debug.mapevent.bandit_attack_fixture_state": {
-    "name": "土匪袭击夹具状态",
-    "summary": "在服务器或客户端上报告精确土匪袭击状态。"
-  },
-  "coop.debug.mapevent.battle_reward_client_state": {
-    "name": "战斗奖励客户端状态",
-    "summary": "报告本地玩家已暂存或已应用的原版战斗奖励。"
-  },
-  "coop.debug.mapevent.battle_reward_fixture_begin_rout": {
-    "name": "开始战斗奖励夹具溃逃",
-    "summary": "开始战斗奖励测试夹具溃逃"
-  },
-  "coop.debug.mapevent.battle_reward_fixture_join": {
-    "name": "加入战斗奖励夹具",
-    "summary": "将第二名玩家加入进行中的 #2308 战斗并打开遭遇。"
-  },
-  "coop.debug.mapevent.battle_reward_fixture_prepare": {
-    "name": "准备战斗奖励夹具",
-    "summary": "关闭 #2308 实机测试存档载入的未完成空闲玩家遭遇。"
-  },
-  "coop.debug.mapevent.battle_reward_fixture_reinforce": {
-    "name": "增援战斗奖励夹具",
-    "summary": "增援战斗奖励测试夹具"
-  },
-  "coop.debug.mapevent.battle_reward_fixture_restore": {
-    "name": "恢复战斗奖励夹具",
-    "summary": "结束 #2308 战斗，移除土匪，并恢复两名玩家。"
-  },
-  "coop.debug.mapevent.battle_reward_fixture_route_enemies": {
-    "name": "击溃战斗奖励夹具敌人",
-    "summary": "击溃战斗奖励测试夹具的敌人"
-  },
-  "coop.debug.mapevent.battle_reward_fixture_start": {
-    "name": "开始战斗奖励夹具",
-    "summary": "创建来自 #2308 的双人迟到加入野战。"
-  },
-  "coop.debug.mapevent.battle_reward_fixture_state": {
-    "name": "战斗奖励夹具状态",
-    "summary": "报告进行中 #2308 夹具的贡献和名册奖励差值。"
-  },
-  "coop.debug.mapevent.choose_battle_mode": {
-    "name": "选择战斗模式",
-    "summary": "运行遭遇菜单的任务或模拟后果，供自动战斗测试使用。"
-  },
-  "coop.debug.mapevent.click_deployment_ready": {
-    "name": "点击部署就绪",
-    "summary": "点击部署就绪"
-  },
-  "coop.debug.mapevent.collapse_scoreboard_parties": {
-    "name": "折叠计分板部队",
-    "summary": "折叠计分板部队"
-  },
-  "coop.debug.mapevent.complete_encounter_meeting": {
-    "name": "完成遭遇会面",
-    "summary": "关闭当前遭遇对话，以便原版进入战斗选项。"
-  },
-  "coop.debug.mapevent.conversation_hold_state": {
-    "name": "对话保持状态",
-    "summary": "报告服务器当前是否为对话保持一个 AI PartyBase。"
-  },
-  "coop.debug.mapevent.deployment_state": {
-    "name": "部署状态",
-    "summary": "查看部署状态"
-  },
-  "coop.debug.mapevent.encounter_state": {
-    "name": "遭遇状态",
-    "summary": "打印当前遭遇和主力部队地图事件状态的精简快照，便于拆卸排查。战斗结束后在每个客户端运行，可发现未拆卸的遭遇，例如 PlayerEncounter.Current 仍为 PRESENT，或 MainParty.MapEvent 仍挂在已结束的事件上。与完整反射转储的 list_player_encounter 不同，这段足够短，便于跨客户端对比。"
-  },
-  "coop.debug.mapevent.enter_current_battle": {
-    "name": "进入当前战斗",
-    "summary": "进入当前战斗"
-  },
-  "coop.debug.mapevent.finish_current_encounter": {
-    "name": "结束当前遭遇",
-    "summary": "结束当前遭遇"
-  },
-  "coop.debug.mapevent.finish_deployment": {
-    "name": "结束部署",
-    "summary": "结束部署"
-  },
-  "coop.debug.mapevent.finish_non_battle_encounter": {
-    "name": "结束非战斗遭遇",
-    "summary": "结束非战斗遭遇"
-  },
-  "coop.debug.mapevent.finish_player_encounter": {
-    "name": "结束玩家遭遇",
-    "summary": "通过现有权威离开路径关闭已连接玩家的遭遇。"
-  },
-  "coop.debug.mapevent.get_event": {
-    "name": "获取事件",
-    "summary": "获取事件"
-  },
-  "coop.debug.mapevent.get_events": {
-    "name": "获取事件列表",
-    "summary": "获取事件列表"
-  },
-  "coop.debug.mapevent.join_existing": {
-    "name": "加入已有战斗",
-    "summary": "加入已有战斗"
-  },
-  "coop.debug.mapevent.kill_all_but_one": {
-    "name": "杀到只剩一人",
-    "summary": "杀死当前地图事件敌方除一人外的全部士兵。"
-  },
-  "coop.debug.mapevent.kill_enemy": {
-    "name": "杀死一名敌人",
-    "summary": "杀死一名敌人"
-  },
-  "coop.debug.mapevent.kill_enemy_team": {
-    "name": "杀死敌方全队",
-    "summary": "杀死敌方全队"
-  },
-  "coop.debug.mapevent.kill_own_team": {
-    "name": "杀死己方全队",
-    "summary": "杀死己方全队"
-  },
-  "coop.debug.mapevent.kill_random_troop": {
-    "name": "杀死随机士兵",
-    "summary": "从当前地图事件的敌方随机杀死一名士兵。"
-  },
-  "coop.debug.mapevent.kms": {
-    "name": "杀死玩家单位",
-    "summary": "杀死玩家单位"
-  },
-  "coop.debug.mapevent.late_join_mode_cleanup": {
-    "name": "迟到加入清理",
-    "summary": "移除夹具野战并恢复各部队的移动状态。"
-  },
-  "coop.debug.mapevent.late_join_mode_enter": {
-    "name": "迟到加入进入",
-    "summary": "将迟到加入者的进攻请求走真实的任务开始处理。"
-  },
-  "coop.debug.mapevent.late_join_mode_fixture": {
-    "name": "迟到加入夹具",
-    "summary": "创建服务器权威战斗，在第二名玩家加入前占据任务模式，再把第二名玩家的加入走真实请求处理。"
-  },
-  "coop.debug.mapevent.late_join_mode_join": {
-    "name": "迟到加入汇合",
-    "summary": "在第一名玩家进入任务后，将等待中玩家按进攻方加入。"
-  },
-  "coop.debug.mapevent.late_join_mode_state": {
-    "name": "迟到加入状态",
-    "summary": "报告玩家的地图事件成员身份以及已知的权威战斗模式。"
-  },
-  "coop.debug.mapevent.leave_battle": {
-    "name": "离开战斗",
-    "summary": "离开战斗"
-  },
-  "coop.debug.mapevent.leave_settlement": {
-    "name": "离开据点",
-    "summary": "离开据点"
-  },
-  "coop.debug.mapevent.list_player_encounter": {
-    "name": "列出玩家遭遇",
-    "summary": "列出当前 PlayerEncounter 的字段和属性。"
-  },
-  "coop.debug.mapevent.peace_pursuit_fixture": {
-    "name": "议和追击夹具",
-    "summary": "找一支中立 AI 部队，可在不改变其原始移动状态的情况下使用。"
-  },
-  "coop.debug.mapevent.peace_pursuit_state": {
-    "name": "议和追击状态",
-    "summary": "报告当前机器上的追击测试部队状态。"
-  },
-  "coop.debug.mapevent.player_interaction_state": {
-    "name": "玩家互动状态",
-    "summary": "查看玩家互动状态"
-  },
-  "coop.debug.mapevent.request_player_field_battle": {
-    "name": "请求玩家野战",
-    "summary": "请求玩家野战"
-  },
-  "coop.debug.mapevent.restore_player_field_battle": {
-    "name": "恢复玩家野战",
-    "summary": "恢复玩家野战"
-  },
-  "coop.debug.mapevent.retreat_confirmation": {
-    "name": "撤退确认",
-    "summary": "显示、关闭或报告实机撤退确认，供自动退出战斗测试使用。"
-  },
-  "coop.debug.mapevent.scoreboard_state": {
-    "name": "计分板状态",
-    "summary": "查看计分板状态"
-  },
-  "coop.debug.mapevent.start_attack_mission": {
-    "name": "开始进攻任务",
-    "summary": "通过正常的客户端/服务器任务开始关卡启动当前战斗。"
-  },
-  "coop.debug.mapevent.start_looter": {
-    "name": "开始掠夺者战斗",
-    "summary": "与掠夺者开战"
-  },
-  "coop.debug.mapevent.start_nearest_bandit_attack": {
-    "name": "开始最近土匪袭击",
-    "summary": "开始一次针对已连接玩家的服务器权威土匪袭击遭遇。"
-  },
-  "coop.debug.mapevent.start_nearest_looter": {
-    "name": "开始最近掠夺者遭遇",
-    "summary": "在玩家部队与最近的活跃土匪/掠夺者部队之间强制开启遭遇，这样不必追着打也能进入投降/招募对话。在客户端运行（使用玩家主力部队）。带一支远大于土匪的部队，他们才会提出投降或加入。"
-  },
-  "coop.debug.mapevent.start_player_field_battle": {
-    "name": "开始玩家野战",
-    "summary": "开始玩家野战"
-  },
-  "coop.debug.mapevent.submit_player_interaction": {
-    "name": "提交玩家互动",
-    "summary": "提交玩家互动"
-  },
-  "coop.debug.mapevent.test_peace_stops_pursuit": {
-    "name": "测试议和停止追击",
-    "summary": "让选定的中立 AI 部队追击已连接玩家，然后议和。"
-  },
-  "coop.debug.mapevent.toggle_scoreboard": {
-    "name": "切换计分板",
-    "summary": "切换计分板"
-  },
-  "coop.debug.mapevent.wounded_allied_fixture_restore": {
-    "name": "恢复受伤盟军夹具",
-    "summary": "结束 #2097 夹具，并恢复玩家原来的英雄、士气和名册状态。"
-  },
-  "coop.debug.mapevent.wounded_allied_fixture_start": {
-    "name": "开始受伤盟军夹具",
-    "summary": "创建来自 #2097 的受伤、无兵玩家加上健康盟军的野战遭遇。"
-  },
-  "coop.debug.mapevent.wounded_allied_fixture_state": {
-    "name": "受伤盟军夹具状态",
-    "summary": "报告 #2097 夹具状态，并在适用时报告本地已修补的下令进攻选项。"
+    "name": "控制劫掠中的 AI 干预，用于联机调试。",
+    "summary": "控制劫掠中的 AI 干预，用于联机调试。",
+    "arguments": {
+      "mode": "模式。"
+    }
   },
   "coop.debug.metrics.party_sync_performance_logs": {
-    "name": "部队同步性能日志",
-    "summary": "部队同步性能日志"
+    "name": "执行部队同步性能日志的调试操作。",
+    "summary": "执行部队同步性能日志的调试操作。",
+    "arguments": {
+      "mode": "on、off 或 status。",
+      "seconds": "启用时的日志记录时长，单位为秒。",
+      "file_name": "启用时的输出文件名。"
+    }
   },
-  "coop.debug.mobileparty.addprisoners": {
-    "name": "添加俘虏",
-    "summary": "向英雄部队添加俘虏"
+  "coop.debug.mobile_party.add_prisoners": {
+    "name": "执行添加俘虏的调试操作。",
+    "summary": "执行添加俘虏的调试操作。",
+    "arguments": {
+      "hero_name": "英雄名称。"
+    }
   },
-  "coop.debug.mobileparty.addtroops": {
-    "name": "添加士兵",
-    "summary": "向英雄部队添加士兵"
+  "coop.debug.mobile_party.add_troop_xp": {
+    "name": "执行增加士兵经验的调试操作。",
+    "summary": "执行增加士兵经验的调试操作。",
+    "arguments": {
+      "hero_name": "英雄名称。",
+      "xp_amount": "经验数量。"
+    }
   },
-  "coop.debug.mobileparty.addtroopxp": {
-    "name": "添加士兵经验",
-    "summary": "为英雄部队中的全部士兵增加经验"
+  "coop.debug.mobile_party.add_troops": {
+    "name": "执行添加士兵的调试操作。",
+    "summary": "执行添加士兵的调试操作。",
+    "arguments": {
+      "hero_name": "英雄名称。"
+    }
+  },
+  "coop.debug.mobile_party.character_ids": {
+    "name": "执行角色 ID 的调试操作。",
+    "summary": "执行角色 ID 的调试操作。",
+    "arguments": {
+      "hero_name_or_id": "英雄名称或 ID。"
+    }
+  },
+  "coop.debug.mobile_party.clan_party_transfer_screen_state": {
+    "name": "显示家族部队转移界面的状态。",
+    "summary": "显示家族部队转移界面的状态。",
+    "arguments": {
+      "clan_party_id": "家族部队 ID。",
+      "character_id": "角色 ID。",
+      "expected_state": "预期界面状态。"
+    }
+  },
+  "coop.debug.mobile_party.commit_clan_party_transfer": {
+    "name": "执行提交家族部队转移的调试操作。",
+    "summary": "执行提交家族部队转移的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.mobile_party.commit_garrison_xp_withdrawal": {
+    "name": "执行提交驻军经验转出的调试操作。",
+    "summary": "执行提交驻军经验转出的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.mobile_party.declare_war": {
+    "name": "执行宣战的调试操作。",
+    "summary": "执行宣战的调试操作。",
+    "arguments": {
+      "party_id": "部队 ID。",
+      "settlement_id": "据点 ID。"
+    }
+  },
+  "coop.debug.mobile_party.imprison_companion": {
+    "name": "执行囚禁同伴的调试操作。",
+    "summary": "执行囚禁同伴的调试操作。",
+    "arguments": {
+      "captor_hero": "俘虏者英雄。",
+      "prisoner_hero": "被俘英雄。"
+    }
+  },
+  "coop.debug.mobile_party.move_offset": {
+    "name": "执行按偏移移动的调试操作。",
+    "summary": "执行按偏移移动的调试操作。",
+    "arguments": {
+      "offset_x": "x 方向偏移量。",
+      "offset_y": "y 方向偏移量。"
+    }
+  },
+  "coop.debug.mobile_party.move_to_settlement": {
+    "name": "执行移动到据点的调试操作。",
+    "summary": "执行移动到据点的调试操作。",
+    "arguments": {
+      "party_id": "部队 ID。",
+      "settlement_id": "据点 ID。"
+    }
+  },
+  "coop.debug.mobile_party.open_clan_party_transfer": {
+    "name": "执行打开家族部队转移界面的调试操作。",
+    "summary": "执行打开家族部队转移界面的调试操作。",
+    "arguments": {
+      "clan_party_id": "家族部队 ID。"
+    }
+  },
+  "coop.debug.mobile_party.party_screen_troop_state": {
+    "name": "显示部队界面的士兵状态。",
+    "summary": "显示部队界面的士兵状态。",
+    "arguments": {
+      "character_id": "角色 ID。"
+    }
+  },
+  "coop.debug.mobile_party.position": {
+    "name": "执行位置的调试操作。",
+    "summary": "执行位置的调试操作。",
+    "arguments": {
+      "party_id": "部队 ID。"
+    }
+  },
+  "coop.debug.mobile_party.remove_prisoners": {
+    "name": "执行移除俘虏的调试操作。",
+    "summary": "执行移除俘虏的调试操作。",
+    "arguments": {
+      "hero_name": "英雄名称。"
+    }
+  },
+  "coop.debug.mobile_party.restore_position": {
+    "name": "将部队还原到战役地图位置和驻留状态。",
+    "summary": "将部队还原到战役地图位置和驻留状态。",
+    "arguments": {
+      "party_id": "已注册的移动部队 ID。",
+      "x": "战役地图的 x 坐标。",
+      "y": "战役地图的 y 坐标。",
+      "is_on_land": "还原的位置是否在陆地上。"
+    }
+  },
+  "coop.debug.mobile_party.select_party_screen_troop": {
+    "name": "执行选择部队界面士兵的调试操作。",
+    "summary": "执行选择部队界面士兵的调试操作。",
+    "arguments": {
+      "character_id": "角色 ID。"
+    }
+  },
+  "coop.debug.mobile_party.set_troop_state": {
+    "name": "显示设置士兵状态的信息。",
+    "summary": "显示设置士兵状态的信息。",
+    "arguments": {
+      "party_id": "部队 ID。",
+      "character_id": "角色 ID。",
+      "exists": "是否存在。",
+      "number": "数量。",
+      "wounded_count": "受伤人数。",
+      "xp": "经验值。"
+    }
+  },
+  "coop.debug.mobile_party.set_troop_wounded": {
+    "name": "执行设置士兵受伤的调试操作。",
+    "summary": "执行设置士兵受伤的调试操作。",
+    "arguments": {
+      "party_id": "部队 ID。",
+      "character_id": "角色 ID。",
+      "wounded_count": "受伤人数。"
+    }
+  },
+  "coop.debug.mobile_party.siege_buff": {
+    "name": "执行攻城强化的调试操作。",
+    "summary": "执行攻城强化的调试操作。",
+    "arguments": {
+      "party_id": "部队 ID。"
+    }
+  },
+  "coop.debug.mobile_party.snapshot_prison": {
+    "name": "执行保存监狱快照的调试操作。",
+    "summary": "执行保存监狱快照的调试操作。",
+    "arguments": {
+      "hero_name_or_id": "英雄名称或 ID。"
+    }
+  },
+  "coop.debug.mobile_party.stage_clan_party_transfer": {
+    "name": "执行准备家族部队转移的调试操作。",
+    "summary": "执行准备家族部队转移的调试操作。",
+    "arguments": {
+      "clan_party_id": "家族部队 ID。",
+      "character_id": "角色 ID。"
+    }
+  },
+  "coop.debug.mobile_party.stage_garrison_xp_withdrawal": {
+    "name": "执行布置驻军经验转出测试的调试操作。",
+    "summary": "执行布置驻军经验转出测试的调试操作。",
+    "arguments": {
+      "garrison_party_id": "驻军部队 ID。",
+      "character_id": "角色 ID。"
+    }
+  },
+  "coop.debug.mobile_party.stage_party_screen_transfer": {
+    "name": "执行准备部队界面转移的调试操作。",
+    "summary": "执行准备部队界面转移的调试操作。",
+    "arguments": {
+      "character_id": "角色 ID。"
+    }
+  },
+  "coop.debug.mobile_party.upgrade_party_screen_troop": {
+    "name": "执行升级部队界面士兵的调试操作。",
+    "summary": "执行升级部队界面士兵的调试操作。",
+    "arguments": {
+      "character_id": "角色 ID。",
+      "upgrade_target_index": "升级目标索引。"
+    }
+  },
+  "coop.debug.mobile_party.who_am_i": {
+    "name": "执行查询自身身份的调试操作。",
+    "summary": "执行查询自身身份的调试操作。",
+    "arguments": {}
   },
   "coop.debug.mobileparty.attachment_ids": {
-    "name": "附属编号",
-    "summary": "查看附属编号"
+    "name": "执行 ID 操作，用于联机调试。",
+    "summary": "执行 ID 操作，用于联机调试。",
+    "arguments": {
+      "partyStringId": "部队的字符串 ID。"
+    }
   },
   "coop.debug.mobileparty.audit": {
-    "name": "核对部队",
-    "summary": "核对部队"
-  },
-  "coop.debug.mobileparty.characterids": {
-    "name": "角色编号",
-    "summary": "按全名或英雄编号查看英雄部队中的角色编号。"
-  },
-  "coop.debug.mobileparty.clan_party_transfer_screen_state": {
-    "name": "调拨界面状态",
-    "summary": "查看调拨界面状态"
-  },
-  "coop.debug.mobileparty.clan_party_xp_fixture_capture": {
-    "name": "捕获",
-    "summary": "捕获氏族部队经验测试夹具"
-  },
-  "coop.debug.mobileparty.clan_party_xp_fixture_restore": {
-    "name": "恢复",
-    "summary": "恢复氏族部队经验测试夹具"
-  },
-  "coop.debug.mobileparty.clan_party_xp_fixture_setup": {
-    "name": "设置",
-    "summary": "设置氏族部队经验测试夹具"
-  },
-  "coop.debug.mobileparty.clan_party_xp_fixture_state": {
-    "name": "状态",
-    "summary": "查看氏族部队经验测试夹具状态"
-  },
-  "coop.debug.mobileparty.clan_party_xp_fixture_verify_restore": {
-    "name": "验证恢复",
-    "summary": "验证恢复"
-  },
-  "coop.debug.mobileparty.commit_clan_party_transfer": {
-    "name": "提交调拨",
-    "summary": "提交调拨"
-  },
-  "coop.debug.mobileparty.commit_garrison_xp_withdrawal": {
-    "name": "提交抽出",
-    "summary": "提交抽出"
+    "name": "审计相关状态，用于联机调试。",
+    "summary": "审计相关状态，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.mobileparty.component_info": {
-    "name": "组件信息",
-    "summary": "查看组件信息"
+    "name": "执行信息操作，用于联机调试。",
+    "summary": "执行信息操作，用于联机调试。",
+    "arguments": {
+      "partyStringId": "部队的字符串 ID。"
+    }
   },
-  "coop.debug.mobileparty.createParty": {
-    "name": "创建部队",
-    "summary": "创建新部队"
+  "coop.debug.mobileparty.create_party": {
+    "name": "创建部队，用于联机调试。",
+    "summary": "创建部队，用于联机调试。",
+    "arguments": {
+      "heroId": "英雄 ID。",
+      "settlementId": "据点 ID。"
+    }
   },
-  "coop.debug.mobileparty.declare_war": {
-    "name": "宣战",
-    "summary": "在部队所属势力与据点所属势力之间宣战，以便该部队围攻该据点。独立氏族也可用（不必有王国）。仅服务器；战争会复制。"
+  "coop.debug.mobileparty.destroy_all_bandit_parties": {
+    "name": "解散所有匪徒部队，用于联机调试。",
+    "summary": "解散所有匪徒部队，用于联机调试。",
+    "arguments": {}
   },
-  "coop.debug.mobileparty.destroyAllBanditParties": {
-    "name": "摧毁全部土匪部队",
-    "summary": "摧毁全部土匪部队"
-  },
-  "coop.debug.mobileparty.destroyParty": {
-    "name": "摧毁部队",
-    "summary": "摧毁部队"
-  },
-  "coop.debug.mobileparty.follow_fixture_follow": {
-    "name": "跟随",
-    "summary": "跟随"
-  },
-  "coop.debug.mobileparty.follow_fixture_move_target": {
-    "name": "移动目标",
-    "summary": "移动目标"
-  },
-  "coop.debug.mobileparty.follow_fixture_restore": {
-    "name": "恢复",
-    "summary": "恢复"
-  },
-  "coop.debug.mobileparty.follow_fixture_setup": {
-    "name": "设置",
-    "summary": "设置"
-  },
-  "coop.debug.mobileparty.follow_fixture_state": {
-    "name": "状态",
-    "summary": "查看跟随测试夹具状态"
-  },
-  "coop.debug.mobileparty.garrison_xp_fixture_capture": {
-    "name": "捕获",
-    "summary": "捕获驻军经验测试夹具"
-  },
-  "coop.debug.mobileparty.garrison_xp_fixture_restore": {
-    "name": "恢复",
-    "summary": "恢复驻军经验测试夹具"
-  },
-  "coop.debug.mobileparty.garrison_xp_fixture_screen_state": {
-    "name": "界面状态",
-    "summary": "查看界面状态"
-  },
-  "coop.debug.mobileparty.garrison_xp_fixture_setup": {
-    "name": "设置",
-    "summary": "设置驻军经验测试夹具"
-  },
-  "coop.debug.mobileparty.garrison_xp_fixture_state": {
-    "name": "状态",
-    "summary": "查看驻军经验测试夹具状态"
-  },
-  "coop.debug.mobileparty.garrison_xp_fixture_verify_restore": {
-    "name": "验证恢复",
-    "summary": "验证恢复"
-  },
-  "coop.debug.mobileparty.imprison_companion": {
-    "name": "囚禁同伴",
-    "summary": "把一名英雄（例如玩家同伴）放入另一英雄部队的监狱名册，以便准备同伴保留测试。参数：俘获者英雄名，俘虏英雄名。"
+  "coop.debug.mobileparty.destroy_party": {
+    "name": "解散部队，用于联机调试。",
+    "summary": "解散部队，用于联机调试。",
+    "arguments": {
+      "mobilePartyId": "移动部队 ID。"
+    }
   },
   "coop.debug.mobileparty.info": {
-    "name": "部队信息",
-    "summary": "查看部队信息"
+    "name": "显示相关状态，用于联机调试。",
+    "summary": "显示相关状态，用于联机调试。",
+    "arguments": {
+      "partyStringId": "部队的字符串 ID。"
+    }
   },
   "coop.debug.mobileparty.list": {
-    "name": "列出部队",
-    "summary": "列出部队"
-  },
-  "coop.debug.mobileparty.move_offset": {
-    "name": "移动偏移",
-    "summary": "发出本地玩家部队的点移动命令，以便自动实机测试确认恢复后的部队接受客户端控制，并向服务器发送正常行为更新。"
-  },
-  "coop.debug.mobileparty.move_to_settlement": {
-    "name": "移动到据点",
-    "summary": "移动到据点"
-  },
-  "coop.debug.mobileparty.open_clan_party_transfer": {
-    "name": "打开部队界面",
-    "summary": "打开部队界面"
-  },
-  "coop.debug.mobileparty.open_garrison_xp_fixture": {
-    "name": "打开驻军",
-    "summary": "打开驻军"
-  },
-  "coop.debug.mobileparty.party_screen_troop_state": {
-    "name": "部队界面士兵状态",
-    "summary": "报告一个打开的部队界面行的可见名册、完成基线和已渲染 VM 状态。"
-  },
-  "coop.debug.mobileparty.position": {
-    "name": "位置",
-    "summary": "报告精确的部队位置和移动模式，供跨客户端实机测试对比。"
-  },
-  "coop.debug.mobileparty.removeprisoners": {
-    "name": "移除俘虏",
-    "summary": "移除英雄部队中的全部俘虏"
-  },
-  "coop.debug.mobileparty.restore_position": {
-    "name": "恢复位置",
-    "summary": "在自动实机测试后，将部队恢复到精确战役地图位置并保持待命。"
-  },
-  "coop.debug.mobileparty.select_party_screen_troop": {
-    "name": "选择部队界面士兵",
-    "summary": "选择真实的右侧成员行，以便实机测试观察其行内升级选项。"
-  },
-  "coop.debug.mobileparty.set_troop_state": {
-    "name": "设置士兵状态",
-    "summary": "设置名册中一名士兵的精确状态，并报告被替换的状态。"
-  },
-  "coop.debug.mobileparty.set_troop_wounded": {
-    "name": "设置士兵受伤",
-    "summary": "设置名册中一名士兵的受伤数量，供实机同步测试。"
+    "name": "列出相关状态，用于联机调试。",
+    "summary": "列出相关状态，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.mobileparty.set_wage_limit_updated": {
-    "name": "设置工资上限已更新",
-    "summary": "仅用于设置无限工资变更测试"
+    "name": "设置工资上限更新状态，用于联机调试。",
+    "summary": "设置工资上限更新状态，用于联机调试。",
+    "arguments": {
+      "partyStringId": "部队的字符串 ID。",
+      "value": "数值。"
+    }
   },
   "coop.debug.mobileparty.set_wage_unlimited": {
-    "name": "设置无限工资",
-    "summary": "仅用于设置无限工资变更测试"
-  },
-  "coop.debug.mobileparty.siege_buff": {
-    "name": "攻城强化",
-    "summary": "将部队补到 2000 名士兵，拉满士气，强制高地图速度，并补充粮食，以便行军并打赢攻城测试且不会饿死。仅服务器；士兵和物品添加会通过名册同步复制。在拥有该部队的客户端上用 coop.debug.mobileparty.whoami 获取部队编号。"
-  },
-  "coop.debug.mobileparty.snapshot_prison": {
-    "name": "快照监狱",
-    "summary": "对英雄部队的监狱名册应用整本名册快照并去掉英雄俘虏，如同服务器释放了他们。在监狱名册上驱动 TroopRosterInterface.UpdateWithData：英雄俘虏（包括玩家同伴）必须被移除而不是保留，且移除会复制到客户端。"
+    "name": "设置工资无限制状态，用于联机调试。",
+    "summary": "设置工资无限制状态，用于联机调试。",
+    "arguments": {
+      "partyStringId": "部队的字符串 ID。",
+      "value": "数值。"
+    }
   },
   "coop.debug.mobileparty.spawn_test_parties": {
-    "name": "生成测试部队",
-    "summary": "生成测试部队"
-  },
-  "coop.debug.mobileparty.stage_clan_party_transfer": {
-    "name": "暂存调拨",
-    "summary": "暂存调拨"
-  },
-  "coop.debug.mobileparty.stage_garrison_xp_withdrawal": {
-    "name": "暂存抽出",
-    "summary": "暂存抽出"
-  },
-  "coop.debug.mobileparty.stage_party_screen_transfer": {
-    "name": "暂存部队界面调拨",
-    "summary": "创建真实的待处理部队界面调拨，供实机同步测试。"
-  },
-  "coop.debug.mobileparty.upgrade_party_screen_troop": {
-    "name": "升级部队界面士兵",
-    "summary": "应用与部队界面行相同的升级命令。"
+    "name": "生成测试部队，用于联机调试。",
+    "summary": "生成测试部队，用于联机调试。",
+    "arguments": {
+      "count": "数量。",
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.mobileparty.verify_ai_authority": {
-    "name": "验证 AI 权威",
-    "summary": "验证 AI 权威"
+    "name": "验证 AI 权威端，用于联机调试。",
+    "summary": "验证 AI 权威端，用于联机调试。",
+    "arguments": {
+      "mobilePartyId": "移动部队 ID。"
+    }
   },
-  "coop.debug.mobileparty.whoami": {
-    "name": "我是谁",
-    "summary": "打印本实例控制的英雄及其编号。在客户端运行以获知自己英雄的 StringId，再把它传给 imprison_companion / snapshot_prison，以便在多名“RandomPlayer”重名时对准你自己的部队。"
+  "coop.debug.mod_config.list": {
+    "name": "显示列表。",
+    "summary": "显示列表。",
+    "arguments": {}
   },
-  "coop.debug.modconfig.list": {
-    "name": "列出选项",
-    "summary": "列出模组选项"
+  "coop.debug.party_visuals.buffer_state": {
+    "name": "显示缓冲区状态。",
+    "summary": "显示缓冲区状态。",
+    "arguments": {}
   },
-  "coop.debug.partyvisuals.buffer_state": {
-    "name": "缓冲状态",
-    "summary": "查看缓冲状态"
+  "coop.delete_player": {
+    "name": "向服务器请求删除本地玩家。",
+    "summary": "向服务器请求删除本地玩家。",
+    "arguments": {}
+  },
+  "coop.unstuck": {
+    "name": "执行解除卡住的调试操作。",
+    "summary": "执行解除卡住的调试操作。",
+    "arguments": {}
   },
   "coop.debug.players.list": {
-    "name": "列出玩家",
-    "summary": "列出玩家"
+    "name": "列出已注册的联机玩家。",
+    "summary": "列出已注册的联机玩家。",
+    "arguments": {}
   },
   "coop.debug.players.party_state": {
-    "name": "部队状态",
-    "summary": "查看部队状态"
+    "name": "显示玩家已复制同步的部队状态。",
+    "summary": "显示玩家已复制同步的部队状态。",
+    "arguments": {
+      "controller_id": "玩家控制器 ID。"
+    }
   },
   "coop.debug.romance.agree": {
-    "name": "同意结婚",
-    "summary": "将玩家与 NPC 标为已同意结婚。"
+    "name": "将一对恋人标记为已同意结婚。",
+    "summary": "将一对恋人标记为已同意结婚。",
+    "arguments": {
+      "player_hero_id": "已注册的玩家英雄 ID。",
+      "npc_hero_id": "已注册的 NPC 英雄 ID。"
+    }
   },
   "coop.debug.romance.compatible": {
-    "name": "彼此合适",
-    "summary": "将玩家与 NPC 标为已认定彼此合适。"
+    "name": "将一对恋人标记为相互合适。",
+    "summary": "将一对恋人标记为相互合适。",
+    "arguments": {
+      "player_hero_id": "已注册的玩家英雄 ID。",
+      "npc_hero_id": "已注册的 NPC 英雄 ID。"
+    }
   },
   "coop.debug.romance.divorce": {
-    "name": "离婚",
-    "summary": "让玩家英雄与 NPC 离婚。不会恢复婚前的氏族或部队变更。"
+    "name": "让玩家英雄与 NPC 英雄离婚。",
+    "summary": "让玩家英雄与 NPC 英雄离婚。",
+    "arguments": {
+      "player_hero_id": "已注册的玩家英雄 ID。",
+      "npc_hero_id": "已注册的 NPC 英雄 ID。"
+    }
   },
   "coop.debug.romance.help": {
-    "name": "恋爱帮助",
-    "summary": "列出恋爱指令用法。"
+    "name": "说明恋爱调试指令。",
+    "summary": "说明恋爱调试指令。",
+    "arguments": {}
   },
   "coop.debug.romance.list": {
-    "name": "列出恋爱状态",
-    "summary": "列出恋爱状态。"
+    "name": "列出当前的恋爱状态。",
+    "summary": "列出当前的恋爱状态。",
+    "arguments": {}
   },
   "coop.debug.romance.marry": {
-    "name": "结婚",
-    "summary": "让玩家英雄与 NPC 结婚。"
+    "name": "让玩家英雄与 NPC 英雄结婚。",
+    "summary": "让玩家英雄与 NPC 英雄结婚。",
+    "arguments": {
+      "player_hero_id": "已注册的玩家英雄 ID。",
+      "npc_hero_id": "已注册的 NPC 英雄 ID。"
+    }
   },
   "coop.debug.romance.start": {
-    "name": "开始追求",
-    "summary": "开始玩家英雄与 NPC 之间的追求。"
+    "name": "开始玩家与 NPC 之间的求爱。",
+    "summary": "开始玩家与 NPC 之间的求爱。",
+    "arguments": {
+      "player_hero_id": "已注册的玩家英雄 ID。",
+      "npc_hero_id": "已注册的 NPC 英雄 ID。"
+    }
   },
   "coop.debug.romance.status": {
-    "name": "恋爱状态",
-    "summary": "显示玩家英雄与 NPC 之间的恋爱状态。"
+    "name": "显示玩家与 NPC 的恋爱状态。",
+    "summary": "显示玩家与 NPC 的恋爱状态。",
+    "arguments": {
+      "player_hero_id": "已注册的玩家英雄 ID。",
+      "npc_hero_id": "已注册的 NPC 英雄 ID。"
+    }
   },
   "coop.debug.save.force_autosave": {
-    "name": "强制自动存档",
-    "summary": "排队一次原版自动存档（与 SaveHandler 定时使用的同一路径），以便按需测试客户端存档拦截。在客户端上 SetSaveArgs 会被拦截，因此不会入队也不会写文件；在主机上会出现存档文件。"
+    "name": "执行强制自动保存的调试操作。",
+    "summary": "执行强制自动保存的调试操作。",
+    "arguments": {
+      "evidence_hold_milliseconds": "可选的取证保持时长，范围为 1 至 5000 毫秒。"
+    }
   },
   "coop.debug.save.save_as": {
-    "name": "另存为",
-    "summary": "另存为"
+    "name": "执行另存为的调试操作。",
+    "summary": "执行另存为的调试操作。",
+    "arguments": {
+      "save_name": "存档名称，长度为 1 至 64 个字符，只能使用字母、数字、下划线或连字符。"
+    }
   },
   "coop.debug.save.state": {
-    "name": "存档状态",
-    "summary": "查看存档状态"
+    "name": "显示状态。",
+    "summary": "显示状态。",
+    "arguments": {}
   },
-  "coop.debug.settlementComponent.set_gold": {
-    "name": "设置金币",
-    "summary": "更改据点组件的金币"
+  "coop.debug.settlement_component.set_gold": {
+    "name": "设置金币，用于联机调试。",
+    "summary": "设置金币，用于联机调试。",
+    "arguments": {
+      "settlementComponentId": "据点组件 ID。",
+      "gold": "金币。"
+    }
   },
-  "coop.debug.settlementComponent.set_is_owner_unassigned": {
-    "name": "设置所有者未指定",
-    "summary": "更改据点组件的所有者未指定状态"
+  "coop.debug.settlement_component.set_is_owner_unassigned": {
+    "name": "设置是否未分配所有者，用于联机调试。",
+    "summary": "设置是否未分配所有者，用于联机调试。",
+    "arguments": {
+      "settlementComponentId": "据点组件 ID。",
+      "value": "数值。"
+    }
   },
-  "coop.debug.settlementComponent.set_owner": {
-    "name": "设置所有者",
-    "summary": "更改据点组件的所有者"
+  "coop.debug.settlement_component.set_owner": {
+    "name": "设置所有者，用于联机调试。",
+    "summary": "设置所有者，用于联机调试。",
+    "arguments": {
+      "settlementComponentId": "据点组件 ID。",
+      "mobilePartyId": "移动部队 ID。"
+    }
   },
   "coop.debug.settlements.audit": {
-    "name": "核对据点",
-    "summary": "核对据点"
+    "name": "审计相关状态，用于联机调试。",
+    "summary": "审计相关状态，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.settlements.capture_by_siege": {
-    "name": "攻城占领",
-    "summary": "通过攻城占领"
+    "name": "通过攻城占领据点，用于联机调试。",
+    "summary": "通过攻城占领据点，用于联机调试。",
+    "arguments": {
+      "settlementNameOrId": "据点的完整名称或 ID；包含空格的名称需加双引号。",
+      "capturerHeroId": "占领者英雄 ID。"
+    }
   },
   "coop.debug.settlements.collect_cache_notables": {
-    "name": "收集缓存名流",
-    "summary": "测试将名流收集到缓存。"
+    "name": "收集并缓存要人，用于联机调试。",
+    "summary": "收集并缓存要人，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.settlements.enter_random_castle": {
-    "name": "进入随机城堡",
-    "summary": "进入随机城堡"
+    "name": "进入随机城堡，用于联机调试。",
+    "summary": "进入随机城堡，用于联机调试。",
+    "arguments": {
+      "castleId": "城堡 ID。"
+    }
   },
   "coop.debug.settlements.get_town_name": {
-    "name": "获取城镇名",
-    "summary": "获取城镇名"
+    "name": "获取城镇名称，用于联机调试。",
+    "summary": "获取城镇名称，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.settlements.info": {
-    "name": "据点信息",
-    "summary": "给出据点的大量信息。"
+    "name": "显示相关状态，用于联机调试。",
+    "summary": "显示相关状态，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.settlements.last_attacker": {
-    "name": "上一攻击者",
-    "summary": "更改 LastAttackerParty"
+    "name": "执行攻击者操作，用于联机调试。",
+    "summary": "执行攻击者操作，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "lastAttackerPartyId": "最近攻击者的部队 ID。"
+    }
   },
   "coop.debug.settlements.list_siege_state": {
-    "name": "列出攻城状态",
-    "summary": "列出全部可能的攻城状态"
+    "name": "列出攻城状态，用于联机调试。",
+    "summary": "列出攻城状态，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.settlements.owner_state": {
-    "name": "所有者状态",
-    "summary": "查看所有者状态"
+    "name": "显示状态，用于联机调试。",
+    "summary": "显示状态，用于联机调试。",
+    "arguments": {
+      "settlementNameOrId": "据点的完整名称或 ID；包含空格的名称需加双引号。"
+    }
   },
   "coop.debug.settlements.set_allies_spotted": {
-    "name": "设置发现的盟军",
-    "summary": "更改 NumberOfAlliesSpottedAround"
+    "name": "设置发现盟友的状态，用于联机调试。",
+    "summary": "设置发现盟友的状态，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "value": "数值。"
+    }
   },
   "coop.debug.settlements.set_bribe_paid": {
-    "name": "设置已付贿赂",
-    "summary": "更改 BribePaid"
+    "name": "设置贿赂支付状态，用于联机调试。",
+    "summary": "设置贿赂支付状态，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "value": "数值。"
+    }
   },
   "coop.debug.settlements.set_enemies_spotted": {
-    "name": "设置发现的敌军",
-    "summary": "更改 NumberOfEnemiesSpottedAround"
+    "name": "设置发现敌人的状态，用于联机调试。",
+    "summary": "设置发现敌人的状态，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "value": "数值。"
+    }
   },
   "coop.debug.settlements.set_garrison_pay_limit": {
-    "name": "设置驻军工资上限",
-    "summary": "更改驻军工资上限"
+    "name": "设置驻军工资上限，用于联机调试。",
+    "summary": "设置驻军工资上限，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "payLimit": "工资上限。"
+    }
   },
   "coop.debug.settlements.set_hit_points": {
-    "name": "设置生命值",
-    "summary": "更改 SettlementHitPoints"
+    "name": "设置生命值，用于联机调试。",
+    "summary": "设置生命值，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "value": "数值。"
+    }
   },
   "coop.debug.settlements.set_militia": {
-    "name": "设置民兵",
-    "summary": "更改民兵数量"
+    "name": "设置民兵，用于联机调试。",
+    "summary": "设置民兵，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "militia": "民兵数量。"
+    }
   },
-  "coop.debug.settlements.set_ownerclan": {
-    "name": "设置所有氏族",
-    "summary": "按英雄编号设置据点的所有氏族"
+  "coop.debug.settlements.set_owner_clan": {
+    "name": "设置所属家族，用于联机调试。",
+    "summary": "设置所属家族，用于联机调试。",
+    "arguments": {
+      "settlementNameOrId": "据点的完整名称或 ID；包含空格的名称需加双引号。",
+      "heroId": "英雄 ID。"
+    }
   },
   "coop.debug.settlements.set_siege_state": {
-    "name": "设置攻城状态",
-    "summary": "更改 SiegeState"
+    "name": "设置攻城状态，用于联机调试。",
+    "summary": "设置攻城状态，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "siegeState": "攻城状态。"
+    }
   },
-  "coop.debug.besiegercamp.add_besiegerparty": {
-    "name": "添加攻城部队",
-    "summary": "向攻城营地添加一支攻城部队。"
-  },
-  "coop.debug.besiegercamp.coop.debug.besiegercamp.set_progress": {
-    "name": "设置进度",
-    "summary": "设置攻城准备进度"
+  "coop.debug.besiegercamp.add_besieger_party": {
+    "name": "添加攻城部队，用于联机调试。",
+    "summary": "添加攻城部队，用于联机调试。",
+    "arguments": {
+      "besiegerCampId": "攻城营地 ID。",
+      "partyId": "部队 ID。"
+    }
   },
   "coop.debug.besiegercamp.remove_party": {
-    "name": "移除部队",
-    "summary": "从攻城营地移除一支攻城部队。"
+    "name": "移除部队，用于联机调试。",
+    "summary": "移除部队，用于联机调试。",
+    "arguments": {
+      "besiegerCampId": "攻城营地 ID。",
+      "partyId": "部队 ID。"
+    }
   },
   "coop.debug.besiegercamp.set_leader_party": {
-    "name": "设置领导部队",
-    "summary": "设置指定攻城营地的领导部队字段。"
+    "name": "设置领队部队，用于联机调试。",
+    "summary": "设置领队部队，用于联机调试。",
+    "arguments": {
+      "besiegerCampId": "攻城营地 ID。",
+      "partyId": "部队 ID。"
+    }
   },
   "coop.debug.besiegercamp.set_number_of_troops_killed_on_side": {
-    "name": "设置一方阵亡数",
-    "summary": "设置阵亡士兵数量"
+    "name": "设置一方阵亡的士兵数量，用于联机调试。",
+    "summary": "设置一方阵亡的士兵数量，用于联机调试。",
+    "arguments": {
+      "besiegerCampId": "攻城营地 ID。",
+      "value": "数值。"
+    }
+  },
+  "coop.debug.besiegercamp.set_progress": {
+    "name": "设置进度，用于联机调试。",
+    "summary": "设置进度，用于联机调试。",
+    "arguments": {
+      "besiegerCampId": "攻城营地 ID。",
+      "progress": "进度。"
+    }
   },
   "coop.debug.besiegercamp.set_siege_strategy": {
-    "name": "设置攻城策略",
-    "summary": "为攻城营地设置攻城策略"
+    "name": "设置攻城策略，用于联机调试。",
+    "summary": "设置攻城策略，用于联机调试。",
+    "arguments": {
+      "besiegerCampId": "攻城营地 ID。",
+      "strategyId": "策略 ID。"
+    }
   },
   "coop.debug.siege.army_relief_state": {
-    "name": "军团解围状态",
-    "summary": "查看军团解围状态"
+    "name": "执行解围状态操作，用于联机调试。",
+    "summary": "执行解围状态操作，用于联机调试。",
+    "arguments": {
+      "controllerId": "控制器 ID。",
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.siege.assault": {
-    "name": "强攻",
-    "summary": "为已有的 AI 主导攻城开始攻墙。仅服务器；产生的地图事件使用与战役 AI 相同的权威动作。"
+    "name": "执行相关状态的操作，用于联机调试。",
+    "summary": "执行相关状态的操作，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.siege.assault_entry_state": {
-    "name": "强攻进入状态",
-    "summary": "查看强攻进入状态"
+    "name": "执行进入状态操作，用于联机调试。",
+    "summary": "执行进入状态操作，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.siege.dump_engines": {
-    "name": "转储攻城器械",
-    "summary": "转储每场进行中攻城的器械及其合作注册编号、生命值、进度和瞄准。只读；请在服务器和客户端两边运行并对比。编号与生命值一致说明同步有效（屏幕上过期则是界面刷新问题）；客户端编号不同或显示未注册，说明它在渲染服务器生命值/瞄准更新到不了的本地副本。"
+    "name": "转储攻城引擎，用于联机调试。",
+    "summary": "转储攻城引擎，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.siege.dump_machines": {
-    "name": "转储攻城器械与部署点",
-    "summary": "转储当前任务的攻城武器和部署点——使用提示和 AI 读取的那些标记——排序后便于两个客户端逐行对比，并写入 Coop 日志供事后比较。传入 all 可包含每台可用器械。只读。"
+    "name": "转储攻城器械，用于联机调试。",
+    "summary": "转储攻城器械，用于联机调试。",
+    "arguments": {
+      "includeAll": "是否包含全部。"
+    }
   },
   "coop.debug.siege.dump_party": {
-    "name": "转储部队攻城状态",
-    "summary": "转储部队与攻城相关的状态——CurrentSettlement、BesiegerCamp、BesiegedSettlement、Position——及其合作注册编号。只读；攻城占领后立刻在服务器和两个客户端上运行，并对比共同攻城者的部队。若 CurrentSettlement 在服务器/主机上有值，但在共同攻城者自己的客户端上为 null（部队仍在营地位置，BesiegerCamp 可能未清除），就能定位它被留在外面的原因。可用 main（该客户端自己的部队）、合作编号或族长英雄名解析。"
+    "name": "转储部队，用于联机调试。",
+    "summary": "转储部队，用于联机调试。",
+    "arguments": {
+      "heroNameOrPartyId": "英雄的完整名称或部队 ID；包含空格的名称需加双引号。"
+    }
   },
   "coop.debug.siege.focus": {
-    "name": "对准",
-    "summary": "将客户端战役镜头对准据点以便目视检查。"
+    "name": "聚焦相关状态，用于联机调试。",
+    "summary": "聚焦相关状态，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.siege.graph": {
-    "name": "攻城图",
-    "summary": "报告据点已复制的攻城图是否已准备好用于地图视觉。只读。"
+    "name": "执行相关状态的操作，用于联机调试。",
+    "summary": "执行相关状态的操作，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.siege.join_active_assault": {
-    "name": "加入进行中的强攻",
-    "summary": "加入进行中的强攻"
+    "name": "加入进行中的攻城突击，用于联机调试。",
+    "summary": "加入进行中的攻城突击，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.siege.join_players": {
-    "name": "加入玩家",
-    "summary": "在权威服务器上将每支已连接的玩家部队加入进行中的攻城。"
+    "name": "加入玩家，用于联机调试。",
+    "summary": "加入玩家，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "expectedPlayerCount": "预期玩家数量。"
+    }
   },
   "coop.debug.siege.leave": {
-    "name": "离开",
-    "summary": "离开"
+    "name": "离开相关状态，用于联机调试。",
+    "summary": "离开相关状态，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.siege.leave_settlement": {
-    "name": "离开据点",
-    "summary": "离开据点"
+    "name": "离开据点，用于联机调试。",
+    "summary": "离开据点，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.siege.list": {
-    "name": "列出攻城",
-    "summary": "列出进行中的攻城及其准备进度和已部署器械数量。"
+    "name": "列出相关状态，用于联机调试。",
+    "summary": "列出相关状态，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.siege.player_state": {
-    "name": "玩家状态",
-    "summary": "查看玩家状态"
+    "name": "执行状态操作，用于联机调试。",
+    "summary": "执行状态操作，用于联机调试。",
+    "arguments": {
+      "partyId": "部队 ID。"
+    }
   },
   "coop.debug.siege.prepare_ladders_only": {
-    "name": "只准备云梯",
-    "summary": "只准备云梯"
+    "name": "准备仅使用云梯的攻城，用于联机调试。",
+    "summary": "准备仅使用云梯的攻城，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.siege.request_assault": {
-    "name": "请求强攻",
-    "summary": "请求强攻"
+    "name": "请求攻城突击，用于联机调试。",
+    "summary": "请求攻城突击，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.siege.request_besiege": {
-    "name": "请求围城",
-    "summary": "请求围城"
+    "name": "请求围城，用于联机调试。",
+    "summary": "请求围城，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
+  },
+  "coop.debug.siege.resolve_starvation": {
+    "name": "结算饥饿，用于联机调试。",
+    "summary": "结算饥饿，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.siege.stage_machines": {
-    "name": "暂存器械",
-    "summary": "暂存器械"
+    "name": "布置攻城器械，用于联机调试。",
+    "summary": "布置攻城器械，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.siege.start": {
-    "name": "开始攻城",
-    "summary": "由指定部队（未指定时则由最强敌对领主部队）开始围攻据点。仅服务器；攻城会复制到客户端。"
+    "name": "启动相关状态，用于联机调试。",
+    "summary": "启动相关状态，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "besiegerPartyId": "攻城方部队 ID。"
+    }
   },
   "coop.debug.siege.start_army_relief": {
-    "name": "开始军团解围",
-    "summary": "创建由玩家主导的攻城，并派出多部队守方军团前来打断。仅服务器。"
+    "name": "启动军团解围，用于联机调试。",
+    "summary": "启动军团解围，用于联机调试。",
+    "arguments": {
+      "controllerId": "控制器 ID。",
+      "settlementId": "据点 ID。",
+      "armyPartyCount": "军团部队数量。"
+    }
   },
   "coop.debug.siege.stop": {
-    "name": "停止攻城",
-    "summary": "通过正常权威离开路径结束 AI 主导的攻城。仅服务器。"
+    "name": "停止相关状态，用于联机调试。",
+    "summary": "停止相关状态，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "originalX": "原始 x 坐标。",
+      "originalY": "原始 y 坐标。",
+      "originalIsOnLand": "原始位置是否在陆地上。"
+    }
   },
-  "coop.debug.crafting.addcrafteditems": {
-    "name": "添加已锻造物品",
-    "summary": "将现有全部已锻造物品给予指定英雄"
+  "coop.debug.siege.terminal_status": {
+    "name": "执行状态信息操作，用于联机调试。",
+    "summary": "执行状态信息操作，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
-  "coop.debug.crafting.addtownorder": {
-    "name": "添加城镇订单",
-    "summary": "由该镇的一名英雄向城镇添加订单"
+  "coop.debug.crafting.add_crafted_items": {
+    "name": "执行添加锻造物品的调试操作。",
+    "summary": "执行添加锻造物品的调试操作。",
+    "arguments": {
+      "hero_name": "英雄的完整显示名称。"
+    }
   },
-  "coop.debug.crafting.crafteditemhistory": {
-    "name": "锻造物品历史",
-    "summary": "查看锻造物品历史，服务器显示全部玩家，客户端显示当前玩家"
+  "coop.debug.crafting.add_town_order": {
+    "name": "执行添加城镇订单的调试操作。",
+    "summary": "执行添加城镇订单的调试操作。",
+    "arguments": {
+      "hero_name": "英雄的完整显示名称。"
+    }
   },
-  "coop.debug.crafting.craftingpiecesxp": {
-    "name": "锻造部件经验",
-    "summary": "查看锻造部件经验，服务器显示全部玩家，客户端显示当前玩家"
+  "coop.debug.crafting.crafted_item_history": {
+    "name": "执行锻造物品历史记录的调试操作。",
+    "summary": "执行锻造物品历史记录的调试操作。",
+    "arguments": {}
   },
-  "coop.debug.crafting.givesupplies": {
-    "name": "给予材料",
-    "summary": "按名称给英雄调试用锻造材料"
+  "coop.debug.crafting.crafting_pieces_xp": {
+    "name": "执行锻造部件经验的调试操作。",
+    "summary": "执行锻造部件经验的调试操作。",
+    "arguments": {}
+  },
+  "coop.debug.crafting.give_supplies": {
+    "name": "执行给予锻造材料的调试操作。",
+    "summary": "执行给予锻造材料的调试操作。",
+    "arguments": {
+      "hero_name": "英雄的完整显示名称。"
+    }
   },
   "coop.debug.crafting.stamina": {
-    "name": "体力",
-    "summary": "在客户端查看部队中全部英雄的锻造体力，在服务器查看全部英雄"
+    "name": "执行体力的调试操作。",
+    "summary": "执行体力的调试操作。",
+    "arguments": {}
   },
-  "coop.debug.crafting.townorders": {
-    "name": "城镇订单",
-    "summary": "查看指定城镇的订单"
+  "coop.debug.crafting.town_orders": {
+    "name": "执行城镇订单的调试操作。",
+    "summary": "执行城镇订单的调试操作。",
+    "arguments": {
+      "town_name": "城镇的完整显示名称。"
+    }
   },
-  "coop.debug.crafting.unlockallcraftingpieces": {
-    "name": "解锁全部锻造部件",
-    "summary": "在客户端解锁全部锻造部件。OpenPart 已被修补，会更新 CoopSession 并跨会话保留"
+  "coop.debug.crafting.unlock_all_crafting_pieces": {
+    "name": "执行解锁所有锻造部件的调试操作。",
+    "summary": "执行解锁所有锻造部件的调试操作。",
+    "arguments": {}
   },
-  "coop.debug.crafting.unlockedcraftingpieces": {
-    "name": "已解锁锻造部件",
-    "summary": "查看已解锁的锻造部件，服务器显示全部玩家，客户端显示当前玩家"
+  "coop.debug.crafting.unlocked_crafting_pieces": {
+    "name": "执行已解锁锻造部件的调试操作。",
+    "summary": "执行已解锁锻造部件的调试操作。",
+    "arguments": {}
   },
   "coop.debug.steam.host_lobby": {
-    "name": "主持大厅",
-    "summary": "主持大厅"
+    "name": "执行创建 Steam 大厅的调试操作。",
+    "summary": "执行创建 Steam 大厅的调试操作。",
+    "arguments": {}
   },
   "coop.debug.steam.invite": {
-    "name": "邀请",
-    "summary": "邀请"
-  },
-  "coop.debug.steam.join": {
-    "name": "加入",
-    "summary": "加入"
-  },
-  "coop.debug.steam.status": {
-    "name": "状态",
-    "summary": "查看 Steam 状态"
+    "name": "执行邀请的调试操作。",
+    "summary": "执行邀请的调试操作。",
+    "arguments": {}
   },
   "coop.debug.tournaments.add_tournament_to_town": {
-    "name": "向城镇添加比武",
-    "summary": "向城镇添加比武大会"
+    "name": "向城镇添加竞技大会，用于联机调试。",
+    "summary": "向城镇添加竞技大会，用于联机调试。",
+    "arguments": {
+      "townNameOrId": "城镇的完整名称或 ID；包含空格的名称需加双引号。"
+    }
   },
   "coop.debug.town.add_item_to_sold_items": {
-    "name": "添加到已售物品",
-    "summary": "向指定城镇的已售物品列表添加若干物品。"
+    "name": "向已售物品中添加物品，用于联机调试。",
+    "summary": "向已售物品中添加物品，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。",
+      "itemId": "物品 ID。",
+      "numberOfItems": "物品数量。"
+    }
   },
   "coop.debug.town.apply_garrison_lifecycle": {
-    "name": "应用驻军生命周期",
-    "summary": "应用驻军生命周期"
+    "name": "应用驻军生命周期，用于联机调试。",
+    "summary": "应用驻军生命周期，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。",
+      "operation": "操作。"
+    }
   },
   "coop.debug.town.auditor": {
-    "name": "城镇核对",
-    "summary": "把已同步到服务器的全部城镇值发过去，以查找不匹配的值"
+    "name": "执行相关状态的操作，用于联机调试。",
+    "summary": "执行相关状态的操作，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.town.change_current_building": {
-    "name": "更改当前建筑",
-    "summary": "设置城镇当前建筑。"
+    "name": "更改当前建筑，用于联机调试。",
+    "summary": "更改当前建筑，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。"
+    }
   },
   "coop.debug.town.change_current_building_queue": {
-    "name": "更改当前建筑队列",
-    "summary": "设置城镇当前建筑队列。"
+    "name": "更改当前建筑队列，用于联机调试。",
+    "summary": "更改当前建筑队列，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。"
+    }
   },
   "coop.debug.town.focus_garrison": {
-    "name": "对准驻军",
-    "summary": "对准驻军"
+    "name": "聚焦驻军，用于联机调试。",
+    "summary": "聚焦驻军，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。"
+    }
   },
   "coop.debug.town.garrison_backlink": {
-    "name": "驻军反向链接",
-    "summary": "查看驻军反向链接"
+    "name": "执行反向关联操作，用于联机调试。",
+    "summary": "执行反向关联操作，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。"
+    }
   },
   "coop.debug.town.info": {
-    "name": "城镇信息",
-    "summary": "获取指定城镇的信息。"
+    "name": "显示相关状态，用于联机调试。",
+    "summary": "显示相关状态，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。"
+    }
   },
   "coop.debug.town.list_buildings": {
-    "name": "列出建筑",
-    "summary": "列出城镇的 Buildings 与 BuildingsInProgress（已同步的集合字段 MBList）以及每座建筑的等级/进度，以便对比服务器与客户端截图，确认建筑集合仍在复制。"
+    "name": "列出建筑，用于联机调试。",
+    "summary": "列出建筑，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。"
+    }
   },
   "coop.debug.town.list_items": {
-    "name": "列出物品",
-    "summary": "列出全部物品"
+    "name": "列出物品，用于联机调试。",
+    "summary": "列出物品，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.town.list_towns": {
-    "name": "列出城镇",
-    "summary": "列出全部城镇"
+    "name": "列出城镇，用于联机调试。",
+    "summary": "列出城镇，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.town.list_workshops": {
-    "name": "列出作坊",
-    "summary": "列出城镇的 Workshops（已同步的集合属性数组）以及每间作坊的类型和所有者，以便对比服务器与客户端截图，确认作坊集合仍在复制。"
+    "name": "列出工坊，用于联机调试。",
+    "summary": "列出工坊，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。"
+    }
   },
-  "coop.debug.town.managementdata": {
-    "name": "管理数据",
-    "summary": "查看指定城镇的管理数据"
+  "coop.debug.town.management_data": {
+    "name": "执行数据操作，用于联机调试。",
+    "summary": "执行数据操作，用于联机调试。",
+    "arguments": {
+      "townName": "城镇的完整名称；包含空格的值需加双引号。"
+    }
   },
   "coop.debug.town.refresh_mercenary_stocks": {
-    "name": "刷新 Mercenary 库存",
-    "summary": "刷新 Mercenary 库存"
+    "name": "刷新雇佣兵库存，用于联机调试。",
+    "summary": "刷新雇佣兵库存，用于联机调试。",
+    "arguments": {
+      "townName": "城镇的完整名称；包含空格的值需加双引号。"
+    }
   },
   "coop.debug.town.request_mercenary_stock": {
-    "name": "请求 Mercenary 库存",
-    "summary": "请求 Mercenary 库存"
+    "name": "请求雇佣兵库存，用于联机调试。",
+    "summary": "请求雇佣兵库存，用于联机调试。",
+    "arguments": {
+      "townName": "城镇的完整名称；包含空格的值需加双引号。"
+    }
   },
-  "coop.debug.town.set_foodStocks": {
-    "name": "设置粮食库存",
-    "summary": "设置城镇的粮食库存"
+  "coop.debug.town.set_food_stocks": {
+    "name": "设置粮食储备，用于联机调试。",
+    "summary": "设置粮食储备，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。",
+      "foodStocks": "粮食储备。"
+    }
   },
   "coop.debug.town.set_garrison_auto_recruitment": {
-    "name": "设置驻军自动招募",
-    "summary": "设置指定城镇的 GarrisonAutoRecruitmentIsEnabled 属性。"
+    "name": "设置驻军自动招募，用于联机调试。",
+    "summary": "设置驻军自动招募，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。",
+      "enabled": "是否启用。"
+    }
   },
   "coop.debug.town.set_governor": {
-    "name": "设置总督",
-    "summary": "设置指定城镇的总督。"
+    "name": "设置总督，用于联机调试。",
+    "summary": "设置总督，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。",
+      "heroId": "英雄 ID。"
+    }
   },
   "coop.debug.town.set_in_rebellious_state": {
-    "name": "设置叛乱状态",
-    "summary": "设置指定城镇的叛乱状态。"
+    "name": "设置叛乱状态，用于联机调试。",
+    "summary": "设置叛乱状态，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。",
+      "inRebelliousState": "是否处于叛乱状态。"
+    }
   },
   "coop.debug.town.set_last_captured_by": {
-    "name": "设置上次占领者",
-    "summary": "设置指定城镇的 LastCapturedBy 属性。"
+    "name": "设置最近占领者，用于联机调试。",
+    "summary": "设置最近占领者，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。",
+      "clanId": "家族 ID。"
+    }
   },
   "coop.debug.town.set_loyalty": {
-    "name": "设置忠诚",
-    "summary": "设置指定城镇的忠诚。"
+    "name": "设置忠诚度，用于联机调试。",
+    "summary": "设置忠诚度，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。",
+      "loyalty": "忠诚度。"
+    }
   },
   "coop.debug.town.set_prosperity": {
-    "name": "设置繁荣",
-    "summary": "设置指定城镇的繁荣。"
+    "name": "设置繁荣度，用于联机调试。",
+    "summary": "设置繁荣度，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。",
+      "prosperity": "繁荣度。"
+    }
   },
   "coop.debug.town.set_security": {
-    "name": "设置治安",
-    "summary": "设置指定城镇的治安。"
+    "name": "设置治安值，用于联机调试。",
+    "summary": "设置治安值，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。",
+      "security": "治安值。"
+    }
   },
   "coop.debug.town.set_trade_tax_acc": {
-    "name": "设置累计贸易税",
-    "summary": "设置城镇的累计贸易税。"
+    "name": "设置累计贸易税，用于联机调试。",
+    "summary": "设置累计贸易税，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。",
+      "tradeTax": "贸易税。"
+    }
   },
   "coop.debug.town.start_rebellion": {
-    "name": "开始叛乱",
-    "summary": "开始叛乱"
+    "name": "发动叛乱，用于联机调试。",
+    "summary": "发动叛乱，用于联机调试。",
+    "arguments": {
+      "townId": "城镇 ID。"
+    }
   },
   "coop.debug.ui.active_state": {
-    "name": "活动状态",
-    "summary": "查看活动状态"
+    "name": "显示当前活动状态。",
+    "summary": "显示当前活动状态。",
+    "arguments": {}
   },
   "coop.debug.ui.close_screen": {
-    "name": "关闭界面",
-    "summary": "关闭界面"
+    "name": "执行关闭界面的调试操作。",
+    "summary": "执行关闭界面的调试操作。",
+    "arguments": {}
   },
   "coop.debug.ui.evidence_map_state": {
-    "name": "取证地图状态",
-    "summary": "查看取证地图状态"
+    "name": "显示取证地图的状态。",
+    "summary": "显示取证地图的状态。",
+    "arguments": {}
   },
   "coop.debug.ui.leave_settlement_encounter": {
-    "name": "离开据点遭遇",
-    "summary": "离开据点遭遇"
+    "name": "执行离开据点遭遇的调试操作。",
+    "summary": "执行离开据点遭遇的调试操作。",
+    "arguments": {}
   },
   "coop.debug.ui.loading_window_state": {
-    "name": "加载窗口状态",
-    "summary": "查看加载窗口状态"
+    "name": "显示加载窗口的状态。",
+    "summary": "显示加载窗口的状态。",
+    "arguments": {}
   },
   "coop.debug.ui.pop_state": {
-    "name": "弹出状态",
-    "summary": "弹出状态"
+    "name": "显示弹出状态的信息。",
+    "summary": "显示弹出状态的信息。",
+    "arguments": {}
   },
   "coop.debug.ui.prepare_evidence_map": {
-    "name": "准备取证地图",
-    "summary": "准备取证地图"
+    "name": "执行准备取证地图的调试操作。",
+    "summary": "执行准备取证地图的调试操作。",
+    "arguments": {}
   },
   "coop.debug.ui.saving_overlay_state": {
-    "name": "保存遮罩状态",
-    "summary": "查看保存遮罩状态"
+    "name": "显示保存覆盖层的状态。",
+    "summary": "显示保存覆盖层的状态。",
+    "arguments": {}
   },
   "coop.debug.ui.switch_menu": {
-    "name": "切换菜单",
-    "summary": "切换菜单"
+    "name": "执行切换菜单的调试操作。",
+    "summary": "执行切换菜单的调试操作。",
+    "arguments": {
+      "menu_id": "游戏菜单 ID。"
+    }
   },
   "coop.debug.ui.tactical_symbols": {
-    "name": "战术符号",
-    "summary": "战术符号"
+    "name": "执行战术符号的调试操作。",
+    "summary": "执行战术符号的调试操作。",
+    "arguments": {
+      "mode": "on、off、toggle 或 status。"
+    }
   },
   "coop.debug.villagers.view_interacted_villagers": {
-    "name": "查看互动村民",
-    "summary": "在服务器上查看所有玩家互动过的村民，在客户端上查看当前玩家的"
+    "name": "显示曾交互的村民，用于联机调试。",
+    "summary": "显示曾交互的村民，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.villagers.view_looted_villagers": {
-    "name": "查看被劫村民",
-    "summary": "查看被劫村民"
+    "name": "显示被劫掠的村民，用于联机调试。",
+    "summary": "显示被劫掠的村民，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.village.info": {
-    "name": "村庄信息",
-    "summary": "获取指定村庄的信息"
+    "name": "显示相关状态，用于联机调试。",
+    "summary": "显示相关状态，用于联机调试。",
+    "arguments": {
+      "villageId": "村庄 ID。"
+    }
   },
   "coop.debug.village.list": {
-    "name": "列出村庄",
-    "summary": "列出全部村庄"
+    "name": "列出相关状态，用于联机调试。",
+    "summary": "列出相关状态，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.village.set_demand_time": {
-    "name": "设置需求时间",
-    "summary": "设置 LastDemandTimeSatisified"
+    "name": "设置需求时间，用于联机调试。",
+    "summary": "设置需求时间，用于联机调试。",
+    "arguments": {
+      "villageId": "村庄 ID。",
+      "demandTime": "需求时间。"
+    }
   },
   "coop.debug.village.set_hearth": {
-    "name": "设置炉火",
-    "summary": "设置村庄的炉火浮点值。"
+    "name": "设置户数，用于联机调试。",
+    "summary": "设置户数，用于联机调试。",
+    "arguments": {
+      "villageId": "村庄 ID。",
+      "hearth": "户数。"
+    }
   },
   "coop.debug.village.set_state": {
-    "name": "设置状态",
-    "summary": "设置指定村庄的 VillageState。"
+    "name": "设置状态，用于联机调试。",
+    "summary": "设置状态，用于联机调试。",
+    "arguments": {
+      "villageId": "村庄 ID。",
+      "state": "状态。"
+    }
   },
   "coop.debug.village.set_trade_tax_acc": {
-    "name": "设置累计贸易税",
-    "summary": "设置村庄的累计贸易税。"
+    "name": "设置累计贸易税，用于联机调试。",
+    "summary": "设置累计贸易税，用于联机调试。",
+    "arguments": {
+      "villageId": "村庄 ID。",
+      "tradeTax": "贸易税。"
+    }
   },
   "coop.debug.workshop.hero_owned_workshops": {
-    "name": "英雄拥有的作坊",
-    "summary": "查看英雄拥有的作坊"
+    "name": "执行拥有工坊的操作，用于联机调试。",
+    "summary": "执行拥有工坊的操作，用于联机调试。",
+    "arguments": {
+      "heroId": "英雄 ID。"
+    }
   },
   "coop.debug.workshop.owners_in_settlement": {
-    "name": "据点内作坊所有者",
-    "summary": "查看据点内的作坊所有者"
+    "name": "执行据点内的操作，用于联机调试。",
+    "summary": "执行据点内的操作，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   },
   "coop.debug.workshop.set_workshop_custom_name": {
-    "name": "设置作坊自定义名称",
-    "summary": "设置作坊自定义名称"
+    "name": "设置工坊自定义名称，用于联机调试。",
+    "summary": "设置工坊自定义名称，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "workshopType": "工坊类型。",
+      "newCustomName": "完整的新自定义名称；包含空格的值需加双引号。"
+    }
   },
   "coop.debug.workshop.set_workshop_owner": {
-    "name": "设置作坊所有者",
-    "summary": "设置作坊所有者"
+    "name": "设置工坊所有者，用于联机调试。",
+    "summary": "设置工坊所有者，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。",
+      "workshopType": "工坊类型。",
+      "newOwnerId": "新所有者 ID。"
+    }
   },
   "coop.debug.workshop.view_warehouse_rosters": {
-    "name": "查看仓库名册",
-    "summary": "在服务器上查看所有玩家的仓库名册，在客户端上查看当前玩家的"
+    "name": "显示仓库物品清单，用于联机调试。",
+    "summary": "显示仓库物品清单，用于联机调试。",
+    "arguments": {}
   },
   "coop.debug.workshop.workshop_info": {
-    "name": "作坊信息",
-    "summary": "查看据点内作坊的信息"
+    "name": "执行信息操作，用于联机调试。",
+    "summary": "执行信息操作，用于联机调试。",
+    "arguments": {
+      "settlementId": "据点 ID。"
+    }
   }
 }
