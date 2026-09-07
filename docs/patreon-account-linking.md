@@ -46,6 +46,17 @@ would need additional scopes and secure token storage in a separate change.
 Use separate Supabase/Patreon applications and an HTTPS website for staging.
 Don't point production `PATREON_SITE_URL` at arbitrary preview domains.
 
+## Website build versus runtime configuration
+
+`/account` is request-rendered, so production builds do not need
+`NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to prerender
+it. Both values are still required by the deployed server for authentication;
+missing runtime configuration fails closed. Configure the real public values at
+build time as well for browser authentication, since Next.js inlines
+`NEXT_PUBLIC_*` values into client bundles. A successful build without these
+values is not proof that deployed sign-in works. Never use placeholder keys to
+make CI pass.
+
 ## Flow and security
 
 - The account button runs a Next.js Server Action, verifies the site user, and
@@ -83,7 +94,8 @@ never be treated as authorization or entitlement evidence.
 
 ```sh
 npx tsx --test supabase/functions/_shared/patreon.test.ts
-npx tsc --noEmit
+npx vitest run src/app/account/page.component.test.tsx
+npx next typegen && npx tsc --noEmit
 ```
 
 After deploying, test a successful authorization, Patreon cancellation, callback
