@@ -25,6 +25,7 @@ function OnboardingSession({ userId, summary }: Props) {
     const [intent, setIntent] = useState<OnboardingIntent | null>(null);
     const intentRef = useRef<OnboardingIntent | null>(null);
     const inFlight = useRef(false);
+    const completionAuthority = useRef<object | null>(null);
     const [pending, setPending] = useState(false);
     const [open, setOpen] = useState(false);
     const [message, setMessage] = useState("");
@@ -32,6 +33,8 @@ function OnboardingSession({ userId, summary }: Props) {
     const [staleSnapshot, setStaleSnapshot] = useState<OnboardingSummary | null>(null);
     const fallbackRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
+        // Each effect lifetime owns its completions, including StrictMode's repeated setup.
+        completionAuthority.current = {};
         const timer = window.setTimeout(() => {
             try {
                 const retained = readOnboardingIntent(window.sessionStorage, key);
@@ -40,13 +43,17 @@ function OnboardingSession({ userId, summary }: Props) {
                 setReady(true);
             } catch { setStorageError(true); }
         }, 0);
-        return () => window.clearTimeout(timer);
+        return () => {
+            completionAuthority.current = null;
+            window.clearTimeout(timer);
+        };
     }, [key]);
 
     const canOffer = summary !== null && summary !== staleSnapshot && summary.eligibility.eligible && summary.unavailableReason === null;
     const busy = !ready || storageError || pending;
     async function dispatch(candidate: OnboardingIntent) {
-        if (inFlight.current || !ready || storageError) return;
+        const authority = completionAuthority.current;
+        if (!authority || inFlight.current || !ready || storageError) return;
         inFlight.current = true;
         try {
             // Write before any dispatch; retries ignore current eligibility/capacity/list state.
@@ -62,6 +69,8 @@ function OnboardingSession({ userId, summary }: Props) {
         setMessage("");
         try {
             const response = await submitServerOnboarding(candidate, userId);
+            // Unmounted sessions leave even identical retained intents for the new session to replay.
+            if (completionAuthority.current !== authority) return;
             if (response.ok || !response.retrySameRequest) {
                 try { clearOnboardingIntent(window.sessionStorage, key, candidate); }
                 catch { setStorageError(true); }
@@ -73,10 +82,14 @@ function OnboardingSession({ userId, summary }: Props) {
             if (response.ok) setResult(response.result);
             else setMessage(response.message);
         } catch {
-            setMessage("The submission outcome is unconfirmed. Retry the same pending request; closing this dialog does not cancel it.");
+            if (completionAuthority.current === authority) {
+                setMessage("The submission outcome is unconfirmed. Retry the same pending request; closing this dialog does not cancel it.");
+            }
         } finally {
-            inFlight.current = false;
-            setPending(false);
+            if (completionAuthority.current === authority) {
+                inFlight.current = false;
+                setPending(false);
+            }
         }
     }
     function createCandidate(displayName: string, region: OnboardingRegion, available: boolean) {

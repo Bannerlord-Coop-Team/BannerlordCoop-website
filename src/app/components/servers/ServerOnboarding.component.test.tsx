@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServerOnboarding } from "./ServerOnboarding";
@@ -22,8 +22,9 @@ beforeEach(() => {
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
-async function render(summary: OnboardingSummary | null = onboardingSummary(), userId = "account-a") {
-    await act(async () => root.render(<ServerOnboarding summary={summary} userId={userId} />));
+async function render(summary: OnboardingSummary | null = onboardingSummary(), userId = "account-a", strict = false) {
+    const session = <ServerOnboarding summary={summary} userId={userId} />;
+    await act(async () => root.render(strict ? <StrictMode>{session}</StrictMode> : session));
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
 }
 function button(text: string) {
@@ -38,6 +39,12 @@ async function name(value: string) {
 async function choose(region: string) { await act(async () => container.querySelector<HTMLInputElement>(`input[value="${region}"]`)!.click()); }
 async function setup() { await render(); await click("Set up server "); }
 function stored(user = "account-a") { const raw = sessionStorage.getItem(onboardingIntentKey(user)); return raw ? JSON.parse(raw) : null; }
+function deferred() {
+    let resolve!: (value: ReturnType<typeof onboardingCreated>) => void;
+    let reject!: (reason: Error) => void;
+    const promise = new Promise<ReturnType<typeof onboardingCreated>>((yes, no) => { resolve = yes; reject = no; });
+    return { promise, resolve, reject };
+}
 // Text includes the literal space before the decorative arrow in JSX.
 describe("ServerOnboarding real component and server-action recovery", () => {
     it("offers only explicit unused quota and fails safely for unknown or unavailable summary", async () => {
@@ -138,6 +145,63 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         sessionStorage.setItem(onboardingIntentKey("account-a"), "broken"); await render(); expect(button("Set up server ").disabled).toBe(true); expect(container.textContent).toContain("Setup is blocked");
         await render(onboardingSummary(), "account-b"); vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("denied"); });
         await click("Set up server "); await name("My Campaign"); await click("Create server"); expect(mocks.request).not.toHaveBeenCalled(); expect(container.textContent).toContain("Setup is blocked");
+    });
+    describe.each([false, true])("session completion authority (StrictMode=%s)", (strict) => {
+        it.each(["capacity_unavailable", "success", "uncertain"])("ignores obsolete %s across A-B-A and preserves same-UUID replay after another remount", async (outcome) => {
+            const old = deferred(); const retry = deferred(); const replay = deferred();
+            mocks.request.mockImplementationOnce(() => old.promise).mockImplementationOnce(() => retry.promise).mockImplementationOnce(() => replay.promise);
+            await render(onboardingSummary(), "account-a", strict); await click("Set up server ");
+            await name("  My   Campaign  "); await click("Create server");
+            const original = stored();
+            expect(original).toMatchObject({ action: "create-server", displayName: "My Campaign", region: "us-west" });
+            expect(original.requestId).toMatch(/^[0-9a-f-]{36}$/);
+            await render(onboardingSummary(), "account-b", strict);
+            expect(container.textContent).not.toContain("Retry pending request");
+            await render(null, "account-a", strict); await click("Retry pending request");
+            expect(mocks.request.mock.calls.map((call) => call[1])).toEqual([original, original]);
+            await act(async () => {
+                if (outcome === "success") old.resolve(onboardingCreated());
+                else old.reject(outcome === "capacity_unavailable" ? new MyServersApiError("capacity_unavailable", "old capacity race") : new Error("old outcome lost"));
+            });
+            expect(stored()).toEqual(original);
+            expect(button("Confirming request…").disabled).toBe(true);
+            expect(container.textContent).not.toContain("Server assigned");
+            expect(container.textContent).not.toContain("No change was made");
+            expect(container.textContent).not.toContain("outcome is unconfirmed");
+            expect(mocks.refresh).not.toHaveBeenCalled();
+            // A further reload must recover the same UUID even before the retry settles.
+            await act(async () => root.unmount()); root = createRoot(container);
+            await render(null, "account-a", strict); await click("Retry pending request");
+            await act(async () => retry.reject(new Error("newer attempt may have committed")));
+            expect(stored()).toEqual(original);
+            expect(button("Confirming request…").disabled).toBe(true);
+            expect(container.textContent).not.toContain("outcome is unconfirmed");
+            expect(mocks.refresh).not.toHaveBeenCalled();
+            expect(mocks.request.mock.calls.map((call) => call[1])).toEqual([original, original, original]);
+            await act(async () => replay.resolve(onboardingCreated()));
+            expect(stored()).toBeNull(); expect(container.textContent).toContain("Server assigned");
+            expect(mocks.refresh).toHaveBeenCalledTimes(1);
+        });
+        it("allows the current session's terminal completion to release its intent", async () => {
+            const current = deferred(); mocks.request.mockImplementationOnce(() => current.promise);
+            await render(onboardingSummary(), "account-a", strict); await click("Set up server ");
+            await name("My Campaign"); await click("Create server"); expect(stored()).not.toBeNull();
+            await act(async () => current.reject(new MyServersApiError("capacity_unavailable", "current capacity race")));
+            expect(stored()).toBeNull(); expect(container.textContent).toContain("No change was made");
+            expect(mocks.refresh).toHaveBeenCalledTimes(1);
+        });
+    });
+    it("current completion still compare-clears only its exact retained intent", async () => {
+        const current = deferred(); mocks.request.mockImplementationOnce(() => current.promise);
+        await setup(); await name("My Campaign"); await click("Create server");
+        const original = stored();
+        const newer = { ...original, requestId: ONBOARDING_TEST_ID };
+        expect(newer.requestId).not.toBe(original.requestId);
+        sessionStorage.removeItem(onboardingIntentKey("account-a"));
+        storeOnboardingIntent(sessionStorage, onboardingIntentKey("account-a"), newer);
+        await act(async () => current.resolve(onboardingCreated()));
+        expect(stored()).toEqual(newer); expect(container.textContent).toContain("Server assigned");
+        expect(mocks.refresh).toHaveBeenCalledTimes(1);
     });
     it("late response from previous account cannot clear newer retained intent", async () => {
         let resolve!: (value: unknown) => void;
