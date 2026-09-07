@@ -1,6 +1,6 @@
 "use client";
 
-import { signOut } from "@/app/auth/actions";
+import { ProfileDropdown } from "@/app/components/layout/ProfileDropdown";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -58,7 +58,8 @@ export function MobileNavigation({
     }
 
     return (
-        <div className="lg:hidden">
+        <div className="flex items-center gap-2 lg:hidden">
+            {isAuthenticated && <ProfileDropdown />}
             <button
                 ref={triggerRef}
                 type="button"
@@ -154,16 +155,7 @@ export function MobileNavigation({
                             >
                                 Discord
                             </a>
-                            {isAuthenticated ? (
-                                <form action={signOut} onSubmit={closeMenu}>
-                                    <button
-                                        type="submit"
-                                        className="inline-flex min-h-12 w-full items-center justify-center rounded-sm border border-crimson bg-transparent font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors hover:border-crimson-hover hover:bg-crimson/15 hover:text-white"
-                                    >
-                                        Log out
-                                    </button>
-                                </form>
-                            ) : (
+                            {!isAuthenticated && (
                                 <Link
                                     href="/login"
                                     onClick={closeMenu}
