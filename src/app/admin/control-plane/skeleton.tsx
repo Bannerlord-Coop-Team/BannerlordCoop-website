@@ -142,7 +142,7 @@ function ReleaseSkeleton() {
 }
 
 function TableSkeleton({ view }: { view: ControlPlaneView }) {
-    const columns = view === "vps" ? 8 : view === "servers" ? 7 : 6;
+    const columns = view === "vps" ? 6 : view === "servers" ? 7 : 6;
     return (
         <div>
             {view === "servers" && <Skeleton className="mb-6 h-11 w-xl max-w-full" />}

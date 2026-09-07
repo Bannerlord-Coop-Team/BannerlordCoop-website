@@ -18,6 +18,10 @@ export type CheatsUi = {
     serverStat: string;
     clientStat: string;
     consoleTip: string;
+    parameters: string;
+    required: string;
+    optional: string;
+    parameterTip: string;
     vanillaCampaignWarning: CheatsRichPart[];
     directoryEyebrow: string;
     directoryTitle: string;
@@ -58,12 +62,12 @@ export type CheatsUi = {
 export type CheatsCommandOverlay = {
     name: string;
     summary: string;
+    arguments: Record<string, string>;
 };
 
 export type CheatsMessages = {
     ui: CheatsUi;
     categories: Record<string, string>;
-    featured: Record<string, string>;
     commands: Record<string, CheatsCommandOverlay>;
 };
 

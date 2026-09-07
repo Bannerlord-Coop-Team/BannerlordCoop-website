@@ -12,7 +12,7 @@ const server = {
     players: null,
 };
 
-test("does not advertise management for a listing-only managed server", () => {
+test("does not advertise management without an explicit detail route", () => {
     const html = renderToStaticMarkup(
         <ServerDirectoryTable servers={[server]} emptyMessage="No servers" />,
     );
@@ -21,7 +21,7 @@ test("does not advertise management for a listing-only managed server", () => {
     assert.doesNotMatch(html, /\/servers\/4789e6c3/iu);
 });
 
-test("keeps an explicit live-console management link", () => {
+test("renders an explicit management link without inline lifecycle controls", () => {
     const html = renderToStaticMarkup(
         <ServerDirectoryTable
             servers={[{ ...server, manageUrl: `/servers/${server.id}` }]}
@@ -31,4 +31,7 @@ test("keeps an explicit live-console management link", () => {
 
     assert.match(html, />Manage</u);
     assert.match(html, /\/servers\/4789e6c3/iu);
+    assert.doesNotMatch(html, />Start</u);
+    assert.doesNotMatch(html, />Stop</u);
+    assert.doesNotMatch(html, />Restart</u);
 });

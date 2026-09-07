@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { ReleaseBuild } from "./types";
 import {
+    adminActionOptionValue,
     applyControlPlaneOperationDefaults,
     createServerRegionOptions,
     fieldRequirementLabel,
@@ -15,6 +16,7 @@ import {
     operationTargetMatchesHash,
     overviewStatRowClass,
     presentControlPlaneOperationResult,
+    serverLifecycleOperationHref,
     serverRegionOptions,
 } from "./presentation";
 
@@ -46,6 +48,37 @@ test("create-server regions come only from registered hosts with available prepa
     assert.deepEqual(createServerRegionOptions([]), []);
 });
 
+test("create-server regions require positive safe-integer capacity", () => {
+    for (const availableServers of [0, -1, 0.5, 1.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, -Infinity]) {
+        assert.deepEqual(createServerRegionOptions(
+            serverRegionOptions().map(({ value: region }) => ({ region, availableServers })),
+        ), [], `Invalid available capacity: ${availableServers}`);
+    }
+    assert.deepEqual(createServerRegionOptions([
+        { region: "poland", availableServers: Number.MAX_SAFE_INTEGER },
+        { region: "us-east", availableServers: 1 },
+        { region: "us-east", availableServers: 0 },
+        { region: "germany", availableServers: 0 },
+        { region: "united-kingdom", availableServers: -1 },
+        { region: "france", availableServers: 0.5 },
+        { region: "us-west", availableServers: Infinity },
+        { region: "poland", availableServers: 2 },
+    ]), [
+        { value: "us-east", label: "US-East" },
+        { value: "poland", label: "Poland" },
+    ]);
+});
+
+test("create-server regions exclude legacy values, provider locations, and noncanonical spellings", () => {
+    for (const region of [
+        "united-states", "spain", "europe-automatic", "unexpected",
+        "us/las", "us/ewr", "de/fra", "US-West", "us-east ", " france",
+        "", "toString", "constructor", "__proto__",
+    ]) {
+        assert.deepEqual(createServerRegionOptions([{ region, availableServers: 5 }]), [], region);
+    }
+});
+
 test("maintenance choices show their authoritative timezone without changing protocol values", () => {
     assert.equal(MAINTENANCE_TIME_ZONE, "America/Chicago");
     assert.deepEqual(maintenanceSlotOptions(), [
@@ -68,7 +101,7 @@ test("the website creates servers on Stable without asking for a redundant relea
         new URL("../../admin/control-plane/page.tsx", import.meta.url),
         "utf8",
     );
-    const createCard = source.match(/operation: "create-server"[\s\S]+?operation: "force-reconcile"/u)?.[0];
+    const createCard = source.match(/operation: "create-server"[\s\S]+?operation: "set-global-controls"/u)?.[0];
     assert.ok(createCard);
     assert.doesNotMatch(createCard, /name: "releaseChannel"/u);
     assert.match(createCard, /New servers use Stable by default/u);
@@ -90,6 +123,21 @@ test("server ownership combines the Discord username and durable user id", () =>
     );
 });
 
+test("the VPS view presents slot occupants and resources with their owning host", async () => {
+    const source = await readFile(
+        new URL("../../admin/control-plane/page.tsx", import.meta.url),
+        "utf8",
+    );
+
+    assert.match(source, /needsDiscordUsers = view === "vps"/u);
+    assert.match(source, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\} \/>/u);
+    assert.doesNotMatch(source, /hosts\.map\(\(host\) => <HostResourcesCard/u);
+    assert.match(source, /<OccupiedVpsSlots host=\{host\} usernames=\{usernames\} \/>/u);
+    assert.match(source, /<InlineHostResources resources=\{host\.resources\} \/>/u);
+    assert.match(source, /formatDiscordOwner\(usernames\.get\(slot\.ownerDiscordUserId\), slot\.ownerDiscordUserId\)/u);
+    assert.match(source, /view=server&serverId=\$\{encodeURIComponent\(slot\.serverId\)\}/u);
+});
+
 test("administrator reason fields are optional and explain the audit fallback", async () => {
     const source = await readFile(
         new URL("../../admin/control-plane/page.tsx", import.meta.url),
@@ -108,6 +156,18 @@ test("operation deep links match their rendered card after hydration", () => {
     assert.equal(operationTargetMatchesHash("#onboard%2Dvps%2Dhost", "onboard-vps-host"), true);
     assert.equal(operationTargetMatchesHash("#create-server", "onboard-vps-host"), false);
     assert.equal(operationTargetMatchesHash("#%E0%A4%A", "onboard-vps-host"), false);
+});
+
+test("server rows deep-link to a highlighted lifecycle operation", () => {
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    assert.equal(
+        serverLifecycleOperationHref(serverId),
+        `/admin/control-plane?view=operations&serverId=${serverId}#server-operation`,
+    );
+    assert.equal(
+        adminActionOptionValue("server", { value: serverId, updatedAt: "2026-09-02T15:00:00.000Z" }),
+        JSON.stringify({ id: serverId, updatedAt: "2026-09-02T15:00:00.000Z" }),
+    );
 });
 
 test("create-server success explains stopped state without hiding its one-time password", () => {
@@ -235,6 +295,20 @@ test("operation cards group similar input density into balanced rows", () => {
             { operation: "diagnostics", fields: [true] },
         ]).map((row) => row.map((card) => card.operation)),
         [["retry", "cancel"], ["diagnostics"]],
+    );
+});
+
+test("a prioritized lifecycle card remains first without occupying its own row", () => {
+    const cards = [
+        { operation: "lifecycle", layoutPriority: 1, fields: Array.from({ length: 3 }) },
+        { operation: "replace", fields: Array.from({ length: 6 }) },
+        { operation: "settings", fields: Array.from({ length: 4 }) },
+        { operation: "backup", fields: Array.from({ length: 2 }) },
+    ];
+
+    assert.deepEqual(
+        operationCardRows(cards).map((row) => row.map((card) => card.operation)),
+        [["lifecycle", "replace"], ["settings", "backup"]],
     );
 });
 

@@ -60,7 +60,11 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         if (code === "server_not_found") {
             return { ok: false, message: "This server is unavailable or your access was removed." };
         }
-        if (code === "operation_unavailable" || code === "operation_in_progress") {
+        if (code === "operation_in_progress") {
+            revalidatePath("/servers");
+            return { ok: false, message: "Another server operation is in progress. Wait for it to finish and try again." };
+        }
+        if (code === "operation_unavailable") {
             revalidatePath("/servers");
             return { ok: false, message: "That operation is not available in the server's current state." };
         }

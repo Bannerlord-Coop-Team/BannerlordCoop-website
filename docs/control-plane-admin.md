@@ -32,8 +32,13 @@ npx supabase functions deploy my-servers --project-ref <project-ref>
 
 The `my-servers` function accepts authenticated GET inventory requests and
 strict POST lifecycle requests for Start, Stop, or game-container Restart.
-Only current durable owner and manager access can enqueue an operation; support
-and server-level admin access remain read-only. Requests carry the current
+**My Servers** is an inventory and navigation surface; each durable-access row
+links to `/servers/[serverId]`, where the lifecycle controls are rendered from
+the freshly loaded authoritative summary. The detail route grants no authority
+from the URL: it lists through the authenticated Edge boundary and renders a
+matching server only when that current user can access it. Only current durable
+owner and manager access can enqueue an operation; support and server-level
+admin access remain read-only. Requests carry the current
 exact UTC-millisecond `updatedAt` value, and the control plane derives idempotency
 from the request UUID while rechecking access when the durable job begins.
 After acceptance, one shared page poller disables lifecycle controls and refreshes
@@ -47,3 +52,26 @@ Restart never becomes a VM reboot.
 `CONTROL_PLANE_ADMIN_URL` is the Oracle adapter's HTTPS origin; each function appends its fixed `/v1/admin/control-plane` or `/v1/user/control-plane` path. `CONTROL_PLANE_WEB_ORIGINS` is a comma-separated exact allowlist of HTTPS browser origins. Neither value may contain credentials, query parameters, fragments, or path prefixes. JWT verification remains enabled in `supabase/config.toml`.
 
 The website itself needs only the existing public Supabase URL and publishable key. It does not need an Oracle URL or control-plane credential in Netlify.
+
+## Simplified server operations
+
+Update server includes build selection: keep the current selection, install the
+latest release and remove a pin, or install and pin a specific release. Only
+installable builds in the selected server's channel are offered. Selection and
+pinning are a single control-plane transaction. Deploy the control-plane version
+supporting optional `update-server.input.buildId` before publishing this website.
+
+Reinstall previous build installs and pins the preceding channel release while
+keeping the current campaign. Restore backup instead replaces the campaign with
+an older snapshot. Selecting a server loads a bounded backup page; the list shows
+creation time, type, size, and build, with expiry in the selected backup details.
+Older pages, empty lists, request failures, and retries are supported. Changing
+servers clears the selected backup and ignores late responses from the previous
+server. In-game date is not yet recorded in the backup catalog.
+
+Orphan cleanup/review, forced reconciliation, provider-generation replacement,
+and build inspect/validate/reject/revoke are removed from everyday Operations.
+Their backend operator APIs and durable audit history remain intact. Releases
+is a read-only view of installable builds; approval belongs to the release pipeline.
+Missing save compatibility metadata is assumed compatible without a checkbox;
+safety backups, integrity checks, and known incompatibility checks remain.

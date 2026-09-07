@@ -200,11 +200,7 @@ function toDirectoryServer(server: MyServerSummary): ManagedServerDirectoryEntry
         connectionType: "Direct",
         joinUrl: `bannerlordcoop://join/${encodeURIComponent(server.serverId)}`,
         players: null,
-        lifecycle: {
-            accessRole: server.accessRole,
-            operationState: server.operationState,
-            updatedAt: server.updatedAt,
-        },
+        manageUrl: `/servers/${encodeURIComponent(server.serverId)}`,
     };
 }
 
@@ -218,7 +214,6 @@ function uniqueServers(servers: readonly ManagedServerDirectoryEntry[]) {
                 ...server,
                 ...existing,
                 manageUrl: server.manageUrl ?? existing.manageUrl,
-                lifecycle: existing.lifecycle ?? server.lifecycle,
             });
     }
     return [...unique.values()];

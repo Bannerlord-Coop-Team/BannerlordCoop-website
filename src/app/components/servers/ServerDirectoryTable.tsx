@@ -1,5 +1,3 @@
-import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
-import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import type {
     DirectoryServer,
     HostedServerStatus,
@@ -14,11 +12,6 @@ export type ManagedServerDirectoryEntry = Omit<
     players: number | null;
     status: HostedServerStatus | "Unknown";
     manageUrl?: string;
-    lifecycle?: {
-        accessRole: "owner" | "manager" | "support" | "admin";
-        operationState: string;
-        updatedAt: string;
-    };
 };
 
 type ServerDirectoryTableProps = {
@@ -46,7 +39,7 @@ export function ServerDirectoryTable({
         );
     }
 
-    const table = (
+    return (
         <div className="overflow-x-auto border border-white/10 bg-surface">
             <table className="w-full min-w-240 border-collapse text-left">
                 <thead className="border-b border-white/10 bg-white/[0.025]">
@@ -100,15 +93,6 @@ export function ServerDirectoryTable({
                                 </td>
                                 <td className="px-5 py-4 sm:px-6 sm:py-5">
                                     <div className="flex flex-wrap items-start justify-end gap-2">
-                                        {server.lifecycle && (
-                                            <ManagedServerControls
-                                                serverId={server.id}
-                                                displayName={server.name}
-                                                accessRole={server.lifecycle.accessRole}
-                                                operationState={server.lifecycle.operationState}
-                                                expectedUpdatedAt={server.lifecycle.updatedAt}
-                                            />
-                                        )}
                                         {isOnline ? (
                                             <a
                                                 href={server.joinUrl}
@@ -145,7 +129,4 @@ export function ServerDirectoryTable({
             </table>
         </div>
     );
-    return servers.some((server) => server.lifecycle !== undefined)
-        ? <ManagedServerPollingProvider>{table}</ManagedServerPollingProvider>
-        : table;
 }

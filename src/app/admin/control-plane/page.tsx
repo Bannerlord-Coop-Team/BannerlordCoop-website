@@ -1,3 +1,4 @@
+import { ServerResourceUsage } from "@/app/components/admin/ServerResourceUsage";
 import {
     ControlPlaneActionCard,
     type AdminActionField,
@@ -8,6 +9,7 @@ import { JobFailureAcknowledgeButton } from "@/app/components/admin/JobFailureAc
 import { JobFailuresAcknowledgeButton } from "@/app/components/admin/JobFailuresAcknowledgeButton";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
 import { ControlPlaneLiveRefresh } from "@/app/components/admin/ControlPlaneLiveRefresh";
+import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
 import { hasAdminAccess } from "@/app/lib/auth/access";
 import { ControlPlaneAdminError, requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import {
@@ -18,6 +20,7 @@ import {
     stateExplanation,
 } from "@/app/lib/control-plane/explanations";
 import {
+    adminActionOptionValue,
     createServerRegionOptions,
     formatDiscordOwner,
     installableBuilds,
@@ -26,7 +29,7 @@ import {
     operationCardRowClass,
     operationCardRows,
     overviewStatRowClass,
-    serverRegionOptions,
+    serverLifecycleOperationHref,
 } from "@/app/lib/control-plane/presentation";
 import type {
     AuditEvent,
@@ -189,7 +192,7 @@ async function ControlPlaneViewContent({
     let discordUsers: DiscordUserSummary[] = [];
     let error = "";
     try {
-        const needsDiscordUsers = view === "servers" || view === "server" || view === "operations";
+        const needsDiscordUsers = view === "vps" || view === "servers" || view === "server" || view === "operations";
         const [viewResult, usersResult] = await Promise.allSettled([
             loadView(token, view, query, serverId, jobState, jobAction, unacknowledgedOnly, jobCursor),
             needsDiscordUsers ? listDiscordUsers() : Promise.resolve({ users: [], truncated: false }),
@@ -217,7 +220,7 @@ async function ControlPlaneViewContent({
                 </div>
             )}
             {!error && view === "overview" && <OverviewView overview={data as Overview} />}
-            {!error && view === "vps" && <VpsView inventory={data as HostingAdminVpsInventory} />}
+            {!error && view === "vps" && <VpsView inventory={data as HostingAdminVpsInventory} discordUsers={discordUsers} />}
             {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} discordUsers={discordUsers} />}
             {!error && view === "server" && <ServerView result={data as ServerDashboardResult} discordUsers={discordUsers} />}
             {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} state={jobState} action={jobAction} unacknowledgedOnly={unacknowledgedOnly} cursor={jobCursor} serverId={serverId} />}
@@ -233,11 +236,22 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         case "overview":
             return requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" });
         case "operations": {
-            const [overview, inventory] = await Promise.all([
+            const [overview, inventory, selectedDashboard] = await Promise.all([
                 requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" }),
                 requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts" }),
+                serverId
+                    ? requestControlPlaneAdmin<ServerDashboardResult>({
+                        accessToken: token,
+                        operation: "server-dashboard",
+                        input: { serverId },
+                    })
+                    : Promise.resolve(null),
             ]);
-            return { overview, inventory } satisfies OperationsData;
+            return {
+                overview,
+                inventory,
+                selectedServer: selectedDashboard?.dashboard.server ?? null,
+            } satisfies OperationsData;
         }
         case "vps":
             return requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts" });
@@ -304,8 +318,9 @@ function ViewTabs({ active }: { active: View }) {
     );
 }
 
-function VpsView({ inventory }: { inventory: HostingAdminVpsInventory }) {
+function VpsView({ inventory, discordUsers }: { inventory: HostingAdminVpsInventory; discordUsers: DiscordUserSummary[] }) {
     const { controlPlaneHost, hosts } = inventory;
+    const usernames = discordUsernameMap(discordUsers);
     const availableServiceNames = Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : [];
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
@@ -320,38 +335,37 @@ function VpsView({ inventory }: { inventory: HostingAdminVpsInventory }) {
                 <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased OVH VPS. The durable workflow verifies account ownership, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
                 <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
             </div>
-            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div className="mt-6">
                 <HostResourcesCard name="Oracle control plane" resources={controlPlaneHost} />
-                {hosts.map((host) => <HostResourcesCard key={host.name} name={host.name} resources={host.resources} />)}
             </div>
             <div className="mt-6 overflow-x-auto border border-white/10 bg-surface">
-                <table className="w-full min-w-250 text-left text-sm">
+                <table className="w-full min-w-300 table-fixed text-left text-sm">
+                    <colgroup><col className="w-[16%]" /><col className="w-[11%]" /><col className="w-[22%]" /><col className="w-[23%]" /><col className="w-[13%]" /><col className="w-[15%]" /></colgroup>
                     <thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted">
                         <tr>
-                            <th className="p-4">Name</th>
-                            <th className="p-4">Region</th>
-                            <th className="p-4">Total Slots</th>
-                            <th className="p-4">Running Servers</th>
-                            <th className="p-4">Available Slots</th>
-                            <th className="p-4">Cost</th>
-                            <th className="p-4">Expiration Date</th>
-                            <th className="p-4">Auto-Renew</th>
+                            <th className="p-4">Host</th>
+                            <th className="p-4">Capacity</th>
+                            <th className="p-4">Occupied slots</th>
+                            <th className="p-4">System resources</th>
+                            <th className="p-4">Billing</th>
                             <th className="p-4">Runner</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">{hosts.map((host) => (
-                        <tr key={host.name} className="hover:bg-white/[0.025]">
-                            <td className="p-4 font-mono text-xs text-foreground">{host.name}</td>
-                            <td className="p-4 text-xs text-foreground-muted">
-                                <span className="block">{host.region}</span>
-                                <span className="mt-1 block font-mono text-[0.65rem] text-foreground-dim">{host.locationId}</span>
+                        <tr key={host.name} className="align-top hover:bg-white/[0.025]">
+                            <td className="p-4">
+                                <p className="break-all font-mono text-xs text-foreground">{host.name}</p>
+                                <p className="mt-2 text-xs text-foreground-muted">{host.region}</p>
+                                <p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{host.locationId}</p>
                             </td>
-                            <td className="p-4 font-display text-xl text-foreground">{host.totalSlots}</td>
-                            <td className="p-4 font-display text-xl text-foreground">{host.runningServers}</td>
-                            <td className="p-4 font-display text-xl text-foreground">{host.availableServers}</td>
-                            <td className="p-4 text-xs text-foreground-muted">{formatVpsCost(host.cost)}</td>
-                            <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={host.expirationDate} empty="Unknown" /></td>
-                            <td className="p-4"><State value={host.autoRenew === true ? "enabled" : host.autoRenew === false ? "disabled" : "unknown"} /></td>
+                            <td className="p-4"><VpsCapacity host={host} /></td>
+                            <td className="p-4"><OccupiedVpsSlots host={host} usernames={usernames} /></td>
+                            <td className="p-4"><InlineHostResources resources={host.resources} /></td>
+                            <td className="p-4 text-xs text-foreground-muted">
+                                <p className="font-semibold text-foreground">{formatVpsCost(host.cost)}</p>
+                                <p className="mt-3"><span className="block text-[0.6rem] uppercase tracking-[0.1em] text-foreground-dim">Expires</span><LocalDateTime value={host.expirationDate} empty="Unknown" /></p>
+                                <div className="mt-3"><span className="mb-1 block text-[0.6rem] uppercase tracking-[0.1em] text-foreground-dim">Auto-renew</span><State value={host.autoRenew === true ? "enabled" : host.autoRenew === false ? "disabled" : "unknown"} /></div>
+                            </td>
                             <td className="p-4"><RunnerOnboardingStatus serviceName={host.name} runningServers={host.runningServers} targetSourceCommit={runnerTargetSourceCommit} onboarding={host.runnerOnboarding} update={host.runnerUpdate ?? null} /></td>
                         </tr>
                     ))}</tbody>
@@ -421,15 +435,19 @@ function ServersView({ page, query, discordUsers }: { page: HostingPage<ManagedS
                 <table className="w-full min-w-260 text-left text-sm">
                     <thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Server</th><th className="p-4">Owner</th><th className="p-4">State</th><th className="p-4">Runtime</th><th className="p-4">Release</th><th className="p-4">Provider</th><th className="p-4">Updated</th></tr></thead>
                     <tbody className="divide-y divide-white/10">{page.items.map((server) => (
-                        <tr key={server.serverId} className="hover:bg-white/[0.025]">
-                            <td className="p-4"><Link className="font-semibold text-gold hover:underline" href={`/admin/control-plane?view=server&serverId=${server.serverId}`}>{server.displayName}</Link><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.serverId}</p></td>
+                        <ClickableTableRow
+                            key={server.serverId}
+                            href={serverLifecycleOperationHref(server.serverId)}
+                            label={`Open Lifecycle operation for ${server.displayName}`}
+                        >
+                            <td className="p-4"><p className="font-semibold text-gold group-hover:underline">{server.displayName}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.serverId}</p></td>
                             <td className="p-4 text-xs text-foreground-muted"><p className="font-semibold text-foreground">{formatDiscordUsername(usernames.get(server.ownerDiscordUserId))}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.ownerDiscordUserId}</p></td>
                             <td className="p-4"><State value={server.operationState} /></td>
                             <td className="p-4"><RuntimeObservation server={server} /></td>
                             <td className="p-4 text-xs text-foreground-muted">{server.releaseChannel}<br />{shortId(server.installedBuildId)}</td>
                             <td className="p-4 text-xs text-foreground-muted">{server.provider}<br />{shortId(server.providerResourceId)}</td>
                             <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={server.updatedAt} /></td>
-                        </tr>
+                        </ClickableTableRow>
                     ))}</tbody>
                 </table>
                 {page.items.length === 0 && <Empty>No managed servers match this filter.</Empty>}
@@ -552,22 +570,27 @@ function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nig
 }
 
 function OperationsView({ data, discordUsers }: { data: OperationsData; discordUsers: DiscordUserSummary[] }) {
-    const { overview, inventory } = data;
-    const serverOptions: AdminActionOption[] = overview.servers.items.map((server) => ({ label: `${server.displayName} · ${server.operationState}`, value: server.serverId, updatedAt: server.updatedAt }));
+    const { overview, inventory, selectedServer } = data;
+    const listedServers = selectedServer !== null
+        && !overview.servers.items.some((server) => server.serverId === selectedServer.serverId)
+        ? [selectedServer, ...overview.servers.items]
+        : overview.servers.items;
+    const serverOptions: AdminActionOption[] = listedServers.map((server) => ({ label: `${server.displayName} · ${server.operationState}`, value: server.serverId, updatedAt: server.updatedAt, releaseChannel: server.releaseChannel }));
     const serverPlainOptions = serverOptions.map(({ label, value }) => ({ label, value }));
+    const selectedServerOption = selectedServer === null
+        ? undefined
+        : serverOptions.find((option) => option.value === selectedServer.serverId);
     const jobOptions: AdminActionOption[] = overview.jobs.items.map((job) => ({ label: `${job.action} · ${job.state} · ${shortId(job.jobId)}`, value: job.jobId, updatedAt: job.updatedAt }));
-    const buildOptions = [...overview.stableBuilds.items, ...overview.nightlyBuilds.items].map((build) => ({ label: `${build.channel} · ${build.version} · ${build.validationState}`, value: build.buildId }));
+    const buildOptions = installableBuilds([...overview.stableBuilds.items, ...overview.nightlyBuilds.items]).map((build) => ({ label: `${build.channel} · ${build.version} · ${build.sourceRevision.slice(0, 8)}`, value: build.buildId, releaseChannel: build.channel }));
     const discordUserOptions: AdminActionOption[] = discordUsers.map((user) => ({ label: user.username, value: user.discordUserId }));
     const availableVpsOptions: AdminActionOption[] = (Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : []).map((serviceName) => ({ label: serviceName, value: serviceName }));
     const createRegionOptions: AdminActionOption[] = createServerRegionOptions(inventory.hosts);
-    const regionOptions: AdminActionOption[] = serverRegionOptions();
     const maintenanceOptions: AdminActionOption[] = maintenanceSlotOptions();
     const discordUserField = (name: string, label: string): AdminActionField => ({ name, label, kind: "discord-user", required: true, options: discordUserOptions, help: "Enter the account's unique Discord username or its numeric Discord user ID. The username must belong to a user who has signed into this website with Discord." });
     const reasonField: AdminActionField = { name: "reason", label: "Reason", kind: "textarea", placeholder: "Optional context for this action", help: "Optional context stored in the immutable administrative audit event. When blank, the control plane records a fixed portal-action reason." };
-    const serverField: AdminActionField = { name: "serverId", label: "Server", kind: "server", required: true, options: serverOptions, help: "The selected row carries its current update generation so a stale action fails safely." };
-    const plainServerField: AdminActionField = { name: "serverId", label: "Server", kind: "select", required: true, options: serverPlainOptions };
-    const compatibilityField: AdminActionField = { name: "allowCompatibilityOverride", label: "Override unknown save compatibility", kind: "checkbox", help: "Use only after reviewing the save and build. This permits an unknown compatibility result; it does not bypass a known incompatibility." };
-    const cards: Array<{ group: string; operation: string; title: string; description: string; fields: AdminActionField[]; destructive?: boolean }> = [
+    const serverField: AdminActionField = { name: "serverId", label: "Server", kind: "server", required: true, options: serverOptions, defaultValue: selectedServerOption === undefined ? "" : adminActionOptionValue("server", selectedServerOption), help: "The selected row carries its current update generation so a stale action fails safely." };
+    const plainServerField: AdminActionField = { name: "serverId", label: "Server", kind: "select", required: true, options: serverPlainOptions, defaultValue: selectedServerOption?.value ?? "" };
+    const cards: Array<{ group: string; operation: string; title: string; description: string; fields: AdminActionField[]; destructive?: boolean; layoutPriority?: number }> = [
         { group: "Fleet", operation: "onboard-vps-host", title: "Onboard existing OVH VPS", description: "Choose one already-purchased VPS, then click Onboard VPS. The control plane revalidates its OVH account identity, location, vCPU capacity, and primary IPv4; acquires and pins its Ed25519 host identity; uses the preinstalled fleet-operator key; installs and hardens every managed runner slot; establishes private mTLS routes; and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.", fields: [
             { name: "serviceName", label: "Available OVH VPS", kind: "select", required: true, options: availableVpsOptions, defaultValue: availableVpsOptions.length === 1 ? availableVpsOptions[0]!.value : "", help: "Only unregistered VPS products discovered in the authenticated OVH account are shown. Select the saved bannerlord-fleet-operator key when installing the VPS; no SSH key, IP address, vCPU count, region, or audit reason is entered here." },
         ] },
@@ -576,22 +599,17 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
             { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: createRegionOptions, help: "Only regions with a prepared, currently available slot on a registered VPS are shown. The control plane revalidates capacity when you submit; no VPS is purchased automatically." },
             { name: "maintenanceSlot", label: "Maintenance slot", kind: "select", required: true, options: maintenanceOptions, help: `All maintenance windows use ${MAINTENANCE_TIME_ZONE} (Central Time and its daylight-saving changes).` },
         ] },
-        { group: "Fleet", operation: "force-reconcile", title: "Force reconciliation", description: "Compare desired state with current provider and runner evidence, record drift, and queue only bounded repairs. It does not buy VPS products or start intentionally stopped servers.", fields: [] },
-        { group: "Fleet", operation: "review-orphans", title: "Review provider orphans", description: "Create a read-only snapshot of provider resources that do not match managed state. Review never deletes or changes a provider resource.", fields: [] },
-        { group: "Fleet", operation: "orphan-review", title: "Open orphan review", description: "Read a previously created review and its exact cleanup group digests.", fields: [{ name: "reviewId", label: "Review UUID", required: true }] },
-        { group: "Fleet", operation: "cleanup-orphan", title: "Clean reviewed orphan group", description: "Queue cleanup only for an exact reviewed group digest.", destructive: true, fields: [{ name: "reviewId", label: "Review UUID", required: true }, { name: "groupSha256", label: "Group SHA-256", required: true }, reasonField] },
         { group: "Fleet", operation: "set-global-controls", title: "Global controls", description: `Replace all five live pause switches as one audited update. Role deletions are currently ${overview.controls.roleDeletionsPaused ? "paused" : "enabled"}.${overview.controls.reason ? ` Last recorded reason: ${overview.controls.reason}` : " No override reason is recorded."}`, fields: [
             { name: "provisioningPaused", label: "Pause provisioning", kind: "checkbox", defaultValue: overview.controls.provisioningPaused, help: "Checked means new server provisioning is currently paused." }, { name: "roleDeletionsPaused", label: "Pause role deletions", kind: "checkbox", defaultValue: overview.controls.roleDeletionsPaused, help: "Checked reflects the current durable safety control: automatic entitlement-loss deletions are paused until an administrator submits this card unchecked with a reason." },
             { name: "maintenancePaused", label: "Pause maintenance", kind: "checkbox", defaultValue: overview.controls.maintenancePaused, help: "Checked means scheduled maintenance work is paused." }, { name: "automaticBackupsPaused", label: "Pause automatic backups", kind: "checkbox", defaultValue: overview.controls.automaticBackupsPaused, help: "Checked means scheduled automatic backups are paused; manual backup operations remain separately controlled." },
             { name: "nightlyRolloutsPaused", label: "Pause Nightly rollouts", kind: "checkbox", defaultValue: overview.controls.nightlyRolloutsPaused, help: "Checked means automatic Nightly rollout work is paused." }, reasonField,
         ] },
-        { group: "Server lifecycle", operation: "server-operation", title: "Lifecycle operation", description: "Start, stop, restart, delete, reboot, or emergency-stop a current server generation.", destructive: true, fields: [serverField, { name: "action", label: "Action", kind: "select", required: true, options: enumOptions(["start", "stop", "restart-game", "delete", "reboot-vm", "force-stop"]) }, reasonField] },
-        { group: "Server lifecycle", operation: "update-server", title: "Update server", description: "Resolve the selected channel to a verified immutable build and queue an update.", fields: [serverField, compatibilityField, reasonField] },
-        { group: "Server lifecycle", operation: "rollback-server", title: "Rollback server", description: "Queue the reviewed rollback path for the current generation.", destructive: true, fields: [serverField, compatibilityField, reasonField] },
-        { group: "Server lifecycle", operation: "restore-backup", title: "Restore backup", description: "Restore an exact backup after current-state validation.", destructive: true, fields: [serverField, { name: "backupId", label: "Backup UUID", required: true }, reasonField] },
+        { group: "Server lifecycle", operation: "server-operation", title: "Lifecycle operation", description: "Start, stop, restart, delete, reboot, or emergency-stop a current server generation.", destructive: true, layoutPriority: 1, fields: [serverField, { name: "action", label: "Action", kind: "select", required: true, options: enumOptions(["start", "stop", "restart-game", "delete", "reboot-vm", "force-stop"]) }, reasonField] },
+        { group: "Server lifecycle", operation: "update-server", title: "Update server", description: "Install the current selection, follow the latest release, or choose a build to install and keep pinned. A backup is taken before installation.", fields: [serverField, { name: "buildId", label: "Build", kind: "select", required: true, defaultValue: "__keep__", options: [{ value: "__keep__", label: "Current selection (keep any pin)" }, { value: "__latest__", label: "Latest release (remove pin)" }, ...buildOptions], help: "Choosing a specific build installs and pins it in one request. A pin prevents automatic updates to newer builds." }, reasonField] },
+        { group: "Server lifecycle", operation: "rollback-server", title: "Reinstall previous build", description: "Install and pin the previous release in this channel, keeping the current campaign. Takes a safety backup first. To recover an older campaign instead, use Restore backup.", destructive: true, fields: [serverField, reasonField] },
+        { group: "Server lifecycle", operation: "restore-backup", title: "Restore backup", description: "Choose a server to browse its retained backups. Restoring replaces the current campaign and takes a safety backup first.", destructive: true, fields: [serverField, { name: "backupId", label: "Backup", kind: "backup", required: true }, reasonField] },
         { group: "Server lifecycle", operation: "collect-diagnostics", title: "Collect diagnostics", description: "Queue bounded, sanitized diagnostics. Raw secrets and arbitrary files remain inaccessible.", fields: [serverField, { name: "lookbackSeconds", label: "Lookback seconds", kind: "number", required: true, minimum: 60, maximum: 86400, defaultValue: 3600 }, reasonField] },
-        { group: "Server lifecycle", operation: "update-settings", title: "Change release settings", description: "Change channel and/or maintenance slot with a stale-state guard.", fields: [serverField, { name: "patch.releaseChannel", label: "Release channel", kind: "select", options: enumOptions(["stable", "nightly"]) }, { name: "patch.maintenanceSlot", label: "Maintenance slot", kind: "select", options: maintenanceOptions, help: `All maintenance windows use ${MAINTENANCE_TIME_ZONE} (Central Time and its daylight-saving changes).` }, compatibilityField, reasonField] },
-        { group: "Server lifecycle", operation: "set-build-pin", title: "Set build pin", description: "Pin an exact catalog build, or leave blank to return to channel resolution.", fields: [serverField, { name: "buildId", label: "Build pin", kind: "select", valueType: "nullable", options: buildOptions }, compatibilityField, reasonField] },
+        { group: "Server lifecycle", operation: "update-settings", title: "Change release settings", description: "Change channel and/or maintenance slot with a stale-state guard.", fields: [serverField, { name: "patch.releaseChannel", label: "Release channel", kind: "select", options: enumOptions(["stable", "nightly"]) }, { name: "patch.maintenanceSlot", label: "Maintenance slot", kind: "select", options: maintenanceOptions, help: `All maintenance windows use ${MAINTENANCE_TIME_ZONE} (Central Time and its daylight-saving changes).` }, reasonField] },
         { group: "Server lifecycle", operation: "reset-password", title: "Reset game password", description: "Generate a password or set a custom value; generated output is shown once.", destructive: true, fields: [serverField, { name: "choice.kind", label: "Password source", kind: "select", required: true, options: enumOptions(["generated", "custom"]) }, { name: "choice.password", label: "Custom password", kind: "password", placeholder: "Required only for custom" }, reasonField] },
         { group: "Server lifecycle", operation: "suspend-server", title: "Suspend server", description: "Durably suspend owner operations and queue a safe stop.", destructive: true, fields: [plainServerField, reasonField] },
         { group: "Server lifecycle", operation: "reactivate-server", title: "Reactivate server", description: "Clear administrative suspension after entitlement checks.", fields: [plainServerField, reasonField] },
@@ -601,13 +619,11 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
         { group: "Ownership and capacity", operation: "set-bonus-quota", title: "Set bonus quota", description: "Replace an owner’s administrative bonus server quota.", fields: [discordUserField("targetDiscordUserId", "Discord username or ID"), { name: "bonusQuota", label: "Bonus quota", kind: "number", required: true, minimum: 0, maximum: 100 }, reasonField] },
         { group: "Ownership and capacity", operation: "transfer-owner", title: "Transfer ownership", description: "Transfer a server or queue the required replacement workflow.", destructive: true, fields: [serverField, discordUserField("recipientDiscordUserId", "Recipient Discord username or ID"), { name: "recipientRoleIds", label: "Recipient role IDs", valueType: "csv", placeholder: "Comma separated" }, reasonField] },
         { group: "Ownership and capacity", operation: "set-manager", title: "Set manager", description: "Grant or revoke manager access for one Discord user.", fields: [plainServerField, discordUserField("managerDiscordUserId", "Manager Discord username or ID"), { name: "enabled", label: "Grant access (unchecked revokes)", kind: "checkbox", defaultValue: true }, reasonField] },
-        { group: "Ownership and capacity", operation: "replace-provider", title: "Replace provider generation", description: "Queue a resize, rebuild, or region migration with backup/restore and atomic cutover gates.", destructive: true, fields: [serverField, { name: "selection.action", label: "Replacement", kind: "select", required: true, options: enumOptions(["resize", "rebuild", "migrate-region"]) }, { name: "selection.targetSizeId", label: "Target size ID", placeholder: "Resize only" }, { name: "selection.targetImageId", label: "Target image ID", placeholder: "Rebuild only" }, { name: "selection.targetFriendlyRegion", label: "Target region", kind: "select", options: regionOptions }, reasonField] },
         { group: "Jobs", operation: "retry-job", title: "Retry job", description: "Move an eligible failed/retry-wait job back to the durable queue.", fields: [{ name: "jobId", label: "Job", kind: "job", required: true, options: jobOptions }, reasonField] },
         { group: "Jobs", operation: "cancel-job", title: "Cancel job", description: "Request cancellation at the next safe checkpoint.", destructive: true, fields: [{ name: "jobId", label: "Job", kind: "job", required: true, options: jobOptions }, reasonField] },
         { group: "Jobs", operation: "diagnostics", title: "Open diagnostics result", description: "Read the sanitized result of a completed diagnostics job.", fields: [{ name: "jobId", label: "Diagnostics job UUID", required: true }] },
-        { group: "Releases and communication", operation: "batch-maintenance", title: "Batch maintenance", description: "Queue updates for a bounded fleet snapshot, optionally limited to one channel.", fields: [{ name: "releaseChannel", label: "Channel", kind: "select", valueType: "nullable", options: enumOptions(["stable", "nightly"]) }, reasonField] },
-        { group: "Releases and communication", operation: "announce-owners", title: "Announce to owners", description: "Queue a durable private notification campaign for entitled owners.", fields: [{ name: "message", label: "Message", kind: "textarea", required: true }, reasonField] },
-        ...(["inspect", "validate", "reject", "revoke"] as const).map((verb) => ({ group: "Releases and communication", operation: `${verb}-build`, title: `${capitalize(verb)} build`, description: `${capitalize(verb)} one exact release catalog build with an audit reason.`, destructive: verb === "reject" || verb === "revoke", fields: [{ name: "buildId", label: "Build", kind: "select" as const, required: true, options: buildOptions }, reasonField] })),
+        { group: "Maintenance and communication", operation: "batch-maintenance", title: "Batch maintenance", description: "Queue updates for a bounded fleet snapshot, optionally limited to one channel.", fields: [{ name: "releaseChannel", label: "Channel", kind: "select", valueType: "nullable", options: enumOptions(["stable", "nightly"]) }, reasonField] },
+        { group: "Maintenance and communication", operation: "announce-owners", title: "Announce to owners", description: "Queue a durable private notification campaign for entitled owners.", fields: [{ name: "message", label: "Message", kind: "textarea", required: true }, reasonField] },
     ];
     const groups = [...new Set(cards.map((card) => card.group))];
     return <div className="mt-8 space-y-12">{groups.map((group) => {
@@ -621,6 +637,21 @@ function JobsTable({ jobs, allowFailureAcknowledgement = false }: { jobs: Hostin
 function BackupsTable({ backups }: { backups: Backup[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-200 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Backup</th><th className="p-4">Type</th><th className="p-4">State</th><th className="p-4">Size</th><th className="p-4">Created</th><th className="p-4">Expires</th></tr></thead><tbody className="divide-y divide-white/10">{backups.map((backup) => <tr key={backup.backupId}><td className="p-4 font-mono text-xs text-foreground-muted">{backup.backupId}</td><td className="p-4 text-xs text-foreground-muted">{backup.backupType}</td><td className="p-4"><State value={backup.restoreState} /></td><td className="p-4 text-xs text-foreground-muted">{formatBytes(backup.byteSize)}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={backup.createdAt} /></td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={backup.retentionExpiresAt} /></td></tr>)}</tbody></table>{backups.length === 0 && <Empty>No retained backups.</Empty>}</div>; }
 function AuditTable({ events }: { events: AuditEvent[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-240 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Time</th><th className="p-4">Action</th><th className="p-4">Actor</th><th className="p-4">Server</th><th className="p-4">Reason</th><th className="p-4">Correlation</th></tr></thead><tbody className="divide-y divide-white/10">{events.map((event) => { const explanation = auditActionExplanation(event.action); return <tr key={event.eventId} className="cursor-help hover:bg-white/[0.025]" title={explanation} aria-label={`${event.action}: ${explanation}`}><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={event.occurredAt} /></td><td className="p-4 text-xs font-semibold text-foreground underline decoration-dotted underline-offset-4">{event.action}</td><td className="p-4 text-xs text-foreground-muted">{event.actorType}<br />{shortId(event.actorId)}</td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(event.targetServerId)}</td><td className="max-w-80 p-4 text-xs text-foreground-muted">{event.reason ?? "—"}</td><td className="p-4 font-mono text-[0.62rem] text-foreground-dim">{shortId(event.correlationId)}</td></tr>; })}</tbody></table>{events.length === 0 && <Empty>No audit events in this view.</Empty>}</div>; }
 function BuildTable({ builds }: { builds: ReleaseBuild[] }) { return <div className="mt-4 border border-white/10 bg-surface"><table className="w-full table-fixed text-left text-sm"><colgroup><col className="w-[28%]" /><col className="w-[17%]" /><col className="w-[20%]" /><col className="w-[12%]" /><col className="w-[23%]" /></colgroup><thead className="border-b border-white/10 font-label text-[0.6rem] uppercase tracking-[0.09em] text-foreground-muted"><tr><th className="px-2 py-4 sm:px-4">Version</th><th className="px-2 py-4 sm:px-4">Commit</th><th className="px-2 py-4 sm:px-4">Validation</th><th className="px-2 py-4 sm:px-4">Game</th><th className="px-2 py-4 sm:px-4">Published</th></tr></thead><tbody className="divide-y divide-white/10">{builds.map((build) => <tr key={build.buildId}><td className="min-w-0 px-2 py-4 sm:px-4"><p className="truncate font-semibold text-foreground" title={build.version}>{build.version}</p><p className="truncate font-mono text-[0.6rem] text-foreground-dim" title={build.buildId}>{shortId(build.buildId)}</p></td><td className="break-all px-2 py-4 font-mono text-xs text-foreground-muted sm:px-4" title={build.sourceRevision}>{shortRevision(build.sourceRevision)}</td><td className="px-2 py-4 sm:px-4"><State value={build.validationState} /></td><td className="break-words px-2 py-4 text-xs text-foreground-muted sm:px-4">{build.supportedGameVersion}</td><td className="px-2 py-4 text-xs text-foreground-muted sm:px-4"><LocalDateTime value={build.publishedAt} /></td></tr>)}</tbody></table>{builds.length === 0 && <Empty>No validated builds in this channel.</Empty>}</div>; }
+
+function VpsCapacity({ host }: { host: HostingAdminVpsHost }) {
+    return <dl className="space-y-2 text-xs"><div className="flex items-center justify-between gap-3"><dt className="text-foreground-muted">Total</dt><dd className="font-display text-lg text-foreground">{host.totalSlots}</dd></div><div className="flex items-center justify-between gap-3"><dt className="text-foreground-muted">Running</dt><dd className="font-display text-lg text-foreground">{host.runningServers}</dd></div><div className="flex items-center justify-between gap-3"><dt className="text-foreground-muted">Available</dt><dd className="font-display text-lg text-foreground">{host.availableServers}</dd></div></dl>;
+}
+
+function OccupiedVpsSlots({ host, usernames }: { host: HostingAdminVpsHost; usernames: Map<string, string> }) {
+    const slots = Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
+    if (slots.length === 0) return <p className="text-xs leading-5 text-foreground-muted">No occupied slots.</p>;
+    return <ul className="space-y-3">{slots.map((slot) => <li key={`${slot.slotIndex}:${slot.serverId}`} className="border-l-2 border-gold/30 pl-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-label text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-gold">Slot {slot.slotIndex + 1} · UDP {slot.gamePort}</p><State value={slot.operationState} /></div><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="mt-1 block break-words text-xs font-semibold text-foreground hover:text-gold hover:underline">{slot.displayName}</Link><p className="mt-1 break-all font-mono text-[0.62rem] text-foreground-muted">{formatDiscordOwner(usernames.get(slot.ownerDiscordUserId), slot.ownerDiscordUserId)}</p><ServerResourceUsage resources={slot.resources} /></li>)}</ul>;
+}
+
+function InlineHostResources({ resources }: { resources: HostingAdminHostResources | null }) {
+    if (!resources) return <div><State value="unavailable" /><p className="mt-2 text-xs leading-5 text-foreground-muted">No current trusted runner observation.</p></div>;
+    return <div><State value="available" /><dl className="mt-3 space-y-2 text-xs"><div><dt className="text-foreground-dim">Disk</dt><dd className="mt-0.5 text-foreground-muted">{formatStorageBytes(resources.diskUsedBytes)} used · {formatStorageBytes(resources.diskFreeBytes)} free</dd></div><div><dt className="text-foreground-dim">Memory</dt><dd className="mt-0.5 text-foreground-muted">{formatStorageBytes(resources.memoryUsedBytes)} / {formatStorageBytes(resources.memoryTotalBytes)}</dd></div><div className="flex flex-wrap gap-x-4 gap-y-1"><div><dt className="text-foreground-dim">CPU load</dt><dd className="text-foreground-muted">{resources.cpuPercent.toFixed(1)}%</dd></div><div><dt className="text-foreground-dim">Uptime</dt><dd className="text-foreground-muted">{formatUptime(resources.uptimeSeconds)}</dd></div></div><div><dt className="text-foreground-dim">Observed</dt><dd className="text-foreground-muted"><LocalDateTime value={resources.observedAt} /></dd></div></dl></div>;
+}
 
 function HostResourcesCard({ name, resources }: { name: string; resources: HostingAdminHostResources | null }) {
     return (
@@ -647,7 +678,7 @@ function SectionHeading({ eyebrow, title, count }: { eyebrow: string; title: str
 function State({ value }: { value: string }) { const good = ["running", "succeeded", "validated", "available", "healthy"].includes(value); const bad = ["failed", "degraded", "revoked", "rejected", "cancelled", "unavailable"].includes(value); const explanation = stateExplanation(value); return <span title={explanation} aria-label={`${value}: ${explanation}`} className={`inline-flex cursor-help border px-2 py-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] ${good ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : bad ? "border-crimson/30 bg-crimson/10 text-red-200" : "border-gold/25 bg-gold/8 text-gold"}`}>{value}</span>; }
 function Empty({ children }: { children: React.ReactNode }) { return <div className="px-6 py-12 text-center text-sm text-foreground-muted">{children}</div>; }
 
-function ReleaseHistoryNote({ hidden }: { hidden: number }) { return hidden > 0 ? <p className="mt-3 min-h-10 text-xs leading-5 text-foreground-muted">Showing installable validated builds. {hidden} non-validated historical {hidden === 1 ? "record is" : "records are"} hidden here; receipts and audit history remain available to the inspect/reject operations.</p> : <p className="mt-3 min-h-10 text-xs leading-5 text-foreground-muted">Only installable validated builds are shown.</p>; }
+function ReleaseHistoryNote({ hidden }: { hidden: number }) { return hidden > 0 ? <p className="mt-3 min-h-10 text-xs leading-5 text-foreground-muted">Showing installable validated builds. {hidden} non-validated historical {hidden === 1 ? "record is" : "records are"} hidden here; release publication and approval are handled by the release pipeline.</p> : <p className="mt-3 min-h-10 text-xs leading-5 text-foreground-muted">Only installable validated builds are shown.</p>; }
 
 function RuntimeObservation({ server }: { server: ManagedServer }) {
     const suspendedWhileRunning = server.operationState === "suspended" && server.observedGameState === "running";
@@ -690,4 +721,3 @@ function formatStorageBytes(value: number) { return value >= 1_073_741_824 ? `${
 function formatUptime(seconds: number) { const days = Math.floor(seconds / 86_400); const hours = Math.floor((seconds % 86_400) / 3_600); return days > 0 ? `${days}d ${hours}h` : `${hours}h`; }
 function shortId(value: string | null) { return value ? (value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value) : "—"; }
 function shortRevision(value: string) { return value.slice(0, 12); }
-function capitalize(value: string) { return value[0]?.toUpperCase() + value.slice(1); }

@@ -33,6 +33,18 @@ server; Linux testers run those files through Wine or Proton. Run
 `installer/`; `gateway:dry-run` performs the sync automatically before
 packaging.
 
+`installer/install.ps1` is the authority for nightly release metadata, Discord
+authorization decisions, and incremental server update behavior. Keep the Linux
+implementation aligned when those contracts change, including downloading the
+validated client `publicUrl` rather than the mutable legacy URL. Linux-specific
+Steam discovery and Wine/Proton handling remain in `install-linux.sh`.
+
+Run `npm run test:installer-linux` on Linux or WSL with Bash, Python 3, and 7-Zip
+(`7zz` or `7z`) installed. The suite executes the interactive installer against
+local HTTP fixtures and temporary installs, including rollback failures, without
+contacting the gateway or launching the game. `npm test` also runs this suite on
+Linux and checks that the packaged Linux scripts match their canonical sources.
+
 ## Required production setup
 
 1. Apply `supabase/migrations/202608260004_create_nightly_gateway_schema.sql`

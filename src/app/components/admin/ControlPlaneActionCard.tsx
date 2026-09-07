@@ -5,12 +5,14 @@ import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { resolveDiscordUserReference } from "@/app/lib/supabase/discord-users";
 import {
+    adminActionOptionValue,
     applyControlPlaneOperationDefaults,
     fieldRequirementLabel,
     operationTargetMatchesHash,
     presentControlPlaneOperationResult,
     type ControlPlaneOperationResultLink,
 } from "@/app/lib/control-plane/presentation";
+import { ControlPlaneBackupPicker } from "./ControlPlaneBackupPicker";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -19,12 +21,13 @@ export type AdminActionOption = {
     label: string;
     value: string;
     updatedAt?: string;
+    releaseChannel?: "stable" | "nightly";
 };
 
 export type AdminActionField = {
     name: string;
     label: string;
-    kind?: "text" | "textarea" | "number" | "checkbox" | "select" | "server" | "job" | "password" | "discord-user";
+    kind?: "text" | "textarea" | "number" | "checkbox" | "select" | "server" | "job" | "password" | "discord-user" | "backup";
     placeholder?: string;
     required?: boolean;
     minimum?: number;
@@ -61,6 +64,15 @@ export function ControlPlaneActionCard({
         links: ControlPlaneOperationResultLink[];
     } | null>(null);
     const [isTargeted, setIsTargeted] = useState(false);
+    const serverField = fields.find((field) => field.kind === "server");
+    const [serverValue, setServerValue] = useState(String(serverField?.defaultValue ?? ""));
+    const [backupReady, setBackupReady] = useState(false);
+    const [formRevision, setFormRevision] = useState(0);
+    const selectedServer = serverField?.options?.find((option) => adminActionOptionValue("server", option) === serverValue);
+    const effectiveFields = fields.map((field) => field.name === "buildId" && operation === "update-server"
+        ? { ...field, options: field.options?.filter((option) => !option.releaseChannel || option.releaseChannel === selectedServer?.releaseChannel) }
+        : field);
+    const needsBackup = fields.some((field) => field.kind === "backup");
     const unavailableField = fields.find((field) => (
         field.required === true
         && ["select", "server", "job"].includes(field.kind ?? "")
@@ -104,7 +116,7 @@ export function ControlPlaneActionCard({
         setResult(null);
         const requestId = crypto.randomUUID();
         try {
-            const input = buildInput(fields, formData);
+            const input = buildInput(effectiveFields, formData);
             applyControlPlaneOperationDefaults(operation, input);
             normalizeOperationInput(operation, input);
             const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
@@ -154,15 +166,27 @@ export function ControlPlaneActionCard({
                     </span>
                 )}
             </div>
-            <form action={submit} className="mt-4 flex flex-1 flex-col">
+            <form action={submit} onReset={() => {
+                setServerValue(String(serverField?.defaultValue ?? ""));
+                setBackupReady(false);
+                setFormRevision((value) => value + 1);
+            }} onChange={(event) => {
+                const target = event.target;
+                if (target instanceof HTMLSelectElement && target.name === serverField?.name) {
+                    setServerValue(target.value);
+                    setBackupReady(false);
+                }
+            }} className="mt-4 flex flex-1 flex-col">
                 <div className="grid gap-3">
-                    {fields.map((field) => <ActionField key={field.name} field={field} />)}
+                    {effectiveFields.map((field) => field.kind === "backup"
+                        ? <ControlPlaneBackupPicker key={`${serverValue}:${formRevision}`} serverId={selectedServer?.value ?? null} onReady={setBackupReady} />
+                        : <ActionField key={field.name === "buildId" ? `${field.name}:${serverValue}` : field.name} field={field} />)}
                 </div>
                 {unavailableField && <p className="mt-3 text-xs leading-5 text-amber-300">No eligible {unavailableField.label.toLowerCase()} is currently available.</p>}
                 <div className="mt-auto pt-4">
                     <button
                         type="submit"
-                        disabled={pending || unavailableField !== undefined}
+                        disabled={pending || unavailableField !== undefined || (needsBackup && !backupReady)}
                         className="inline-flex min-h-10 w-full items-center justify-center gap-2 border border-crimson bg-crimson px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:bg-crimson-hover disabled:cursor-wait disabled:opacity-60"
                     >
                         {pending ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <Play aria-hidden="true" className="size-3.5" />}
@@ -229,9 +253,7 @@ function ActionField({ field }: { field: AdminActionField }) {
                     {field.options?.map((option) => (
                         <option
                             key={`${option.value}:${option.updatedAt ?? ""}`}
-                            value={field.kind === "server" || field.kind === "job"
-                                ? JSON.stringify({ id: option.value, updatedAt: option.updatedAt })
-                                : option.value}
+                            value={adminActionOptionValue(field.kind, option)}
                         >
                             {option.label}
                         </option>
@@ -340,6 +362,10 @@ function setPath(target: Record<string, unknown>, path: string, value: unknown) 
 
 function normalizeOperationInput(operation: string, input: Record<string, unknown>) {
     if (operation === "onboard-vps-host") input.mode = "enroll";
+    if (operation === "update-server") {
+        if (input.buildId === "__keep__") delete input.buildId;
+        else if (input.buildId === "__latest__") input.buildId = null;
+    }
     if (operation === "reset-password") {
         const choice = input.choice as Record<string, unknown> | undefined;
         if (choice?.kind === "generated") delete choice.password;
