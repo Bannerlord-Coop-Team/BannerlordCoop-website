@@ -166,7 +166,9 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
         return () => {
             dialog.close();
             document.body.style.overflow = previousOverflow;
-            if (previousFocus?.isConnected) previousFocus.focus(); else restoreFallback();
+            const canRestore = previousFocus?.isConnected && !previousFocus.matches(":disabled");
+            if (canRestore) previousFocus.focus();
+            if (!canRestore || document.activeElement !== previousFocus) restoreFallback();
         };
     }, []);
     useEffect(() => {

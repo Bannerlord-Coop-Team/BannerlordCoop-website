@@ -94,12 +94,36 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         expect(stored()).toBeNull(); expect(container.textContent).toContain("No change was made"); expect(button("Create server").disabled).toBe(true);
         await render(onboardingSummary()); expect(button("Create server").disabled).toBe(false);
     });
-    it("closing pending dialog neither cancels mutation nor hides accessible recovery", async () => {
+    it.each(["Escape", "Close"])("closing pending dialog via %s restores fallback focus without cancelling or resubmitting", async (dismiss) => {
         let resolve!: (value: unknown) => void;
         mocks.request.mockImplementationOnce(() => new Promise((r) => { resolve = r; }));
-        await setup(); await name("My Campaign"); await click("Create server"); expect(stored()).not.toBeNull();
-        await click("Close (request continues)"); expect(container.querySelector("dialog")).toBeNull(); expect(button("Confirming request…").disabled).toBe(true);
+        await render(); button("Set up server ").focus(); await click("Set up server ");
+        await name("My Campaign"); await click("Create server"); const original = stored(); expect(original).not.toBeNull();
+        expect(button("Set up server ").disabled).toBe(true);
+        if (dismiss === "Escape") await act(async () => container.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true })));
+        else await click("Close (request continues)");
+        expect(container.querySelector("dialog")).toBeNull(); expect(document.activeElement).toBe(container.firstElementChild);
+        expect(button("Confirming request…").disabled).toBe(true); expect(stored()).toEqual(original); expect(mocks.request).toHaveBeenCalledTimes(1);
         await act(async () => resolve(onboardingCreated())); expect(container.textContent).toContain("Server assigned"); expect(stored()).toBeNull();
+        expect(mocks.request).toHaveBeenCalledTimes(1);
+    });
+    it.each(["Escape", "Close"])("closing uncertain dialog via %s restores fallback focus and preserves exact retry", async (dismiss) => {
+        mocks.request.mockRejectedValueOnce(new Error("lost after possible commit"));
+        await render(); button("Set up server ").focus(); await click("Set up server ");
+        await name("My Campaign"); await click("Create server"); const original = stored(); expect(original).not.toBeNull();
+        expect(button("Set up server ").disabled).toBe(true);
+        if (dismiss === "Escape") await act(async () => container.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true })));
+        else await click("Close");
+        expect(container.querySelector("dialog")).toBeNull(); expect(document.activeElement).toBe(container.firstElementChild);
+        expect(stored()).toEqual(original); expect(mocks.request).toHaveBeenCalledTimes(1);
+        await click("Retry pending request"); expect(mocks.request).toHaveBeenCalledTimes(2);
+        expect(mocks.request.mock.calls[1][1]).toEqual(original); expect(stored()).toBeNull();
+    });
+    it("uses fallback when a connected enabled trigger does not accept focus", async () => {
+        await render(); const trigger = button("Set up server "); trigger.focus(); await click("Set up server ");
+        vi.spyOn(trigger, "focus").mockImplementation(() => {});
+        await click("Close"); expect(document.activeElement).toBe(container.firstElementChild);
+        expect(mocks.request).not.toHaveBeenCalled();
     });
     it("native dialog cancels via Escape, restores focus and wraps tab edges", async () => {
         await render(); button("Set up server ").focus(); await click("Set up server ");
