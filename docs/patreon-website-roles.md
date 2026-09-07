@@ -33,6 +33,11 @@ OAuth tokens are still discarded.
   again. A later cancellation preserves that manual grant. Manually setting
   `User` while membership is eligible is not a permanent exclusion: the next
   successful refresh can grant Standard Server again.
+- Console owner/operator edits use `set_live_console_assignment`, a separate
+  service-role-only RPC that locks the Auth row and changes only the requested
+  server assignment in current metadata. These edits never send a cached role
+  or grant marker back to Auth, so a console save cannot restore a revoked
+  Patreon grant or erase a newer grant. Deploy these writers before enabling sync.
 - Changing/deleting an OAuth link immediately withdraws the old integration
   grant in the same database transaction. New links schedule verification;
   cached membership records do not transfer a grant to another account.
@@ -92,7 +97,10 @@ access tokens and are not sufficient for unattended membership refresh.
    state, the RPC and the link-change trigger; it leaves existing links and
    manual roles intact and makes no grants at installation. Review shared
    Supabase migration history and the CLI dry run before applying migrations;
-   do not bulk-push unrelated repository history.
+   do not bulk-push unrelated repository history. Then apply
+   `20260907230000_atomic_live_console_assignments.sql` before deploying the
+   website; it adds the service-only console assignment RPC without changing
+   existing account metadata. Console writes fail closed if this RPC is missing.
 3. Set these additional Edge Function secrets using the Dashboard or an
    owner-only environment file, never command arguments or frontend variables:
 
@@ -108,7 +116,8 @@ access tokens and are not sufficient for unattended membership refresh.
    must be present before the function starts. The first authenticated RPC pins
    campaign and tier durably; changing them requires an explicit migration.
 4. Deploy the website administrator change (which clears grant ownership on a
-   manual edit) before enabling role sync. Deploy `patreon-roles` using its
+   manual edit) and the atomic console assignment writers before enabling role
+   sync. Deploy `patreon-roles` using its
    `verify_jwt = false` configuration; its signature/scheduler authentication
    replaces gateway JWT checks. Register `members:create`, `members:update`,
    `members:delete`, `members:pledge:create`, `members:pledge:update` and
@@ -161,10 +170,11 @@ removing outstanding grants requires checking each current ownership marker.
 ## Validation
 
 `npm test` includes handler tests and PGlite integration tests applying the actual
-account-linking migration before the new migration. Coverage includes signature
+account-linking migration before the new migrations. Coverage includes signature
 verification, entitlement decisions, private-state permissions, upgrades with
-existing links, manual grants, duplicate delivery, lease recovery, pagination,
-relinking and stale-response rejection. Mocked upstream responses and PGlite do
+existing links, manual grants, console edits after revocation and before/after
+new grants, console RPC permissions and rollback, duplicate delivery, lease
+recovery, pagination, relinking and stale-response rejection. Mocked upstream responses and PGlite do
 not prove real Patreon billing behavior, PostgreSQL lock scheduling or production
 deployment. Complete the staging checks above before activation.
 

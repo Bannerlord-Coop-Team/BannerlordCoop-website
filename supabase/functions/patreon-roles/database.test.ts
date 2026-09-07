@@ -3,6 +3,9 @@ import { readFile } from "node:fs/promises";
 import { after, before, beforeEach, test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import { manualRoleMetadata } from "../../../src/app/lib/auth/manual-role";
+import { LIVE_CONSOLE_OPERATOR_IDS_KEY, LIVE_CONSOLE_OWNER_IDS_KEY } from "../../../src/app/lib/console/access";
+import { updateLiveConsoleAssignment } from "../../../src/app/lib/console/assignment";
+import { createClient } from "@supabase/supabase-js";
 import { createPatreonRoleHandler } from "../_shared/patreon-roles.ts";
 import { createHmac } from "node:crypto";
 
@@ -32,6 +35,9 @@ before(async () => {
     assert.equal((await metadata()).role, "Standard Server");
     assert.equal((await db.query("select * from public.patreon_accounts")).rows.length, 1);
     assert.equal((await db.query("select * from patreon_roles.grants")).rows.length, 0);
+    await db.exec(await readFile(new URL("../../migrations/20260907230000_atomic_live_console_assignments.sql", import.meta.url), "utf8"));
+    assert.equal((await metadata()).role, "Standard Server");
+    assert.equal((await db.query("select * from public.patreon_accounts")).rows.length, 1);
 });
 after(async () => { await db?.close(); });
 beforeEach(async () => { await db.exec("reset role"); await db.exec(clear); });
@@ -70,6 +76,30 @@ async function apply(eligible = true, id = member, userId = "123") {
     return result;
 }
 async function eligibleUser() { await addUser(); await link(); await apply(); }
+
+// Exercise the same Supabase client and writer as the server actions, with only
+// the HTTP boundary replaced by the actual migrated SQL function.
+const consoleClient = createClient("https://example.test", "fixture-service-role-key", {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { fetch: async (input, init) => {
+        const request = new Request(input, init);
+        assert.equal(request.url, "https://example.test/rest/v1/rpc/set_live_console_assignment");
+        assert.equal(request.method, "POST");
+        const body = await request.json();
+        assert.deepEqual(Object.keys(body).sort(), ["p_operator_assigned", "p_owner_assigned", "p_server_id", "p_user_id"]);
+        try {
+            await db.query("select public.set_live_console_assignment($1,$2,$3,$4)", [
+                body.p_user_id, body.p_server_id, body.p_owner_assigned, body.p_operator_assigned,
+            ]);
+            return new Response(null, { status: 204 });
+        } catch (error) {
+            return Response.json({ message: error instanceof Error ? error.message : "database_error" }, { status: 400 });
+        }
+    } },
+});
+async function consoleAssignment(assignment: { owner?: boolean; operator?: boolean }, serverId = "server-one", id = user) {
+    await updateLiveConsoleAssignment(consoleClient, id, serverId, assignment);
+}
 
 test("only the service role can execute sync or write links; OAuth can still invoke the trigger", async () => {
     await addUser();
@@ -122,6 +152,117 @@ test("unconfirmed, banned and deleted website accounts cannot receive grants", a
 test("an unset role is restored without inventing a previous role", async () => {
     await addUser(user, null); await link(); await apply(); await apply(false);
     assert.deepEqual(await metadata(), { unrelated: true });
+});
+
+test("a console save after revocation cannot restore the revoked Patreon grant", async () => {
+    await eligibleUser();
+    const snapshot = { id: user, app_metadata: await metadata() };
+    assert.equal(snapshot.app_metadata.role, "Standard Server");
+    await apply(false);
+    await updateLiveConsoleAssignment(consoleClient, snapshot.id, "server-one", { operator: true });
+    assert.equal((await metadata()).role, "User");
+    await apply(false);
+    assert.equal((await metadata()).role, "User");
+    assert.equal((await metadata()).patreon_standard_server_grant, undefined);
+    assert.deepEqual((await metadata())[LIVE_CONSOLE_OPERATOR_IDS_KEY], ["server-one"]);
+    assert.equal((await db.query("select * from patreon_roles.grants")).rows.length, 0);
+});
+
+test("owner and operator removals after revocation preserve the restored role", async () => {
+    await addUser(user, null); await link(); await apply();
+    await consoleAssignment({ owner: true, operator: true });
+    const snapshot = { id: user, app_metadata: await metadata() };
+    await apply(false);
+    await updateLiveConsoleAssignment(consoleClient, snapshot.id, "server-one", { owner: false, operator: false });
+    await apply(false);
+    assert.deepEqual(await metadata(), {
+        unrelated: true, [LIVE_CONSOLE_OWNER_IDS_KEY]: [], [LIVE_CONSOLE_OPERATOR_IDS_KEY]: [],
+    });
+});
+
+test("a console edit preserves a newer Patreon grant and its revocation ownership", async () => {
+    await addUser(); await link();
+    const snapshot = { id: user, app_metadata: await metadata() };
+    await apply();
+    const marker = (await metadata()).patreon_standard_server_grant;
+    await updateLiveConsoleAssignment(consoleClient, snapshot.id, "server-one", { owner: true });
+    assert.equal((await metadata()).role, "Standard Server");
+    assert.equal((await metadata()).patreon_standard_server_grant, marker);
+    await apply(false);
+    assert.equal((await metadata()).role, "User");
+    assert.deepEqual((await metadata())[LIVE_CONSOLE_OWNER_IDS_KEY], ["server-one"]);
+});
+
+test("console edits preserve newer manual roles, other servers and unrelated metadata", async () => {
+    await eligibleUser();
+    const snapshot = { id: user, app_metadata: await metadata() };
+    await db.query("update auth.users set raw_app_meta_data=raw_app_meta_data || $1::jsonb where id=$2", [
+        JSON.stringify({ role: "Admin", patreon_standard_server_grant: null, unrelated: "new value" }), user,
+    ]);
+    await consoleAssignment({ owner: true, operator: true }, "server-two");
+    await updateLiveConsoleAssignment(consoleClient, snapshot.id, "server-one", { operator: true });
+    await consoleAssignment({ owner: true, operator: false });
+    await apply(false);
+    assert.deepEqual(await metadata(), {
+        role: "Admin", patreon_standard_server_grant: null, unrelated: "new value",
+        [LIVE_CONSOLE_OWNER_IDS_KEY]: ["server-two", "server-one"],
+        [LIVE_CONSOLE_OPERATOR_IDS_KEY]: ["server-two"],
+    });
+});
+
+test("console mutations require the service role and fail closed on invalid requests", async () => {
+    await addUser();
+    for (const role of ["anon", "authenticated"]) {
+        await db.exec(`set role ${role}`);
+        await assert.rejects(() => consoleAssignment({ operator: true }), { message: /permission denied/ });
+        await db.exec("reset role");
+    }
+    await db.exec("set role service_role");
+    await consoleAssignment({ operator: true });
+    await db.exec("reset role");
+    const original = await metadata();
+    for (const serverId of ["", "../server", "server\n", "x".repeat(129)]) {
+        await assert.rejects(() => consoleAssignment({ operator: true }, serverId), { message: /invalid_console_assignment/ });
+    }
+    await assert.rejects(() => consoleAssignment({}), { message: /invalid_console_assignment/ });
+    await assert.rejects(() => consoleAssignment({ operator: true }, "server-one", secondUser), { message: /console_account_not_found/ });
+    await assert.rejects(() => db.query("select public.set_live_console_assignment(null,'server-one',true,null)"));
+    await assert.rejects(() => db.query("select public.set_live_console_assignment($1,null,true,null)", [user]));
+    assert.deepEqual(await metadata(), original);
+});
+
+test("repeated console mutations are idempotent and normalize only the requested key", async () => {
+    await addUser();
+    await db.query("update auth.users set raw_app_meta_data=raw_app_meta_data || $1::jsonb where id=$2", [
+        JSON.stringify({ [LIVE_CONSOLE_OPERATOR_IDS_KEY]: ["server-two", "server-two", 42, "", "x".repeat(129)],
+            [LIVE_CONSOLE_OWNER_IDS_KEY]: ["server-other"] }), user,
+    ]);
+    await consoleAssignment({ operator: true });
+    const original = await metadata();
+    const timestamp = (await db.query("select updated_at from auth.users where id=$1", [user])).rows;
+    await consoleAssignment({ operator: true });
+    assert.deepEqual(await metadata(), original);
+    assert.deepEqual((await db.query("select updated_at from auth.users where id=$1", [user])).rows, timestamp);
+    await consoleAssignment({ operator: false });
+    await consoleAssignment({ operator: false });
+    assert.deepEqual(await metadata(), {
+        role: "User", unrelated: true,
+        [LIVE_CONSOLE_OPERATOR_IDS_KEY]: ["server-two"], [LIVE_CONSOLE_OWNER_IDS_KEY]: ["server-other"],
+    });
+});
+
+test("console assignment limits roll back both assignment keys without changing a role", async () => {
+    await eligibleUser();
+    await db.query("update auth.users set raw_app_meta_data=raw_app_meta_data || $1::jsonb where id=$2", [
+        JSON.stringify({ [LIVE_CONSOLE_OPERATOR_IDS_KEY]: Array.from({ length: 1024 }, (_, i) => `server-${i}`) }), user,
+    ]);
+    const original = await metadata();
+    await assert.rejects(() => consoleAssignment({ owner: true, operator: true }), { message: /console_assignment_limit/ });
+    assert.deepEqual(await metadata(), original);
+    await consoleAssignment({ operator: false }, "server-0");
+    await consoleAssignment({ owner: true, operator: true });
+    assert.equal((await metadata()).role, "Standard Server");
+    assert.deepEqual((await metadata())[LIVE_CONSOLE_OWNER_IDS_KEY], ["server-one"]);
 });
 
 test("a new link schedules fresh verification instead of granting from cached membership", async () => {
