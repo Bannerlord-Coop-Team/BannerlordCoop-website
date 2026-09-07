@@ -22,3 +22,15 @@ verify_jwt = true
 
 [functions.my-servers]
 verify_jwt = true
+
+# The start handler verifies the bearer token with Supabase Auth itself.
+[functions.patreon-start]
+verify_jwt = false
+
+# Browser OAuth callback uses single-use state, not a bearer token.
+[functions.patreon-callback]
+verify_jwt = false
+
+# Completion independently verifies the logged-in user with Supabase Auth.
+[functions.patreon-complete]
+verify_jwt = false
