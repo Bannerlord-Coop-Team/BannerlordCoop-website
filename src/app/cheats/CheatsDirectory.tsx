@@ -32,6 +32,7 @@ export type CheatCommand = {
     category: string;
     summary: string;
     usage: string;
+    arguments: { name: string; description: string; required: boolean }[];
     side: "server" | "client" | "either";
     kind: "action" | "inspect" | "fixture" | "audit";
     aliases?: string[];
@@ -65,7 +66,8 @@ function textMatches(command: CheatCommand, query: string, messages: CheatsMessa
         overlay?.name,
         overlay?.summary,
         messages.categories[command.category],
-        messages.featured[command.command],
+        ...command.arguments.flatMap((argument) => [argument.name, argument.description]),
+        ...Object.values(overlay?.arguments ?? {}),
         ...(command.aliases ?? []),
     ].filter(Boolean).join(" ").toLowerCase().includes(query);
 }
@@ -468,11 +470,34 @@ export function CheatsDirectory({
                                                 {command.command}
                                             </a>
                                             <p className="mt-1 max-w-full text-sm leading-6 wrap-anywhere text-foreground-muted">
-                                                {localizedCommandSummary(command, messages, isFeaturedTab)}
+                                                {localizedCommandSummary(command, messages)}
                                             </p>
                                             <p className="mt-2 max-w-full wrap-anywhere font-mono text-xs text-foreground-dim">
                                                 {command.usage}
                                             </p>
+                                            {command.arguments.length > 0 && (
+                                                <details className="mt-3 text-sm text-foreground-muted">
+                                                    <summary className="cursor-pointer text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">
+                                                        {ui.parameters}
+                                                    </summary>
+                                                    <p className="mt-2 text-xs leading-5">{ui.parameterTip}</p>
+                                                    <dl className="mt-2 space-y-2">
+                                                        {command.arguments.map((argument) => (
+                                                            <div key={argument.name}>
+                                                                <dt className="wrap-anywhere">
+                                                                    <code>{argument.name}</code>
+                                                                    <span className="ml-2 text-xs text-foreground-dim">
+                                                                        {argument.required ? ui.required : ui.optional}
+                                                                    </span>
+                                                                </dt>
+                                                                <dd className="mt-0.5 wrap-anywhere text-xs leading-5">
+                                                                    {messages.commands[command.command]?.arguments[argument.name] ?? argument.description}
+                                                                </dd>
+                                                            </div>
+                                                        ))}
+                                                    </dl>
+                                                </details>
+                                            )}
                                         </div>
                                         <div className="flex w-full flex-wrap items-center gap-2">
                                             {showCategoryBadge && (
