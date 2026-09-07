@@ -7,7 +7,9 @@ import {
 import { getLiveConsoleAccessLevel } from "@/app/lib/auth/access";
 import { listLiveConsoleServers } from "@/app/lib/console/servers";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
-import { listAllMyServers } from "@/app/lib/hosting/my-servers";
+import { getServerOnboarding, listAllMyServers } from "@/app/lib/hosting/my-servers";
+import { ServerOnboarding, GamePasswordNotice } from "@/app/components/servers/ServerOnboarding";
+import type { OnboardingSummary } from "../../../supabase/functions/_shared/server-onboarding-contract";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getAllServers } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -63,6 +65,11 @@ export default async function ServersPage() {
             manageUrl: `/servers/${encodeURIComponent(server.id)}`,
         }),
     );
+    let onboarding: OnboardingSummary | null = null;
+    if (user && accessToken) {
+        try { onboarding = await getServerOnboarding(accessToken); }
+        catch { /* Unknown eligibility/capacity must never become a positive or empty snapshot. */ }
+    }
     let managedServersError = "";
     let controlPlaneServers: ManagedServerDirectoryEntry[] = [];
     if (user) {
@@ -122,6 +129,8 @@ export default async function ServersPage() {
                     </p>
                 </div>
 
+                {user && <ServerOnboarding userId={user.id} summary={onboarding} />}
+
                 <section id="my-servers" className="mt-12" aria-labelledby="my-servers-heading">
                     <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
                         <div>
@@ -145,6 +154,7 @@ export default async function ServersPage() {
                                     {managedServersError}
                                 </p>
                             )}
+                            {controlPlaneServers.length > 0 && <div className="mb-5"><GamePasswordNotice /></div>}
                             <ServerDirectoryTable
                                 servers={managedServers}
                                 emptyMessage={managedServersError

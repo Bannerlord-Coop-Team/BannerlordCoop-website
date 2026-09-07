@@ -6,6 +6,8 @@ import type {
     MyServerSummary,
 } from "@/app/lib/control-plane/types";
 
+import { parseOnboardingIntent, parseOnboardingSummary, parseOnboardingResult, type OnboardingIntent, type OnboardingResult, type OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+
 const MAXIMUM_RESPONSE_BYTES = 8 * 1_048_576;
 const MAXIMUM_PAGES = 10;
 const BACKUP_PAGE_LIMIT = 50;
@@ -195,6 +197,24 @@ export async function requestMyServerBackupOperation(
     return result as MyServerBackupOperationResult;
 }
 
+export async function getServerOnboarding(accessToken: string): Promise<OnboardingSummary> {
+    const result = await requestMyServersApi(accessToken, {
+        method: "GET",
+        configureEndpoint(endpoint) { endpoint.searchParams.set("resource", "onboarding"); },
+    });
+    try { return parseOnboardingSummary(result); } catch { throw invalidResponse(); }
+}
+
+export async function requestServerOnboarding(accessToken: string, intent: OnboardingIntent): Promise<OnboardingResult> {
+    let parsed: OnboardingIntent;
+    try { parsed = parseOnboardingIntent(intent); } catch {
+        throw new MyServersApiError("invalid_request", "The onboarding request is invalid.");
+    }
+    const { requestId, ...input } = parsed;
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify(input), requestId });
+    try { return parseOnboardingResult(result, input); } catch { throw invalidResponse(); }
+}
+
 async function requestMyServers(accessToken: string, cursor: string | null): Promise<unknown> {
     return requestMyServersApi(accessToken, {
         method: "GET",
@@ -270,7 +290,10 @@ async function requestMyServersApi(
     if (!envelope.ok) {
         const error = envelope.error;
         if (
-            !isRecord(error)
+            response.ok
+            || !hasExactKeys(envelope, ["error", "ok", "requestId", "version"])
+            || !isRecord(error)
+            || !hasExactKeys(error, ["code", "message", "retryable"])
             || typeof error.code !== "string"
             || !SAFE_ERROR_CODE.test(error.code)
             || typeof error.message !== "string"
@@ -281,7 +304,7 @@ async function requestMyServersApi(
         ) throw invalidResponse();
         throw new MyServersApiError(error.code, error.message, error.retryable);
     }
-    if (!response.ok || !Object.hasOwn(envelope, "result")) throw invalidResponse();
+    if (!response.ok || !hasExactKeys(envelope, ["ok", "requestId", "result", "version"])) throw invalidResponse();
     return envelope.result;
 }
 

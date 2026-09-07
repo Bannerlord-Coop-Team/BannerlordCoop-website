@@ -111,9 +111,9 @@ Bootstrap administrators always retain admin access, preventing an accidental to
 
 The protected `/admin/control-plane` page is the administrative surface for managed hosting. It reads fleet/server/job/release/audit state and submits the complete supported administrator operation set through the `control-plane-admin` Supabase Edge Function. The function reauthenticates the current Discord administrator and relays the typed request to the Oracle control-plane web adapter. The website does not query the private control-plane schema or talk directly to OVH, runners, containers, or object storage. See `docs/control-plane-admin.md` and the control-plane repository's `docs/managed-hosting/web-admin.md`.
 
-### Server hosting preview
+### Legacy server hosting preview
 
-The public `/servers` page provides the server directory, while server management remains role-protected:
+The legacy placeholder implementation (not the current authenticated My Servers/onboarding flow below) provides these simulated behaviors:
 
 - Everyone can browse, search, filter, and join servers without signing in.
 - Signed-in `Admin` and `Server Manager` members can manage every placeholder hosted server and view its assigned account.
@@ -121,11 +121,17 @@ The public `/servers` page provides the server directory, while server managemen
 - Start, stop, restart, runtime status, and log streaming are simulated in the browser and reset on refresh.
 - The cron-restart toggle reveals an editable five-field UTC expression while enabled, initially `0 4 * * *`.
 
-The public directory and placeholder assigned-server records do not have a production control plane yet. Typed placeholder records—including fictitious account assignments—live in `src/app/lib/hosting/servers.ts` so those routes can be developed without implying production connectivity. Replace that repository and the local simulation when the infrastructure contract is ready.
+The public directory and legacy placeholder assigned-server records remain fixtures. Typed placeholder records—including fictitious account assignments—live in `src/app/lib/hosting/servers.ts`; they are not evidence of current account assignments or onboarding eligibility.
 
 A dormant IONOS adapter is retained, but its inventory panel and API calls are disabled while alternative hosting options are evaluated. The create-server Server Action rejects requests before contacting IONOS. `IONOS_MANAGEMENT_ENABLED=true` restores inventory management; billable creation additionally requires `IONOS_SERVER_CREATION_ENABLED=true`.
 
 The placeholder design is documented in `docs/server-hosting-design.md`.
+
+### Managed-server onboarding
+
+The current `/servers` page loads authenticated managed assignments from the control plane alongside the existing live-console list. New setup uses **unused explicitly granted quota**, not membership or role claims. Available regions create an assigned stopped server; full regions accept private durable requests through the existing authenticated `my-servers` Edge Function. The public directory remains labeled placeholder data.
+
+See [website server onboarding](docs/server-onboarding.md) for the strict contract, exact-request recovery, Discord password controls, mock-only screenshots/tests and required **schema → backend → my-servers Edge → UI** rollout order. Nothing in this implementation deploys those layers automatically.
 
 ### Live server console
 
