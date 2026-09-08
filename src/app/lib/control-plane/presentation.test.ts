@@ -17,21 +17,66 @@ import {
     overviewStatRowClass,
     presentControlPlaneOperationResult,
     serverLifecycleOperationHref,
+    serverRegionOptions,
 } from "./presentation";
+
+test("server regions use the approved display order and protocol values", () => {
+    assert.deepEqual(serverRegionOptions(), [
+        { value: "us-west", label: "US-West" },
+        { value: "us-east", label: "US-East" },
+        { value: "france", label: "France" },
+        { value: "germany", label: "Germany" },
+        { value: "united-kingdom", label: "United Kingdom" },
+        { value: "poland", label: "Poland" },
+    ]);
+});
 
 test("create-server regions come only from registered hosts with available prepared slots", () => {
     assert.deepEqual(createServerRegionOptions([
-        { region: "united-states", availableServers: 2 },
+        { region: "poland", availableServers: 1 },
+        { region: "us-east", availableServers: 2 },
         { region: "germany", availableServers: 1 },
-        { region: "united-states", availableServers: 1 },
-        { region: "spain", availableServers: 0 },
-        { region: "united-kingdom", availableServers: -1 },
+        { region: "us-west", availableServers: 1 },
+        { region: "france", availableServers: 1 },
+        { region: "united-kingdom", availableServers: 1 },
+        { region: "us-east", availableServers: 1 },
+        { region: "spain", availableServers: 5 },
+        { region: "united-states", availableServers: 5 },
+        { region: "europe-automatic", availableServers: 5 },
         { region: "unexpected", availableServers: 5 },
-    ]), [
-        { value: "germany", label: "Germany" },
-        { value: "united-states", label: "United States" },
-    ]);
+    ]), serverRegionOptions());
     assert.deepEqual(createServerRegionOptions([]), []);
+});
+
+test("create-server regions require positive safe-integer capacity", () => {
+    for (const availableServers of [0, -1, 0.5, 1.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, -Infinity]) {
+        assert.deepEqual(createServerRegionOptions(
+            serverRegionOptions().map(({ value: region }) => ({ region, availableServers })),
+        ), [], `Invalid available capacity: ${availableServers}`);
+    }
+    assert.deepEqual(createServerRegionOptions([
+        { region: "poland", availableServers: Number.MAX_SAFE_INTEGER },
+        { region: "us-east", availableServers: 1 },
+        { region: "us-east", availableServers: 0 },
+        { region: "germany", availableServers: 0 },
+        { region: "united-kingdom", availableServers: -1 },
+        { region: "france", availableServers: 0.5 },
+        { region: "us-west", availableServers: Infinity },
+        { region: "poland", availableServers: 2 },
+    ]), [
+        { value: "us-east", label: "US-East" },
+        { value: "poland", label: "Poland" },
+    ]);
+});
+
+test("create-server regions exclude legacy values, provider locations, and noncanonical spellings", () => {
+    for (const region of [
+        "united-states", "spain", "europe-automatic", "unexpected",
+        "us/las", "us/ewr", "de/fra", "US-West", "us-east ", " france",
+        "", "toString", "constructor", "__proto__",
+    ]) {
+        assert.deepEqual(createServerRegionOptions([{ region, availableServers: 5 }]), [], region);
+    }
 });
 
 test("maintenance choices show their authoritative timezone without changing protocol values", () => {
