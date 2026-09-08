@@ -9,13 +9,28 @@ export const PATREON_IDENTITY_URL = (() => {
     return url.href;
 })();
 function resource(value: unknown, type: string): value is Record<string, unknown> & { id: string } { return record(value) && value.type === type && typeof value.id === "string" && IDENTIFIER.test(value.id); }
+// Accept only a complete bounded response; never follow provider pagination URLs.
+function completePagination(value: Record<string, unknown>, count: number): void {
+    if (value.links !== undefined) {
+        if (!record(value.links) || (value.links.next !== undefined && value.links.next !== null) || (value.links.prev !== undefined && value.links.prev !== null)) throw new Error("Incomplete links");
+    }
+    if (value.meta === undefined) return;
+    if (!record(value.meta)) throw new Error("Invalid metadata");
+    if (value.meta.pagination === undefined) return;
+    const page = value.meta.pagination;
+    if (!record(page) || (!Object.hasOwn(page, "total") && !Object.hasOwn(page, "cursors"))) throw new Error("Invalid pagination");
+    if (page.total !== undefined && (!Number.isSafeInteger(page.total) || page.total !== count)) throw new Error("Contradictory total");
+    if (page.cursors !== undefined) {
+        if (!record(page.cursors) || !Object.hasOwn(page.cursors, "next") || page.cursors.next !== null) throw new Error("Incomplete cursors");
+        if (page.cursors.prev !== undefined && page.cursors.prev !== null) throw new Error("Partial page");
+    }
+    // Unrecognized pagination semantics cannot establish completeness.
+    if (Object.keys(page).some(key => !["total", "cursors"].includes(key))) throw new Error("Unknown pagination");
+}
 function relationship(value: Record<string, unknown>, name: string): unknown {
     if (!record(value.relationships) || !record(value.relationships[name])) throw new Error("Missing relationship");
     const relation = value.relationships[name];
-    if (record(relation.links) && relation.links.next != null) throw new Error("Incomplete relationship");
-    if (record(relation.meta) && record(relation.meta.pagination) && relation.meta.pagination.total !== undefined) {
-        if (!Array.isArray(relation.data) || relation.meta.pagination.total !== relation.data.length) throw new Error("Incomplete relationship pagination");
-    }
+    completePagination(relation, Array.isArray(relation.data) ? relation.data.length : relation.data === null ? 0 : 1);
     return relation.data;
 }
 // This is current subscription-benefit evidence, NOT proof of a settled $20 charge.
@@ -27,7 +42,7 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
     const evidence: Evidence = { verification: policy === null ? "unverified" : "review_required", campaignId: policy?.campaignId ?? null, memberId: null, tierIds: [], verifiedAt: policy === null ? null : now, paidThroughAt: null, policyVersion: POLICY_VERSION, evidenceSha256: null };
     if (policy !== null) {
         try {
-            if (record(body.links) && body.links.next != null) throw new Error("Incomplete identity");
+            completePagination(body, 1);
             if (!Array.isArray(body.included) || body.included.length > 500) throw new Error("Incomplete resources");
             const included = new Map<string, Record<string, unknown>>();
             for (const item of body.included) {

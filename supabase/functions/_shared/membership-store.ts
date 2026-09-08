@@ -1,4 +1,9 @@
 import { boundedJson, currentDiscord, record, UUID } from "./membership.ts";
+// Closed retry contract: never expose PostgREST/provider errors to the browser.
+export class MembershipRateLimit extends Error {}
+export function membershipRateLimitResponse(): Response {
+    return Response.json({ error: "membership_rate_limited", retryAfterSeconds: 600 }, { status: 429, headers: { "Retry-After": "600", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+}
 export type StoreConfig = { supabaseUrl: string; serviceRoleKey: string; fetch?: typeof fetch };
 export function membershipStore(config: StoreConfig) {
     const origin = new URL(config.supabaseUrl);
@@ -7,6 +12,7 @@ export function membershipStore(config: StoreConfig) {
     async function request(path: string, init: RequestInit, allowDeleted = false) {
         const response = await requestFetch(new URL(path, origin), { ...init, redirect: "error", signal: AbortSignal.timeout(4_000), headers: { apikey: config.serviceRoleKey, Authorization: `Bearer ${config.serviceRoleKey}`, "Content-Type": "application/json", ...init.headers } });
         if (allowDeleted && response.status === 404) return null;
+        if (response.status === 429) throw new MembershipRateLimit();
         if (!response.ok) throw new Error("Membership service unavailable");
         return boundedJson(response);
     }

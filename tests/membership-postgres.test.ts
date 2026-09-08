@@ -21,6 +21,13 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
         await query("insert into auth.users values($1),($2)", [a,b]);
         await query("insert into public.patreon_accounts(user_id,patreon_user_id) values($1,'1')",[a]);
         await query(await readFile(migration,"utf8"));
+        // Scenarios are independent delivery windows; preserve all receipts while
+        // acknowledging prior scenario hints and advancing only fixture A/B clocks.
+        t.beforeEach(async () => {
+            const rows=(await query("select event_id from public.membership_outbox where receipt_id is null order by sequence")).rows;
+            for(const row of rows) await rpc("membership_ack",[row.event_id,crypto.randomUUID()]);
+            await query("update public.membership_heads set mutation_window_started_at=clock_timestamp()-interval '11 minutes' where account_id in ($1,$2)",[a,b]);
+        });
         await t.test("populated identity-only history stays unverified and all new tables deny browser reads", async () => {
             const h = await rpc("membership_fence", [a,discord,false]); assert.equal(h.verification,"unverified"); assert.equal(h.linkGeneration,"2");
             for (const table of ["membership_heads","membership_outbox","membership_completion_receipts","discord_link_requests"]) {
@@ -41,6 +48,12 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             await query("insert into public.patreon_oauth_states(token_hash,kind,user_id,patreon_user_id,expires_at,operation_id,expected_generation,return_path,evidence) values($1,'complete',$2,$3,clock_timestamp()+($4::text)::interval,gen_random_uuid(),$5,'/servers',$6)",[token,account,patreon,expired ? "-1 minute" : "10 minutes",h.linkGeneration,evidence]);
             return token;
         }
+        await t.test("redundant unlink is a stable retry but still fences a live pending generation", async () => {
+            const first = await rpc("membership_unlink",[b,discord]);
+            const rows = (await query("select count(*) from public.membership_outbox where account_id=$1",[b])).rows[0].count;
+            assert.deepEqual(await rpc("membership_unlink",[b,discord]),first);
+            assert.equal((await query("select count(*) from public.membership_outbox where account_id=$1",[b])).rows[0].count,rows);
+        });
         let token: string;
         await t.test("transaction failure leaves completion authority, identity and outbox intact", async () => {
             token = await stage();
@@ -76,6 +89,7 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             assert.equal((await query("select user_id from public.patreon_accounts where patreon_user_id='1'")).rows[0].user_id,a);
         });
         await t.test("outbox restart/ack response loss replays exact receipt, conflict cannot rewrite ack", async () => {
+            await rpc("membership_fence",[a,"999456789012345678",false]);
             const page = await rpc("membership_changes",[null,50]); assert.ok(page.events.length>0);
             const event = page.events[0]; const receipt = "cccccccc-1111-4111-8111-111111111111";
             const result = await rpc("membership_ack",[event.eventId,receipt]); assert.deepEqual(await rpc("membership_ack",[event.eventId,receipt]),result);
@@ -94,6 +108,7 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
         await t.test("outbox commit ordering cannot skip a lower uncommitted sequence", async () => {
             const peer = new pg.Client({ connectionString: url }); await peer.connect();
             try {
+                await stage(b,"7".repeat(64),"7"); // real authority, not a now-redundant unlink
                 const before = await rpc("membership_changes",[null,50]);
                 await query("begin"); await rpc("membership_unlink",[b,discord]);
                 let finished = false;
@@ -118,6 +133,148 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             await rpc("membership_complete",[b,discord,"2".repeat(64)]);
             await assert.rejects(rpc("membership_complete",[b,discord,"1".repeat(64)]));
             const status = await rpc("membership_status",[b,discord]); assert.equal(status.snapshot.verification,"nonqualifying"); assert.equal(status.verificationPending,false);
+        });
+        async function freshAccount() {
+            const id = crypto.randomUUID(); await query("insert into auth.users values($1)",[id]);
+            await rpc("membership_fence",[id,null,false]); return id;
+        }
+        async function beginFor(id: string, db = client) {
+            return db.query("select public.membership_begin($1,null,$2,$3,'/servers') result",[id,crypto.randomUUID(),crypto.randomUUID().replaceAll("-", "").repeat(2)]);
+        }
+        async function drain(id: string) {
+            // Real acknowledgements retain immutable rows/receipts, not fixture deletion.
+            for (let i=0; i<20; i++) {
+                const rows = (await query("select event_id from public.membership_outbox where account_id=$1 and receipt_id is null order by sequence",[id])).rows;
+                if (!rows.length) return;
+                for (const row of rows) await rpc("membership_ack",[row.event_id,crypto.randomUUID()]);
+            }
+            assert.fail("drain must terminate");
+        }
+        async function pendingCount(id: string) { return Number((await query("select count(*) from public.membership_outbox where account_id=$1 and receipt_id is null",[id])).rows[0].count); }
+        await t.test("per-account fixed-window mutation admission is durable and concurrent; replay and other accounts progress", async () => {
+            const id = await freshAccount();
+            // Delivery keeps outbox capacity available, isolating the durable rate bound.
+            for (let i=0; i<9; i++) { await beginFor(id); await drain(id); }
+            const peers = await Promise.all(Array.from({length:4},async()=>{ const c=new pg.Client({connectionString:url}); await c.connect(); return c; }));
+            try {
+                const results = await Promise.allSettled(peers.map(c=>beginFor(id,c)));
+                assert.equal(results.filter(r=>r.status==="fulfilled").length,1);
+                for (const result of results) if (result.status==="rejected") assert.equal(result.reason.code,"PT429");
+            } finally { await Promise.all(peers.map(c=>c.end())); }
+            assert.equal((await query("select mutation_count from public.membership_heads where account_id=$1",[id])).rows[0].mutation_count,10);
+            await assert.rejects(beginFor(id),{code:"PT429"});
+            const other = await freshAccount(); await beginFor(other); assert.equal(await pendingCount(other),1);
+            // Conservative whole-window retry; expiry resets only this account's durable row.
+            await query("update public.membership_heads set mutation_window_started_at=clock_timestamp()-interval '10 minutes' where account_id=$1",[id]);
+            await beginFor(id);
+            assert.equal((await query("select mutation_count from public.membership_heads where account_id=$1",[id])).rows[0].mutation_count,1);
+        });
+        await t.test("concurrent completions share durable budget, exact receipts replay at budget and unlink still revokes", async () => {
+            const id=await freshAccount();
+            const initial=await stage(id,"3".repeat(64),"987655"); await rpc("membership_complete",[id,discord,initial]); await drain(id);
+            for(let i=0;i<8;i++) { await rpc("membership_begin",[id,discord,crypto.randomUUID(),crypto.randomUUID().replaceAll("-", "").repeat(2),"/servers"]); await drain(id); }
+            // Stage two real completion authorities at the same current generation.
+            const x=await stage(id,"4".repeat(64),"987655"), y=await stage(id,"5".repeat(64),"987655");
+            const peer=new pg.Client({connectionString:url}); await peer.connect();
+            let winner: string;
+            try {
+                const results=await Promise.allSettled([rpc("membership_complete",[id,discord,x]),peer.query("select public.membership_complete($1,$2,$3) result",[id,discord,y]).then(r=>r.rows[0].result)]);
+                assert.equal(results.filter(r=>r.status==="fulfilled").length,1);
+                for(const result of results) if(result.status==="rejected") assert.equal(result.reason.code,"PT429");
+                winner=results[0].status==="fulfilled" ? x : y;
+            } finally { await peer.end(); }
+            const result=await rpc("membership_complete",[id,discord,winner]);
+            assert.equal((await query("select mutation_count from public.membership_heads where account_id=$1",[id])).rows[0].mutation_count,10);
+            const revoked=await rpc("membership_unlink",[id,discord]);
+            assert.deepEqual(await rpc("membership_complete",[id,discord,winner]),result);
+            assert.deepEqual(await rpc("membership_unlink",[id,discord]),revoked);
+            assert.equal((await rpc("membership_fence",[id,discord,false])).patreonUserId,null);
+            assert.equal((await query("select mutation_count from public.membership_heads where account_id=$1",[id])).rows[0].mutation_count,10);
+        });
+        await t.test("four live authorities cap concurrent Discord/Patreon issuance and callback replacement cannot resurrect unlink", async () => {
+            const id = await freshAccount();
+            const peers = await Promise.all(Array.from({length:6},async()=>{ const c=new pg.Client({connectionString:url}); await c.connect(); return c; }));
+            try {
+                const results = await Promise.allSettled(peers.map(c=>c.query("select public.membership_discord_begin($1,$2,$3,'/servers')",[id,crypto.randomUUID().replaceAll("-", "").repeat(2),crypto.randomUUID()])));
+                assert.equal(results.filter(r=>r.status==="fulfilled").length,4);
+                for (const result of results) if(result.status==="rejected") assert.equal(result.reason.code,"PT429");
+            } finally { await Promise.all(peers.map(c=>c.end())); }
+            await assert.rejects(beginFor(id),{code:"PT429"});
+            await query("update public.discord_link_requests set expires_at=clock_timestamp()-interval '1 second' where account_id=$1",[id]);
+            await beginFor(id);
+            const state = (await query("delete from public.patreon_oauth_states where user_id=$1 returning *",[id])).rows[0];
+            // OAuth is outside SQL while its consumed row is absent. Unknown evidence
+            // still fences that generation; INSERT's trigger rejects late replacement.
+            const revoked = await rpc("membership_unlink",[id,null]);
+            await assert.rejects(query("insert into public.patreon_oauth_states(token_hash,kind,user_id,expires_at,operation_id,expected_generation,return_path) values($1,'state',$2,clock_timestamp()+interval '10 minutes',$3,$4,'/servers')",[state.token_hash,id,state.operation_id,state.expected_generation]),/Link generation changed/);
+            assert.deepEqual(await rpc("membership_unlink",[id,null]),revoked);
+        });
+        await t.test("full ordinary queue reserves unlink capacity; full reserved queue defers newest revocation until atomic ack repair", async () => {
+            const id = await freshAccount();
+            for(let i=0;i<8;i++) await beginFor(id);
+            assert.equal(await pendingCount(id),8); await assert.rejects(beginFor(id),{code:"PT429"});
+            const fetched = (await query("select * from public.membership_outbox where account_id=$1 order by sequence",[id])).rows;
+            const token = (await query("select token_hash from public.patreon_oauth_states where user_id=$1 order by expected_generation desc limit 1",[id])).rows[0].token_hash;
+            await query("update public.patreon_oauth_states set kind='complete',patreon_user_id='987654',evidence=$1 where token_hash=$2",[evidence,token]);
+            await assert.rejects(rpc("membership_complete",[id,null,token]),{code:"PT429"});
+            assert.equal((await query("select count(*) from public.patreon_oauth_states where token_hash=$1",[token])).rows[0].count,"1");
+            const pre = await rpc("membership_fence",[id,null,false]);
+            await query("begin"); await rpc("membership_unlink",[id,null]); await query("rollback");
+            assert.deepEqual(await rpc("membership_fence",[id,null,false]),pre); assert.equal(await pendingCount(id),8);
+            const unlink = await rpc("membership_unlink",[id,null]); assert.equal(await pendingCount(id),9);
+            assert.deepEqual(await rpc("membership_unlink",[id,null]),unlink); assert.equal(await pendingCount(id),9);
+            await assert.rejects(rpc("membership_complete",[id,null,token]));
+            // Previously fetched old hint, now with a newer head beyond all 9 hints.
+            const head = await rpc("membership_fence",[id,discord,false]);
+            assert.ok(BigInt(head.revision)>BigInt(unlink.revision)); assert.equal(await pendingCount(id),9);
+            const old = fetched[0], receipt=crypto.randomUUID();
+            await query("create function public.test_fail_successor() returns trigger language plpgsql as $$ begin raise exception 'injected successor failure'; end $$; create trigger test_fail_successor before insert on public.membership_outbox for each row execute function public.test_fail_successor()");
+            await assert.rejects(rpc("membership_ack",[old.event_id,receipt]),/injected successor failure/);
+            assert.equal((await query("select receipt_id from public.membership_outbox where event_id=$1",[old.event_id])).rows[0].receipt_id,null);
+            await query("drop trigger test_fail_successor on public.membership_outbox; drop function public.test_fail_successor()");
+            await query("begin"); await rpc("membership_ack",[old.event_id,receipt]); await query("rollback");
+            assert.equal((await query("select receipt_id from public.membership_outbox where event_id=$1",[old.event_id])).rows[0].receipt_id,null);
+            const ack = await rpc("membership_ack",[old.event_id,receipt]);
+            assert.equal(await pendingCount(id),9);
+            const successor = (await query("select * from public.membership_outbox where account_id=$1 and revision=$2",[id,head.revision])).rows[0];
+            assert.ok(BigInt(successor.sequence)>BigInt(fetched.at(-1).sequence));
+            assert.deepEqual(await rpc("membership_ack",[old.event_id,receipt]),ack);
+            await assert.rejects(rpc("membership_ack",[old.event_id,crypto.randomUUID()]));
+            assert.equal(await pendingCount(id),9);
+            // A restarted connection replays exactly, then out-of-order ACK cannot
+            // duplicate the newest-head event or erase its revocation.
+            const peer=new pg.Client({connectionString:url}); await peer.connect();
+            try { assert.deepEqual((await peer.query("select public.membership_ack($1,$2) result",[old.event_id,receipt])).rows[0].result,ack); }
+            finally { await peer.end(); }
+            await rpc("membership_ack",[successor.event_id,crypto.randomUUID()]);
+            await rpc("membership_ack",[fetched[1].event_id,crypto.randomUUID()]);
+            assert.equal((await query("select count(*) from public.membership_outbox where account_id=$1 and revision=$2",[id,head.revision])).rows[0].count,"1");
+            await drain(id); assert.equal(await pendingCount(id),0);
+            assert.equal((await rpc("membership_fence",[id,discord,false])).verification,"unverified");
+        });
+        await t.test("full-queue Auth deletion and concurrent ack/unlink/begin preserve bounded durable wake and cross-account progress", async () => {
+            const id=await freshAccount(); for(let i=0;i<8;i++) await beginFor(id);
+            await rpc("membership_unlink",[id,null]); assert.equal(await pendingCount(id),9);
+            const event=(await query("select event_id from public.membership_outbox where account_id=$1 order by sequence limit 1",[id])).rows[0].event_id;
+            const peer=new pg.Client({connectionString:url}); await peer.connect();
+            try {
+                const results=await Promise.allSettled([rpc("membership_ack",[event,crypto.randomUUID()]),peer.query("select public.membership_unlink($1,null)",[id]),beginFor(id)]);
+                assert.equal(results[0].status,"fulfilled"); assert.equal(results[1].status,"fulfilled");
+                assert.ok(await pendingCount(id)<=9);
+            } finally { await peer.end(); }
+            // Fill reserved capacity using actual authority fences, then delete Auth.
+            for(let i=0;i<12;i++) await rpc("membership_fence",[id,i%2 ? discord : "999456789012345678",false]);
+            assert.equal(await pendingCount(id),9);
+            await query("delete from auth.users where id=$1",[id]);
+            const tombstone=await rpc("membership_fence",[id,null,true]);
+            assert.equal(tombstone.linkState,"account_deleted"); assert.equal(await pendingCount(id),9);
+            const other=await freshAccount(); await beginFor(other);
+            assert.ok((await rpc("membership_changes",[null,50])).events.some((e:{accountId:string})=>e.accountId===other));
+            await drain(id); assert.equal(await pendingCount(id),0);
+            assert.deepEqual(await rpc("membership_fence",[id,null,true]),tombstone);
+            await assert.rejects(beginFor(id),/Deleted account/);
+            const latest=(await query("select receipt_id from public.membership_outbox where account_id=$1 and revision=$2",[id,tombstone.revision])).rows[0];
+            assert.ok(latest.receipt_id);
         });
         await t.test("Auth deletion retains tombstone, outbox and receipts, forbids resurrection", async () => {
             const before = (await query("select count(*) from public.membership_completion_receipts")).rows[0].count;

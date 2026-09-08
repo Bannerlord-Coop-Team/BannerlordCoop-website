@@ -1,5 +1,5 @@
 import { boundedJson, currentDiscord, exact, record, type Policy } from "./membership.ts";
-import { membershipStore } from "./membership-store.ts";
+import { membershipStore, MembershipRateLimit, membershipRateLimitResponse } from "./membership-store.ts";
 import { PATREON_IDENTITY_URL, verifyPatreonMembership } from "./patreon-membership.ts";
 
 export interface PatreonConfig {
@@ -64,6 +64,7 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
             redirect: "error",
             signal: AbortSignal.timeout(4_000),
         });
+        if (result.status === 429) throw new MembershipRateLimit();
         if (!result.ok) throw new Error("Patreon storage operation failed");
         return await boundedJson(result) as Record<string, unknown>[];
     }
@@ -115,7 +116,6 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
                 }
                 const body = await boundedJson(new Response(request.body, { headers: request.headers }), 4096);
                 if (!record(body) || !exact(body, ["returnPath"]) || !["/account", "/servers"].includes(body.returnPath as string)) return response("Invalid return path", 400);
-                await database(`patreon_oauth_states?expires_at=lt.${encodeURIComponent(new Date().toISOString())}`, "DELETE");
                 const ticket = token();
                 await store.rpc("membership_begin", { p_account_id: user.id, p_discord_user_id: currentDiscord(user), p_operation_id: crypto.randomUUID(), p_token_hash: await hash(ticket), p_return_path: body.returnPath });
                 const url = new URL(callback);
@@ -174,7 +174,8 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
             const completionUrl = new URL("/account/patreon/callback", config.siteUrl);
             completionUrl.searchParams.set("token", completionToken);
             return redirect(completionUrl.href, `${cookieName}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
-        } catch {
+        } catch (error) {
+            if (mode !== "callback" && error instanceof MembershipRateLimit) return membershipRateLimitResponse();
             // Never return provider bodies, tokens, codes, or database details to the browser.
             return mode === "callback" ? finish("error") : response("Unable to link Patreon account", 503);
         }

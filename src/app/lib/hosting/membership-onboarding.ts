@@ -1,7 +1,7 @@
 import { currentDiscord, exact, record, timestamp, UUID, type Verification } from "../../../../supabase/functions/_shared/membership";
 import type { OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 export type MembershipStatus = { linked: boolean; verification: Verification; sync: "not_needed" | "pending" | "applied" | "unavailable"; verifiedAt: string | null; validUntil: string | null; retryAt: string | null; refreshMode: "oauth_reauthorization" };
-export const NEXT_ACTION = { signed_out: "sign_in", needs_discord: "connect_discord", identity_repair: "repair_account", configuration_blocked: "contact_support", needs_patreon: "connect_patreon", verification_pending: "refresh_status", sync_pending: "refresh_status", nonqualifying: "subscribe_or_upgrade", verification_expired: "check_again", review_required: "contact_support", unavailable: "retry_status", eligible: "choose_name_region", quota_exhausted: "manage_owned_servers", provisioning_unavailable: "retry_status", created: "manage_created_server" } as const;
+export const NEXT_ACTION = { signed_out: "sign_in", needs_discord: "connect_discord", identity_repair: "repair_account", configuration_blocked: "contact_support", needs_patreon: "connect_patreon", verification_pending: "confirm_account", sync_pending: "refresh_status", nonqualifying: "subscribe_or_upgrade", verification_expired: "check_again", review_required: "contact_support", unavailable: "retry_status", eligible: "choose_name_region", quota_exhausted: "manage_owned_servers", provisioning_unavailable: "retry_status", created: "manage_created_server" } as const;
 export type WebsiteOnboardingSummary = { version: 2; accountId: string | null; status: keyof typeof NEXT_ACTION; nextAction: typeof NEXT_ACTION[keyof typeof NEXT_ACTION]; membership: MembershipStatus; allocation: OnboardingSummary | null; ownedServerIds: string[] };
 export type AccountStatus = { version: 1; accountId: string; hasDiscord: boolean; configured: boolean; verificationPending: boolean; membership: MembershipStatus };
 export const EMPTY_MEMBERSHIP: MembershipStatus = { linked: false, verification: "unverified", sync: "unavailable", verifiedAt: null, validUntil: null, retryAt: null, refreshMode: "oauth_reauthorization" };
@@ -37,6 +37,8 @@ export function composeOnboarding(accountId: string | null, identity: ReturnType
     else if (m.sync === "pending") status = "sync_pending";
     else if (allocation === null) status = "unavailable";
     else if (allocation.eligibility.eligible) status = allocation.unavailableReason === null ? "eligible" : "provisioning_unavailable";
-    else status = "sync_pending";
+    else if (!allocation.membership.enabled) status = "configuration_blocked";
+    else if (m.sync === "unavailable") status = "unavailable";
+    else status = "review_required";
     return { version: 2, accountId, status, nextAction: NEXT_ACTION[status], membership: m, allocation: identity === null ? allocation : null, ownedServerIds: ownedServerIds.filter(id => UUID.test(id)).slice(0, 1000) };
 }

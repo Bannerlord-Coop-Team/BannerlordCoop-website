@@ -1,0 +1,247 @@
+{
+  "websiteBaselineHead": "ba0d34cb9023360bb13632112bc4509484c096b6",
+  "cpSourceHead": "4160f7bda49c6dd7dab57b912811c793dec90ac3",
+  "deploymentContract": "Upgrade only through CP coordinated exact release catalog; baseline must already exist. No fresh bootstrap, marker replay, or remote applied-state proof. Fixed historical representations are not SQL-equivalent aliases.",
+  "migrations": [
+    {
+      "version": "20260821074242",
+      "owner": "website",
+      "websitePath": "supabase/migrations/20260821074242_applied_public_schema_history.sql",
+      "websiteSha256": "21853778a9804a192c75e88dfe5ba6016d449a5ab9777d1980069f028aea8691",
+      "websiteBytes": 128,
+      "cpPath": "supabase/migrations/20260821074242_create_coop_servers.sql",
+      "cpSha256": "23c40babea8e10f9188e89cf846808a61207da211d614ae0ca5c888ae717fdbf",
+      "cpBytes": 196,
+      "representationException": true
+    },
+    {
+      "version": "20260821083000",
+      "owner": "website",
+      "websitePath": "supabase/migrations/20260821083000_applied_heartbeat_history.sql",
+      "websiteSha256": "21853778a9804a192c75e88dfe5ba6016d449a5ab9777d1980069f028aea8691",
+      "websiteBytes": 128,
+      "cpPath": "supabase/migrations/20260821083000_fix_community_server_heartbeat.sql",
+      "cpSha256": "f0c5ecdafeb274b412d165023ae9d866446e16a18463f22bc4242bbcc6334d2f",
+      "cpBytes": 119,
+      "representationException": true
+    },
+    {
+      "version": "20260821100640",
+      "owner": "website",
+      "websitePath": "supabase/migrations/20260821100640_applied_statistics_history.sql",
+      "websiteSha256": "21853778a9804a192c75e88dfe5ba6016d449a5ab9777d1980069f028aea8691",
+      "websiteBytes": 128,
+      "cpPath": "supabase/migrations/20260821100640_create_platform_statistics.sql",
+      "cpSha256": "f0c5ecdafeb274b412d165023ae9d866446e16a18463f22bc4242bbcc6334d2f",
+      "cpBytes": 119,
+      "representationException": true
+    },
+    {
+      "version": "20260821112235",
+      "owner": "website",
+      "websitePath": "supabase/migrations/20260821112235_applied_statistics_schedule_history.sql",
+      "websiteSha256": "21853778a9804a192c75e88dfe5ba6016d449a5ab9777d1980069f028aea8691",
+      "websiteBytes": 128,
+      "cpPath": "supabase/migrations/20260821112235_schedule_platform_statistics_sync.sql",
+      "cpSha256": "f0c5ecdafeb274b412d165023ae9d866446e16a18463f22bc4242bbcc6334d2f",
+      "cpBytes": 119,
+      "representationException": true
+    },
+    {
+      "version": "202608240001",
+      "owner": "website",
+      "websitePath": "supabase/migrations/202608240001_create_server_settings.sql",
+      "websiteSha256": "fc4d43abc8dd78563084e525d4f4f5a294b7230304e302d5ce28da62a53aaf5f",
+      "websiteBytes": 1225,
+      "cpPath": "supabase/migrations/202608240001_website_server_settings.sql",
+      "cpSha256": "f0c5ecdafeb274b412d165023ae9d866446e16a18463f22bc4242bbcc6334d2f",
+      "cpBytes": 119,
+      "representationException": true
+    },
+    {
+      "version": "202608260001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202608260001_control_plane_history.sql",
+      "websiteSha256": "cbe09e0b514a35eb1f35a7eaa3d57db8d8d66b018dd7a61fa6459a6d98360e9d",
+      "websiteBytes": 123,
+      "cpPath": "supabase/migrations/202608260001_control_plane_schema.sql",
+      "cpSha256": "3bcccbc1e00b067db8e5326ffc4da24e44078ecac50cf4467e3b89419077c760",
+      "cpBytes": 141747,
+      "representationException": true
+    },
+    {
+      "version": "202608260002",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202608260002_control_plane_runtime_history.sql",
+      "websiteSha256": "cbe09e0b514a35eb1f35a7eaa3d57db8d8d66b018dd7a61fa6459a6d98360e9d",
+      "websiteBytes": 123,
+      "cpPath": "supabase/migrations/202608260002_control_plane_runtime_role.sql",
+      "cpSha256": "3b8c391ea4678e709997c152cabd0eaebe32d5dace2f5c5ed77a95e8f08c5e7f",
+      "cpBytes": 1481,
+      "representationException": true
+    },
+    {
+      "version": "202608260003",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202608260003_control_plane_audit_history.sql",
+      "websiteSha256": "cbe09e0b514a35eb1f35a7eaa3d57db8d8d66b018dd7a61fa6459a6d98360e9d",
+      "websiteBytes": 123,
+      "cpPath": "supabase/migrations/202608260003_control_plane_audit_sequence_cutover.sql",
+      "cpSha256": "f7570421f05c6f34388b0b12c5cb1d57f7d1ec51263dfc4411a530a07d0f8850",
+      "cpBytes": 326,
+      "representationException": true
+    },
+    {
+      "version": "202608260004",
+      "owner": "website",
+      "websitePath": "supabase/migrations/202608260004_create_nightly_gateway_schema.sql",
+      "websiteSha256": "c1bd8fc91b2fb701f8c86e9af3276bf160658986d75e779bdd9b003e86eb89a0",
+      "websiteBytes": 8179,
+      "cpPath": "supabase/migrations/202608260004_nightly_gateway_schema.sql",
+      "cpSha256": "f0c5ecdafeb274b412d165023ae9d866446e16a18463f22bc4242bbcc6334d2f",
+      "cpBytes": 119,
+      "representationException": true
+    },
+    {
+      "version": "202608260005",
+      "owner": "website",
+      "websitePath": "supabase/migrations/202608260005_enforce_nightly_sponsorship_limit.sql",
+      "websiteSha256": "ea0486ed7fa46518cc57d80d076fed5968cc12a05bdb5704ccdf38ae1f525988",
+      "websiteBytes": 983,
+      "cpPath": "supabase/migrations/202608260005_nightly_gateway_sponsorship_limit.sql",
+      "cpSha256": "f0c5ecdafeb274b412d165023ae9d866446e16a18463f22bc4242bbcc6334d2f",
+      "cpBytes": 119,
+      "representationException": true
+    },
+    {
+      "version": "202608270001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202608270001_control_plane_job_failure_acknowledgements.sql",
+      "websiteSha256": "04d3ba498868f6049f42dbb4e93df2ff45fd0b7c2e36e47d3bf35dfda327ed58",
+      "websiteBytes": 1284,
+      "cpPath": "supabase/migrations/202608270001_control_plane_job_failure_acknowledgements.sql",
+      "cpSha256": "04d3ba498868f6049f42dbb4e93df2ff45fd0b7c2e36e47d3bf35dfda327ed58",
+      "cpBytes": 1284,
+      "representationException": false
+    },
+    {
+      "version": "202608270002",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202608270002_control_plane_ovhcloud_vps_runner_onboarding.sql",
+      "websiteSha256": "4455232502cc2d1933486e483e98c5ed0ee93a089fa76220ac17b7d1272a9824",
+      "websiteBytes": 4369,
+      "cpPath": "supabase/migrations/202608270002_control_plane_ovhcloud_vps_runner_onboarding.sql",
+      "cpSha256": "4455232502cc2d1933486e483e98c5ed0ee93a089fa76220ac17b7d1272a9824",
+      "cpBytes": 4369,
+      "representationException": false
+    },
+    {
+      "version": "202608270003",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202608270003_control_plane_runtime_migration_catalog.sql",
+      "websiteSha256": "5c614add483850688f4ed732efbd976cbadf2c70a86185fe7191fd4f4f6b9797",
+      "websiteBytes": 404,
+      "cpPath": "supabase/migrations/202608270003_control_plane_runtime_migration_catalog.sql",
+      "cpSha256": "5c614add483850688f4ed732efbd976cbadf2c70a86185fe7191fd4f4f6b9797",
+      "cpBytes": 404,
+      "representationException": false
+    },
+    {
+      "version": "202608290001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202608290001_control_plane_static_slot_reuse.sql",
+      "websiteSha256": "d5dd0615fca568c83382a2e0ac0b6c66d6b3c6fa1c9624c87bac967c46f0de7b",
+      "websiteBytes": 750,
+      "cpPath": "supabase/migrations/202608290001_control_plane_static_slot_reuse.sql",
+      "cpSha256": "d5dd0615fca568c83382a2e0ac0b6c66d6b3c6fa1c9624c87bac967c46f0de7b",
+      "cpBytes": 750,
+      "representationException": false
+    },
+    {
+      "version": "202608290002",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202608290002_control_plane_ovhcloud_vps_slot_identity_binding.sql",
+      "websiteSha256": "a8fdd364ae3516513df3b5710e097dc09c614de1444dbbde83a2b9721c2b3d04",
+      "websiteBytes": 2361,
+      "cpPath": "supabase/migrations/202608290002_control_plane_ovhcloud_vps_slot_identity_binding.sql",
+      "cpSha256": "a8fdd364ae3516513df3b5710e097dc09c614de1444dbbde83a2b9721c2b3d04",
+      "cpBytes": 2361,
+      "representationException": false
+    },
+    {
+      "version": "202608300001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202608300001_control_plane_ovhcloud_vps_runner_updates.sql",
+      "websiteSha256": "7b03a4105becd7101587a35c14478c1ec6f7df5c9b38522368906c8c4025dbc2",
+      "websiteBytes": 2860,
+      "cpPath": "supabase/migrations/202608300001_control_plane_ovhcloud_vps_runner_updates.sql",
+      "cpSha256": "7b03a4105becd7101587a35c14478c1ec6f7df5c9b38522368906c8c4025dbc2",
+      "cpBytes": 2860,
+      "representationException": false
+    },
+    {
+      "version": "202609020001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202609020001_control_plane_managed_release_container_distribution.sql",
+      "websiteSha256": "2adf0ed77dfaebe960d1daac105f41f5972b19196f01ab0972c600cf8dca2e02",
+      "websiteBytes": 5656,
+      "cpPath": "supabase/migrations/202609020001_control_plane_managed_release_container_distribution.sql",
+      "cpSha256": "2adf0ed77dfaebe960d1daac105f41f5972b19196f01ab0972c600cf8dca2e02",
+      "cpBytes": 5656,
+      "representationException": false
+    },
+    {
+      "version": "202609030001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202609030001_control_plane_regions.sql",
+      "websiteSha256": "fa94039ee7b414a82200a234272fc7fff4c6f92cdca52c4d5b1846815d9212d8",
+      "websiteBytes": 919,
+      "cpPath": "supabase/migrations/202609030001_control_plane_regions.sql",
+      "cpSha256": "fa94039ee7b414a82200a234272fc7fff4c6f92cdca52c4d5b1846815d9212d8",
+      "cpBytes": 919,
+      "representationException": false
+    },
+    {
+      "version": "202609070001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202609070001_control_plane_owner_onboarding.sql",
+      "websiteSha256": "36a493a5a917e6d94227a12f96a64f1df012ba09ecbb0e8af8f961bf3a217d2f",
+      "websiteBytes": 3503,
+      "cpPath": "supabase/migrations/202609070001_control_plane_owner_onboarding.sql",
+      "cpSha256": "36a493a5a917e6d94227a12f96a64f1df012ba09ecbb0e8af8f961bf3a217d2f",
+      "cpBytes": 3503,
+      "representationException": false
+    },
+    {
+      "version": "20260907212654",
+      "owner": "website",
+      "websitePath": "supabase/migrations/20260907212654_create_patreon_links.sql",
+      "websiteSha256": "cf83f8383d17d93ce4f33d26353337229efc9d129d9b257f9cbe43b934eb0349",
+      "websiteBytes": 911,
+      "cpPath": "supabase/migrations/20260907212654_create_patreon_links.sql",
+      "cpSha256": "cf83f8383d17d93ce4f33d26353337229efc9d129d9b257f9cbe43b934eb0349",
+      "cpBytes": 911,
+      "representationException": false
+    },
+    {
+      "version": "202609080001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202609080001_control_plane_membership_sources.sql",
+      "websiteSha256": "727c72f57e84508f5bc6015509244a4ac6c547a173365c6570d433065dd5a1fa",
+      "websiteBytes": 3298,
+      "cpPath": "supabase/migrations/202609080001_control_plane_membership_sources.sql",
+      "cpSha256": "727c72f57e84508f5bc6015509244a4ac6c547a173365c6570d433065dd5a1fa",
+      "cpBytes": 3298,
+      "representationException": false
+    },
+    {
+      "version": "202609080002",
+      "owner": "website",
+      "websitePath": "supabase/migrations/202609080002_membership_onboarding.sql",
+      "websiteSha256": "fc0f8089971ce20ec2af4dda4f93017e85a1e4a7d9ca2ac98ca5c3c9da91966e",
+      "websiteBytes": 23355,
+      "representationException": false,
+      "releaseClassification": "new website-owned pending release, NOT already-applied external history"
+    }
+  ]
+}

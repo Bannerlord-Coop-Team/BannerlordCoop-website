@@ -214,3 +214,66 @@ loopback fixture URL, `npx next typegen && npx tsc --noEmit`, focused changed-fi
 credential-free Next and `WORKERS_CI=1` OpenNext builds. The PostgreSQL suite refuses
 non-loopback or non-fixture database names and otherwise explicitly skips without
 its fixture URL. Tests do not relax legacy UUID/session recovery or full-region UI.
+
+## Bounded account mutations and revocation delivery
+
+These are technical abuse limits, not membership business policy: at most **10 new
+ordinary mutations per account per 10-minute window**, **4 live pending authorities**
+across Patreon and Discord, **8 ordinary unacknowledged hints**, plus **1 reserved
+revocation hint**. Begin and first completion consume ordinary budget; authenticated
+exact completion/confirmation replay does not. Pending OAuth insertion is locked and
+generation-checked even during callback replacement, so a consumed token cannot be
+reissued after unlink. Only expired/superseded ephemeral authority is cleaned; durable
+completion receipts, acknowledged events and confirmed Discord requests are retained.
+The closed public retry is HTTP429, `Retry-After: 600`, JSON
+`{"error":"membership_rate_limited","retryAfterSeconds":600}`. Queue pressure can
+outlast the minimum retry interval; do not launch OAuth again when confirmation exists.
+
+Unlink, current-Auth fencing and Auth deletion must remain safe at budget. Redundant
+unlink does not advance an already empty, unlinked head, but real pending authority
+(including a temporarily consumed OAuth row's unknown generation) is fenced. It deletes
+pending Patreon authority, invalidates evidence and uses reserved revocation capacity.
+With all 9 hints pending, revocation advances the durable head without rewriting any
+hint or receipt. At least one deliverable unacknowledged hint necessarily survives.
+Every ACK, including retry/out-of-order ACK, takes the global commit-order/account locks
+and atomically ensures a hint for the **newest head** exists after acknowledging the old
+hint. A missing successor is inserted with a strictly newer cursor, within the 9-hint
+bound. If insertion fails, the ACK rolls back. An already acknowledged newest-head hint
+satisfies delivery; no duplicate is generated. Tombstone repair does not require Auth
+or resurrect a deleted account. CP must acknowledge only applied snapshot receipts.
+Status remains pending while any unacknowledged hint survives, including deferred wake.
+
+This bounds per-account durable admission/backlog; it is **not global volumetric-abuse
+prevention**. Historical receipts remain monotonic and retained, not pruned to satisfy a
+space quota. Existing server access, administrative grants/revocation, current-binding
+CAS and exact-UUID Create recovery are unchanged.
+
+## Shared history: fixed representations, upgrade only
+
+The exact 22-version inventory is pinned in
+[`membership-migration-inventory.json`](membership-migration-inventory.json).
+It records canonical LF Git SHA256/byte counts and ownership for every own file,
+companion source HEAD `4160f7bda49c6dd7dab57b912811c793dec90ac3`, and the fixed ten
+historical representation pairs. All pre-existing website paths and committed bytes
+are unchanged, including the old Patreon migration. Ten previously missing,
+noncolliding CP migrations through `202609080001` are exact committed Git-byte mirrors.
+`202609080002` is website-owned **new pending release SQL**, not already-applied external
+history; its final pin must be added to CP's coordinated release catalog.
+
+The ten historical exceptions (versions21074242/21083000/21100640/21112235 on202608,
+202608240001, and202608260001–260005) are explicitly **different historical
+representations of the same version, not SQL-equivalent aliases or authenticated
+remote SQL**. Four early public-history pairs are both markers; website240001 and
+260004–5 are actual server-settings/nightly SQL versus CP markers; website260001–3 are
+markers versus CP private-schema/runtime-role/audit-sequence SQL. The JSON pins both
+paths/hashes/byte counts. Fresh review must inspect this fixed matrix rather than
+relax a helper to accept arbitrary aliases.
+
+Supported deployment is **upgrade only via CP's coordinated release**, with its own
+exact baseline inventory/pins unchanged and baseline already applied. Do not use
+arbitrary website `supabase db push`, reset, migration repair, or replay markers to fill
+missing baseline. A fresh bootstrap is unsupported/unproved by these history markers.
+The website's version union does not prove remote applied state. Next backend stage
+must pin the final website080002 bytes as pending, preserve its own exact catalog and
+unknown/external-replay refusals, and test real isolated CLI pre-application, partial
+and terminal release histories. No remote history was read or altered in this fix.

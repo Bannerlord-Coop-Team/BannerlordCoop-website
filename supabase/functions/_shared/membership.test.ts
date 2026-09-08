@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { currentDiscord, parsePolicy, POLICY_VERSION, parseSnapshot, validUntil, type Policy } from "./membership.ts";
 import { verifyPatreonMembership, PATREON_IDENTITY_URL } from "./patreon-membership.ts";
+import { createWebsiteAccountHandler } from "./website-account.ts";
+import { createPatreonHandler } from "./patreon.ts";
 import { createControlPlaneMembershipHandler } from "./control-plane-membership.ts";
 import { composeOnboarding, identityStep, parseAccountStatus } from "../../../src/app/lib/hosting/membership-onboarding.ts";
 import { onboardingSummary } from "../../../tests/onboarding-fixtures.ts";
@@ -82,4 +84,64 @@ test("website identity first, independent grant bypasses outage/configuration an
     assert.equal(composeOnboarding(accountId, null, { ...status, verificationPending: true }, allocation).status, "verification_pending");
     assert.throws(() => parseAccountStatus({ ...status, campaignId: "10" }, accountId));
     assert.throws(() => parseAccountStatus(status, "bbbbbbbb-1111-4111-8111-111111111111"));
+});
+
+test("Patreon pagination refuses cursor-only, malformed and contradictory metadata at every relevant level", async () => {
+    const targets = [
+        (b: ReturnType<typeof identity>) => b,
+        (b: ReturnType<typeof identity>) => b.data.relationships.memberships,
+        (b: ReturnType<typeof identity>) => b.included[0].relationships!.user!,
+        (b: ReturnType<typeof identity>) => b.included[0].relationships!.campaign!,
+        (b: ReturnType<typeof identity>) => b.included[0].relationships!.currently_entitled_tiers!,
+        (b: ReturnType<typeof identity>) => b.included[2].relationships!.campaign!,
+    ];
+    const bad = [
+        { meta: { pagination: { cursors: { next: "cursor" } } } },
+        { links: { next: null }, meta: { pagination: { total: 1, cursors: { next: "cursor" } } } },
+        { meta: { pagination: { total: 2, cursors: { next: null } } } },
+        { meta: { pagination: { total: "1" } } },
+        { meta: { pagination: { total: -1 } } },
+        { meta: { pagination: { cursors: null } } },
+        { meta: { pagination: { cursors: {} } } },
+        { meta: { pagination: { cursors: { next: false } } } },
+        { meta: { pagination: { cursors: { next: "" } } } },
+        { meta: { pagination: { cursors: { next: null, prev: "previous" } } } },
+        { meta: { pagination: [] } }, { meta: { pagination: {} } }, { meta: { pagination: null } }, { meta: null },
+        { links: [] }, { links: { next: false } }, { links: { next: null, prev: "previous-page" } },
+    ];
+    for (const [index, target] of targets.entries()) {
+        for (const extra of bad) {
+            const body = identity(); Object.assign(target(body), extra);
+            assert.equal((await verifyPatreonMembership(body, policy, now)).evidence.verification, "review_required", `${index}:${JSON.stringify(extra)}`);
+        }
+        const complete = identity(); Object.assign(target(complete), { links: { next: null }, meta: { pagination: { total: 1, cursors: { next: null } } } });
+        assert.equal((await verifyPatreonMembership(complete, policy, now)).evidence.verification, "qualifying");
+    }
+});
+test("applied qualifying membership with denied allocation offers support or disabled guidance, not synchronization", () => {
+    const allocation = onboardingSummary(); allocation.sources.administrativeBase = 0;
+    allocation.eligibility = { eligible: false, reason: "no_grant", granted: 0, used: 0, remaining: 0 };
+    allocation.membership.enabled = true;
+    const account = parseAccountStatus({ version: 1, accountId, hasDiscord: true, configured: true, verificationPending: false, membership: { linked: true, verification: "qualifying", sync: "applied", verifiedAt: now, validUntil: "2026-09-08T12:00:00.000Z", retryAt: null, refreshMode: "oauth_reauthorization" } }, accountId);
+    assert.equal(composeOnboarding(accountId, null, account, allocation, [], Date.parse(now)).status, "review_required");
+    allocation.membership.enabled = false;
+    assert.equal(composeOnboarding(accountId, null, account, allocation, [], Date.parse(now)).status, "configuration_blocked");
+    allocation.membership.enabled = true; account.membership.sync = "pending";
+    assert.equal(composeOnboarding(accountId, null, account, allocation, [], Date.parse(now)).status, "sync_pending");
+});
+
+test("authenticated mutation throttles return exact bounded retry contracts without raw database errors", async () => {
+    const config = { supabaseUrl: "https://project.supabase.co", serviceRoleKey: "synthetic", policy,
+        clientId: "synthetic", clientSecret: "synthetic", redirectUri: "https://project.supabase.co/functions/v1/patreon-callback", siteUrl: "https://website.example",
+        fetch: async (input: string | URL | Request) => new URL(String(input)).pathname === "/auth/v1/user"
+            ? Response.json({ id: accountId, identities: [] }) : new Response("private sql message credential", { status: 429 }),
+    };
+    const account = createWebsiteAccountHandler(config);
+    const patreonStart = createPatreonHandler(config, "start"), patreonComplete = createPatreonHandler(config, "complete");
+    for (const [handler, body] of [[account, { operation: "discord-start", returnPath: "/servers" }], [account, { operation: "unlink" }], [patreonStart, { returnPath: "/servers" }], [patreonComplete, { token: "a".repeat(64) }]] as const) {
+        const result = await handler(new Request("https://project.supabase.co/functions/v1/test", { method: "POST", headers: { Authorization: "Bearer synthetic", "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+        assert.equal(result.status, 429); assert.equal(result.headers.get("Retry-After"), "600");
+        assert.equal(result.headers.get("Cache-Control"), "no-store");
+        assert.deepEqual(await result.json(), { error: "membership_rate_limited", retryAfterSeconds: 600 });
+    }
 });

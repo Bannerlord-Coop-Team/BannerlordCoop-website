@@ -54,3 +54,12 @@ it("Patreon callback GET never invokes completion; POST retries preserve the sam
     await expect(completePatreonAccount()).rejects.toThrow("redirect:/servers?patreon=linked"); expect(mocks.jar.has("__Host-patreon-completion")).toBe(false);
     expect(mocks.invoke.mock.calls.every(call=>call[1].body.token===token)).toBe(true);
 });
+
+it("rate-limited completion and Discord begin retain cookie authority and show bounded retry guidance", async () => {
+    mocks.jar.set("__Host-patreon-completion",token); mocks.jar.set("__Host-account-link",token);
+    mocks.invoke.mockResolvedValue({ data: null, error: { context: new Response("private database details", { status: 429, headers: { "Retry-After": "600" } }) } });
+    await expect(completePatreonAccount()).rejects.toThrow("redirect:/account?patreon=rate_limited");
+    expect(mocks.jar.get("__Host-patreon-completion")).toBe(token);
+    await expect(linkDiscordAccount(new FormData())).rejects.toThrow("redirect:/account?discord=rate_limited");
+    expect(mocks.jar.get("__Host-account-link")).toBe(token); expect(mocks.link).not.toHaveBeenCalled();
+});

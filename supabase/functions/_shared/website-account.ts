@@ -1,5 +1,5 @@
 import { boundedJson, exact, HASH, parseSnapshot, randomToken, record, sha256, validUntil, type Policy } from "./membership.ts";
-import { membershipStore, type StoreConfig } from "./membership-store.ts";
+import { membershipStore, MembershipRateLimit, membershipRateLimitResponse, type StoreConfig } from "./membership-store.ts";
 export function createWebsiteAccountHandler(config: StoreConfig & { policy: Policy | null }) {
     const store = membershipStore(config);
     const response = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
@@ -32,6 +32,6 @@ export function createWebsiteAccountHandler(config: StoreConfig & { policy: Poli
                 return response(await store.rpc("membership_discord_confirm", { p_account_id: user.accountId, p_token_hash: await sha256(body.token), p_discord_user_id: user.discordUserId }));
             }
             return response({ error: "invalid_request" }, 400);
-        } catch { return response({ error: "account_unavailable" }, 503); }
+        } catch (error) { return error instanceof MembershipRateLimit ? membershipRateLimitResponse() : response({ error: "account_unavailable" }, 503); }
     };
 }
