@@ -2,6 +2,7 @@
 
 import { hasAdminAccess, isBootstrapAdmin } from "@/app/lib/auth/access";
 import { isMemberRole } from "@/app/lib/auth/roles";
+import { manualRoleMetadata } from "@/app/lib/auth/manual-role";
 import { getSupabaseAdminClient } from "@/app/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -46,10 +47,7 @@ export async function updateMemberRole(formData: FormData) {
             updateError = "Bootstrap administrators must remain admins.";
         } else {
             const { error } = await adminClient.auth.admin.updateUserById(userId, {
-                app_metadata: {
-                    ...targetData.user.app_metadata,
-                    role,
-                },
+                app_metadata: manualRoleMetadata(targetData.user.app_metadata, role),
             });
 
             if (error) throw error;

@@ -2,8 +2,10 @@
 
 This links a Patreon **identity** to an existing Supabase user. It does not sign
 users in through Patreon, check paid memberships, or grant supporter roles.
-OAuth access/refresh tokens are deliberately not persisted. Membership syncing
-would need additional scopes and secure token storage in a separate change.
+OAuth access/refresh tokens are deliberately not persisted. The separate
+[membership worker](patreon-website-roles.md) uses a creator access token to
+verify the linked identity's paid tier and manage Standard Server grants.
+It requires its own deployment and configuration; linking alone does not grant a role.
 
 ## Production setup
 

@@ -34,3 +34,6 @@ verify_jwt = false
 # Completion independently verifies the logged-in user with Supabase Auth.
 [functions.patreon-complete]
 verify_jwt = false
+
+[functions.patreon-roles]
+verify_jwt = false
