@@ -341,9 +341,85 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             try { assert.equal((await restarted.query("select public.membership_recovery($1,$2,'discord') r",[owner,discord])).rows[0].r.state,"committed"); }
             finally { await restarted.end(); }
             await assert.rejects(rpc("membership_discord_confirm",[b,committedToken,discord]));
-            await assert.rejects(rpc("membership_recovery",[owner,"999456789012345678","discord",committedOp,true]));
+            assert.equal((await rpc("membership_recovery",[owner,"999456789012345678","discord",committedOp,true])).state,"retired");
             assert.equal((await rpc("membership_recovery",[owner,discord,"discord",committedOp,true])).state,"committed");
             assert.deepEqual(await rpc("membership_discord_confirm",[owner,committedToken,discord]),result);
+        });
+        await t.test("historical Discord slot retirement after Auth unlink/change preserves history and permits exact restart", async () => {
+            for (const acknowledged of [false,true]) for (const current of [null,"999456789012345678"]) {
+                const id=await freshAccount(), tok=crypto.randomUUID().replaceAll("-", "").repeat(2), op=crypto.randomUUID();
+                await rpc("membership_discord_begin",[id,tok,op,"/servers"]);
+                await rpc("membership_discord_callback",[id,tok,discord]);
+                const original=await rpc("membership_discord_confirm",[id,tok,discord]);
+                if(acknowledged) await rpc("membership_recovery",[id,discord,"discord",op,true]);
+                const history=(await query("select * from public.discord_link_requests where token_hash=$1",[tok])).rows;
+                // Auth is authoritative input from the handler, not an identity restored by recovery.
+                await rpc("membership_status",[id,current]);
+                const head=(await query("select * from public.membership_heads where account_id=$1",[id])).rows;
+                const hints=(await query("select * from public.membership_outbox where account_id=$1 order by sequence",[id])).rows;
+                await assert.rejects(rpc("membership_discord_confirm",[id,tok,current]),/Discord linking conflict/);
+                const stale=await rpc("membership_recovery",[id,current,"discord"]);
+                assert.equal(stale.state,acknowledged ? "retired" : "historical"); assert.equal(stale.receipt,null); assert.equal(stale.confirmable,false);
+                if(!acknowledged && current===null) await assert.rejects(rpc("membership_discord_begin",[id,"8a".repeat(32),crypto.randomUUID(),"/account"]),/Resolve previous operation/);
+                assert.equal((await rpc("membership_recovery",[b,current,"discord",op,true])).state,"none");
+                assert.equal((await rpc("membership_recovery",[id,current,"discord",crypto.randomUUID(),true])).state,"none");
+                const retired=await rpc("membership_recovery",[id,current,"discord",op,true]);
+                assert.equal(retired.state,"retired"); assert.equal(retired.receipt,null);
+                const restart=new pg.Client({connectionString:url}); await restart.connect();
+                try {
+                    // Lost retirement response, cookie-free reload and exact retry from a new connection.
+                    assert.deepEqual((await restart.query("select public.membership_recovery($1,$2,'discord',$3,true) r",[id,current,op])).rows[0].r,retired);
+                    assert.equal((await restart.query("select public.membership_recovery($1,$2,'discord') r",[id,current])).rows[0].r.state,"retired");
+                } finally { await restart.end(); }
+                assert.deepEqual((await query("select * from public.membership_heads where account_id=$1",[id])).rows,head);
+                assert.deepEqual((await query("select * from public.membership_outbox where account_id=$1 order by sequence",[id])).rows,hints);
+                assert.deepEqual((await query("select * from public.discord_link_requests where token_hash=$1",[tok])).rows,history);
+                if(current===null) {
+                    const next=crypto.randomUUID(); await rpc("membership_discord_begin",[id,crypto.randomUUID().replaceAll("-", "").repeat(2),next,"/account"]);
+                    assert.equal((await rpc("membership_recovery",[id,null,"discord",op,true])).state,"none");
+                    const pending=await rpc("membership_recovery",[id,null,"discord"]); assert.equal(pending.operationId,next); assert.equal(pending.state,"live");
+                } else assert.equal((await rpc("membership_status",[id,current])).snapshot.discordUserId,current);
+                assert.deepEqual((await query("select * from public.discord_link_requests where token_hash=$1",[tok])).rows,history);
+                // Already committed replay keeps its original bytes when Auth really matches again.
+                assert.deepEqual(await rpc("membership_discord_confirm",[id,tok,discord]),original);
+            }
+        });
+        await t.test("Discord deadline crossing inside admission or final write rolls back the entire RPC", async () => {
+            for (const window of ["cleanup", "final_write"]) {
+                const id=await freshAccount(), tok=crypto.randomUUID().replaceAll("-", "").repeat(2), op=crypto.randomUUID();
+                await rpc("membership_discord_begin",[id,tok,op,"/servers"]); await rpc("membership_discord_callback",[id,tok,discord]);
+                // Fixture-only trigger waits across the actual stored deadline inside the RPC.
+                await query(`create function public.test_deadline_wait() returns trigger language plpgsql as $$ declare deadline timestamptz; begin
+                    select expires_at into deadline from public.discord_link_requests where account_id=new.account_id and confirmed_at is null;
+                    if deadline is not null then perform pg_sleep(greatest(0,extract(epoch from deadline-clock_timestamp()))+0.02); end if;
+                    return new; end $$`);
+                // The window-reset update is after the initial authority check but before cleanup.
+                // The increment update instead covers expiry after cleanup retained the row.
+                await query("update public.membership_heads set mutation_window_started_at=clock_timestamp()-interval '11 minutes' where account_id=$1",[id]);
+                await query(window==="cleanup"
+                    ? "create trigger test_deadline_wait before update of mutation_window_started_at on public.membership_heads for each row execute function public.test_deadline_wait()"
+                    : "create trigger test_deadline_wait before update of mutation_count on public.membership_heads for each row when (new.mutation_count > 0) execute function public.test_deadline_wait()");
+                try {
+                    // Plenty of initial authority; trigger waits until the actual stored deadline.
+                    await query("update public.discord_link_requests set expires_at=clock_timestamp()+interval '1 second' where token_hash=$1",[tok]);
+                    const snapshot=async () => (await query(`select
+                        (select jsonb_agg(to_jsonb(r)) from public.discord_link_requests r where account_id=$1) requests,
+                        (select to_jsonb(h) from public.membership_heads h where account_id=$1) head,
+                        (select jsonb_agg(to_jsonb(o) order by sequence) from public.membership_outbox o where account_id=$1) outbox,
+                        (select jsonb_agg(to_jsonb(i)) from public.membership_recovery_intents i where account_id=$1) intents,
+                        (select jsonb_agg(to_jsonb(c)) from public.membership_completion_receipts c where account_id=$1) receipts`,[id])).rows[0];
+                    const before=await snapshot();
+                    let result: unknown; let failure: unknown;
+                    try { result=await rpc("membership_discord_confirm",[id,tok,discord]); } catch(error) { failure=error; }
+                    const after=await snapshot();
+                    console.log("INTRA_RPC_DEADLINE",JSON.stringify({window,result:result??null,error:failure instanceof Error ? failure.message : null,requestsAfter:after.requests,rolledBack:JSON.stringify(after)===JSON.stringify(before)}));
+                    assert.match(failure instanceof Error ? failure.message : "unexpected success",/Discord confirmation expired or missing/);
+                    assert.deepEqual(after,before,"cleanup, admission, audit/outbox, authority and receipts all roll back");
+                    assert.equal((await query("select confirmed_at from public.discord_link_requests where token_hash=$1",[tok])).rows[0].confirmed_at,null);
+                } finally {
+                    await query("drop trigger test_deadline_wait on public.membership_heads; drop function public.test_deadline_wait()");
+                }
+            }
         });
         await t.test("Patreon recovery survives expiry/deleted transport, unlink, response loss and serializes cancellation with completion", async () => {
             const id=await freshAccount(), tok=await stage(id,"0d".repeat(32),"555551");

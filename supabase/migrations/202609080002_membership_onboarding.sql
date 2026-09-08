@@ -291,7 +291,13 @@ begin
   then raise exception 'Invalid Discord callback authority'; end if;
  perform public.membership_admit(p_account_id,false);
  perform public.membership_fence(p_account_id,p_discord_user_id,false);
- update public.discord_link_requests set confirmed_discord_id=p_discord_user_id,confirmed_at=coalesce(confirmed_at,clock_timestamp()) where token_hash=p_token_hash;
+ -- Admission cleanup and the clock may invalidate the initially selected authority.
+ -- Success requires the exact durable write; failure rolls back this entire RPC.
+ update public.discord_link_requests set confirmed_discord_id=p_discord_user_id,confirmed_at=clock_timestamp()
+  where token_hash=p_token_hash and account_id=p_account_id and operation_id=r.operation_id
+   and confirmed_at is null and expires_at=r.expires_at and public.membership_authority_live(expires_at,clock_timestamp())
+  returning * into r;
+ if not found or not public.membership_authority_live(r.expires_at,r.confirmed_at) then raise exception 'Discord confirmation expired or missing'; end if;
  return jsonb_build_object('confirmed',true,'returnPath',r.return_path);
 end $$;
 create function public.membership_auth_deleted() returns trigger language plpgsql security definer set search_path = '' as $$
@@ -367,7 +373,7 @@ grant execute on function public.membership_discord_callback(uuid,text,text) to 
 -- Missing/foreign UUIDs are indistinguishable. No GET/status grants authority.
 create function public.membership_recovery(p_account_id uuid,p_discord_user_id text,p_provider text,p_operation_id uuid default null,p_discard boolean default false,p_token_hash text default null) returns jsonb
 language plpgsql security definer set search_path = '' as $$
-declare i public.membership_recovery_intents; r public.discord_link_requests; receipt jsonb; state text; confirmable boolean := false; generation bigint;
+declare i public.membership_recovery_intents; r public.discord_link_requests; receipt jsonb; state text; confirmable boolean := false; historical boolean := false; generation bigint;
 begin
  perform pg_advisory_xact_lock(702,1);
  perform pg_advisory_xact_lock(hashtextextended(p_account_id::text,702));
@@ -381,15 +387,18 @@ begin
  else
   select * into r from public.discord_link_requests where token_hash=i.token_hash and operation_id=i.operation_id and account_id=p_account_id;
   if r.confirmed_at is not null then
-   if r.confirmed_discord_id is distinct from p_discord_user_id then raise exception 'Current identity conflict'; end if;
-   receipt := jsonb_build_object('confirmed',true,'returnPath',r.return_path);
+   historical := r.confirmed_discord_id is distinct from p_discord_user_id;
+   if not historical then receipt := jsonb_build_object('confirmed',true,'returnPath',r.return_path); end if;
   end if;
   confirmable := r.callback_discord_id is not null and r.callback_discord_id=p_discord_user_id and r.callback_generation=generation and public.membership_authority_live(r.expires_at,clock_timestamp());
  end if;
- state := case when receipt is not null then 'committed' when not public.membership_authority_live(i.expires_at,clock_timestamp()) then 'expired' else 'live' end;
+ -- A confirmed reference under changed/unlinked Auth is history, never current success.
+ -- Acknowledgment (including an earlier receipt acknowledgment) releases only this slot.
+ state := case when historical then case when i.acknowledged then 'retired' else 'historical' end when receipt is not null then 'committed' when not public.membership_authority_live(i.expires_at,clock_timestamp()) then 'expired' else 'live' end;
  if p_discard then
   if p_operation_id is null then raise exception 'Exact operation required'; end if;
-  if receipt is null then
+  if historical then state := 'retired';
+  elsif receipt is null then
    -- Explicit cancellation fences even a consumed Patreon callback transport row.
    if p_provider='patreon' then
     delete from public.patreon_oauth_states where user_id=p_account_id and operation_id=i.operation_id;
@@ -399,7 +408,7 @@ begin
    end if;
    state := 'cancelled';
   end if;
-  if receipt is null then
+  if receipt is null and not historical then
    delete from public.membership_recovery_intents where account_id=p_account_id and provider=p_provider and operation_id=i.operation_id;
   else
    -- A lost resolution response must still be recoverable on a cookie-free reload.

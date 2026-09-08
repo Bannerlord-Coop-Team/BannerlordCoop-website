@@ -2,6 +2,7 @@
 
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { accountLinkOrigin, accountReturn, LINK_COOKIE, LINK_COOKIE_OPTIONS, PATREON_COOKIE } from "@/app/lib/auth/account-link";
+import { parseLinkResolution, type LinkProvider } from "@/app/lib/auth/link-recovery";
 import { currentDiscord } from "../../../supabase/functions/_shared/membership";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -51,9 +52,12 @@ export async function resolveAccountLink(form: FormData) {
         if (!["discord", "patreon"].includes(provider as string) || typeof operationId !== "string" || !/^[0-9a-f-]{36}$/iu.test(operationId)) throw new Error("Invalid recovery");
         const { supabase, user, session } = await authenticated();
         const { data, error } = await supabase.functions.invoke("website-account", { headers: { Authorization: `Bearer ${session.access_token}` }, body: { operation: "recovery-resolve", provider, operationId } });
-        if (!error && data?.accountId === user.id && data.provider === provider && data.operationId === operationId && ["cancelled", "committed"].includes(data.state) && ["/account", "/servers"].includes(data.returnPath)) {
-            (await cookies()).delete(provider === "discord" ? LINK_COOKIE : PATREON_COOKIE);
-            destination = data.state === "committed" ? `${data.returnPath}?${provider}=recovered` : `/account?${provider}=cancelled`;
+        const resolved = !error ? parseLinkResolution(data, user.id, provider as LinkProvider, operationId) : null;
+        if (resolved) {
+            // Retirement is non-authorizing: do not erase a newer browser authority
+            // started in another tab while this historical response was in flight.
+            if (resolved.state !== "retired") (await cookies()).delete(provider === "discord" ? LINK_COOKIE : PATREON_COOKIE);
+            destination = resolved.state === "committed" ? `${resolved.returnPath}?${provider}=recovered` : `/account?${provider}=${resolved.state}`;
         }
     } catch { /* Unknown outcomes retain both durable intent and cookie. */ }
     redirect(destination);

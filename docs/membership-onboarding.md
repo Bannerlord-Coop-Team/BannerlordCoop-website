@@ -111,7 +111,18 @@ old positive evidence immediately, including cancellation or provider outage.
    explicitly resolved, then restarted if Auth is unlinked. An already connected
    Discord remains usable for Servers/Patreon without falsely reporting the expired
    attempt committed; fresh OAuth for an already-linked provider is not promised.
-   No Auth unlink or automatic account merge is performed.
+   If a confirmed Discord slot no longer matches authoritative current Auth (including
+   unlink), recovery returns `historical`, with no receipt or confirmation authority.
+   Exact same-account resolution only acknowledges that reference and returns `retired`;
+   it never restores identity, grants or original confirmation history. An already
+   acknowledged slot is also `retired` under mismatch. Both states expose explicit
+   retirement; cookie-free lost-response retries remain idempotent. Only `retired`
+   plus currently unlinked Auth permits a new explicit begin. A valid different
+   current Discord can continue normally without claiming the old attempt is current.
+   A new begin replaces the acknowledged slot; old/foreign/unknown operation resolution
+   cannot clear it. Retirement leaves browser cookies untouched so a delayed response
+   cannot erase a newer authority. Successful confirmation/receipt-as-current replay
+   still refuses mismatched Auth. No Auth unlink or automatic account merge is performed.
 6. `/account` shows a server-authenticated current status, never success inferred
    from query parameters. **Refresh status** reads durable state/sync; **Check again**
    initiates new OAuth. `/servers` retains exact-UUID sessionStorage mutation recovery
@@ -256,7 +267,15 @@ Refresh authenticated recovery before retrying. Ten-minute OAuth authority is ne
 extended, and waiting cannot guarantee admission. Expired uncommitted attempts offer
 explicit safe resolution rather than an impossible ten-minute retry promise.
 Confirmed Discord receipt replay, like Patreon, precedes expiry and ordinary admission
-while preserving account/current-identity fences. The partial
+while preserving account/current-identity fences. First Discord confirmation must
+write the exact account/operation/hash row before its original exclusive deadline and
+assert `RETURNING` plus the recorded confirmation timestamp before returning success.
+If admission cleanup deletes the request or the deadline crosses inside the RPC, an
+exception rolls back all admission, cleanup, head/outbox and receipt effects. Fixture-only
+PG triggers cross that deadline at window reset and after cleanup; production has no
+clock override or expiry extension. PG-backed mounted actions exercise synthetic Auth
+unlink/change, both acknowledgment states, lost retirement responses and explicit restart;
+this is not real browser OAuth/JWT or deployed Edge evidence. The partial
 `discord_link_requests_pending_account_expiry` index excludes retained confirmed
 history from account/expiry admission scans. Local PostgreSQL EXPLAIN regressions
 populate 50,000 confirmed rows without forcing the optimizer's scan choice.

@@ -145,3 +145,138 @@ it("missing existing server callback configuration fails before consuming PKCE",
     const response=await discordCallback(new NextRequest("https://website.example/account/discord/callback?code=synthetic", { headers: { cookie: `__Host-account-link=${token}` } }));
     expect(response.headers.get("location")).toContain("discord=repair"); expect(mocks.exchange).not.toHaveBeenCalled(); expect(mocks.stamp).not.toHaveBeenCalled();
 });
+
+it.each([false, true])("mounted historical Discord retirement/restart after cookie loss, prior acknowledgment=%s", async acknowledged => {
+    mocks.jar.set("__Host-account-link", token);
+    mocks.invoke.mockResolvedValue({ data: { confirmed: true, returnPath: "/servers" }, error: null });
+    await expect(confirmDiscordAccount()).rejects.toThrow("redirect:/servers"); expect(mocks.jar.size).toBe(0);
+    // Synthetic authoritative Auth unlink after the actual confirmation action removed its cookie.
+    pageResponses(bound(acknowledged ? "retired" : "historical", false), false);
+    let view=await mount();
+    try {
+        expect(view.container.textContent).toContain("historical Discord attempt");
+        expect(view.container.textContent).not.toContain("Recover Discord result");
+        expect(view.container.textContent).not.toContain("Confirm Discord connection");
+        expect(view.container.textContent).toContain("Retire historical Discord reference");
+        if(!acknowledged) expect(view.container.textContent).not.toContain("Confirm and connect Discord");
+    } finally { await view.close(); }
+    const form=new FormData(); form.set("provider","discord"); form.set("operationId",operationId);
+    mocks.invoke.mockResolvedValue({ data:null, error:new Error("retirement committed but response lost") });
+    await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/account?recovery=unavailable");
+    pageResponses(bound("retired",false),false); view=await mount();
+    try { expect(view.container.textContent).toContain("Confirm and connect Discord"); expect(view.container.textContent).not.toContain("Recover Discord result"); }
+    finally { await view.close(); }
+    mocks.invoke.mockResolvedValue({ data:bound("retired",false),error:null });
+    await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/account?discord=retired");
+    mocks.invoke.mockResolvedValue({ data:{accountId:a,token},error:null });
+    await expect(linkDiscordAccount(new FormData())).rejects.toThrow("redirect:https://discord.com/oauth2/authorize");
+    expect(mocks.link).toHaveBeenCalledTimes(1);
+});
+it("historical different current Auth permits normal continuation, never reports old success or starts linking", async () => {
+    mocks.user.mockResolvedValue({data:{user:{id:a,identities:[{provider:"discord",identity_data:{provider_id:"999456789012345678"}}]}}});
+    pageResponses(bound("historical",false)); const view=await mount();
+    try {
+        expect(view.container.textContent).toContain("Continue to Servers");
+        expect(view.container.textContent).toContain("current Auth connection remains usable");
+        expect(view.container.textContent).not.toContain("Confirm and connect Discord");
+        expect(view.container.textContent).not.toContain("Recover Discord result");
+    } finally { await view.close(); }
+    await expect(linkDiscordAccount(new FormData())).rejects.toThrow("redirect:/account?discord=repair"); expect(mocks.link).not.toHaveBeenCalled();
+});
+it.each([
+    {...bound("retired",false),accountId:"foreign"}, {...bound("retired",false),operationId:"ffffffff-1111-4111-8111-111111111111"},
+    bound("unknown",false), {...bound("retired",true)}, {...bound("historical",true)},
+    {...bound("retired",false),receipt:{confirmed:true}}, {...bound("historical",false),provider:"patreon"}
+])("foreign, superseding or unknown recovery DTO refuses cookie deletion and false success: %j", async data => {
+    mocks.jar.set("__Host-account-link",token); mocks.invoke.mockResolvedValue({data,error:null});
+    const form=new FormData(); form.set("provider","discord"); form.set("operationId",operationId);
+    await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/account?recovery=unavailable"); expect(mocks.jar.get("__Host-account-link")).toBe(token);
+    pageResponses(data,false); const view=await mount();
+    try { if(data.accountId!=="foreign" && data.operationId===operationId) expect(view.container.textContent).toContain("recovery is unavailable"); }
+    finally { await view.close(); }
+});
+it("a delayed successful retirement response cannot erase a newer browser authority", async () => {
+    const newer="b".repeat(64); mocks.jar.set("__Host-account-link",newer);
+    mocks.invoke.mockResolvedValue({data:bound("retired",false),error:null});
+    const form=new FormData(); form.set("provider","discord"); form.set("operationId",operationId);
+    await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/account?discord=retired");
+    expect(mocks.jar.get("__Host-account-link")).toBe(newer);
+});
+it("failed Discord confirmation preserves authority and never redirects as confirmed", async () => {
+    mocks.jar.set("__Host-account-link",token); mocks.invoke.mockResolvedValue({data:null,error:new Error("expired inside RPC")});
+    await expect(confirmDiscordAccount()).rejects.toThrow("redirect:/account?discord=repair"); expect(mocks.jar.get("__Host-account-link")).toBe(token);
+});
+
+it.runIf(Boolean(process.env.WEBSITE_MEMBERSHIP_TEST_URL))("real PostgreSQL mounted handler/action lifecycle: commit, cookie loss, Auth change, retirement and restart", async () => {
+    const { default: pg } = await import("pg");
+    const { createWebsiteAccountHandler } = await import("../../../supabase/functions/_shared/website-account");
+    const { sha256 } = await import("../../../supabase/functions/_shared/membership");
+    const target=new URL(process.env.WEBSITE_MEMBERSHIP_TEST_URL!);
+    expect(["localhost","127.0.0.1"]).toContain(target.hostname); expect(target.pathname).toBe("/website_membership_test");
+    const db=new pg.Client({connectionString:target.href}); await db.connect();
+    let accountId=crypto.randomUUID(), current: string|null=null;
+    const authUser=()=>({id:accountId,identities:current ? [{provider:"discord",identity_data:{provider_id:current}}] : []});
+    const rpc=async(name:string,args:Record<string,unknown>)=>{
+        const allowed=["membership_status","membership_recovery","membership_discord_begin","membership_discord_check","membership_discord_callback","membership_discord_confirm"];
+        if(!allowed.includes(name) || Object.keys(args).some(k=>!/^p_[a-z_]+$/u.test(k))) throw new Error("Fixture RPC refused");
+        await db.query("set role service_role");
+        try { return (await db.query(`select public.${name}(${Object.keys(args).map((k,i)=>`${k} => $${i+1}`).join(",")}) r`,Object.values(args))).rows[0].r; }
+        finally { await db.query("reset role"); }
+    };
+    const handler=createWebsiteAccountHandler({supabaseUrl:"https://fixture.invalid",serviceRoleKey:"synthetic-not-a-credential",policy:null,fetch:async(input,init)=>{
+        const path=new URL(String(input)).pathname;
+        if(path==="/auth/v1/user") return Response.json(authUser());
+        try { return Response.json(await rpc(path.replace("/rest/v1/rpc/",""),JSON.parse(String(init?.body)))); }
+        catch { return Response.json({error:"fixture_rpc_refused"},{status:503}); }
+    }});
+    let loseRetirement=false;
+    mocks.user.mockImplementation(async()=>({data:{user:authUser()}}));
+    mocks.session.mockImplementation(async()=>({data:{session:{user:{id:accountId},access_token:"synthetic-jwt"}}}));
+    mocks.invoke.mockImplementation(async(_name,options)=>{
+        const response=await handler(new Request("https://fixture.invalid/website-account",{method:"POST",headers:{Authorization:"Bearer synthetic-jwt","Content-Type":"application/json"},body:JSON.stringify(options.body)}));
+        if(loseRetirement && options.body.operation==="recovery-resolve") { loseRetirement=false; return {data:null,error:new Error("lost committed retirement response")}; }
+        return {data:await response.json(),error:response.ok ? null : new Error("fixture refusal")};
+    });
+    mocks.stamp.mockImplementation(async(name,args)=>({data:await rpc(name,args),error:null}));
+    try {
+        for(const acknowledged of [false,true]) for(const changed of [null,"999456789012345678"]) {
+            accountId=crypto.randomUUID(); current=null; mocks.jar.clear();
+            await db.query("insert into auth.users values($1)",[accountId]);
+            await expect(linkDiscordAccount(new FormData())).rejects.toThrow("redirect:https://discord.com/oauth2/authorize");
+            const authority=mocks.jar.get("__Host-account-link")!, hash=await sha256(authority);
+            current="123456789012345678";
+            const callback=await discordCallback(new NextRequest("https://website.example/account/discord/callback?code=synthetic",{headers:{cookie:`__Host-account-link=${authority}`}}));
+            expect(callback.headers.get("location")).toContain("discord=confirm");
+            await expect(confirmDiscordAccount()).rejects.toThrow("redirect:/account"); expect(mocks.jar.size).toBe(0);
+            const history=(await db.query("select * from public.discord_link_requests where token_hash=$1",[hash])).rows;
+            const op=history[0].operation_id;
+            const form=new FormData(); form.set("provider","discord"); form.set("operationId",op);
+            if(acknowledged) await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/account?discord=recovered");
+            current=changed;
+            let view=await mount();
+            try { expect(view.container.textContent).toContain("historical Discord attempt"); expect(view.container.textContent).not.toContain("Recover Discord result"); }
+            finally { await view.close(); }
+            const failed=await handler(new Request("https://fixture.invalid",{method:"POST",headers:{Authorization:"Bearer synthetic-jwt"},body:JSON.stringify({operation:"discord-confirm",token:authority})}));
+            expect(failed.status).toBe(503);
+            const owner=accountId; accountId=crypto.randomUUID(); await db.query("insert into auth.users values($1)",[accountId]);
+            await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/account?recovery=unavailable"); accountId=owner;
+            loseRetirement=true;
+            await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/account?recovery=unavailable");
+            view=await mount();
+            try {
+                expect(view.container.textContent).toContain("already acknowledged");
+                expect(view.container.textContent).not.toContain("Recover Discord result");
+                expect(view.container.textContent?.includes("Confirm and connect Discord")).toBe(changed===null);
+                expect(view.container.textContent).toContain("Continue to Servers");
+            } finally { await view.close(); }
+            await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/account?discord=retired");
+            if(changed===null) {
+                await expect(linkDiscordAccount(new FormData())).rejects.toThrow("redirect:https://discord.com/oauth2/authorize");
+                const next=mocks.jar.get("__Host-account-link"); expect(next).not.toBe(authority);
+                await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/account?recovery=unavailable"); expect(mocks.jar.get("__Host-account-link")).toBe(next);
+                expect((await db.query("select acknowledged,operation_id from public.membership_recovery_intents where account_id=$1 and provider='discord'",[accountId])).rows[0]).toEqual({acknowledged:false,operation_id:expect.not.stringMatching(op)});
+            }
+            expect((await db.query("select * from public.discord_link_requests where token_hash=$1",[hash])).rows).toEqual(history);
+        }
+    } finally { await db.end(); }
+}, 20000);
