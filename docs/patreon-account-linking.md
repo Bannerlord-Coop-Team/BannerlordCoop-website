@@ -1,13 +1,16 @@
 # Patreon account linking
 
-This links a Patreon **identity** to an existing Supabase user. It does not sign
-users in through Patreon, check paid memberships, or grant supporter roles.
-OAuth access/refresh tokens are deliberately not persisted. Membership syncing
-would need additional scopes and secure token storage in a separate change.
+This links Patreon to an existing Supabase account, with explicit authenticated
+confirmation and ephemeral `identity identity.memberships` verification. Tokens
+are never retained. See [membership onboarding](membership-onboarding.md) for the
+current policy, transactional recovery, private synchronization contract, settings,
+additive migration order and enablement blockers. This is not unattended polling
+or proof of settled funds. The original identity-only SQL migration remains immutable.
 
 ## Production setup
 
-1. Apply `supabase/migrations/20260907212654_create_patreon_links.sql` to the intended
+1. Follow the coordinated additive migration order in the membership document.
+   The original `supabase/migrations/20260907212654_create_patreon_links.sql` belongs to the intended
    Supabase project. If using the CLI, verify the linked project and review
    `supabase db push --dry-run` before `supabase db push` (which applies all pending
    migrations, not just this one).
@@ -25,7 +28,9 @@ would need additional scopes and secure token storage in a separate change.
    automatically by hosted Supabase Edge Functions. Never expose the service role
    key or Patreon secret in frontend environment variables.
 3. Register the exact `PATREON_REDIRECT_URI` in your Patreon app's redirect URLs.
-4. Deploy all three functions to the same project:
+4. Deploy updated Patreon functions plus `website-account`, `my-servers` and the
+   dedicated private `control-plane-membership-v1` function per the membership
+   rollout gates. The original Patreon functions are:
 
    ```sh
    supabase functions deploy patreon-start --project-ref <project-ref>
@@ -59,36 +64,18 @@ make CI pass.
 
 ## Flow and security
 
-- The account button runs a Next.js Server Action, verifies the site user, and
-  calls `patreon-start` with that user's Supabase bearer token.
-- Start creates a random, ten-minute, single-use launch ticket. A top-level
-  navigation to the callback consumes it and creates an independent OAuth state.
-  This navigation sets a Secure, HttpOnly, SameSite=Lax, host-only cookie on the
-  Supabase domain without relying on third-party cookies or cross-origin fetches.
-- Patreon returns an authorization code. The callback checks the cookie/state,
-  atomically consumes the state, exchanges the code server-side, and fetches
-  `/api/oauth2/v2/identity` with the `identity` scope.
-- The callback creates a short-lived completion token and redirects to the site's
-  callback route. The site verifies its current session; `patreon-complete` verifies
-  the bearer token again and consumes the completion token only for the initiating
-  user. This prevents a forwarded launch URL from linking a victim's Patreon to a
-  different person's site account. Switching accounts mid-flow fails safely.
-- Only completion writes `public.patreon_accounts`. One site user has at most one
-  Patreon identity, and one Patreon identity cannot be shared across site users.
-  Linking again replaces the same user's previous identity.
-- Both tables have RLS enabled with no client policies and no anon/authenticated
-  grants. Only the service role can access them. OAuth tokens are discarded;
-  launch/state/completion tokens are stored as SHA-256 hashes. Expired temporary
-  rows are cleaned up on subsequent authenticated starts.
-- Redirect destinations are configured server-side, not supplied by callers.
-  OAuth responses are non-cacheable and use `Referrer-Policy: no-referrer`.
-  Avoid logging callback query strings in external request-log systems, as they
-  contain short-lived OAuth codes or tickets.
+The current complete flow is documented in [membership onboarding](membership-onboarding.md).
+Launch/state remain one-use and browser-cookie bound; operation UUID, initiating
+UUID, expected generation and safe return path are server-held. Callback GET
+creates normalized completion authority only. The website requires explicit POST
+confirmation; one transaction consumes authority, links, stores normalized evidence,
+records an immutable replayable receipt and emits an outbox event. Lost responses
+retain the same completion cookie for recovery. Current status is authenticated,
+never established by query parameters. Unlink/deletion preserve revocation evidence.
 
-If the session expires, cookies are blocked, or another user already owns the
-Patreon identity, linking fails without changing an existing link. Sign in again
-and restart from Account. Status query parameters are presentation only and must
-never be treated as authorization or entitlement evidence.
+All sensitive storage has RLS and no anon/authenticated grants. No provider tokens,
+raw bodies or emails are persisted as evidence. Avoid logging callback query strings
+in external request-log systems: they contain short-lived OAuth codes or tickets.
 
 ## Validation
 
@@ -101,5 +88,5 @@ npx next typegen && npx tsc --noEmit
 After deploying, test a successful authorization, Patreon cancellation, callback
 refresh/replay, and linking an already-used Patreon identity from a second site
 account. Verify the row using the Supabase dashboard; it should not be readable
-using a user's bearer token. Unit tests mock the provider and database; a live
-Patreon round trip and the SQL migration still require deployment verification.
+using a user's bearer token. Provider/API tests are synthetic. The new SQL migration has isolated PostgreSQL
+coverage; live Patreon/Auth/browser round trips still require authorized deployment verification.

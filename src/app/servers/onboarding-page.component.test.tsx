@@ -13,7 +13,7 @@ vi.mock("@/app/components/servers/AllServersDirectory", () => ({ AllServersDirec
 import ServersPage from "./page";
 beforeEach(() => {
     vi.clearAllMocks();
-    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "page-user" } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt" } } }) } });
+    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "page-user", identities: [{ provider: "discord", identity_data: { sub: "123456789012345678" } }] } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt", user: { id: "page-user" } } } }) } });
     mocks.list.mockResolvedValue([{ serverId: ONBOARDING_TEST_ID, displayName: "Assigned campaign", operationState: "stopped", observedGameState: "stopped", accessRole: "owner" }]);
     mocks.onboarding.mockResolvedValue(onboardingSummary());
 });
@@ -36,4 +36,11 @@ it.each(["starting", "provisioning", "unknown", "stopped", "running"])("inventor
 it("signed-out page never requests private onboarding or inventory", async () => {
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: null } }), getSession: async () => ({ data: { session: null } }) } });
     const html = renderToStaticMarkup(await ServersPage()); expect(html).toContain("Sign in to view"); expect(mocks.onboarding).not.toHaveBeenCalled(); expect(mocks.list).not.toHaveBeenCalled();
+});
+
+it("missing Discord is composed before CP allocation fetch, while existing inventory stays accessible", async () => {
+    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "page-user", identities: [] } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt", user: { id: "page-user" } } } }) } });
+    const html = renderToStaticMarkup(await ServersPage());
+    expect(mocks.onboarding).not.toHaveBeenCalled(); expect(mocks.list).toHaveBeenCalled(); expect(html).toContain("Assigned campaign");
+    expect(html).toContain("Owned servers"); expect(html).toContain("Associated servers");
 });

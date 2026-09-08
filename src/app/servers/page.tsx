@@ -1,3 +1,5 @@
+import { MembershipNextStep } from "@/app/components/servers/MembershipNextStep";
+import { composeOnboarding, identityStep, parseAccountStatus, type AccountStatus } from "@/app/lib/hosting/membership-onboarding";
 import { Navbar } from "@/app/components/layout/Navbar";
 import { AllServersDirectory } from "@/app/components/servers/AllServersDirectory";
 import {
@@ -41,7 +43,7 @@ export default async function ServersPage() {
             supabase.auth.getSession(),
         ]);
         user = userData.user;
-        accessToken = sessionData.session?.access_token ?? null;
+        accessToken = user && sessionData.session?.user.id === user.id ? sessionData.session.access_token : null;
     } catch {
         // Keep the public server directory available when auth is not configured.
     }
@@ -65,19 +67,32 @@ export default async function ServersPage() {
             manageUrl: `/servers/${encodeURIComponent(server.id)}`,
         }),
     );
-    let onboarding: OnboardingSummary | null = null;
+    // Resolve authoritative identities before any allocation fetch. No metadata/email fallback.
+    let identity = identityStep(user);
+    let account: AccountStatus | null = null;
     if (user && accessToken) {
+        try {
+            const supabase = await getSupabaseServerClient();
+            const result = await supabase.functions.invoke("website-account", { headers: { Authorization: `Bearer ${accessToken}` }, body: { operation: "status" } });
+            if (!result.error) { account = parseAccountStatus(result.data, user.id); if (!account.hasDiscord && identity === null) identity = "identity_repair"; }
+        } catch { /* Independent CP grants must remain usable during membership outages. */ }
+    }
+    let onboarding: OnboardingSummary | null = null;
+    if (user && accessToken && identity === null) {
         try { onboarding = await getServerOnboarding(accessToken); }
         catch { /* Unknown eligibility/capacity must never become a positive or empty snapshot. */ }
     }
     let managedServersError = "";
     let controlPlaneServers: ManagedServerDirectoryEntry[] = [];
+    let ownedIds: string[] = [];
     if (user) {
         if (!accessToken) {
             managedServersError = "Your authenticated server session is unavailable. Please sign in again.";
         } else {
             try {
-                controlPlaneServers = (await listAllMyServers(accessToken)).map(toDirectoryServer);
+                const listed = await listAllMyServers(accessToken);
+                ownedIds = listed.filter(server => server.accessRole === "owner").map(server => server.serverId);
+                controlPlaneServers = listed.map(toDirectoryServer);
             } catch (error) {
                 console.error("Managed server inventory failed to load", error);
                 managedServersError = "Managed servers could not be loaded right now.";
@@ -89,6 +104,7 @@ export default async function ServersPage() {
         ...liveServers,
     ]);
     const managedServerCount = managedServers.length;
+    const websiteSummary = composeOnboarding(user?.id ?? null, identity, account, onboarding, ownedIds);
     const allServers = getAllServers();
     const onlineServers = allServers.filter((server) => server.status === "Online");
     const onlinePlayers = onlineServers.reduce(
@@ -129,7 +145,7 @@ export default async function ServersPage() {
                     </p>
                 </div>
 
-                {user && <ServerOnboarding userId={user.id} summary={onboarding} />}
+                {user ? <ServerOnboarding userId={user.id} summary={onboarding} websiteSummary={websiteSummary} /> : <MembershipNextStep summary={websiteSummary} />}
 
                 <section id="my-servers" className="mt-12" aria-labelledby="my-servers-heading">
                     <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
@@ -155,8 +171,11 @@ export default async function ServersPage() {
                                 </p>
                             )}
                             {controlPlaneServers.length > 0 && <div className="mb-5"><GamePasswordNotice /></div>}
+                            <h3 className="mb-3 font-semibold">Owned servers</h3>
+                            <ServerDirectoryTable servers={managedServers.filter(server => ownedIds.includes(server.id))} emptyMessage="No owned servers are currently listed." />
+                            <h3 className="mb-3 mt-6 font-semibold">Associated servers (manager, support or administrator)</h3>
                             <ServerDirectoryTable
-                                servers={managedServers}
+                                servers={managedServers.filter(server => !ownedIds.includes(server.id))}
                                 emptyMessage={managedServersError
                                     ? "No managed-server data is currently available."
                                     : "You do not own or operate any servers yet."}

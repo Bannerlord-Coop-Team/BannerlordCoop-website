@@ -2,6 +2,7 @@ import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServerOnboarding } from "./ServerOnboarding";
+import { composeOnboarding, EMPTY_MEMBERSHIP } from "@/app/lib/hosting/membership-onboarding";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import { onboardingIntentKey, storeOnboardingIntent } from "@/app/servers/onboarding-intent";
 import { onboardingSummary, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID } from "../../../../tests/onboarding-fixtures";
@@ -47,7 +48,7 @@ function deferred() {
 }
 // Text includes the literal space before the decorative arrow in JSX.
 describe("ServerOnboarding real component and server-action recovery", () => {
-    it("offers only explicit unused quota and fails safely for unknown or unavailable summary", async () => {
+    it("offers only backend-authorized unused allocation and fails safely for unknown or unavailable summary", async () => {
         await render(); expect(container.textContent).toContain("You have a server available"); expect(container.textContent).not.toContain("Patreon");
         for (const summary of [null, { ...onboardingSummary(), unavailableReason: "provisioning_paused" as const }, { ...onboardingSummary(), eligibility: { eligible: false, reason: "no_grant" as const, granted: 0, used: 0, remaining: 0 } }, { ...onboardingSummary(), eligibility: { eligible: false, reason: "quota_exhausted" as const, granted: 1, used: 1, remaining: 0 } }]) {
             await render(summary); expect(container.textContent).not.toContain("You have a server available"); expect(container.textContent).not.toContain("Set up server");
@@ -214,4 +215,15 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         await act(async () => resolve(onboardingCreated())); expect(stored("account-a")).toEqual(newer);
         expect(container.textContent).not.toContain("Server assigned");
     });
+});
+
+it("membership prompts never replace a retained exact-UUID mutation, and associated inventory is not allocation", async () => {
+    const candidate = { action: "create-server", displayName: "My Campaign", region: "us-west", requestId: ONBOARDING_TEST_ID } as const;
+    storeOnboardingIntent(sessionStorage,onboardingIntentKey("account-a"),candidate);
+    const allocation = onboardingSummary(); allocation.sources.administrativeBase=0; allocation.eligibility={eligible:false,reason:"no_grant",granted:0,used:0,remaining:0};
+    const summary = composeOnboarding("account-a",null,{version:1,accountId:"account-a",hasDiscord:true,configured:true,verificationPending:false,membership:{...EMPTY_MEMBERSHIP,sync:"not_needed"}},allocation);
+    await act(async()=>root.render(<ServerOnboarding userId="account-a" summary={allocation} websiteSummary={summary} />));
+    await act(async()=>{await vi.advanceTimersByTimeAsync(0);});
+    expect(container.textContent).toContain("Retry pending request"); expect(container.textContent).not.toContain("Connect Patreon");
+    await click("Retry pending request"); expect(mocks.request.mock.calls[0][1]).toEqual(candidate); expect(stored()).toBeNull();
 });

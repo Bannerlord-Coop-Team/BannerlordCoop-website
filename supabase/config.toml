@@ -34,3 +34,11 @@ verify_jwt = false
 # Completion independently verifies the logged-in user with Supabase Auth.
 [functions.patreon-complete]
 verify_jwt = false
+
+# Dedicated closed credential verification, not Supabase JWT authority.
+[functions.control-plane-membership-v1]
+verify_jwt = false
+
+# Verifies current Supabase user via Auth on every request.
+[functions.website-account]
+verify_jwt = false

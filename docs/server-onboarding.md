@@ -1,10 +1,10 @@
 # Website server onboarding
 
-Real `/servers` onboarding adapts the approved gold/dark modal design (`f4eeb2d`) onto the current directory. It does not replace the page with the development mock, infer Patreon membership, or use browser database writes. Existing live-console and managed-server inventory/credentials/controls are unchanged.
+Real `/servers` onboarding adapts the approved gold/dark modal design (`f4eeb2d`) onto the current directory. It does not replace the page with the development mock or use browser database writes. Membership is verified server-side under the explicit policy in [membership onboarding](membership-onboarding.md). Existing live-console and managed-server inventory/credentials/controls are unchanged.
 
 ## Authority and public contract
 
-An active **explicitly granted**, unused base+bonus quota is required. Roles (including Admin, Standard and Server Owner) and historical role grants do not authorize this feature. The authenticated backend derives the guild and verified linked Discord identity; website-supplied page identity only prevents dispatch after an account switch.
+The backend requires active, unused allocation under `max(administrativeBase, qualifyingPatreonOne) + administrativeBonus`. Membership is disabled until the reviewed configuration/rollout gates in the membership document pass. Roles (including Admin, Standard and Server Owner) and historical role grants do not authorize this feature. The authenticated backend derives the guild and verified linked Discord identity; website-supplied page identity only prevents dispatch after an account switch.
 
 | Website Edge request | Fixed backend operation | Exact backend input |
 | --- | --- | --- |
@@ -12,7 +12,7 @@ An active **explicitly granted**, unused base+bonus quota is required. Roles (in
 | `POST my-servers` `{action:'create-server',displayName,region}` | `create-server` | `{displayName,region}` |
 | `POST my-servers` `{action:'request-region',region}` | `request-region` | `{region}` |
 
-All use existing Supabase JWT forwarding to authenticated `POST /v1/user/control-plane`, `{version:1,requestId,operation,input}`. Mutations require a caller-generated UUID in `x-request-id`, normalized to lowercase. There is no new configuration, browser service secret, owner/role/host/build/slot selection, or admin bypass. The shared closed DTO parser is used by **both** Edge and website facade. Unknown enums, extra/private fields, missing fields, inconsistent eligibility, wrong regions/names, invalid timestamps, mismatched receipts/envelopes and inconsistent HTTP success/failure are rejected as unavailable, not displayed as safe data.
+All use existing Supabase JWT forwarding to authenticated `POST /v1/user/control-plane`, `{version:1,requestId,operation,input}`. Mutations require a caller-generated UUID in `x-request-id`, normalized to lowercase. There is no browser service secret or owner/role/host/build/slot selection. Adequate independent administrative grants bypass membership steps; an administrator role alone is not allocation authority. New membership runtime configuration is documented separately. The shared closed DTO parser is used by **both** Edge and website facade. Unknown enums, extra/private fields, missing fields, inconsistent eligibility, wrong regions/names, invalid timestamps, mismatched receipts/envelopes and inconsistent HTTP success/failure are rejected as unavailable, not displayed as safe data.
 
 Canonical order: **US-West, US-East, France, Germany, United Kingdom, Poland**. Name policy matches backend raw 3–48 UTF-16 code units, then NFKC, trim and whitespace collapse, normalized 3–48 policy. Letters/numbers at both ends; letters/numbers/spaces/periods/apostrophes/hyphens inside. Region requests do not send a name.
 
@@ -32,7 +32,7 @@ sequenceDiagram
     Action->>Action: getUser + session; compare page user (restriction only)
     Action->>Edge: Current Supabase JWT + fixed input + UUID
     Edge->>Backend: Strict /v1/user/control-plane envelope
-    Backend->>Backend: Verify JWT + linked Discord + explicit grant
+    Backend->>Backend: Verify JWT + linked Discord + source-owned allocation
     Backend->>DB: Exact replay or atomic assignment / region request
     DB-->>Backend: Durable receipt
     Backend-->>Edge: Closed safe DTO

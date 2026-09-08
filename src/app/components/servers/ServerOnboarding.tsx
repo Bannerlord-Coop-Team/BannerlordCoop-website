@@ -1,5 +1,7 @@
 "use client";
 
+import { MembershipNextStep } from "./MembershipNextStep";
+import type { WebsiteOnboardingSummary } from "@/app/lib/hosting/membership-onboarding";
 import { ArrowRight, Server, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -13,11 +15,11 @@ const primaryButton = `inline-flex min-h-11 items-center justify-center gap-2 ro
 const secondaryButton = `inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-white/15 px-4 py-2 text-sm text-foreground-muted hover:border-gold/50 hover:text-foreground disabled:opacity-60 ${focusRing}`;
 const labelStyle = "font-label text-xs font-semibold uppercase tracking-[0.16em] text-gold";
 
-type Props = { userId: string; summary: OnboardingSummary | null };
+type Props = { userId: string; summary: OnboardingSummary | null; websiteSummary?: WebsiteOnboardingSummary };
 export function ServerOnboarding(props: Props) {
     return <OnboardingSession key={props.userId} {...props} />;
 }
-function OnboardingSession({ userId, summary }: Props) {
+function OnboardingSession({ userId, summary, websiteSummary }: Props) {
     const router = useRouter();
     const key = onboardingIntentKey(userId);
     const [ready, setReady] = useState(false);
@@ -49,7 +51,7 @@ function OnboardingSession({ userId, summary }: Props) {
         };
     }, [key]);
 
-    const canOffer = summary !== null && summary !== staleSnapshot && summary.eligibility.eligible && summary.unavailableReason === null;
+    const canOffer = (!websiteSummary || websiteSummary.status === "eligible") && summary !== null && summary !== staleSnapshot && summary.eligibility.eligible && summary.unavailableReason === null;
     const busy = !ready || storageError || pending;
     async function dispatch(candidate: OnboardingIntent) {
         const authority = completionAuthority.current;
@@ -111,24 +113,24 @@ function OnboardingSession({ userId, summary }: Props) {
         {message && <p role="status" className="mt-4 text-sm text-gold">{message}</p>}
     </>;
     return <div ref={fallbackRef} tabIndex={-1} className="outline-none">
-        {canOffer ? <section aria-labelledby="available-server-heading" className="relative mt-7 overflow-hidden rounded-sm border border-gold/40 bg-[radial-gradient(ellipse_at_top_right,rgba(170,151,96,0.18),transparent_65%)] p-5 sm:p-8">
+        {(intent || result) && !canOffer ? null : canOffer ? <section aria-labelledby="available-server-heading" className="relative mt-7 overflow-hidden rounded-sm border border-gold/40 bg-[radial-gradient(ellipse_at_top_right,rgba(170,151,96,0.18),transparent_65%)] p-5 sm:p-8">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-start gap-4 sm:gap-5">
                     <div className="hidden size-14 shrink-0 items-center justify-center rounded-sm border border-gold/30 bg-gold/10 sm:flex"><Server aria-hidden="true" className="size-7 text-gold" strokeWidth={1.4} /></div>
                     <div><p className={labelStyle}>Your granted server quota</p>
                         <h2 id="available-server-heading" className="mt-2 font-display text-3xl font-semibold sm:text-4xl">You have a server available</h2>
-                        <p className="mt-2 max-w-xl text-sm leading-6 text-foreground-muted">Give your campaign a name and choose where it lives. Setup uses one unused explicitly granted server slot.</p>
+                        <p className="mt-2 max-w-xl text-sm leading-6 text-foreground-muted">Give your campaign a name and choose where it lives. Setup uses one unused administrative or verified membership server allowance.</p>
                         <p className="mt-4 flex items-center gap-2 text-xs text-gold"><ShieldCheck aria-hidden="true" className="size-4" />{summary.eligibility.remaining} unused · regional capacity checked at submission</p>
                     </div>
                 </div>
                 <button type="button" disabled={busy || intent !== null} onClick={() => { setResult(null); setMessage(""); setOpen(true); }} className={`${primaryButton} shrink-0`}>Set up server <ArrowRight aria-hidden="true" className="size-4" /></button>
             </div>
-        </section> : <div role="status" className="mt-7 border border-white/10 bg-surface px-5 py-4 text-sm text-foreground-muted">
+        </section> : websiteSummary ? (ready && !storageError ? <MembershipNextStep summary={staleSnapshot !== null && summary === staleSnapshot ? { ...websiteSummary, status: "unavailable", nextAction: "retry_status" } : websiteSummary} /> : <p role="status" className="mt-7 text-sm">Checking retained server request authority…</p>) : <div role="status" className="mt-7 border border-white/10 bg-surface px-5 py-4 text-sm text-foreground-muted">
             {summary === null || summary.unavailableReason !== null || summary === staleSnapshot
                 ? "Server setup availability could not be confirmed or is temporarily unavailable. Refresh to check again."
                 : summary.eligibility.reason === "quota_exhausted" ? "Your explicitly granted server quota is currently in use." : "No unused explicitly granted server quota is available for this account."}
         </div>}
-        <button type="button" className={`${secondaryButton} mt-3`} onClick={() => router.refresh()}>Refresh availability and My Servers</button>
+        <button type="button" className={`${secondaryButton} mt-3`} onClick={() => router.refresh()}>Refresh status and My Servers</button>
         {!open && recovery}
         {!open && result && <div className="mt-5 border border-gold/30 bg-surface p-5"><OnboardingReceipt result={result} /></div>}
         {summary?.regions.some((entry) => entry.request !== null) && <section aria-label="Your outstanding region requests" className="mt-5 border border-white/10 bg-surface p-5 text-sm">

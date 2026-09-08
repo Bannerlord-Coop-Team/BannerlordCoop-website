@@ -12,6 +12,9 @@ export type OnboardingMutation =
 export type OnboardingIntent = OnboardingMutation & { requestId: string };
 export type RegionRequest = { requestId: string; region: OnboardingRegion; status: "outstanding"; createdAt: string };
 export type OnboardingSummary = {
+    version: 2;
+    sources: { administrativeBase: number; administrativeBonus: number; baseSource: "legacy" | "administrative" | "none"; membershipAllowance: 0 | 1 };
+    membership: { enabled: boolean; verification: "qualifying" | "nonqualifying" | "unknown" | "review_required" | "unverified"; verifiedAt: string | null; validUntil: string | null; refreshMode: "oauth_reauthorization" };
     eligibility: { eligible: boolean; reason: "eligible" | "no_grant" | "quota_exhausted"; granted: number; used: number; remaining: number };
     unavailableReason: typeof ONBOARDING_UNAVAILABLE_REASONS[number] | null;
     regions: { region: OnboardingRegion; label: string; available: boolean; request: RegionRequest | null }[];
@@ -45,7 +48,10 @@ export function parseOnboardingIntent(value: unknown): OnboardingIntent {
     return { ...parseOnboardingMutation(mutation), requestId: requestId.toLowerCase() };
 }
 export function parseOnboardingSummary(value: unknown): OnboardingSummary {
-    if (!record(value) || !keys(value, ["eligibility", "unavailableReason", "regions"])) throw invalid();
+    if (!record(value) || !keys(value, ["version", "sources", "membership", "eligibility", "unavailableReason", "regions"]) || value.version !== 2) throw invalid();
+    const sources = value.sources; const membership = value.membership;
+    if (!record(sources) || !keys(sources, ["administrativeBase", "administrativeBonus", "baseSource", "membershipAllowance"]) || !integer(sources.administrativeBase) || !integer(sources.administrativeBonus) || !["legacy", "administrative", "none"].includes(sources.baseSource as string) || ![0,1].includes(sources.membershipAllowance as number)) throw invalid();
+    if (!record(membership) || !keys(membership, ["enabled", "verification", "verifiedAt", "validUntil", "refreshMode"]) || typeof membership.enabled !== "boolean" || !["qualifying", "nonqualifying", "unknown", "review_required", "unverified"].includes(membership.verification as string) || membership.refreshMode !== "oauth_reauthorization" || (membership.verifiedAt !== null && !timestamp(membership.verifiedAt)) || (membership.validUntil !== null && !timestamp(membership.validUntil))) throw invalid();
     const e = value.eligibility;
     if (!record(e) || !keys(e, ["eligible", "reason", "granted", "used", "remaining"])
         || typeof e.eligible !== "boolean" || !integer(e.granted) || !integer(e.used) || !integer(e.remaining)) throw invalid();
@@ -63,7 +69,7 @@ export function parseOnboardingSummary(value: unknown): OnboardingSummary {
         if (request !== null && request.region !== entry.region) throw invalid();
         return { region: entry.region, label: entry.label as string, available: entry.available, request };
     });
-    return { eligibility: { eligible: e.eligible, reason, granted: e.granted, used: e.used, remaining }, unavailableReason: value.unavailableReason as OnboardingSummary["unavailableReason"], regions };
+    return { version: 2, sources: sources as OnboardingSummary["sources"], membership: membership as OnboardingSummary["membership"], eligibility: { eligible: e.eligible, reason, granted: e.granted, used: e.used, remaining }, unavailableReason: value.unavailableReason as OnboardingSummary["unavailableReason"], regions };
 }
 export function parseOnboardingResult(value: unknown, expected: OnboardingMutation): OnboardingResult {
     if (!record(value) || value.action !== expected.action) throw invalid();

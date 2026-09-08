@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createPatreonHandler, type PatreonConfig } from "./patreon.ts";
 
-type State = { token_hash: string; kind: string; user_id: string; expires_at: string; patreon_user_id?: string };
+type State = { operation_id?: string; expected_generation?: number; return_path?: string; evidence?: unknown; token_hash: string; kind: string; user_id: string; expires_at: string; patreon_user_id?: string };
 
 function fixture() {
     const states: State[] = [];
     const accounts: { user_id: string; patreon_user_id: string }[] = [];
+    const receipts = new Map<string, { userId: string; result: unknown }>();
     let tokenExchanges = 0;
     let failExchange = false;
     const config: PatreonConfig = {
@@ -20,10 +21,26 @@ function fixture() {
             if (url.pathname === "/auth/v1/user") {
                 const auth = headers.get("Authorization");
                 return auth === "Bearer user-a" || auth === "Bearer user-b"
-                    ? Response.json({ id: auth.slice(7) }) : new Response("Unauthorized", { status: 401 });
+                    ? Response.json({ id: auth.slice(7), identities: [] }) : new Response("Unauthorized", { status: 401 });
             }
             if (url.pathname.startsWith("/rest/v1/")) {
                 assert.equal(headers.get("Authorization"), "Bearer service-secret");
+                if (url.pathname.endsWith("rpc/membership_begin")) {
+                    const body = JSON.parse(String(init?.body));
+                    states.push({ token_hash: body.p_token_hash, user_id: body.p_account_id, kind: "ticket", expires_at: new Date(Date.now()+600000).toISOString(), operation_id: body.p_operation_id, expected_generation: 0, return_path: body.p_return_path });
+                    return Response.json({ started: true });
+                }
+                if (url.pathname.endsWith("rpc/membership_complete")) {
+                    const body = JSON.parse(String(init?.body));
+                    const receipt = receipts.get(body.p_token_hash);
+                    if (receipt) return receipt.userId === body.p_account_id ? Response.json(receipt.result) : new Response("conflict", { status: 409 });
+                    const row = states.find(s => s.token_hash === body.p_token_hash && s.kind === "complete" && s.user_id === body.p_account_id && Date.parse(s.expires_at) > Date.now());
+                    if (!row || accounts.some(a => a.patreon_user_id === row.patreon_user_id && a.user_id !== row.user_id)) return new Response("conflict", { status: 409 });
+                    accounts.push({ user_id: row.user_id, patreon_user_id: row.patreon_user_id! });
+                    const result = { linked: true, operationId: row.operation_id, returnPath: row.return_path };
+                    receipts.set(body.p_token_hash, { userId: row.user_id, result }); states.splice(states.indexOf(row),1);
+                    return Response.json(result);
+                }
                 if (url.pathname.endsWith("patreon_oauth_states")) {
                     if (init?.method === "POST") {
                         states.push(JSON.parse(String(init.body)));
@@ -58,9 +75,9 @@ function fixture() {
                 assert.equal(body.get("redirect_uri"), config.redirectUri);
                 return failExchange ? new Response("sensitive provider error", { status: 400 }) : Response.json({ access_token: "patreon-secret" });
             }
-            if (url.href === "https://www.patreon.com/api/oauth2/v2/identity") {
+            if (url.pathname === "/api/oauth2/v2/identity") {
                 assert.equal(headers.get("Authorization"), "Bearer patreon-secret");
-                return Response.json({ data: { type: "user", id: "patreon-123" } });
+                return Response.json({ data: { type: "user", id: "123" } });
             }
             throw new Error(`Unexpected request: ${url}`);
         },
@@ -70,7 +87,7 @@ function fixture() {
     const complete = createPatreonHandler(config, "complete");
     async function begin() {
         const response = await start(new Request("https://project.supabase.co/functions/v1/patreon-start", {
-            method: "POST", headers: { Authorization: "Bearer user-a" },
+            method: "POST", headers: { Authorization: "Bearer user-a", "Content-Type": "application/json" }, body: JSON.stringify({ returnPath: "/servers" }),
         }));
         assert.equal(response.status, 200);
         const { url } = await response.json();
@@ -78,7 +95,7 @@ function fixture() {
         assert.equal(authorize.status, 303);
         const location = new URL(authorize.headers.get("Location")!);
         assert.equal(location.origin, "https://www.patreon.com");
-        assert.equal(location.searchParams.get("scope"), "identity");
+        assert.equal(location.searchParams.get("scope"), "identity identity.memberships");
         const cookie = authorize.headers.get("Set-Cookie")!;
         assert.match(cookie, /HttpOnly; Secure; SameSite=Lax/);
         return { state: location.searchParams.get("state")!, cookie: cookie.split(";")[0], ticketUrl: url };
@@ -104,7 +121,7 @@ test("start requires a valid signed-in user and POST", async () => {
     assert.equal(f.states.length, 0);
 });
 
-test("links identity only after site session confirmation; all tokens are single-use", async () => {
+test("links only after session confirmation; state is single-use and completion receipts replay", async () => {
     const f = fixture();
     const { state, cookie, ticketUrl } = await f.begin();
     assert.ok(f.states.every((row) => row.token_hash !== state));
@@ -118,8 +135,9 @@ test("links identity only after site session confirmation; all tokens are single
     const completion = location.searchParams.get("token")!;
     assert.equal((await f.finish(completion)).status, 200);
     assert.equal(f.accounts[0].user_id, "user-a");
-    assert.equal(f.accounts[0].patreon_user_id, "patreon-123");
-    assert.equal((await f.finish(completion)).status, 400);
+    assert.equal(f.accounts[0].patreon_user_id, "123");
+    assert.equal((await f.finish(completion)).status, 200);
+    assert.equal(f.accounts.length, 1);
     assert.match((await f.returnFromPatreon(state, cookie)).headers.get("Location")!, /patreon=error/);
     assert.equal(f.exchanges(), 1);
 });
@@ -150,7 +168,7 @@ test("completion rejects a different site user (including a forwarded initiation
     const { state, cookie } = await f.begin();
     const returned = await f.returnFromPatreon(state, cookie);
     const completion = new URL(returned.headers.get("Location")!).searchParams.get("token")!;
-    assert.equal((await f.finish(completion, "user-b")).status, 400);
+    assert.equal((await f.finish(completion, "user-b")).status, 503);
     assert.equal(f.accounts.length, 0);
     assert.equal((await f.finish(completion, "user-a")).status, 200);
 });
@@ -167,12 +185,12 @@ test("provider failures do not expose provider responses", async () => {
 
 test("a Patreon identity already linked to another user is not reassigned", async () => {
     const f = fixture();
-    f.accounts.push({ user_id: "user-b", patreon_user_id: "patreon-123" });
+    f.accounts.push({ user_id: "user-b", patreon_user_id: "123" });
     const { state, cookie } = await f.begin();
     const returned = await f.returnFromPatreon(state, cookie);
     const completion = new URL(returned.headers.get("Location")!).searchParams.get("token")!;
     const response = await f.finish(completion);
     assert.equal(response.status, 503);
     assert.equal(await response.text(), "Unable to link Patreon account");
-    assert.deepEqual(f.accounts, [{ user_id: "user-b", patreon_user_id: "patreon-123" }]);
+    assert.deepEqual(f.accounts, [{ user_id: "user-b", patreon_user_id: "123" }]);
 });
