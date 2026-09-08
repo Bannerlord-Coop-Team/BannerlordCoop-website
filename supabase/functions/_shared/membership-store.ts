@@ -2,7 +2,9 @@ import { boundedJson, currentDiscord, record, UUID } from "./membership.ts";
 // Closed retry contract: never expose PostgREST/provider errors to the browser.
 export class MembershipRateLimit extends Error {}
 export function membershipRateLimitResponse(): Response {
-    return Response.json({ error: "membership_rate_limited", retryAfterSeconds: 600 }, { status: 429, headers: { "Retry-After": "600", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+    // Queue delivery has no predictable deadline. Never prescribe a delay that
+    // outlives authority or imply that waiting guarantees admission.
+    return Response.json({ error: "membership_rate_limited" }, { status: 429, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
 }
 export type StoreConfig = { supabaseUrl: string; serviceRoleKey: string; fetch?: typeof fetch };
 export function membershipStore(config: StoreConfig) {
@@ -30,6 +32,6 @@ export function membershipStore(config: StoreConfig) {
             if (!record(response) || response.id !== accountId) throw new Error("Auth account mismatch");
             return { discordUserId: currentDiscord(response), deleted: false };
         },
-        rpc(name: "membership_fence" | "membership_begin" | "membership_complete" | "membership_unlink" | "membership_changes" | "membership_ack" | "membership_status" | "membership_discord_begin" | "membership_discord_confirm" | "membership_discord_check", body: Record<string, unknown>) { return request(`/rest/v1/rpc/${name}`, { method: "POST", body: JSON.stringify(body) }); },
+        rpc(name: "membership_fence" | "membership_begin" | "membership_complete" | "membership_unlink" | "membership_changes" | "membership_ack" | "membership_status" | "membership_discord_begin" | "membership_discord_confirm" | "membership_discord_check" | "membership_recovery", body: Record<string, unknown>) { return request(`/rest/v1/rpc/${name}`, { method: "POST", body: JSON.stringify(body) }); },
     };
 }

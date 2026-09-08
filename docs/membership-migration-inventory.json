@@ -238,8 +238,8 @@
       "version": "202609080002",
       "owner": "website",
       "websitePath": "supabase/migrations/202609080002_membership_onboarding.sql",
-      "websiteSha256": "fc0f8089971ce20ec2af4dda4f93017e85a1e4a7d9ca2ac98ca5c3c9da91966e",
-      "websiteBytes": 23355,
+      "websiteSha256": "ce18319f24350f8ec3646c2c94bf98b2a6e187d8988f6f5b46973449fc20febe",
+      "websiteBytes": 33963,
       "representationException": false,
       "releaseClassification": "new website-owned pending release, NOT already-applied external history"
     }

@@ -140,8 +140,8 @@ test("authenticated mutation throttles return exact bounded retry contracts with
     const patreonStart = createPatreonHandler(config, "start"), patreonComplete = createPatreonHandler(config, "complete");
     for (const [handler, body] of [[account, { operation: "discord-start", returnPath: "/servers" }], [account, { operation: "unlink" }], [patreonStart, { returnPath: "/servers" }], [patreonComplete, { token: "a".repeat(64) }]] as const) {
         const result = await handler(new Request("https://project.supabase.co/functions/v1/test", { method: "POST", headers: { Authorization: "Bearer synthetic", "Content-Type": "application/json" }, body: JSON.stringify(body) }));
-        assert.equal(result.status, 429); assert.equal(result.headers.get("Retry-After"), "600");
+        assert.equal(result.status, 429); assert.equal(result.headers.get("Retry-After"), null);
         assert.equal(result.headers.get("Cache-Control"), "no-store");
-        assert.deepEqual(await result.json(), { error: "membership_rate_limited", retryAfterSeconds: 600 });
+        assert.deepEqual(await result.json(), { error: "membership_rate_limited" });
     }
 });

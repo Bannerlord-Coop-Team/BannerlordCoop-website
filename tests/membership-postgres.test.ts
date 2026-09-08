@@ -30,7 +30,7 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
         });
         await t.test("populated identity-only history stays unverified and all new tables deny browser reads", async () => {
             const h = await rpc("membership_fence", [a,discord,false]); assert.equal(h.verification,"unverified"); assert.equal(h.linkGeneration,"2");
-            for (const table of ["membership_heads","membership_outbox","membership_completion_receipts","discord_link_requests"]) {
+            for (const table of ["membership_heads","membership_outbox","membership_completion_receipts","discord_link_requests","membership_recovery_intents"]) {
                 assert.equal((await query("select relrowsecurity from pg_class where oid=$1::regclass",[`public.${table}`])).rows[0].relrowsecurity,true);
                 assert.equal((await query("select has_table_privilege('authenticated',$1,'select') permitted",[`public.${table}`])).rows[0].permitted,false);
             }
@@ -44,6 +44,8 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
 
         });
         async function stage(account = a, token = "a".repeat(64), patreon = "1", expired = false) {
+            const prior = await rpc("membership_recovery",[account,discord,"patreon"]);
+            if (prior.operationId) await rpc("membership_recovery",[account,discord,"patreon",prior.operationId,true]);
             const h = await rpc("membership_fence",[account,discord,false]);
             await query("insert into public.patreon_oauth_states(token_hash,kind,user_id,patreon_user_id,expires_at,operation_id,expected_generation,return_path,evidence) values($1,'complete',$2,$3,clock_timestamp()+($4::text)::interval,gen_random_uuid(),$5,'/servers',$6)",[token,account,patreon,expired ? "-1 minute" : "10 minutes",h.linkGeneration,evidence]);
             return token;
@@ -101,6 +103,7 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             const token = "9".repeat(64); await rpc("membership_discord_begin",[b,token,"eeeeeeee-1111-4111-8111-111111111111","/servers"]);
             await assert.rejects(rpc("membership_discord_check",[a,token]));
             assert.equal((await rpc("membership_discord_check",[b,token])).valid,true);
+            await rpc("membership_discord_callback",[b,token,discord]);
             const result = await rpc("membership_discord_confirm",[b,token,discord]); assert.deepEqual(await rpc("membership_discord_confirm",[b,token,discord]),result);
             await assert.rejects(rpc("membership_discord_confirm",[b,token,"999456789012345678"]));
             await query("update public.discord_link_requests set expires_at=clock_timestamp()-interval '1 second' where token_hash=$1",[token]); await assert.rejects(rpc("membership_discord_check",[b,token]));
@@ -125,6 +128,8 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             await assert.rejects(rpc("membership_complete",[b,discord,pending]));
         });
         await t.test("new explicit OAuth checks fence reordered completions and expose verification pending separately from sync", async () => {
+            const prior=await rpc("membership_recovery",[b,discord,"patreon"]);
+            if(prior.operationId) await rpc("membership_recovery",[b,discord,"patreon",prior.operationId,true]);
             await rpc("membership_begin",[b,discord,"12345678-1111-4111-8111-111111111111","1".repeat(64),"/servers"]);
             await query("update public.patreon_oauth_states set kind='complete',patreon_user_id='7',evidence=$1 where token_hash=$2",[evidence,"1".repeat(64)]);
             await rpc("membership_begin",[b,discord,"22345678-1111-4111-8111-111111111111","2".repeat(64),"/servers"]);
@@ -171,22 +176,21 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
         });
         await t.test("concurrent completions share durable budget, exact receipts replay at budget and unlink still revokes", async () => {
             const id=await freshAccount();
-            const initial=await stage(id,"3".repeat(64),"987655"); await rpc("membership_complete",[id,discord,initial]); await drain(id);
+            const initial=await stage(id,"3".repeat(64),"987655"); await rpc("membership_complete",[id,discord,initial]);
+            const completed=await rpc("membership_recovery",[id,discord,"patreon"]); await rpc("membership_recovery",[id,discord,"patreon",completed.operationId,true]); await drain(id);
             for(let i=0;i<8;i++) { await rpc("membership_begin",[id,discord,crypto.randomUUID(),crypto.randomUUID().replaceAll("-", "").repeat(2),"/servers"]); await drain(id); }
-            // Stage two real completion authorities at the same current generation.
-            const x=await stage(id,"4".repeat(64),"987655"), y=await stage(id,"5".repeat(64),"987655");
+            // One recovery slot per provider blocks uncertain replacement. Two
+            // concurrent calls of the exact last-admitted operation return one receipt.
+            const x=await stage(id,"4".repeat(64),"987655");
             const peer=new pg.Client({connectionString:url}); await peer.connect();
-            let winner: string;
+            let result;
             try {
-                const results=await Promise.allSettled([rpc("membership_complete",[id,discord,x]),peer.query("select public.membership_complete($1,$2,$3) result",[id,discord,y]).then(r=>r.rows[0].result)]);
-                assert.equal(results.filter(r=>r.status==="fulfilled").length,1);
-                for(const result of results) if(result.status==="rejected") assert.equal(result.reason.code,"PT429");
-                winner=results[0].status==="fulfilled" ? x : y;
+                const results=await Promise.all([rpc("membership_complete",[id,discord,x]),peer.query("select public.membership_complete($1,$2,$3) result",[id,discord,x]).then(r=>r.rows[0].result)]);
+                assert.deepEqual(results[0],results[1]); result=results[0];
             } finally { await peer.end(); }
-            const result=await rpc("membership_complete",[id,discord,winner]);
             assert.equal((await query("select mutation_count from public.membership_heads where account_id=$1",[id])).rows[0].mutation_count,10);
             const revoked=await rpc("membership_unlink",[id,discord]);
-            assert.deepEqual(await rpc("membership_complete",[id,discord,winner]),result);
+            assert.deepEqual(await rpc("membership_complete",[id,discord,x]),result);
             assert.deepEqual(await rpc("membership_unlink",[id,discord]),revoked);
             assert.equal((await rpc("membership_fence",[id,discord,false])).patreonUserId,null);
             assert.equal((await query("select mutation_count from public.membership_heads where account_id=$1",[id])).rows[0].mutation_count,10);
@@ -196,10 +200,13 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             const peers = await Promise.all(Array.from({length:6},async()=>{ const c=new pg.Client({connectionString:url}); await c.connect(); return c; }));
             try {
                 const results = await Promise.allSettled(peers.map(c=>c.query("select public.membership_discord_begin($1,$2,$3,'/servers')",[id,crypto.randomUUID().replaceAll("-", "").repeat(2),crypto.randomUUID()])));
-                assert.equal(results.filter(r=>r.status==="fulfilled").length,4);
-                for (const result of results) if(result.status==="rejected") assert.equal(result.reason.code,"PT429");
+                assert.equal(results.filter(r=>r.status==="fulfilled").length,1);
+                for (const result of results) if(result.status==="rejected") assert.match(result.reason.message,/Resolve previous operation/);
             } finally { await Promise.all(peers.map(c=>c.end())); }
+            const h=await rpc("membership_fence",[id,null,false]);
+            for(let i=0;i<3;i++) await query("insert into public.patreon_oauth_states(token_hash,kind,user_id,expires_at,operation_id,expected_generation,return_path) values($1,'state',$2,clock_timestamp()+interval '10 minutes',$3,$4,'/servers')",[crypto.randomUUID().replaceAll("-", "").repeat(2),id,crypto.randomUUID(),h.linkGeneration]);
             await assert.rejects(beginFor(id),{code:"PT429"});
+            await query("update public.patreon_oauth_states set expires_at=clock_timestamp()-interval '1 second' where user_id=$1",[id]);
             await query("update public.discord_link_requests set expires_at=clock_timestamp()-interval '1 second' where account_id=$1",[id]);
             await beginFor(id);
             const state = (await query("delete from public.patreon_oauth_states where user_id=$1 returning *",[id])).rows[0];
@@ -275,6 +282,154 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             await assert.rejects(beginFor(id),/Deleted account/);
             const latest=(await query("select receipt_id from public.membership_outbox where account_id=$1 and revision=$2",[id,tombstone.revision])).rows[0];
             assert.ok(latest.receipt_id);
+        });
+        await t.test("Discord callback receipt is server-only, exact-account, bounded and required before confirmation", async () => {
+            const id=await freshAccount(), op=crypto.randomUUID(), tok="0a".repeat(32);
+            await rpc("membership_discord_begin",[id,tok,op,"/servers"]);
+            await assert.rejects(rpc("membership_discord_confirm",[id,tok,discord]),/callback authority/);
+            assert.equal((await rpc("membership_recovery",[id,null,"discord",null,false,tok])).confirmable,false);
+            for(const role of ["anon","authenticated"]) {
+                await query(`set role ${role}`);
+                try { await assert.rejects(rpc("membership_discord_callback",[id,tok,discord]),/permission denied/); await assert.rejects(rpc("membership_recovery",[id,discord,"discord"]),/permission denied/); }
+                finally { await query("reset role"); }
+            }
+            await query("set role service_role");
+            try {
+                await assert.rejects(rpc("membership_discord_callback",[b,tok,discord]),/Invalid callback/);
+                assert.equal((await rpc("membership_discord_callback",[id,tok,discord])).verified,true);
+                assert.equal((await rpc("membership_discord_callback",[id,tok,discord])).verified,true);
+                await assert.rejects(rpc("membership_discord_callback",[id,tok,"999456789012345678"]),/Callback conflict/);
+            } finally { await query("reset role"); }
+            assert.equal((await rpc("membership_recovery",[id,discord,"discord",null,false,tok])).confirmable,true);
+            assert.equal((await rpc("membership_recovery",[id,discord,"discord"])).confirmable,false,"UUID/status cannot replace lost cookie authority");
+            await rpc("membership_recovery",[id,discord,"discord",op,true]);
+            await assert.rejects(rpc("membership_discord_callback",[id,tok,discord]));
+            await assert.rejects(rpc("membership_discord_confirm",[id,tok,discord]));
+        });
+        await t.test("Discord clock boundaries, full window/outbox, expired cookie reference and post-expiry lost-response receipt", async () => {
+            const id=await freshAccount(), tok="0b".repeat(32), op=crypto.randomUUID();
+            // Seven ordinary hints, then callback's identity fence fills the eighth.
+            // Do not supersede the Discord initiation generation to build pressure.
+            for(let i=0;i<7;i++) await beginFor(id);
+            await rpc("membership_discord_begin",[id,tok,op,"/servers"]);
+            await rpc("membership_discord_callback",[id,tok,discord]);
+            await query("update public.membership_heads set mutation_count=10 where account_id=$1",[id]);
+            await assert.rejects(rpc("membership_discord_confirm",[id,tok,discord]),{code:"PT429"});
+            const before=await rpc("membership_recovery",[id,discord,"discord",null,false,tok]); assert.equal(before.state,"live");
+            // Production <= clock_timestamp boundary, checked with equal timestamps on PG.
+            const boundary=(await query("select public.membership_authority_live(expires_at,expires_at) as at_expiry, public.membership_authority_live(expires_at,expires_at - interval '1 microsecond') as before_expiry, public.membership_authority_live(expires_at,expires_at + interval '1 microsecond') as after_expiry from public.discord_link_requests where token_hash=$1",[tok])).rows[0];
+            assert.deepEqual(boundary,{at_expiry:false,before_expiry:true,after_expiry:false});
+            await query("update public.discord_link_requests set expires_at=clock_timestamp() where token_hash=$1",[tok]);
+            await query("update public.membership_recovery_intents set expires_at=clock_timestamp() where operation_id=$1",[op]);
+            await assert.rejects(rpc("membership_discord_confirm",[id,tok,discord]),/callback authority/);
+            assert.equal((await rpc("membership_recovery",[id,discord,"discord"])).state,"expired");
+            await query("update public.discord_link_requests set expires_at=clock_timestamp()-interval '600 seconds' where token_hash=$1",[tok]);
+            await assert.rejects(rpc("membership_discord_confirm",[id,tok,discord]));
+            assert.equal((await rpc("membership_recovery",[b,discord,"discord",op,true])).state,"none");
+            assert.equal((await rpc("membership_recovery",[id,discord,"discord",op,true])).state,"cancelled");
+            await assert.rejects(rpc("membership_discord_callback",[id,tok,discord]));
+            // A separate actually committed operation recovers after expiry at full budget.
+            const owner=await freshAccount(), committedToken="0c".repeat(32), committedOp=crypto.randomUUID();
+            await rpc("membership_discord_begin",[owner,committedToken,committedOp,"/servers"]); await rpc("membership_discord_callback",[owner,committedToken,discord]);
+            const result=await rpc("membership_discord_confirm",[owner,committedToken,discord]);
+            const row=(await query("select * from public.discord_link_requests where token_hash=$1",[committedToken])).rows[0];
+            await query("update public.discord_link_requests set expires_at=clock_timestamp()-interval '11 minutes' where token_hash=$1",[committedToken]);
+            await query("update public.membership_heads set mutation_count=10 where account_id=$1",[owner]);
+            assert.deepEqual(await rpc("membership_discord_confirm",[owner,committedToken,discord]),result);
+            assert.equal((await query("select confirmed_at from public.discord_link_requests where token_hash=$1",[committedToken])).rows[0].confirmed_at.toISOString(),row.confirmed_at.toISOString());
+            const restarted=new pg.Client({connectionString:url}); await restarted.connect();
+            try { assert.equal((await restarted.query("select public.membership_recovery($1,$2,'discord') r",[owner,discord])).rows[0].r.state,"committed"); }
+            finally { await restarted.end(); }
+            await assert.rejects(rpc("membership_discord_confirm",[b,committedToken,discord]));
+            await assert.rejects(rpc("membership_recovery",[owner,"999456789012345678","discord",committedOp,true]));
+            assert.equal((await rpc("membership_recovery",[owner,discord,"discord",committedOp,true])).state,"committed");
+            assert.deepEqual(await rpc("membership_discord_confirm",[owner,committedToken,discord]),result);
+        });
+        await t.test("Patreon recovery survives expiry/deleted transport, unlink, response loss and serializes cancellation with completion", async () => {
+            const id=await freshAccount(), tok=await stage(id,"0d".repeat(32),"555551");
+            const pending=await rpc("membership_recovery",[id,discord,"patreon",null,false,tok]); assert.equal(pending.confirmable,true);
+            await assert.rejects(beginFor(id),/Resolve previous operation/);
+            const peer=new pg.Client({connectionString:url}); await peer.connect();
+            try {
+                await query("begin"); const result=await rpc("membership_complete",[id,discord,tok]);
+                let finished=false; const cancel=peer.query("select public.membership_recovery($1,$2,'patreon',$3,true) r",[id,discord,pending.operationId]).then(r=>{finished=true;return r.rows[0].r;});
+                await new Promise(resolve=>setTimeout(resolve,30)); assert.equal(finished,false); await query("commit");
+                const resolved=await cancel; assert.equal(resolved.state,"committed"); assert.deepEqual(resolved.receipt,result);
+                await rpc("membership_unlink",[id,discord]); assert.deepEqual(await rpc("membership_complete",[id,discord,tok]),result);
+                assert.equal((await rpc("membership_fence",[id,discord,false])).patreonUserId,null);
+            } finally { await query("rollback"); await peer.end(); }
+            const expired=await stage(id,"0e".repeat(32),"555551",true); const intent=await rpc("membership_recovery",[id,discord,"patreon"]); assert.equal(intent.state,"expired");
+            await query("delete from public.patreon_oauth_states where token_hash=$1",[expired]);
+            assert.equal((await rpc("membership_recovery",[id,discord,"patreon"])).state,"expired");
+            assert.equal((await rpc("membership_recovery",[id,discord,"patreon",intent.operationId,true])).state,"cancelled");
+            await assert.rejects(rpc("membership_complete",[id,discord,expired]));
+            const cancelled=await stage(id,"0f".repeat(32),"555551"); const live=await rpc("membership_recovery",[id,discord,"patreon"]);
+            await rpc("membership_recovery",[id,discord,"patreon",live.operationId,true]); await assert.rejects(rpc("membership_complete",[id,discord,cancelled]));
+        });
+        await t.test("initiation generation CAS refuses status/Patreon supersession without losing independent current Auth", async () => {
+            for(const mutation of ["status", "begin", "unlink"]) {
+                const id=await freshAccount(), tok=crypto.randomUUID().replaceAll("-", "").repeat(2), op=crypto.randomUUID();
+                if(mutation==="unlink") await beginFor(id); // ensure unlink has real authority to fence
+                await rpc("membership_discord_begin",[id,tok,op,"/servers"]);
+                const peer=new pg.Client({connectionString:url}); await peer.connect();
+                try {
+                    await query("begin");
+                    if(mutation==="status") await rpc("membership_status",[id,discord]);
+                    else if(mutation==="begin") await beginFor(id);
+                    else await rpc("membership_unlink",[id,null]);
+                    const before=(await query("select * from public.membership_heads where account_id=$1",[id])).rows[0];
+                    let finished=false; const callback=peer.query("select public.membership_discord_callback($1,$2,$3)",[id,tok,discord]).then(()=>{finished=true;return "unexpected";},e=>{finished=true;return e.message;});
+                    await new Promise(resolve=>setTimeout(resolve,30)); assert.equal(finished,false);
+                    await query("commit"); assert.match(await callback,/Callback superseded/);
+                    assert.deepEqual((await query("select * from public.membership_heads where account_id=$1",[id])).rows[0],before,"refused stamp rolls back every effect");
+                    assert.equal((await query("select callback_discord_id from public.discord_link_requests where token_hash=$1",[tok])).rows[0].callback_discord_id,null);
+                    const pending=await rpc("membership_recovery",[id,discord,"discord",null,false,tok]); assert.equal(pending.state,"live"); assert.equal(pending.confirmable,false);
+                    await rpc("membership_recovery",[id,discord,"discord",op,true]);
+                    assert.equal((await rpc("membership_fence",[id,discord,false])).discordUserId,discord);
+                } finally { await query("rollback"); await peer.end(); }
+            }
+            const id=await freshAccount(), tok="3a".repeat(32);
+            await rpc("membership_discord_begin",[id,tok,crypto.randomUUID(),"/servers"]); await rpc("membership_discord_callback",[id,tok,discord]);
+            assert.equal((await rpc("membership_discord_callback",[id,tok,discord])).verified,true);
+            await beginFor(id);
+            await assert.rejects(rpc("membership_discord_callback",[id,tok,discord]),/Callback conflict/);
+            await assert.rejects(rpc("membership_discord_confirm",[id,tok,discord]),/callback authority/);
+        });
+        await t.test("Discord callback/cancel/confirm races serialize and resolved receipts survive a lost acknowledgment response", async () => {
+            const id=await freshAccount(), tok="2a".repeat(32), op=crypto.randomUUID();
+            await rpc("membership_discord_begin",[id,tok,op,"/servers"]);
+            const peer=new pg.Client({connectionString:url}); await peer.connect();
+            try {
+                await query("begin"); await rpc("membership_recovery",[id,discord,"discord",op,true]);
+                let finished=false;
+                const stamp=peer.query("select public.membership_discord_callback($1,$2,$3)",[id,tok,discord]).then(()=>{finished=true; return "unexpected";},e=>{finished=true;return e.message;});
+                await new Promise(resolve=>setTimeout(resolve,30)); assert.equal(finished,false); await query("commit"); assert.match(await stamp,/Invalid callback/);
+                assert.equal((await rpc("membership_recovery",[id,discord,"discord"])).state,"none");
+                const next="2b".repeat(32), nextOp=crypto.randomUUID();
+                await rpc("membership_discord_begin",[id,next,nextOp,"/servers"]); await rpc("membership_discord_callback",[id,next,discord]);
+                await query("begin"); const receipt=await rpc("membership_discord_confirm",[id,next,discord]);
+                const resolve=peer.query("select public.membership_recovery($1,$2,'discord',$3,true) r",[id,discord,nextOp]);
+                await query("commit"); assert.deepEqual((await resolve).rows[0].r.receipt,receipt);
+                // Simulated lost HTTP result: no cookie/UUID needed on the next reload.
+                const reload=await rpc("membership_recovery",[id,discord,"discord"]); assert.equal(reload.state,"resolved"); assert.equal(reload.operationId,nextOp);
+                assert.deepEqual((await rpc("membership_recovery",[id,discord,"discord",nextOp,true])).receipt,receipt);
+                const count=(await query("select count(*) from public.discord_link_requests where account_id=$1 and confirmed_at is not null",[id])).rows[0].count;
+                await rpc("membership_discord_begin",[id,"2c".repeat(32),crypto.randomUUID(),"/account"]);
+                assert.equal((await query("select count(*) from public.discord_link_requests where account_id=$1 and confirmed_at is not null",[id])).rows[0].count,count);
+            } finally { await query("rollback"); await peer.end(); }
+        });
+        await t.test("pending Discord admission uses partial account/expiry index with populated retained history", async () => {
+            const id=await freshAccount(), other=await freshAccount();
+            await query("insert into public.discord_link_requests(token_hash,operation_id,account_id,return_path,expires_at,confirmed_discord_id,confirmed_at) select encode(sha256(convert_to('history-'||g::text,'UTF8')),'hex'),gen_random_uuid(),case when g%2=0 then $1::uuid else $2::uuid end,'/servers',clock_timestamp()-interval '1 day',$3,clock_timestamp() from generate_series(1,50000) g",[id,other,discord]);
+            await rpc("membership_discord_begin",[id,"1a".repeat(32),crypto.randomUUID(),"/servers"]);
+            await query("analyze public.discord_link_requests");
+            for(const sql of ["select count(*) from public.discord_link_requests where account_id=$1 and confirmed_at is null", "select count(*) from public.discord_link_requests where account_id=$1 and confirmed_at is null and expires_at>clock_timestamp()", "delete from public.discord_link_requests where account_id=$1 and confirmed_at is null and expires_at<=clock_timestamp()"]) {
+                const plan=(await query(`explain (analyze, buffers, format json) ${sql}`,[id])).rows[0]["QUERY PLAN"];
+                console.log("POPULATED_HISTORY_PLAN",JSON.stringify(plan));
+                assert.match(JSON.stringify(plan),/discord_link_requests_pending_account_expiry/);
+                assert.doesNotMatch(JSON.stringify(plan),/"Node Type":"Seq Scan"/);
+            }
+            assert.equal((await query("select count(*) from public.discord_link_requests where account_id in ($1,$2) and confirmed_at is not null",[id,other])).rows[0].count,"50000");
         });
         await t.test("Auth deletion retains tombstone, outbox and receipts, forbids resurrection", async () => {
             const before = (await query("select count(*) from public.membership_completion_receipts")).rows[0].count;

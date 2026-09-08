@@ -44,7 +44,20 @@ export async function completePatreonAccount() {
     // Retain the same token on an unknown outcome; SQL returns its committed receipt.
     redirect(destination);
 }
-export async function cancelPatreonCompletion() { (await cookies()).delete(PATREON_COOKIE); redirect("/account?patreon=cancelled"); }
+export async function resolveAccountLink(form: FormData) {
+    let destination = "/account?recovery=unavailable";
+    try {
+        const provider = form.get("provider"); const operationId = form.get("operationId");
+        if (!["discord", "patreon"].includes(provider as string) || typeof operationId !== "string" || !/^[0-9a-f-]{36}$/iu.test(operationId)) throw new Error("Invalid recovery");
+        const { supabase, user, session } = await authenticated();
+        const { data, error } = await supabase.functions.invoke("website-account", { headers: { Authorization: `Bearer ${session.access_token}` }, body: { operation: "recovery-resolve", provider, operationId } });
+        if (!error && data?.accountId === user.id && data.provider === provider && data.operationId === operationId && ["cancelled", "committed"].includes(data.state) && ["/account", "/servers"].includes(data.returnPath)) {
+            (await cookies()).delete(provider === "discord" ? LINK_COOKIE : PATREON_COOKIE);
+            destination = data.state === "committed" ? `${data.returnPath}?${provider}=recovered` : `/account?${provider}=cancelled`;
+        }
+    } catch { /* Unknown outcomes retain both durable intent and cookie. */ }
+    redirect(destination);
+}
 export async function unlinkPatreonAccount() {
     let destination = "/account?patreon=error";
     try {
@@ -70,7 +83,7 @@ export async function linkDiscordAccount(form: FormData) {
         const url = new URL(linked.data.url);
         if (url.origin !== "https://discord.com" || !["/oauth2/authorize", "/api/oauth2/authorize"].includes(url.pathname) || url.username || url.password) throw new Error("Unexpected link destination");
         destination = url.href;
-    } catch { if (destination !== "/account?discord=rate_limited") (await cookies()).delete(LINK_COOKIE); }
+    } catch { /* Preserve uncertain initiation; authenticated status resolves it. */ }
     redirect(destination);
 }
 export async function confirmDiscordAccount() {

@@ -67,7 +67,19 @@ old positive evidence immediately, including cancellation or provider outage.
    in a Secure, HttpOnly, host-only cookie. Supabase owns its own OAuth state/PKCE;
    application code does not replace them. The callback checks the current UUID
    against the server request before exchanging the code and verifies the same UUID
-   afterward. Explicit confirmation rechecks current authoritative Discord.
+   afterward. Only after successful same-UUID exchange, the existing server-only
+   `getSupabaseAdminClient` seam writes an exact token/account/operation callback
+   marker. This requires the existing `SUPABASE_SECRET_KEY` on the website server;
+   missing configuration fails closed before code exchange. The fixed callback RPC
+   is service-role-only; browser JWTs cannot stamp a marker from Auth linkage.
+   Explicit confirmation requires the marker, current authoritative Discord,
+   unchanged callback generation and live original authority. The first marker
+   also CAS-checks the initiation generation before current-Auth fencing. A parallel
+   background status that fences the newly connected identity (or a Patreon begin/
+   unlink) can therefore supersede this attempt before the marker is written. This
+   conservative refusal does not disconnect Auth or remove independent grants:
+   resolve/cancel the uncommitted attempt and continue using the valid connection.
+   No seamless OAuth success under that race is claimed.
    Supabase may establish the identity during its own OAuth callback after the
    user's initial explicit approval; return confirmation never fabricates identity.
 3. Disabled manual linking, cancellation, missing/expired cookie, conflicting
@@ -85,8 +97,21 @@ old positive evidence immediately, including cancellation or provider outage.
    retry the same token and recover the committed receipt, even after evidence
    expiry/unlink. Recovery reports the historical operation, not a current positive
    status, and never relinks. A different user cannot consume or recover it.
-   Keep the pending completion cookie on uncertain responses. Cancel confirmation
-   discards browser authority only; it does not reverse a previously committed link.
+   Keep pending cookies on uncertain responses, but do not rely on their survival.
+   One durable, non-authorizing recovery slot per account/provider stores the exact
+   operation, hash, generation, expiry and safe continuation (no raw OAuth token).
+   Discord begin and Patreon completion issuance persist this slot atomically.
+   Authenticated status renders retained recovery on throttle/reload/bare `/account`.
+   A missing cookie or unverified callback cannot be replaced by the UUID or current
+   Auth identity. Explicit cancellation serializes with completion: a winning commit
+   returns its historical receipt; otherwise cancellation fences/deletes ephemeral
+   authority. Acknowledged committed slots survive response loss until a later
+   explicit begin replaces them; immutable receipts/confirmed history never expire.
+   A live/unknown attempt blocks replacement. An expired uncommitted attempt can be
+   explicitly resolved, then restarted if Auth is unlinked. An already connected
+   Discord remains usable for Servers/Patreon without falsely reporting the expired
+   attempt committed; fresh OAuth for an already-linked provider is not promised.
+   No Auth unlink or automatic account merge is performed.
 6. `/account` shows a server-authenticated current status, never success inferred
    from query parameters. **Refresh status** reads durable state/sync; **Check again**
    initiates new OAuth. `/servers` retains exact-UUID sessionStorage mutation recovery
@@ -225,9 +250,16 @@ exact completion/confirmation replay does not. Pending OAuth insertion is locked
 generation-checked even during callback replacement, so a consumed token cannot be
 reissued after unlink. Only expired/superseded ephemeral authority is cleaned; durable
 completion receipts, acknowledged events and confirmed Discord requests are retained.
-The closed public retry is HTTP429, `Retry-After: 600`, JSON
-`{"error":"membership_rate_limited","retryAfterSeconds":600}`. Queue pressure can
-outlast the minimum retry interval; do not launch OAuth again when confirmation exists.
+The closed public throttle is HTTP429, JSON `{"error":"membership_rate_limited"}`.
+There is no `Retry-After`: outbox delivery has no deterministic admission deadline.
+Refresh authenticated recovery before retrying. Ten-minute OAuth authority is never
+extended, and waiting cannot guarantee admission. Expired uncommitted attempts offer
+explicit safe resolution rather than an impossible ten-minute retry promise.
+Confirmed Discord receipt replay, like Patreon, precedes expiry and ordinary admission
+while preserving account/current-identity fences. The partial
+`discord_link_requests_pending_account_expiry` index excludes retained confirmed
+history from account/expiry admission scans. Local PostgreSQL EXPLAIN regressions
+populate 50,000 confirmed rows without forcing the optimizer's scan choice.
 
 Unlink, current-Auth fencing and Auth deletion must remain safe at budget. Redundant
 unlink does not advance an already empty, unlinked head, but real pending authority

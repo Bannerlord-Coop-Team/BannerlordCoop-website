@@ -70,7 +70,12 @@ UUID, expected generation and safe return path are server-held. Callback GET
 creates normalized completion authority only. The website requires explicit POST
 confirmation; one transaction consumes authority, links, stores normalized evidence,
 records an immutable replayable receipt and emits an outbox event. Lost responses
-retain the same completion cookie for recovery. Current status is authenticated,
+retain the same completion cookie when available; a bounded account/provider recovery
+slot survives cookie expiry and resolves the exact operation via authenticated status.
+Neither this non-authorizing UUID nor current Auth linkage replaces live completion
+authority. Explicit cancellation serializes with commit; uncertain attempts cannot be
+silently replaced. A committed receipt can be recovered after expiry without relinking.
+Current status is authenticated,
 never established by query parameters. Unlink/deletion preserve revocation evidence.
 
 All sensitive storage has RLS and no anon/authenticated grants. No provider tokens,

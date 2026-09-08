@@ -32,8 +32,23 @@ create index membership_oauth_account_expiry on public.patreon_oauth_states(user
 create table public.discord_link_requests (
  token_hash text primary key check(token_hash ~ '^[a-f0-9]{64}$'), operation_id uuid not null unique,
  account_id uuid not null references public.membership_heads(account_id), return_path text not null check(return_path in ('/account','/servers')),
- expires_at timestamptz not null, confirmed_discord_id text, confirmed_at timestamptz
+ expires_at timestamptz not null, confirmed_discord_id text, confirmed_at timestamptz,
+ callback_discord_id text, callback_generation bigint
 );
+
+create index discord_link_requests_pending_account_expiry on public.discord_link_requests(account_id,expires_at) where confirmed_at is null;
+-- One non-authorizing recovery reference per provider/account; receipts stay immutable.
+create table public.membership_recovery_intents (
+ account_id uuid not null references public.membership_heads(account_id),
+ provider text not null check(provider in ('discord','patreon')),
+ operation_id uuid not null unique, token_hash text not null check(token_hash ~ '^[a-f0-9]{64}$'),
+ expected_generation bigint not null, expires_at timestamptz not null,
+ acknowledged boolean not null default false,
+ return_path text not null check(return_path in ('/account','/servers')),
+ primary key(account_id,provider)
+);
+alter table public.membership_recovery_intents enable row level security;
+revoke all on public.membership_recovery_intents from public,anon,authenticated,service_role;
 
 alter table public.membership_heads enable row level security;
 alter table public.membership_outbox enable row level security;
@@ -42,6 +57,11 @@ alter table public.discord_link_requests enable row level security;
 revoke all on public.membership_heads, public.membership_outbox, public.membership_completion_receipts, public.discord_link_requests from public, anon, authenticated;
 -- Service authority uses narrow RPCs; state issuance still uses the existing server-only table.
 revoke all on public.membership_heads, public.membership_outbox, public.membership_completion_receipts, public.discord_link_requests from service_role;
+
+-- Exclusive authority deadline shared by mutation and recovery classification.
+create function public.membership_authority_live(p_expires_at timestamptz,p_now timestamptz) returns boolean
+language sql immutable strict set search_path = '' as $$ select p_expires_at>p_now $$;
+revoke all on function public.membership_authority_live(timestamptz,timestamptz) from public,anon,authenticated,service_role;
 
 create function public.membership_empty_evidence() returns jsonb language sql immutable set search_path = '' as $$
  select '{"verification":"unverified","campaignId":null,"memberId":null,"tierIds":[],"verifiedAt":null,"paidThroughAt":null,"policyVersion":"patreon-paid-usd20-v1","evidenceSha256":null}'::jsonb
@@ -134,6 +154,8 @@ language plpgsql security definer set search_path = '' as $$
 declare snapshot jsonb;
 begin
  snapshot := public.membership_fence(p_account_id,p_discord_user_id,false);
+ delete from public.membership_recovery_intents where account_id=p_account_id and provider='patreon' and acknowledged;
+ if exists(select 1 from public.membership_recovery_intents where account_id=p_account_id and provider='patreon') then raise exception 'Resolve previous operation'; end if;
  perform public.membership_admit(p_account_id,true);
  -- An explicit refresh invalidates old positive evidence immediately, including
  -- cancellation/outage after launch. Tokens cannot refresh membership unattended.
@@ -161,7 +183,7 @@ begin
  end if;
  perform public.membership_fence(p_account_id,p_discord_user_id,false);
  select * into s from public.patreon_oauth_states where token_hash=p_token_hash and kind='complete' for update;
- if not found or s.user_id<>p_account_id or s.expires_at<=clock_timestamp() or s.operation_id is null or s.evidence is null then raise exception 'Invalid completion authority'; end if;
+ if not found or s.user_id<>p_account_id or not public.membership_authority_live(s.expires_at,clock_timestamp()) or s.operation_id is null or s.evidence is null then raise exception 'Invalid completion authority'; end if;
  select * into strict h from public.membership_heads where account_id=p_account_id for update;
  if h.link_generation<>s.expected_generation then raise exception 'Link generation changed'; end if;
  if s.patreon_user_id !~ '^[1-9][0-9]{0,31}$' or jsonb_typeof(s.evidence)<>'object'
@@ -242,8 +264,11 @@ create function public.membership_discord_begin(p_account_id uuid,p_token_hash t
 language plpgsql security definer set search_path = '' as $$
 begin
  perform public.membership_fence(p_account_id,null,false);
+ delete from public.membership_recovery_intents where account_id=p_account_id and provider='discord' and acknowledged;
+ if exists(select 1 from public.membership_recovery_intents where account_id=p_account_id and provider='discord') then raise exception 'Resolve previous operation'; end if;
  perform public.membership_admit(p_account_id,true);
  insert into public.discord_link_requests(token_hash,operation_id,account_id,return_path,expires_at) values(p_token_hash,p_operation_id,p_account_id,p_return_path,clock_timestamp()+interval '10 minutes');
+ insert into public.membership_recovery_intents(account_id,provider,operation_id,token_hash,expected_generation,expires_at,return_path) select account_id,'discord',operation_id,token_hash,h.link_generation,expires_at,return_path from public.discord_link_requests r join public.membership_heads h using(account_id) where r.token_hash=p_token_hash;
  return jsonb_build_object('started',true);
 end $$;
 create function public.membership_discord_confirm(p_account_id uuid,p_token_hash text,p_discord_user_id text) returns jsonb
@@ -253,9 +278,18 @@ begin
  perform pg_advisory_xact_lock(702,1); -- serialize outbox sequence with commit order
  perform pg_advisory_xact_lock(hashtextextended(p_account_id::text,702));
  select * into r from public.discord_link_requests where token_hash=p_token_hash for update;
- if not found or r.account_id<>p_account_id or r.expires_at<=clock_timestamp() or p_discord_user_id is null
+ if not found or r.account_id<>p_account_id or p_discord_user_id is null
   or (r.confirmed_discord_id is not null and r.confirmed_discord_id<>p_discord_user_id) then raise exception 'Discord linking conflict'; end if;
- if r.confirmed_at is null then perform public.membership_admit(p_account_id,false); end if;
+ -- Exact historical receipt recovery precedes expiry/admission; never reapplies a link.
+ if r.confirmed_at is not null then
+  perform public.membership_fence(p_account_id,p_discord_user_id,false);
+  return jsonb_build_object('confirmed',true,'returnPath',r.return_path);
+ end if;
+ if not public.membership_authority_live(r.expires_at,clock_timestamp()) or r.callback_discord_id is distinct from p_discord_user_id
+  or not exists(select 1 from public.membership_recovery_intents i join public.membership_heads h using(account_id)
+   where i.account_id=p_account_id and i.provider='discord' and i.operation_id=r.operation_id and h.link_generation=r.callback_generation)
+  then raise exception 'Invalid Discord callback authority'; end if;
+ perform public.membership_admit(p_account_id,false);
  perform public.membership_fence(p_account_id,p_discord_user_id,false);
  update public.discord_link_requests set confirmed_discord_id=p_discord_user_id,confirmed_at=coalesce(confirmed_at,clock_timestamp()) where token_hash=p_token_hash;
  return jsonb_build_object('confirmed',true,'returnPath',r.return_path);
@@ -284,3 +318,97 @@ revoke all on function public.membership_discord_check(uuid,text) from public,an
 grant execute on function public.membership_discord_check(uuid,text) to service_role;
 
 revoke all on function public.membership_notify(uuid,boolean),public.membership_admit(uuid,boolean),public.membership_oauth_admission() from public,anon,authenticated,service_role;
+
+-- Callback issuance and intent persistence are one transaction. Consumed OAuth
+-- transport rows may disappear; this reference never authorizes completion.
+create function public.membership_completion_intent() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+ if new.kind='complete' then
+  delete from public.membership_recovery_intents where account_id=new.user_id and provider='patreon' and acknowledged;
+  if exists(select 1 from public.membership_recovery_intents where account_id=new.user_id and provider='patreon') then raise exception 'Resolve previous operation'; end if;
+  insert into public.membership_recovery_intents(account_id,provider,operation_id,token_hash,expected_generation,expires_at,return_path) values(new.user_id,'patreon',new.operation_id,new.token_hash,new.expected_generation,new.expires_at,new.return_path);
+ end if;
+ return new;
+end $$;
+create trigger membership_completion_intent after insert on public.patreon_oauth_states for each row execute function public.membership_completion_intent();
+revoke all on function public.membership_completion_intent() from public,anon,authenticated,service_role;
+
+-- Called only by the website server after successful same-account PKCE exchange.
+-- Public JWT endpoints cannot stamp a callback from current Auth linkage alone.
+create function public.membership_discord_callback(p_account_id uuid,p_token_hash text,p_discord_user_id text) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare r public.discord_link_requests; h public.membership_heads;
+begin
+ perform pg_advisory_xact_lock(702,1);
+ perform pg_advisory_xact_lock(hashtextextended(p_account_id::text,702));
+ select * into r from public.discord_link_requests where token_hash=p_token_hash for update;
+ if not found or r.account_id<>p_account_id or not public.membership_authority_live(r.expires_at,clock_timestamp()) or r.confirmed_at is not null
+  or p_discord_user_id is null or p_discord_user_id !~ '^[0-9]{17,20}$'
+  or not exists(select 1 from public.membership_recovery_intents where account_id=p_account_id and provider='discord' and operation_id=r.operation_id)
+  then raise exception 'Invalid callback'; end if;
+ if r.callback_discord_id is not null then
+  if r.callback_discord_id<>p_discord_user_id or not exists(select 1 from public.membership_heads where account_id=p_account_id and link_generation=r.callback_generation) then raise exception 'Callback conflict'; end if;
+ else
+  -- Never adopt a superseding generation, even if Auth now has the same identity.
+  if not exists(select 1 from public.membership_recovery_intents i join public.membership_heads head using(account_id)
+   where i.account_id=p_account_id and i.provider='discord' and i.operation_id=r.operation_id and i.token_hash=r.token_hash and i.expected_generation=head.link_generation)
+   then raise exception 'Callback superseded'; end if;
+  perform public.membership_fence(p_account_id,p_discord_user_id,false);
+  select * into strict h from public.membership_heads where account_id=p_account_id;
+  update public.discord_link_requests set callback_discord_id=p_discord_user_id,callback_generation=h.link_generation where token_hash=p_token_hash;
+ end if;
+ return jsonb_build_object('verified',true);
+end $$;
+revoke all on function public.membership_discord_callback(uuid,text,text) from public,anon,authenticated;
+grant execute on function public.membership_discord_callback(uuid,text,text) to service_role;
+
+-- Authenticated lookup/explicit resolution is serialized with every completion.
+-- Missing/foreign UUIDs are indistinguishable. No GET/status grants authority.
+create function public.membership_recovery(p_account_id uuid,p_discord_user_id text,p_provider text,p_operation_id uuid default null,p_discard boolean default false,p_token_hash text default null) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare i public.membership_recovery_intents; r public.discord_link_requests; receipt jsonb; state text; confirmable boolean := false; generation bigint;
+begin
+ perform pg_advisory_xact_lock(702,1);
+ perform pg_advisory_xact_lock(hashtextextended(p_account_id::text,702));
+ perform public.membership_fence(p_account_id,p_discord_user_id,false);
+ select * into i from public.membership_recovery_intents where account_id=p_account_id and provider=p_provider for update;
+ if not found or (p_operation_id is not null and i.operation_id<>p_operation_id) then return jsonb_build_object('accountId',p_account_id,'provider',p_provider,'state','none'); end if;
+ select link_generation into strict generation from public.membership_heads where account_id=p_account_id;
+ if p_provider='patreon' then
+  select result into receipt from public.membership_completion_receipts where operation_id=i.operation_id and account_id=p_account_id and token_hash=i.token_hash;
+  confirmable := exists(select 1 from public.patreon_oauth_states where token_hash=i.token_hash and kind='complete' and expected_generation=generation and expires_at>clock_timestamp());
+ else
+  select * into r from public.discord_link_requests where token_hash=i.token_hash and operation_id=i.operation_id and account_id=p_account_id;
+  if r.confirmed_at is not null then
+   if r.confirmed_discord_id is distinct from p_discord_user_id then raise exception 'Current identity conflict'; end if;
+   receipt := jsonb_build_object('confirmed',true,'returnPath',r.return_path);
+  end if;
+  confirmable := r.callback_discord_id is not null and r.callback_discord_id=p_discord_user_id and r.callback_generation=generation and public.membership_authority_live(r.expires_at,clock_timestamp());
+ end if;
+ state := case when receipt is not null then 'committed' when not public.membership_authority_live(i.expires_at,clock_timestamp()) then 'expired' else 'live' end;
+ if p_discard then
+  if p_operation_id is null then raise exception 'Exact operation required'; end if;
+  if receipt is null then
+   -- Explicit cancellation fences even a consumed Patreon callback transport row.
+   if p_provider='patreon' then
+    delete from public.patreon_oauth_states where user_id=p_account_id and operation_id=i.operation_id;
+    update public.membership_heads set link_generation=link_generation+1,revision=revision+1,evidence=public.membership_empty_evidence() where account_id=p_account_id;
+    perform public.membership_notify(p_account_id,true);
+   else delete from public.discord_link_requests where token_hash=i.token_hash and confirmed_at is null;
+   end if;
+   state := 'cancelled';
+  end if;
+  if receipt is null then
+   delete from public.membership_recovery_intents where account_id=p_account_id and provider=p_provider and operation_id=i.operation_id;
+  else
+   -- A lost resolution response must still be recoverable on a cookie-free reload.
+   -- Only a later explicit begin may replace this acknowledged reference.
+   update public.membership_recovery_intents set acknowledged=true where account_id=p_account_id and provider=p_provider and operation_id=i.operation_id;
+  end if;
+ elsif state='committed' and i.acknowledged then state := 'resolved';
+ end if;
+ return jsonb_build_object('accountId',p_account_id,'provider',p_provider,'operationId',i.operation_id,'state',state,'confirmable',coalesce(confirmable and state='live' and i.token_hash=p_token_hash,false),'returnPath',i.return_path,'receipt',receipt);
+end $$;
+revoke all on function public.membership_recovery(uuid,text,text,uuid,boolean,text) from public,anon,authenticated;
+grant execute on function public.membership_recovery(uuid,text,text,uuid,boolean,text) to service_role;
