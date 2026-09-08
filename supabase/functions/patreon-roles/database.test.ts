@@ -36,6 +36,7 @@ before(async () => {
     assert.equal((await db.query("select * from public.patreon_accounts")).rows.length, 1);
     assert.equal((await db.query("select * from patreon_roles.grants")).rows.length, 0);
     await db.exec(await readFile(new URL("../../migrations/20260907230000_atomic_live_console_assignments.sql", import.meta.url), "utf8"));
+    await db.exec(await readFile(new URL("../../migrations/20260908030000_patreon_event_reconciliation.sql", import.meta.url), "utf8"));
     assert.equal((await metadata()).role, "Standard Server");
     assert.equal((await db.query("select * from public.patreon_accounts")).rows.length, 1);
 });

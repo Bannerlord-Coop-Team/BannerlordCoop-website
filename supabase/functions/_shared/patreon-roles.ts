@@ -208,13 +208,18 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
                 if (!failed && lease.scanDue === true && now() - started < 20_000) {
                     if (typeof lease.cursor !== "string" || lease.cursor.length > 1024
                         || !Number.isSafeInteger(lease.scanGeneration) || Number(lease.scanGeneration) < 1) throw new Error("invalid_cursor");
-                    const params: Record<string, string> = { include: "campaign", "page[count]": "100" };
+                    const params: Record<string, string> = { include: "campaign,user", "page[count]": "100" };
                     if (lease.cursor) params["page[cursor]"] = lease.cursor;
                     const page = object(await patreon(`campaigns/${options.campaignId}/members`, params));
                     if (!Array.isArray(page.data) || page.data.length > 1000) throw new Error("invalid_page");
-                    const memberIds = page.data.map((value) => member(value, options.campaignId).id);
+                    const members = page.data.map((value) => {
+                        const data = member(value, options.campaignId);
+                        return { memberId: data.id, userId: resource(relationship(data, "user"), "user", ID).id };
+                    });
+                    const memberIds = members.map((value) => value.memberId);
+                    if (new Set(memberIds).size !== memberIds.length) throw new Error("duplicate_member");
                     const cursor = discoveryCursor(page, options.campaignId, lease.cursor);
-                    await options.rpc("discovered", { token, memberIds, cursor, scanGeneration: lease.scanGeneration });
+                    await options.rpc("discovered", { token, memberIds, members, cursor, scanGeneration: lease.scanGeneration });
                 }
                 return reply(failed ? 503 : 200, failed ? "sync_incomplete" : "synced");
             } catch {
