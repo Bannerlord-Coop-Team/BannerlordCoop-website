@@ -229,7 +229,7 @@ test("unlinked members stop periodic reads while linked ineligible members retai
     assert.equal(await role(), "User");
 });
 
-test("upgrade preserves live grants and pending work while rescheduling successful periodic reads", async () => {
+test("upgrade preserves live grants, pending work and successful periodic deadlines", async () => {
     const upgrade = new PGlite();
     try {
         await upgrade.exec(`create role anon; create role authenticated; create role service_role bypassrls;
@@ -249,11 +249,83 @@ test("upgrade preserves live grants and pending work while rescheduling successf
         await call("release", { token: lease.token });
         await call("queue", { memberId: otherMember });
         const before = await upgrade.query("select raw_app_meta_data from auth.users");
+        const deadlines = await upgrade.query("select member_id,due_at::text from patreon_roles.memberships order by member_id");
         await upgrade.exec(await readFile(new URL("../../migrations/20260908030000_patreon_event_reconciliation.sql", import.meta.url), "utf8"));
         assert.deepEqual((await upgrade.query("select raw_app_meta_data from auth.users")).rows, before.rows);
         assert.equal((await upgrade.query("select * from patreon_roles.grants")).rows.length, 1);
         assert.equal((await upgrade.query("select * from patreon_roles.audit where action='granted'")).rows.length, 1);
         assert.equal((await upgrade.query<{ due: boolean }>("select due_at<=now() as due from patreon_roles.memberships where member_id=$1", [otherMember])).rows[0].due, true);
-        assert.equal((await upgrade.query<{ deferred: boolean }>("select due_at>now()+interval '5 hours' as deferred from patreon_roles.memberships where member_id=$1", [member])).rows[0].deferred, true);
+        assert.deepEqual((await upgrade.query("select member_id,due_at::text from patreon_roles.memberships order by member_id")).rows, deadlines.rows);
     } finally { await upgrade.close(); }
 });
+
+for (const scenario of ["linked event", "unlinked event", "active claim", "abandoned claim", "new link"] as const) {
+    test(`upgrade preserves an aged observation's ${scenario} until reconciliation succeeds`, async () => {
+        const upgrade = new PGlite();
+        try {
+            await upgrade.exec(`create role anon; create role authenticated; create role service_role bypassrls;
+                create schema auth; create table auth.users(id uuid primary key,email_confirmed_at timestamptz,
+                    deleted_at timestamptz,banned_until timestamptz,raw_app_meta_data jsonb default '{}',updated_at timestamptz default now());`);
+            for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles"]) {
+                await upgrade.exec(await readFile(new URL(`../../migrations/${name}.sql`, import.meta.url), "utf8"));
+            }
+            const call = async (operation: string, input: object = {}) => (await upgrade.query<{ result: unknown }>(
+                "select public.patreon_role_sync($1,$2,$3,$4::jsonb) as result", [campaign, tier, operation, JSON.stringify(input)],
+            )).rows[0].result;
+            const addLink = () => upgrade.query("insert into public.patreon_accounts(user_id,patreon_user_id) values($1,$2)", [user, patreonUser]);
+            await upgrade.query("insert into auth.users(id,email_confirmed_at,raw_app_meta_data) values($1,now(),'{\"role\":\"User\"}')", [user]);
+            if (scenario !== "unlinked event" && scenario !== "new link") await addLink();
+            await call("queue", { memberId: member });
+            const original = await call("acquire") as Lease;
+            await call("complete", { token: original.token, ...original.jobs[0], userId: patreonUser, eligible: true });
+            await call("release", { token: original.token });
+            // Model twelve minutes elapsing after the successful observation
+            // without sleeping, retaining its fifteen-minute periodic deadline.
+            await upgrade.exec("update patreon_roles.memberships set observed_at=now()-interval '12 minutes',due_at=now()+interval '3 minutes'");
+            if (scenario === "new link") await addLink();
+            else await call("queue", { memberId: member });
+            let pending: Lease | undefined;
+            if (scenario === "active claim" || scenario === "abandoned claim") {
+                pending = await call("acquire") as Lease;
+                assert.equal(pending.jobs[0].memberId, member);
+                if (scenario === "abandoned claim") {
+                    // Simulate six more minutes passing after the worker claims
+                    // the event and disappears, beyond both lease and retry time.
+                    await upgrade.exec(`update patreon_roles.memberships set observed_at=observed_at-interval '6 minutes',due_at=now()-interval '1 minute';
+                        update patreon_roles.sync_state set worker_until=now()-interval '4 minutes';`);
+                }
+            }
+            const membershipState = () => upgrade.query(`select member_id,generation,due_at::text,observed_at::text,
+                patreon_user_id,website_user_id,eligible,last_error from patreon_roles.memberships`);
+            const workerState = () => upgrade.query("select worker_token,worker_until::text,scan_due::text,scan_generation from patreon_roles.sync_state");
+            const beforeMember = await membershipState(), beforeWorker = await workerState();
+            // Every case matches the removed heuristic, including a previously
+            // observed unlinked member and a link created before deployment.
+            assert.equal((await upgrade.query<{ aged: boolean }>(
+                "select observed_at is not null and due_at>observed_at+interval '10 minutes' as aged from patreon_roles.memberships",
+            )).rows[0].aged, true);
+            await upgrade.exec(await readFile(new URL("../../migrations/20260908030000_patreon_event_reconciliation.sql", import.meta.url), "utf8"));
+            assert.deepEqual((await membershipState()).rows, beforeMember.rows);
+            assert.deepEqual((await workerState()).rows, beforeWorker.rows);
+            let next: Lease;
+            if (scenario === "active claim") {
+                assert.equal(await call("acquire"), null);
+                next = pending!;
+            } else {
+                next = await call("acquire") as Lease;
+                if (pending) assert.notEqual(next.token, pending.token);
+            }
+            assert.equal(next.jobs[0].memberId, member);
+            assert.deepEqual(await call("complete", {
+                token: next.token, ...next.jobs[0], userId: patreonUser, eligible: scenario === "new link",
+            }), { applied: true });
+            await call("release", { token: next.token });
+            const scheduled = (await upgrade.query<{ six_hours: boolean; infinite: boolean }>(`select
+                due_at between now()+interval '359 minutes' and now()+interval '361 minutes' as six_hours,
+                due_at='infinity'::timestamptz as infinite from patreon_roles.memberships`)).rows[0];
+            assert.deepEqual(scheduled, { six_hours: scenario !== "unlinked event", infinite: scenario === "unlinked event" });
+            assert.equal((await upgrade.query<{ role: string }>("select raw_app_meta_data->>'role' as role from auth.users")).rows[0].role,
+                scenario === "new link" ? "Standard Server" : "User");
+        } finally { await upgrade.close(); }
+    });
+}

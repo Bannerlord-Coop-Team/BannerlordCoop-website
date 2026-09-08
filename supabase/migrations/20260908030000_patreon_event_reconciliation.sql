@@ -13,13 +13,9 @@ alter table patreon_roles.sync_state
 alter table patreon_roles.memberships add column priority smallint not null default 0 check (priority between 0 and 2);
 create index patreon_roles_priority_due on patreon_roles.memberships(priority desc, due_at, member_id);
 
--- Reschedule only ordinary successful periodic observations. Preserve pending
--- events, unfinished work, retries, grants, role metadata and audit history.
-update patreon_roles.memberships m set due_at = case when exists(
-    select 1 from public.patreon_accounts a where a.patreon_user_id = m.patreon_user_id
-) then observed_at + interval '6 hours' else 'infinity'::timestamptz end
-where observed_at is not null and due_at > observed_at + interval '10 minutes'
-    and last_error is distinct from 'upstream_unavailable';
+-- Preserve every legacy deadline. Queue events, account links and worker claims
+-- retain observed_at, so timestamps cannot identify ordinary periodic refreshes.
+-- The next successful completion adopts the new linked/unlinked schedule.
 
 create or replace function public.patreon_role_sync(p_campaign text, p_tier text, p_operation text, p_input jsonb)
 returns jsonb language plpgsql security definer

@@ -86,6 +86,9 @@ of 100, fetching individual membership/billing records only for linked identitie
 or explicitly queued events. With 299 known, unlinked members and no events, a
 quiet day needs roughly 12 worker invocations for four three-page discovery scans,
 rather than 1,440 timer invocations and repeated individual membership reads.
+During upgrade, all existing deadlines remain intact, including periodic refreshes,
+queued events and unfinished claims. Each member adopts the new schedule only
+after its next successful reconciliation, so legacy work may add initial calls.
 
 Discovery persists the V2 `meta.pagination.cursors.next` cursor. Legacy next links
 must match the fixed campaign URL and agree with metadata. Scans are capped at
@@ -129,8 +132,9 @@ access tokens and are not sufficient for unattended membership refresh.
    website; it adds the service-only console assignment RPC without changing
    existing account metadata. Console writes fail closed if this RPC is missing.
    Then apply `20260908030000_patreon_event_reconciliation.sql`. It leaves dispatch
-   disabled until explicitly activated, preserves queued work and role ownership,
-   and reschedules ordinary periodic checks. No applied migration is rewritten.
+   disabled until explicitly activated and preserves all legacy deadlines, queued
+   work and role ownership. The next successful reconciliation adopts the new
+   schedule. No applied migration is rewritten.
    Old workers can still submit the previous discovery format during rollout.
 3. Set these additional Edge Function secrets using the Dashboard or an
    owner-only environment file, never command arguments or frontend variables:
@@ -225,6 +229,9 @@ recovery, pagination, relinking and stale-response rejection. Event tests includ
 link-to-grant without a cron tick, signed event wakeups, transactional rollback,
 coalescing, priority, rolling request limits, continuation after an in-flight event,
 unknown-link discovery, idle recovery, and private dispatcher permissions. PGlite
+upgrade cases preserve deadlines for aged observations with queued linked/unlinked
+events, active/abandoned worker claims and newly linked identities, then verify
+the new schedule and role projection after successful reconciliation. PGlite
 uses a transactional `pg_net` stub; it cannot prove the live extension's delivery
 or concurrent PostgreSQL scheduling. Mocked upstream responses and PGlite do
 not prove real Patreon billing behavior, PostgreSQL lock scheduling or production
