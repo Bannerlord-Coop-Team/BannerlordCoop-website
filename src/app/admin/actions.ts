@@ -2,6 +2,7 @@
 
 import { hasAdminAccess, isBootstrapAdmin } from "@/app/lib/auth/access";
 import { isMemberRole } from "@/app/lib/auth/roles";
+import { isDatabaseContention } from "../../../supabase/functions/_shared/database-contention";
 import { getSupabaseAdminClient } from "@/app/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -45,18 +46,12 @@ export async function updateMemberRole(formData: FormData) {
         } else if (isBootstrapAdmin(targetData.user.email) && role !== "Admin") {
             updateError = "Bootstrap administrators must remain admins.";
         } else {
-            const { error } = await adminClient.auth.admin.updateUserById(userId, {
-                app_metadata: {
-                    ...targetData.user.app_metadata,
-                    role,
-                },
-            });
+            const { error } = await adminClient.rpc("set_member_role", { p_user_id: userId, p_role: role });
 
             if (error) throw error;
         }
     } catch (error) {
-        console.error("Member role update failed", error);
-        updateError = "The member role could not be updated.";
+        updateError = isDatabaseContention(error) ? "The account is busy. Refresh and retry the same role change." : "The member role could not be updated.";
     }
 
     if (updateError) redirect(adminUrl("error", updateError, query));

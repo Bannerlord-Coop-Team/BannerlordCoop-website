@@ -1,3 +1,4 @@
+import { DatabaseContention, databaseContentionResponse } from "./database-contention.ts";
 import { boundedJson, DECIMAL, exact, HASH, parseSnapshot, record, sha256, UUID } from "./membership.ts";
 import { membershipStore, type StoreConfig } from "./membership-store.ts";
 
@@ -35,6 +36,6 @@ export function createControlPlaneMembershipHandler(config: StoreConfig & { sync
                 return respond(value);
             }
             return respond({ error: "invalid_request" }, 400);
-        } catch { return respond({ error: "unavailable" }, 503); }
+        } catch (error) { return error instanceof DatabaseContention ? databaseContentionResponse() : respond({ error: "unavailable" }, 503); }
     };
 }

@@ -42,3 +42,6 @@ verify_jwt = false
 # Verifies current Supabase user via Auth on every request.
 [functions.website-account]
 verify_jwt = false
+
+[functions.patreon-roles]
+verify_jwt = false

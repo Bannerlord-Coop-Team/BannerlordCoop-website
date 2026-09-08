@@ -224,6 +224,38 @@
       "representationException": false
     },
     {
+      "version": "20260907220000",
+      "owner": "website",
+      "websitePath": "supabase/migrations/20260907220000_patreon_website_roles.sql",
+      "representationException": false,
+      "websiteSha256": "b6d3da36486ad34c72e3bf764e1fce9bb1cae5aeebd97e99c653db2d3d76ff3f",
+      "websiteBytes": 14691,
+      "cpPath": "supabase/migrations/20260907220000_patreon_website_roles.sql",
+      "cpSha256": "b6d3da36486ad34c72e3bf764e1fce9bb1cae5aeebd97e99c653db2d3d76ff3f",
+      "cpBytes": 14691,
+      "releaseClassification": "required already-applied external history; NEVER replay",
+      "provenance": {
+        "websiteHead": "f012d9412d98a1e8f50bcc3887c655a813959500",
+        "pullRequest": 104
+      }
+    },
+    {
+      "version": "20260907230000",
+      "owner": "website",
+      "websitePath": "supabase/migrations/20260907230000_atomic_live_console_assignments.sql",
+      "representationException": false,
+      "websiteSha256": "a04058cf5e82a21da745eb25f3d17fc98c1e0ad2099ed4ddfb530d2c4713b812",
+      "websiteBytes": 3178,
+      "cpPath": "supabase/migrations/20260907230000_atomic_live_console_assignments.sql",
+      "cpSha256": "a04058cf5e82a21da745eb25f3d17fc98c1e0ad2099ed4ddfb530d2c4713b812",
+      "cpBytes": 3178,
+      "releaseClassification": "required already-applied external history; NEVER replay",
+      "provenance": {
+        "websiteHead": "f012d9412d98a1e8f50bcc3887c655a813959500",
+        "pullRequest": 104
+      }
+    },
+    {
       "version": "202609080001",
       "owner": "control-plane",
       "websitePath": "supabase/migrations/202609080001_control_plane_membership_sources.sql",
@@ -238,10 +270,21 @@
       "version": "202609080002",
       "owner": "website",
       "websitePath": "supabase/migrations/202609080002_membership_onboarding.sql",
-      "websiteSha256": "60c50be755c5c3d1d5899f7104e3596391bcee5bb29f61e2fe09b57722a6b5f4",
-      "websiteBytes": 34807,
+      "websiteSha256": "d8eed42928a1d933bdd57000ce0a6328bb2b261c6f9014a983c36fcb606ce69f",
+      "websiteBytes": 37964,
       "representationException": false,
       "releaseClassification": "new website-owned pending release, NOT already-applied external history"
+    },
+    {
+      "version": "202609080003",
+      "owner": "website",
+      "websitePath": "supabase/migrations/202609080003_membership_role_locking.sql",
+      "representationException": false,
+      "websiteSha256": "6f1a8a4aecf401ee9f9a5928ea1be4083f3e514e1c904e8af62000e5bcc96683",
+      "websiteBytes": 16123,
+      "releaseClassification": "new website-owned pending release, NOT already-applied external history"
     }
-  ]
+  ],
+  "integratedWebsiteMainHead": "f012d9412d98a1e8f50bcc3887c655a813959500",
+  "approvedWebsiteHead": "04ce498019d21dd9a1d8e627aaf6dec5a4d3b0d7"
 }

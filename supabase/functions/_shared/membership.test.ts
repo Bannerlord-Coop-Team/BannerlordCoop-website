@@ -145,3 +145,18 @@ test("authenticated mutation throttles return exact bounded retry contracts with
         assert.deepEqual(await result.json(), { error: "membership_rate_limited" });
     }
 });
+
+test("participating database contention maps exact SQLSTATE to closed503 at real Edge handlers", async () => {
+    for (const code of ["55P03", "40P01", "23505"]) {
+        const config = { supabaseUrl: "https://project.supabase.co", serviceRoleKey: "synthetic", policy,
+            clientId: "synthetic", clientSecret: "synthetic", redirectUri: "https://project.supabase.co/functions/v1/patreon-callback", siteUrl: "https://website.example",
+            fetch: async (input: string | URL | Request) => new URL(String(input)).pathname === "/auth/v1/user"
+                ? Response.json({ id: accountId, identities: [] }) : Response.json({ code, message: "private database data", details: "private" }, { status: 500 }),
+        };
+        for(const [handler,body] of [[createWebsiteAccountHandler(config),{operation:"discord-confirm",token:"a".repeat(64)}],[createWebsiteAccountHandler(config),{operation:"recovery-resolve",provider:"discord",operationId:accountId}],[createWebsiteAccountHandler(config),{operation:"unlink"}],[createPatreonHandler(config,"complete"),{token:"a".repeat(64)}]] as const) {
+            const response=await handler(new Request("https://project.supabase.co/functions/v1/test",{method:"POST",headers:{Authorization:"Bearer synthetic","Content-Type":"application/json"},body:JSON.stringify(body)}));
+            assert.equal(response.status,503);const text=await response.text();assert.doesNotMatch(text,/private|55P03|40P01|23505/);
+            assert.equal(text.includes("membership_retry"),code==="55P03");assert.equal(response.headers.get("Retry-After"),null);
+        }
+    }
+});

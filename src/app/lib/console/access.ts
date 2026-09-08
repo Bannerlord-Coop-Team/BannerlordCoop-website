@@ -44,21 +44,6 @@ export function getAssignedLiveConsoleAccess(
     return null;
 }
 
-export function withLiveConsoleServerAssignment(
-    metadata: Record<string, unknown> | null | undefined,
-    key: typeof LIVE_CONSOLE_OWNER_IDS_KEY | typeof LIVE_CONSOLE_OPERATOR_IDS_KEY,
-    serverId: string,
-    assigned: boolean,
-) {
-    const ids = serverIds(metadata, key).filter((id) => id !== serverId);
-    if (assigned) ids.push(serverId);
-
-    return {
-        ...(metadata ?? {}),
-        [key]: ids,
-    };
-}
-
 export function getLiveConsoleMember(user: User): LiveConsoleMember {
     const metadata = user.user_metadata ?? {};
     const displayName =

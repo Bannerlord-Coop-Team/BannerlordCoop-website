@@ -280,3 +280,17 @@ it.runIf(Boolean(process.env.WEBSITE_MEMBERSHIP_TEST_URL))("real PostgreSQL moun
         }
     } finally { await db.end(); }
 }, 20000);
+
+it("closed contention retry retains exact UUID and both cookies across confirmation, resolution and callback refusal", async()=>{
+    mocks.jar.set("__Host-patreon-completion",token);mocks.jar.set("__Host-account-link",token);
+    mocks.invoke.mockImplementation(async()=>({data:null,error:{context:Response.json({error:"membership_retry"},{status:503})}}));
+    await expect(completePatreonAccount()).rejects.toThrow("patreon=retry");await expect(confirmDiscordAccount()).rejects.toThrow("discord=retry");
+    const form=new FormData();form.set("provider","discord");form.set("operationId",operationId);
+    await expect(resolveAccountLink(form)).rejects.toThrow("recovery=retry");expect(mocks.invoke).toHaveBeenLastCalledWith("website-account",expect.objectContaining({body:{operation:"recovery-resolve",provider:"discord",operationId}}));
+    expect(mocks.jar.get("__Host-patreon-completion")).toBe(token);expect(mocks.jar.get("__Host-account-link")).toBe(token);
+    pageResponses(bound());const view=await mount({discord:"retry"});try{expect(view.container.textContent).toContain("account is busy");expect(view.container.textContent).toContain("Confirm Discord connection");}finally{await view.close();}
+    mocks.invoke.mockResolvedValue({data:{valid:true},error:null});mocks.user.mockResolvedValue({data:{user:{id:a,identities:[{provider:"discord",identity_data:{provider_id:"123456789012345678"}}]}}});
+    mocks.stamp.mockResolvedValue({data:null,error:{code:"55P03",message:"private"}});
+    const response=await discordCallback(new NextRequest("https://website.example/account/discord/callback?code=synthetic",{headers:{cookie:`__Host-account-link=${token}`}}));
+    expect(response.headers.get("location")).toContain("discord=retry");expect(response.headers.has("set-cookie")).toBe(false);
+});

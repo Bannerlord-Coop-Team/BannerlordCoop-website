@@ -1,6 +1,7 @@
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabase/admin";
 import { currentDiscord, sha256 } from "../../../../../supabase/functions/_shared/membership";
+import { isDatabaseContention } from "../../../../../supabase/functions/_shared/database-contention";
 import { LINK_COOKIE } from "@/app/lib/auth/account-link";
 import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest) {
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
                 // Only this server-only seam attests successful same-account PKCE.
                 // A lost response is resolved from the durable intent, never Auth linkage.
                 const stamped = await admin.rpc("membership_discord_callback", { p_account_id: user.id, p_token_hash: await sha256(token), p_discord_user_id: discord });
+                if (isDatabaseContention(stamped.error)) result = "retry";
                 if (!stamped.error && stamped.data?.verified === true) result = "confirm";
             }
         } catch { /* Never substitute sign-in or expose provider errors. */ }

@@ -1,3 +1,4 @@
+import { DatabaseContention, databaseContentionResponse, checkDatabaseContention } from "./database-contention.ts";
 import { boundedJson, currentDiscord, exact, record, type Policy } from "./membership.ts";
 import { membershipStore, MembershipRateLimit, membershipRateLimitResponse } from "./membership-store.ts";
 import { PATREON_IDENTITY_URL, verifyPatreonMembership } from "./patreon-membership.ts";
@@ -65,6 +66,7 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
             signal: AbortSignal.timeout(4_000),
         });
         if (result.status === 429) throw new MembershipRateLimit();
+        if (!result.ok) await checkDatabaseContention(result);
         if (!result.ok) throw new Error("Patreon storage operation failed");
         return await boundedJson(result) as Record<string, unknown>[];
     }
@@ -175,6 +177,7 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
             completionUrl.searchParams.set("token", completionToken);
             return redirect(completionUrl.href, `${cookieName}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
         } catch (error) {
+            if (error instanceof DatabaseContention) return mode === "callback" ? redirect(`${accountUrl}?patreon=retry`) : databaseContentionResponse();
             if (mode !== "callback" && error instanceof MembershipRateLimit) return membershipRateLimitResponse();
             // Never return provider bodies, tokens, codes, or database details to the browser.
             return mode === "callback" ? finish("error") : response("Unable to link Patreon account", 503);

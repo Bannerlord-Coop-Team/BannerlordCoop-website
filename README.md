@@ -238,6 +238,9 @@ src/app/
 
 ## Related Links
 
+- [Patreon account linking](docs/patreon-account-linking.md)
+- [Patreon Standard Server role sync and activation](docs/patreon-website-roles.md)
+
 - [Bannerlord Coop repository](https://github.com/Bannerlord-Coop-Team/BannerlordCoop)
 - [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3770450698)
 - [Discord](https://discord.gg/bannerlordcoop)

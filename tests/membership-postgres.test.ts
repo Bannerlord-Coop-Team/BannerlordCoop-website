@@ -6,6 +6,14 @@ import test from "node:test";
 import pg from "pg";
 const url = process.env.WEBSITE_MEMBERSHIP_TEST_URL;
 const migration = "supabase/migrations/202609080002_membership_onboarding.sql";
+async function retryContention<T>(run: () => Promise<T>): Promise<T> {
+    for (let attempt=0; ; attempt++) {
+        try { return await run(); } catch (error) {
+            if (attempt>=20 || (error as {code?:string}).code!=="55P03") throw error;
+            await new Promise(resolve=>setTimeout(resolve,10));
+        }
+    }
+}
 const a = "aaaaaaaa-1111-4111-8111-111111111111", b = "bbbbbbbb-1111-4111-8111-111111111111";
 const discord = "123456789012345678";
 const evidence = { verification: "qualifying", campaignId: "10", memberId: "2", tierIds: ["20"], verifiedAt: "2026-09-07T12:00:00.000Z", paidThroughAt: null, policyVersion: "patreon-paid-usd20-v1", evidenceSha256: "e".repeat(64) };
@@ -16,11 +24,13 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
     const query = (sql: string, params: unknown[] = []) => client.query(sql, params);
     const rpc = async (name: string, args: unknown[]) => (await query(`select public.${name}(${args.map((_, i) => `$${i+1}`).join(",")}) result`, args)).rows[0].result;
     try {
-        await query("create schema auth; create table auth.users(id uuid primary key); create role anon; create role authenticated; create role service_role;");
+        await query("create schema auth; create table auth.users(id uuid primary key, email_confirmed_at timestamptz, deleted_at timestamptz, banned_until timestamptz, raw_app_meta_data jsonb, updated_at timestamptz); create role anon; create role authenticated; create role service_role;");
         await query(await readFile("supabase/migrations/20260907212654_create_patreon_links.sql", "utf8"));
         await query("insert into auth.users values($1),($2)", [a,b]);
         await query("insert into public.patreon_accounts(user_id,patreon_user_id) values($1,'1')",[a]);
+        for (const name of ["20260907220000_patreon_website_roles.sql","20260907230000_atomic_live_console_assignments.sql"]) await query(await readFile(`supabase/migrations/${name}`,"utf8"));
         await query(await readFile(migration,"utf8"));
+        await query(await readFile("supabase/migrations/202609080003_membership_role_locking.sql","utf8"));
         // Scenarios are independent delivery windows; preserve all receipts while
         // acknowledging prior scenario hints and advancing only fixture A/B clocks.
         t.beforeEach(async () => {
@@ -69,7 +79,7 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
         await t.test("same completion races return one immutable receipt; another account cannot consume or recover it", async () => {
             const peer = new pg.Client({ connectionString: url }); await peer.connect();
             try {
-                const results = await Promise.all([rpc("membership_complete",[a,discord,token!]),peer.query("select public.membership_complete($1,$2,$3) result",[a,discord,token!]).then(r=>r.rows[0].result)]);
+                const results = await Promise.all([rpc("membership_complete",[a,discord,token!]),retryContention(()=>peer.query("select public.membership_complete($1,$2,$3) result",[a,discord,token!])).then(r=>r.rows[0].result)]);
                 assert.deepEqual(results[0],results[1]); assert.equal(results[0].returnPath,"/servers");
                 assert.equal((await query("select count(*) from public.membership_completion_receipts")).rows[0].count,"1");
                 await assert.rejects(rpc("membership_complete",[b,discord,token!]));
@@ -114,10 +124,8 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
                 await stage(b,"7".repeat(64),"7"); // real authority, not a now-redundant unlink
                 const before = await rpc("membership_changes",[null,50]);
                 await query("begin"); await rpc("membership_unlink",[b,discord]);
-                let finished = false;
-                const waiting = peer.query("select public.membership_fence($1,$2,false)",[b,"999456789012345678"]).then(r=>{finished=true; return r;});
-                await new Promise(resolve=>setTimeout(resolve,50)); assert.equal(finished,false);
-                await query("commit"); await waiting;
+                await assert.rejects(peer.query("select public.membership_fence($1,$2,false)",[b,"999456789012345678"]),{code:"55P03"});
+                await query("commit"); await peer.query("select public.membership_fence($1,$2,false)",[b,"999456789012345678"]);
                 const after = await rpc("membership_changes",[before.cursor,50]); assert.ok(after.events.length>=2);
             } finally { await query("rollback"); await peer.end(); }
         });
@@ -162,7 +170,7 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             for (let i=0; i<9; i++) { await beginFor(id); await drain(id); }
             const peers = await Promise.all(Array.from({length:4},async()=>{ const c=new pg.Client({connectionString:url}); await c.connect(); return c; }));
             try {
-                const results = await Promise.allSettled(peers.map(c=>beginFor(id,c)));
+                const results = await Promise.allSettled(peers.map(c=>retryContention(()=>beginFor(id,c))));
                 assert.equal(results.filter(r=>r.status==="fulfilled").length,1);
                 for (const result of results) if (result.status==="rejected") assert.equal(result.reason.code,"PT429");
             } finally { await Promise.all(peers.map(c=>c.end())); }
@@ -185,7 +193,7 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             const peer=new pg.Client({connectionString:url}); await peer.connect();
             let result;
             try {
-                const results=await Promise.all([rpc("membership_complete",[id,discord,x]),peer.query("select public.membership_complete($1,$2,$3) result",[id,discord,x]).then(r=>r.rows[0].result)]);
+                const results=await Promise.all([retryContention(()=>rpc("membership_complete",[id,discord,x])),retryContention(()=>peer.query("select public.membership_complete($1,$2,$3) result",[id,discord,x])).then(r=>r.rows[0].result)]);
                 assert.deepEqual(results[0],results[1]); result=results[0];
             } finally { await peer.end(); }
             assert.equal((await query("select mutation_count from public.membership_heads where account_id=$1",[id])).rows[0].mutation_count,10);
@@ -199,7 +207,7 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             const id = await freshAccount();
             const peers = await Promise.all(Array.from({length:6},async()=>{ const c=new pg.Client({connectionString:url}); await c.connect(); return c; }));
             try {
-                const results = await Promise.allSettled(peers.map(c=>c.query("select public.membership_discord_begin($1,$2,$3,'/servers')",[id,crypto.randomUUID().replaceAll("-", "").repeat(2),crypto.randomUUID()])));
+                const results = await Promise.allSettled(peers.map(c=>{ const args=[id,crypto.randomUUID().replaceAll("-", "").repeat(2),crypto.randomUUID()]; return retryContention(()=>c.query("select public.membership_discord_begin($1,$2,$3,'/servers')",args)); }));
                 assert.equal(results.filter(r=>r.status==="fulfilled").length,1);
                 for (const result of results) if(result.status==="rejected") assert.match(result.reason.message,/Resolve previous operation/);
             } finally { await Promise.all(peers.map(c=>c.end())); }
@@ -265,7 +273,7 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             const event=(await query("select event_id from public.membership_outbox where account_id=$1 order by sequence limit 1",[id])).rows[0].event_id;
             const peer=new pg.Client({connectionString:url}); await peer.connect();
             try {
-                const results=await Promise.allSettled([rpc("membership_ack",[event,crypto.randomUUID()]),peer.query("select public.membership_unlink($1,null)",[id]),beginFor(id)]);
+                const ack=crypto.randomUUID(); const results=await Promise.allSettled([retryContention(()=>rpc("membership_ack",[event,ack])),retryContention(()=>peer.query("select public.membership_unlink($1,null)",[id])),beginFor(id)]);
                 assert.equal(results[0].status,"fulfilled"); assert.equal(results[1].status,"fulfilled");
                 assert.ok(await pendingCount(id)<=9);
             } finally { await peer.end(); }
@@ -428,9 +436,9 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             const peer=new pg.Client({connectionString:url}); await peer.connect();
             try {
                 await query("begin"); const result=await rpc("membership_complete",[id,discord,tok]);
-                let finished=false; const cancel=peer.query("select public.membership_recovery($1,$2,'patreon',$3,true) r",[id,discord,pending.operationId]).then(r=>{finished=true;return r.rows[0].r;});
-                await new Promise(resolve=>setTimeout(resolve,30)); assert.equal(finished,false); await query("commit");
-                const resolved=await cancel; assert.equal(resolved.state,"committed"); assert.deepEqual(resolved.receipt,result);
+                await assert.rejects(peer.query("select public.membership_recovery($1,$2,'patreon',$3,true) r",[id,discord,pending.operationId]),{code:"55P03"});
+                await query("commit");
+                const resolved=(await peer.query("select public.membership_recovery($1,$2,'patreon',$3,true) r",[id,discord,pending.operationId])).rows[0].r; assert.equal(resolved.state,"committed"); assert.deepEqual(resolved.receipt,result);
                 await rpc("membership_unlink",[id,discord]); assert.deepEqual(await rpc("membership_complete",[id,discord,tok]),result);
                 assert.equal((await rpc("membership_fence",[id,discord,false])).patreonUserId,null);
             } finally { await query("rollback"); await peer.end(); }
@@ -454,9 +462,8 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
                     else if(mutation==="begin") await beginFor(id);
                     else await rpc("membership_unlink",[id,null]);
                     const before=(await query("select * from public.membership_heads where account_id=$1",[id])).rows[0];
-                    let finished=false; const callback=peer.query("select public.membership_discord_callback($1,$2,$3)",[id,tok,discord]).then(()=>{finished=true;return "unexpected";},e=>{finished=true;return e.message;});
-                    await new Promise(resolve=>setTimeout(resolve,30)); assert.equal(finished,false);
-                    await query("commit"); assert.match(await callback,/Callback superseded/);
+                    await assert.rejects(peer.query("select public.membership_discord_callback($1,$2,$3)",[id,tok,discord]),{code:"55P03"});
+                    await query("commit"); await assert.rejects(peer.query("select public.membership_discord_callback($1,$2,$3)",[id,tok,discord]),/Callback superseded/);
                     assert.deepEqual((await query("select * from public.membership_heads where account_id=$1",[id])).rows[0],before,"refused stamp rolls back every effect");
                     assert.equal((await query("select callback_discord_id from public.discord_link_requests where token_hash=$1",[tok])).rows[0].callback_discord_id,null);
                     const pending=await rpc("membership_recovery",[id,discord,"discord",null,false,tok]); assert.equal(pending.state,"live"); assert.equal(pending.confirmable,false);
@@ -477,14 +484,13 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             const peer=new pg.Client({connectionString:url}); await peer.connect();
             try {
                 await query("begin"); await rpc("membership_recovery",[id,discord,"discord",op,true]);
-                let finished=false;
-                const stamp=peer.query("select public.membership_discord_callback($1,$2,$3)",[id,tok,discord]).then(()=>{finished=true; return "unexpected";},e=>{finished=true;return e.message;});
-                await new Promise(resolve=>setTimeout(resolve,30)); assert.equal(finished,false); await query("commit"); assert.match(await stamp,/Invalid callback/);
+                await assert.rejects(peer.query("select public.membership_discord_callback($1,$2,$3)",[id,tok,discord]),{code:"55P03"});
+                await query("commit"); await assert.rejects(peer.query("select public.membership_discord_callback($1,$2,$3)",[id,tok,discord]),/Invalid callback/);
                 assert.equal((await rpc("membership_recovery",[id,discord,"discord"])).state,"none");
                 const next="2b".repeat(32), nextOp=crypto.randomUUID();
                 await rpc("membership_discord_begin",[id,next,nextOp,"/servers"]); await rpc("membership_discord_callback",[id,next,discord]);
                 await query("begin"); const receipt=await rpc("membership_discord_confirm",[id,next,discord]);
-                const resolve=peer.query("select public.membership_recovery($1,$2,'discord',$3,true) r",[id,discord,nextOp]);
+                const resolve=retryContention(()=>peer.query("select public.membership_recovery($1,$2,'discord',$3,true) r",[id,discord,nextOp]));
                 await query("commit"); assert.deepEqual((await resolve).rows[0].r.receipt,receipt);
                 // Simulated lost HTTP result: no cookie/UUID needed on the next reload.
                 const reload=await rpc("membership_recovery",[id,discord,"discord"]); assert.equal(reload.state,"resolved"); assert.equal(reload.operationId,nextOp);

@@ -1,22 +1,22 @@
 "use server";
 
+import { isDatabaseContention } from "../../../supabase/functions/_shared/database-contention";
+
 import {
     getLiveConsoleAccessLevel,
     getMemberRole,
     hasAdminAccess,
 } from "@/app/lib/auth/access";
 import {
+    getAssignedLiveConsoleAccess,
     getOperatedLiveConsoleServerIds,
     getOwnedLiveConsoleServerIds,
-    LIVE_CONSOLE_OPERATOR_IDS_KEY,
-    LIVE_CONSOLE_OWNER_IDS_KEY,
-    withLiveConsoleServerAssignment,
 } from "@/app/lib/console/access";
+import { updateLiveConsoleAssignment } from "@/app/lib/console/assignment";
 import { getLiveConsoleServer } from "@/app/lib/console/servers";
 import { getSupabaseAdminClient } from "@/app/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { listSupabaseUsers } from "@/app/lib/supabase/users";
-import type { User } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -42,23 +42,6 @@ async function currentUser() {
     const sessionClient = await getSupabaseServerClient();
     const { data } = await sessionClient.auth.getUser();
     return data.user;
-}
-
-function metadataChanged(
-    previous: Record<string, unknown>,
-    next: Record<string, unknown>,
-) {
-    return JSON.stringify(previous) !== JSON.stringify(next);
-}
-
-async function updateUserMetadata(user: User, appMetadata: Record<string, unknown>) {
-    if (!metadataChanged(user.app_metadata, appMetadata)) return;
-
-    const adminClient = getSupabaseAdminClient();
-    const { error } = await adminClient.auth.admin.updateUserById(user.id, {
-        app_metadata: appMetadata,
-    });
-    if (error) throw error;
 }
 
 async function findAccountByEmail(email: string) {
@@ -108,31 +91,23 @@ export async function assignLiveConsoleOwner(formData: FormData) {
             );
             const ownerChanged =
                 currentOwners.length !== 1 || currentOwners[0].id !== target.id;
+            const assignedUsers = result.users.filter((user) =>
+                user.id === target.id || getAssignedLiveConsoleAccess(user.app_metadata, serverId),
+            );
             const orderedUsers = ownerChanged
-                ? [...result.users.filter((user) => user.id !== target.id), target]
-                : result.users;
+                ? [...assignedUsers.filter((user) => user.id !== target.id), target]
+                : assignedUsers;
+            const adminClient = getSupabaseAdminClient();
 
             for (const user of orderedUsers) {
-                let metadata = withLiveConsoleServerAssignment(
-                    user.app_metadata,
-                    LIVE_CONSOLE_OWNER_IDS_KEY,
-                    serverId,
-                    user.id === target.id,
-                );
-                if (ownerChanged || user.id === target.id) {
-                    metadata = withLiveConsoleServerAssignment(
-                        metadata,
-                        LIVE_CONSOLE_OPERATOR_IDS_KEY,
-                        serverId,
-                        false,
-                    );
-                }
-                await updateUserMetadata(user, metadata);
+                await updateLiveConsoleAssignment(adminClient, user.id, serverId, {
+                    owner: user.id === target.id,
+                    operator: ownerChanged || user.id === target.id ? false : undefined,
+                });
             }
         }
     } catch (error) {
-        console.error("Live console owner assignment failed", error);
-        actionError = "The server owner could not be updated.";
+        actionError = isDatabaseContention(error) ? "The account is busy. Refresh assignments and retry the same change." : "The server owner could not be updated.";
     }
 
     if (actionError) fail(actionError, serverId);
@@ -153,25 +128,19 @@ export async function clearLiveConsoleOwner(formData: FormData) {
         if (truncated) {
             actionError = "The member directory is too large to remove every assignment safely.";
         } else {
-            for (const user of users) {
-                let metadata = withLiveConsoleServerAssignment(
-                    user.app_metadata,
-                    LIVE_CONSOLE_OWNER_IDS_KEY,
-                    serverId,
-                    false,
-                );
-                metadata = withLiveConsoleServerAssignment(
-                    metadata,
-                    LIVE_CONSOLE_OPERATOR_IDS_KEY,
-                    serverId,
-                    false,
-                );
-                await updateUserMetadata(user, metadata);
+            const assignedUsers = users.filter((user) =>
+                getAssignedLiveConsoleAccess(user.app_metadata, serverId),
+            );
+            const adminClient = getSupabaseAdminClient();
+            for (const user of assignedUsers) {
+                await updateLiveConsoleAssignment(adminClient, user.id, serverId, {
+                    owner: false,
+                    operator: false,
+                });
             }
         }
     } catch (error) {
-        console.error("Live console owner removal failed", error);
-        actionError = "The server owner could not be removed.";
+        actionError = isDatabaseContention(error) ? "The account is busy. Refresh assignments and retry the same change." : "The server owner could not be removed.";
     }
 
     if (actionError) fail(actionError, serverId);
@@ -207,17 +176,12 @@ export async function addLiveConsoleOperator(formData: FormData) {
         } else if (getMemberRole(target) === "Admin") {
             actionError = "Administrators already have management access.";
         } else {
-            const metadata = withLiveConsoleServerAssignment(
-                target.app_metadata,
-                LIVE_CONSOLE_OPERATOR_IDS_KEY,
-                serverId,
-                true,
-            );
-            await updateUserMetadata(target, metadata);
+            await updateLiveConsoleAssignment(getSupabaseAdminClient(), target.id, serverId, {
+                operator: true,
+            });
         }
     } catch (error) {
-        console.error("Live console operator assignment failed", error);
-        actionError = "The operator could not be added.";
+        actionError = isDatabaseContention(error) ? "The account is busy. Refresh assignments and retry the same change." : "The operator could not be added.";
     }
 
     if (actionError) fail(actionError, serverId);
@@ -244,17 +208,12 @@ export async function removeLiveConsoleOperator(formData: FormData) {
         } else if (!getOperatedLiveConsoleServerIds(data.user.app_metadata).includes(serverId)) {
             actionError = "That account is not an operator for this server.";
         } else {
-            const metadata = withLiveConsoleServerAssignment(
-                data.user.app_metadata,
-                LIVE_CONSOLE_OPERATOR_IDS_KEY,
-                serverId,
-                false,
-            );
-            await updateUserMetadata(data.user, metadata);
+            await updateLiveConsoleAssignment(adminClient, data.user.id, serverId, {
+                operator: false,
+            });
         }
     } catch (error) {
-        console.error("Live console operator removal failed", error);
-        actionError = "The operator could not be removed.";
+        actionError = isDatabaseContention(error) ? "The account is busy. Refresh assignments and retry the same change." : "The operator could not be removed.";
     }
 
     if (actionError) fail(actionError, serverId);

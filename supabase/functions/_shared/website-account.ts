@@ -1,3 +1,4 @@
+import { DatabaseContention, databaseContentionResponse } from "./database-contention.ts";
 import { boundedJson, exact, HASH, UUID, parseSnapshot, randomToken, record, sha256, validUntil, type Policy } from "./membership.ts";
 import { membershipStore, MembershipRateLimit, membershipRateLimitResponse, type StoreConfig } from "./membership-store.ts";
 export function createWebsiteAccountHandler(config: StoreConfig & { policy: Policy | null }) {
@@ -35,6 +36,6 @@ export function createWebsiteAccountHandler(config: StoreConfig & { policy: Poli
                 return response(await store.rpc("membership_discord_confirm", { p_account_id: user.accountId, p_token_hash: await sha256(body.token), p_discord_user_id: user.discordUserId }));
             }
             return response({ error: "invalid_request" }, 400);
-        } catch (error) { return error instanceof MembershipRateLimit ? membershipRateLimitResponse() : response({ error: "account_unavailable" }, 503); }
+        } catch (error) { return error instanceof DatabaseContention ? databaseContentionResponse() : error instanceof MembershipRateLimit ? membershipRateLimitResponse() : response({ error: "account_unavailable" }, 503); }
     };
 }

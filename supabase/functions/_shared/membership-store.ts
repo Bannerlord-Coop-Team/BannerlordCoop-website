@@ -1,3 +1,4 @@
+import { checkDatabaseContention } from "./database-contention.ts";
 import { boundedJson, currentDiscord, record, UUID } from "./membership.ts";
 // Closed retry contract: never expose PostgREST/provider errors to the browser.
 export class MembershipRateLimit extends Error {}
@@ -15,6 +16,7 @@ export function membershipStore(config: StoreConfig) {
         const response = await requestFetch(new URL(path, origin), { ...init, redirect: "error", signal: AbortSignal.timeout(4_000), headers: { apikey: config.serviceRoleKey, Authorization: `Bearer ${config.serviceRoleKey}`, "Content-Type": "application/json", ...init.headers } });
         if (allowDeleted && response.status === 404) return null;
         if (response.status === 429) throw new MembershipRateLimit();
+        if (!response.ok) await checkDatabaseContention(response);
         if (!response.ok) throw new Error("Membership service unavailable");
         return boundedJson(response);
     }

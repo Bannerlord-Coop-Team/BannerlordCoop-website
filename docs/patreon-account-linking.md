@@ -7,6 +7,8 @@ current policy, transactional recovery, private synchronization contract, settin
 additive migration order and enablement blockers. This is not unattended polling
 or proof of settled funds. The original identity-only SQL migration remains immutable.
 
+The independent [website role worker](patreon-website-roles.md) uses a distinct creator token and policy to manage Standard Server roles; those roles never authorize control-plane membership grants.
+
 ## Production setup
 
 1. Follow the coordinated additive migration order in the membership document.

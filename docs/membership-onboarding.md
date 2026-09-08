@@ -45,7 +45,7 @@ refused, response bodies/counts and request deadlines bounded. Provider access a
 refresh tokens exist only during callback processing; no tokens/raw bodies are
 persisted or logged. Only normalized evidence and its SHA256 digest are retained.
 A crash between code exchange and normalized persistence requires fresh OAuth.
-There is **no unattended Patreon polling or token refresh**.
+This CP evidence adapter has **no unattended Patreon polling or token refresh**. The independent PR104 website-role worker polls with its distinct creator token and policy; website roles never establish CP allowance.
 
 Positive evidence lasts at most 24 hours and funds only **new allocation**.
 `max(administrativeBase, qualifyingPatreonOne) + administrativeBonus` is the backend
@@ -175,7 +175,8 @@ six ordered regions. No private provider IDs enter the public account status or
 website summary. `membership-onboarding.ts` owns strict authenticated status parsing
 and public summary v2 status/next-action composition.
 
-Website migration: `202609080002_membership_onboarding.sql`, **after** backend
+Website migrations: `202609080002_membership_onboarding.sql` then append-only
+`202609080003_membership_role_locking.sql`, **after** backend
 `202609080001_control_plane_membership_sources.sql`. No applied migration is edited;
 `20260907212654_create_patreon_links.sql` remains byte-identical to merged PR103.
 Four new public-schema tables are RLS enabled and client grants denied:
@@ -301,15 +302,15 @@ CAS and exact-UUID Create recovery are unchanged.
 
 ## Shared history: fixed representations, upgrade only
 
-The exact 22-version inventory is pinned in
+The exact 25-version inventory (15 exact-mirror dispositions and fixed10 exceptions) is pinned in
 [`membership-migration-inventory.json`](membership-migration-inventory.json).
 It records canonical LF Git SHA256/byte counts and ownership for every own file,
 companion source HEAD `4160f7bda49c6dd7dab57b912811c793dec90ac3`, and the fixed ten
 historical representation pairs. All pre-existing website paths and committed bytes
 are unchanged, including the old Patreon migration. Ten previously missing,
 noncolliding CP migrations through `202609080001` are exact committed Git-byte mirrors.
-`202609080002` is website-owned **new pending release SQL**, not already-applied external
-history; its final pin must be added to CP's coordinated release catalog.
+`202609080002` and `202609080003` are website-owned **new pending release SQL**, not already-applied external
+history; their final pins must be added to CP's coordinated release catalog.
 
 The ten historical exceptions (versions21074242/21083000/21100640/21112235 on202608,
 202608240001, and202608260001–260005) are explicitly **different historical
@@ -325,6 +326,9 @@ exact baseline inventory/pins unchanged and baseline already applied. Do not use
 arbitrary website `supabase db push`, reset, migration repair, or replay markers to fill
 missing baseline. A fresh bootstrap is unsupported/unproved by these history markers.
 The website's version union does not prove remote applied state. Next backend stage
-must pin the final website080002 bytes as pending, preserve its own exact catalog and
+must pin the final website080002 and080003 bytes as pending, preserve its own exact catalog and
 unknown/external-replay refusals, and test real isolated CLI pre-application, partial
 and terminal release histories. No remote history was read or altered in this fix.
+
+
+See [combined PR104 locking and retry](membership-locking.md) for immutable applied PR104 history, the complete participating-lock/error contract, independent policies, explicit Auth deletion retry, pending migration rollout and realPG/GoTrue evidence limits.

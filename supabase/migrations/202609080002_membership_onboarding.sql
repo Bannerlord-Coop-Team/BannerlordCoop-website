@@ -1,3 +1,24 @@
+create function public.membership_lock_budget() returns text
+language sql stable set search_path = '' as $$
+ select case when current_setting('lock_timeout')::interval > interval '0'
+  and current_setting('lock_timeout')::interval < interval '100 milliseconds'
+  then current_setting('lock_timeout') else '100ms' end
+$$;
+revoke all on function public.membership_lock_budget() from public,anon,authenticated,service_role;
+
+-- Shared commit-order fence. Refusal aborts the statement, never skips effects.
+-- Each participating function has a SET search_path GUC scope. Its local
+-- timeout assignment is restored on exit and never raises a tighter caller limit.
+create function public.membership_lock() returns void
+language plpgsql set search_path = '' as $$
+begin
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
+ if not pg_try_advisory_xact_lock(702,1) then
+  raise sqlstate '55P03' using message='membership_retry';
+ end if;
+end $$;
+revoke all on function public.membership_lock() from public,anon,authenticated,service_role;
+
 -- Website-owned additive history. No provider credentials or raw provider responses.
 create table public.membership_heads (
  account_id uuid primary key, discord_user_id text check(discord_user_id ~ '^[0-9]{17,20}$'),
@@ -75,6 +96,7 @@ create function public.membership_notify(p_account_id uuid, p_revocation boolean
 language plpgsql security definer set search_path = '' as $$
 declare current_revision bigint; pending_count integer;
 begin
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
  select revision into strict current_revision from public.membership_heads where account_id=p_account_id;
  if exists(select 1 from public.membership_outbox where account_id=p_account_id and revision=current_revision) then return; end if;
  select count(*) into pending_count from public.membership_outbox where account_id=p_account_id and receipt_id is null;
@@ -88,6 +110,7 @@ create function public.membership_admit(p_account_id uuid, p_pending boolean) re
 language plpgsql security definer set search_path = '' as $$
 declare h public.membership_heads; pending_count integer;
 begin
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
  select * into strict h from public.membership_heads where account_id=p_account_id for update;
  if clock_timestamp() >= h.mutation_window_started_at + interval '10 minutes' then
   update public.membership_heads set mutation_window_started_at=clock_timestamp(),mutation_count=0 where account_id=p_account_id returning * into h;
@@ -111,9 +134,10 @@ create function public.membership_oauth_admission() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare generation bigint;
 begin
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
  if new.operation_id is null or new.expected_generation is null then raise exception 'Missing membership operation'; end if;
- perform pg_advisory_xact_lock(702,1);
- perform pg_advisory_xact_lock(hashtextextended(new.user_id::text,702));
+ perform public.membership_lock();
+ if not pg_try_advisory_xact_lock(hashtextextended(new.user_id::text,702)) then raise sqlstate '55P03' using message='membership_retry'; end if;
  select link_generation into strict generation from public.membership_heads where account_id=new.user_id for update;
  if generation<>new.expected_generation then raise exception 'Link generation changed'; end if;
  if (select count(*) from public.patreon_oauth_states where user_id=new.user_id and expires_at>clock_timestamp() and expected_generation=generation) +
@@ -129,8 +153,9 @@ create function public.membership_fence(p_account_id uuid, p_discord_user_id tex
 language plpgsql security definer set search_path = '' as $$
 declare h public.membership_heads; current_patreon text; state text;
 begin
- perform pg_advisory_xact_lock(702,1); -- no cursor can skip an uncommitted lower sequence
- perform pg_advisory_xact_lock(hashtextextended(p_account_id::text, 702));
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
+ perform public.membership_lock(); -- no cursor can skip an uncommitted lower sequence
+ if not pg_try_advisory_xact_lock(hashtextextended(p_account_id::text, 702)) then raise sqlstate '55P03' using message='membership_retry'; end if;
  insert into public.membership_heads(account_id) values(p_account_id) on conflict do nothing;
  select * into strict h from public.membership_heads where account_id=p_account_id for update;
  if p_deleted then current_patreon := null; state := 'account_deleted';
@@ -153,6 +178,7 @@ create function public.membership_begin(p_account_id uuid, p_discord_user_id tex
 language plpgsql security definer set search_path = '' as $$
 declare snapshot jsonb;
 begin
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
  snapshot := public.membership_fence(p_account_id,p_discord_user_id,false);
  delete from public.membership_recovery_intents where account_id=p_account_id and provider='patreon' and acknowledged;
  if exists(select 1 from public.membership_recovery_intents where account_id=p_account_id and provider='patreon') then raise exception 'Resolve previous operation'; end if;
@@ -172,8 +198,9 @@ create function public.membership_complete(p_account_id uuid, p_discord_user_id 
 language plpgsql security definer set search_path = '' as $$
 declare s public.patreon_oauth_states; h public.membership_heads; r public.membership_completion_receipts; result jsonb; payload text;
 begin
- perform pg_advisory_xact_lock(702,1); -- serialize outbox sequence with commit order
- perform pg_advisory_xact_lock(hashtextextended(p_account_id::text,702));
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
+ perform public.membership_lock(); -- serialize outbox sequence with commit order
+ if not pg_try_advisory_xact_lock(hashtextextended(p_account_id::text,702)) then raise sqlstate '55P03' using message='membership_retry'; end if;
  -- Receipt recovery does not require unexpired OAuth authority or still-positive evidence.
  select * into r from public.membership_completion_receipts where token_hash=p_token_hash;
  if found then
@@ -194,6 +221,8 @@ begin
  perform public.membership_admit(p_account_id,false);
  payload := encode(sha256(convert_to(jsonb_build_object('accountId',p_account_id,'generation',s.expected_generation,'patreonId',s.patreon_user_id,'evidence',s.evidence,'returnPath',s.return_path)::text,'UTF8')),'hex');
  if exists(select 1 from public.membership_completion_receipts where operation_id=s.operation_id) then raise exception 'Completion payload conflict'; end if;
+ -- Existing tuples refuse immediately; invisible uniqueness/FK waits use the local budget.
+ perform 1 from public.patreon_accounts where user_id=p_account_id or patreon_user_id=s.patreon_user_id for update nowait;
  insert into public.patreon_accounts(user_id,patreon_user_id,linked_at) values(p_account_id,s.patreon_user_id,clock_timestamp())
  on conflict(user_id) do update set patreon_user_id=excluded.patreon_user_id,linked_at=excluded.linked_at;
  update public.membership_heads set patreon_user_id=s.patreon_user_id,discord_user_id=p_discord_user_id,link_state='linked',
@@ -210,8 +239,9 @@ create function public.membership_unlink(p_account_id uuid,p_discord_user_id tex
 language plpgsql security definer set search_path = '' as $$
 declare h public.membership_heads; needs_fence boolean;
 begin
- perform pg_advisory_xact_lock(702,1);
- perform pg_advisory_xact_lock(hashtextextended(p_account_id::text,702));
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
+ perform public.membership_lock();
+ if not pg_try_advisory_xact_lock(hashtextextended(p_account_id::text,702)) then raise sqlstate '55P03' using message='membership_retry'; end if;
  perform public.membership_fence(p_account_id,p_discord_user_id,false);
  select * into strict h from public.membership_heads where account_id=p_account_id for update;
  -- In-flight callbacks may have consumed their row: unknown evidence also marks
@@ -219,6 +249,7 @@ begin
  needs_fence := h.patreon_user_id is not null or h.link_state<>'unlinked' or h.evidence<>public.membership_empty_evidence()
   or exists(select 1 from public.patreon_oauth_states where user_id=p_account_id and expected_generation=h.link_generation and expires_at>clock_timestamp());
  delete from public.patreon_oauth_states where user_id=p_account_id;
+ perform 1 from public.patreon_accounts where user_id=p_account_id for update nowait;
  delete from public.patreon_accounts where user_id=p_account_id;
  if needs_fence then
   -- Revocation uses reserved/deferred notification capacity, never ordinary budget.
@@ -231,6 +262,7 @@ create function public.membership_changes(p_cursor text,p_limit integer) returns
 language plpgsql security definer set search_path = '' as $$
 declare result jsonb;
 begin
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
  if p_limit is null or p_limit not between 1 and 50 or (p_cursor is not null and p_cursor !~ '^(0|[1-9][0-9]{0,19})$') then raise exception 'Invalid page'; end if;
  select jsonb_build_object('version',1,'cursor',coalesce(max(sequence)::text,p_cursor),'events',coalesce(jsonb_agg(jsonb_build_object('eventId',event_id,'accountId',account_id) order by sequence),'[]'::jsonb)) into result
  from (select sequence,event_id,account_id from public.membership_outbox where receipt_id is null and (p_cursor is null or sequence::numeric>p_cursor::numeric) order by sequence limit p_limit) page;
@@ -240,10 +272,11 @@ create function public.membership_ack(p_event_id uuid,p_receipt_id uuid) returns
 language plpgsql security definer set search_path = '' as $$
 declare current_receipt uuid; account uuid;
 begin
- perform pg_advisory_xact_lock(702,1);
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
+ perform public.membership_lock();
  select account_id into account from public.membership_outbox where event_id=p_event_id;
  if not found then raise exception 'Receipt conflict'; end if;
- perform pg_advisory_xact_lock(hashtextextended(account::text,702));
+ if not pg_try_advisory_xact_lock(hashtextextended(account::text,702)) then raise sqlstate '55P03' using message='membership_retry'; end if;
  select receipt_id into current_receipt from public.membership_outbox where event_id=p_event_id for update;
  if not found or (current_receipt is not null and current_receipt<>p_receipt_id) then raise exception 'Receipt conflict'; end if;
  update public.membership_outbox set receipt_id=p_receipt_id,acknowledged_at=coalesce(acknowledged_at,clock_timestamp()) where event_id=p_event_id;
@@ -256,6 +289,7 @@ create function public.membership_status(p_account_id uuid,p_discord_user_id tex
 language plpgsql security definer set search_path = '' as $$
 declare snapshot jsonb; pending boolean;
 begin
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
  snapshot := public.membership_fence(p_account_id,p_discord_user_id,false);
  select exists(select 1 from public.membership_outbox where account_id=p_account_id and receipt_id is null) into pending;
  return jsonb_build_object('snapshot',snapshot,'pending',pending,'verificationPending',exists(select 1 from public.patreon_oauth_states where user_id=p_account_id and expected_generation=(snapshot->>'linkGeneration')::bigint and expires_at>clock_timestamp()));
@@ -263,6 +297,7 @@ end $$;
 create function public.membership_discord_begin(p_account_id uuid,p_token_hash text,p_operation_id uuid,p_return_path text) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 begin
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
  perform public.membership_fence(p_account_id,null,false);
  delete from public.membership_recovery_intents where account_id=p_account_id and provider='discord' and acknowledged;
  if exists(select 1 from public.membership_recovery_intents where account_id=p_account_id and provider='discord') then raise exception 'Resolve previous operation'; end if;
@@ -275,8 +310,9 @@ create function public.membership_discord_confirm(p_account_id uuid,p_token_hash
 language plpgsql security definer set search_path = '' as $$
 declare r public.discord_link_requests;
 begin
- perform pg_advisory_xact_lock(702,1); -- serialize outbox sequence with commit order
- perform pg_advisory_xact_lock(hashtextextended(p_account_id::text,702));
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
+ perform public.membership_lock(); -- serialize outbox sequence with commit order
+ if not pg_try_advisory_xact_lock(hashtextextended(p_account_id::text,702)) then raise sqlstate '55P03' using message='membership_retry'; end if;
  select * into r from public.discord_link_requests where token_hash=p_token_hash for update;
  if not found or r.account_id<>p_account_id or p_discord_user_id is null
   or (r.confirmed_discord_id is not null and r.confirmed_discord_id<>p_discord_user_id) then raise exception 'Discord linking conflict'; end if;
@@ -302,6 +338,7 @@ begin
 end $$;
 create function public.membership_auth_deleted() returns trigger language plpgsql security definer set search_path = '' as $$
 begin
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
  perform public.membership_fence(old.id,null,true);
  return old;
 end $$;
@@ -317,6 +354,7 @@ grant execute on function public.membership_fence(uuid,text,boolean),public.memb
 create function public.membership_discord_check(p_account_id uuid,p_token_hash text) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 begin
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
  if not exists(select 1 from public.discord_link_requests where token_hash=p_token_hash and account_id=p_account_id and expires_at>clock_timestamp()) then raise exception 'Discord initiation mismatch'; end if;
  return jsonb_build_object('valid',true);
 end $$;
@@ -330,6 +368,7 @@ revoke all on function public.membership_notify(uuid,boolean),public.membership_
 create function public.membership_completion_intent() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
  if new.kind='complete' then
   delete from public.membership_recovery_intents where account_id=new.user_id and provider='patreon' and acknowledged;
   if exists(select 1 from public.membership_recovery_intents where account_id=new.user_id and provider='patreon') then raise exception 'Resolve previous operation'; end if;
@@ -346,8 +385,9 @@ create function public.membership_discord_callback(p_account_id uuid,p_token_has
 language plpgsql security definer set search_path = '' as $$
 declare r public.discord_link_requests; h public.membership_heads;
 begin
- perform pg_advisory_xact_lock(702,1);
- perform pg_advisory_xact_lock(hashtextextended(p_account_id::text,702));
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
+ perform public.membership_lock();
+ if not pg_try_advisory_xact_lock(hashtextextended(p_account_id::text,702)) then raise sqlstate '55P03' using message='membership_retry'; end if;
  select * into r from public.discord_link_requests where token_hash=p_token_hash for update;
  if not found or r.account_id<>p_account_id or not public.membership_authority_live(r.expires_at,clock_timestamp()) or r.confirmed_at is not null
   or p_discord_user_id is null or p_discord_user_id !~ '^[0-9]{17,20}$'
@@ -375,8 +415,9 @@ create function public.membership_recovery(p_account_id uuid,p_discord_user_id t
 language plpgsql security definer set search_path = '' as $$
 declare i public.membership_recovery_intents; r public.discord_link_requests; receipt jsonb; state text; confirmable boolean := false; historical boolean := false; generation bigint;
 begin
- perform pg_advisory_xact_lock(702,1);
- perform pg_advisory_xact_lock(hashtextextended(p_account_id::text,702));
+ perform set_config('lock_timeout',public.membership_lock_budget(),true);
+ perform public.membership_lock();
+ if not pg_try_advisory_xact_lock(hashtextextended(p_account_id::text,702)) then raise sqlstate '55P03' using message='membership_retry'; end if;
  perform public.membership_fence(p_account_id,p_discord_user_id,false);
  select * into i from public.membership_recovery_intents where account_id=p_account_id and provider=p_provider for update;
  if not found or (p_operation_id is not null and i.operation_id<>p_operation_id) then return jsonb_build_object('accountId',p_account_id,'provider',p_provider,'state','none'); end if;
