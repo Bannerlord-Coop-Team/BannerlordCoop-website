@@ -61,7 +61,7 @@ it("Patreon callback GET never invokes completion; POST retries preserve the sam
     mocks.jar.set("__Host-patreon-completion",token); mocks.invoke.mockResolvedValue({ data: null, error: new Error("response lost") });
     await expect(completePatreonAccount()).rejects.toThrow("redirect:/account?patreon=confirm_error"); expect(mocks.jar.get("__Host-patreon-completion")).toBe(token);
     mocks.invoke.mockResolvedValue({ data: { linked: true, returnPath: "/servers" }, error: null });
-    await expect(completePatreonAccount()).rejects.toThrow("redirect:/servers?patreon=linked"); expect(mocks.jar.has("__Host-patreon-completion")).toBe(false);
+    await expect(completePatreonAccount()).rejects.toThrow("redirect:/servers?patreon=linked"); expect(mocks.jar.get("__Host-patreon-completion")).toBe(token);
     expect(mocks.invoke.mock.calls.every(call=>call[1].body.token===token)).toBe(true);
 });
 
@@ -127,7 +127,7 @@ it("exact resolve preserves intent on unknown/foreign outcome; concurrent commit
     for (const response of [{ data: null, error: new Error("lost") }, { data: { ...bound("cancelled"), accountId: "foreign" }, error: null }]) {
         mocks.invoke.mockResolvedValue(response); await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/account?recovery=unavailable"); expect(mocks.jar.get("__Host-account-link")).toBe(token);
     }
-    mocks.invoke.mockResolvedValue({ data: bound("committed"), error: null }); await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/servers?discord=recovered"); expect(mocks.jar.has("__Host-account-link")).toBe(false);
+    mocks.invoke.mockResolvedValue({ data: bound("committed"), error: null }); await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/servers?discord=recovered"); expect(mocks.jar.get("__Host-account-link")).toBe(token);
 });
 it("callback marker unknown response retains recovery and never infers success from Auth; exchange/account failures cannot stamp", async () => {
     mocks.invoke.mockResolvedValue({ data: { valid: true }, error: null });
@@ -149,8 +149,9 @@ it("missing existing server callback configuration fails before consuming PKCE",
 it.each([false, true])("mounted historical Discord retirement/restart after cookie loss, prior acknowledgment=%s", async acknowledged => {
     mocks.jar.set("__Host-account-link", token);
     mocks.invoke.mockResolvedValue({ data: { confirmed: true, returnPath: "/servers" }, error: null });
-    await expect(confirmDiscordAccount()).rejects.toThrow("redirect:/servers"); expect(mocks.jar.size).toBe(0);
-    // Synthetic authoritative Auth unlink after the actual confirmation action removed its cookie.
+    await expect(confirmDiscordAccount()).rejects.toThrow("redirect:/servers"); expect(mocks.jar.get("__Host-account-link")).toBe(token);
+    mocks.jar.clear(); // Simulate browser cookie expiry after successful confirmation.
+    // Synthetic authoritative Auth unlink after cookie loss.
     pageResponses(bound(acknowledged ? "retired" : "historical", false), false);
     let view=await mount();
     try {
@@ -202,6 +203,53 @@ it("a delayed successful retirement response cannot erase a newer browser author
     await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/account?discord=retired");
     expect(mocks.jar.get("__Host-account-link")).toBe(newer);
 });
+it.each([
+    ["discord", "cancelled"], ["discord", "committed"], ["discord", "retired"],
+    ["patreon", "cancelled"], ["patreon", "committed"],
+    ["discord", "confirm"], ["patreon", "confirm"],
+])("delayed %s %s response preserves newer cookie and callback authority", async (provider, state) => {
+    const key = provider === "discord" ? "__Host-account-link" : "__Host-patreon-completion";
+    const newer = "b".repeat(64);
+    mocks.jar.set(key, token);
+    let release!: (value: { data: unknown; error: null }) => void;
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    mocks.invoke.mockImplementationOnce(() => {
+        entered();
+        return new Promise(resolve => { release = resolve; });
+    });
+    const form = new FormData(); form.set("provider", provider); form.set("operationId", operationId);
+    const oldResponse = (state === "confirm"
+        ? provider === "discord" ? confirmDiscordAccount() : completePatreonAccount()
+        : resolveAccountLink(form)).catch(error => error as Error);
+    await started; // Old operation has committed; its response is still deferred.
+    if (provider === "discord") {
+        mocks.invoke.mockResolvedValue({ data: { accountId: a, token: newer }, error: null });
+        await expect(linkDiscordAccount(new FormData())).rejects.toThrow("redirect:https://discord.com/oauth2/authorize");
+    } else {
+        const response = await patreonCallback(new NextRequest(`https://website.example/account/patreon/callback?token=${newer}`));
+        expect(response.cookies.get(key)?.value).toBe(newer);
+        mocks.jar.set(key, response.cookies.get(key)!.value); // Deliver tab B's Set-Cookie.
+    }
+    expect(mocks.jar.get(key)).toBe(newer);
+    release({ data: state === "confirm" ? { confirmed: true, linked: true, returnPath: "/servers" } : { ...bound(state, false), provider }, error: null });
+    const expected = state === "confirm" ? provider === "discord" ? "/servers" : "/servers?patreon=linked"
+        : state === "committed" ? `/servers?${provider}=recovered` : `/account?${provider}=${state}`;
+    expect((await oldResponse as Error).message).toBe(`redirect:${expected}`);
+    expect(mocks.jar.get(key)).toBe(newer);
+    if (provider === "discord") {
+        mocks.invoke.mockResolvedValue({ data: { valid: true }, error: null });
+        mocks.user.mockResolvedValue({ data: { user: { id: a, identities: [{ provider: "discord", identity_data: { provider_id: "123456789012345678" } }] } } });
+        const response = await discordCallback(new NextRequest("https://website.example/account/discord/callback?code=new-code", { headers: { cookie: `${key}=${mocks.jar.get(key)}` } }));
+        expect(response.headers.get("location")).toContain("discord=confirm");
+        expect(mocks.invoke).toHaveBeenLastCalledWith("website-account", expect.objectContaining({ body: { operation: "discord-check", token: newer } }));
+    } else {
+        mocks.invoke.mockResolvedValue({ data: { linked: true, returnPath: "/servers" }, error: null });
+        await expect(completePatreonAccount()).rejects.toThrow("redirect:/servers?patreon=linked");
+        expect(mocks.invoke).toHaveBeenLastCalledWith("patreon-complete", expect.objectContaining({ body: { token: newer } }));
+    }
+});
+
 it("failed Discord confirmation preserves authority and never redirects as confirmed", async () => {
     mocks.jar.set("__Host-account-link",token); mocks.invoke.mockResolvedValue({data:null,error:new Error("expired inside RPC")});
     await expect(confirmDiscordAccount()).rejects.toThrow("redirect:/account?discord=repair"); expect(mocks.jar.get("__Host-account-link")).toBe(token);
@@ -247,7 +295,8 @@ it.runIf(Boolean(process.env.WEBSITE_MEMBERSHIP_TEST_URL))("real PostgreSQL moun
             current="123456789012345678";
             const callback=await discordCallback(new NextRequest("https://website.example/account/discord/callback?code=synthetic",{headers:{cookie:`__Host-account-link=${authority}`}}));
             expect(callback.headers.get("location")).toContain("discord=confirm");
-            await expect(confirmDiscordAccount()).rejects.toThrow("redirect:/account"); expect(mocks.jar.size).toBe(0);
+            await expect(confirmDiscordAccount()).rejects.toThrow("redirect:/account"); expect(mocks.jar.get("__Host-account-link")).toBe(authority);
+            mocks.jar.clear(); // Simulate browser cookie expiry.
             const history=(await db.query("select * from public.discord_link_requests where token_hash=$1",[hash])).rows;
             const op=history[0].operation_id;
             const form=new FormData(); form.set("provider","discord"); form.set("operationId",op);

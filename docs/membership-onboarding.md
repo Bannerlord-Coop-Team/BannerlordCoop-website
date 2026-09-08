@@ -120,8 +120,12 @@ old positive evidence immediately, including cancellation or provider outage.
    plus currently unlinked Auth permits a new explicit begin. A valid different
    current Discord can continue normally without claiming the old attempt is current.
    A new begin replaces the acknowledged slot; old/foreign/unknown operation resolution
-   cannot clear it. Retirement leaves browser cookies untouched so a delayed response
-   cannot erase a newer authority. Successful confirmation/receipt-as-current replay
+   cannot clear it. All recovery responses (including cancellation and committed
+   acknowledgment), Discord confirmation and Patreon completion leave shared browser
+   cookies untouched so delayed responses cannot erase a newer authority. Cookies
+   expire naturally or are replaced by a subsequent initiation/callback; SQL still
+   fences consumed/cancelled authority. Comparing an old request's cookie snapshot
+   does not protect against reordered HTTP responses. Successful confirmation/receipt-as-current replay
    still refuses mismatched Auth. No Auth unlink or automatic account merge is performed.
 6. `/account` shows a server-authenticated current status, never success inferred
    from query parameters. **Refresh status** reads durable state/sync; **Check again**
@@ -330,5 +334,20 @@ must pin the final website080002 and080003 bytes as pending, preserve its own ex
 unknown/external-replay refusals, and test real isolated CLI pre-application, partial
 and terminal release histories. No remote history was read or altered in this fix.
 
+
+### PR102 provider identifier correction — enablement remains blocked
+
+Patreon API v2 `member` resource IDs and relationship references, and private snapshot
+`memberId`, are UUIDs (for example `03ca69c3-ebea-4b9a-8fac-e4a837873254`). User,
+campaign and tier IDs remain strictly numeric. OAuth regression fixtures and the real
+PostgreSQL history suite use that provider-realistic member UUID; public account status
+continues to omit provider identifiers.
+
+The paired ControlPlane head `dbd50dcb2dba567524df8351ba548b8fef8fb31b` still validates
+`memberId` with its numeric `identifier` schema in `src/hosting/membership-contract.ts`.
+It therefore does **not** accept the corrected producer contract yet. A matching UUID
+consumer fix, its regressions, fresh exact-head review and live commissioning are
+required before coordinated enablement. This website correction does not authorize
+merge, deployment or changing the schema → ControlPlane → Edge → website rollout order.
 
 See [combined PR104 locking and retry](membership-locking.md) for immutable applied PR104 history, the complete participating-lock/error contract, independent policies, explicit Auth deletion retry, pending migration rollout and realPG/GoTrue evidence limits.

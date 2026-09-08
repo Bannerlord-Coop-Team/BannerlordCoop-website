@@ -1,4 +1,4 @@
-import { IDENTIFIER, POLICY_VERSION, record, sha256, type Evidence, type Policy } from "./membership.ts";
+import { IDENTIFIER, UUID, POLICY_VERSION, record, sha256, type Evidence, type Policy } from "./membership.ts";
 
 export const PATREON_IDENTITY_URL = (() => {
     const url = new URL("https://www.patreon.com/api/oauth2/v2/identity");
@@ -8,7 +8,11 @@ export const PATREON_IDENTITY_URL = (() => {
     url.searchParams.set("fields[tier]", "amount_cents");
     return url.href;
 })();
-function resource(value: unknown, type: string): value is Record<string, unknown> & { id: string } { return record(value) && value.type === type && typeof value.id === "string" && IDENTIFIER.test(value.id); }
+// Patreon member IDs are UUIDs; user, campaign and tier IDs remain numeric.
+function resourceId(type: string, id: string): boolean {
+    return type === "member" ? UUID.test(id) : ["user", "campaign", "tier"].includes(type) && IDENTIFIER.test(id);
+}
+function resource(value: unknown, type: string): value is Record<string, unknown> & { id: string } { return record(value) && value.type === type && typeof value.id === "string" && resourceId(type, value.id); }
 // Accept only a complete bounded response; never follow provider pagination URLs.
 function completePagination(value: Record<string, unknown>, count: number): void {
     if (value.links !== undefined) {
@@ -46,7 +50,7 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
             if (!Array.isArray(body.included) || body.included.length > 500) throw new Error("Incomplete resources");
             const included = new Map<string, Record<string, unknown>>();
             for (const item of body.included) {
-                if (!record(item) || typeof item.type !== "string" || typeof item.id !== "string" || !IDENTIFIER.test(item.id)) throw new Error("Invalid resource");
+                if (!record(item) || typeof item.type !== "string" || typeof item.id !== "string" || !resourceId(item.type, item.id)) throw new Error("Invalid resource");
                 const key = `${item.type}:${item.id}`; if (included.has(key)) throw new Error("Duplicate resource"); included.set(key, item);
             }
             const memberships = relationship(user, "memberships");

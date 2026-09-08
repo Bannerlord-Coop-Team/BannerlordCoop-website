@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createPatreonHandler, type PatreonConfig } from "./patreon.ts";
+import { parseSnapshot, POLICY_VERSION, type Evidence } from "./membership.ts";
+import { createWebsiteAccountHandler } from "./website-account.ts";
+
+const memberId = "03ca69c3-ebea-4b9a-8fac-e4a837873254";
 
 type State = { operation_id?: string; expected_generation?: number; return_path?: string; evidence?: unknown; token_hash: string; kind: string; user_id: string; expires_at: string; patreon_user_id?: string };
 
@@ -8,6 +12,7 @@ function fixture() {
     const states: State[] = [];
     const accounts: { user_id: string; patreon_user_id: string }[] = [];
     const receipts = new Map<string, { userId: string; result: unknown }>();
+    let completedEvidence: Evidence | undefined;
     let tokenExchanges = 0;
     let failExchange = false;
     const config: PatreonConfig = {
@@ -15,6 +20,7 @@ function fixture() {
         clientId: "client-id", clientSecret: "client-secret",
         redirectUri: "https://project.supabase.co/functions/v1/patreon-callback",
         siteUrl: "https://website.example",
+        policy: { campaignId: "10", qualifyingTierIds: ["20"], currency: "USD", minimumCents: 2000, policyVersion: POLICY_VERSION },
         fetch: async (input, init) => {
             const url = new URL(String(input));
             const headers = new Headers(init?.headers);
@@ -36,6 +42,7 @@ function fixture() {
                     if (receipt) return receipt.userId === body.p_account_id ? Response.json(receipt.result) : new Response("conflict", { status: 409 });
                     const row = states.find(s => s.token_hash === body.p_token_hash && s.kind === "complete" && s.user_id === body.p_account_id && Date.parse(s.expires_at) > Date.now());
                     if (!row || accounts.some(a => a.patreon_user_id === row.patreon_user_id && a.user_id !== row.user_id)) return new Response("conflict", { status: 409 });
+                    completedEvidence = row.evidence as Evidence;
                     accounts.push({ user_id: row.user_id, patreon_user_id: row.patreon_user_id! });
                     const result = { linked: true, operationId: row.operation_id, returnPath: row.return_path };
                     receipts.set(body.p_token_hash, { userId: row.user_id, result }); states.splice(states.indexOf(row),1);
@@ -77,7 +84,11 @@ function fixture() {
             }
             if (url.pathname === "/api/oauth2/v2/identity") {
                 assert.equal(headers.get("Authorization"), "Bearer patreon-secret");
-                return Response.json({ data: { type: "user", id: "123" } });
+                return Response.json({ data: { type: "user", id: "123", relationships: { memberships: { data: [{ type: "member", id: memberId }] } } }, included: [
+                    { type: "member", id: memberId, attributes: { patron_status: "active_patron", last_charge_status: "Paid", last_charge_date: "2026-09-01T12:00:00Z", currently_entitled_amount_cents: 2000, is_free_trial: false, is_gifted: false }, relationships: { user: { data: { type: "user", id: "123" } }, campaign: { data: { type: "campaign", id: "10" } }, currently_entitled_tiers: { data: [{ type: "tier", id: "20" }] } } },
+                    { type: "campaign", id: "10", attributes: { currency: "USD" } },
+                    { type: "tier", id: "20", attributes: { amount_cents: 2000 }, relationships: { campaign: { data: { type: "campaign", id: "10" } } } },
+                ] });
             }
             throw new Error(`Unexpected request: ${url}`);
         },
@@ -109,7 +120,7 @@ function fixture() {
             body: JSON.stringify({ token }),
         }));
     }
-    return { start, callback, begin, returnFromPatreon, finish, states, accounts,
+    return { start, callback, begin, returnFromPatreon, finish, states, accounts, config, evidence: () => completedEvidence,
         exchanges: () => tokenExchanges, failExchange: () => { failExchange = true; } };
 }
 
@@ -140,6 +151,31 @@ test("links only after session confirmation; state is single-use and completion 
     assert.equal(f.accounts.length, 1);
     assert.match((await f.returnFromPatreon(state, cookie)).headers.get("Location")!, /patreon=error/);
     assert.equal(f.exchanges(), 1);
+});
+
+test("member UUID survives OAuth evidence storage, completion, private snapshot and account status", async () => {
+    const f = fixture();
+    const { state, cookie } = await f.begin();
+    const returned = await f.returnFromPatreon(state, cookie);
+    const completion = new URL(returned.headers.get("Location")!).searchParams.get("token")!;
+    assert.equal((await f.finish(completion)).status, 200);
+    assert.equal(f.evidence()?.memberId, memberId);
+    assert.equal(f.evidence()?.verification, "qualifying");
+    const accountId = "aaaaaaaa-1111-4111-8111-111111111111";
+    const snapshot = parseSnapshot({ version: 1, accountId, discordUserId: null, patreonUserId: "123", linkGeneration: "1", revision: "1", linkState: "linked", ...f.evidence() });
+    assert.equal(snapshot.memberId, memberId);
+    const handler = createWebsiteAccountHandler({ ...f.config, policy: f.config.policy ?? null, fetch: async input => {
+        const path = new URL(String(input)).pathname;
+        if (path === "/auth/v1/user") return Response.json({ id: accountId, identities: [] });
+        assert.equal(path, "/rest/v1/rpc/membership_status");
+        return Response.json({ snapshot, pending: false, verificationPending: false });
+    } });
+    const response = await handler(new Request("https://project.supabase.co/functions/v1/website-account", { method: "POST", headers: { Authorization: "Bearer synthetic", "Content-Type": "application/json" }, body: JSON.stringify({ operation: "status" }) }));
+    assert.equal(response.status, 200);
+    const status = await response.json();
+    assert.equal(status.membership.verification, "qualifying");
+    assert.equal(status.membership.linked, true);
+    assert.ok(!JSON.stringify(status).includes(memberId), "private member UUID is not leaked into the public DTO");
 });
 
 test("missing or mismatched browser cookie never exchanges the code", async () => {

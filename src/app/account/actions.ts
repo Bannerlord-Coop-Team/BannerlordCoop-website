@@ -44,10 +44,11 @@ export async function completePatreonAccount() {
         const { supabase, session } = await authenticated();
         const { data, error } = await supabase.functions.invoke("patreon-complete", { headers: { Authorization: `Bearer ${session.access_token}` }, body: { token } });
         if (!error && data?.linked === true && ["/account", "/servers"].includes(data.returnPath)) {
-            destination = `${data.returnPath}?patreon=linked`; jar.delete(PATREON_COOKIE);
+            destination = `${data.returnPath}?patreon=linked`;
         } else destination = await contention(error) ? "/account?patreon=retry" : rateLimited(error) ? "/account?patreon=rate_limited" : "/account?patreon=confirm_error";
     } catch { destination = "/account?patreon=confirm_error"; }
-    // Retain the same token on an unknown outcome; SQL returns its committed receipt.
+    // Never delete shared authority on completion: a delayed response could erase
+    // another tab's newer cookie. Tokens expire and SQL fences consumed authority.
     redirect(destination);
 }
 export async function resolveAccountLink(form: FormData) {
@@ -60,9 +61,9 @@ export async function resolveAccountLink(form: FormData) {
         if (await contention(error)) destination = "/account?recovery=retry";
         const resolved = !error ? parseLinkResolution(data, user.id, provider as LinkProvider, operationId) : null;
         if (resolved) {
-            // Retirement is non-authorizing: do not erase a newer browser authority
-            // started in another tab while this historical response was in flight.
-            if (resolved.state !== "retired") (await cookies()).delete(provider === "discord" ? LINK_COOKIE : PATREON_COOKIE);
+            // Every terminal response can arrive after another tab starts a new operation.
+            // Leave shared cookies untouched; request-snapshot comparisons cannot
+            // protect against reordered Set-Cookie responses.
             destination = resolved.state === "committed" ? `${resolved.returnPath}?${provider}=recovered` : `/account?${provider}=${resolved.state}`;
         }
     } catch { /* Unknown outcomes retain both durable intent and cookie. */ }
@@ -107,7 +108,9 @@ export async function confirmDiscordAccount() {
         const { data, error } = await supabase.functions.invoke("website-account", { headers: { Authorization: `Bearer ${session.access_token}` }, body: { operation: "discord-confirm", token } });
         if (rateLimited(error)) destination = "/account?discord=rate_limited";
         if (await contention(error)) destination = "/account?discord=retry";
-        if (!error && data?.confirmed === true && ["/servers", "/account"].includes(data.returnPath)) { destination = data.returnPath; jar.delete(LINK_COOKIE); }
+        if (!error && data?.confirmed === true && ["/servers", "/account"].includes(data.returnPath)) { destination = data.returnPath; }
+        // As with Patreon completion, let authority expire rather than deleting
+        // a shared cookie that may already belong to a newer operation.
     } catch { /* Account switches never fall back to sign-in or email merging. */ }
     redirect(destination);
 }

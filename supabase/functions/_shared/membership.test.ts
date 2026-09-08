@@ -10,9 +10,10 @@ import { onboardingSummary } from "../../../tests/onboarding-fixtures.ts";
 const accountId = "aaaaaaaa-1111-4111-8111-111111111111";
 const policy: Policy = { campaignId: "10", qualifyingTierIds: ["20"], currency: "USD", minimumCents: 2000, policyVersion: POLICY_VERSION };
 const now = "2026-09-07T12:00:00.000Z";
+const memberId = "03ca69c3-ebea-4b9a-8fac-e4a837873254";
 function identity() {
-    return { data: { type: "user", id: "1", relationships: { memberships: { data: [{ type: "member", id: "2" }] } } }, included: [
-        { type: "member", id: "2", attributes: { patron_status: "active_patron", last_charge_status: "Paid", last_charge_date: "2026-09-01T12:00:00Z", currently_entitled_amount_cents: 2000, is_free_trial: false, is_gifted: false }, relationships: { user: { data: { type: "user", id: "1" } }, campaign: { data: { type: "campaign", id: "10" } }, currently_entitled_tiers: { data: [{ type: "tier", id: "20" }] } } },
+    return { data: { type: "user", id: "1", relationships: { memberships: { data: [{ type: "member", id: memberId }] } } }, included: [
+        { type: "member", id: memberId, attributes: { patron_status: "active_patron", last_charge_status: "Paid", last_charge_date: "2026-09-01T12:00:00Z", currently_entitled_amount_cents: 2000, is_free_trial: false, is_gifted: false }, relationships: { user: { data: { type: "user", id: "1" } }, campaign: { data: { type: "campaign", id: "10" } }, currently_entitled_tiers: { data: [{ type: "tier", id: "20" }] } } },
         { type: "campaign", id: "10", attributes: { currency: "USD" } }, { type: "tier", id: "20", attributes: { amount_cents: 2000 }, relationships: { campaign: { data: { type: "campaign", id: "10" } } } },
     ] };
 }
@@ -26,12 +27,20 @@ test("current entitled upgrade qualifies intentionally, not proof of captured $2
     // A previous lower payment followed by an upgrade can produce this exact provider
     // state. No last-charge amount is claimed or manufactured by the adapter.
     const result = await verifyPatreonMembership(body, policy, now);
+    assert.equal(result.evidence.memberId, memberId);
     assert.equal(result.evidence.verification, "qualifying"); assert.equal(result.evidence.paidThroughAt, null);
     assert.equal(validUntil(result.evidence), "2026-09-08T12:00:00.000Z"); assert.match(result.evidence.evidenceSha256!, /^[a-f0-9]{64}$/u);
     assert.equal((await verifyPatreonMembership(body, null, now)).evidence.verification, "unverified");
 });
 test("wrong campaign/tier, pending, declined, former, missing, future and incomplete provider data fail closed", async () => {
     const cases: [string, (body: ReturnType<typeof identity>) => void, string][] = [
+        ["numeric member", b => { b.included[0].id = "2"; b.data.relationships.memberships.data[0].id = "2"; }, "review_required"],
+        ["malformed included member", b => { b.included[0].id = "not-a-uuid"; }, "review_required"],
+        ["malformed member reference", b => { b.data.relationships.memberships.data[0].id = "not-a-uuid"; }, "review_required"],
+        ["wrong member resource type", b => { b.included[0].type = "user"; }, "review_required"],
+        ["wrong member reference type", b => { b.data.relationships.memberships.data[0].type = "tier"; }, "review_required"],
+        ["UUID campaign", b => { b.included[1].id = memberId; }, "review_required"],
+        ["UUID tier", b => { b.included[2].id = memberId; }, "review_required"],
         ["wrong campaign", b => { b.included[0].relationships!.campaign!.data.id = "11"; }, "nonqualifying"],
         ["wrong tier", b => { b.included[0].relationships!.currently_entitled_tiers!.data[0].id = "21"; b.included[2].id = "21"; }, "nonqualifying"],
         ["declined", b => { b.included[0].attributes.last_charge_status = "Declined"; }, "nonqualifying"],
@@ -70,6 +79,10 @@ test("strict CP endpoint authenticates dedicated token and always fences exact a
     for (const bad of [{ ...body, quota: 1 }, { ...body, accountId: accountId.toUpperCase() }, { version: 1, operation: "changes", cursor: null, limit: 51 }, { version: 1, operation: "sql", table: "anything" }]) assert.equal((await request(bad)).status, 400);
     assert.equal(calls.length, 0);
     assert.deepEqual(parseSnapshot(await (await request(body)).json()), snapshot);
+    assert.equal(snapshot.memberId, memberId);
+    for (const badId of ["2", "not-a-uuid", `${memberId}extra`]) assert.throws(() => parseSnapshot({ ...snapshot, memberId: badId }));
+    for (const field of ["patreonUserId", "campaignId"]) assert.throws(() => parseSnapshot({ ...snapshot, [field]: memberId }));
+    assert.throws(() => parseSnapshot({ ...snapshot, tierIds: [memberId] }));
     outage = true; assert.equal((await request(body)).status, 503); assert.equal(calls.filter(c => c.includes("membership_fence")).length, 1);
     outage = false; deleted = true; assert.equal((await (await request(body)).json()).linkState, "account_deleted");
 });

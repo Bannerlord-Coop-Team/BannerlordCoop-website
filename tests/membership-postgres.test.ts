@@ -16,7 +16,7 @@ async function retryContention<T>(run: () => Promise<T>): Promise<T> {
 }
 const a = "aaaaaaaa-1111-4111-8111-111111111111", b = "bbbbbbbb-1111-4111-8111-111111111111";
 const discord = "123456789012345678";
-const evidence = { verification: "qualifying", campaignId: "10", memberId: "2", tierIds: ["20"], verifiedAt: "2026-09-07T12:00:00.000Z", paidThroughAt: null, policyVersion: "patreon-paid-usd20-v1", evidenceSha256: "e".repeat(64) };
+const evidence = { verification: "qualifying", campaignId: "10", memberId: "03ca69c3-ebea-4b9a-8fac-e4a837873254", tierIds: ["20"], verifiedAt: "2026-09-07T12:00:00.000Z", paidThroughAt: null, policyVersion: "patreon-paid-usd20-v1", evidenceSha256: "e".repeat(64) };
 test("membership migration and transactional recovery on real PostgreSQL", { skip: !url }, async t => {
     const target = new URL(url!);
     assert.ok(["127.0.0.1", "localhost"].includes(target.hostname) && target.pathname === "/website_membership_test", "Only the owned local fixture database is allowed");
