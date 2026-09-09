@@ -1,3 +1,4 @@
+import { checkDatabaseContention, DatabaseContention } from "./database-contention.ts";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Buffer } from "node:buffer";
 
@@ -175,6 +176,7 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
         if (request.headers.has("x-patreon-sync-key")) {
             if (!secretEqual(request.headers.get("x-patreon-sync-key") ?? "", options.syncSecret)) return reply(401, "unauthorized");
             let token: string | undefined;
+            let outcome: Response;
             try {
                 const acquired = await options.rpc("acquire", {});
                 if (acquired === null) return reply(200, "already_running");
@@ -198,7 +200,8 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
                         });
                         const snapshot = parsePatreonMembership(result, options.campaignId, options.tierId, job.memberId);
                         await options.rpc("complete", { token, generation: job.generation, ...snapshot });
-                    } catch {
+                    } catch (error) {
+                        if (error instanceof DatabaseContention) throw error;
                         failed = true;
                         // Retry the durable job. Never interpret HTTP errors as lost membership.
                         await options.rpc("failed", { token, memberId: job.memberId, generation: job.generation });
@@ -216,12 +219,16 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
                     const cursor = discoveryCursor(page, options.campaignId, lease.cursor);
                     await options.rpc("discovered", { token, memberIds, cursor, scanGeneration: lease.scanGeneration });
                 }
-                return reply(failed ? 503 : 200, failed ? "sync_incomplete" : "synced");
-            } catch {
-                return reply(503, "sync_unavailable");
+                outcome = reply(failed ? 503 : 200, failed ? "sync_incomplete" : "synced");
+            } catch (error) {
+                outcome = reply(503, error instanceof DatabaseContention ? "sync_retry" : "sync_unavailable");
             } finally {
-                if (token) await options.rpc("release", { token }).catch(() => undefined);
+                if (token) {
+                    try { await options.rpc("release", { token }); }
+                    catch (error) { outcome = reply(503, error instanceof DatabaseContention ? "sync_retry" : "sync_unavailable"); }
+                }
             }
+            return outcome;
         }
         if (!EVENTS.has(request.headers.get("x-patreon-event") ?? "")) return reply(400, "invalid_event");
         const signature = request.headers.get("x-patreon-signature") ?? "";
@@ -239,8 +246,8 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
             // Webhook content is a refresh signal, never role or deletion authority.
             await options.rpc("queue", { memberId: data.id });
             return reply(202, "queued");
-        } catch {
-            return reply(503, "queue_unavailable");
+        } catch (error) {
+            return reply(503, error instanceof DatabaseContention ? "queue_retry" : "queue_unavailable");
         }
     };
 }
@@ -254,9 +261,13 @@ export function createPatreonRoleRpc(options: {
     }
     if (!options.serviceKey || options.serviceKey.length < 20 || options.serviceKey.length > 4096) throw new Error("invalid_service_key");
     const endpoint = new URL("/rest/v1/rpc/patreon_role_sync", origin);
-    return async (operation, input) => json(await (options.fetchImplementation ?? fetch)(endpoint, {
+    return async (operation, input) => {
+        const response = await (options.fetchImplementation ?? fetch)(endpoint, {
         method: "POST", redirect: "error", signal: AbortSignal.timeout(8_000),
         headers: { apikey: options.serviceKey, authorization: `Bearer ${options.serviceKey}`, "content-type": "application/json" },
         body: JSON.stringify({ p_campaign: options.campaignId, p_tier: options.tierId, p_operation: operation, p_input: input }),
-    }));
+        });
+        if (!response.ok) await checkDatabaseContention(response);
+        return json(response);
+    };
 }

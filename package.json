@@ -7,7 +7,8 @@
   },
   "scripts": {
     "dev": "next dev",
-    "test": "tsx --test supabase/functions/_shared/patreon.test.ts src/app/lib/control-plane/backups.test.ts src/app/lib/auth/redirect.test.ts src/app/lib/auth/roles.test.ts src/app/lib/hosting/servers.test.ts src/app/lib/hosting/my-servers.test.ts src/app/lib/hosting/server-names.test.ts src/app/servers/managed-server-backup-input.test.ts src/app/servers/managed-server-backup-recovery.test.ts src/app/components/servers/managed-server-backup-policy.test.ts src/app/lib/console/access.test.ts src/app/lib/console/catalog.test.ts src/app/lib/control-plane/client.test.ts src/app/lib/control-plane/explanations.test.ts src/app/lib/control-plane/presentation.test.ts src/app/components/admin/LocalDateTime.test.ts src/app/components/servers/ServerDirectoryTable.test.tsx src/app/admin/control-plane/skeleton.test.tsx src/app/lib/supabase/discord-users.test.ts src/app/lib/ionos/resources.test.ts src/app/cheats/locale.test.ts nightly-gateway/src/core.test.ts nightly-gateway/src/database.test.ts nightly-gateway/src/pin.test.ts supabase/functions/control-plane-admin/index.test.ts supabase/functions/my-servers/index.test.ts supabase/functions/patreon-roles/index.test.ts supabase/functions/patreon-roles/database.test.ts && node --test services/console-gateway/access.test.mjs nightly-gateway/sync-installer.test.mjs tests/install-linux.test.mjs && npm run test:components",
+    "test": "tsx --test tests/membership-migration-inventory.test.ts supabase/functions/_shared/membership.test.ts supabase/functions/_shared/patreon.test.ts src/app/lib/control-plane/backups.test.ts src/app/lib/auth/redirect.test.ts src/app/lib/auth/roles.test.ts src/app/lib/hosting/servers.test.ts src/app/lib/hosting/my-servers.test.ts src/app/lib/hosting/server-names.test.ts src/app/servers/managed-server-backup-input.test.ts src/app/servers/managed-server-backup-recovery.test.ts src/app/components/servers/managed-server-backup-policy.test.ts src/app/lib/console/access.test.ts src/app/lib/console/catalog.test.ts src/app/lib/control-plane/client.test.ts src/app/lib/control-plane/explanations.test.ts src/app/lib/control-plane/presentation.test.ts src/app/components/admin/LocalDateTime.test.ts src/app/components/servers/ServerDirectoryTable.test.tsx src/app/admin/control-plane/skeleton.test.tsx src/app/lib/supabase/discord-users.test.ts src/app/lib/ionos/resources.test.ts src/app/cheats/locale.test.ts nightly-gateway/src/core.test.ts nightly-gateway/src/database.test.ts nightly-gateway/src/pin.test.ts supabase/functions/control-plane-admin/index.test.ts supabase/functions/my-servers/index.test.ts supabase/functions/my-servers/onboarding.test.ts src/app/lib/hosting/onboarding.test.ts supabase/functions/patreon-roles/index.test.ts supabase/functions/patreon-roles/database.test.ts && node --test services/console-gateway/access.test.mjs nightly-gateway/sync-installer.test.mjs tests/install-linux.test.mjs && npm run test:components",
+    "test:membership:postgres": "tsx --test tests/membership-postgres.test.ts",
     "test:installer-linux": "python3 tests/test_install_linux.py",
     "build": "next build",
     "postbuild": "node scripts/build-cloudflare-output.mjs",
@@ -19,7 +20,8 @@
     "gateway:sync-installer": "node nightly-gateway/sync-installer.mjs",
     "gateway:migrate-d1": "node nightly-gateway/migrate-d1-to-postgres.mjs",
     "gateway:provision-postgres": "node nightly-gateway/provision-postgres.mjs",
-    "test:components": "vitest run"
+    "test:components": "vitest run",
+    "test:membership:locking": "tsx --test tests/membership-role-postgres.test.ts tests/membership-gotrue.test.ts"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "1.20.5",

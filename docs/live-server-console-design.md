@@ -227,3 +227,9 @@ Mounting the Docker socket is security-sensitive even though the agent protocol 
 ## Deferred work
 
 Dynamic `game_servers`, `server_nodes`, and assignment tables are intentionally deferred while the server set and account directory remain small. Move assignments out of Auth metadata before exceeding the bounded user scan or requiring transactional ownership transfer. MFA/recent-auth enforcement, immediate revocation of an already-open console session, persistent audit storage/retention, Docker socket proxy policy, and production deployment monitoring remain deferred.
+
+
+Manual administrator role saves use the separate service-only finite `set_member_role`
+RPC from website080003. Both writers merge only their keys under current Auth row
+locks, never stale unrelated metadata. Refusal is busy/retry, not success. Refresh
+assignments before retrying multi-account edits. See [combined locking and retry](membership-locking.md).

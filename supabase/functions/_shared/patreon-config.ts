@@ -1,3 +1,4 @@
+import { parsePolicy } from "./membership.ts";
 import type { PatreonConfig } from "./patreon.ts";
 
 declare const Deno: { env: { get(name: string): string | undefined } };
@@ -15,5 +16,6 @@ export function patreonConfig(): PatreonConfig {
         clientSecret: required("PATREON_CLIENT_SECRET"),
         redirectUri: required("PATREON_REDIRECT_URI"),
         siteUrl: required("PATREON_SITE_URL"),
+        policy: parsePolicy(Deno.env.get("HOSTING_MEMBERSHIP_POLICY_JSON")),
     };
 }

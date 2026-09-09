@@ -1,5 +1,7 @@
 "use server";
 
+import { isDatabaseContention } from "../../../supabase/functions/_shared/database-contention";
+
 import {
     getLiveConsoleAccessLevel,
     getMemberRole,
@@ -105,8 +107,7 @@ export async function assignLiveConsoleOwner(formData: FormData) {
             }
         }
     } catch (error) {
-        console.error("Live console owner assignment failed", error);
-        actionError = "The server owner could not be updated.";
+        actionError = isDatabaseContention(error) ? "The account is busy. Refresh assignments and retry the same change." : "The server owner could not be updated.";
     }
 
     if (actionError) fail(actionError, serverId);
@@ -139,8 +140,7 @@ export async function clearLiveConsoleOwner(formData: FormData) {
             }
         }
     } catch (error) {
-        console.error("Live console owner removal failed", error);
-        actionError = "The server owner could not be removed.";
+        actionError = isDatabaseContention(error) ? "The account is busy. Refresh assignments and retry the same change." : "The server owner could not be removed.";
     }
 
     if (actionError) fail(actionError, serverId);
@@ -181,8 +181,7 @@ export async function addLiveConsoleOperator(formData: FormData) {
             });
         }
     } catch (error) {
-        console.error("Live console operator assignment failed", error);
-        actionError = "The operator could not be added.";
+        actionError = isDatabaseContention(error) ? "The account is busy. Refresh assignments and retry the same change." : "The operator could not be added.";
     }
 
     if (actionError) fail(actionError, serverId);
@@ -214,8 +213,7 @@ export async function removeLiveConsoleOperator(formData: FormData) {
             });
         }
     } catch (error) {
-        console.error("Live console operator removal failed", error);
-        actionError = "The operator could not be removed.";
+        actionError = isDatabaseContention(error) ? "The account is busy. Refresh assignments and retry the same change." : "The operator could not be removed.";
     }
 
     if (actionError) fail(actionError, serverId);
