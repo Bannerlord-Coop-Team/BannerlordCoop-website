@@ -35,6 +35,13 @@ export function hasAdminAccess(user: User) {
     return getMemberRole(user) === "Admin";
 }
 
+// Only use with a freshly verified Auth user; site bootstrap emails confer no CP authority.
+export function hasControlPlaneAdminAccess(user: User) {
+    return user.app_metadata?.role === "Admin"
+        && typeof user.id === "string"
+        && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(user.id);
+}
+
 export function hasHostedServerAccess(user: User) {
     return hasServerDashboardAccess(getMemberRole(user));
 }

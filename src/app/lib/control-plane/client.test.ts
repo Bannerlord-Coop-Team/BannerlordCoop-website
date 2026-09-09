@@ -32,6 +32,7 @@ test("calls the Supabase Edge Function with the current access token", async () 
         assert.equal(request?.headers.get("apikey"), "publishable-key-with-enough-characters");
         assert.equal(request?.headers.get("authorization"), "Bearer access-token-with-enough-characters");
         assert.equal(request?.headers.get("content-type"), "application/json");
+        assert.deepEqual(await request?.json(), { version: 1, requestId: REQUEST_ID, operation: "overview" });
     } finally {
         globalThis.fetch = ORIGINAL_FETCH;
         restoreEnvironment("NEXT_PUBLIC_SUPABASE_URL", ORIGINAL_URL);
