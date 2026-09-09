@@ -283,6 +283,15 @@
       "websiteSha256": "6f1a8a4aecf401ee9f9a5928ea1be4083f3e514e1c904e8af62000e5bcc96683",
       "websiteBytes": 16123,
       "releaseClassification": "new website-owned pending release, NOT already-applied external history"
+    },
+    {
+      "version": "20260908030000",
+      "owner": "website",
+      "websitePath": "supabase/migrations/20260908030000_patreon_event_reconciliation.sql",
+      "representationException": false,
+      "websiteSha256": "944e69b53ce8c9637da62529cc6c110115aef7fde04490b16756e10538de6f2f",
+      "websiteBytes": 17103,
+      "releaseClassification": "new website-owned event reconciliation; requires membership onboarding and role locking migrations"
     }
   ],
   "integratedWebsiteMainHead": "f012d9412d98a1e8f50bcc3887c655a813959500",

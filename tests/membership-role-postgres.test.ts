@@ -35,7 +35,7 @@ test("membership role locking: actual PostgreSQL combined call graph", { skip: !
     }
     try {
         await db.query("create schema auth; create table auth.users(id uuid primary key, email_confirmed_at timestamptz, deleted_at timestamptz, banned_until timestamptz, raw_app_meta_data jsonb, updated_at timestamptz)");
-        for(const name of ["20260907212654_create_patreon_links.sql","20260907220000_patreon_website_roles.sql","20260907230000_atomic_live_console_assignments.sql","202609080002_membership_onboarding.sql",...(!baseline?["202609080003_membership_role_locking.sql"]:[])]) await db.query(await readFile(`supabase/migrations/${name}`,"utf8"));
+        for(const name of ["20260907212654_create_patreon_links.sql","20260907220000_patreon_website_roles.sql","20260907230000_atomic_live_console_assignments.sql","202609080002_membership_onboarding.sql",...(!baseline?["202609080003_membership_role_locking.sql","20260908030000_patreon_event_reconciliation.sql"]:[])]) await db.query(await readFile(`supabase/migrations/${name}`,"utf8"));
         // Harness safety deadline produces baseline red instead of hanging a cyclic test.
         for(const c of [db,peer,third]) await c.query("set statement_timeout='2s'; set lock_timeout='1700ms'");
         for(const operation of ["unlink","complete","replacement","worker","delete"] as const) await t.test(`${operation} refuses held Auth tuple, preserves all effects, explicit retry`,async()=>{

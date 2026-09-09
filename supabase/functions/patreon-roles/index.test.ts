@@ -180,7 +180,7 @@ test("discovery is paginated through a validated cursor and never follows arbitr
             assert.deepEqual(calls.map((call) => call.operation), ["release"]);
         } else {
             assert.equal(response.status, 200);
-            assert.deepEqual(calls[0], { operation: "discovered", input: { token, memberIds: [memberId], cursor: "page-two", scanGeneration: 1 } });
+            assert.deepEqual(calls[0], { operation: "discovered", input: { token, memberIds: [memberId], members: [{ memberId, userId: "123" }], cursor: "page-two", scanGeneration: 1 } });
         }
     }
 });
@@ -206,6 +206,7 @@ test("discovery consumes V2 metadata cursors and sends the saved cursor on the n
         const { options, calls } = setup(async (input) => {
             const url = new URL(String(input));
             assert.equal(url.pathname, `/api/oauth2/v2/campaigns/${campaignId}/members`);
+            assert.equal(url.searchParams.get("include"), "campaign,user");
             assert.equal(url.searchParams.get("page[cursor]"), "page-one");
             return Response.json({ data: [membership().data], meta: { pagination: { cursors: { next } } }, links });
         });
@@ -213,7 +214,20 @@ test("discovery consumes V2 metadata cursors and sends the saved cursor on the n
         options.rpc = async (operation, input) => operation === "acquire"
             ? { token, jobs: [], cursor: "page-one", scanDue: true, scanGeneration: 1 } : rpc(operation, input);
         assert.equal((await createPatreonRoleHandler(options)(sync())).status, 200);
-        assert.deepEqual(calls[0], { operation: "discovered", input: { token, memberIds: [memberId], cursor: next ?? "", scanGeneration: 1 } });
+        assert.deepEqual(calls[0], { operation: "discovered", input: { token, memberIds: [memberId], members: [{ memberId, userId: "123" }], cursor: next ?? "", scanGeneration: 1 } });
+    }
+});
+
+test("discovery rejects duplicate members or missing stable identities before committing a page", async () => {
+    const missingIdentity = structuredClone(membership().data);
+    Reflect.deleteProperty(missingIdentity.relationships, "user");
+    for (const data of [[membership().data, membership().data], [missingIdentity]]) {
+        const { options, calls } = setup(async () => Response.json({ data, meta: { pagination: { cursors: { next: null } } } }));
+        const rpc = options.rpc;
+        options.rpc = async (operation, input) => operation === "acquire"
+            ? { token, jobs: [], cursor: "", scanDue: true, scanGeneration: 1 } : rpc(operation, input);
+        assert.equal((await createPatreonRoleHandler(options)(sync())).status, 503);
+        assert.deepEqual(calls.map(call => call.operation), ["release"]);
     }
 });
 

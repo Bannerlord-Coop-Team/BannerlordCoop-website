@@ -31,6 +31,7 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
         for (const name of ["20260907220000_patreon_website_roles.sql","20260907230000_atomic_live_console_assignments.sql"]) await query(await readFile(`supabase/migrations/${name}`,"utf8"));
         await query(await readFile(migration,"utf8"));
         await query(await readFile("supabase/migrations/202609080003_membership_role_locking.sql","utf8"));
+        await query(await readFile("supabase/migrations/20260908030000_patreon_event_reconciliation.sql","utf8"));
         // Scenarios are independent delivery windows; preserve all receipts while
         // acknowledging prior scenario hints and advancing only fixture A/B clocks.
         t.beforeEach(async () => {
