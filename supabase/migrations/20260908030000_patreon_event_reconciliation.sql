@@ -35,6 +35,8 @@ declare
     v_user_id text;
     v_linked boolean;
 begin
+    perform set_config('lock_timeout',public.membership_lock_budget(),true);
+    perform public.membership_lock();
     if p_campaign is null or p_campaign !~ '^[1-9][0-9]{0,19}$'
         or p_tier is null or p_tier !~ '^[1-9][0-9]{0,19}$'
         or p_input is null or jsonb_typeof(p_input) <> 'object' or octet_length(p_input::text) > 131072
@@ -43,7 +45,7 @@ begin
     end if;
     insert into patreon_roles.sync_state(singleton, campaign_id, tier_id)
         values (true, p_campaign, p_tier) on conflict do nothing;
-    select * into v_state from patreon_roles.sync_state where singleton for update;
+    select * into v_state from patreon_roles.sync_state where singleton for update nowait;
     if v_state.campaign_id <> p_campaign or v_state.tier_id <> p_tier then
         raise exception 'patreon_configuration_mismatch';
     end if;
@@ -176,6 +178,8 @@ begin
                 and u.email_confirmed_at is not null and u.deleted_at is null
                 and (u.banned_until is null or u.banned_until <= now());
     end if;
+    -- Preserve the shared membership lock order before assigning the Auth FK.
+    perform 1 from auth.users where id in (v_old_user, v_new_user) order by id for no key update nowait;
     update patreon_roles.memberships set patreon_user_id = p_input ->> 'userId',
         eligible = v_eligible, website_user_id = v_new_user, observed_at = now(),
         due_at = case when exists(select 1 from public.patreon_accounts
@@ -199,12 +203,14 @@ declare
     v_old_id text;
     v_new_id text;
 begin
+    perform set_config('lock_timeout',public.membership_lock_budget(),true);
+    perform public.membership_lock();
     if TG_OP <> 'INSERT' then v_user := OLD.user_id; v_old_id := OLD.patreon_user_id; end if;
     if TG_OP <> 'DELETE' then v_user := NEW.user_id; v_new_id := NEW.patreon_user_id; end if;
     if TG_OP = 'UPDATE' and OLD.user_id <> NEW.user_id then
         raise exception 'patreon_link_owner_immutable';
     end if;
-    perform 1 from patreon_roles.sync_state where singleton for update;
+    perform 1 from patreon_roles.sync_state where singleton for update nowait;
     if v_old_id is distinct from v_new_id then
         update patreon_roles.memberships set website_user_id = null where website_user_id = v_user;
         perform patreon_roles.project_role(v_user);
@@ -238,7 +244,9 @@ declare
     v_key text;
     v_request bigint;
 begin
-    select * into v_state from patreon_roles.sync_state where singleton for update;
+    perform set_config('lock_timeout',public.membership_lock_budget(),true);
+    perform public.membership_lock();
+    select * into v_state from patreon_roles.sync_state where singleton for update nowait;
     if not found or not v_state.dispatch_enabled
         or v_state.worker_until > now() or v_state.dispatch_until > now()
         or (select count(*) from unnest(v_state.recent_runs) started

@@ -1,3 +1,5 @@
+import { parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingRegion } from "./server-onboarding-contract.ts";
+
 const MAXIMUM_URL_LENGTH = 4_096;
 const MAXIMUM_REQUEST_BYTES = 16 * 1_024;
 const MAXIMUM_LIST_RESPONSE_BYTES = 8 * 1_048_576;
@@ -18,6 +20,9 @@ export type MyServersHandlerOptions = {
 };
 
 type UpstreamRequest =
+    | { operation: "server-onboarding"; input: Record<string, never> }
+    | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion } }
+    | { operation: "request-region"; input: { region: OnboardingRegion } }
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "server-backup-status"; input: { serverId: string } }
@@ -45,7 +50,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
 
     return async (request: Request): Promise<Response> => {
         const origin = request.headers.get("origin");
-        const requestId = readRequestId(request.headers.get("x-request-id"));
+        let requestId = readRequestId(request.headers.get("x-request-id"));
         if (origin !== null && !allowedOrigins.has(origin)) {
             return errorResponse(403, requestId, "origin_forbidden", "The request origin is not allowed.", false);
         }
@@ -74,6 +79,13 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 : request.method === "POST"
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
+            // New onboarding mutations must retain the caller's durable UUID.
+            if (upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region") {
+                if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
+                    throw new Error("A mutation request ID is required");
+                }
+                requestId = requestId.toLowerCase();
+            }
         } catch (error) {
             if (error instanceof MethodNotAllowedError) {
                 return errorResponse(405, requestId, "method_not_allowed", "Only GET and POST are allowed.", false, cors);
@@ -128,6 +140,16 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             if (!isControlPlaneEnvelope(envelope, requestId)) {
                 throw new Error("Invalid control-plane envelope");
             }
+            if (isRecord(envelope) && envelope.ok === true) {
+                if (!upstream.ok) throw new Error("Inconsistent success status");
+                if (upstreamRequest.operation === "server-onboarding") parseOnboardingSummary(envelope.result);
+                if (upstreamRequest.operation === "create-server") {
+                    parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, ...upstreamRequest.input });
+                }
+                if (upstreamRequest.operation === "request-region") {
+                    parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, ...upstreamRequest.input });
+                }
+            } else if (upstream.ok) throw new Error("Inconsistent failure status");
         } catch {
             return errorResponse(
                 502,
@@ -164,6 +186,11 @@ function listRequest(request: Request): UpstreamRequest {
             operation: "my-servers",
             input: readPageInput(url, MAXIMUM_LIMIT),
         };
+    }
+
+    if (resource === "onboarding") {
+        assertQueryParameters(url, ["resource"]);
+        return { operation: "server-onboarding", input: {} };
     }
 
     if (resource === "backups") {
@@ -204,6 +231,12 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
     }
     if (!isRecord(value) || typeof value.action !== "string") {
         throw new Error("Invalid operation");
+    }
+    if (value.action === "create-server" || value.action === "request-region") {
+        const parsed = parseOnboardingMutation(value);
+        return parsed.action === "create-server"
+            ? { operation: parsed.action, input: { displayName: parsed.displayName, region: parsed.region } }
+            : { operation: parsed.action, input: { region: parsed.region } };
     }
     if (typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)) {
         throw new Error("Invalid server ID");
@@ -387,8 +420,9 @@ function isControlPlaneEnvelope(value: unknown, requestId: string) {
     if (!isRecord(value) || value.version !== 1 || value.requestId !== requestId || typeof value.ok !== "boolean") {
         return false;
     }
-    if (value.ok) return Object.hasOwn(value, "result");
-    if (!isRecord(value.error)) return false;
+    if (value.ok) return hasExactKeys(value, ["ok", "requestId", "result", "version"]);
+    if (!hasExactKeys(value, ["error", "ok", "requestId", "version"]) || !isRecord(value.error)
+        || !hasExactKeys(value.error, ["code", "message", "retryable"])) return false;
     return typeof value.error.code === "string"
         && SAFE_ERROR_CODE.test(value.error.code)
         && typeof value.error.message === "string"

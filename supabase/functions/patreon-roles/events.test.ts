@@ -28,7 +28,7 @@ before(async () => {
         returns bigint language sql as $$
             insert into net.requests(url,headers,body,timeout_ms) values(url,headers,body,timeout_milliseconds) returning id;
         $$;`);
-    for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "20260908030000_patreon_event_reconciliation"]) {
+    for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation"]) {
         await db.exec(await readFile(new URL(`../../migrations/${name}.sql`, import.meta.url), "utf8"));
     }
 });
@@ -250,7 +250,9 @@ test("upgrade preserves live grants, pending work and successful periodic deadli
         await call("queue", { memberId: otherMember });
         const before = await upgrade.query("select raw_app_meta_data from auth.users");
         const deadlines = await upgrade.query("select member_id,due_at::text from patreon_roles.memberships order by member_id");
-        await upgrade.exec(await readFile(new URL("../../migrations/20260908030000_patreon_event_reconciliation.sql", import.meta.url), "utf8"));
+        for (const migration of ["202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation"]) {
+                await upgrade.exec(await readFile(new URL(`../../migrations/${migration}.sql`, import.meta.url), "utf8"));
+            }
         assert.deepEqual((await upgrade.query("select raw_app_meta_data from auth.users")).rows, before.rows);
         assert.equal((await upgrade.query("select * from patreon_roles.grants")).rows.length, 1);
         assert.equal((await upgrade.query("select * from patreon_roles.audit where action='granted'")).rows.length, 1);
@@ -304,7 +306,9 @@ for (const scenario of ["linked event", "unlinked event", "active claim", "aband
             assert.equal((await upgrade.query<{ aged: boolean }>(
                 "select observed_at is not null and due_at>observed_at+interval '10 minutes' as aged from patreon_roles.memberships",
             )).rows[0].aged, true);
-            await upgrade.exec(await readFile(new URL("../../migrations/20260908030000_patreon_event_reconciliation.sql", import.meta.url), "utf8"));
+            for (const migration of ["202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation"]) {
+                await upgrade.exec(await readFile(new URL(`../../migrations/${migration}.sql`, import.meta.url), "utf8"));
+            }
             assert.deepEqual((await membershipState()).rows, beforeMember.rows);
             assert.deepEqual((await workerState()).rows, beforeWorker.rows);
             let next: Lease;

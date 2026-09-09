@@ -246,3 +246,18 @@ test("invalid or inconsistent pagination never advances discovery", async () => 
         assert.deepEqual(calls.map((call) => call.operation), ["release"]);
     }
 });
+
+test("lock refusal is sanitized at actual worker complete/release and never marks upstream failure or returns success", async () => {
+    const { DatabaseContention }=await import("../_shared/database-contention.ts");
+    for(const refused of ["acquire","complete","release"]) {
+        const calls:string[]=[];
+        const handler=createPatreonRoleHandler({campaignId,tierId,creatorAccessToken,webhookSecret,syncSecret,
+            fetchImplementation:async()=>Response.json(membership()),
+            rpc:async(op)=>{calls.push(op);if(op===refused)throw new DatabaseContention();if(op==="acquire")return {token,jobs:[{memberId,generation:1}],scanDue:false};return {applied:true};},
+        });
+        const response=await handler(new Request("https://example.test",{method:"POST",headers:{"x-patreon-sync-key":syncSecret}}));
+        assert.equal(response.status,503);assert.deepEqual(await response.json(),{code:"sync_retry"});assert.ok(!calls.includes("failed"));
+    }
+    const rpc=createPatreonRoleRpc({supabaseUrl:"https://project.supabase.co",serviceKey:"synthetic-service-role-only",campaignId,tierId,fetchImplementation:async()=>Response.json({code:"55P03",message:"private"},{status:500})});
+    await assert.rejects(rpc("queue",{memberId}),DatabaseContention);
+});

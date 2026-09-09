@@ -11,7 +11,9 @@ This builds on [Patreon account linking](patreon-account-linking.md). The role
 worker uses `public.patreon_accounts.patreon_user_id`; emails can differ and
 email matches, display names and editable user metadata cannot establish a
 link. Each Patreon identity can belong to only one website account. Existing
-OAuth client credentials and the identity-only linking flow are reused. The
+OAuth client credentials and same-account linking identity are reused. The
+integrated onboarding adapter also requests ephemeral membership evidence under
+its separate CP policy, without creator-token reuse. The
 worker reads campaign memberships with a creator token; individual users'
 OAuth tokens are still discarded.
 
@@ -119,19 +121,22 @@ access tokens and are not sufficient for unattended membership refresh.
    creator access token with `campaigns` and `campaigns.members` access from the
    campaign owner. Member email/address scopes are unnecessary. Use
    `w:campaigns.webhook` only if registering webhooks through the API. Do not
-   register a duplicate client or change ordinary users' identity-only scope.
+   register a duplicate client. The separate onboarding adapter requires its reviewed
+   `identity identity.memberships` scope; this is not creator-token authority.
    Confirm the campaign/tier IDs and real paid, cancelled-but-entitled, expired,
    gifted and trial response shapes in staging.
-2. Review and apply `20260907220000_patreon_website_roles.sql` **after** the existing
-   `20260907212654_create_patreon_links.sql`. The new migration adds private
-   state, the RPC and the link-change trigger; it leaves existing links and
-   manual roles intact and makes no grants at installation. Review shared
-   Supabase migration history and the CLI dry run before applying migrations;
-   do not bulk-push unrelated repository history. Then apply
-   `20260907230000_atomic_live_console_assignments.sql` before deploying the
-   website; it adds the service-only console assignment RPC without changing
-   existing account metadata. Console writes fail closed if this RPC is missing.
-   Then apply `20260908030000_patreon_event_reconciliation.sql`. It leaves dispatch
+2. **Do not replay applied PR104 migrations.** Parent-refreshed history confirms
+   `20260907220000_patreon_website_roles.sql` and
+   `20260907230000_atomic_live_console_assignments.sql` applied. Their exact main
+   `f012d9412d98a1e8f50bcc3887c655a813959500` bytes remain canonical forever.
+   Presence does not prove remote bytes or enablement. Coordinate the upgrade-only
+   25-version/fixed10-exception union through CP's exact release catalog. Pending
+   website080002 then080003 add fail-closed locking and atomic role intent writing.
+   Apply only after separate parent/reviewer authorization; missing RPCs fail closed.
+   Then apply `20260908030000_patreon_event_reconciliation.sql` after both
+   membership migrations. It preserves their shared advisory fence, bounded lock
+   waits and Auth-before-FK locking. The website inventory now contains 26 versions
+   with the same 10 historical representation exceptions. It leaves dispatch
    disabled until explicitly activated and preserves all legacy deadlines, queued
    work and role ownership. The next successful reconciliation adopts the new
    schedule. No applied migration is rewritten.
@@ -241,3 +246,7 @@ References: [Patreon V2 API](https://docs.patreon.com/),
 [Patreon cancellation](https://support.patreon.com/hc/en-us/articles/4407273239693-What-happens-when-I-cancel),
 [Supabase function schedules](https://supabase.com/docs/guides/functions/schedule-functions),
 [Supabase pg_net transaction semantics](https://supabase.com/docs/guides/database/extensions/pg_net).
+
+
+
+See [combined locking and retry](membership-locking.md) for the required lock corrections, finite atomic manual role writer, sanitized worker/action contention and explicit Auth delete retry. Existing role policy remains independent; website roles never establish CP grants or override suspension. Pre-trigger Auth row waits are not universally bounded by100ms. This integration changes no live worker or scheduler settings.
