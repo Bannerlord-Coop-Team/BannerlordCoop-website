@@ -28,7 +28,7 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
         revalidatePath("/servers");
         revalidatePath(`/servers/${input.serverId}`);
         return { ok: true, message: input.visibility === "public"
-            ? "Server is now public. Its game IP and port are visible to everyone."
+            ? "Server is marked public. It appears in the public directory while eligible; its assigned game IP and port can be seen by everyone."
             : "Server is now private and removed from the public directory." };
     } catch (error) {
         const code = error instanceof MyServersApiError ? error.code : "visibility_update_failed";

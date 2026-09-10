@@ -8,6 +8,8 @@
 - Authorized users can copy the game endpoint as `IP:port` (bracketed IPv6).
 - Changing visibility does not change game connection permissions, firewall rules, passwords, or player allowlists.
 - Publishing requires an explicit authorized mutation, not discovery of a running server or the presence of an IP.
+- The paired backend excludes deleted, suspended, and entitlement-inactive servers even when marked public. Invalid/unassigned endpoints remain null/empty, disabling Join without inventing an address.
+- Ownership transfers reset visibility to private. Same-value owner updates may return the existing timestamp; the backend still records the idempotency receipt and rejects stale non-replays.
 - Removing a server from public listing cannot erase addresses that visitors previously copied.
 
 ## Minimal boundaries

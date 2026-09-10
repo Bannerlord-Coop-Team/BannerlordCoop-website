@@ -31,7 +31,8 @@ export function ServerVisibilitySetting({ serverId, visibility, accessRole, expe
         <section className="mt-6 border border-white/10 bg-surface p-5" aria-labelledby="server-visibility-heading">
             <h2 id="server-visibility-heading" className="font-display text-xl font-semibold">Server visibility: {isPublic ? "Public" : "Private"}</h2>
             <p className="mt-2 text-sm text-foreground-muted">
-                Private servers are not listed publicly. Public servers share their name, region, game IP and port with everyone.
+                Private servers are not listed publicly. Eligible public servers share their name, region, game IP and port with everyone.
+                Suspended, deleted, or entitlement-inactive servers are excluded; ownership transfers reset visibility to private.
                 This setting does not block game connections or erase addresses people previously copied.
             </p>
             {accessRole === "owner" ? (
