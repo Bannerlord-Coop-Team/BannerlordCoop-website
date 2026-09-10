@@ -214,7 +214,9 @@ No retention/cleanup policy for durable receipts/tombstones is introduced.
 
 Nothing here provisions credentials, applies SQL, changes Auth/Patreon settings,
 deploys Edge/Cloudflare/CP, pushes or merges GitHub. Membership remains disabled
-without reviewed configuration. No actual campaign or tier ID was invented.
+without reviewed configuration. The production commissioning policy uses the
+already-pinned campaign `16338430` and Standard Server tier `28995946`; provider
+evidence must still independently prove USD and at least 2,000 cents.
 
 Required reviewed runtime configuration:
 
@@ -312,7 +314,7 @@ CAS and exact-UUID Create recovery are unchanged.
 
 ## Shared history: fixed representations, upgrade only
 
-The exact 27-version inventory (17 exact-mirror dispositions and fixed10 exceptions) is pinned in
+The exact 30-version inventory (20 exact-mirror dispositions and fixed10 exceptions) is pinned in
 [`membership-migration-inventory.json`](membership-migration-inventory.json).
 It records canonical LF Git SHA256/byte counts and ownership for every own file,
 companion source HEAD `4160f7bda49c6dd7dab57b912811c793dec90ac3`, and the fixed ten
@@ -338,7 +340,14 @@ missing baseline. A fresh bootstrap is unsupported/unproved by these history mar
 The website's version union does not prove remote applied state. Next backend stage
 must pin the final website080002 and080003 bytes as pending, preserve its own exact catalog and
 unknown/external-replay refusals, and test real isolated CLI pre-application, partial
-and terminal release histories. No remote history was read or altered in this fix.
+and terminal release histories.
+
+The 2026-09-10 reconciliation adds exact already-applied mirrors for Control Plane
+versions `202609100012` and `20260910170000`, plus the authenticated 339-byte
+production statement for `20260910213320_drop_unused_community_servers.sql`
+(SHA-256 `8f20fe1de829d9494cf734d7500066fbf55e9367c3373a4945f128bef5413bf1`).
+These files align source history and previews; production must never replay or
+repair any of the three already-applied rows.
 
 
 ### PR102 provider identifier correction — enablement remains blocked
