@@ -318,7 +318,7 @@ function ViewTabs({ active }: { active: View }) {
 
 function VpsView({ inventory, discordUsers }: { inventory: HostingAdminVpsInventory; discordUsers: DiscordUserSummary[] }) {
     const { controlPlaneHost, hosts } = inventory;
-    const usernames = discordUsernameMap(discordUsers);
+    const ownerLabels = discordOwnerLabelMap(discordUsers);
     const availableServiceNames = Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : [];
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
@@ -338,7 +338,7 @@ function VpsView({ inventory, discordUsers }: { inventory: HostingAdminVpsInvent
             </div>
             <VpsHostInventory
                 hosts={hosts}
-                usernames={Object.fromEntries(usernames)}
+                ownerLabels={Object.fromEntries(ownerLabels)}
                 runnerTargetSourceCommit={runnerTargetSourceCommit}
             />
         </section>
@@ -551,7 +551,9 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
         : serverOptions.find((option) => option.value === selectedServer.serverId);
     const jobOptions: AdminActionOption[] = overview.jobs.items.map((job) => ({ label: `${job.action} · ${job.state} · ${shortId(job.jobId)}`, value: job.jobId, updatedAt: job.updatedAt }));
     const buildOptions = installableBuilds([...overview.stableBuilds.items, ...overview.nightlyBuilds.items]).map((build) => ({ label: `${build.channel} · ${build.version} · ${build.sourceRevision.slice(0, 8)}`, value: build.buildId, releaseChannel: build.channel }));
-    const discordUserOptions: AdminActionOption[] = discordUsers.map((user) => ({ label: user.username, value: user.discordUserId }));
+    const discordUserOptions: AdminActionOption[] = discordUsers.flatMap((user) => user.username
+        ? [{ label: user.username, value: user.discordUserId }]
+        : []);
     const availableVpsOptions: AdminActionOption[] = (Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : []).map((serviceName) => ({ label: serviceName, value: serviceName }));
     const createRegionOptions: AdminActionOption[] = createServerRegionOptions(inventory.hosts);
     const maintenanceOptions: AdminActionOption[] = maintenanceSlotOptions();
@@ -653,7 +655,8 @@ function controlRows(controls: GlobalControls) { return [
 ]; }
 function chunk<T>(items: readonly T[], size: number): T[][] { const rows: T[][] = []; for (let index = 0; index < items.length; index += size) rows.push(items.slice(index, index + size)); return rows; }
 function enumOptions(values: readonly string[]): AdminActionOption[] { return values.map((value) => ({ label: value, value })); }
-function discordUsernameMap(users: readonly DiscordUserSummary[]) { return new Map(users.map((user) => [user.discordUserId, user.username])); }
+function discordUsernameMap(users: readonly DiscordUserSummary[]) { return new Map(users.flatMap((user) => user.username ? [[user.discordUserId, user.username] as const] : [])); }
+function discordOwnerLabelMap(users: readonly DiscordUserSummary[]) { return new Map(users.map((user) => [user.discordUserId, user.username ?? user.email ?? user.discordUserId])); }
 function formatDiscordUsername(username: string | undefined) { return username ? `@${username}` : "Username unavailable"; }
 function first(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
 function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations"].includes(value ?? "") ? value as View : "overview"; }
