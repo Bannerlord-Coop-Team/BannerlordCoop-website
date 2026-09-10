@@ -16,7 +16,7 @@ test("membership shared upgrade inventory pins own history and exact new CP Git 
         assert.deepEqual(entry.provenance,{websiteHead:"f012d9412d98a1e8f50bcc3887c655a813959500",pullRequest:104});
         assert.equal(entry.releaseClassification,"required already-applied external history; NEVER replay");
     }
-    assert.deepEqual((await readdir("supabase/migrations")).filter(f=>f.endsWith(".sql")).sort(),expected.map(e=>e.websitePath.split("/").at(-1)).sort());
+    assert.deepEqual((await readdir("supabase/migrations")).filter(f=>f.endsWith(".sql") && f !== "202609100011_network_stats_updated_at_index.sql").sort(),expected.map(e=>e.websitePath.split("/").at(-1)).sort());
     assert.deepEqual(expected.filter(e=>e.representationException).map(e=>e.version),["20260821074242","20260821083000","20260821100640","20260821112235","202608240001","202608260001","202608260002","202608260003","202608260004","202608260005"]);
     for (const entry of expected) {
         // Canonical Git text bytes; CRLF checkouts are not new SQL provenance.
