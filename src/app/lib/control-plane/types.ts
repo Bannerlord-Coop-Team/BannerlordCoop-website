@@ -37,6 +37,9 @@ export type MyServerSummary = Pick<
     | "updatedAt"
 > & {
     accessRole: "owner" | "manager" | "support" | "admin";
+    // Optional while older control-plane releases omit connection details.
+    connectionIp?: string | null;
+    gamePorts?: number[];
 };
 
 export type MyServerBackupSummary = {

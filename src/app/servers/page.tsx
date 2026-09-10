@@ -14,6 +14,7 @@ import { ServerOnboarding, GamePasswordNotice } from "@/app/components/servers/S
 import type { OnboardingSummary } from "../../../supabase/functions/_shared/server-onboarding-contract";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getAllServers } from "@/app/lib/hosting/servers";
+import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
     CircleAlert,
@@ -141,7 +142,7 @@ export default async function ServersPage() {
                     <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
                     <p>
                         <strong className="font-semibold text-foreground">Infrastructure preview:</strong>{" "}
-                        public directory availability and player counts are placeholder data. Signed-in account assignments under My Servers come from the authenticated control plane when it is available.
+                        public directory availability and player counts are placeholder data. Signed-in account assignments under My Servers come from the authenticated control plane when it is available. Join copies the server’s IP and port when a connection address is available.
                     </p>
                 </div>
 
@@ -228,6 +229,7 @@ function toDirectoryServer(server: MyServerSummary): ManagedServerDirectoryEntry
         status: isRunning ? "Online" : isStopped ? "Offline" : "Unknown",
         connectionType: "Direct",
         joinUrl: `bannerlordcoop://join/${encodeURIComponent(server.serverId)}`,
+        connectionAddress: connectionAddress(server.connectionIp ?? null, server.gamePorts ?? []),
         players: null,
         manageUrl: `/servers/${encodeURIComponent(server.serverId)}`,
     };
