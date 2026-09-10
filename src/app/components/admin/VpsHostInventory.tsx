@@ -24,7 +24,8 @@ type VpsHostInventoryProps = {
     runnerTargetSourceCommit: string | null;
 };
 
-const SUMMARY_GRID = "grid-cols-[minmax(13rem,1.15fr)_minmax(10rem,.85fr)_minmax(16rem,1.4fr)_minmax(13rem,1fr)_minmax(10rem,.8fr)_minmax(13rem,1fr)_3rem]";
+const SUMMARY_GRID = "grid-cols-[12rem_9rem_15rem_12rem_8rem_12rem_3rem]";
+const SLOT_GRID = "grid-cols-[10rem_20rem_11rem_13rem_8rem]";
 
 export function VpsHostInventory({
     hosts,
@@ -39,39 +40,40 @@ export function VpsHostInventory({
     }
 
     return (
-        <div role="table" aria-label="VPS host inventory" className="mt-6 overflow-x-auto border border-white/10 bg-surface">
-            <div role="rowgroup">
-                <div role="row" className={`grid min-w-300 ${SUMMARY_GRID} gap-x-4 border-b border-l-2 border-white/10 border-l-transparent px-4 py-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted`}>
-                    <span role="columnheader">Host</span>
-                    <span role="columnheader">Capacity</span>
-                    <span role="columnheader">Slots</span>
-                    <span role="columnheader">System</span>
-                    <span role="columnheader">Billing</span>
-                    <span role="columnheader">Runner</span>
-                    <span role="columnheader" className="sr-only">Details</span>
+        <div className="mt-6 overflow-x-auto border border-white/10 bg-surface">
+            <div role="table" aria-label="VPS host inventory" className="mx-auto w-max">
+                <div role="rowgroup">
+                    <div role="row" className={`grid ${SUMMARY_GRID} gap-x-4 border-b border-l-2 border-white/10 border-l-transparent px-4 py-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted`}>
+                        <span role="columnheader">Host</span>
+                        <span role="columnheader">Capacity</span>
+                        <span role="columnheader">Slots</span>
+                        <span role="columnheader">System</span>
+                        <span role="columnheader">Billing</span>
+                        <span role="columnheader">Runner</span>
+                        <span role="columnheader" className="sr-only">Details</span>
+                    </div>
                 </div>
-            </div>
-            <div role="presentation" className="min-w-300 divide-y divide-white/10">
-                {hosts.map((host, index) => {
-                    const expanded = expandedHost === host.name;
-                    const panelId = `${idPrefix}-host-${index}`;
-                    const pressure = diskPressureLevel(host.resources);
-                    return (
-                        <section role="rowgroup"
-                            key={host.name}
-                            className={pressure?.level === "critical"
-                                ? "border-l-2 border-crimson"
-                                : pressure?.level === "warning"
-                                    ? "border-l-2 border-amber-400"
-                                    : "border-l-2 border-transparent"}
-                        >
-                            <div role="row" className={`grid ${SUMMARY_GRID} items-center gap-x-4 px-4 py-3 hover:bg-white/[0.025]`}>
-                                <div role="cell"><HostIdentity host={host} /></div>
-                                <div role="cell"><CapacitySummary host={host} /></div>
-                                <div role="cell"><SlotSummary host={host} /></div>
-                                <div role="cell"><SystemSummary resources={host.resources} /></div>
-                                <div role="cell"><p className="text-xs font-semibold text-foreground">{formatVpsCost(host.cost)}</p></div>
-                                <div role="cell"><RunnerOnboardingStatus
+                <div role="presentation" className="divide-y divide-white/10">
+                    {hosts.map((host, index) => {
+                        const expanded = expandedHost === host.name;
+                        const panelId = `${idPrefix}-host-${index}`;
+                        const pressure = diskPressureLevel(host.resources);
+                        return (
+                            <section role="rowgroup"
+                                key={host.name}
+                                className={pressure?.level === "critical"
+                                    ? "border-l-2 border-crimson"
+                                    : pressure?.level === "warning"
+                                        ? "border-l-2 border-amber-400"
+                                        : "border-l-2 border-transparent"}
+                            >
+                                <div role="row" className={`grid ${SUMMARY_GRID} items-center gap-x-4 px-4 py-3 hover:bg-white/[0.025]`}>
+                                    <div role="cell"><HostIdentity host={host} /></div>
+                                    <div role="cell"><CapacitySummary host={host} /></div>
+                                    <div role="cell"><SlotSummary host={host} /></div>
+                                    <div role="cell"><SystemSummary resources={host.resources} /></div>
+                                    <div role="cell"><p className="text-xs font-semibold text-foreground">{formatVpsCost(host.cost)}</p></div>
+                                    <div role="cell"><RunnerOnboardingStatus
                                         compact
                                         serviceName={host.name}
                                         runningServers={host.runningServers}
@@ -79,7 +81,7 @@ export function VpsHostInventory({
                                         onboarding={host.runnerOnboarding}
                                         update={host.runnerUpdate ?? null}
                                     /></div>
-                                <div role="cell" className="justify-self-end"><button
+                                    <div role="cell" className="justify-self-end"><button
                                         type="button"
                                         aria-expanded={expanded}
                                         aria-controls={panelId}
@@ -89,11 +91,12 @@ export function VpsHostInventory({
                                     >
                                         <ChevronDown aria-hidden="true" className={`size-5 transition-transform ${expanded ? "rotate-180" : "-rotate-90"}`} />
                                     </button></div>
-                            </div>
-                            {expanded && <ExpandedHost id={panelId} host={host} usernames={usernames} runnerTargetSourceCommit={runnerTargetSourceCommit} />}
-                        </section>
-                    );
-                })}
+                                </div>
+                                {expanded && <ExpandedHost id={panelId} host={host} usernames={usernames} runnerTargetSourceCommit={runnerTargetSourceCommit} />}
+                            </section>
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );
@@ -149,14 +152,14 @@ function ExpandedHost({ id, host, usernames, runnerTargetSourceCommit }: { id: s
                 <div role="region" aria-label={`Details for ${host.name}`}>
                     {slots.length > 0 ? <div role="table" aria-label={`Occupied slots for ${host.name}`}>
                         <div role="rowgroup">
-                            <div role="row" className="grid grid-cols-[11rem_minmax(18rem,1.5fr)_12rem_14rem_8rem] gap-x-4 border-b border-white/10 px-6 py-2 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-foreground-dim">
-                                <span role="columnheader">Slot / UDP</span><span role="columnheader">Server / player</span><span role="columnheader">CPU</span><span role="columnheader">Memory</span><span role="columnheader">Status</span>
+                            <div role="row" className={`grid ${SLOT_GRID} justify-center gap-x-4 border-b border-white/10 px-6 py-2 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-foreground-dim`}>
+                                <span role="columnheader">Slot / UDP</span><span role="columnheader">Player / Server</span><span role="columnheader">CPU</span><span role="columnheader">Memory</span><span role="columnheader">Status</span>
                             </div>
                         </div>
                         <div role="rowgroup" className="divide-y divide-white/10">
-                            {slots.map((slot) => <div role="row" key={`${slot.slotIndex}:${slot.serverId}`} className="grid grid-cols-[11rem_minmax(18rem,1.5fr)_12rem_14rem_8rem] items-center gap-x-4 px-6 py-2.5 text-xs">
+                            {slots.map((slot) => <div role="row" key={`${slot.slotIndex}:${slot.serverId}`} className={`grid ${SLOT_GRID} items-center justify-center gap-x-4 px-6 py-2.5 text-xs`}>
                                 <div role="cell"><p className="font-label font-semibold uppercase tracking-[0.08em] text-gold">Slot {slot.slotIndex + 1} · UDP {slot.gamePort}</p></div>
-                                <div role="cell" className="min-w-0"><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-semibold text-foreground hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link><p className="truncate font-mono text-[0.62rem] text-foreground-muted" title={formatDiscordOwner(usernames[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}>{formatDiscordOwner(usernames[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}</p></div>
+                                <div role="cell" className="min-w-0"><p className="truncate font-semibold text-foreground" title={formatDiscordOwner(usernames[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}>{formatDiscordOwner(usernames[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
                                 <div role="cell"><p className="text-foreground-muted">{formatCpu(slot.resources)}</p></div>
                                 <div role="cell"><p className="text-foreground-muted">{formatMemory(slot.resources)}</p></div>
                                 <div role="cell"><StateBadge value={slot.operationState} /></div>

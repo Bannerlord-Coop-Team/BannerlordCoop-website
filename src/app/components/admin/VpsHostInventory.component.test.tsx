@@ -41,9 +41,12 @@ describe("compact VPS host inventory", () => {
         expect(firstToggle.getAttribute("aria-expanded")).toBe("true");
         expect(container.textContent).toContain("Slot 1 · UDP 4200");
         expect(container.textContent).toContain("shot_up (owner-1)");
+        expect(container.textContent).toContain("Player / Server");
         expect(container.textContent).toContain("Target target-sourc");
         expect(container.textContent).toContain("Verifying Capabilities");
-        expect(container.querySelector('[role="table"][aria-label="Occupied slots for host-a"]')).not.toBeNull();
+        const slotTable = container.querySelector('[role="table"][aria-label="Occupied slots for host-a"]');
+        expect(slotTable).not.toBeNull();
+        expect(slotTable?.textContent?.indexOf("shot_up (owner-1)")).toBeLessThan(slotTable?.textContent?.indexOf("testserver") ?? 0);
 
         const secondToggle = container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-b"]')!;
         await act(async () => secondToggle.click());
