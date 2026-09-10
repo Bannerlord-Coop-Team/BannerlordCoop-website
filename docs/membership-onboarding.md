@@ -152,7 +152,7 @@ sequenceDiagram
   Web->>SQL: Normalized completion authority (not a link)
   User->>Web: Confirm Patreon completion (POST)
   Web->>SQL: Atomic generation CAS, receipt, evidence, outbox
-  CP->>Edge: Dedicated token: changes / snapshot / ack
+  CP->>Edge: Dedicated token: claim / snapshot / ack
   Edge->>Web: Exact UUID current Auth admin lookup
   Edge->>SQL: Transactional current-binding fence or tombstone
   Edge-->>CP: Closed normalized snapshot, no tokens
@@ -165,8 +165,10 @@ Private endpoint (no browser/CORS authority):
 `POST https://wfvqnijwuyqjibhlcrhz.supabase.co/functions/v1/control-plane-membership-v1`.
 `Authorization: Bearer <64 lowercase hex>` is a **dedicated** synchronization
 credential, not a service-role key. The verifier uses a full fixed-length digest
-comparison. Only strict v1 `snapshot({accountId})`, `changes({cursor,limit<=50})`,
-and `ack({eventId,receiptId})` envelopes exist. Unknown fields/operations fail.
+comparison. The current contract is strict v1 `snapshot({accountId})` plus v2
+`claim({claimId,limit<=50})` and `ack({eventId,receiptId,claimId})`. The legacy v1
+changes/ACK envelopes remain server-only for a bounded rollback. Unknown
+fields/operations fail.
 Every snapshot authoritatively looks up the exact account via Auth admin API;
 404 becomes a tombstone, outage fails closed, identities never fall back to metadata.
 Patreon is a website-owned binding, not a Supabase provider identity.
@@ -180,7 +182,8 @@ website summary. `membership-onboarding.ts` owns strict authenticated status par
 and public summary v2 status/next-action composition.
 
 Website migrations: `202609080002_membership_onboarding.sql` then append-only
-`202609080003_membership_role_locking.sql`, **after** backend
+`202609080003_membership_role_locking.sql`, `20260908030000_patreon_event_reconciliation.sql`,
+then `20260910200000_membership_receipt_claims.sql`, **after** backend
 `202609080001_control_plane_membership_sources.sql`. No applied migration is edited;
 `20260907212654_create_patreon_links.sql` remains byte-identical to merged PR103.
 Four new public-schema tables are RLS enabled and client grants denied:
@@ -197,11 +200,14 @@ Each new explicit verification also advances generation, preventing an older OAu
 completion from overwriting a newer check. Verification-pending state is distinct
 from outbox synchronization-pending state. Binding fences hold short SQL locks and invalidate evidence on observed Discord or
 Patreon changes. Explicit unlink fences even an in-flight initially-unlinked flow.
-A global membership-outbox advisory lock serializes writer commit order so a cursor
-cannot skip a lower uncommitted sequence. Pages are bounded ascending hints, not
-stale grant payloads. Ack binds the first receipt forever; exact replay succeeds,
-changed receipt conflicts. Restart from a null cursor returns remaining pending
-hints. Known binding reconciliation is an Auth check, not a Patreon refresh.
+Outbox delivery is receipt/lease driven: sequence is only a stable scheduling hint,
+and every unacknowledged row remains eligible after its 45-second claim expires,
+including a lower sequence that commits after a higher one was delivered. Claim IDs
+make a lost claim response replay the same bounded page. ACK requires that live claim,
+binds the first receipt forever, and exact replay succeeds while a changed receipt
+conflicts. The old subsystem-wide commit-order advisory lock is a rolling-upgrade
+no-op; account, Auth, Patreon tuple and role-worker singleton fences remain bounded.
+Known binding reconciliation is an Auth check, not a Patreon refresh.
 No retention/cleanup policy for durable receipts/tombstones is introduced.
 
 ## Configuration and rollout blockers
@@ -291,7 +297,7 @@ unlink does not advance an already empty, unlinked head, but real pending author
 pending Patreon authority, invalidates evidence and uses reserved revocation capacity.
 With all 9 hints pending, revocation advances the durable head without rewriting any
 hint or receipt. At least one deliverable unacknowledged hint necessarily survives.
-Every ACK, including retry/out-of-order ACK, takes the global commit-order/account locks
+Every ACK, including retry/out-of-order ACK, takes the account lock
 and atomically ensures a hint for the **newest head** exists after acknowledging the old
 hint. A missing successor is inserted with a strictly newer cursor, within the 9-hint
 bound. If insertion fails, the ACK rolls back. An already acknowledged newest-head hint
@@ -306,7 +312,7 @@ CAS and exact-UUID Create recovery are unchanged.
 
 ## Shared history: fixed representations, upgrade only
 
-The exact 25-version inventory (15 exact-mirror dispositions and fixed10 exceptions) is pinned in
+The exact 27-version inventory (17 exact-mirror dispositions and fixed10 exceptions) is pinned in
 [`membership-migration-inventory.json`](membership-migration-inventory.json).
 It records canonical LF Git SHA256/byte counts and ownership for every own file,
 companion source HEAD `4160f7bda49c6dd7dab57b912811c793dec90ac3`, and the fixed ten

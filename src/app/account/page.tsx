@@ -2,7 +2,8 @@ import { resolveAccountLink, completePatreonAccount, confirmDiscordAccount, link
 import { Footer } from "@/app/components/layout/Footer";
 import { Navbar } from "@/app/components/layout/Navbar";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
-import { parseAccountStatus, type AccountStatus } from "@/app/lib/hosting/membership-onboarding";
+import type { AccountStatus } from "@/app/lib/hosting/membership-onboarding";
+import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
 import { parseLinkRecovery, type LinkRecovery } from "@/app/lib/auth/link-recovery";
 import { LINK_COOKIE, PATREON_COOKIE } from "@/app/lib/auth/account-link";
 import type { Metadata } from "next";
@@ -22,8 +23,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session && session.user.id === user.id) {
-            const result = await supabase.functions.invoke("website-account", { headers: { Authorization: `Bearer ${session.access_token}` }, body: { operation: "status" } });
-            if (!result.error) status = parseAccountStatus(result.data, user.id);
+            status = await getWebsiteAccountStatus(user.id, session.access_token);
             for (const provider of ["discord", "patreon"] as const) {
                 const token = jar.get(provider === "discord" ? LINK_COOKIE : PATREON_COOKIE)?.value;
                 const pending = await supabase.functions.invoke("website-account", { headers: { Authorization: `Bearer ${session.access_token}` }, body: { operation: "recovery-status", provider, token: token && /^[a-f0-9]{64}$/u.test(token) ? token : null } });
@@ -58,8 +58,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             {status && !status.hasDiscord && (recovery.discord?.state === "none" || recovery.discord?.state === "retired") && <form action={linkDiscordAccount}><input type="hidden" name="returnPath" value="/account" /><p>Confirm that you want to connect Discord to this signed-in account.</p><button type="submit" className="mt-3 underline">Confirm and connect Discord</button></form>}
             {(recovery.patreon?.state === "none" || recovery.patreon?.state === "resolved") && <form action={linkPatreonAccount}><input type="hidden" name="returnPath" value="/account" /><button type="submit" className="underline">{status?.membership.linked ? "Check again with Patreon authorization" : "Link Patreon account"}</button></form>}
             {status?.membership.linked && <form action={unlinkPatreonAccount}><p>Unlink removes only future membership allocation evidence, not existing servers or administrative grants.</p><button type="submit" className="mt-3 underline">Confirm unlink Patreon</button></form>}
-            <Link href="/account" className="block underline">Refresh status (no new Patreon authorization)</Link>
-            <Link href="/servers" className="block underline">Continue to Servers / manage existing servers</Link>
+            <Link href="/account" prefetch={false} className="block underline">Refresh status (no new Patreon authorization)</Link>
+            <Link href="/servers" prefetch={false} className="block underline">Continue to Servers / manage existing servers</Link>
         </div>
         <p className="mt-6 text-sm text-foreground-muted">Membership verification requires explicit authorization and lasts at most 24 hours for new allocation. It does not prove a settled payment and does not run unattended. Unknown or expired evidence never starts automatic Stop, deletion or a grace countdown. Adequate administrative grants bypass membership steps.</p>
     </section></main><Footer /></>;

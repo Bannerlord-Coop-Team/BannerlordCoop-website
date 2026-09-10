@@ -19,20 +19,30 @@ export function createControlPlaneMembershipHandler(config: StoreConfig & { sync
         let body: unknown;
         try { body = await boundedJson(new Response(request.body, { headers: request.headers }), 4096); }
         catch { return respond({ error: "invalid_request" }, 400); }
-        if (!record(body) || body.version !== 1) return respond({ error: "invalid_request" }, 400);
+        if (!record(body) || ![1, 2].includes(body.version as number)) return respond({ error: "invalid_request" }, 400);
         try {
-            if (body.operation === "snapshot" && exact(body, ["version", "operation", "accountId"]) && typeof body.accountId === "string" && UUID.test(body.accountId)) {
+            if (body.operation === "snapshot" && body.version === 1 && exact(body, ["version", "operation", "accountId"]) && typeof body.accountId === "string" && UUID.test(body.accountId)) {
                 const binding = await store.binding(body.accountId);
                 return respond(parseSnapshot(await store.rpc("membership_fence", { p_account_id: body.accountId, p_discord_user_id: binding.discordUserId, p_deleted: binding.deleted })));
             }
-            if (body.operation === "changes" && exact(body, ["version", "operation", "cursor", "limit"]) && (body.cursor === null || (typeof body.cursor === "string" && DECIMAL.test(body.cursor))) && Number.isInteger(body.limit) && (body.limit as number) >= 1 && (body.limit as number) <= 50) {
+            if (body.operation === "changes" && body.version === 1 && exact(body, ["version", "operation", "cursor", "limit"]) && (body.cursor === null || (typeof body.cursor === "string" && DECIMAL.test(body.cursor))) && Number.isInteger(body.limit) && (body.limit as number) >= 1 && (body.limit as number) <= 50) {
                 const value = await store.rpc("membership_changes", { p_cursor: body.cursor, p_limit: body.limit });
                 if (!record(value) || !exact(value, ["version", "cursor", "events"]) || value.version !== 1 || (value.cursor !== null && (typeof value.cursor !== "string" || !DECIMAL.test(value.cursor))) || !Array.isArray(value.events) || value.events.length > (body.limit as number) || !value.events.every(e => record(e) && exact(e, ["eventId", "accountId"]) && typeof e.eventId === "string" && UUID.test(e.eventId) && typeof e.accountId === "string" && UUID.test(e.accountId))) throw new Error("Invalid outbox");
                 return respond(value);
             }
-            if (body.operation === "ack" && exact(body, ["version", "operation", "eventId", "receiptId"]) && typeof body.eventId === "string" && UUID.test(body.eventId) && typeof body.receiptId === "string" && UUID.test(body.receiptId)) {
+            if (body.operation === "claim" && body.version === 2 && exact(body, ["version", "operation", "claimId", "limit"]) && typeof body.claimId === "string" && UUID.test(body.claimId) && Number.isInteger(body.limit) && (body.limit as number) >= 1 && (body.limit as number) <= 50) {
+                const value = await store.rpc("membership_claim", { p_claim_id: body.claimId, p_limit: body.limit });
+                if (!record(value) || !exact(value, ["version", "claimId", "leaseExpiresAt", "events"]) || value.version !== 2 || value.claimId !== body.claimId || typeof value.leaseExpiresAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value.leaseExpiresAt) || !Array.isArray(value.events) || value.events.length > (body.limit as number) || !value.events.every(e => record(e) && exact(e, ["eventId", "accountId"]) && typeof e.eventId === "string" && UUID.test(e.eventId) && typeof e.accountId === "string" && UUID.test(e.accountId))) throw new Error("Invalid outbox claim");
+                return respond(value);
+            }
+            if (body.operation === "ack" && body.version === 1 && exact(body, ["version", "operation", "eventId", "receiptId"]) && typeof body.eventId === "string" && UUID.test(body.eventId) && typeof body.receiptId === "string" && UUID.test(body.receiptId)) {
                 const value = await store.rpc("membership_ack", { p_event_id: body.eventId, p_receipt_id: body.receiptId });
                 if (!record(value) || !exact(value, ["version", "acknowledged", "eventId", "receiptId"]) || value.version !== 1 || value.acknowledged !== true || value.eventId !== body.eventId || value.receiptId !== body.receiptId) throw new Error("Invalid acknowledgement");
+                return respond(value);
+            }
+            if (body.operation === "ack" && body.version === 2 && exact(body, ["version", "operation", "eventId", "receiptId", "claimId"]) && typeof body.eventId === "string" && UUID.test(body.eventId) && typeof body.receiptId === "string" && UUID.test(body.receiptId) && typeof body.claimId === "string" && UUID.test(body.claimId)) {
+                const value = await store.rpc("membership_ack_claim", { p_event_id: body.eventId, p_receipt_id: body.receiptId, p_claim_id: body.claimId });
+                if (!record(value) || !exact(value, ["version", "acknowledged", "eventId", "receiptId", "claimId"]) || value.version !== 2 || value.acknowledged !== true || value.eventId !== body.eventId || value.receiptId !== body.receiptId || value.claimId !== body.claimId) throw new Error("Invalid claim acknowledgement");
                 return respond(value);
             }
             return respond({ error: "invalid_request" }, 400);

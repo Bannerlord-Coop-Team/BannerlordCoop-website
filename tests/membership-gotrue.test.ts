@@ -34,7 +34,7 @@ test("GoTrue v2.177.0 actual admin deletion refuses atomically and explicit same
         for(let i=0;i<200;i++) { if(auth.exitCode!==null)assert.fail("Pinned Auth exited before health (no sensitive log retained)");try {if((await fetch(origin+"/health")).ok)break;}catch{}if(i===199)assert.fail("Auth health timeout");await new Promise(r=>setTimeout(r,50)); }
         const health=await (await fetch(origin+"/health")).json();assert.match(health.version,/2\.177\.0/);console.log("PINNED_GOTRUE_HEALTH",health.version);
         // Auth owns its actual migrations/schema; add the exact combined website SQL.
-        for(const name of ["20260907212654_create_patreon_links.sql","20260907220000_patreon_website_roles.sql","20260907230000_atomic_live_console_assignments.sql","202609080002_membership_onboarding.sql","202609080003_membership_role_locking.sql"]) await db.query(await readFile(`supabase/migrations/${name}`,"utf8"));
+        for(const name of ["20260907212654_create_patreon_links.sql","20260907220000_patreon_website_roles.sql","20260907230000_atomic_live_console_assignments.sql","202609080002_membership_onboarding.sql","202609080003_membership_role_locking.sql","20260908030000_patreon_event_reconciliation.sql","20260910200000_membership_receipt_claims.sql"]) await db.query(await readFile(`supabase/migrations/${name}`,"utf8"));
         assert.equal((await fetch(origin+"/admin/users")).status,401,"JWT verification is not bypassed");
         const tables=["auth.users","auth.identities","auth.sessions","auth.refresh_tokens","public.patreon_accounts","public.membership_heads","public.membership_outbox","public.membership_completion_receipts","patreon_roles.memberships","patreon_roles.grants","patreon_roles.sync_state","patreon_roles.audit"];
         async function snapshot() {const result:Record<string,unknown>={};for(const table of tables)result[table]=(await db.query(`select to_jsonb(t) r from ${table} t order by to_jsonb(t)::text`)).rows;return result;}
@@ -54,7 +54,7 @@ test("GoTrue v2.177.0 actual admin deletion refuses atomically and explicit same
             const receipt=(await db.query("select * from public.membership_completion_receipts where operation_id=$1",[op])).rows;
             assert.equal(receipt.length,1);assert.equal((await db.query("select count(*) from patreon_roles.grants where user_id=$1",[account])).rows[0].count,"1");
             if(contend) {
-                await peer.query("begin;select pg_advisory_xact_lock(702,1)"); const before=await snapshot();
+                await peer.query("begin;select pg_advisory_xact_lock(hashtextextended($1::text,702))",[account]); const before=await snapshot();
                 try {
                     const refused=await request(`/admin/users/${account}`,"DELETE");assert.equal(refused.status,500);
                     const error=await refused.json();assert.equal(error.code,500);

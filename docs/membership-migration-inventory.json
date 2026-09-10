@@ -292,6 +292,18 @@
       "websiteSha256": "944e69b53ce8c9637da62529cc6c110115aef7fde04490b16756e10538de6f2f",
       "websiteBytes": 17103,
       "releaseClassification": "new website-owned event reconciliation; requires membership onboarding and role locking migrations"
+    },
+    {
+      "version": "20260910200000",
+      "owner": "website",
+      "websitePath": "supabase/migrations/20260910200000_membership_receipt_claims.sql",
+      "websiteSha256": "1a6a7145b78555150a67ae75810f52b70ab0a387765d541a83f5b71d1198613f",
+      "websiteBytes": 10908,
+      "cpPath": "supabase/migrations/20260910200000_membership_receipt_claims.sql",
+      "cpSha256": "1a6a7145b78555150a67ae75810f52b70ab0a387765d541a83f5b71d1198613f",
+      "cpBytes": 10908,
+      "representationException": false,
+      "releaseClassification": "website-owned receipt and lease delivery migration; apply before the version-two Control Plane consumer"
     }
   ],
   "integratedWebsiteMainHead": "f012d9412d98a1e8f50bcc3887c655a813959500",

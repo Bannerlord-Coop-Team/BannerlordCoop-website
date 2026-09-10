@@ -1,5 +1,5 @@
 import { MembershipNextStep } from "@/app/components/servers/MembershipNextStep";
-import { composeOnboarding, identityStep, parseAccountStatus, type AccountStatus } from "@/app/lib/hosting/membership-onboarding";
+import { composeOnboarding, identityStep, type AccountStatus } from "@/app/lib/hosting/membership-onboarding";
 import { Navbar } from "@/app/components/layout/Navbar";
 import { AllServersDirectory } from "@/app/components/servers/AllServersDirectory";
 import {
@@ -10,6 +10,7 @@ import { getLiveConsoleAccessLevel } from "@/app/lib/auth/access";
 import { listLiveConsoleServers } from "@/app/lib/console/servers";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { getServerOnboarding, listAllMyServers } from "@/app/lib/hosting/my-servers";
+import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
 import { ServerOnboarding, GamePasswordNotice } from "@/app/components/servers/ServerOnboarding";
 import type { OnboardingSummary } from "../../../supabase/functions/_shared/server-onboarding-contract";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
@@ -72,9 +73,8 @@ export default async function ServersPage() {
     let account: AccountStatus | null = null;
     if (user && accessToken) {
         try {
-            const supabase = await getSupabaseServerClient();
-            const result = await supabase.functions.invoke("website-account", { headers: { Authorization: `Bearer ${accessToken}` }, body: { operation: "status" } });
-            if (!result.error) { account = parseAccountStatus(result.data, user.id); if (!account.hasDiscord && identity === null) identity = "identity_repair"; }
+            account = await getWebsiteAccountStatus(user.id, accessToken);
+            if (!account.hasDiscord && identity === null) identity = "identity_repair";
         } catch { /* Independent CP grants must remain usable during membership outages. */ }
     }
     let onboarding: OnboardingSummary | null = null;

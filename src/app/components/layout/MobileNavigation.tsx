@@ -124,6 +124,7 @@ export function MobileNavigation({
                                     <li key={item.href}>
                                         <Link
                                             href={item.href}
+                                            prefetch={item.href === "/servers" ? false : undefined}
                                             onClick={closeMenu}
                                             className="block border-b border-white/10 py-4 font-display text-3xl font-semibold uppercase text-foreground transition-colors hover:text-gold focus-visible:outline-none"
                                         >

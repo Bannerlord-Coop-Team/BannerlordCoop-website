@@ -86,6 +86,38 @@ test("strict CP endpoint authenticates dedicated token and always fences exact a
     outage = true; assert.equal((await request(body)).status, 503); assert.equal(calls.filter(c => c.includes("membership_fence")).length, 1);
     outage = false; deleted = true; assert.equal((await (await request(body)).json()).linkState, "account_deleted");
 });
+test("CP claim/ack retries typed contention with the same durable identities", async () => {
+    const claimId = "bbbbbbbb-1111-4111-8111-111111111111";
+    const eventId = "cccccccc-1111-4111-8111-111111111111";
+    const receiptId = "dddddddd-1111-4111-8111-111111111111";
+    const bodies: unknown[] = []; const delays: number[] = []; let claimCalls = 0; let ackCalls = 0;
+    const handler = createControlPlaneMembershipHandler({ supabaseUrl: "https://wfvqnijwuyqjibhlcrhz.supabase.co",
+        serviceRoleKey: "synthetic-service-key", syncToken: "a".repeat(64), sleep: async delay => { delays.push(delay); }, random: () => 0,
+        fetch: async (url, init) => {
+            const path = new URL(String(url)).pathname; bodies.push(JSON.parse(String(init?.body)));
+            if (path.endsWith("/membership_claim")) {
+                claimCalls++;
+                return Response.json(claimCalls === 1 ? { version: 2, retry: true } : { version: 2, claimId,
+                    leaseExpiresAt: "2026-09-07T12:01:00.000Z", events: [{ eventId, accountId }] });
+            }
+            assert.ok(path.endsWith("/membership_ack_claim")); ackCalls++;
+            return Response.json(ackCalls === 1 ? { version: 2, retry: true }
+                : { version: 2, acknowledged: true, eventId, receiptId, claimId });
+        } });
+    const request = (body: unknown) => handler(new Request("https://wfvqnijwuyqjibhlcrhz.supabase.co/functions/v1/control-plane-membership-v1",
+        { method: "POST", headers: { Authorization: `Bearer ${"a".repeat(64)}`, "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+    assert.deepEqual(await (await request({ version: 2, operation: "claim", claimId, limit: 50 })).json(),
+        { version: 2, claimId, leaseExpiresAt: "2026-09-07T12:01:00.000Z", events: [{ eventId, accountId }] });
+    assert.deepEqual(await (await request({ version: 2, operation: "ack", eventId, receiptId, claimId })).json(),
+        { version: 2, acknowledged: true, eventId, receiptId, claimId });
+    assert.deepEqual(bodies, [
+        { p_claim_id: claimId, p_limit: 50 }, { p_claim_id: claimId, p_limit: 50 },
+        { p_event_id: eventId, p_receipt_id: receiptId, p_claim_id: claimId },
+        { p_event_id: eventId, p_receipt_id: receiptId, p_claim_id: claimId },
+    ]);
+    assert.deepEqual(delays, [20, 20]);
+    assert.equal((await request({ version: 2, operation: "ack", eventId, receiptId })).status, 400);
+});
 test("website identity first, independent grant bypasses outage/configuration and expiry is exact", () => {
     const allocation = onboardingSummary();
     assert.equal(composeOnboarding(accountId, "needs_discord", null, allocation).status, "needs_discord");

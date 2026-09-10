@@ -1,41 +1,93 @@
-# Combined website membership / PR104 locking and retry
+# Website membership locking, delivery, and retry
 
-## Immutable history and policy boundaries
+## Current concurrency model
 
-Exact main `f012d9412d98a1e8f50bcc3887c655a813959500` is integrated without rewriting approved `04ce498019d21dd9a1d8e627aaf6dec5a4d3b0d7` history. Parent-refreshed production history confirms **07220000 and07230000 already applied**. Their canonical merged Git bytes are immutable required external baseline, never replayed. History presence does not authenticate remote SQL bytes, scheduler/secrets/settings or role-worker enablement.
+`20260910200000_membership_receipt_claims.sql` replaces the subsystem-wide
+commit-order advisory lock with receipt-driven outbox delivery. The retained
+`membership_lock()` function is an intentional no-op during rolling upgrade so
+already-deployed functions remain callable; it must not be restored as a global
+serialization point.
 
-Only undeployed080002 common lock wiring changes. PR104 function corrections and finite atomic `set_member_role` are in new append-only080003. The own union has25 versions,15 exact-mirror dispositions and the fixed10 historical representation exceptions. Exception hashes authenticate representations, not remote SQL or SQL equivalence. CP owns final mirroring/pins and CLI2.116.0 release matrix next. Its runtime schema/catalog marker is unaffected;080003 is a pending website migration. No fresh bootstrap, marker replay, unknown-file or include-all bypass.
+The narrower integrity fences remain:
 
-The website role policy remains independent: configured entitled paid/gifted benefit, no free trials, prior grants retained on upstream errors. CP evidence instead requires its reviewed current USD20 mapping, excludes gifts/trials and may require review; neither proves settled funds. Differing results are not corruption. Website roles/markers never establish Discord identity, CP allocation credit, administrative grants or suspension overrides. Creator, webhook, scheduler, OAuth and CP synchronization credentials remain distinct. Membership stays disabled. This local integration authorizes no worker/service/settings changes or deployment.
+- membership mutations take the account advisory transaction lock;
+- Auth projection and deletion conflicts use bounded row locks;
+- visible Patreon tuples and the role-worker singleton use `NOWAIT` where they
+  can form a lock-order cycle;
+- invisible unique/FK waits retain the function-local lock budget; and
+- claim rows use `FOR UPDATE SKIP LOCKED`, so unrelated accounts and consumers
+  can progress without a PostgreSQL error.
 
-## Participating call graph
+SQLSTATE `55P03` still means a participating mutation could not safely acquire a
+required account, Auth, Patreon, or singleton fence. It rolls back that whole
+statement. Removing the global lock does not permit skipping a projection,
+weakening uniqueness, rewriting history, or treating a refused mutation as
+success.
 
-- Membership RPCs, OAuth admission, recovery and ACK retain global commit-order `(702,1)` and account advisory fences; these now try-lock, never wait or skip effects on refusal. Immutable exact receipt lookup still precedes ordinary admission and reauthorizes the account/current identity.
-- PR104 worker and legacy Patreon AFTER-row trigger also try-global **before** singleton bootstrap/locking. Direct legacy writes already holding a Patreon tuple cannot wait for global while a global-first RPC waits for that tuple.
-- Singleton and Auth projection use NOWAIT. Worker prelocks old/new Auth rows before membership FK assignment, not only during projection. Complete/replacement and unlink prelock visible affected Patreon tuples NOWAIT. Both unique source-account constraints remain intact; no transfer or owner-change shortcut.
-- Each participating function locally sets `lock_timeout` to the minimum of100ms and a nonzero tighter caller setting (0 means unlimited, so100ms). A pure private helper computes the value; the actual local assignment runs in each outer function's secure SET search-path GUC scope. That scope restores the caller value on success/error, including nested triggers. This bounds invisible unique-insert/FK waits that cannot use SELECT NOWAIT.
-- Auth's existing BEFORE ROW DELETE fence stays intact. Auth-row→global contention refuses deletion; no pre-statement trigger or global/service timeout is added. A DELETE waiting on an already-held Auth row **before** the row trigger retains existing executor/request behavior: worker finishes independently and commits, then deletion proceeds.100ms is a per-lock contention budget, **not a whole-request bound**.
+## Receipt/lease outbox delivery
 
-SQLSTATE `55P03` aborts the whole statement/RPC, including admission, projection, link, tombstone, outbox, receipt and lease effects. No catch suppresses required writes. Sequence gaps after rollback are harmless; committed ordering and lower-sequence visibility remain fenced. Durable histories/receipts are never deleted to make retry pass.
+Outbox `sequence` is a stable scheduling hint, not an exclusion cursor. The v2
+private protocol is:
 
-## Supported caller-visible refusal
+1. The Control Plane creates a random `claimId` and requests at most 50 events.
+2. PostgreSQL leases currently unclaimed or expired, unacknowledged rows for 45
+   seconds with `FOR UPDATE SKIP LOCKED`.
+3. Replaying the same claim after response loss returns the same unacknowledged
+   rows and original lease deadline.
+4. The Control Plane applies each authoritative snapshot and commits its local
+   immutable receipt before ACK.
+5. ACK requires the matching live claim, binds the first remote receipt forever,
+   releases the claim, and repairs the newest-head notification atomically.
 
-Only exact DB code55P03 (not messages, deadlock40P01 or arbitrary500s) maps to sanitized HTTP503 `{"error":"membership_retry"}` at website/private Edge seams. Actions retain both cookies and exact account/token/operation UUID. Refresh authenticated status, then explicitly retry the same confirmation/resolution. There is no guaranteed Retry-After, automatic loop, expiry extension or changed UUID on uncertain outcome. A provider callback whose code was consumed may require resolving the retained intent before explicit fresh authorization; retry cannot recreate consumed provider authority.
+A consumer crash therefore delays a claimed row only until lease expiry. A lower
+sequence that commits after a higher sequence was claimed remains unacknowledged
+and will be claimed later; no cursor can hide it. Active claims cannot be stolen
+by the legacy v1 ACK. The v1 changes/ACK functions remain server-only rollback
+compatibility and scan unacknowledged rows without cursor exclusion.
 
-The role worker returns503 `sync_retry`/`queue_retry` for contention, including release refusal. It never marks refused projection successful or misclassifies contention as upstream loss of membership. Retained lease/member and scan generations remain authoritative. Later scheduled invocations may retry durable jobs after existing schedule/lease delays; convergence is not guaranteed under persistent contention.
+Claims are scheduling ownership only. They do not grant membership authority,
+extend OAuth authority, or permit the Control Plane to trust event payloads. The
+Control Plane still fetches the exact current Auth-bound snapshot and preserves
+its own source CAS and immutable receipt.
 
-Admin role/console actions show sanitized busy guidance. `set_member_role(uuid, finite-role)` updates only role and the integration marker under the current Auth row lock, never a stale full metadata object. Console RPC updates only requested assignment keys. Existing deterministic actor/target authorization, bootstrap-admin protection and manual Standard preservation remain. Multi-account console ownership edits remain separate RPCs, not a new cross-account atomicity guarantee: refresh assignments before explicitly retrying.
+## Browser status and duplicate requests
 
-**Auth admin clients need explicit retry.** Locally pinned GoTrue v2.177.0 returns HTTP500 (numeric code500) for fence refusal, not website's closed503. A caller must reread the exact account and retry that same intended deletion only after resolving uncertainty. No automatic GoTrue retry is claimed. Never bypass fences, ignore failure or fabricate a tombstone/ACK. Ordinary pre-trigger waits use existing request/transaction behavior.
+`membership_status` first compares the current Auth/Patreon identities with the
+durable head. A matching account is a read-only fast path: it does not acquire an
+account or global advisory lock and does not emit another hint. Only actual drift
+enters `membership_fence` under the account lock.
 
-## Rollout and evidence limits
+The Account and Servers server routes share an identical in-flight
+`website-account` status request within one server isolate. The key contains the
+account ID and a SHA-256 digest of the access token; neither the token nor a
+settled result is cached. Navigation links to these dynamic routes disable
+prefetch so browser navigation does not manufacture duplicate status traffic.
 
-Coordinate upgrade-only application of pending080001,080002,080003 and matching applications/Edge code through the CP exact catalog, with membership disabled. Preserve required already-applied PR104 bytes. Parent/reviewer must approve final source, history and pins before any deployment/enablement. No source changes here apply SQL remotely or prove production secrets, role-worker operation, Auth settings or provider response shapes.
+## Closed backpressure
 
-`npm test` retains all approved app/components and both pinned PGlite PR104 suites; intentionally removed console helper tests stay removed. `npm run test:membership:postgres` runs existing full histories on combined SQL. `npm run test:membership:locking` requires owned loopback `WEBSITE_MEMBERSHIP_LOCK_TEST_URL`, `WEBSITE_MEMBERSHIP_AUTH_TEST_URL` and digest-pinned `WEBSITE_GOTRUE_BINARY`; absent fixtures explicitly skip, not acceptance proof.
+Normal try-lock refusal is returned inside the private SQL protocol as the exact
+typed value `{ "version": 1|2, "retry": true }`. Edge code retries only this
+typed response or exact PostgREST SQLSTATE `55P03`, with the same operation,
+claim, event, and receipt IDs, a short jitter, three total attempts, and a fixed
+overall deadline. Exhaustion becomes sanitized HTTP 503
+`{ "error": "membership_retry" }`.
 
-Actual PG16.15 barriers cover worker/unlink/complete/replacement/Auth deletion, both orders, direct legacy tuple inversion, simultaneous three-way cycle, invisible unique/FK waits, whole rollback/retry/receipt loss, scan generations and caller budgets0/10/100/1700ms. Actual admin action barriers test console removal/new assignment, role grant/revoke and manual Standard saves. Original outbox commit/ACK/deletion and recovery/expiry tests remain.
+The Control Plane likewise retries only that exact HTTP contract. Other 4xx/5xx,
+malformed/oversized bodies, identity mismatches, redirects, and configuration
+errors fail closed without exposing database or provider details. There is no
+`Retry-After`, stale-success response, new operation ID, or indefinite retry.
 
-Mandatory actual GoTrue v2.177.0 image pin: `supabase/gotrue:v2.177.0@sha256:6a916b47af0386b7e0152ca84f3d45d050bf056e449a75a5460b48742fd67822`. Verified linux/amd64 manifest `0c262721126928680835a4b075d6763ab15de57c578ecbf680136539c21fd536`; fixed executable SHA256 `bde91101eb64db8dbbbd1489ae005bf9f8d54bcd47753d04e811779e30cfcd5a`. Private daemonless fixture verifies all manifest/config/layer digests and confined extraction before nonroot execution, with a nonsuper Auth DB role and actual Auth migrations. Signed synthetic service JWT admin HTTP verifies ordinary success, pre-trigger serialization, full Auth transaction rollback after fence refusal and explicit same-ID retry with tombstone/ACK safety. Unauthenticated admin HTTP is refused.
+## Evidence and rollout boundary
 
-Loopback HTTP Auth fixtures are **not browser TLS, real OAuth, deployed Edge/CP, live billing/provider, deployment, gameplay or UDP evidence**. No TLS/JWT bypass is used to make such claims. PGlite/mocked upstream responses do not substitute for actual PostgreSQL/GoTrue transaction evidence. Final independent reviewer and CP-owned catalog/CLI matrix remain required.
+The ordinary test suite covers Edge validation, stable retry identities, and
+in-flight request coalescing. The owned loopback PostgreSQL suites additionally
+cover late lower-sequence commits, exclusive/replayed/expired claims, status
+fast-path behavior, account/Auth/Patreon/singleton contention, whole-statement
+rollback, and explicit retry. The GoTrue fixture uses the account lock to verify
+actual admin-deletion rollback; the removed global lock is not part of that
+proof.
+
+These source changes do not apply SQL, deploy Edge/Website/Control Plane code,
+enable membership, change secrets, or prove production behavior. Rollout must
+apply the append-only migration before switching the Control Plane consumer to
+v2, while the legacy functions remain available for rollback.
