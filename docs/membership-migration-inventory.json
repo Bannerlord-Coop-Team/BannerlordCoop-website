@@ -294,6 +294,30 @@
       "releaseClassification": "new website-owned event reconciliation; requires membership onboarding and role locking migrations"
     },
     {
+      "version": "202609100012",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202609100012_control_plane_runner_auto_updates.sql",
+      "websiteSha256": "0c574f3af3e6478693fb19a1b5cd73fdfb34ec258d87a588b6e37a6b164fea79",
+      "websiteBytes": 630,
+      "cpPath": "supabase/migrations/202609100012_control_plane_runner_auto_updates.sql",
+      "cpSha256": "0c574f3af3e6478693fb19a1b5cd73fdfb34ec258d87a588b6e37a6b164fea79",
+      "cpBytes": 630,
+      "representationException": false,
+      "releaseClassification": "already-applied control-plane history mirrored into the website migration stream; NEVER replay"
+    },
+    {
+      "version": "20260910170000",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/20260910170000_control_plane_job_failure_admin_principals.sql",
+      "websiteSha256": "c0acc19adf0beaeaf205730447d87222fca746249e2aa4e0cf2058c15a4ac6ac",
+      "websiteBytes": 591,
+      "cpPath": "supabase/migrations/20260910170000_control_plane_job_failure_admin_principals.sql",
+      "cpSha256": "c0acc19adf0beaeaf205730447d87222fca746249e2aa4e0cf2058c15a4ac6ac",
+      "cpBytes": 591,
+      "representationException": false,
+      "releaseClassification": "already-applied control-plane history mirrored into the website migration stream; NEVER replay"
+    },
+    {
       "version": "20260910200000",
       "owner": "website",
       "websitePath": "supabase/migrations/20260910200000_membership_receipt_claims.sql",
@@ -304,6 +328,24 @@
       "cpBytes": 10908,
       "representationException": false,
       "releaseClassification": "website-owned receipt and lease delivery migration; apply before the version-two Control Plane consumer"
+    },
+    {
+      "version": "20260910213320",
+      "owner": "website",
+      "websitePath": "supabase/migrations/20260910213320_drop_unused_community_servers.sql",
+      "websiteSha256": "8f20fe1de829d9494cf734d7500066fbf55e9367c3373a4945f128bef5413bf1",
+      "websiteBytes": 339,
+      "cpPath": "supabase/migrations/20260910213320_drop_unused_community_servers.sql",
+      "cpSha256": "8f20fe1de829d9494cf734d7500066fbf55e9367c3373a4945f128bef5413bf1",
+      "cpBytes": 339,
+      "representationException": false,
+      "releaseClassification": "required already-applied external history; NEVER replay",
+      "provenance": {
+        "projectReference": "wfvqnijwuyqjibhlcrhz",
+        "migrationVersion": "20260910213320",
+        "migrationName": "drop_unused_community_servers",
+        "source": "supabase_migrations.schema_migrations.statements"
+      }
     }
   ],
   "integratedWebsiteMainHead": "f012d9412d98a1e8f50bcc3887c655a813959500",
