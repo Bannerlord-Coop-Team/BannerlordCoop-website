@@ -14,7 +14,7 @@
 
 The control plane owns visibility persistence, authorization, and public projection. The website never fetches an administrative inventory to filter it into public data. Missing visibility is private; missing endpoints disable Join. Public reads use a dedicated read-only endpoint, with a bounded allowlisted response and no caching. Private inventory retains its current authentication boundary.
 
-Owner-facing visibility updates use the authenticated user API and optimistic concurrency. The control plane must enforce the exact mutation permission; UI hiding is only presentation. Administrative permissions must follow the control plane's existing policy rather than granting new authority from a website role.
+Owner-facing visibility updates use the authenticated user API and optimistic concurrency. Only the current owner may change visibility; manager, support, and administrator rows remain read-only in this user API. Private endpoint disclosure follows the paired CP contract: owner/manager summaries receive connection details, while support/admin summaries receive null/empty endpoints. UI hiding is only presentation, not authorization.
 
 Public data is limited to the server identity/name, friendly region, observed game state, and game endpoint. No owner identities, infrastructure identifiers, agent ports, credentials, or invented player counts are published. Public pages must not fall back to sample or private server data on failure.
 
@@ -56,6 +56,12 @@ flowchart LR
     PublicCP --> DB[(Server visibility)]
     PrivateCP --> DB
 ```
+
+## API contract
+
+- Anonymous Edge `GET /functions/v1/public-servers?limit=100&cursor=...` calls only CP `POST /v1/public/control-plane`, operation `public-servers`, input `{cursor, limit}`. The normal version-1 correlated success envelope uses `result: {items, nextCursor}`. Public cursor length is capped at 2048, page size at 100, and game port arrays at 32. This does not alter the existing private API cursor limit.
+- Authenticated Edge `POST /functions/v1/my-servers` accepts action `set-server-visibility` with `serverId`, `visibility`, and `expectedUpdatedAt`, plus the caller's UUID `x-request-id`. It forwards the unchanged bearer to CP `/v1/user/control-plane`, operation `set-server-visibility`. Success is synchronous `{serverId, visibility, updatedAt}` in the normal `result` envelope, not a job. CP must enforce durable idempotency and current ownership.
+- The new public Edge function deliberately has `verify_jwt = false`; `my-servers` retains `verify_jwt = true`. Both reuse the existing `CONTROL_PLANE_ADMIN_URL` origin and `CONTROL_PLANE_WEB_ORIGINS` allowlist. No service-role key or user session is sent to the public endpoint.
 
 ## Verification and rollout
 
