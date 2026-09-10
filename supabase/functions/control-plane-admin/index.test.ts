@@ -62,10 +62,10 @@ test("reauthenticates a Discord Admin and forwards the closed envelope", async (
     assert.match(calls[1]?.body ?? "", new RegExp(REQUEST_ID, "u"));
 });
 
-test("rejects non-admin and non-Discord sessions before the upstream call", async () => {
+test("rejects non-admin sessions before the upstream call", async () => {
     for (const user of [
         { ...ADMIN, app_metadata: { role: "User" } },
-        { ...ADMIN, identities: [{ provider: "google", id: "google", identity_data: {} }] },
+        { ...ADMIN, app_metadata: { role: "Server Manager" }, identities: [] },
     ]) {
         let calls = 0;
         const handler = createHandler(async (input) => {
@@ -74,7 +74,7 @@ test("rejects non-admin and non-Discord sessions before the upstream call", asyn
             return Response.json(user);
         });
         const response = await handler(adminRequest());
-        assert.equal(response.status, user.app_metadata.role === "User" ? 403 : 409);
+        assert.equal(response.status, 403);
         assert.equal(calls, 1);
     }
 });
@@ -121,5 +121,19 @@ function adminRequest(body = JSON.stringify({ version: 1, requestId: REQUEST_ID,
             ...(includeOrigin ? { origin: ORIGIN } : {}),
         },
         body,
+    });
+}
+
+for (const identities of [undefined, [], [{ provider: "google", id: "google", identity_data: {} }]]) {
+    test(`allows an Admin without Discord identity: ${JSON.stringify(identities)}`, async () => {
+        let calls = 0;
+        const handler = createHandler(async (input) => {
+            calls += 1;
+            return String(input).endsWith("/auth/v1/user")
+                ? Response.json({ ...ADMIN, identities })
+                : Response.json({ version: 1, requestId: REQUEST_ID, ok: true, result: {} });
+        });
+        assert.equal((await handler(adminRequest())).status, 200);
+        assert.equal(calls, 2);
     });
 }
