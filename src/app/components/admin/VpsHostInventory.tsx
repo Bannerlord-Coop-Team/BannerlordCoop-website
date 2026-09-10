@@ -20,7 +20,7 @@ type DiskPressure = {
 
 type VpsHostInventoryProps = {
     hosts: HostingAdminVpsHost[];
-    usernames: Record<string, string>;
+    ownerLabels: Record<string, string>;
     runnerTargetSourceCommit: string | null;
 };
 
@@ -29,7 +29,7 @@ const SLOT_GRID = "grid-cols-[10rem_20rem_11rem_13rem_8rem]";
 
 export function VpsHostInventory({
     hosts,
-    usernames,
+    ownerLabels,
     runnerTargetSourceCommit,
 }: VpsHostInventoryProps) {
     const [expandedHost, setExpandedHost] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export function VpsHostInventory({
                                 <div role="row" className={`grid ${SUMMARY_GRID} items-center gap-x-4 px-4 py-3 hover:bg-white/[0.025]`}>
                                     <div role="cell"><HostIdentity host={host} /></div>
                                     <div role="cell"><CapacitySummary host={host} /></div>
-                                    <div role="cell"><SlotSummary host={host} usernames={usernames} /></div>
+                                    <div role="cell"><SlotSummary host={host} ownerLabels={ownerLabels} /></div>
                                     <div role="cell"><SystemSummary resources={host.resources} /></div>
                                     <div role="cell"><p className="text-xs font-semibold text-foreground">{formatVpsCost(host.cost)}</p></div>
                                     <div role="cell"><RunnerOnboardingStatus
@@ -92,7 +92,7 @@ export function VpsHostInventory({
                                         <ChevronDown aria-hidden="true" className={`size-5 transition-transform ${expanded ? "rotate-180" : "-rotate-90"}`} />
                                     </button></div>
                                 </div>
-                                {expanded && <ExpandedHost id={panelId} host={host} usernames={usernames} runnerTargetSourceCommit={runnerTargetSourceCommit} />}
+                                {expanded && <ExpandedHost id={panelId} host={host} ownerLabels={ownerLabels} runnerTargetSourceCommit={runnerTargetSourceCommit} />}
                             </section>
                         );
                     })}
@@ -121,11 +121,11 @@ function CapacitySummary({ host }: { host: HostingAdminVpsHost }) {
     return <p className="text-xs text-foreground-muted"><span className="font-display text-lg text-foreground">{host.totalSlots}</span> slots · <span className="font-semibold text-foreground">{host.runningServers}</span> running · <span className="font-semibold text-foreground">{host.availableServers}</span> free</p>;
 }
 
-function SlotSummary({ host, usernames }: { host: HostingAdminVpsHost; usernames: Record<string, string> }) {
+function SlotSummary({ host, ownerLabels }: { host: HostingAdminVpsHost; ownerLabels: Record<string, string> }) {
     const slots = Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
     return <ul className="space-y-1 text-xs">
         {slots.map((slot) => {
-            const ownerName = usernames[slot.ownerDiscordUserId] ?? slot.ownerDiscordUserId;
+            const ownerName = ownerLabels[slot.ownerDiscordUserId] ?? slot.ownerDiscordUserId;
             const label = `${ownerName} (${slot.displayName})`;
             return <li key={`${slot.slotIndex}:${slot.serverId}`} className="flex min-w-0 items-center gap-2"><span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${slot.operationState === "running" ? "bg-emerald-400" : "bg-white/30"}`} /><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="truncate font-semibold text-foreground hover:text-gold hover:underline" title={label}>{label}</Link></li>;
         })}
@@ -148,7 +148,7 @@ function SystemSummary({ resources }: { resources: HostingAdminHostResources | n
     </dl>;
 }
 
-function ExpandedHost({ id, host, usernames, runnerTargetSourceCommit }: { id: string; host: HostingAdminVpsHost; usernames: Record<string, string>; runnerTargetSourceCommit: string | null }) {
+function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit }: { id: string; host: HostingAdminVpsHost; ownerLabels: Record<string, string>; runnerTargetSourceCommit: string | null }) {
     const slots = Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
     return (
         <div role="row">
@@ -163,7 +163,7 @@ function ExpandedHost({ id, host, usernames, runnerTargetSourceCommit }: { id: s
                         <div role="rowgroup" className="divide-y divide-white/10">
                             {slots.map((slot) => <div role="row" key={`${slot.slotIndex}:${slot.serverId}`} className={`grid ${SLOT_GRID} items-center justify-center gap-x-4 px-6 py-2.5 text-xs`}>
                                 <div role="cell"><p className="font-label font-semibold uppercase tracking-[0.08em] text-gold">Slot {slot.slotIndex + 1} · UDP {slot.gamePort}</p></div>
-                                <div role="cell" className="min-w-0"><p className="truncate font-semibold text-foreground" title={formatDiscordOwner(usernames[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}>{formatDiscordOwner(usernames[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
+                                <div role="cell" className="min-w-0"><p className="truncate font-semibold text-foreground" title={formatDiscordOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}>{formatDiscordOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
                                 <div role="cell"><p className="text-foreground-muted">{formatCpu(slot.resources)}</p></div>
                                 <div role="cell"><p className="text-foreground-muted">{formatMemory(slot.resources)}</p></div>
                                 <div role="cell"><StateBadge value={slot.operationState} /></div>

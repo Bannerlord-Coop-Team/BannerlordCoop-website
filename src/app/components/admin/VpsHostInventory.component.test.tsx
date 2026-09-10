@@ -27,7 +27,7 @@ describe("compact VPS host inventory", () => {
     it("keeps summaries compact and reveals only one host detail panel at a time", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-a", resources(70, 30), 0, true), host("host-b", resources(80, 20), 1)]}
-            usernames={{ "owner-1": "shot_up" }}
+            ownerLabels={{ "owner-1": "shot_up" }}
             runnerTargetSourceCommit="target-source"
         />));
 
@@ -59,7 +59,7 @@ describe("compact VPS host inventory", () => {
     it("surfaces disk warning state in a collapsed row", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-warning", resources(82, 18), 0)]}
-            usernames={{}}
+            ownerLabels={{}}
             runnerTargetSourceCommit="target-source"
         />));
 
@@ -67,6 +67,16 @@ describe("compact VPS host inventory", () => {
         expect(disk).not.toBeNull();
         expect(disk?.textContent).toContain("82% · 18 KiB free");
         expect(container.textContent).not.toContain("UDP 4200");
+    });
+
+    it("uses an email owner label when the directory has no Discord username", async () => {
+        await act(async () => root.render(<VpsHostInventory
+            hosts={[host("host-email", resources(60, 40), 0)]}
+            ownerLabels={{ "owner-1": "owner@example.com" }}
+            runnerTargetSourceCommit="target-source"
+        />));
+
+        expect(container.textContent).toContain("owner@example.com (testserver)");
     });
 });
 

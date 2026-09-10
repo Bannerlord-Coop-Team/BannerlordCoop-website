@@ -3,8 +3,8 @@ import test from "node:test";
 import type { User } from "@supabase/supabase-js";
 import { discordUserSummary, resolveDiscordUserReference, uniqueDiscordUsers } from "./discord-users";
 
-function user(id: string, metadata: Record<string, unknown>): User {
-    return { id, user_metadata: metadata, identities: [] } as unknown as User;
+function user(id: string, metadata: Record<string, unknown>, email?: string): User {
+    return { id, email, user_metadata: metadata, identities: [] } as unknown as User;
 }
 
 test("reads the unique Discord username and provider id from Supabase metadata", () => {
@@ -15,6 +15,17 @@ test("reads the unique Discord username and provider id from Supabase metadata",
     })), {
         discordUserId: "763278507085922325",
         username: "shot_up",
+        email: null,
+    });
+});
+
+test("retains a bounded email for Discord accounts without a username", () => {
+    assert.deepEqual(discordUserSummary(user("auth-1", {
+        provider_id: "763278507085922325",
+    }, "owner@example.com")), {
+        discordUserId: "763278507085922325",
+        username: null,
+        email: "owner@example.com",
     });
 });
 
@@ -25,11 +36,11 @@ test("rejects non-Discord provider ids and deduplicates Discord accounts", () =>
         user("auth-3", { provider_id: "google-subject", full_name: "not_discord" }),
     ]);
 
-    assert.deepEqual(users, [{ discordUserId: "763278507085922325", username: "shot_up" }]);
+    assert.deepEqual(users, [{ discordUserId: "763278507085922325", username: "shot_up", email: null }]);
 });
 
 test("resolves a unique Discord username or a numeric Discord user ID", () => {
-    const users = [{ discordUserId: "763278507085922325", username: "shot_up" }];
+    const users = [{ discordUserId: "763278507085922325", username: "shot_up", email: null }];
 
     assert.equal(resolveDiscordUserReference("@SHOT_UP", users), "763278507085922325");
     assert.equal(resolveDiscordUserReference("763278507085922325", users), "763278507085922325");

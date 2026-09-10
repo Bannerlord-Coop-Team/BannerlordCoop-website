@@ -136,7 +136,7 @@ test("the VPS view presents slot occupants and resources with their owning host"
     assert.match(pageSource, /needsDiscordUsers = view === "vps"/u);
     assert.match(pageSource, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\} \/>/u);
     assert.match(pageSource, /<VpsHostInventory/u);
-    assert.match(inventorySource, /formatDiscordOwner\(usernames\[slot\.ownerDiscordUserId\], slot\.ownerDiscordUserId\)/u);
+    assert.match(inventorySource, /formatDiscordOwner\(ownerLabels\[slot\.ownerDiscordUserId\], slot\.ownerDiscordUserId\)/u);
     assert.match(inventorySource, /view=server&serverId=\$\{encodeURIComponent\(slot\.serverId\)\}/u);
     assert.match(inventorySource, /usedPercent >= 90 \? "critical" : usedPercent >= 80 \? "warning"/u);
 });
