@@ -1,4 +1,7 @@
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
+import { CopyJoinButton } from "@/app/components/servers/CopyJoinButton";
+import { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
+import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
 import { LiveServerConsole } from "@/app/components/servers/LiveServerConsole";
 import { ManagedServerBackups } from "@/app/components/servers/ManagedServerBackups";
@@ -329,6 +332,10 @@ function ManagedServerManagementPage({
                         </div>
                     </div>
 
+                    <CopyJoinButton
+                        address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
+                        disabled={server.observedGameState !== "running"}
+                    />
                     <div className="flex items-center gap-3 rounded-sm border border-gold/25 bg-gold/[0.07] px-4 py-3">
                         <ShieldCheck aria-hidden="true" className="size-5 text-gold" />
                         <div>
@@ -349,6 +356,13 @@ function ManagedServerManagementPage({
                         Start, Stop, and Restart affect only this server&apos;s game container. They never reboot or power off the VPS.
                     </p>
                 </div>
+
+                <ServerVisibilitySetting
+                    serverId={server.serverId}
+                    visibility={server.visibility}
+                    accessRole={server.accessRole}
+                    expectedUpdatedAt={server.updatedAt}
+                />
 
                 <section className="mt-8 grid gap-3 sm:grid-cols-3" aria-label="Server status">
                     <ResourceCard icon={Container} label="Game state" value={formatManagedValue(server.observedGameState)} />

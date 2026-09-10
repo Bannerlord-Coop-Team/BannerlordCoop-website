@@ -1,3 +1,4 @@
+import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
 import { parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingRegion } from "./server-onboarding-contract.ts";
 
 const MAXIMUM_URL_LENGTH = 4_096;
@@ -20,6 +21,7 @@ export type MyServersHandlerOptions = {
 };
 
 type UpstreamRequest =
+    | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
     | { operation: "server-onboarding"; input: Record<string, never> }
     | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion } }
     | { operation: "request-region"; input: { region: OnboardingRegion } }
@@ -80,7 +82,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // New onboarding mutations must retain the caller's durable UUID.
-            if (upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region") {
+            if (upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -143,6 +145,9 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             if (isRecord(envelope) && envelope.ok === true) {
                 if (!upstream.ok) throw new Error("Inconsistent success status");
                 if (upstreamRequest.operation === "server-onboarding") parseOnboardingSummary(envelope.result);
+                if (upstreamRequest.operation === "set-server-visibility") {
+                    parseVisibilityResult(envelope.result, { action: "set-server-visibility", ...upstreamRequest.input });
+                }
                 if (upstreamRequest.operation === "create-server") {
                     parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, ...upstreamRequest.input });
                 }
@@ -231,6 +236,12 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
     }
     if (!isRecord(value) || typeof value.action !== "string") {
         throw new Error("Invalid operation");
+    }
+    if (value.action === "set-server-visibility") {
+        const parsed = parseVisibilityMutation(value);
+        return { operation: "set-server-visibility", input: {
+            serverId: parsed.serverId, visibility: parsed.visibility, expectedUpdatedAt: parsed.expectedUpdatedAt,
+        } };
     }
     if (value.action === "create-server" || value.action === "request-region") {
         const parsed = parseOnboardingMutation(value);
