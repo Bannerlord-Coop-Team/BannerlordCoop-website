@@ -69,5 +69,9 @@ test("accepts empty/unassigned endpoints but rejects malformed or duplicated sum
     assert.deepEqual(parsePublicServerPage({ items: [{ ...server, connectionIp: null, gamePorts: [] }], nextCursor: null }).items[0].gamePorts, []);
     assert.equal(parsePublicServerPage({ items: [{ ...server, connectionIp: "2001:db8::1" }], nextCursor: null }).items.length, 1);
     assert.throws(() => parsePublicServerPage({ items: [server, server], nextCursor: null }));
-    assert.throws(() => parsePublicServerPage({ items: [{ ...server, connectionIp: "999.0.0.1" }], nextCursor: null }));
+    for (const connectionIp of ["999.0.0.1", "https://203.0.113.4", "game.example.com", "fe80::1%eth0"]) {
+        assert.throws(() => parsePublicServerPage({ items: [{ ...server, connectionIp }], nextCursor: null }));
+    }
+    assert.equal(parsePublicServerPage({ items: [{ ...server, gamePorts: Array(32).fill(4200) }], nextCursor: null }).items.length, 1);
+    assert.throws(() => parsePublicServerPage({ items: [{ ...server, gamePorts: Array(33).fill(4200) }], nextCursor: null }));
 });

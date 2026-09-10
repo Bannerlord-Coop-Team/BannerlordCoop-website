@@ -34,7 +34,7 @@ export function isGameIp(value: unknown): value is string {
     try { return new URL(`http://[${value}]/`).hostname.startsWith("["); } catch { return false; }
 }
 export function isGamePorts(value: unknown): value is number[] {
-    return Array.isArray(value) && value.length <= 64
+    return Array.isArray(value) && value.length <= 32
         && value.every(port => Number.isInteger(port) && port >= 1 && port <= 65_535);
 }
 export function parsePublicServerPage(value: unknown): PublicServerPage {
