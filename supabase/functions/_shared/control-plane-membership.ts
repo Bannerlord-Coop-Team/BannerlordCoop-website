@@ -9,7 +9,9 @@ export function createControlPlaneMembershipHandler(config: StoreConfig & { sync
     const respond = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
     return async (request: Request) => {
         const url = new URL(request.url);
-        if (url.pathname !== "/functions/v1/control-plane-membership-v1" || url.search || request.method !== "POST" || request.headers.has("origin")) return respond({ error: "forbidden" }, 403);
+        // The Supabase gateway owns /functions/v1; the deployed Deno runtime
+        // receives the exact function-relative pathname.
+        if (url.pathname !== "/control-plane-membership-v1" || url.search || request.method !== "POST" || request.headers.has("origin")) return respond({ error: "forbidden" }, 403);
         const token = request.headers.get("authorization")?.match(/^Bearer ([a-f0-9]{64})$/u)?.[1];
         if (!token) return respond({ error: "unauthorized" }, 401);
         // Fixed-length digests and a full-length XOR comparison; no early differing-byte exit.
