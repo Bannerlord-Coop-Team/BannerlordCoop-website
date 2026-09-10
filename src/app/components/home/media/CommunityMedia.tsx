@@ -3,37 +3,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { ScrollReveal } from "@/app/components/motion/ScrollReveal";
 import { VideoCarousel } from "@/app/components/home/media/VideoCarousel";
-import type {
-    ChannelVideo,
-    ContentCreator,
-    MediaVideo,
-} from "@/app/components/utils/types/media.types";
-import { getYouTubeCreators, getYouTubeVideos } from "@/app/lib/youtube";
-
-// Add official YouTube video links here.
-const channelVideos: ChannelVideo[] = [
-    { href: "https://www.youtube.com/watch?v=Au-oT5KKj0w" },
-    { href: "https://www.youtube.com/watch?v=mJ7hZ0-BkZs" },
-    { href: "https://www.youtube.com/watch?v=HNiozn0_FZs" },
-    { href: "https://www.youtube.com/watch?v=PNBfJXMTHII" },
-    { href: "https://www.youtube.com/watch?v=6Y9rNAQN8Jg" },
-    { href: "https://www.youtube.com/watch?v=U0F0LIfOBYQ" },
-];
-
-const featuredVideos: MediaVideo[] = [
-    {
-        id: "twitch-2827818732",
-        title: "Bannerlord Coop — L'empire contre-attaque!",
-        description:
-            "Watch CaptainFRACAS play Bannerlord Coop at maximum difficulty, starting at the highlighted moment.",
-        thumbnail:
-            "https://static-cdn.jtvnw.net/cf_vods/d3stzm2eumvgb4/95c2e4eed29530aa15e1_captainfracas_317326941667_1784898206//thumb/thumb0-640x360.jpg",
-        thumbnailAlt: "Bannerlord Coop Twitch VOD by CaptainFRACAS",
-        href: "https://www.twitch.tv/videos/2827818732?t=04h20m50s",
-        category: "CaptainFRACAS on Twitch",
-        duration: "7:06:10",
-    },
-];
+import type { ContentCreator } from "@/app/components/utils/types/media.types";
+import { getYouTubeCreators } from "@/app/lib/youtube";
+import { getHomepageVideos } from "@/app/lib/homepage-videos";
 
 // Add approved content creators here.
 const contentCreators: ContentCreator[] = [
@@ -43,13 +15,12 @@ const contentCreators: ContentCreator[] = [
 ];
 
 export async function CommunityMedia() {
-    const [videos, creators] = await Promise.all([
-        getYouTubeVideos(channelVideos.map((video) => video.href)),
+    const [carouselVideos, creators] = await Promise.all([
+        getHomepageVideos(),
         getYouTubeCreators(
             contentCreators.map((creator) => creator.channelId),
         ),
     ]);
-    const carouselVideos = [...videos, ...featuredVideos];
 
     return (
         <section
