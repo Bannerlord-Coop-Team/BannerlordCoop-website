@@ -32,7 +32,7 @@ describe("compact VPS host inventory", () => {
         />));
 
         expect(container.textContent).toContain("host-a");
-        expect(container.textContent).toContain("testserver");
+        expect(container.textContent).toContain("shot_up (testserver)");
         expect(container.textContent).not.toContain("UDP 4200");
         expect([...container.querySelectorAll("button")].filter((button) => button.textContent === "Runner current")).toHaveLength(2);
 
