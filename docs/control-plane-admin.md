@@ -1,6 +1,6 @@
 # Control Plane administration page
 
-`/admin/control-plane` is the website presentation layer for managed-hosting administration. Supabase `Admin` access protects the page, and the browser sends typed requests to the `control-plane-admin` Supabase Edge Function. The function accepts only configured website origins, reauthenticates the current access token, requires the protected `Admin` role and a verified Discord identity, then forwards the unchanged request envelope to the Oracle web-admin adapter. The adapter independently revalidates the token and uses the control plane's typed Unix-socket contract.
+`/admin/control-plane` is the website presentation layer for managed-hosting administration. Supabase `Admin` access protects the page, and the browser sends typed requests to the `control-plane-admin` Supabase Edge Function. The function accepts only configured website origins, reauthenticates the current access token, requires the protected `Admin` role, then forwards the unchanged request envelope to the Oracle web-admin adapter. The adapter independently revalidates the token and uses the control plane's typed Unix-socket contract.
 
 The page provides:
 
@@ -75,3 +75,10 @@ Their backend operator APIs and durable audit history remain intact. Releases
 is a read-only view of installable builds; approval belongs to the release pipeline.
 Missing save compatibility metadata is assumed compatible without a checkbox;
 safety backups, integrity checks, and known incompatibility checks remain.
+
+Administrators may sign in with any supported Supabase authentication provider;
+a linked Discord identity is not required. The Oracle adapter attributes all
+administrator operations to `supabase:<user UUID>`, derived from the independently
+verified session. Customer ownership and owner/manager Discord identities are
+unchanged. Deploy the control-plane principal migration and adapter before the
+Edge Function change; the old adapter will reject accounts without Discord.

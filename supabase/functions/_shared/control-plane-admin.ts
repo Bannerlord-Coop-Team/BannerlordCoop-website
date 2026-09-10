@@ -1,7 +1,6 @@
 const MAXIMUM_REQUEST_BYTES = 64 * 1024;
 const MAXIMUM_AUTH_RESPONSE_BYTES = 512 * 1024;
 const MAXIMUM_UPSTREAM_RESPONSE_BYTES = 8 * 1_048_576;
-const DISCORD_SNOWFLAKE = /^[1-9][0-9]{16,19}$/u;
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const MAXIMUM_AUTH_TIMEOUT_MILLISECONDS = 30_000;
 const MAXIMUM_UPSTREAM_TIMEOUT_MILLISECONDS = 65_000;
@@ -93,9 +92,7 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
         if (!isRecord(user) || !isRecord(user.app_metadata) || user.app_metadata.role !== "Admin") {
             return envelopeError(403, requestId, "forbidden", "Administrator access is required.", false, cors);
         }
-        if (!hasDiscordIdentity(user)) {
-            return envelopeError(409, requestId, "identity_unavailable", "A verified Discord sign-in is required.", false, cors);
-        }
+
 
         let upstream: Response;
         try {
@@ -159,16 +156,6 @@ function validateEnvelope(raw: string) {
     if (!isRecord(value) || value.version !== 1 || typeof value.operation !== "string") return null;
     if (value.operation.length < 1 || value.operation.length > 64) return null;
     return typeof value.requestId === "string" && REQUEST_ID.test(value.requestId) ? value.requestId : null;
-}
-
-function hasDiscordIdentity(user: Record<string, unknown>) {
-    if (!Array.isArray(user.identities) || user.identities.length > 20) return false;
-    return user.identities.some((candidate) => {
-        if (!isRecord(candidate) || candidate.provider !== "discord") return false;
-        const data = isRecord(candidate.identity_data) ? candidate.identity_data : {};
-        return [data.provider_id, data.sub, data.id, candidate.id]
-            .some((value) => typeof value === "string" && DISCORD_SNOWFLAKE.test(value));
-    });
 }
 
 function corsHeaders(origin: string) {
