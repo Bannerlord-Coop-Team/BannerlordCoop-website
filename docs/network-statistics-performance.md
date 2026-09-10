@@ -24,3 +24,8 @@ control-plane migration from commit
 `daa012cbf71ef62906493512a8f1ac13992e8f3a238b4af6b158fa6af2ab8c37`. It aligns the website's local shared-project
 history with production. Do not replay or edit this already-applied SQL. The
 network-statistics index remains a separate pending migration.
+
+Pending CP migration `202609100010_control_plane_monitor_indexes.sql` is also
+mirrored byte-for-byte so both repositories have the coordinated release union.
+Apply 202609100010 then 202609100011 through the protected CP release workflow;
+do not run an independent website migration writer concurrently.
