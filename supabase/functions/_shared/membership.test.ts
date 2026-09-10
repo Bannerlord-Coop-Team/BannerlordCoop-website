@@ -73,9 +73,10 @@ test("strict CP endpoint authenticates dedicated token and always fences exact a
         const input = JSON.parse(String(init?.body)); assert.equal(input.p_account_id, accountId); assert.equal(input.p_deleted, deleted);
         return Response.json(deleted ? { ...snapshot, discordUserId: null, patreonUserId: null, linkState: "account_deleted", verification: "unverified" } : snapshot);
     } });
-    const request = (body: unknown, token = "a".repeat(64), origin?: string) => handler(new Request("https://wfvqnijwuyqjibhlcrhz.supabase.co/functions/v1/control-plane-membership-v1", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(origin ? { origin } : {}) }, body: JSON.stringify(body) }));
+    const request = (body: unknown, token = "a".repeat(64), origin?: string, pathname = "/control-plane-membership-v1") => handler(new Request(`https://edge-runtime.supabase.com${pathname}`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(origin ? { origin } : {}) }, body: JSON.stringify(body) }));
     const body = { version: 1, operation: "snapshot", accountId };
     assert.equal((await request(body, "b".repeat(64))).status, 401); assert.equal((await request(body, "a".repeat(64), "https://site.test")).status, 403);
+    assert.equal((await request(body, "a".repeat(64), undefined, "/functions/v1/control-plane-membership-v1")).status, 403);
     for (const bad of [{ ...body, quota: 1 }, { ...body, accountId: accountId.toUpperCase() }, { version: 1, operation: "changes", cursor: null, limit: 51 }, { version: 1, operation: "sql", table: "anything" }]) assert.equal((await request(bad)).status, 400);
     assert.equal(calls.length, 0);
     assert.deepEqual(parseSnapshot(await (await request(body)).json()), snapshot);
@@ -104,7 +105,7 @@ test("CP claim/ack retries typed contention with the same durable identities", a
             return Response.json(ackCalls === 1 ? { version: 2, retry: true }
                 : { version: 2, acknowledged: true, eventId, receiptId, claimId });
         } });
-    const request = (body: unknown) => handler(new Request("https://wfvqnijwuyqjibhlcrhz.supabase.co/functions/v1/control-plane-membership-v1",
+    const request = (body: unknown) => handler(new Request("https://edge-runtime.supabase.com/control-plane-membership-v1",
         { method: "POST", headers: { Authorization: `Bearer ${"a".repeat(64)}`, "Content-Type": "application/json" }, body: JSON.stringify(body) }));
     assert.deepEqual(await (await request({ version: 2, operation: "claim", claimId, limit: 50 })).json(),
         { version: 2, claimId, leaseExpiresAt: "2026-09-07T12:01:00.000Z", events: [{ eventId, accountId }] });

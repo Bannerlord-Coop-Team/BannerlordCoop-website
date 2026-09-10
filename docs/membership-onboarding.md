@@ -163,6 +163,9 @@ sequenceDiagram
 
 Private endpoint (no browser/CORS authority):
 `POST https://wfvqnijwuyqjibhlcrhz.supabase.co/functions/v1/control-plane-membership-v1`.
+The Supabase gateway owns the `/functions/v1` prefix; the deployed Deno handler
+therefore validates the exact function-relative pathname
+`/control-plane-membership-v1`, not the external gateway pathname.
 `Authorization: Bearer <64 lowercase hex>` is a **dedicated** synchronization
 credential, not a service-role key. The verifier uses a full fixed-length digest
 comparison. The current contract is strict v1 `snapshot({accountId})` plus v2
