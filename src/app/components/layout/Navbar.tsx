@@ -67,6 +67,7 @@ export async function Navbar() {
                             <li key={item.href}>
                                 <Link
                                     href={item.href}
+                                    prefetch={item.href === "/servers" ? false : undefined}
                                     className="font-sans text-xs uppercase tracking-[0.2em] text-foreground-muted transition-colors duration-300 hover:text-gold focus-visible:outline-none"
                                 >
                                     {item.label}

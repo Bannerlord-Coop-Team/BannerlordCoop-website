@@ -35,7 +35,7 @@ test("membership role locking: actual PostgreSQL combined call graph", { skip: !
     }
     try {
         await db.query("create schema auth; create table auth.users(id uuid primary key, email_confirmed_at timestamptz, deleted_at timestamptz, banned_until timestamptz, raw_app_meta_data jsonb, updated_at timestamptz)");
-        for(const name of ["20260907212654_create_patreon_links.sql","20260907220000_patreon_website_roles.sql","20260907230000_atomic_live_console_assignments.sql","202609080002_membership_onboarding.sql",...(!baseline?["202609080003_membership_role_locking.sql","20260908030000_patreon_event_reconciliation.sql"]:[])]) await db.query(await readFile(`supabase/migrations/${name}`,"utf8"));
+        for(const name of ["20260907212654_create_patreon_links.sql","20260907220000_patreon_website_roles.sql","20260907230000_atomic_live_console_assignments.sql","202609080002_membership_onboarding.sql",...(!baseline?["202609080003_membership_role_locking.sql","20260908030000_patreon_event_reconciliation.sql","20260910200000_membership_receipt_claims.sql"]:[])]) await db.query(await readFile(`supabase/migrations/${name}`,"utf8"));
         // Harness safety deadline produces baseline red instead of hanging a cyclic test.
         for(const c of [db,peer,third]) await c.query("set statement_timeout='2s'; set lock_timeout='1700ms'");
         for(const operation of ["unlink","complete","replacement","worker","delete"] as const) await t.test(`${operation} refuses held Auth tuple, preserves all effects, explicit retry`,async()=>{
@@ -76,15 +76,15 @@ test("membership role locking: actual PostgreSQL combined call graph", { skip: !
                 if(op==="delete") assert.equal((await rpc("membership_fence",[a,null,true])).linkState,"account_deleted");
             }
         });
-        await t.test("legacy Patreon tuple/global inversion and singleton bootstrap refusal",async()=>{
+        await t.test("legacy Patreon tuple and singleton fences remain bounded without the global lock",async()=>{
             await setup(); await peer.query("begin"); await peer.query("select 1 from public.patreon_accounts where user_id=$1 for update",[a]);
-            try { await refusal(()=>rpc("membership_unlink",[a,null]),"global -> legacy Patreon tuple"); }
+            try { await refusal(()=>rpc("membership_unlink",[a,null]),"account -> legacy Patreon tuple"); }
             finally { await peer.query("rollback"); }
-            await db.query("begin"); await rpc("membership_fence",[a,null,false]);
-            try { const before=await snapshot(third); await assert.rejects(peer.query("delete from public.patreon_accounts where user_id=$1",[a]),{code:"55P03"}); assert.deepEqual(await snapshot(third),before); }
+            await db.query("begin"); await db.query("select pg_advisory_xact_lock(702,1)");
+            try { await peer.query("delete from public.patreon_accounts where user_id=$1",[a]); }
             finally { await db.query("rollback"); }
-            await db.query("truncate patreon_roles.sync_state"); await peer.query("begin"); await role("queue",{memberId:member},peer);
-            try { await refusal(()=>role("queue",{memberId:crypto.randomUUID()}),"bootstrap insert / global"); }
+            await setup(); await db.query("truncate patreon_roles.sync_state"); await peer.query("begin"); await role("queue",{memberId:member},peer);
+            try { await refusal(()=>role("queue",{memberId:crypto.randomUUID()}),"singleton bootstrap"); }
             finally { await peer.query("rollback"); }
         });
         await t.test("three-way global -> singleton -> Auth -> global cycle refuses each cyclic edge",async()=>{
@@ -180,7 +180,7 @@ test("membership role locking: actual PostgreSQL combined call graph", { skip: !
             const metadata=(await db.query("select raw_app_meta_data m from auth.users where id=$1",[a])).rows[0].m;
             assert.equal(metadata.role,"Standard Server"); assert.deepEqual(metadata.live_console_operator_server_ids,["new"]); assert.equal(metadata.unrelated,true);
             await db.query("delete from public.patreon_accounts where user_id=$1",[a]);
-            assert.deepEqual(await role("discovered",{token:lease.token,scanGeneration:lease.scanGeneration,memberIds:[],cursor:""}),{stale:true});
+            assert.deepEqual(await role("discovered",{token:lease.token,scanGeneration:lease.scanGeneration,memberIds:[],cursor:""}),{discovered:true});
             for(const roleName of ["anon","authenticated"]) { await db.query(`set role ${roleName}`); try { await assert.rejects(rpc("set_member_role",[a,"Admin"]),{code:"42501"}); } finally {await db.query("reset role");} }
             await assert.rejects(rpc("set_member_role",[a,"arbitrary"]));
         });

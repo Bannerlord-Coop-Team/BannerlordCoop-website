@@ -64,10 +64,10 @@ export function ProfileDropdown() {
                     id={panelId}
                     className="absolute right-0 top-full z-70 mt-3 w-52 rounded-sm border border-white/10 bg-surface-raised p-1 shadow-2xl"
                 >
-                    <Link href="/account" onClick={() => setIsOpen(false)} className={itemClassName}>
+                    <Link href="/account" prefetch={false} onClick={() => setIsOpen(false)} className={itemClassName}>
                         Account
                     </Link>
-                    <Link href="/account#link-account" onClick={() => setIsOpen(false)} className={itemClassName}>
+                    <Link href="/account#link-account" prefetch={false} onClick={() => setIsOpen(false)} className={itemClassName}>
                         Link account
                     </Link>
                     <hr className="my-1 border-white/10" />

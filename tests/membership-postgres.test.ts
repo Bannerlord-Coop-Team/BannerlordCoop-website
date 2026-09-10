@@ -32,11 +32,13 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
         await query(await readFile(migration,"utf8"));
         await query(await readFile("supabase/migrations/202609080003_membership_role_locking.sql","utf8"));
         await query(await readFile("supabase/migrations/20260908030000_patreon_event_reconciliation.sql","utf8"));
+        await query(await readFile("supabase/migrations/20260910200000_membership_receipt_claims.sql","utf8"));
         // Scenarios are independent delivery windows; preserve all receipts while
         // acknowledging prior scenario hints and advancing only fixture A/B clocks.
         t.beforeEach(async () => {
-            const rows=(await query("select event_id from public.membership_outbox where receipt_id is null order by sequence")).rows;
-            for(const row of rows) await rpc("membership_ack",[row.event_id,crypto.randomUUID()]);
+            const rows=(await query("select event_id,claim_id from public.membership_outbox where receipt_id is null order by sequence")).rows;
+            for(const row of rows) await rpc(row.claim_id ? "membership_ack_claim" : "membership_ack",
+                row.claim_id ? [row.event_id,crypto.randomUUID(),row.claim_id] : [row.event_id,crypto.randomUUID()]);
             await query("update public.membership_heads set mutation_window_started_at=clock_timestamp()-interval '11 minutes' where account_id in ($1,$2)",[a,b]);
         });
         await t.test("populated identity-only history stays unverified and all new tables deny browser reads", async () => {
@@ -101,14 +103,22 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             const foreign = await stage(b,"f".repeat(64)); await assert.rejects(rpc("membership_complete",[b,discord,foreign]));
             assert.equal((await query("select user_id from public.patreon_accounts where patreon_user_id='1'")).rows[0].user_id,a);
         });
-        await t.test("outbox restart/ack response loss replays exact receipt, conflict cannot rewrite ack", async () => {
+        await t.test("outbox claim/ack response loss replays exact identities and expired leases recover", async () => {
             await rpc("membership_fence",[a,"999456789012345678",false]);
-            const page = await rpc("membership_changes",[null,50]); assert.ok(page.events.length>0);
+            const claimId=crypto.randomUUID(); const page = await rpc("membership_claim",[claimId,50]); assert.ok(page.events.length>0);
+            assert.deepEqual(await rpc("membership_claim",[claimId,50]),page,"lost claim response returns the same rows");
+            assert.equal((await rpc("membership_claim",[crypto.randomUUID(),50])).events.length,0,"an active lease is exclusive");
             const event = page.events[0]; const receipt = "cccccccc-1111-4111-8111-111111111111";
-            const result = await rpc("membership_ack",[event.eventId,receipt]); assert.deepEqual(await rpc("membership_ack",[event.eventId,receipt]),result);
-            await assert.rejects(rpc("membership_ack",[event.eventId,"dddddddd-1111-4111-8111-111111111111"]));
-            assert.ok(!(await rpc("membership_changes",[null,50])).events.some((e: {eventId:string})=>e.eventId===event.eventId));
-            const empty = await rpc("membership_changes",[page.cursor,50]); assert.deepEqual(empty,{version:1,cursor:page.cursor,events:[]});
+            const result = await rpc("membership_ack_claim",[event.eventId,receipt,claimId]);
+            assert.deepEqual(await rpc("membership_ack_claim",[event.eventId,receipt,claimId]),result);
+            await assert.rejects(rpc("membership_ack_claim",[event.eventId,"dddddddd-1111-4111-8111-111111111111",claimId]));
+            assert.ok(!(await rpc("membership_claim",[crypto.randomUUID(),50])).events.some((e: {eventId:string})=>e.eventId===event.eventId));
+            const remaining=page.events.slice(1);
+            if(remaining.length) {
+                await query("update public.membership_outbox set claim_expires_at=clock_timestamp()-interval '1 second' where claim_id=$1",[claimId]);
+                const recovered=await rpc("membership_claim",[crypto.randomUUID(),50]);
+                assert.deepEqual(recovered.events,remaining);
+            }
         });
         await t.test("Discord requests are initiating-UUID bound, expire, and permit exact confirmation replay", async () => {
             const token = "9".repeat(64); await rpc("membership_discord_begin",[b,token,"eeeeeeee-1111-4111-8111-111111111111","/servers"]);
@@ -119,16 +129,32 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             await assert.rejects(rpc("membership_discord_confirm",[b,token,"999456789012345678"]));
             await query("update public.discord_link_requests set expires_at=clock_timestamp()-interval '1 second' where token_hash=$1",[token]); await assert.rejects(rpc("membership_discord_check",[b,token]));
         });
-        await t.test("outbox commit ordering cannot skip a lower uncommitted sequence", async () => {
+        await t.test("receipt-driven claims cannot skip a lower sequence that commits late", async () => {
             const peer = new pg.Client({ connectionString: url }); await peer.connect();
             try {
-                await stage(b,"7".repeat(64),"7"); // real authority, not a now-redundant unlink
-                const before = await rpc("membership_changes",[null,50]);
-                await query("begin"); await rpc("membership_unlink",[b,discord]);
-                await assert.rejects(peer.query("select public.membership_fence($1,$2,false)",[b,"999456789012345678"]),{code:"55P03"});
-                await query("commit"); await peer.query("select public.membership_fence($1,$2,false)",[b,"999456789012345678"]);
-                const after = await rpc("membership_changes",[before.cursor,50]); assert.ok(after.events.length>=2);
+                const lower=await freshAccount(), higher=await freshAccount(); await drain(lower); await drain(higher);
+                await query("begin"); await rpc("membership_fence",[lower,discord,false]);
+                await peer.query("select public.membership_fence($1,$2,false)",[higher,"999456789012345678"]);
+                const firstClaim=crypto.randomUUID();
+                const first=(await peer.query("select public.membership_claim($1,50) result",[firstClaim])).rows[0].result;
+                assert.deepEqual(first.events.map((event:{accountId:string})=>event.accountId),[higher]);
+                await query("commit");
+                await peer.query("select public.membership_ack_claim($1,$2,$3)",[first.events[0].eventId,crypto.randomUUID(),firstClaim]);
+                const second=await rpc("membership_claim",[crypto.randomUUID(),50]);
+                assert.deepEqual(second.events.map((event:{accountId:string})=>event.accountId),[lower]);
             } finally { await query("rollback"); await peer.end(); }
+        });
+
+        await t.test("matching status is lock-free while drift returns typed account backpressure", async () => {
+            const id=await freshAccount();
+            const peer=new pg.Client({connectionString:url}); await peer.connect();
+            try {
+                await peer.query("begin");
+                await peer.query("select pg_advisory_xact_lock(hashtextextended($1::text,702))",[id]);
+                const matched=await rpc("membership_status",[id,null]);
+                assert.equal(matched.snapshot.accountId,id); assert.equal(matched.snapshot.discordUserId,null);
+                assert.deepEqual(await rpc("membership_status",[id,discord]),{version:1,retry:true});
+            } finally { await peer.query("rollback"); await peer.end(); }
         });
         await t.test("explicit unlink fences even a pending initially-unlinked completion", async () => {
             await rpc("membership_unlink",[b,discord]);
@@ -160,7 +186,11 @@ test("membership migration and transactional recovery on real PostgreSQL", { ski
             for (let i=0; i<20; i++) {
                 const rows = (await query("select event_id from public.membership_outbox where account_id=$1 and receipt_id is null order by sequence",[id])).rows;
                 if (!rows.length) return;
-                for (const row of rows) await rpc("membership_ack",[row.event_id,crypto.randomUUID()]);
+                for (const row of rows) {
+                    const claim=(await query("select claim_id from public.membership_outbox where event_id=$1",[row.event_id])).rows[0]?.claim_id;
+                    await rpc(claim ? "membership_ack_claim" : "membership_ack",
+                        claim ? [row.event_id,crypto.randomUUID(),claim] : [row.event_id,crypto.randomUUID()]);
+                }
             }
             assert.fail("drain must terminate");
         }
