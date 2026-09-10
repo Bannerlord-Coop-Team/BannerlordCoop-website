@@ -13,7 +13,7 @@ registerHooks({
 });
 const { getHomepageVideos } = await import("./homepage-videos.ts");
 
-test("homepage videos use public reads and preserve mixed-source ordering", async () => {
+test("homepage videos request newest-first dates, nulls last, and preserve database ordering", async () => {
     const originalFetch = globalThis.fetch;
     const originalEnv = { ...process.env };
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
@@ -26,18 +26,19 @@ test("homepage videos use public reads and preserve mixed-source ordering", asyn
         if (url.includes("/rest/v1/")) {
             assert.equal(new Headers(init?.headers).get("apikey"), "public-test-key");
             assert.equal(new URL(url).searchParams.get("published"), "eq.true");
-            assert.equal(new URL(url).searchParams.get("order"), "sort_order.asc,id.asc");
+            assert.equal(new URL(url).searchParams.get("order"), "published_at.desc.nullslast,sort_order.asc,id.asc");
             assert.equal(init.next.revalidate, 60);
             return Response.json([
                 { id: "custom", source: "custom", href: "https://www.twitch.tv/videos/1", title: "Twitch", thumbnail: "https://example.com/image.jpg", thumbnail_alt: "Twitch thumbnail", description: "Description", category: "Twitch", duration: null },
                 { id: "youtube", source: "youtube", href: "https://youtube.com/watch?v=Au-oT5KKj0w&t=1615s" },
+                { id: "undated", source: "custom", href: "https://www.twitch.tv/videos/2", title: "Undated", thumbnail: "https://example.com/image.jpg", thumbnail_alt: "Undated thumbnail", description: "", category: "Twitch", duration: null },
             ]);
         }
         return Response.json({ title: "YouTube", author_name: "Creator", thumbnail_url: "https://i.ytimg.com/test.jpg" });
     };
     try {
         const videos = await getHomepageVideos();
-        assert.deepEqual(videos.map((video) => video.id), ["custom", "youtube"]);
+        assert.deepEqual(videos.map((video) => video.id), ["custom", "youtube", "undated"]);
         assert.equal(videos[0].thumbnailAlt, "Twitch thumbnail");
         assert.equal(videos[1].title, "YouTube");
         assert.equal(videos[1].href, "https://youtube.com/watch?v=Au-oT5KKj0w&t=1615s");
