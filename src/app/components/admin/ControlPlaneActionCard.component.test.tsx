@@ -86,6 +86,14 @@ it("offers only the selected channel's builds and sends pinning as one update re
     expect(request.mock.calls[0]?.[0]).toMatchObject({ operation: "update-server", input: { serverId: "server-a", buildId: "stable-build", expectedUpdatedAt: "2026-09-06T12:00:00Z" } });
 });
 
+it("sends only bearer and closed request fields for an unlinked Supabase Admin", async () => {
+    session.mockResolvedValue({ data: { session: { access_token: "test-only", user: { id: "22222222-2222-4222-8222-222222222222", app_metadata: { role: "Admin" }, identities: [] } } } });
+    request.mockResolvedValue({ healthy: true });
+    await act(async () => root.render(<ControlPlaneActionCard operation="overview" title="Overview" description="Read fleet" fields={[]} />));
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(request).toHaveBeenCalledExactlyOnceWith({ accessToken: "test-only", requestId: expect.any(String), operation: "overview" });
+});
+
 it("resets the server and backup state with the form after an action", async () => {
     request.mockResolvedValue({ items: [backup], nextCursor: null });
     await renderRestore(); await select("serverId", 1); await select("backupId", 1);

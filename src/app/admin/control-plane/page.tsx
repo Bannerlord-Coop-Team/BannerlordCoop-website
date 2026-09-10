@@ -10,7 +10,7 @@ import { JobFailuresAcknowledgeButton } from "@/app/components/admin/JobFailures
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
 import { ControlPlaneLiveRefresh } from "@/app/components/admin/ControlPlaneLiveRefresh";
 import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
-import { hasAdminAccess } from "@/app/lib/auth/access";
+import { hasControlPlaneAdminAccess } from "@/app/lib/auth/access";
 import { ControlPlaneAdminError, requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import {
     auditActionExplanation,
@@ -103,7 +103,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
         supabase.auth.getSession(),
     ]);
     if (!userData.user || !sessionData.session?.access_token) redirect("/login?next=/admin/control-plane");
-    if (!hasAdminAccess(userData.user)) redirect("/");
+    if (!hasControlPlaneAdminAccess(userData.user)) redirect("/");
 
     const params = await searchParams;
     const view = parseView(first(params.view));

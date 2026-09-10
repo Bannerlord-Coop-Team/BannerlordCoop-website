@@ -1,6 +1,12 @@
 # Control Plane administration page
 
-`/admin/control-plane` is the website presentation layer for managed-hosting administration. Supabase `Admin` access protects the page, and the browser sends typed requests to the `control-plane-admin` Supabase Edge Function. The function accepts only configured website origins, reauthenticates the current access token, requires the protected `Admin` role and a verified Discord identity, then forwards the unchanged request envelope to the Oracle web-admin adapter. The adapter independently revalidates the token and uses the control plane's typed Unix-socket contract.
+`/admin/control-plane` is the website presentation layer for managed-hosting administration. The page calls Supabase Auth `getUser()` and requires the returned protected `app_metadata.role === "Admin"`, plus a valid Supabase account UUID. It does not authorize using the session's cached user, editable `user_metadata`, or `SUPABASE_ADMIN_EMAILS`. The bootstrap email override still works for unrelated site administration.
+
+The browser sends only the bearer token and existing typed request envelope to the `control-plane-admin` Supabase Edge Function, never caller-supplied actor authority. The function accepts only configured browser origins (authenticated server-to-server calls need no Origin), calls `/auth/v1/user` on every request, and requires that fresh protected Admin role and a canonical lowercase, hyphenated, non-nil UUID (RFC variant, versions 1–8). It forwards the same token and unchanged envelope to the Oracle web-admin adapter. The adapter must independently revalidate the token and current Admin role and derive its trusted actor from the verified account; an Edge check is not sufficient backend authority.
+
+Discord linkage is not required for these **administrative** requests: Google, email, and accounts without provider identities qualify with the actual Auth Admin role. A stale token after demotion, email allowlisting alone, or a role in `user_metadata` cannot authorize a new CP administrative request. Malformed verified account IDs fail closed with `identity_unavailable` (409) at Edge. Provider identity IDs are never converted into invented Discord snowflakes.
+
+Fresh Admin verification occurs at each HTTP admission. Already-admitted durable administrator jobs retain the control plane's existing admitted-authority semantics: demotion denies new requests, not automatic cancellation of admitted jobs. The backend does not retain the bearer for per-checkpoint Auth verification.
 
 The page provides:
 
@@ -20,7 +26,15 @@ The administrator presentation resolves Discord usernames only from bounded Supa
 
 The Operations page's **Register existing OVH VPS** card is the normal additive host-ingestion path. It verifies that an already-purchased service belongs to the configured OVH account, derives the reviewed image within the control plane, records `floor(vCPU / 2)` empty slots, and writes an administrative audit event. It never purchases, renews, powers, assigns, or installs the VPS. Managed-runner enrollment is still required before an assigned slot can Start. Server creation assigns an existing prepared OVH slot in the selected region; it never orders a VPS, and unavailable capacity fails without creating or billing anything. The normal Releases view hides non-validated history, but pending, rejected, and revoked receipts remain retained for explicit inspection and audit rather than being deleted.
 
-Deploy the Edge Function from the repository root:
+## Coordinated release: Supabase account administrators
+
+This website/Edge change is not an end-to-end fix on its own. Release the reviewed control-plane backend support for a native `{ provider: "supabase", subject: <canonical lowercase UUID> }` principal with administrator authority first, including its independent fresh Auth verification and durable authorization/audit handling. Backend stored attribution is `supabase:<UUID>`; historical Discord IDs remain untouched. Then release the matching admin Edge Function and website. The shared HTTP bearer/envelope contract is unchanged; no actor fields should be added by the browser or relay. The generic audit table renders the backend's `actorType` and `actorId` as escaped text, without interpreting the account UUID as a Discord user.
+
+This repository change adds no SQL migrations and applies none. Any backend persistence migration or operational gate belongs to the coordinated control-plane release and must be reviewed there. Do not advertise unlinked-account support after shipping Edge alone. Verify an unlinked Auth Admin read and mutation, backend-derived audit attribution, fresh demotion denial at both boundaries, and legacy Discord administration before treating rollout as complete.
+
+Customer ownership, create-server/transfer/manager targets, bonus quotas, entitlements, game/save data, and My Servers remain Discord-based and unchanged. No customer ownership or Patreon/membership migration is part of this release. No new website credential or environment variable is required.
+
+The following are reference deployment instructions for a separately authorized release, not implementation-stage commands. Deploy the Edge Function from the repository root:
 
 ```sh
 npx supabase secrets set --project-ref <project-ref> \
