@@ -37,6 +37,8 @@ export type MyServerSummary = Pick<
     | "updatedAt"
 > & {
     accessRole: "owner" | "manager" | "support" | "admin";
+    // Missing visibility is treated as private during the control-plane rollout.
+    visibility?: "private" | "public";
     // Optional while older control-plane releases omit connection details.
     connectionIp?: string | null;
     gamePorts?: number[];

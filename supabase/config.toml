@@ -23,6 +23,10 @@ verify_jwt = true
 [functions.my-servers]
 verify_jwt = true
 
+# Read-only public directory. Authentication on my-servers remains mandatory.
+[functions.public-servers]
+verify_jwt = false
+
 # The start handler verifies the bearer token with Supabase Auth itself.
 [functions.patreon-start]
 verify_jwt = false

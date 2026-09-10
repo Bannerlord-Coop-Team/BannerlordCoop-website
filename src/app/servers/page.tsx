@@ -13,14 +13,13 @@ import { getServerOnboarding, listAllMyServers } from "@/app/lib/hosting/my-serv
 import { ServerOnboarding, GamePasswordNotice } from "@/app/components/servers/ServerOnboarding";
 import type { OnboardingSummary } from "../../../supabase/functions/_shared/server-onboarding-contract";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
-import { getAllServers } from "@/app/lib/hosting/servers";
+import { listPublicServers } from "@/app/lib/hosting/public-servers";
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
     CircleAlert,
     Server,
     ShieldCheck,
-    Users,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Metadata } from "next";
@@ -106,12 +105,22 @@ export default async function ServersPage() {
     ]);
     const managedServerCount = managedServers.length;
     const websiteSummary = composeOnboarding(user?.id ?? null, identity, account, onboarding, ownedIds);
-    const allServers = getAllServers();
-    const onlineServers = allServers.filter((server) => server.status === "Online");
-    const onlinePlayers = onlineServers.reduce(
-        (total, server) => total + server.players,
-        0,
-    );
+    let allServers: ManagedServerDirectoryEntry[] = [];
+    let publicServersError = "";
+    try {
+        allServers = (await listPublicServers()).map(server => ({
+            id: server.serverId,
+            name: server.displayName,
+            status: server.observedGameState === "running" ? "Online" : server.observedGameState === "stopped" ? "Offline" : "Unknown",
+            connectionType: "Direct",
+            joinUrl: "",
+            connectionAddress: connectionAddress(server.connectionIp, server.gamePorts),
+            players: null,
+        }));
+    } catch {
+        publicServersError = "The public server directory could not be loaded right now. Please try again later.";
+    }
+    const onlineServers = allServers.filter(server => server.status === "Online");
 
     return (
         <>
@@ -127,22 +136,21 @@ export default async function ServersPage() {
                             Servers
                         </h1>
                         <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground-muted sm:text-base">
-                            Find an active campaign, see who is playing, and join through your preferred game platform.
+                            Find a public campaign and copy its IP and port to join in-game.
                         </p>
                     </div>
 
-                    <dl className="grid grid-cols-3 border border-white/10 bg-surface">
-                        <DirectoryStat icon={Server} label="Servers" value={allServers.length} />
-                        <DirectoryStat icon={ShieldCheck} label="Online" value={onlineServers.length} />
-                        <DirectoryStat icon={Users} label="Players" value={onlinePlayers} />
+                    <dl className="grid grid-cols-2 border border-white/10 bg-surface">
+                        <DirectoryStat icon={Server} label="Public servers" value={publicServersError ? "—" : allServers.length} />
+                        <DirectoryStat icon={ShieldCheck} label="Online" value={publicServersError ? "—" : onlineServers.length} />
                     </dl>
                 </section>
 
                 <div className="mt-8 flex gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3.5 text-sm text-foreground-muted">
                     <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
                     <p>
-                        <strong className="font-semibold text-foreground">Infrastructure preview:</strong>{" "}
-                        public directory availability and player counts are placeholder data. Signed-in account assignments under My Servers come from the authenticated control plane when it is available. Join copies the server’s IP and port when a connection address is available.
+                        <strong className="font-semibold text-foreground">Private by default.</strong>{" "}
+                        Only servers published by their owners appear in the public directory. Private servers remain under My Servers for authorized users. Join copies the game IP and port; player counts are not yet available.
                     </p>
                 </div>
 
@@ -204,14 +212,16 @@ export default async function ServersPage() {
                                 Community campaigns
                             </p>
                             <h2 id="all-servers-heading" className="mt-2 font-display text-3xl font-semibold text-foreground sm:text-4xl">
-                                All Servers
+                                Public Servers
                             </h2>
                         </div>
                         <p className="text-sm text-foreground-muted">
-                            {allServers.length} {allServers.length === 1 ? "server" : "servers"} in the directory
+                            {publicServersError ? "Directory unavailable" : `${allServers.length} ${allServers.length === 1 ? "server" : "servers"} in the directory`}
                         </p>
                     </div>
-                    <AllServersDirectory servers={allServers} />
+                    {publicServersError ? (
+                        <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">{publicServersError}</p>
+                    ) : <AllServersDirectory servers={allServers} />}
                 </section>
                 </div>
             </main>
@@ -257,7 +267,7 @@ function DirectoryStat({
 }: {
     icon: typeof Server;
     label: string;
-    value: number;
+    value: number | string;
 }) {
     return (
         <div className="min-w-24 border-r border-white/10 px-4 py-3 last:border-r-0 sm:min-w-32 sm:px-5">
