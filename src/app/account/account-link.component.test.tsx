@@ -1,9 +1,9 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ client: vi.fn(), invoke: vi.fn(), link: vi.fn(), exchange: vi.fn(), user: vi.fn(), session: vi.fn(), admin: vi.fn(), stamp: vi.fn(), jar: new Map<string,string>() }));
+const mocks = vi.hoisted(() => ({ client: vi.fn(), unlink: vi.fn(), invoke: vi.fn(), link: vi.fn(), exchange: vi.fn(), user: vi.fn(), session: vi.fn(), admin: vi.fn(), stamp: vi.fn(), jar: new Map<string,string>() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.client }));
 vi.mock("next/navigation", () => ({ redirect: (url: string) => { throw new Error(`redirect:${url}`); } }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ has: (key:string) => mocks.jar.has(key), get: (key:string) => mocks.jar.has(key) ? { value: mocks.jar.get(key) } : undefined, set: (key:string,value:string) => mocks.jar.set(key,value), delete: (key:string) => mocks.jar.delete(key) }) }));
-import { linkDiscordAccount, completePatreonAccount, confirmDiscordAccount, resolveAccountLink } from "./actions";
+import { disconnectDiscordAccount, disconnectPatreonAccount, automaticallyCompletePatreonAccount, linkDiscordAccount, completePatreonAccount, confirmDiscordAccount, resolveAccountLink } from "./actions";
 vi.mock("@/app/lib/supabase/admin", () => ({ getSupabaseAdminClient: mocks.admin }));
 vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: () => null }));
 vi.mock("@/app/components/layout/Footer", () => ({ Footer: () => null }));
@@ -26,8 +26,31 @@ beforeEach(() => {
     mocks.exchange.mockResolvedValue({ error: null });
     mocks.admin.mockReturnValue({ rpc: mocks.stamp });
     mocks.stamp.mockResolvedValue({ data: { verified: true }, error: null });
-    mocks.client.mockResolvedValue({ auth: { getUser: mocks.user, getSession: mocks.session, linkIdentity: mocks.link, exchangeCodeForSession: mocks.exchange }, functions: { invoke: mocks.invoke } });
+    mocks.client.mockResolvedValue({ auth: { getUser: mocks.user, getSession: mocks.session, linkIdentity: mocks.link, unlinkIdentity: mocks.unlink, exchangeCodeForSession: mocks.exchange }, functions: { invoke: mocks.invoke } });
 });
+it("disconnects only the current account's exact Discord identity with another sign-in method", async () => {
+    const identity = { provider: "discord", identity_id: "discord-identity" };
+    mocks.user.mockResolvedValue({ data: { user: { id: a, identities: [identity, { provider: "email", identity_id: "email-identity" }] } } });
+    mocks.unlink.mockResolvedValue({ data: {}, error: null });
+    await expect(disconnectDiscordAccount(a, "discord-identity")).rejects.toThrow("redirect:/account?discord=disconnected");
+    expect(mocks.unlink).toHaveBeenCalledWith(identity);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+});
+it.each(["only_identity", "account_changed", "identity_changed", "auth_error"])("Discord disconnect fails safely for %s", async scenario => {
+    const identity = { provider: "discord", identity_id: "discord-identity" };
+    mocks.user.mockResolvedValue({ data: { user: { id: a, identities: scenario === "only_identity" ? [identity] : [identity, { provider: "email", identity_id: "email-identity" }] } } });
+    mocks.unlink.mockResolvedValue({ data: null, error: new Error("private Auth detail") });
+    await expect(disconnectDiscordAccount(scenario === "account_changed" ? "another-account" : a, scenario === "identity_changed" ? "old-identity" : "discord-identity")).rejects.toThrow(`redirect:/account?discord=${scenario === "only_identity" ? "last_identity" : "disconnect_error"}`);
+    expect(mocks.unlink).toHaveBeenCalledTimes(scenario === "auth_error" ? 1 : 0);
+});
+it("Patreon disconnect keeps existing backend unlink behavior and rejects account switches", async () => {
+    await expect(disconnectPatreonAccount("another-account")).rejects.toThrow("redirect:/account?patreon=disconnect_error");
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    mocks.invoke.mockResolvedValue({ data: { unlinked: true }, error: null });
+    await expect(disconnectPatreonAccount(a)).rejects.toThrow("redirect:/account?patreon=unlinked");
+    expect(mocks.invoke).toHaveBeenCalledWith("website-account", expect.objectContaining({ body: { operation: "unlink" } }));
+});
+
 it("Discord calls linkIdentity, keeps Supabase OAuth state untouched, server-binds initiating UUID and safe continuation", async () => {
     const form = new FormData(); form.set("returnPath","/servers");
     await expect(linkDiscordAccount(form)).rejects.toThrow("redirect:https://discord.com/oauth2/authorize?state=supabase-owned-state");
@@ -63,6 +86,24 @@ it("Patreon callback GET never invokes completion; POST retries preserve the sam
     mocks.invoke.mockResolvedValue({ data: { linked: true, returnPath: "/servers" }, error: null });
     await expect(completePatreonAccount()).rejects.toThrow("redirect:/servers?patreon=linked"); expect(mocks.jar.get("__Host-patreon-completion")).toBe(token);
     expect(mocks.invoke.mock.calls.every(call=>call[1].body.token===token)).toBe(true);
+});
+
+it("automatic Patreon completion checks the rendered account and operation before committing", async () => {
+    mocks.jar.set("__Host-patreon-completion", token);
+    mocks.invoke.mockImplementation(async (_name, options) => options.body.operation === "recovery-status"
+        ? { data: { ...bound(), provider: "patreon" }, error: null }
+        : { data: { linked: true, returnPath: "/account" }, error: null });
+    await expect(automaticallyCompletePatreonAccount(a, operationId)).rejects.toThrow("redirect:/account?patreon=linked");
+    expect(mocks.invoke).toHaveBeenCalledWith("patreon-complete", expect.objectContaining({ body: { token } }));
+    expect(mocks.jar.get("__Host-patreon-completion")).toBe(token);
+});
+it.each(["account", "operation", "expired", "unconfirmable", "unavailable"])("automatic Patreon completion refuses changed %s authority", async change => {
+    mocks.jar.set("__Host-patreon-completion", token);
+    const recovery = { ...bound(), provider: "patreon", ...(change === "operation" ? { operationId: "ffffffff-1111-4111-8111-111111111111" } : {}), ...(change === "expired" ? { state: "expired", confirmable: false } : {}), ...(change === "unconfirmable" ? { confirmable: false } : {}) };
+    mocks.invoke.mockResolvedValue(change === "unavailable" ? { data: null, error: new Error("unavailable") } : { data: recovery, error: null });
+    await expect(automaticallyCompletePatreonAccount(change === "account" ? "another-account" : a, operationId)).rejects.toThrow("redirect:/account?patreon=confirm_error");
+    expect(mocks.invoke.mock.calls.some(call => call[0] === "patreon-complete")).toBe(false);
+    expect(mocks.jar.get("__Host-patreon-completion")).toBe(token);
 });
 
 it("rate-limited completion and Discord begin retain cookie authority and show bounded retry guidance", async () => {
