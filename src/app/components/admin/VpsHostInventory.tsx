@@ -118,7 +118,11 @@ function HostIdentity({ host }: { host: HostingAdminVpsHost }) {
 }
 
 function CapacitySummary({ host }: { host: HostingAdminVpsHost }) {
-    return <p className="text-xs text-foreground-muted"><span className="font-display text-lg text-foreground">{host.totalSlots}</span> slots · <span className="font-semibold text-foreground">{host.runningServers}</span> running · <span className="font-semibold text-foreground">{host.availableServers}</span> free</p>;
+    return <dl aria-label={`${host.totalSlots} total slots, ${host.runningServers} running, ${host.availableServers} free`} className="grid max-w-28 grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
+        <dt className="text-foreground-muted">Slots</dt><dd className="font-semibold text-foreground">{host.totalSlots}</dd>
+        <dt className="text-foreground-muted">Running</dt><dd className="font-semibold text-foreground">{host.runningServers}</dd>
+        <dt className="text-foreground-muted">Free</dt><dd className="font-semibold text-foreground">{host.availableServers}</dd>
+    </dl>;
 }
 
 function SlotSummary({ host, ownerLabels }: { host: HostingAdminVpsHost; ownerLabels: Record<string, string> }) {
