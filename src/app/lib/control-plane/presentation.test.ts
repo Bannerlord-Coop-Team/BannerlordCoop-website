@@ -107,6 +107,17 @@ test("the website creates servers on Stable without asking for a redundant relea
     assert.match(createCard, /New servers use Stable by default/u);
 });
 
+test("the administrator page omits the retired role-deletion control", async () => {
+    const source = await readFile(
+        new URL("../../admin/control-plane/page.tsx", import.meta.url),
+        "utf8",
+    );
+    assert.doesNotMatch(source, /roleDeletionsPaused|Role deletions|Pause role deletions/u);
+    assert.doesNotMatch(source, /Discord-role reconciliation/u);
+    assert.match(source, /Replace all four live pause switches/u);
+    assert.match(source, /explicit administrator grant/u);
+});
+
 test("operation fields explicitly identify required and optional inputs", () => {
     assert.equal(fieldRequirementLabel(true), "Required");
     assert.equal(fieldRequirementLabel(false), "Optional");

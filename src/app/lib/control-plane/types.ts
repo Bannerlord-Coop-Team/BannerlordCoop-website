@@ -240,7 +240,6 @@ export type FleetSummary = {
 
 export type GlobalControls = {
     provisioningPaused: boolean;
-    roleDeletionsPaused: boolean;
     maintenancePaused: boolean;
     automaticBackupsPaused: boolean;
     nightlyRolloutsPaused: boolean;
