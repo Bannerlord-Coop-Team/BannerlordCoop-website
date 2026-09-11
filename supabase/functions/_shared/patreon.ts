@@ -98,6 +98,12 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
         if (request.method !== (mode === "callback" ? "GET" : "POST")) {
             return response("Method not allowed", 405, { Allow: mode === "callback" ? "GET" : "POST" });
         }
+        let stage = "request";
+        function callbackFailure(status?: number) {
+            // Fixed stage/status only: never log URLs, codes, tokens, provider bodies, or accounts.
+            console.warn("Patreon callback failed", { stage, ...(status === undefined ? {} : { status }) });
+            return finish("error");
+        }
         try {
             if (mode !== "callback") {
                 const authorization = request.headers.get("Authorization");
@@ -128,8 +134,10 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
             const url = new URL(request.url);
             const ticket = url.searchParams.get("ticket");
             if (ticket) {
+                stage = "consume_ticket";
                 const context = await consume(ticket, "ticket");
-                if (!context || typeof context.user_id !== "string") return finish("error");
+                if (!context || typeof context.user_id !== "string") return callbackFailure();
+                stage = "issue_state";
                 const state = await issue(context.user_id, "state", context);
                 const authorize = new URL("https://www.patreon.com/oauth2/authorize");
                 authorize.search = new URLSearchParams({
@@ -140,16 +148,20 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
                 return redirect(authorize.href, `${cookieName}=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
             }
 
+            stage = "validate_state";
             const state = url.searchParams.get("state") ?? "";
             const cookie = request.headers.get("Cookie")?.split(";").map((part) => part.trim())
                 .find((part) => part.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
-            if (!tokenPattern.test(state) || cookie !== state) return finish("error");
+            if (!tokenPattern.test(state) || cookie !== state) return callbackFailure();
+            stage = "consume_state";
             const context = await consume(state, "state");
-            if (!context || typeof context.user_id !== "string") return finish("error");
+            if (!context || typeof context.user_id !== "string") return callbackFailure();
             if (url.searchParams.has("error")) return finish("cancelled");
             const code = url.searchParams.get("code");
-            if (!code || code.length > 4096) return finish("error");
+            stage = "validate_code";
+            if (!code || code.length > 4096) return callbackFailure();
 
+            stage = "token_exchange";
             const exchange = await requestFetch("https://www.patreon.com/api/oauth2/token", {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -160,18 +172,23 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
                 redirect: "error",
             signal: AbortSignal.timeout(4_000),
             });
-            if (!exchange.ok) return finish("error");
+            if (!exchange.ok) return callbackFailure(exchange.status);
+            stage = "token_response";
             const tokens = await boundedJson(exchange, 16_384);
-            if (!record(tokens) || typeof tokens.access_token !== "string" || !tokens.access_token || tokens.access_token.length > 4096) return finish("error");
+            if (!record(tokens) || typeof tokens.access_token !== "string" || !tokens.access_token || tokens.access_token.length > 4096) return callbackFailure();
+            stage = "identity_request";
             const identityResponse = await requestFetch(PATREON_IDENTITY_URL, {
                 headers: { Authorization: `Bearer ${tokens.access_token}` },
                 redirect: "error",
             signal: AbortSignal.timeout(4_000),
             });
-            if (!identityResponse.ok) return finish("error");
+            if (!identityResponse.ok) return callbackFailure(identityResponse.status);
+            stage = "identity_response";
             const identity = await boundedJson(identityResponse, 262_144);
+            stage = "verify_identity";
             const verified = await verifyPatreonMembership(identity, config.policy ?? null);
             // Tokens exist only in this callback; completion stores normalized evidence.
+            stage = "issue_completion";
             const completionToken = await issue(context.user_id, "complete", context, verified.patreonUserId, verified.evidence);
             const completionUrl = new URL("/account/patreon/callback", config.siteUrl);
             completionUrl.searchParams.set("token", completionToken);
@@ -180,7 +197,7 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
             if (error instanceof DatabaseContention) return mode === "callback" ? redirect(`${accountUrl}?patreon=retry`) : databaseContentionResponse();
             if (mode !== "callback" && error instanceof MembershipRateLimit) return membershipRateLimitResponse();
             // Never return provider bodies, tokens, codes, or database details to the browser.
-            return mode === "callback" ? finish("error") : response("Unable to link Patreon account", 503);
+            return mode === "callback" ? callbackFailure() : response("Unable to link Patreon account", 503);
         }
     };
 }
