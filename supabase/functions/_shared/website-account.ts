@@ -1,5 +1,5 @@
 import { DatabaseContention, databaseContentionResponse } from "./database-contention.ts";
-import { boundedJson, exact, HASH, UUID, parseSnapshot, randomToken, record, sha256, validUntil, type Policy } from "./membership.ts";
+import { boundedJson, exact, HASH, parseSnapshot, randomToken, record, sha256, validUntil, type Policy } from "./membership.ts";
 import { membershipStore, MembershipRateLimit, membershipRateLimitResponse, type StoreConfig } from "./membership-store.ts";
 export function createWebsiteAccountHandler(config: StoreConfig & { policy: Policy | null }) {
     const store = membershipStore(config);
@@ -16,9 +16,6 @@ export function createWebsiteAccountHandler(config: StoreConfig & { policy: Poli
                 if (!record(value) || typeof value.pending !== "boolean" || typeof value.verificationPending !== "boolean") throw new Error("Invalid status");
                 const s = parseSnapshot(value.snapshot);
                 return response({ version: 1, accountId: user.accountId, hasDiscord: user.discordUserId !== null, configured: config.policy !== null, verificationPending: value.verificationPending, membership: { linked: s.patreonUserId !== null, verification: s.verification, sync: value.pending ? "pending" : s.revision === "0" ? "not_needed" : "applied", verifiedAt: s.verifiedAt, validUntil: validUntil(s), retryAt: null, refreshMode: "oauth_reauthorization" } });
-            }
-            if ((body.operation === "recovery-status" && exact(body, ["operation", "provider", "token"]) && (body.token === null || typeof body.token === "string" && HASH.test(body.token)) || body.operation === "recovery-resolve" && exact(body, ["operation", "provider", "operationId"]) && typeof body.operationId === "string" && UUID.test(body.operationId)) && ["discord", "patreon"].includes(body.provider as string)) {
-                return response(await store.rpc("membership_recovery", { p_account_id: user.accountId, p_discord_user_id: user.discordUserId, p_provider: body.provider, p_operation_id: body.operationId ?? null, p_discard: body.operation === "recovery-resolve", p_token_hash: typeof body.token === "string" ? await sha256(body.token) : null }));
             }
             if (body.operation === "unlink" && exact(body, ["operation"])) {
                 await store.rpc("membership_unlink", { p_account_id: user.accountId, p_discord_user_id: user.discordUserId }); return response({ unlinked: true });

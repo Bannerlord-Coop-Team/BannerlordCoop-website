@@ -3,12 +3,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { EMPTY_MEMBERSHIP } from "@/app/lib/hosting/membership-onboarding";
 import { accountDisplayName, discordDisplayName } from "@/app/lib/auth/account-display";
 
-const mocks = vi.hoisted(() => ({ status: vi.fn(), recovery: vi.fn() }));
+const mocks = vi.hoisted(() => ({ status: vi.fn(), invoke: vi.fn() }));
 vi.mock("@/app/account/AccountStatusSync", () => ({ AccountStatusSync: ({ pending }: { pending: boolean }) => <span data-status-pending={pending} /> }));
-vi.mock("@/app/account/PatreonAutoCompletion", () => ({ PatreonAutoCompletion: () => <p>Automatic completion</p> }));
 vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: () => null }));
 vi.mock("@/app/components/layout/Footer", () => ({ Footer: () => null }));
-vi.mock("@/app/account/actions", () => ({ automaticallyCompletePatreonAccount: vi.fn(), resolveAccountLink: vi.fn(), completePatreonAccount: vi.fn(), confirmDiscordAccount: vi.fn(), linkDiscordAccount: vi.fn(), linkPatreonAccount: vi.fn(), disconnectPatreonAccount: vi.fn(), disconnectDiscordAccount: vi.fn() }));
+vi.mock("@/app/account/actions", () => ({ linkDiscordAccount: vi.fn(), linkPatreonAccount: vi.fn(), disconnectPatreonAccount: vi.fn(), disconnectDiscordAccount: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock("@/app/lib/hosting/website-account-status", () => ({ getWebsiteAccountStatus: mocks.status }));
 const accountId = "aaaaaaaa-1111-4111-8111-111111111111";
@@ -17,13 +16,13 @@ vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: async () 
         getUser: async () => ({ data: { user: { id: accountId, user_metadata: { full_name: "Andrew" }, identities: [{ provider: "discord", identity_id: "discord-identity", identity_data: { preferred_username: "andrew_discord" } }] } } }),
         getSession: async () => ({ data: { session: { user: { id: accountId }, access_token: "test" } } }),
     },
-    functions: { invoke: async (_name: string, options: { body: { provider: string } }) => ({ data: mocks.recovery(options.body.provider) ?? { accountId, provider: options.body.provider, state: "none" }, error: null }) },
+    functions: { invoke: mocks.invoke },
 }) }));
 import AccountPage from "./page";
 
 afterEach(() => vi.resetAllMocks());
-async function render(membership = EMPTY_MEMBERSHIP, params: { patreon?: string } = {}) {
-    mocks.status.mockResolvedValue({ hasDiscord: true, membership });
+async function render(membership = EMPTY_MEMBERSHIP, params: { patreon?: string } = {}, hasDiscord = true) {
+    mocks.status.mockResolvedValue({ hasDiscord, membership });
     const element = document.createElement("div");
     element.innerHTML = renderToStaticMarkup(await AccountPage({ searchParams: Promise.resolve(params) }));
     return element;
@@ -51,13 +50,21 @@ it("does not claim expired qualifying verification is current", async () => {
     expect(view.textContent).not.toContain("Membership verified.");
     expect(view.textContent).toContain("Verify your membership before creating a new server.");
 });
-it("automatically completes only a verified live callback, not an arbitrary query or retry landing", async () => {
-    expect((await render(EMPTY_MEMBERSHIP, { patreon: "confirm" })).textContent).not.toContain("Automatic completion");
-    mocks.recovery.mockImplementation(provider => provider === "patreon" ? { accountId, provider, state: "live", operationId: "eeeeeeee-1111-4111-8111-111111111111", confirmable: true, returnPath: "/account" } : undefined);
-    expect((await render(EMPTY_MEMBERSHIP, { patreon: "confirm" })).textContent).toContain("Automatic completion");
-    const retry = await render(EMPTY_MEMBERSHIP, { patreon: "confirm_error" });
-    expect(retry.textContent).not.toContain("Automatic completion");
-    expect(retry.textContent).toContain("Retry connecting Patreon");
+it.each(["confirm", "linked", "error", "confirm_error"])("query %s neither completes nor hides reconnect", async patreon => {
+    const view = await render(EMPTY_MEMBERSHIP, { patreon });
+    expect(view.textContent).toContain("Connect Patreon");
+    expect(view.textContent).not.toMatch(/Recover|Resolve|Retry connecting|Finishing/);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+});
+it("initial link and disconnect/reconnect expose Connect solely from current status", async () => {
+    for (const hasDiscord of [false, true, false]) {
+        const view = await render({ ...EMPTY_MEMBERSHIP, linked: hasDiscord }, {}, hasDiscord);
+        expect(view.textContent?.includes("Confirm and connect Discord")).toBe(!hasDiscord);
+        expect(view.textContent?.includes("Connect Patreon")).toBe(!hasDiscord);
+        expect(view.textContent?.includes("Verify with Patreon")).toBe(hasDiscord);
+        expect(view.textContent).not.toMatch(/Recover|Resolve|Cancel pending/);
+    }
+    expect(mocks.invoke).not.toHaveBeenCalled();
 });
 it("uses safe name fallbacks without exposing email or confusing provider identity", () => {
     expect(accountDisplayName({ user_metadata: { full_name: "  Andrew  " } })).toBe("Andrew");

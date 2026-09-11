@@ -7,7 +7,7 @@ const url = process.env.WEBSITE_MEMBERSHIP_LOCK_TEST_URL;
 const baseline = process.env.WEBSITE_MEMBERSHIP_BASELINE === "1";
 const a = "aaaaaaaa-1111-4111-8111-111111111111", b = "bbbbbbbb-1111-4111-8111-111111111111";
 const member = "cccccccc-1111-4111-8111-111111111111";
-const tables = ["auth.users", "public.patreon_accounts", "public.patreon_oauth_states", "public.membership_heads", "public.membership_outbox", "public.membership_completion_receipts", "public.membership_recovery_intents", "public.discord_link_requests", "patreon_roles.sync_state", "patreon_roles.memberships", "patreon_roles.grants", "patreon_roles.audit"];
+const tables = ["auth.users", "public.patreon_accounts", "public.patreon_oauth_states", "public.membership_heads", "public.membership_outbox", "public.membership_completion_receipts", "public.discord_link_requests", "patreon_roles.sync_state", "patreon_roles.memberships", "patreon_roles.grants", "patreon_roles.audit"];
 test("membership role locking: actual PostgreSQL combined call graph", { skip: !url }, async t => {
     const target = new URL(url!); assert.equal(target.hostname,"127.0.0.1"); assert.equal(target.pathname,"/website_membership_lock_test");
     const db = new pg.Client({connectionString:url}); const peer = new pg.Client({connectionString:url}); const third = new pg.Client({connectionString:url});
@@ -21,7 +21,7 @@ test("membership role locking: actual PostgreSQL combined call graph", { skip: !
         assert.deepEqual(await snapshot(),before,"whole-statement rollback: "+label); console.log("REFUSAL_ROLLBACK",label);
     }
     async function setup() {
-        await db.query("truncate public.membership_completion_receipts, public.membership_outbox, public.membership_recovery_intents, public.discord_link_requests, public.patreon_oauth_states, public.membership_heads, patreon_roles.audit, patreon_roles.grants, patreon_roles.memberships, patreon_roles.sync_state, public.patreon_accounts, auth.users cascade");
+        await db.query("truncate public.membership_completion_receipts, public.membership_outbox, public.discord_link_requests, public.patreon_oauth_states, public.membership_heads, patreon_roles.audit, patreon_roles.grants, patreon_roles.memberships, patreon_roles.sync_state, public.patreon_accounts, auth.users cascade");
         await db.query("insert into auth.users(id,email_confirmed_at,raw_app_meta_data) values($1,now(),'{\"role\":\"User\",\"unrelated\":true}'),($2,now(),'{\"role\":\"User\"}')",[a,b]);
         await db.query("insert into public.patreon_accounts(user_id,patreon_user_id) values($1,'123')",[a]);
         await rpc("membership_fence",[a,null,false]); await rpc("membership_fence",[b,null,false]);
@@ -35,7 +35,7 @@ test("membership role locking: actual PostgreSQL combined call graph", { skip: !
     }
     try {
         await db.query("create schema auth; create table auth.users(id uuid primary key, email_confirmed_at timestamptz, deleted_at timestamptz, banned_until timestamptz, raw_app_meta_data jsonb, updated_at timestamptz)");
-        for(const name of ["20260907212654_create_patreon_links.sql","20260907220000_patreon_website_roles.sql","20260907230000_atomic_live_console_assignments.sql","202609080002_membership_onboarding.sql",...(!baseline?["202609080003_membership_role_locking.sql","20260908030000_patreon_event_reconciliation.sql","20260910200000_membership_receipt_claims.sql"]:[])]) await db.query(await readFile(`supabase/migrations/${name}`,"utf8"));
+        for(const name of ["20260907212654_create_patreon_links.sql","20260907220000_patreon_website_roles.sql","20260907230000_atomic_live_console_assignments.sql","202609080002_membership_onboarding.sql",...(!baseline?["202609080003_membership_role_locking.sql","20260908030000_patreon_event_reconciliation.sql","20260910200000_membership_receipt_claims.sql","202609110001_edge_owned_link_commit.sql"]:[])]) await db.query(await readFile(`supabase/migrations/${name}`,"utf8"));
         // Harness safety deadline produces baseline red instead of hanging a cyclic test.
         for(const c of [db,peer,third]) await c.query("set statement_timeout='2s'; set lock_timeout='1700ms'");
         for(const operation of ["unlink","complete","replacement","worker","delete"] as const) await t.test(`${operation} refuses held Auth tuple, preserves all effects, explicit retry`,async()=>{

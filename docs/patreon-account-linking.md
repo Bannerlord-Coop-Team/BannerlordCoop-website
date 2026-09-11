@@ -3,15 +3,15 @@
 This links Patreon to an existing Supabase account, with authenticated
 completion after Patreon consent and ephemeral `identity identity.memberships` verification. Tokens
 are never retained. See [membership onboarding](membership-onboarding.md) for the
-current policy, transactional recovery, private synchronization contract, settings,
-additive migration order and enablement blockers. This is not unattended polling
+current policy, atomic completion, private synchronization contract, settings,
+migration/cutover order and enablement blockers. This is not unattended polling
 or proof of settled funds. The original identity-only SQL migration remains immutable.
 
 The independent [website role worker](patreon-website-roles.md) uses a distinct creator token and policy to manage Standard Server roles; those roles never authorize control-plane membership grants.
 
 ## Production setup
 
-1. Follow the coordinated additive migration order in the membership document.
+1. Follow the coordinated migration/cutover order in the membership document.
    The original `supabase/migrations/20260907212654_create_patreon_links.sql` belongs to the intended
    Supabase project. If using the CLI, verify the linked project and review
    `supabase db push --dry-run` before `supabase db push` (which applies all pending
@@ -68,22 +68,30 @@ make CI pass.
 
 The current complete flow is documented in [membership onboarding](membership-onboarding.md).
 Launch/state remain one-use and browser-cookie bound; operation UUID, initiating
-UUID, expected generation and safe return path are server-held. Callback GET
-creates normalized completion authority only. After returning from Patreon, the website
-automatically submits an authenticated same-origin POST when recovery status confirms a
-live, confirmable operation. The action rechecks the rendered account and operation
-against the current cookie before completing. GET never commits a link, and a query
-parameter alone cannot authorize completion. Failed completion lands on manual retry
-rather than automatically looping; without JavaScript, a submit button remains available.
-One transaction consumes authority, links, stores normalized evidence,
-records an immutable replayable receipt and emits an outbox event. Lost responses
-retain the same completion cookie when available; a bounded account/provider recovery
-slot survives cookie expiry and resolves the exact operation via authenticated status.
-Neither this non-authorizing UUID nor current Auth linkage replaces live completion
-authority. Explicit cancellation serializes with commit; uncertain attempts cannot be
-silently replaced. A committed receipt can be recovered after expiry without relinking.
-Current status is authenticated,
-never established by query parameters. Unlink/deletion preserve revocation evidence.
+UUID, expected generation and safe return path are server-held. The anonymous
+provider callback creates normalized completion authority only. It never commits a
+forwarded initiation ticket. The website callback checks current authenticated
+`getUser`/`getSession` agreement, then immediately invokes `patreon-complete` with
+that session's bearer token. Edge validates it through Auth; SQL requires that the
+completion authority belongs to that exact account and its generation is current.
+No client hydration, completion cookie, manual confirmation, Recover or Resolve is
+required. The deployed JSON:API response handling and bounded safe diagnostics remain.
+
+The Edge completion's `membership_complete` RPC is the atomic website DB commit:
+authority consumption, globally unique Patreon link, evidence, receipt and outbox
+commit together or roll back together. External OAuth and Auth are not part of this
+SQL transaction. Exact token retries return the immutable historical receipt without
+reapplying an unlinked/superseded binding; the landing page always reads current
+status rather than displaying receipt/query flags as current connection status.
+If an outcome is lost, check current status and explicitly authorize again if needed.
+New authorization fences older generations; no unacknowledged reference blocks it.
+Expired/failed attempts require fresh OAuth, not resolution. Technical mutation and
+outbox capacity limits still apply. Website Edge invocations have a ten-second timeout;
+a timeout does not imply rollback and does not trigger automatic authorization loops.
+
+`202609110001_edge_owned_link_commit.sql` is forward-only and drops the recovery
+RPC/table/issuance trigger. Read the cutover and rollback section before deployment;
+this task does not deploy it or drop any production table.
 
 All sensitive storage has RLS and no anon/authenticated grants. No provider tokens,
 raw bodies or emails are persisted as evidence. Avoid logging callback query strings
@@ -92,8 +100,8 @@ in external request-log systems: they contain short-lived OAuth codes or tickets
 ## Validation
 
 ```sh
-npx tsx --test supabase/functions/_shared/patreon.test.ts
-npx vitest run src/app/account/page.component.test.tsx
+npx tsx --test supabase/functions/_shared/patreon.test.ts tests/membership-edge-commit.test.ts
+npx vitest run src/app/account
 npx next typegen && npx tsc --noEmit
 ```
 

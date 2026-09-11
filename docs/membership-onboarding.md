@@ -1,4 +1,8 @@
-# Source-owned account and membership onboarding (not enabled or deployed)
+# Source-owned account and membership onboarding
+
+The edge-owned commit cutover below is pending; this change performs no deployment
+or remote schema mutation. Previously deployed Patreon JSON:API handling and safe
+callback diagnostics are retained unchanged.
 
 This composes reviewed website histories `93ab60b` (owner onboarding) and
 `e8a6648ca64b8ae0e8cbd43d31620eec720b131f` (Patreon identity linking), without the
@@ -56,82 +60,86 @@ revoke administrative grants, transfer servers, or start a grace countdown. Exis
 owner Start/Stop/saves remain accessible. Beginning a new Patreon check invalidates
 old positive evidence immediately, including cancellation or provider outage.
 
-## Same-account flow and recovery
+## Same-account flow and Edge commit
 
-1. Sign in or sign up normally, retaining the intended website account. `/servers`
-   inspects current Auth provider identities **before requesting CP allocation**.
-   Missing Discord offers **Confirm and connect Discord**; it uses Supabase
-   `linkIdentity`, never `signInWithOAuth`, an email match or automatic account merge.
-2. A server-held random-token request records initiating UUID, operation UUID, safe
-   `/account` or `/servers` continuation and a ten-minute expiry. Its reference is
-   in a Secure, HttpOnly, host-only cookie. Supabase owns its own OAuth state/PKCE;
-   application code does not replace them. The callback checks the current UUID
-   against the server request before exchanging the code and verifies the same UUID
-   afterward. Only after successful same-UUID exchange, the existing server-only
-   `getSupabaseAdminClient` seam writes an exact token/account/operation callback
-   marker. This requires the existing `SUPABASE_SECRET_KEY` on the website server;
-   missing configuration fails closed before code exchange. The fixed callback RPC
-   is service-role-only; browser JWTs cannot stamp a marker from Auth linkage.
-   Explicit confirmation requires the marker, current authoritative Discord,
-   unchanged callback generation and live original authority. The first marker
-   also CAS-checks the initiation generation before current-Auth fencing. A parallel
-   background status that fences the newly connected identity (or a Patreon begin/
-   unlink) can therefore supersede this attempt before the marker is written. This
-   conservative refusal does not disconnect Auth or remove independent grants:
-   resolve/cancel the uncommitted attempt and continue using the valid connection.
-   No seamless OAuth success under that race is claimed.
-   Supabase may establish the identity during its own OAuth callback after the
-   user's initial explicit approval; return confirmation never fabricates identity.
-3. Disabled manual linking, cancellation, missing/expired cookie, conflicting
-   provider identities, forwarded callback or account change fail into repair.
-   Separate pre-existing accounts require support. Never solve them by switching
-   to sign-in, guessing identity by email or transferring CP ownership.
-4. Patreon launch/state are single-use, hashed and browser-cookie bound. Operation
-   UUID, expected generation and server-held continuation travel through state.
-   Provider callback GET creates only normalized completion authority; the website
-   callback GET puts its token in an HttpOnly cookie and removes it from the URL.
-   **Authenticated explicit POST confirmation** commits the link and evidence.
-5. One SQL transaction validates initiating UUID, generation and expiry, consumes
-   completion authority, updates the globally unique Patreon binding, increments
-   revision, writes an immutable receipt and inserts an outbox hint. Lost responses
-   retry the same token and recover the committed receipt, even after evidence
-   expiry/unlink. Recovery reports the historical operation, not a current positive
-   status, and never relinks. A different user cannot consume or recover it.
-   Keep pending cookies on uncertain responses, but do not rely on their survival.
-   One durable, non-authorizing recovery slot per account/provider stores the exact
-   operation, hash, generation, expiry and safe continuation (no raw OAuth token).
-   Discord begin and Patreon completion issuance persist this slot atomically.
-   Authenticated status renders retained recovery on throttle/reload/bare `/account`.
-   A missing cookie or unverified callback cannot be replaced by the UUID or current
-   Auth identity. Explicit cancellation serializes with completion: a winning commit
-   returns its historical receipt; otherwise cancellation fences/deletes ephemeral
-   authority. Acknowledged committed slots survive response loss until a later
-   explicit begin replaces them; immutable receipts/confirmed history never expire.
-   A live/unknown attempt blocks replacement. An expired uncommitted attempt can be
-   explicitly resolved, then restarted if Auth is unlinked. An already connected
-   Discord remains usable for Servers/Patreon without falsely reporting the expired
-   attempt committed; fresh OAuth for an already-linked provider is not promised.
-   If a confirmed Discord slot no longer matches authoritative current Auth (including
-   unlink), recovery returns `historical`, with no receipt or confirmation authority.
-   Exact same-account resolution only acknowledges that reference and returns `retired`;
-   it never restores identity, grants or original confirmation history. An already
-   acknowledged slot is also `retired` under mismatch. Both states expose explicit
-   retirement; cookie-free lost-response retries remain idempotent. Only `retired`
-   plus currently unlinked Auth permits a new explicit begin. A valid different
-   current Discord can continue normally without claiming the old attempt is current.
-   A new begin replaces the acknowledged slot; old/foreign/unknown operation resolution
-   cannot clear it. All recovery responses (including cancellation and committed
-   acknowledgment), Discord confirmation and Patreon completion leave shared browser
-   cookies untouched so delayed responses cannot erase a newer authority. Cookies
-   expire naturally or are replaced by a subsequent initiation/callback; SQL still
-   fences consumed/cancelled authority. Comparing an old request's cookie snapshot
-   does not protect against reordered HTTP responses. Successful confirmation/receipt-as-current replay
-   still refuses mismatched Auth. No Auth unlink or automatic account merge is performed.
-6. `/account` shows a server-authenticated current status, never success inferred
-   from query parameters. **Refresh status** reads durable state/sync; **Check again**
-   initiates new OAuth. `/servers` retains exact-UUID sessionStorage mutation recovery
-   ahead of membership prompts, preserves current-session completion fences, and
-   separates **owned** cards from **associated** manager/support/admin cards.
+1. Sign in to the intended website account. `/servers` checks current Auth provider
+   identities before allocation. **Confirm and connect Discord** uses Supabase
+   `linkIdentity`, never sign-in, an email match or automatic account merge.
+2. A server-held Discord request stores initiating UUID, operation UUID, safe return
+   path and ten-minute expiry. Its random token is in a Secure, HttpOnly, host-only
+   cookie. Supabase still owns OAuth state/PKCE. Before code exchange, the website
+   callback checks current `getUser`/`getSession` agreement and token ownership via
+   authenticated Edge. After successful exchange it verifies the same account and
+   current Discord identity, and checks the returned session matches that account.
+   Only the website server's existing `SUPABASE_SECRET_KEY` admin seam can stamp
+   successful PKCE using `membership_discord_callback`; missing configuration fails
+   before code exchange. Public JWT endpoints cannot infer this marker from Auth.
+3. The callback immediately invokes JWT-authenticated Edge `discord-confirm`.
+   Edge reads authoritative Auth; SQL requires the exact marker/current Discord,
+   current generation and unexpired authority before committing confirmation. The
+   existing `callback_generation` stores the initiating generation until attestation,
+   then the post-fence generation. A new explicit Discord attempt deletes only
+   unconfirmed requests; confirmed receipts remain immutable. A status/Patreon fence
+   can conservatively supersede an unstamped callback. This does not unlink Auth:
+   current Auth linking is independently authoritative and usable even if website
+   confirmation failed. There is no manual confirmation/recovery step. Disabled
+   manual linking, conflicting identity or account switches fail closed, never merge.
+4. Patreon launch/state are one-use, hashed and browser-cookie bound. The anonymous
+   provider callback verifies Patreon and issues only normalized completion authority.
+   The website callback validates current authenticated `getUser`/`getSession`
+   agreement and immediately invokes `patreon-complete` with that session's JWT.
+   Edge independently authenticates; SQL checks the completion token's initiating
+   account, generation and expiry. A forwarded initiation ticket never commits in
+   the anonymous provider callback. No Patreon completion cookie/client auto-submit
+   or Recover/Resolve UI exists.
+5. `membership_complete` is the atomic website DB commit point: token consumption,
+   globally unique Patreon binding, evidence, revision, immutable receipt and outbox
+   hint succeed together or roll back. OAuth/remote Auth are not a distributed SQL
+   transaction. A duplicate token returns its original receipt without relinking,
+   even after unlink; a foreign account cannot use it. Current status, not historical
+   receipt flags or query parameters, determines the landing page's connection UI.
+6. On failed/expired/lost outcomes, check current status and explicitly connect or
+   verify again if needed. A new Patreon authorization increments generation, fencing
+   older callbacks. New Discord attempts supersede unfinished requests. No durable
+   unacknowledged reference locks out reconnect. Rate limits/outbox backpressure
+   remain; no automatic retry loop or guaranteed wait time is promised. Discord
+   response handlers never delete shared cookies (a late response could erase a
+   newer attempt); they naturally expire or are replaced by explicit initiation.
+   `/servers` exact-UUID allocation recovery and ownership policy are unchanged.
+
+## Recovery-table removal: coordinated cutover and rollback
+
+`202609110001_edge_owned_link_commit.sql` is pending, forward-only website history.
+Do not rewrite/replay the historical onboarding or role/concurrency migrations.
+The migration replaces the five recovery-dependent begin/check/callback/confirm RPCs,
+drops `membership_completion_intent` trigger/function and `membership_recovery` RPC,
+then drops `membership_recovery_intents` without CASCADE. It adds no table or column.
+The existing atomic Patreon completion RPC, receipts, RLS/grants, account locks,
+role synchronization, membership policy and receipt-driven outbox delivery remain.
+
+For an authorized future cutover, pause account-link entry points/drain callbacks,
+review exact migration inventory and backups, apply the forward migration, deploy the
+matching website callbacks/UI and `website-account` Edge, then reopen linking.
+Do not leave the old website active after the drop: it calls removed recovery APIs
+and can hide Connect. New website against old SQL can still hit the old intent lockout.
+An old anonymous Patreon callback remains compatible (same normalized authority and
+JSON:API fix), but old browser confirmation pages should reload or restart. This is
+not a production deployment instruction executed by this change.
+
+The migration deliberately deletes **unconfirmed in-flight Discord requests** rather
+than guessing their initiation generation; those attempts must reauthorize once if
+Auth is not already linked. Already-linked Auth stays usable independently. Confirmed
+Discord requests and Patreon completion receipts survive unchanged. Patreon state
+and completion rows retain their existing expiry/generation fences. Dropped intent
+references cannot be reconstructed safely from receipts and must not be restored as
+new authorization.
+
+This is not a simple old-binary rollback: old UI/Edge require removed schema. Prefer
+roll-forward repair while preserving the new schema, or prepare a separately reviewed
+compatible rollback release. Restoring the old DB backup would lose subsequent valid
+links/receipts/outbox changes and is not an acceptable automatic rollback. Keep account
+linking paused during a failed cutover; never weaken account/generation checks to
+rescue a consumed callback. No remote DB changes or production drop occurred here.
 
 Full regions remain selectable for persistent Request, without reservation or ETA.
 Create remains stopped; first Start uses the bundled default save. Password controls
@@ -145,13 +153,13 @@ sequenceDiagram
   participant SQL as Website private RLS heads/receipts/outbox
   participant Edge as Private membership Edge
   participant CP as CP synchronizer / allocation
-  User->>Web: Same-account linkIdentity + explicit confirmation
+  User->>Web: Same-account linkIdentity / explicit authorization
   Web->>SQL: Initiating UUID / operation / expiry / safe continuation
   User->>OAuth: Explicit identity + identity.memberships authorization
   OAuth->>Web: Ephemeral callback verification
   Web->>SQL: Normalized completion authority (not a link)
-  User->>Web: Confirm Patreon completion (POST)
-  Web->>SQL: Atomic generation CAS, receipt, evidence, outbox
+  Web->>Edge: Current authenticated account JWT + completion token
+  Edge->>SQL: Atomic generation CAS, receipt, evidence, outbox
   CP->>Edge: Dedicated token: claim / snapshot / ack
   Edge->>Web: Exact UUID current Auth admin lookup
   Edge->>SQL: Transactional current-binding fence or tombstone
@@ -279,9 +287,9 @@ reissued after unlink. Only expired/superseded ephemeral authority is cleaned; d
 completion receipts, acknowledged events and confirmed Discord requests are retained.
 The closed public throttle is HTTP429, JSON `{"error":"membership_rate_limited"}`.
 There is no `Retry-After`: outbox delivery has no deterministic admission deadline.
-Refresh authenticated recovery before retrying. Ten-minute OAuth authority is never
-extended, and waiting cannot guarantee admission. Expired uncommitted attempts offer
-explicit safe resolution rather than an impossible ten-minute retry promise.
+Check current authenticated status before retrying. Ten-minute OAuth authority is never
+extended, and waiting cannot guarantee admission. Expired/failed attempts can be
+replaced by explicit authorization without a recovery/acknowledgment step.
 Confirmed Discord receipt replay, like Patreon, precedes expiry and ordinary admission
 while preserving account/current-identity fences. First Discord confirmation must
 write the exact account/operation/hash row before its original exclusive deadline and
@@ -289,9 +297,12 @@ assert `RETURNING` plus the recorded confirmation timestamp before returning suc
 If admission cleanup deletes the request or the deadline crosses inside the RPC, an
 exception rolls back all admission, cleanup, head/outbox and receipt effects. Fixture-only
 PG triggers cross that deadline at window reset and after cleanup; production has no
-clock override or expiry extension. PG-backed mounted actions exercise synthetic Auth
-unlink/change, both acknowledgment states, lost retirement responses and explicit restart;
-this is not real browser OAuth/JWT or deployed Edge evidence. The partial
+clock override or expiry extension. `tests/membership-edge-commit.test.ts` runs real SQL
+in PGlite with the recovery table absent, covering forward cutover, account binding,
+receipt replay, failure rollback and disconnect/reconnect. Component tests cover
+immediate website callbacks and session switches. PGlite is single-connection, not
+real multi-session contention or live browser OAuth/JWT evidence. The existing local
+PostgreSQL/GoTrue suites require separately available isolated fixtures. The partial
 `discord_link_requests_pending_account_expiry` index excludes retained confirmed
 history from account/expiry admission scans. Local PostgreSQL EXPLAIN regressions
 populate 50,000 confirmed rows without forcing the optimizer's scan choice.
