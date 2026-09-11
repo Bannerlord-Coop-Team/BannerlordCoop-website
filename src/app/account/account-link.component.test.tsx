@@ -5,6 +5,7 @@ vi.mock("next/navigation", () => ({ redirect: (url: string) => { throw new Error
 vi.mock("next/headers", () => ({ cookies: async () => ({ has: (key:string) => mocks.jar.has(key), get: (key:string) => mocks.jar.has(key) ? { value: mocks.jar.get(key) } : undefined, set: (key:string,value:string) => mocks.jar.set(key,value), delete: (key:string) => mocks.jar.delete(key) }) }));
 import { disconnectDiscordAccount, disconnectPatreonAccount, automaticallyCompletePatreonAccount, linkDiscordAccount, completePatreonAccount, confirmDiscordAccount, resolveAccountLink } from "./actions";
 vi.mock("@/app/lib/supabase/admin", () => ({ getSupabaseAdminClient: mocks.admin }));
+vi.mock("@/app/account/AccountStatusSync", () => ({ AccountStatusSync: () => null }));
 vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: () => null }));
 vi.mock("@/app/components/layout/Footer", () => ({ Footer: () => null }));
 import { act } from "react";

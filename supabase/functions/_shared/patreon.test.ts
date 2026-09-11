@@ -209,7 +209,8 @@ test("completion rejects a different site user (including a forwarded initiation
     assert.equal((await f.finish(completion, "user-a")).status, 200);
 });
 
-test("provider failures do not expose provider responses", async () => {
+test("provider failures log only a fixed stage and status, never provider responses", async (t) => {
+    const warning = t.mock.method(console, "warn", () => {});
     const f = fixture();
     const { state, cookie } = await f.begin();
     f.failExchange();
@@ -217,6 +218,7 @@ test("provider failures do not expose provider responses", async () => {
     assert.equal(returned.headers.get("Location"), "https://website.example/account?patreon=error");
     assert.equal(await returned.text(), "");
     assert.equal(f.accounts.length, 0);
+    assert.deepEqual(warning.mock.calls.map(call => call.arguments), [["Patreon callback failed", { stage: "token_exchange", status: 400 }]]);
 });
 
 test("a Patreon identity already linked to another user is not reassigned", async () => {

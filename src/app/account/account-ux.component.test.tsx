@@ -4,6 +4,7 @@ import { EMPTY_MEMBERSHIP } from "@/app/lib/hosting/membership-onboarding";
 import { accountDisplayName, discordDisplayName } from "@/app/lib/auth/account-display";
 
 const mocks = vi.hoisted(() => ({ status: vi.fn(), recovery: vi.fn() }));
+vi.mock("@/app/account/AccountStatusSync", () => ({ AccountStatusSync: ({ pending }: { pending: boolean }) => <span data-status-pending={pending} /> }));
 vi.mock("@/app/account/PatreonAutoCompletion", () => ({ PatreonAutoCompletion: () => <p>Automatic completion</p> }));
 vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: () => null }));
 vi.mock("@/app/components/layout/Footer", () => ({ Footer: () => null }));
@@ -40,7 +41,8 @@ it("shows account and provider names, a clear next action, and no permanent help
 it("shows contextual synchronization feedback and visible disconnect controls", async () => {
     const view = await render({ ...EMPTY_MEMBERSHIP, linked: true, sync: "pending" });
     expect(view.textContent).toContain("Your server allowance is updating.");
-    expect(view.textContent).toContain("Check status");
+    expect(view.textContent).not.toContain("Check status");
+    expect(view.querySelector('[data-status-pending="true"]')).not.toBeNull();
     expect([...view.querySelectorAll("button")].some(button => button.textContent === "Disconnect Patreon")).toBe(true);
     expect(view.textContent).not.toContain("Confirm disconnect Patreon");
 });
