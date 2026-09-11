@@ -346,6 +346,15 @@
         "migrationName": "drop_unused_community_servers",
         "source": "supabase_migrations.schema_migrations.statements"
       }
+    },
+    {
+      "version": "202609110001",
+      "owner": "website",
+      "websitePath": "supabase/migrations/202609110001_edge_owned_link_commit.sql",
+      "websiteSha256": "744af3e59ea259e9578a366edbfe81ccf5a010092cc1d1941257842996c90acf",
+      "websiteBytes": 7616,
+      "representationException": false,
+      "releaseClassification": "pending forward migration; coordinated website/Edge cutover removes recovery intents; do not deploy independently"
     }
   ],
   "integratedWebsiteMainHead": "f012d9412d98a1e8f50bcc3887c655a813959500",
