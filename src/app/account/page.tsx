@@ -1,5 +1,6 @@
+import { DisconnectAccount } from "@/app/account/DisconnectAccount";
 import { PatreonAutoCompletion } from "@/app/account/PatreonAutoCompletion";
-import { automaticallyCompletePatreonAccount, resolveAccountLink, completePatreonAccount, confirmDiscordAccount, linkDiscordAccount, linkPatreonAccount, unlinkPatreonAccount } from "@/app/account/actions";
+import { automaticallyCompletePatreonAccount, resolveAccountLink, completePatreonAccount, confirmDiscordAccount, linkDiscordAccount, linkPatreonAccount, disconnectDiscordAccount, disconnectPatreonAccount } from "@/app/account/actions";
 import { accountDisplayName, discordDisplayName } from "@/app/lib/auth/account-display";
 import { ArrowRight, Check, UserRound } from "lucide-react";
 import { Footer } from "@/app/components/layout/Footer";
@@ -40,6 +41,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     const checkedAt = Date.now();
     const accountName = accountDisplayName(user);
     const discordName = discordDisplayName(user);
+    const discordIdentity = user.identities?.find(identity => identity.provider === "discord");
+    const hasOtherSignIn = user.identities?.some(identity => identity.provider !== "discord") ?? false;
     const needsStatusCheck = !status || status.membership.linked && ["pending", "unavailable"].includes(status.membership.sync) || Object.values(recovery).some(pending => !pending || !["none", "retired", "resolved"].includes(pending.state)) || Object.values(params).some(Boolean);
     const primaryButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-gold px-5 py-3 text-sm font-semibold text-background transition-colors hover:bg-gold/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background";
     const secondaryButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-white/20 px-4 py-2 text-sm text-foreground transition-colors hover:border-gold hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
@@ -53,6 +56,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         {!status && <p role="alert" className="mt-6 border-l-2 border-gold bg-gold/10 p-4 text-sm">Account status is unavailable. Check status before connecting an account.</p>}
         {(params.patreon === "rate_limited" || params.discord === "rate_limited") && <p role="alert" className="mt-4">Too many account changes or synchronization is still catching up. Refresh status before retrying; there is no guaranteed wait time. Authorization expires within ten minutes and is never extended by retrying. Resolve the original attempt below before starting again. Unlink and existing server management remain available.</p>}
         {[params.patreon, params.discord, params.recovery].includes("retry") && <p role="alert" className="mt-4">The account is busy. No refused database statement was applied. Keep this same account and retained attempt; refresh status and explicitly retry the same confirmation or resolution. Do not start a replacement authorization while its outcome is unknown. A consumed provider callback may require resolving the retained attempt before explicitly starting again. There is no guaranteed wait time.</p>}
+        {params.discord === "last_identity" && <p role="alert" className="mt-4 text-sm">Discord is your only sign-in method. Connect another sign-in method before disconnecting it.</p>}
+        {params.discord === "disconnect_error" && <p role="alert" className="mt-4 text-sm">Discord could not be disconnected. Check status and try again. If the problem continues, contact support.</p>}
+        {params.patreon === "disconnect_error" && <p role="alert" className="mt-4 text-sm">Patreon could not be disconnected. Check status before trying again.</p>}
         {params.discord === "repair" && <p role="alert" className="mt-4">Discord linking could not be confirmed. Manual linking may be disabled, your session changed, the request expired, or this Discord belongs to another account. Return to the original account and refresh the retained attempt below. Missing server-side linking configuration requires operator repair; do not assume Auth connection confirms this attempt. We never substitute sign-in for linking.</p>}
         {["error", "confirm_error", "cancelled"].includes(params.patreon ?? "") && <p role="alert" className="mt-4">Patreon authorization was cancelled or could not be confirmed. If a confirmation is pending, retry that same confirmation before starting again. A Patreon account can belong to only one website account.</p>}
         {params.recovery === "unavailable" && <p role="alert">The operation could not be resolved. Keep this attempt and refresh status; do not start another authorization.</p>}
@@ -77,6 +83,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                 <section className="p-5 sm:p-6" aria-labelledby="discord-heading">
                     <div className="flex flex-wrap items-center justify-between gap-3"><h3 id="discord-heading" className="font-semibold">Discord</h3><ConnectionBadge connected={status?.hasDiscord} /></div>
                     <p className="mt-3 break-words text-sm leading-6 text-foreground-muted">{status?.hasDiscord ? discordName ?? "Your Discord account is connected." : "Connect Discord to this website account to set up a server."}</p>
+                    {status?.hasDiscord && <DisconnectAccount provider="Discord" action={disconnectDiscordAccount.bind(null, user.id, discordIdentity?.identity_id ?? "")} disabledReason={!discordIdentity?.identity_id ? "Discord identity could not be confirmed. Check status before disconnecting." : !hasOtherSignIn ? "Discord is your only sign-in method. Connect another sign-in method before disconnecting it." : undefined} />}
                     {status && !status.hasDiscord && (recovery.discord?.state === "none" || recovery.discord?.state === "retired") && <form action={linkDiscordAccount} className="mt-4"><input type="hidden" name="returnPath" value="/account" /><button type="submit" className={primaryButton}>Confirm and connect Discord</button></form>}
                 </section>
                 <section className="p-5 sm:p-6" aria-labelledby="patreon-heading">
@@ -87,7 +94,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                         <p>You may need to verify your membership again before creating a new server. Existing servers aren’t automatically stopped when verification expires.</p>
                     </div>}
                     {status && (recovery.patreon?.state === "none" || recovery.patreon?.state === "resolved") && <form action={linkPatreonAccount} className="mt-4"><input type="hidden" name="returnPath" value="/account" /><button type="submit" className={primaryButton}>{status.membership.linked ? "Verify with Patreon" : "Connect Patreon"}</button></form>}
-                    {status?.membership.linked && <details className="mt-5 text-sm text-foreground-muted"><summary className="cursor-pointer py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">Disconnect Patreon</summary><form action={unlinkPatreonAccount} className="mt-3"><p className="leading-6">Disconnecting removes membership eligibility for new servers. Existing servers and administrative grants are not removed.</p><button type="submit" className={`${secondaryButton} mt-3`}>Confirm unlink Patreon</button></form></details>}
+                    {status?.membership.linked && <DisconnectAccount provider="Patreon" action={disconnectPatreonAccount.bind(null, user.id)} />}
                 </section>
             </div>
             {needsStatusCheck && <Link href="/account" prefetch={false} className={`${secondaryButton} mt-4`}>Check status</Link>}

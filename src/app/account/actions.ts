@@ -88,10 +88,37 @@ export async function resolveAccountLink(form: FormData) {
     } catch { /* Unknown outcomes retain both durable intent and cookie. */ }
     redirect(destination);
 }
-export async function unlinkPatreonAccount() {
-    let destination = "/account?patreon=error";
+export async function disconnectDiscordAccount(accountId: string, identityId: string) {
+    let destination = "/account?discord=disconnect_error";
     try {
-        const { supabase, session } = await authenticated();
+        const { supabase, user } = await authenticated();
+        if (user.id !== accountId) throw new Error("Account changed");
+        const identity = user.identities?.find(value => value.provider === "discord" && value.identity_id === identityId);
+        if (!identity) throw new Error("Identity changed");
+        if (!user.identities?.some(value => value.provider !== "discord")) {
+            destination = "/account?discord=last_identity";
+        } else {
+            // Supabase Auth also enforces its last-identity protection at unlink time.
+            const { error } = await supabase.auth.unlinkIdentity(identity);
+            if (!error) destination = "/account?discord=disconnected";
+        }
+    } catch { /* Do not expose Auth responses or identity details. */ }
+    redirect(destination);
+}
+
+export async function disconnectPatreonAccount(accountId: string) {
+    return unlinkPatreonAccountFor(accountId);
+}
+
+export async function unlinkPatreonAccount() {
+    return unlinkPatreonAccountFor();
+}
+
+async function unlinkPatreonAccountFor(accountId?: string) {
+    let destination = "/account?patreon=disconnect_error";
+    try {
+        const { supabase, user, session } = await authenticated();
+        if (accountId && user.id !== accountId) throw new Error("Account changed");
         const { data, error } = await supabase.functions.invoke("website-account", { headers: { Authorization: `Bearer ${session.access_token}` }, body: { operation: "unlink" } });
         if (await contention(error)) destination = "/account?patreon=retry";
         if (!error && data?.unlinked === true) destination = "/account?patreon=unlinked";

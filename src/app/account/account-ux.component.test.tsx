@@ -7,13 +7,13 @@ const mocks = vi.hoisted(() => ({ status: vi.fn(), recovery: vi.fn() }));
 vi.mock("@/app/account/PatreonAutoCompletion", () => ({ PatreonAutoCompletion: () => <p>Automatic completion</p> }));
 vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: () => null }));
 vi.mock("@/app/components/layout/Footer", () => ({ Footer: () => null }));
-vi.mock("@/app/account/actions", () => ({ automaticallyCompletePatreonAccount: vi.fn(), resolveAccountLink: vi.fn(), completePatreonAccount: vi.fn(), confirmDiscordAccount: vi.fn(), linkDiscordAccount: vi.fn(), linkPatreonAccount: vi.fn(), unlinkPatreonAccount: vi.fn() }));
+vi.mock("@/app/account/actions", () => ({ automaticallyCompletePatreonAccount: vi.fn(), resolveAccountLink: vi.fn(), completePatreonAccount: vi.fn(), confirmDiscordAccount: vi.fn(), linkDiscordAccount: vi.fn(), linkPatreonAccount: vi.fn(), disconnectPatreonAccount: vi.fn(), disconnectDiscordAccount: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock("@/app/lib/hosting/website-account-status", () => ({ getWebsiteAccountStatus: mocks.status }));
 const accountId = "aaaaaaaa-1111-4111-8111-111111111111";
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: async () => ({
     auth: {
-        getUser: async () => ({ data: { user: { id: accountId, user_metadata: { full_name: "Andrew" }, identities: [{ provider: "discord", identity_data: { preferred_username: "andrew_discord" } }] } } }),
+        getUser: async () => ({ data: { user: { id: accountId, user_metadata: { full_name: "Andrew" }, identities: [{ provider: "discord", identity_id: "discord-identity", identity_data: { preferred_username: "andrew_discord" } }] } } }),
         getSession: async () => ({ data: { session: { user: { id: accountId }, access_token: "test" } } }),
     },
     functions: { invoke: async (_name: string, options: { body: { provider: string } }) => ({ data: mocks.recovery(options.body.provider) ?? { accountId, provider: options.body.provider, state: "none" }, error: null }) },
@@ -37,12 +37,12 @@ it("shows account and provider names, a clear next action, and no permanent help
     expect(view.textContent).not.toContain("Verification: unknown");
     expect(view.querySelector('a[href="/servers"]')?.textContent).toContain("My Servers");
 });
-it("shows contextual synchronization feedback and keeps unlink behind disclosure", async () => {
+it("shows contextual synchronization feedback and visible disconnect controls", async () => {
     const view = await render({ ...EMPTY_MEMBERSHIP, linked: true, sync: "pending" });
     expect(view.textContent).toContain("Your server allowance is updating.");
     expect(view.textContent).toContain("Check status");
-    expect(view.querySelector("details")?.hasAttribute("open")).toBe(false);
-    expect(view.querySelector("details")?.textContent).toContain("Confirm unlink Patreon");
+    expect([...view.querySelectorAll("button")].some(button => button.textContent === "Disconnect Patreon")).toBe(true);
+    expect(view.textContent).not.toContain("Confirm disconnect Patreon");
 });
 it("does not claim expired qualifying verification is current", async () => {
     const view = await render({ ...EMPTY_MEMBERSHIP, linked: true, verification: "qualifying", validUntil: "2000-01-01T00:00:00Z" });
