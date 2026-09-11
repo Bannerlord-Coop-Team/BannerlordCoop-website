@@ -39,7 +39,7 @@ export type JsonReadDiagnostics = {
     contentType: "application/json" | "application/vnd.api+json" | "text/html" | "text/plain" | "missing" | "other";
     status: number; bytesRead: number; maxBytes: number; elapsedMs: number;
 };
-export async function boundedJson(response: Response, max = 65_536, onFailure?: (details: JsonReadDiagnostics) => void): Promise<unknown> {
+export async function boundedJson(response: Response, max = 65_536, onFailure?: (details: JsonReadDiagnostics) => void, options: { allowJsonApi?: boolean } = {}): Promise<unknown> {
     const started = Date.now();
     let phase: JsonReadDiagnostics["phase"] = "content_type";
     let length = 0;
@@ -49,7 +49,8 @@ export async function boundedJson(response: Response, max = 65_536, onFailure?: 
     const contentType: JsonReadDiagnostics["contentType"] = !mediaType ? "missing"
         : mediaType === "application/json" || mediaType === "application/vnd.api+json" || mediaType === "text/html" || mediaType === "text/plain" ? mediaType : "other";
     try {
-        if (!rawType?.startsWith("application/json")) throw new Error("Invalid JSON response");
+        // JSON:API is opt-in for Patreon identity, not other service or request bodies.
+        if (!rawType?.startsWith("application/json") && !(options.allowJsonApi && mediaType === "application/vnd.api+json")) throw new Error("Invalid JSON response");
         phase = "missing_body";
         if (!response.body) throw new Error("Invalid JSON response");
         phase = "body_read";

@@ -88,7 +88,7 @@ function fixture() {
                     { type: "member", id: memberId, attributes: { patron_status: "active_patron", last_charge_status: "Paid", last_charge_date: "2026-09-01T12:00:00Z", currently_entitled_amount_cents: 2000, is_free_trial: false, is_gifted: false }, relationships: { user: { data: { type: "user", id: "123" } }, campaign: { data: { type: "campaign", id: "10" } }, currently_entitled_tiers: { data: [{ type: "tier", id: "20" }] } } },
                     { type: "campaign", id: "10", attributes: { currency: "USD" } },
                     { type: "tier", id: "20", attributes: { amount_cents: 2000 }, relationships: { campaign: { data: { type: "campaign", id: "10" } } } },
-                ] });
+                ] }, { headers: { "Content-Type": "application/vnd.api+json; charset=utf-8" } });
             }
             throw new Error(`Unexpected request: ${url}`);
         },

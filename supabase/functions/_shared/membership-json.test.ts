@@ -36,3 +36,19 @@ test("body timeouts are classified without reading or logging body content", asy
     await assert.rejects(boundedJson(new Response(body, { headers: { "Content-Type": "application/json" } }), 100, details => diagnostics.push(details)), /Body deadline exceeded/);
     assert.equal(diagnostics[0].phase, "body_timeout");
 });
+
+test("JSON:API opt-in accepts exact media type with case and parameters", async () => {
+    for (const contentType of ["application/vnd.api+json", "Application/Vnd.Api+Json; charset=utf-8"]) {
+        const response = Response.json({ data: { type: "user", id: "123" } }, { headers: { "Content-Type": contentType } });
+        assert.deepEqual(await boundedJson(response, 100, undefined, { allowJsonApi: true }), { data: { type: "user", id: "123" } });
+    }
+});
+test("JSON:API opt-in still rejects HTML, lookalike types, bad JSON, invalid UTF-8 and oversized bodies", async () => {
+    for (const contentType of ["text/html", "application/vnd.api+json-invalid", "application/problem+json"]) {
+        await assert.rejects(boundedJson(Response.json({}, { headers: { "Content-Type": contentType } }), 100, undefined, { allowJsonApi: true }), /Invalid JSON response/);
+    }
+    const headers = { "Content-Type": "application/vnd.api+json" };
+    await assert.rejects(boundedJson(new Response("not JSON", { headers }), 100, undefined, { allowJsonApi: true }), SyntaxError);
+    await assert.rejects(boundedJson(new Response(new Uint8Array([255]), { headers }), 100, undefined, { allowJsonApi: true }), TypeError);
+    await assert.rejects(boundedJson(Response.json({ data: "oversized" }, { headers }), 1, undefined, { allowJsonApi: true }), /Response too large/);
+});
