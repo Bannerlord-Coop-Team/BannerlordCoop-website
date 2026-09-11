@@ -184,7 +184,9 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
             });
             if (!identityResponse.ok) return callbackFailure(identityResponse.status);
             stage = "identity_response";
-            const identity = await boundedJson(identityResponse, 262_144);
+            const identity = await boundedJson(identityResponse, 262_144, details => {
+                console.warn("Patreon identity response rejected", details);
+            }, { allowJsonApi: true });
             stage = "verify_identity";
             const verified = await verifyPatreonMembership(identity, config.policy ?? null);
             // Tokens exist only in this callback; completion stores normalized evidence.

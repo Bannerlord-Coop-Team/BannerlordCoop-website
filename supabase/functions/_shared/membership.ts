@@ -34,16 +34,58 @@ export async function sha256(value: string): Promise<string> {
     return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))), b => b.toString(16).padStart(2, "0")).join("");
 }
 export function randomToken() { return Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join(""); }
-export async function boundedJson(response: Response, max = 65_536): Promise<unknown> {
-    if (!response.headers.get("content-type")?.toLowerCase().startsWith("application/json") || !response.body) throw new Error("Invalid JSON response");
-    const deadline = Date.now() + 4_000;
-    const reader = response.body.getReader(); let length = 0; const chunks: Uint8Array[] = [];
-    try { while (true) { const remaining = deadline - Date.now(); if (remaining <= 0) throw new Error("Body deadline exceeded");
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        const part = await Promise.race([reader.read(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Body deadline exceeded")), remaining); })]).finally(() => clearTimeout(timer)); if (part.done) break; length += part.value.length; if (length > max) throw new Error("Response too large"); chunks.push(part.value); } }
-    finally { await reader.cancel(); }
-    const bytes = new Uint8Array(length); let offset = 0; for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+export type JsonReadDiagnostics = {
+    phase: "content_type" | "missing_body" | "body_read" | "body_timeout" | "body_size" | "body_cleanup" | "utf8_decode" | "json_parse";
+    contentType: "application/json" | "application/vnd.api+json" | "text/html" | "text/plain" | "missing" | "other";
+    status: number; bytesRead: number; maxBytes: number; elapsedMs: number;
+};
+export async function boundedJson(response: Response, max = 65_536, onFailure?: (details: JsonReadDiagnostics) => void, options: { allowJsonApi?: boolean } = {}): Promise<unknown> {
+    const started = Date.now();
+    let phase: JsonReadDiagnostics["phase"] = "content_type";
+    let length = 0;
+    const rawType = response.headers.get("content-type")?.toLowerCase();
+    const mediaType = rawType?.split(";", 1)[0].trim();
+    // Only allowlisted media types and numeric measurements may leave this reader.
+    const contentType: JsonReadDiagnostics["contentType"] = !mediaType ? "missing"
+        : mediaType === "application/json" || mediaType === "application/vnd.api+json" || mediaType === "text/html" || mediaType === "text/plain" ? mediaType : "other";
+    try {
+        // JSON:API is opt-in for Patreon identity, not other service or request bodies.
+        if (!rawType?.startsWith("application/json") && !(options.allowJsonApi && mediaType === "application/vnd.api+json")) throw new Error("Invalid JSON response");
+        phase = "missing_body";
+        if (!response.body) throw new Error("Invalid JSON response");
+        phase = "body_read";
+        const deadline = Date.now() + 4_000;
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        try {
+            while (true) {
+                const remaining = deadline - Date.now();
+                if (remaining <= 0) { phase = "body_timeout"; throw new Error("Body deadline exceeded"); }
+                let timer: ReturnType<typeof setTimeout> | undefined;
+                const part = await Promise.race([reader.read(), new Promise<never>((_, reject) => {
+                    timer = setTimeout(() => { phase = "body_timeout"; reject(new Error("Body deadline exceeded")); }, remaining);
+                })]).finally(() => clearTimeout(timer));
+                if (part.done) break;
+                length += part.value.length;
+                if (length > max) { phase = "body_size"; throw new Error("Response too large"); }
+                chunks.push(part.value);
+            }
+        } finally {
+            try { await reader.cancel(); }
+            catch (error) { phase = "body_cleanup"; throw error; }
+        }
+        const bytes = new Uint8Array(length); let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+        phase = "utf8_decode";
+        const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        phase = "json_parse";
+        return JSON.parse(text);
+    } catch (error) {
+        // Never pass exception messages, response bodies, headers, URLs, or credentials.
+        try { onFailure?.({ phase, contentType, status: response.status, bytesRead: length, maxBytes: max, elapsedMs: Date.now() - started }); }
+        catch { /* Diagnostics must not change the request result. */ }
+        throw error;
+    }
 }
 export function parseSnapshot(value: unknown): Snapshot {
     if (!record(value) || !exact(value, ["version", "accountId", "discordUserId", "patreonUserId", "linkGeneration", "revision", "linkState", "verification", "campaignId", "memberId", "tierIds", "verifiedAt", "paidThroughAt", "policyVersion", "evidenceSha256"]) || value.version !== 1 || typeof value.accountId !== "string" || !UUID.test(value.accountId) || typeof value.linkGeneration !== "string" || !DECIMAL.test(value.linkGeneration) || typeof value.revision !== "string" || !DECIMAL.test(value.revision) || !["linked", "unlinked", "identity_changed", "account_deleted"].includes(value.linkState as string) || !["qualifying", "nonqualifying", "unknown", "review_required", "unverified"].includes(value.verification as string) || value.policyVersion !== POLICY_VERSION) throw new Error("Invalid membership snapshot");
