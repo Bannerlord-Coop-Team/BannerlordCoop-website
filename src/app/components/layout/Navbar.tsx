@@ -1,5 +1,6 @@
 import { ProfileDropdown } from "@/app/components/layout/ProfileDropdown";
 import { MobileNavigation } from "@/app/components/layout/MobileNavigation";
+import { accountDisplayName } from "@/app/lib/auth/account-display";
 import { hasAdminAccess } from "@/app/lib/auth/access";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { Swords } from "lucide-react";
@@ -32,11 +33,13 @@ const navigation = [
 export async function Navbar() {
     let isAuthenticated = false;
     let isAdmin = false;
+    let accountName = "Your account";
 
     try {
         const supabase = await getSupabaseServerClient();
         const { data } = await supabase.auth.getUser();
         isAuthenticated = data.user !== null;
+        if (data.user) accountName = accountDisplayName(data.user);
         isAdmin = data.user ? hasAdminAccess(data.user) : false;
     } catch {
         // Keep public navigation usable when authentication is not configured.
@@ -101,7 +104,7 @@ export async function Navbar() {
                             <DownloadModal trigger="navbar"/>
 
                             {isAuthenticated ? (
-                                <ProfileDropdown />
+                                <ProfileDropdown accountName={accountName} />
                             ) : (
                                 <Link
                                     href="/login"
@@ -114,6 +117,7 @@ export async function Navbar() {
                     </ul>
                 </nav>
                 <MobileNavigation
+                    accountName={accountName}
                     isAdmin={isAdmin}
                     isAuthenticated={isAuthenticated}
                 />

@@ -11,7 +11,7 @@ import { listLiveConsoleServers } from "@/app/lib/console/servers";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { getServerOnboarding, listAllMyServers } from "@/app/lib/hosting/my-servers";
 import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
-import { ServerOnboarding, GamePasswordNotice } from "@/app/components/servers/ServerOnboarding";
+import { ServerOnboarding } from "@/app/components/servers/ServerOnboarding";
 import type { OnboardingSummary } from "../../../supabase/functions/_shared/server-onboarding-contract";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getAllServers } from "@/app/lib/hosting/servers";
@@ -170,7 +170,6 @@ export default async function ServersPage() {
                                     {managedServersError}
                                 </p>
                             )}
-                            {controlPlaneServers.length > 0 && <div className="mb-5"><GamePasswordNotice /></div>}
                             <h3 className="mb-3 font-semibold">Owned servers</h3>
                             <ServerDirectoryTable servers={managedServers.filter(server => ownedIds.includes(server.id))} emptyMessage="No owned servers are currently listed." />
                             <h3 className="mb-3 mt-6 font-semibold">Associated servers (manager, support or administrator)</h3>
