@@ -1,7 +1,7 @@
 # Patreon account linking
 
-This links Patreon to an existing Supabase account, with explicit authenticated
-confirmation and ephemeral `identity identity.memberships` verification. Tokens
+This links Patreon to an existing Supabase account, with authenticated
+completion after Patreon consent and ephemeral `identity identity.memberships` verification. Tokens
 are never retained. See [membership onboarding](membership-onboarding.md) for the
 current policy, transactional recovery, private synchronization contract, settings,
 additive migration order and enablement blockers. This is not unattended polling
@@ -69,8 +69,13 @@ make CI pass.
 The current complete flow is documented in [membership onboarding](membership-onboarding.md).
 Launch/state remain one-use and browser-cookie bound; operation UUID, initiating
 UUID, expected generation and safe return path are server-held. Callback GET
-creates normalized completion authority only. The website requires explicit POST
-confirmation; one transaction consumes authority, links, stores normalized evidence,
+creates normalized completion authority only. After returning from Patreon, the website
+automatically submits an authenticated same-origin POST when recovery status confirms a
+live, confirmable operation. The action rechecks the rendered account and operation
+against the current cookie before completing. GET never commits a link, and a query
+parameter alone cannot authorize completion. Failed completion lands on manual retry
+rather than automatically looping; without JavaScript, a submit button remains available.
+One transaction consumes authority, links, stores normalized evidence,
 records an immutable replayable receipt and emits an outbox event. Lost responses
 retain the same completion cookie when available; a bounded account/provider recovery
 slot survives cookie expiry and resolves the exact operation via authenticated status.

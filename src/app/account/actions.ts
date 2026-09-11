@@ -2,7 +2,7 @@
 
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { accountLinkOrigin, accountReturn, LINK_COOKIE, LINK_COOKIE_OPTIONS, PATREON_COOKIE } from "@/app/lib/auth/account-link";
-import { parseLinkResolution, type LinkProvider } from "@/app/lib/auth/link-recovery";
+import { parseLinkRecovery, parseLinkResolution, type LinkProvider } from "@/app/lib/auth/link-recovery";
 import { boundedJson, currentDiscord, record } from "../../../supabase/functions/_shared/membership";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -37,11 +37,30 @@ export async function linkPatreonAccount(form: FormData) {
     redirect(destination);
 }
 export async function completePatreonAccount() {
+    return finishPatreonAccount();
+}
+
+export async function automaticallyCompletePatreonAccount(accountId: string, operationId: string) {
+    return finishPatreonAccount({ accountId, operationId });
+}
+
+async function finishPatreonAccount(expected?: { accountId: string; operationId: string }) {
     const jar = await cookies(); const token = jar.get(PATREON_COOKIE)?.value;
     let destination = "/account?patreon=error";
     try {
         if (!token || !/^[a-f0-9]{64}$/u.test(token)) throw new Error("Missing completion");
-        const { supabase, session } = await authenticated();
+        const { supabase, user, session } = await authenticated();
+        if (expected) {
+            if (user.id !== expected.accountId) throw new Error("Account changed");
+            const pending = await supabase.functions.invoke("website-account", {
+                headers: { Authorization: `Bearer ${session.access_token}` },
+                body: { operation: "recovery-status", provider: "patreon", token },
+            });
+            const recovery = !pending.error ? parseLinkRecovery(pending.data, user.id, "patreon") : null;
+            if (!recovery || recovery.state !== "live" || !recovery.confirmable || recovery.operationId !== expected.operationId) {
+                throw new Error("Completion authority changed");
+            }
+        }
         const { data, error } = await supabase.functions.invoke("patreon-complete", { headers: { Authorization: `Bearer ${session.access_token}` }, body: { token } });
         if (!error && data?.linked === true && ["/account", "/servers"].includes(data.returnPath)) {
             destination = `${data.returnPath}?patreon=linked`;

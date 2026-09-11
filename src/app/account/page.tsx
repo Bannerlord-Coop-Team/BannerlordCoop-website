@@ -1,4 +1,5 @@
-import { resolveAccountLink, completePatreonAccount, confirmDiscordAccount, linkDiscordAccount, linkPatreonAccount, unlinkPatreonAccount } from "@/app/account/actions";
+import { PatreonAutoCompletion } from "@/app/account/PatreonAutoCompletion";
+import { automaticallyCompletePatreonAccount, resolveAccountLink, completePatreonAccount, confirmDiscordAccount, linkDiscordAccount, linkPatreonAccount, unlinkPatreonAccount } from "@/app/account/actions";
 import { accountDisplayName, discordDisplayName } from "@/app/lib/auth/account-display";
 import { ArrowRight, Check, UserRound } from "lucide-react";
 import { Footer } from "@/app/components/layout/Footer";
@@ -59,9 +60,11 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             const pending = recovery[provider]; const label = provider === "discord" ? "Discord" : "Patreon";
             if (!pending) return <p key={provider} role="alert">{label} confirmation recovery is unavailable. Refresh status before starting another attempt.</p>;
             if (pending.state === "none") return null;
+            const autoComplete = provider === "patreon" && params.patreon === "confirm" && pending.state === "live" && pending.confirmable;
             return <div key={provider} className="mt-6 border border-gold/30 p-5" aria-label={`${label} confirmation recovery`}>
-                {pending.state === "live" && <><p>{label} has an uncommitted attempt. {pending.confirmable ? "You can retry this exact confirmation while its authority remains valid." : "This attempt may be superseded, or its callback verification/browser authority is unavailable. Current Auth connection is not proof this attempt committed; a valid connection remains usable independently. Refresh status, or explicitly cancel this attempt before starting again."}</p>
-                    {pending.confirmable && <form action={provider === "discord" ? confirmDiscordAccount : completePatreonAccount}><button className="mt-3 underline" type="submit">{provider === "discord" ? "Confirm Discord connection" : "Confirm Patreon link and verification"}</button></form>}</>}
+                {autoComplete && pending.operationId && <PatreonAutoCompletion key={`${user.id}:${pending.operationId}`} action={automaticallyCompletePatreonAccount.bind(null, user.id, pending.operationId)} />}
+                {pending.state === "live" && !autoComplete && <><p>{label} has an uncommitted attempt. {pending.confirmable ? "You can retry this exact confirmation while its authority remains valid." : "This attempt may be superseded, or its callback verification/browser authority is unavailable. Current Auth connection is not proof this attempt committed; a valid connection remains usable independently. Refresh status, or explicitly cancel this attempt before starting again."}</p>
+                    {pending.confirmable && <form action={provider === "discord" ? confirmDiscordAccount : completePatreonAccount}><button className="mt-3 underline" type="submit">{provider === "discord" ? "Confirm Discord connection" : "Retry connecting Patreon"}</button></form>}</>}
                 {pending.state === "expired" && <p>This {label} attempt expired without committing. Resolve it below before explicitly starting a new authorization. Any current Discord Auth connection remains connected and usable for Servers/Patreon; this expired attempt is not reported as confirmed.</p>}
                 {["committed", "resolved"].includes(pending.state) && <p>This exact {label} attempt committed. Recover its original result below; this does not restore any subsequently unlinked or changed binding.</p>}
                 {["historical", "retired"].includes(pending.state) && <p>This historical Discord attempt is not your current Auth identity. {pending.state === "retired" ? "Its recovery reference is already acknowledged; you may explicitly connect again if Auth is unlinked." : "Retire its reference before explicitly connecting again if Auth is unlinked."} This does not recover a current confirmation, restore the old identity or grant membership. Any current Auth connection remains usable independently.</p>}
