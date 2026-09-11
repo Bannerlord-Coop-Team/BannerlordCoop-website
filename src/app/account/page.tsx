@@ -1,4 +1,6 @@
 import { resolveAccountLink, completePatreonAccount, confirmDiscordAccount, linkDiscordAccount, linkPatreonAccount, unlinkPatreonAccount } from "@/app/account/actions";
+import { accountDisplayName, discordDisplayName } from "@/app/lib/auth/account-display";
+import { ArrowRight, Check, UserRound } from "lucide-react";
 import { Footer } from "@/app/components/layout/Footer";
 import { Navbar } from "@/app/components/layout/Navbar";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -32,10 +34,22 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         }
     } catch { /* Query parameters never establish current link state. */ }
 
-    return <><Navbar /><main className="min-h-[70svh] bg-background"><section className="site-container py-16 sm:py-20" aria-labelledby="account-heading">
+    // This dynamic server page takes one request-time snapshot; it is not a client render clock.
+    // eslint-disable-next-line react-hooks/purity
+    const checkedAt = Date.now();
+    const accountName = accountDisplayName(user);
+    const discordName = discordDisplayName(user);
+    const needsStatusCheck = !status || status.membership.linked && ["pending", "unavailable"].includes(status.membership.sync) || Object.values(recovery).some(pending => !pending || !["none", "retired", "resolved"].includes(pending.state)) || Object.values(params).some(Boolean);
+    const primaryButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-gold px-5 py-3 text-sm font-semibold text-background transition-colors hover:bg-gold/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+    const secondaryButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-white/20 px-4 py-2 text-sm text-foreground transition-colors hover:border-gold hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
+
+    return <div className="flex min-h-svh flex-col bg-background text-foreground"><Navbar /><main className="flex-1"><section className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8 sm:py-16" aria-labelledby="account-heading">
         <h1 id="account-heading" className="font-display text-4xl font-semibold">Account</h1>
-        <p className="mt-5 text-sm">Stay signed in to this same website account while connecting providers. Separate Discord/website accounts require support-assisted repair; there is no automatic merge, email matching or server ownership transfer.</p>
-        <p role="status" className="mt-5">{status ? `Discord: ${status.hasDiscord ? "connected" : "not connected"}. Patreon: ${status.membership.linked ? "linked" : "not linked"}. Verification: ${status.membership.verification}. Sync: ${status.membership.sync}.` : "Current account link status is unavailable. Retry status; do not infer success from the address bar."}</p>
+        <div className="mt-6 flex min-w-0 items-center gap-4">
+            <span className="flex size-14 shrink-0 items-center justify-center rounded-full border border-gold/30 bg-gold/10 text-gold"><UserRound aria-hidden="true" className="size-7" /></span>
+            <div className="min-w-0"><p className="break-words font-display text-2xl font-semibold">{accountName}</p><p className="mt-1 text-sm leading-6 text-foreground-muted">Manage your connected accounts and membership.</p></div>
+        </div>
+        {!status && <p role="alert" className="mt-6 border-l-2 border-gold bg-gold/10 p-4 text-sm">Account status is unavailable. Check status before connecting an account.</p>}
         {(params.patreon === "rate_limited" || params.discord === "rate_limited") && <p role="alert" className="mt-4">Too many account changes or synchronization is still catching up. Refresh status before retrying; there is no guaranteed wait time. Authorization expires within ten minutes and is never extended by retrying. Resolve the original attempt below before starting again. Unlink and existing server management remain available.</p>}
         {[params.patreon, params.discord, params.recovery].includes("retry") && <p role="alert" className="mt-4">The account is busy. No refused database statement was applied. Keep this same account and retained attempt; refresh status and explicitly retry the same confirmation or resolution. Do not start a replacement authorization while its outcome is unknown. A consumed provider callback may require resolving the retained attempt before explicitly starting again. There is no guaranteed wait time.</p>}
         {params.discord === "repair" && <p role="alert" className="mt-4">Discord linking could not be confirmed. Manual linking may be disabled, your session changed, the request expired, or this Discord belongs to another account. Return to the original account and refresh the retained attempt below. Missing server-side linking configuration requires operator repair; do not assume Auth connection confirms this attempt. We never substitute sign-in for linking.</p>}
@@ -54,13 +68,37 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                 <form action={resolveAccountLink}><input type="hidden" name="provider" value={provider} /><input type="hidden" name="operationId" value={pending.operationId} /><button className="mt-3 underline" type="submit">{["historical", "retired"].includes(pending.state) ? "Retire historical Discord reference" : ["committed", "resolved"].includes(pending.state) ? `Recover ${label} result` : pending.state === "expired" ? `Resolve expired ${label} attempt` : `Cancel pending ${label} attempt`}</button></form>
             </div>;
         })}
-        <div id="link-account" className="mt-8 space-y-5">
-            {status && !status.hasDiscord && (recovery.discord?.state === "none" || recovery.discord?.state === "retired") && <form action={linkDiscordAccount}><input type="hidden" name="returnPath" value="/account" /><p>Confirm that you want to connect Discord to this signed-in account.</p><button type="submit" className="mt-3 underline">Confirm and connect Discord</button></form>}
-            {(recovery.patreon?.state === "none" || recovery.patreon?.state === "resolved") && <form action={linkPatreonAccount}><input type="hidden" name="returnPath" value="/account" /><button type="submit" className="underline">{status?.membership.linked ? "Check again with Patreon authorization" : "Link Patreon account"}</button></form>}
-            {status?.membership.linked && <form action={unlinkPatreonAccount}><p>Unlink removes only future membership allocation evidence, not existing servers or administrative grants.</p><button type="submit" className="mt-3 underline">Confirm unlink Patreon</button></form>}
-            <Link href="/account" prefetch={false} className="block underline">Refresh status (no new Patreon authorization)</Link>
-            <Link href="/servers" prefetch={false} className="block underline">Continue to Servers / manage existing servers</Link>
-        </div>
-        <p className="mt-6 text-sm text-foreground-muted">Membership verification requires explicit authorization and lasts at most 24 hours for new allocation. It does not prove a settled payment and does not run unattended. Unknown or expired evidence never starts automatic Stop, deletion or a grace countdown. Adequate administrative grants bypass membership steps.</p>
-    </section></main><Footer /></>;
+        <section id="link-account" className="mt-10" aria-labelledby="connections-heading">
+            <h2 id="connections-heading" className="font-display text-2xl font-semibold">Connected accounts</h2>
+            <div className="mt-4 divide-y divide-white/10 rounded-sm border border-white/10 bg-surface">
+                <section className="p-5 sm:p-6" aria-labelledby="discord-heading">
+                    <div className="flex flex-wrap items-center justify-between gap-3"><h3 id="discord-heading" className="font-semibold">Discord</h3><ConnectionBadge connected={status?.hasDiscord} /></div>
+                    <p className="mt-3 break-words text-sm leading-6 text-foreground-muted">{status?.hasDiscord ? discordName ?? "Your Discord account is connected." : "Connect Discord to this website account to set up a server."}</p>
+                    {status && !status.hasDiscord && (recovery.discord?.state === "none" || recovery.discord?.state === "retired") && <form action={linkDiscordAccount} className="mt-4"><input type="hidden" name="returnPath" value="/account" /><button type="submit" className={primaryButton}>Confirm and connect Discord</button></form>}
+                </section>
+                <section className="p-5 sm:p-6" aria-labelledby="patreon-heading">
+                    <div className="flex flex-wrap items-center justify-between gap-3"><h3 id="patreon-heading" className="font-semibold">Patreon</h3><ConnectionBadge connected={status?.membership.linked} /></div>
+                    <p className="mt-3 text-sm leading-6 text-foreground-muted">{status?.membership.linked ? "Your Patreon account is linked." : "Connect Patreon to check your membership benefits and server allowance."}</p>
+                    {status?.membership.linked && <div className="mt-3 space-y-2 text-sm leading-6 text-foreground-muted">
+                        <p role="status">{status.membership.verification === "qualifying" && status.membership.validUntil && Date.parse(status.membership.validUntil) > checkedAt ? "Membership verified." : status.membership.verification === "nonqualifying" ? "No eligible membership benefits were found." : status.membership.verification === "review_required" ? "Your membership needs review. Contact support before trying again." : "Verify your membership before creating a new server."}{status.membership.sync === "pending" ? " Your server allowance is updating." : status.membership.sync === "unavailable" ? " Your server allowance could not be checked." : ""}</p>
+                        <p>You may need to verify your membership again before creating a new server. Existing servers aren’t automatically stopped when verification expires.</p>
+                    </div>}
+                    {status && (recovery.patreon?.state === "none" || recovery.patreon?.state === "resolved") && <form action={linkPatreonAccount} className="mt-4"><input type="hidden" name="returnPath" value="/account" /><button type="submit" className={primaryButton}>{status.membership.linked ? "Verify with Patreon" : "Connect Patreon"}</button></form>}
+                    {status?.membership.linked && <details className="mt-5 text-sm text-foreground-muted"><summary className="cursor-pointer py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">Disconnect Patreon</summary><form action={unlinkPatreonAccount} className="mt-3"><p className="leading-6">Disconnecting removes membership eligibility for new servers. Existing servers and administrative grants are not removed.</p><button type="submit" className={`${secondaryButton} mt-3`}>Confirm unlink Patreon</button></form></details>}
+                </section>
+            </div>
+            {needsStatusCheck && <Link href="/account" prefetch={false} className={`${secondaryButton} mt-4`}>Check status</Link>}
+        </section>
+        <section className="mt-8 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="servers-heading">
+            <h2 id="servers-heading" className="font-display text-2xl font-semibold">Your servers</h2>
+            <p className="mt-2 text-sm leading-6 text-foreground-muted">View and manage your existing servers.</p>
+            <Link href="/servers" prefetch={false} className={`${secondaryButton} mt-4`}>My Servers <ArrowRight aria-hidden="true" className="size-4" /></Link>
+        </section>
+    </section></main><Footer /></div>;
+}
+
+function ConnectionBadge({ connected }: { connected: boolean | undefined }) {
+    return <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${connected ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200" : "border-white/15 text-foreground-muted"}`}>
+        {connected && <Check aria-hidden="true" className="size-3.5" />}{connected === undefined ? "Unavailable" : connected ? "Connected" : "Not linked"}
+    </span>;
 }

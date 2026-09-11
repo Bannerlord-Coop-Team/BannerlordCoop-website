@@ -108,7 +108,7 @@ it.each(["live", "expired", "committed"])("cookie expiry/reload renders honest %
     try {
         expect(view.container.textContent).not.toContain("Confirm Discord connection");
         expect(view.container.textContent).toContain(state === "committed" ? "Recover Discord result" : state === "expired" ? "Resolve expired Discord attempt" : "Cancel pending Discord attempt");
-        expect(view.container.textContent).toContain("Continue to Servers");
+        expect(view.container.textContent).toContain("My Servers");
         expect(view.container.querySelector('input[name="operationId"]')?.getAttribute("value")).toBe(operationId);
         expect(mocks.invoke).toHaveBeenCalledWith("website-account", expect.objectContaining({ body: { operation: "recovery-status", provider: "discord", token: null } }));
     } finally { await view.close(); }
@@ -177,7 +177,7 @@ it("historical different current Auth permits normal continuation, never reports
     mocks.user.mockResolvedValue({data:{user:{id:a,identities:[{provider:"discord",identity_data:{provider_id:"999456789012345678"}}]}}});
     pageResponses(bound("historical",false)); const view=await mount();
     try {
-        expect(view.container.textContent).toContain("Continue to Servers");
+        expect(view.container.textContent).toContain("My Servers");
         expect(view.container.textContent).toContain("current Auth connection remains usable");
         expect(view.container.textContent).not.toContain("Confirm and connect Discord");
         expect(view.container.textContent).not.toContain("Recover Discord result");
@@ -316,7 +316,7 @@ it.runIf(Boolean(process.env.WEBSITE_MEMBERSHIP_TEST_URL))("real PostgreSQL moun
                 expect(view.container.textContent).toContain("already acknowledged");
                 expect(view.container.textContent).not.toContain("Recover Discord result");
                 expect(view.container.textContent?.includes("Confirm and connect Discord")).toBe(changed===null);
-                expect(view.container.textContent).toContain("Continue to Servers");
+                expect(view.container.textContent).toContain("My Servers");
             } finally { await view.close(); }
             await expect(resolveAccountLink(form)).rejects.toThrow("redirect:/account?discord=retired");
             if(changed===null) {

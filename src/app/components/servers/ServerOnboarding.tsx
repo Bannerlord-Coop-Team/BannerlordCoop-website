@@ -130,7 +130,6 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
                 ? "Server setup availability could not be confirmed or is temporarily unavailable. Refresh to check again."
                 : summary.eligibility.reason === "quota_exhausted" ? "Your explicitly granted server quota is currently in use." : "No unused explicitly granted server quota is available for this account."}
         </div>}
-        <button type="button" className={`${secondaryButton} mt-3`} onClick={() => router.refresh()}>Refresh status and My Servers</button>
         {!open && recovery}
         {!open && result && <div className="mt-5 border border-gold/30 bg-surface p-5"><OnboardingReceipt result={result} /></div>}
         {summary?.regions.some((entry) => entry.request !== null) && <section aria-label="Your outstanding region requests" className="mt-5 border border-white/10 bg-surface p-5 text-sm">
@@ -143,16 +142,12 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
     </div>;
 }
 
-export function GamePasswordNotice() {
-    return <p className="mt-4 text-sm leading-6 text-foreground-muted">Manage your game password through the existing Discord owner controls: <strong className="text-foreground">My Servers → choose server → Settings / Configure your server → Custom game password (optional)</strong>. Enter a new custom password and submit. Leaving it blank preserves the generated password, which is not available on this website. Discord does not mask this input or echo the submitted password.</p>;
-}
 function OnboardingReceipt({ result }: { result: OnboardingResult }) {
     return <div role="status">
         <h3 className="font-display text-2xl font-semibold">{result.action === "create-server" ? "Server assigned" : "Region request confirmed"}</h3>
         {result.action === "create-server" ? <>
             <p className="mt-3 break-words text-sm leading-6">{result.displayName} was assigned in {ONBOARDING_REGION_LABELS[result.region]}. It was stopped at creation; this receipt is not live status. Check My Servers or manage the server for its current state.</p>
             <p className="mt-3 text-sm text-foreground-muted">Stable release · maintenance 03:00–04:00 America/Chicago. Setup does not start the server. Its first Start uses the bundled default save; no import is required.</p>
-            <GamePasswordNotice />
             <Link href={`/servers/${encodeURIComponent(result.serverId)}`} className={`${primaryButton} mt-5`}>Manage server <ArrowRight aria-hidden="true" className="size-4" /></Link>
         </> : <p className="mt-3 text-sm leading-6">Your private request for {ONBOARDING_REGION_LABELS[result.request.region]} is saved and outstanding (including an existing request). No server or capacity was reserved and no quota was consumed. No email, ETA or automatic allocation is promised.</p>}
     </div>;

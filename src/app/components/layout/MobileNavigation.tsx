@@ -16,7 +16,9 @@ const navigation = [
 export function MobileNavigation({
     isAdmin,
     isAuthenticated,
+    accountName = "Your account",
 }: {
+    accountName?: string;
     isAdmin: boolean;
     isAuthenticated: boolean;
 }) {
@@ -59,7 +61,7 @@ export function MobileNavigation({
 
     return (
         <div className="flex items-center gap-2 lg:hidden">
-            {isAuthenticated && <ProfileDropdown />}
+            {isAuthenticated && <ProfileDropdown accountName={accountName} />}
             <button
                 ref={triggerRef}
                 type="button"
