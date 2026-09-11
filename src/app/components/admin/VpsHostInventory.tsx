@@ -24,8 +24,10 @@ type VpsHostInventoryProps = {
     runnerTargetSourceCommit: string | null;
 };
 
-const SUMMARY_GRID = "grid-cols-[12rem_9rem_15rem_12rem_8rem_12rem_3rem]";
-const SLOT_GRID = "grid-cols-[10rem_20rem_11rem_13rem_8rem]";
+const SUMMARY_GRID = "grid-cols-2 @min-[70rem]:grid-cols-[minmax(0,12fr)_minmax(0,7fr)_minmax(0,15fr)_minmax(0,12fr)_minmax(0,8fr)_minmax(0,12fr)_2.5rem] [&>*]:min-w-0 [overflow-wrap:anywhere]";
+const SLOT_GRID = "grid-cols-2 @min-[45rem]:grid-cols-[minmax(0,10fr)_minmax(0,20fr)_minmax(0,11fr)_minmax(0,13fr)_minmax(0,8fr)] [&>*]:min-w-0 [overflow-wrap:anywhere]";
+const SUMMARY_LABEL = "before:mb-2 before:block before:text-[0.62rem] before:uppercase before:text-foreground-dim before:content-[attr(data-label)] @min-[70rem]:before:hidden";
+const SLOT_LABEL = "before:mb-2 before:block before:text-[0.58rem] before:uppercase before:text-foreground-dim before:content-[attr(data-label)] @min-[45rem]:before:hidden";
 
 export function VpsHostInventory({
     hosts,
@@ -40,10 +42,10 @@ export function VpsHostInventory({
     }
 
     return (
-        <div className="mt-6 overflow-x-auto border border-white/10 bg-surface">
-            <div role="table" aria-label="VPS host inventory" className="mx-auto w-max">
+        <div className="mt-6 @container border border-white/10 bg-surface">
+            <div role="table" aria-label="VPS host inventory" className="w-full min-w-0">
                 <div role="rowgroup">
-                    <div role="row" className={`grid ${SUMMARY_GRID} gap-x-4 border-b border-l-2 border-white/10 border-l-transparent px-4 py-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted`}>
+                    <div role="row" className={`hidden @min-[70rem]:grid ${SUMMARY_GRID} gap-x-4 border-b border-l-2 border-white/10 border-l-transparent px-4 py-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted`}>
                         <span role="columnheader">Host</span>
                         <span role="columnheader">Capacity</span>
                         <span role="columnheader">Slots</span>
@@ -67,13 +69,13 @@ export function VpsHostInventory({
                                         ? "border-l-2 border-amber-400"
                                         : "border-l-2 border-transparent"}
                             >
-                                <div role="row" className={`grid ${SUMMARY_GRID} items-center gap-x-4 px-4 py-3 hover:bg-white/[0.025]`}>
-                                    <div role="cell"><HostIdentity host={host} /></div>
-                                    <div role="cell"><CapacitySummary host={host} /></div>
-                                    <div role="cell"><SlotSummary host={host} ownerLabels={ownerLabels} /></div>
-                                    <div role="cell"><SystemSummary resources={host.resources} /></div>
-                                    <div role="cell"><p className="text-xs font-semibold text-foreground">{formatVpsCost(host.cost)}</p></div>
-                                    <div role="cell"><RunnerOnboardingStatus
+                                <div role="row" className={`grid ${SUMMARY_GRID} items-center gap-x-4 gap-y-4 px-4 py-3 hover:bg-white/[0.025]`}>
+                                    <div role="cell" data-label="Host" className={SUMMARY_LABEL}><HostIdentity host={host} /></div>
+                                    <div role="cell" data-label="Capacity" className={SUMMARY_LABEL}><CapacitySummary host={host} /></div>
+                                    <div role="cell" data-label="Slots" className={SUMMARY_LABEL}><SlotSummary host={host} ownerLabels={ownerLabels} /></div>
+                                    <div role="cell" data-label="System" className={SUMMARY_LABEL}><SystemSummary resources={host.resources} /></div>
+                                    <div role="cell" data-label="Billing" className={SUMMARY_LABEL}><p className="text-xs font-semibold text-foreground">{formatVpsCost(host.cost)}</p></div>
+                                    <div role="cell" data-label="Runner" className={SUMMARY_LABEL}><RunnerOnboardingStatus
                                         compact
                                         serviceName={host.name}
                                         runningServers={host.runningServers}
@@ -81,7 +83,7 @@ export function VpsHostInventory({
                                         onboarding={host.runnerOnboarding}
                                         update={host.runnerUpdate ?? null}
                                     /></div>
-                                    <div role="cell" className="justify-self-end"><button
+                                    <div role="cell" className="col-span-2 justify-self-end @min-[70rem]:col-span-1"><button
                                         type="button"
                                         aria-expanded={expanded}
                                         aria-controls={panelId}
@@ -155,22 +157,22 @@ function SystemSummary({ resources }: { resources: HostingAdminHostResources | n
 function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit }: { id: string; host: HostingAdminVpsHost; ownerLabels: Record<string, string>; runnerTargetSourceCommit: string | null }) {
     const slots = Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
     return (
-        <div role="row">
+        <div role="row" className="min-w-0">
             <div id={id} role="cell" aria-colspan={7} className="border-t border-white/10 bg-black/10">
                 <div role="region" aria-label={`Details for ${host.name}`}>
                     {slots.length > 0 ? <div role="table" aria-label={`Occupied slots for ${host.name}`}>
                         <div role="rowgroup">
-                            <div role="row" className={`grid ${SLOT_GRID} justify-center gap-x-4 border-b border-white/10 px-6 py-2 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-foreground-dim`}>
+                            <div role="row" className={`hidden @min-[45rem]:grid ${SLOT_GRID} justify-center gap-x-4 border-b border-white/10 px-6 py-2 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-foreground-dim`}>
                                 <span role="columnheader">Slot / UDP</span><span role="columnheader">Player / Server</span><span role="columnheader">CPU</span><span role="columnheader">Memory</span><span role="columnheader">Status</span>
                             </div>
                         </div>
                         <div role="rowgroup" className="divide-y divide-white/10">
-                            {slots.map((slot) => <div role="row" key={`${slot.slotIndex}:${slot.serverId}`} className={`grid ${SLOT_GRID} items-center justify-center gap-x-4 px-6 py-2.5 text-xs`}>
-                                <div role="cell"><p className="font-label font-semibold uppercase tracking-[0.08em] text-gold">Slot {slot.slotIndex + 1} · UDP {slot.gamePort}</p></div>
-                                <div role="cell" className="min-w-0"><p className="truncate font-semibold text-foreground" title={formatDiscordOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}>{formatDiscordOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
-                                <div role="cell"><p className="text-foreground-muted">{formatCpu(slot.resources)}</p></div>
-                                <div role="cell"><p className="text-foreground-muted">{formatMemory(slot.resources)}</p></div>
-                                <div role="cell"><StateBadge value={slot.operationState} /></div>
+                            {slots.map((slot) => <div role="row" key={`${slot.slotIndex}:${slot.serverId}`} className={`grid ${SLOT_GRID} items-center justify-center gap-x-4 gap-y-4 px-6 py-2.5 text-xs`}>
+                                <div role="cell" data-label="Slot / UDP" className={SLOT_LABEL}><p className="font-label font-semibold uppercase tracking-[0.08em] text-gold">Slot {slot.slotIndex + 1} · UDP {slot.gamePort}</p></div>
+                                <div role="cell" data-label="Player / Server" className={SLOT_LABEL}><p className="truncate font-semibold text-foreground" title={formatDiscordOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}>{formatDiscordOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
+                                <div role="cell" data-label="CPU" className={SLOT_LABEL}><p className="text-foreground-muted">{formatCpu(slot.resources)}</p></div>
+                                <div role="cell" data-label="Memory" className={SLOT_LABEL}><p className="text-foreground-muted">{formatMemory(slot.resources)}</p></div>
+                                <div role="cell" data-label="Status" className={SLOT_LABEL}><StateBadge value={slot.operationState} /></div>
                             </div>)}
                         </div>
                     </div> : <p className="px-6 py-4 text-xs text-foreground-muted">No occupied slots.</p>}
@@ -185,7 +187,7 @@ function HostDetailFooter({ host, runnerTargetSourceCommit }: { host: HostingAdm
     const resources = host.resources;
     const runnerSource = host.runnerOnboarding?.sourceCommit;
     const latestUpdate = host.runnerUpdate;
-    return <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-white/10 px-6 py-2.5 text-[0.68rem] text-foreground-muted">
+    return <div className="flex flex-wrap gap-x-5 gap-y-1 [overflow-wrap:anywhere] [&>span]:min-w-0 border-t border-white/10 px-6 py-2.5 text-[0.68rem] text-foreground-muted">
         {resources && <>
             <span>Disk {formatStorageBytes(resources.diskUsedBytes)} used / {formatStorageBytes(resources.diskFreeBytes)} free</span>
             <span>Uptime {formatUptime(resources.uptimeSeconds)}</span>
