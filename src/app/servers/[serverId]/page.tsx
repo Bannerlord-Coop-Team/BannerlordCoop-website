@@ -178,7 +178,7 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
         <ServerWorkspacePanel section="Settings">
-            <ServerSettingsPanel name={server.displayName} visibility={server.visibility ?? "private"} />
+            <ServerSettingsPanel name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
 }
@@ -330,7 +330,7 @@ async function LiveServerManagementPage({
             ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
             : <UnavailableFileWorkspaces />}
         <ServerWorkspacePanel section="Settings">
-            <ServerSettingsPanel name={server.name} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} />
+            <ServerSettingsPanel name={server.name} renameServerId={canManageAssignments ? server.id : undefined} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} visibilityAccess={managedServer ? { serverId: managedServer.serverId, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} />
             <section className="grid gap-3 sm:grid-cols-2" aria-label="Server information">
                 <ResourceCard icon={Server} label="Provider" value={server.provider} />
                 <ResourceCard icon={Container} label="Node" value={server.nodeId} />
