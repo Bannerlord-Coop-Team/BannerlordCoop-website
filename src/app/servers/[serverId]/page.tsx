@@ -167,6 +167,7 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
     return <ServerManagementWorkspace
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.displayName}</h1>}
         address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
+        visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} />}
         summary={<>{formatManagedValue(server.observedGameState)} · {formatManagedValue(server.friendlyRegion)} · {managedAccessLabels[server.accessRole]}</>}
         status={<section className="grid gap-3 sm:grid-cols-3" aria-label="Server status">
             <ResourceCard icon={Container} label="Game state" value={formatManagedValue(server.observedGameState)} />
@@ -177,7 +178,6 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
         <ServerWorkspacePanel section="Settings">
-            <ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} />
             <UnavailableServerPanel title="Server name" actions={["Edit name"]} />
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
@@ -331,6 +331,9 @@ async function LiveServerManagementPage({
     return <ServerManagementWorkspace
         name={<EditableServerName key={server.name} canEdit={canManageAssignments} initialName={server.name} serverId={server.id} />}
         address={server.address}
+        visibility={managedServer !== null
+            ? <ServerVisibilitySetting serverId={managedServer.serverId} visibility={managedServer.visibility} accessRole={managedServer.accessRole} expectedUpdatedAt={managedServer.updatedAt} />
+            : <button disabled className="ml-auto min-h-10 rounded-md border border-white/15 px-3 text-sm text-foreground-muted opacity-50">Visibility unavailable</button>}
         summary={<>{server.provider} · {accessLabels[accessLevel]} · Live dedicated server</>}
         initialSection={accessError || accessUpdated ? "Settings" : "Console"}
         notice="Protected production access. Controls and commands affect the live Bannerlord process immediately. The gateway revalidates your server access."
@@ -340,9 +343,6 @@ async function LiveServerManagementPage({
             ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
             : <UnavailableFileWorkspaces />}
         <ServerWorkspacePanel section="Settings">
-            {managedServer !== null
-                ? <ServerVisibilitySetting serverId={managedServer.serverId} visibility={managedServer.visibility} accessRole={managedServer.accessRole} expectedUpdatedAt={managedServer.updatedAt} />
-                : <UnavailableServerPanel title="Directory visibility" actions={["Private", "Public"]} />}
             <section className="grid gap-3 sm:grid-cols-2" aria-label="Server information">
                 <ResourceCard icon={Server} label="Provider" value={server.provider} />
                 <ResourceCard icon={Container} label="Node" value={server.nodeId} />

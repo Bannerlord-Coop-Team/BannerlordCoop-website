@@ -39,8 +39,8 @@ export function UnavailableServerPanel({ title, actions }: { title: string; acti
     </section>;
 }
 
-export function ServerManagementWorkspace({ name, address, summary, status, notice, initialSection = "Console", children }: {
-    name: ReactNode; address?: string | null; summary: ReactNode; status?: ReactNode; notice: string;
+export function ServerManagementWorkspace({ name, address, summary, status, visibility, notice, initialSection = "Console", children }: {
+    name: ReactNode; address?: string | null; summary: ReactNode; status?: ReactNode; visibility?: ReactNode; notice: string;
     initialSection?: Section; children: ReactNode;
 }) {
     const [section, setSection] = useState<Section>(initialSection);
@@ -64,7 +64,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, noti
             <Link href="/servers" className="inline-flex items-center gap-2 text-sm text-foreground-muted hover:text-gold"><ArrowLeft className="size-4" aria-hidden="true" />All servers</Link>
             <p className="my-5 rounded-md border border-white/10 bg-surface px-4 py-3 text-sm leading-6 text-foreground-muted">{notice}</p>
             <header className="mb-5">
-                <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-foreground-muted">{summary}</div>
+                <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-foreground-muted">{summary}{visibility}</div>
                 {name}
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
                     <span className="text-foreground-muted">Server IP:Port</span>
