@@ -1,7 +1,7 @@
 import { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ServerManagementWorkspace, ServerWorkspacePanel, UnavailableServerPanel } from "./ServerManagementWorkspace";
+import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "./ServerManagementWorkspace";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -63,4 +63,22 @@ it("opens access feedback and hash targets in Settings and disables unsupported 
     await act(async () => click("Console"));
     await act(async () => { window.location.hash = "server-access"; window.dispatchEvent(new HashChangeEvent("hashchange")); });
     expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Settings");
+});
+
+it("renders the wireframe console with all unconnected features disabled", async () => {
+    await act(async () => root.render(<ServerConsoleWorkspace><UnavailableServerConsole /></ServerConsoleWorkspace>));
+    expect(container.querySelector('[role="log"]')?.textContent).toContain("not connected");
+    expect(container.textContent).toContain("Information");
+    expect(container.textContent).toContain("Campaign");
+    for (const control of container.querySelectorAll("button, input")) {
+        expect((control as HTMLButtonElement).disabled).toBe(true);
+    }
+});
+
+it("keeps supplied real lifecycle controls enabled while console input stays unavailable", async () => {
+    const start = vi.fn();
+    await act(async () => root.render(<UnavailableServerConsole controls={<button onClick={start}>Start</button>} />));
+    await act(async () => click("Start"));
+    expect(start).toHaveBeenCalledOnce();
+    expect(container.querySelector("input")?.disabled).toBe(true);
 });

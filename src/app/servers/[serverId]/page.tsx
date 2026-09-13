@@ -1,5 +1,5 @@
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
-import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerPanel } from "@/app/components/servers/ServerManagementWorkspace";
+import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "@/app/components/servers/ServerManagementWorkspace";
 import { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
@@ -132,7 +132,7 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
         summary={<>{server.plan} · {server.location} · Preview</>}
         notice="Preview server. The control plane is not connected; server actions are unavailable."
     >
-        <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><UnavailableServerPanel title="Console" actions={["Start", "Stop", "Restart", "Send command"]} /></ServerConsoleWorkspace></ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><UnavailableServerConsole /></ServerConsoleWorkspace></ServerWorkspacePanel>
         <UnavailableFileWorkspaces />
         <ServerWorkspacePanel section="Settings">
             <UnavailableServerPanel title="Server settings" actions={["Edit name", "Private", "Public"]} />
@@ -174,7 +174,6 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
             <ResourceCard icon={CloudCog} label="Lifecycle" value={formatManagedValue(server.operationState)} />
             <ResourceCard icon={Database} label="Release channel" value={formatManagedValue(server.releaseChannel)} />
         </section>}
-        notice="Connected to the control plane. Disruptive operations require confirmation and may wait for backups or other durable work to finish."
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
         <ServerWorkspacePanel section="Settings">
@@ -198,8 +197,7 @@ function ManagedServerSections({
         <ManagedServerPollingProvider>
             <ServerWorkspacePanel section="Console">
                 {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : <ServerConsoleWorkspace>
-                    <ManagedServerLifecycleSection server={server} />
-                    <UnavailableServerPanel title="Console output" actions={["Send command", "Download logs"]} />
+                    <UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} />
                 </ServerConsoleWorkspace>}
             </ServerWorkspacePanel>
             <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
@@ -211,18 +209,7 @@ function ManagedServerSections({
 
 function ManagedServerLifecycleSection({ server }: { server: MyServerSummary }) {
     return (
-        <section id="server-lifecycle" className="rounded-lg border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-lifecycle-heading">
-            <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
-                Lifecycle
-            </p>
-            <h2 id="server-lifecycle-heading" className="mt-2 font-display text-2xl font-semibold text-foreground sm:text-3xl">
-                Server controls
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
-                Current state: <strong className="font-semibold text-foreground">{formatManagedValue(server.operationState)}</strong>.
-                Disruptive operations require confirmation and may wait for backups or other durable work to finish.
-            </p>
-            <div className="mt-5">
+        <section id="server-lifecycle" aria-label="Server controls">
                 <ManagedServerControls
                     serverId={server.serverId}
                     displayName={server.displayName}
@@ -230,7 +217,6 @@ function ManagedServerLifecycleSection({ server }: { server: MyServerSummary }) 
                     operationState={server.operationState}
                     expectedUpdatedAt={server.updatedAt}
                 />
-            </div>
         </section>
     );
 }
