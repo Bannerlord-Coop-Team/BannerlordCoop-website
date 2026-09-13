@@ -23,7 +23,7 @@ it("switches all four workspaces without unmounting live controls or losing draf
         const [draft, setDraft] = useState(0);
         return <button onClick={() => setDraft(draft + 1)}>Draft {draft}</button>;
     }
-    await act(async () => root.render(<ServerManagementWorkspace name={<h1>Real server</h1>} summary="Running" notice="Live controls">
+    await act(async () => root.render(<ServerManagementWorkspace name={<h1>Real server</h1>} summary="Running" status={<div id="server-status">Game state: Running · Lifecycle: Running · Release channel: Stable</div>} notice="Live controls">
         <ServerWorkspacePanel section="Console"><Console /></ServerWorkspacePanel>
         <ServerWorkspacePanel section="Backups"><div id="backup-content">Real backups</div></ServerWorkspacePanel>
         <ServerWorkspacePanel section="Save & config"><div id="file-content">Real transfers</div></ServerWorkspacePanel>
@@ -33,6 +33,8 @@ it("switches all four workspaces without unmounting live controls or losing draf
     for (const [tab, id] of [["Backups", "backup-content"], ["Save & config", "file-content"], ["Settings", "settings-content"]]) {
         await act(async () => click(tab));
         expect(container.querySelector(`#${id}`)?.closest("[hidden]")).toBeNull();
+        expect(container.querySelector("header #server-status")).not.toBeNull();
+        expect(container.querySelector("#server-status")?.closest("[hidden]")).toBeNull();
         expect([...container.querySelectorAll("button")].find(b => b.textContent === "Draft 1")?.closest("[hidden]")).not.toBeNull();
     }
     await act(async () => click("Console"));

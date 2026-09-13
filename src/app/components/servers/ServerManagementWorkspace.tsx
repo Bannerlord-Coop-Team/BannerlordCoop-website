@@ -39,8 +39,8 @@ export function UnavailableServerPanel({ title, actions }: { title: string; acti
     </section>;
 }
 
-export function ServerManagementWorkspace({ name, address, summary, notice, initialSection = "Console", children }: {
-    name: ReactNode; address?: string | null; summary: ReactNode; notice: string;
+export function ServerManagementWorkspace({ name, address, summary, status, notice, initialSection = "Console", children }: {
+    name: ReactNode; address?: string | null; summary: ReactNode; status?: ReactNode; notice: string;
     initialSection?: Section; children: ReactNode;
 }) {
     const [section, setSection] = useState<Section>(initialSection);
@@ -77,6 +77,7 @@ export function ServerManagementWorkspace({ name, address, summary, notice, init
                     }}><Copy className="size-4" aria-hidden="true" />Copy join address</button>
                 </div>
                 <p role="status" className="mt-2 text-sm text-foreground-muted">{feedback}</p>
+                {status && <div className="mt-5">{status}</div>}
             </header>
             <nav aria-label="Server workspace" className="mb-5 grid grid-cols-4 border-b border-white/10 sm:flex sm:gap-1">
                 {sections.map(({ name: label, icon: Icon }) => <button key={label} aria-current={section === label ? "page" : undefined} onClick={() => setSection(label)} className={`inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 px-1 py-2 text-xs sm:min-h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm focus-visible:outline-2 focus-visible:outline-gold ${section === label ? "border-gold text-gold" : "border-transparent text-foreground-muted hover:text-foreground"}`}><Icon className="size-4" aria-hidden="true" />{label}</button>)}

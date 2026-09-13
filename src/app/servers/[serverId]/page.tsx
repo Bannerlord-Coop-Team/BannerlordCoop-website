@@ -168,16 +168,16 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.displayName}</h1>}
         address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
         summary={<>{formatManagedValue(server.observedGameState)} · {formatManagedValue(server.friendlyRegion)} · {managedAccessLabels[server.accessRole]}</>}
+        status={<section className="grid gap-3 sm:grid-cols-3" aria-label="Server status">
+            <ResourceCard icon={Container} label="Game state" value={formatManagedValue(server.observedGameState)} />
+            <ResourceCard icon={CloudCog} label="Lifecycle" value={formatManagedValue(server.operationState)} />
+            <ResourceCard icon={Database} label="Release channel" value={formatManagedValue(server.releaseChannel)} />
+        </section>}
         notice="Connected to the control plane. Disruptive operations require confirmation and may wait for backups or other durable work to finish."
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
         <ServerWorkspacePanel section="Settings">
             <ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} />
-            <section className="grid gap-3 sm:grid-cols-3" aria-label="Server status">
-                <ResourceCard icon={Container} label="Game state" value={formatManagedValue(server.observedGameState)} />
-                <ResourceCard icon={CloudCog} label="Lifecycle" value={formatManagedValue(server.operationState)} />
-                <ResourceCard icon={Database} label="Release channel" value={formatManagedValue(server.releaseChannel)} />
-            </section>
             <UnavailableServerPanel title="Server name" actions={["Edit name"]} />
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
