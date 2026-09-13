@@ -6,6 +6,7 @@ import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAcce
 import { LiveServerConsole } from "@/app/components/servers/LiveServerConsole";
 import { ManagedServerBackups } from "@/app/components/servers/ManagedServerBackups";
 import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
+import { ManagedServerConsole } from "@/app/components/servers/ManagedServerConsole";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import { ServerControlPanel } from "@/app/components/servers/ServerControlPanel";
 import {
@@ -380,6 +381,9 @@ function ManagedServerSections({
     return (
         <ManagedServerPollingProvider>
             <ManagedServerLifecycleSection server={server} />
+            {(server.accessRole === "owner" || server.accessRole === "manager") && (
+                <ManagedServerConsole serverId={server.serverId} />
+            )}
             <Suspense fallback={<ManagedServerBackupsSkeleton />}>
                 <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
             </Suspense>
