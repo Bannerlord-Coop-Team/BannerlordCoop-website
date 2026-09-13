@@ -1,3 +1,4 @@
+import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
 import { parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingRegion } from "./server-onboarding-contract.ts";
 
@@ -21,6 +22,9 @@ export type MyServersHandlerOptions = {
 };
 
 type UpstreamRequest =
+    | { operation: "server-files"; input: { serverId: string } }
+    | { operation: "file-transfer-status" | "download-save-export"; input: { serverId: string; transferRequestId: string } }
+    | { operation: "file-transfer"; input: OwnerFileMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
     | { operation: "server-onboarding"; input: Record<string, never> }
     | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion } }
@@ -82,7 +86,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // New onboarding mutations must retain the caller's durable UUID.
-            if (upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility") {
+            if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -108,7 +112,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         });
         let upstream: Response;
         try {
-            upstream = await fetchImplementation(controlPlaneEndpoint, {
+            upstream = await fetchImplementation(upstreamRequest.operation === "file-transfer" ? new URL("/v1/user/files", controlPlaneEndpoint) : controlPlaneEndpoint, {
                 method: "POST",
                 redirect: "error",
                 headers: {
@@ -134,7 +138,8 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         try {
             responseBody = await readBoundedText(
                 upstream,
-                upstreamRequest.operation === "my-servers" || upstreamRequest.operation === "server-backups"
+                upstreamRequest.operation === "download-save-export" ? MAXIMUM_WEB_FILE_RESPONSE_BYTES
+                    : upstreamRequest.operation === "my-servers" || upstreamRequest.operation === "server-backups"
                     ? MAXIMUM_LIST_RESPONSE_BYTES
                     : MAXIMUM_OPERATION_RESPONSE_BYTES,
             );
@@ -144,6 +149,9 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             }
             if (isRecord(envelope) && envelope.ok === true) {
                 if (!upstream.ok) throw new Error("Inconsistent success status");
+                if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
+                if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
+                if (upstreamRequest.operation === "download-save-export") parseOwnerFileDownload(envelope.result);
                 if (upstreamRequest.operation === "server-onboarding") parseOnboardingSummary(envelope.result);
                 if (upstreamRequest.operation === "set-server-visibility") {
                     parseVisibilityResult(envelope.result, { action: "set-server-visibility", ...upstreamRequest.input });
@@ -193,6 +201,17 @@ function listRequest(request: Request): UpstreamRequest {
         };
     }
 
+    if (resource === "files") {
+        assertQueryParameters(url, ["resource", "serverId"]);
+        return { operation: "server-files", input: { serverId: readServerId(url) } };
+    }
+    if (resource === "file-transfer-status" || resource === "download-save-export") {
+        assertQueryParameters(url, ["resource", "serverId", "transferRequestId"]);
+        const transferRequestId = url.searchParams.get("transferRequestId");
+        requireUuid(transferRequestId);
+        return { operation: resource, input: { serverId: readServerId(url), transferRequestId } };
+    }
+
     if (resource === "onboarding") {
         assertQueryParameters(url, ["resource"]);
         return { operation: "server-onboarding", input: {} };
@@ -221,19 +240,23 @@ function listRequest(request: Request): UpstreamRequest {
 }
 
 async function operationRequest(request: Request): Promise<UpstreamRequest> {
-    if ([...new URL(request.url).searchParams.keys()].length !== 0) {
+    const url = new URL(request.url);
+    const isFileTransfer = url.searchParams.get("resource") === "file-transfer";
+    if (isFileTransfer) assertQueryParameters(url, ["resource"]);
+    if (!isFileTransfer && [...url.searchParams.keys()].length !== 0) {
         throw new Error("Operation query parameters are unsupported");
     }
     if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
         throw new ContentTypeError();
     }
-    const text = await readBoundedText(request, MAXIMUM_REQUEST_BYTES);
+    const text = await readBoundedText(request, isFileTransfer ? MAXIMUM_WEB_FILE_REQUEST_BYTES : MAXIMUM_REQUEST_BYTES);
     let value: unknown;
     try {
         value = JSON.parse(text);
     } catch {
         throw new Error("Invalid JSON");
     }
+    if (isFileTransfer) return { operation: "file-transfer", input: parseOwnerFileMutation(value) };
     if (!isRecord(value) || typeof value.action !== "string") {
         throw new Error("Invalid operation");
     }
