@@ -45,3 +45,15 @@ it("rejects oversize config before reading bytes and preserves unknown transport
     mocks.status.mockRejectedValue(new Error("Lost connection"));
     expect(await checkManagedServerFile(id, id, "owner")).toMatchObject({ ok: false, rejected: false });
 });
+
+it("strips native private fields before forwarding an individual server configuration", async () => {
+    const result = { kind: "configuration", outcome: "updated", updatedAt };
+    mocks.submit.mockResolvedValue(result);
+    const form = new FormData();
+    for (const [key, value] of Object.entries({ action: "import-config", requestId: id, serverId: id, expectedUpdatedAt: updatedAt, configPart: "server" })) form.set(key, value);
+    const file = new File(["config"], "server-config.json");
+    Object.defineProperty(file, "text", { value: async () => '{"autosaveMinutes":10,"password":"private", "port":4200, "saveName":"campaign",}' });
+    form.set("config", file);
+    expect(await submitManagedServerFile(form, "owner")).toEqual({ ok: true, result });
+    expect(mocks.submit).toHaveBeenCalledWith("original-owner-token", id, { action: "import-config", serverId: id, expectedUpdatedAt: updatedAt, configPart: "server", settings: { autosaveMinutes: 10 } });
+});

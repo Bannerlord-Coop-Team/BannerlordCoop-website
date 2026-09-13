@@ -78,6 +78,8 @@ it("does not dispatch when pending intent cannot be persisted, or recover a diff
 });
 it("reviews configuration changes and rejects secret fields before any submission", async () => {
     await render(); await click("Import config");
+    const choice = container.querySelector("select")!;
+    await act(async () => { choice.value = "combined"; choice.dispatchEvent(new Event("change", { bubbles: true })); });
     const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     async function choose(config: unknown) {
         const file = new File([JSON.stringify(config)], "config.json", { type: "application/json" });
@@ -90,10 +92,63 @@ it("reviews configuration changes and rejects secret fields before any submissio
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
     await choose({ ...status.managedConfig, serverConfig: { ...status.managedConfig.serverConfig, autosaveMinutes: 10 } });
     expect(container.textContent).toContain("Autosave Minutes: 5 → 10");
-    expect(button("Confirm import").disabled).toBe(false); expect(mocks.submit).not.toHaveBeenCalled();
+    expect(button("Import these settings").disabled).toBe(false); expect(mocks.submit).not.toHaveBeenCalled();
 });
 it("rejects malformed stored fingerprints and cross-server identity", () => {
     const value = { requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt, action: "import-save", fingerprints: [], displayName: "Campaign", saveId: status.activeSave!.saveId };
     expect(() => readFileIntent(JSON.stringify(value), status.serverId)).toThrow();
     expect(() => readFileIntent("a".repeat(2049), status.serverId)).toThrow();
+});
+
+it("guides individual imports, catches choosing the wrong file, and previews only the selected settings", async () => {
+    await render(); await click("Import config");
+    expect(container.textContent).toContain("1. Which file are you importing?");
+    expect(container.textContent).toContain("DedicatedServer");
+    expect(container.textContent).toContain("You do not need to open or edit it");
+    async function choose(contents: string) {
+        const file = new File([contents], "config.json", { type: "application/json" });
+        Object.defineProperty(file, "text", { value: async () => contents });
+        const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+        Object.defineProperty(input, "files", { configurable: true, value: [file] });
+        await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+        await click("Review import");
+    }
+    await choose('{"modOptions":{"autoPauseEnabled":false}}');
+    expect(container.textContent).toContain("This looks like mod-config.json");
+    await choose('{// Original file\n"autosaveMinutes":10,"password":"never-show-this",}');
+    expect(container.textContent).toContain("Importing server settings only");
+    expect(container.textContent).toContain("Your gameplay settings will stay the same");
+    expect(container.textContent).toContain("Server password");
+    expect(container.textContent).not.toContain("never-show-this");
+    await click("Back");
+    const choice = container.querySelector("select")!;
+    await act(async () => { choice.value = "mod"; choice.dispatchEvent(new Event("change", { bubbles: true })); });
+    await choose('{"modOptions":{"autoPauseEnabled":false}}');
+    expect(container.textContent).toContain("Importing gameplay settings only");
+    expect(container.textContent).toContain("Your server settings will stay the same");
+    expect(container.textContent).toContain("Auto Pause Enabled: On → Off");
+    expect(mocks.submit).not.toHaveBeenCalled();
+});
+
+it.each(["mod", "server", undefined])("recovers the original config choice for a pending %s import", async (configPart) => {
+    sessionStorage.setItem(key, JSON.stringify({ requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt, action: "import-config", fingerprints: ["a".repeat(64)], displayName: "", saveId: status.activeSave!.saveId, ...(configPart ? { configPart } : {}) }));
+    await render(); await click("Retry same request");
+    const choice = container.querySelector("select")!;
+    expect(choice.value).toBe(configPart ?? "combined");
+    expect(choice.disabled).toBe(true);
+    expect(mocks.submit).not.toHaveBeenCalled();
+});
+
+it("requires another review if current server settings change before confirmation", async () => {
+    await render(); await click("Import config");
+    const file = new File(['{"autosaveMinutes":10}'], "server-config.json");
+    Object.defineProperty(file, "text", { value: async () => '{"autosaveMinutes":10}' });
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(input, "files", { value: [file] });
+    await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+    await click("Review import");
+    await render({ ...status, updatedAt: "2026-09-14T00:00:00.000Z" });
+    await click("Import these settings");
+    expect(mocks.submit).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Go back and review your file again");
 });

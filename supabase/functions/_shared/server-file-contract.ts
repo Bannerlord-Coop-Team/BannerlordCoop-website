@@ -1,3 +1,4 @@
+import { parseConfigurationImport, type ConfigurationImport } from "./configuration-file-import.ts";
 import { parseManagedServerConfiguration, type ManagedServerConfiguration } from "./managed-server-configuration.ts";
 
 export const MAXIMUM_WEB_SAVE_BYTES = 20 * 1_048_576;
@@ -10,7 +11,7 @@ export type OwnerFileMutation = {
   serverId: string;
   expectedUpdatedAt: string;
 } & (
-  | { action: 'import-config'; managedConfig: ManagedServerConfiguration }
+  | ({ action: 'import-config' } & ConfigurationImport)
   | { action: 'export-save'; saveId: string }
   | { action: 'import-save'; displayName: string; files: { basename: string; base64: string }[] }
 );
@@ -39,8 +40,8 @@ export function parseOwnerFileMutation(value: unknown): OwnerFileMutation {
   requireFileTimestamp(value.expectedUpdatedAt);
   const common = ['action', 'serverId', 'expectedUpdatedAt'];
   if (value.action === 'import-config') {
-    exact(value, [...common, 'managedConfig']);
-    return { ...value, managedConfig: parseManagedServerConfiguration(value.managedConfig) } as OwnerFileMutation;
+    const { action, serverId, expectedUpdatedAt, ...configuration } = value;
+    return { action, serverId, expectedUpdatedAt, ...parseConfigurationImport(configuration) };
   }
   if (value.action === 'export-save') {
     exact(value, [...common, 'saveId']);

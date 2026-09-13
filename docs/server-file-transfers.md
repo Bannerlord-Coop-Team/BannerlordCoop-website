@@ -12,8 +12,12 @@ above them, with a responsive two-card layout and native import review dialogs.
   selects the imported campaign and retains its normal rollback behavior.
 - Export the active campaign through a durable job and download its archive.
   Save transfers require the server to be stopped. No server is stopped silently.
-- Import an exported version-1 configuration JSON file, up to 64 KiB. Review
-  changed values before confirmation. Import is owner-only; settings apply on
+- Import `server-config.json` or `mod-config.json` individually, up to 64 KiB.
+  The dialog explains what each file changes and where to find it, catches wrong
+  file choices, and previews changes before confirmation. Native comments, BOM
+  and trailing commas are accepted without making users edit the file.
+  Missing settings and the other configuration section are preserved. The
+  existing combined website settings backup remains a separate, labelled option. Import is owner-only; settings apply on
   the next Start. Passwords, campaign paths and host settings are excluded.
 - Export the current validated configuration. Managers can export this non-secret
   configuration and manage saves; they cannot import configuration settings.
@@ -43,8 +47,8 @@ usable maximum sizes; no production maximum-size transfer has been exercised.
 
 `supabase/functions/_shared/managed-server-configuration.ts` mirrors the control
 plane's `src/hosting/runner/contracts/managed-server-configuration.ts` exactly.
-`server-file-contract.ts` mirrors its `lifecycle/owner-file-contract.ts` (with only
-the import path adjusted). Update both repositories together when that contract
+`server-file-contract.ts` and `configuration-file-import.ts` mirror their
+control-plane lifecycle counterparts (with only import paths adjusted). Update both repositories together when that contract
 changes; the authoritative backend always repeats validation.
 
 ## Rollout and validation
@@ -71,3 +75,17 @@ server operations or production transfers were performed.
 - [Desktop](screenshots/server-files-desktop.png)
 - [Configuration review dialog](screenshots/server-files-import.png)
 - [Mobile](screenshots/server-files-mobile.png)
+
+
+Individual files are sanitized before forwarding: passwords, connection ports,
+save selection and launcher-only settings are excluded. Three newer native mod
+options (battle size, player nameplates and joining battles while wounded) are
+outside the current managed schema and are explicitly listed as not imported.
+Other unrecognised settings are rejected with a plain-language error; users are
+not asked to edit JSON. Native files with omitted settings preserve current
+values instead of replacing them with defaults. Tests use captured shipped
+native templates and verify section preservation through HTTP and IPC.
+
+The updated [step-by-step import guide](screenshots/server-files-import-guide.png)
+and [individual server-settings review](screenshots/server-files-import.png) are
+real Playwright screenshots of the updated component in a local fixture page.

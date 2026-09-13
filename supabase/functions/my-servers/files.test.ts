@@ -53,3 +53,16 @@ test("correlation and downstream validation failures remain unconfirmed, never s
         assert.equal((await handler(async () => Response.json(response))(request(input))).status, 502);
     }
 });
+
+test("individual config imports forward only the selected patch and reject host settings", async () => {
+    for (const selection of [{ configPart: "server", settings: { autosaveMinutes: 10 } }, { configPart: "mod", settings: { modOptions: { autoPauseEnabled: false } } }]) {
+        const patch = { action: "import-config", serverId: input.serverId, expectedUpdatedAt: input.expectedUpdatedAt, ...selection };
+        assert.equal((await handler(async (_url, init) => {
+            assert.deepEqual(JSON.parse(String(init?.body)).input, patch);
+            return Response.json({ version: 1, requestId, ok: true, result });
+        })(request(patch))).status, 200);
+    }
+    let forwarded = false;
+    const response = await handler(async () => { forwarded = true; throw Error("Unexpected request"); })(request({ action: "import-config", serverId: input.serverId, expectedUpdatedAt: input.expectedUpdatedAt, configPart: "server", settings: { autosaveMinutes: 10, password: "forbidden" } }));
+    assert.equal(response.status, 400); assert.equal(forwarded, false);
+});
