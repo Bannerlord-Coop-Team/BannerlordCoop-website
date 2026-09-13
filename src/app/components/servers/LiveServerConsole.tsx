@@ -12,6 +12,7 @@ import {
     CircleAlert,
     CircleCheck,
     Eraser,
+    Download,
     LoaderCircle,
     Plug,
     Send,
@@ -152,6 +153,7 @@ export function LiveServerConsole({
 }) {
     const [command, setCommand] = useState("");
     const [output, setOutput] = useState("");
+    const [followingLogs, setFollowingLogs] = useState(true);
     const [containerState, setContainerState] = useState<ContainerState>("unknown");
     const [controlsReady, setControlsReady] = useState(false);
     const [inputEnabled, setInputEnabled] = useState(false);
@@ -406,9 +408,9 @@ export function LiveServerConsole({
     }, [connect, disconnect]);
 
     useEffect(() => {
-        if (!outputRef.current) return;
+        if (!outputRef.current || !followingLogs) return;
         outputRef.current.scrollTop = outputRef.current.scrollHeight;
-    }, [output]);
+    }, [output, followingLogs]);
 
     function requestOperation(operation: ContainerOperation) {
         const socket = socketRef.current;
@@ -449,12 +451,12 @@ export function LiveServerConsole({
     const consoleWritable = connected && containerState === "running" && inputEnabled;
 
     return (
-        <section className="overflow-hidden rounded-sm border border-white/10 bg-[#050605]" aria-labelledby="container-console-heading">
+        <section className="overflow-hidden rounded-lg border border-white/10 bg-surface-raised" aria-labelledby="container-console-heading">
             <div className="flex flex-col gap-3 border-b border-white/10 bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <div className="flex flex-wrap items-center gap-2.5">
                         <h2 id="container-console-heading" className="font-display text-2xl font-semibold text-foreground">
-                            Container console
+                            Console
                         </h2>
                         <span className={`inline-flex items-center gap-1.5 font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${connected ? "text-emerald-300" : status === "error" ? "text-red-300" : "text-foreground-muted"}`}>
                             <span aria-hidden="true" className={`size-1.5 rounded-full ${connected ? "bg-emerald-400" : status === "error" ? "bg-red-400" : busy ? "animate-pulse bg-gold" : "bg-foreground-dim"}`} />
@@ -465,6 +467,14 @@ export function LiveServerConsole({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                    <button type="button" disabled={!output} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-white/15 px-3 text-sm text-foreground-muted focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-40" onClick={() => {
+                        const url = URL.createObjectURL(new Blob([output], { type: "text/plain" }));
+                        const link = document.createElement("a");
+                        link.href = url;
+                        link.download = `${serverId}-console.txt`;
+                        link.click();
+                        window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+                    }}><Download className="size-4" aria-hidden="true" />Download logs</button>
                     <button
                         type="button"
                         onClick={() => setOutput("")}
@@ -524,13 +534,19 @@ export function LiveServerConsole({
 
             <pre
                 ref={outputRef}
+                onScroll={(event) => {
+                    const viewport = event.currentTarget;
+                    setFollowingLogs(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 24);
+                }}
                 role="log"
                 aria-label="Live Bannerlord container output"
                 tabIndex={0}
-                className="h-[min(58vh,38rem)] min-h-80 overflow-auto whitespace-pre-wrap break-words px-4 py-4 font-mono text-xs leading-5 text-[#c7d5c4] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold sm:px-5 sm:text-[0.78rem]"
+                className="h-80 overflow-auto whitespace-pre-wrap break-words px-4 py-4 font-mono text-[13px] leading-7 text-foreground sm:h-96 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold sm:px-5 sm:text-sm"
             >
                 {output || "Waiting for container output…\n"}
             </pre>
+
+            {!followingLogs && <button type="button" className="m-3 rounded-md border border-white/15 px-3 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold" onClick={() => setFollowingLogs(true)}>Jump to latest</button>}
 
             <form onSubmit={sendCommand} className="border-t border-white/10 bg-surface p-3 sm:p-4">
                 <label htmlFor="console-command" className="sr-only">Send a command to the Bannerlord container</label>
