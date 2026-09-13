@@ -1,3 +1,4 @@
+import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfigPanels";
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
 import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "@/app/components/servers/ServerManagementWorkspace";
 import { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
@@ -155,8 +156,7 @@ function UnavailableFileWorkspaces() {
     return <>
         <ServerWorkspacePanel section="Backups"><UnavailableServerPanel title="Backups" actions={["Create backup", "Restore backup"]} /></ServerWorkspacePanel>
         <ServerWorkspacePanel section="Save & config">
-            <UnavailableServerPanel title="Campaign save" actions={["Import save", "Export save"]} />
-            <UnavailableServerPanel title="Configuration" actions={["Import config", "Export config", "Save config"]} />
+            <ServerSaveConfigPanels />
         </ServerWorkspacePanel>
     </>;
 }

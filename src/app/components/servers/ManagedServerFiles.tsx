@@ -1,3 +1,4 @@
+import { ServerSaveConfigPanels } from "./ServerSaveConfigPanels";
 import { ManagedServerBackups } from "./ManagedServerBackups";
 import { ManagedServerTransfers } from "./ManagedServerTransfers";
 import { ServerWorkspacePanel } from "./ServerManagementWorkspace";
@@ -12,11 +13,10 @@ export function ManagedServerFiles({ userId, server, files, backups, status, loa
     const readOnly = <p className="mt-3 text-sm leading-6 text-foreground-muted">Files, backup history and save restore require owner or manager access. Your current access remains read-only.</p>;
     return <>
         <ServerWorkspacePanel section="Save & config">
-            <section id="server-files" aria-labelledby="server-files-heading" className="rounded-lg border border-white/10 bg-surface p-5 sm:p-6">
-                <h2 id="server-files-heading" className="text-base font-semibold text-foreground">Save &amp; config</h2>
+            <section id="server-files" aria-label="Save & config">
                 {canManage
                     ? <ManagedServerTransfers userId={userId} serverId={server.serverId} status={files} canImportConfig={server.accessRole === "owner"} />
-                    : readOnly}
+                    : <ServerSaveConfigPanels saveNotice={readOnly} configNotice={readOnly} />}
             </section>
         </ServerWorkspacePanel>
         <ServerWorkspacePanel section="Backups">

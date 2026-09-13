@@ -31,5 +31,6 @@ it.each(["owner", "manager", "admin", "support"] as const)("preserves %s file pe
     } else {
         expect(container.querySelector("#transfers, #backups")).toBeNull();
         expect(container.textContent).toContain("read-only");
+        for (const control of container.querySelectorAll("#server-files button, #server-files textarea")) expect((control as HTMLButtonElement).disabled).toBe(true);
     }
 });
