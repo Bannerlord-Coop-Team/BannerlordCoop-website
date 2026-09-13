@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
+import { connectionAddress } from "./connection-address";
 import {
     getMyServerBackupStatus,
     listAllMyServerBackups,
@@ -72,6 +74,47 @@ test("loads every owner-scoped managed-server page through the Edge Function", a
         assert.equal(new URL(requests[0]?.url ?? "").pathname, "/functions/v1/my-servers");
         assert.equal(new URL(requests[0]?.url ?? "").searchParams.get("limit"), "100");
         assert.equal(new URL(requests[1]?.url ?? "").searchParams.get("cursor"), "next-page");
+    } finally {
+        restoreEnvironment();
+    }
+});
+
+test("uses CP #143 connection fields through the authenticated Edge and website client without visibility metadata", async () => {
+    configureEnvironment();
+    const cases = [
+        { accessRole: "owner", connectionIp: "203.0.113.10", gamePorts: [4203], expected: "203.0.113.10:4203" },
+        { accessRole: "manager", connectionIp: "203.0.113.20", gamePorts: [4201, 4202], expected: "203.0.113.20:4201" },
+        { accessRole: "owner", connectionIp: "2001:db8::1", gamePorts: [4205], expected: "[2001:db8::1]:4205" },
+        { accessRole: "owner", connectionIp: null, gamePorts: [], expected: null },
+    ];
+    try {
+        for (const { expected, ...fields } of cases) {
+            const summary = { ...FIRST_SERVER, ...fields };
+            const edge = createMyServersHandler({
+                allowedOrigins: ["https://bannerlordcoop.com"],
+                controlPlaneUrl: "https://control-plane.example.test",
+                fetchImplementation: async (input, init) => {
+                    const request = new Request(input, init);
+                    assert.equal(request.url, "https://control-plane.example.test/v1/user/control-plane");
+                    assert.equal(request.headers.get("authorization"), `Bearer ${TOKEN}`);
+                    const body = await request.json();
+                    assert.equal(body.operation, "my-servers");
+                    assert.deepEqual(body.input, { cursor: null, limit: 100 });
+                    return Response.json({ version: 1, requestId: body.requestId, ok: true,
+                        result: { items: [summary], nextCursor: null } });
+                },
+            });
+            globalThis.fetch = async (input, init) => {
+                const request = new Request(input, init);
+                assert.equal(new URL(request.url).pathname, "/functions/v1/my-servers");
+                assert.equal(request.cache, "no-store");
+                return edge(request);
+            };
+            const [listed] = await listAllMyServers(TOKEN);
+            assert.deepEqual(listed, summary);
+            assert.equal(listed.visibility, undefined);
+            assert.equal(connectionAddress(listed.connectionIp ?? null, listed.gamePorts ?? []), expected);
+        }
     } finally {
         restoreEnvironment();
     }
