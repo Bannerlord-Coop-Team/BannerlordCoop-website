@@ -1,3 +1,6 @@
+import { Blob as NodeBlob } from "node:buffer";
+import { unzipSync, strFromU8 } from "fflate";
+import { readConfigurationFile, applyConfigurationImport } from "../../../../supabase/functions/_shared/configuration-file-import";
 import { act } from "react";
 import { randomUUID } from "node:crypto";
 import { createRoot, type Root } from "react-dom/client";
@@ -208,4 +211,41 @@ it("retains an earlier uncertain request if its retry fails before submission", 
     expect(sessionStorage.getItem(key)).toBe(original);
     expect(container.textContent).toContain("Your previous request is still saved");
     expect(button("Import save").disabled).toBe(true);
+});
+
+it("downloads two correctly named native JSON files in one ZIP that each import independently", async () => {
+    const managedConfig = { ...status.managedConfig, serverConfig: { ...status.managedConfig.serverConfig, autosaveMinutes: 11 } };
+    mocks.config.mockResolvedValue({ ok: true, managedConfig });
+    let archive: NodeBlob | undefined;
+    let filename = "";
+    vi.stubGlobal("Blob", NodeBlob);
+    vi.stubGlobal("URL", { createObjectURL: vi.fn((blob: NodeBlob) => { archive = blob; return "blob:config-export"; }), revokeObjectURL: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { filename = this.download; });
+    await render(status, false);
+    await click("Export config");
+    expect(mocks.config).toHaveBeenCalledWith(status.serverId, "owner");
+    expect(filename).toBe("BannerlordCoop-configuration.zip");
+    const entries = unzipSync(new Uint8Array(await archive!.arrayBuffer()));
+    expect(Object.keys(entries).sort()).toEqual(["mod-config.json", "server-config.json"]);
+    expect(JSON.parse(strFromU8(entries["server-config.json"]))).toEqual(managedConfig.serverConfig);
+    expect(JSON.parse(strFromU8(entries["mod-config.json"]))).toEqual(managedConfig.modConfig);
+    for (const part of ["server", "mod"] as const) {
+        const imported = readConfigurationFile(strFromU8(entries[`${part}-config.json`]), part);
+        expect(imported.ignoredSettings).toEqual([]);
+        expect(applyConfigurationImport(managedConfig, imported.input)).toEqual(managedConfig);
+    }
+    expect(container.textContent).toContain("Extract All");
+    expect(container.textContent).toContain("do not select the ZIP");
+    expect(sessionStorage.getItem(key)).toBeNull();
+    expect(mocks.submit).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:config-export");
+});
+
+it("keeps config export failures retryable without downloading a file", async () => {
+    mocks.config.mockRejectedValue(new Error("Network interrupted"));
+    await render(); await click("Export config");
+    expect(container.textContent).toContain("Configuration download failed. Please try again.");
+    expect(button("Export config").disabled).toBe(false);
+    expect(sessionStorage.getItem(key)).toBeNull();
 });
