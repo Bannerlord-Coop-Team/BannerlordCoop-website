@@ -1,5 +1,6 @@
 "use client";
 
+import { strToU8, zipSync } from "fflate";
 import { Download, Upload, FileText, SlidersHorizontal, Info, X, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -239,13 +240,22 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
             </div>
             <div className="min-w-0 border border-white/10 p-4 sm:p-5">
                 <h3 className="flex items-center gap-3 font-display text-xl font-semibold"><SlidersHorizontal aria-hidden className="size-5 text-gold" />Server configuration</h3>
-                <p className="mt-2 max-w-lg text-sm leading-6 text-foreground-muted">Import server and gameplay settings, or download the current configuration to your computer.</p>
+                <p className="mt-2 max-w-lg text-sm leading-6 text-foreground-muted">Download a ZIP containing server-config.json and mod-config.json, or import either file individually.</p>
                 <p className="mt-2 text-xs text-foreground-muted">Passwords and campaign paths are excluded.</p>
                 <div className="mt-4 flex flex-wrap gap-3">
                     <button className={buttonClass} disabled={blocked || !canImportConfig} onClick={() => openImport("import-config")}><Upload aria-hidden className="size-4" />Import config</button>
                     <button className={buttonClass} disabled={blocked} onClick={() => startTransition(async () => {
                         const response = await exportManagedServerConfig(serverId, userId).catch(() => ({ ok: false as const, message: "Configuration download failed. Please try again." }));
-                        if (response.ok) { saveDownload(JSON.stringify(response.managedConfig, null, 2) + "\n", "BannerlordCoop-configuration.json"); setMessage("Configuration downloaded."); }
+                        if (response.ok) {
+                            try {
+                                const archive = zipSync({
+                                    "server-config.json": strToU8(JSON.stringify(response.managedConfig.serverConfig, null, 2) + "\n"),
+                                    "mod-config.json": strToU8(JSON.stringify(response.managedConfig.modConfig, null, 2) + "\n"),
+                                }, { level: 0 });
+                                saveDownload(new Uint8Array(archive), "BannerlordCoop-configuration.zip");
+                                setMessage("Configuration ZIP downloaded. Open your Downloads folder, right-click BannerlordCoop-configuration.zip and choose Extract All (or double-click it on a Mac). Import server-config.json or mod-config.json separately; do not select the ZIP.");
+                            } catch { setMessage("Configuration download failed. Please try again."); }
+                        }
                         else setMessage(response.message);
                     })}><Download aria-hidden className="size-4" />Export config</button>
                 </div>
@@ -282,14 +292,15 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
                         <select className={inputClass} value={configPart} disabled={intent !== null} onChange={(event) => { setConfigPart(event.target.value as ConfigurationPart); setFiles([]); setDialogError(""); }}>
                             <option value="server">server-config.json — server settings</option>
                             <option value="mod">mod-config.json — gameplay settings</option>
-                            <option value="combined">Website settings backup — both</option>
+                            <option value="combined">Website settings backup — both (older .json exports)</option>
                         </select>
                     </label>
                     <div className="border border-white/10 p-4 text-sm leading-6 text-foreground-muted">
                         <p className="font-semibold text-foreground">{configPart === "server" ? "Server settings: how often your game saves, server logs and Steam settings." : configPart === "mod" ? "Gameplay settings: difficulty, pausing and other co-op game rules." : "Both sets of settings from a backup downloaded with Export config on this website."}</p>
                         <p className="mt-3 font-semibold text-foreground">2. Find your file</p>
-                        {configPart === "combined" ? <p>Look in your Downloads folder for BannerlordCoop-configuration.json.</p> : <>
-                            <p>On the computer where you played or hosted, open Documents → Mount and Blade II Bannerlord → CoopData{configPart === "server" ? " → DedicatedServer" : ""}.</p>
+                        {configPart === "combined" ? <p>This is only for an older BannerlordCoop-configuration.json backup. For a new ZIP export, extract it first, then select server-config.json or mod-config.json above.</p> : <>
+                            <p className="mb-3">If you used Export config on this website, open Downloads, right-click BannerlordCoop-configuration.zip and choose Extract All (or double-click it on a Mac). Open the extracted folder and choose the file below. Do not select the ZIP.</p>
+                            <p>For a file from the game, on the computer where you played or hosted, open Documents → Mount and Blade II Bannerlord → CoopData{configPart === "server" ? " → DedicatedServer" : ""}.</p>
                             <p className="mt-2">Choose <strong className="text-foreground">{configPart === "server" ? "server-config.json" : "mod-config.json"}</strong>. If you used a custom data folder, look there instead. If you cannot find the file, cancel and ask support for help.</p>
                         </>}
                         <p className="mt-3">{configPart === "server" ? "Your gameplay settings will be kept. Password, connection details and save selection are not taken from this file." : configPart === "mod" ? "Your server settings will be kept." : "This option can change both server and gameplay settings."} Any settings missing from an individual file will be kept.</p>
