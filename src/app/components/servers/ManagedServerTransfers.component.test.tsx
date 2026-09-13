@@ -31,9 +31,9 @@ async function render(current = status, owner = true, userId = "owner") {
 function button(label: string) { const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label); if (!found) throw Error(`Missing button ${label}`); return found; }
 async function click(label: string) { await act(async () => button(label).click()); }
 
-it("shows all four actions and disables saves while running and configuration import for managers", async () => {
+it("allows current-save export while running, but requires stopped import and owner config permission", async () => {
     await render({ ...status, operationState: "running", observedGameState: "running" }, false);
-    expect(button("Import save").disabled).toBe(true); expect(button("Export save").disabled).toBe(true);
+    expect(button("Import save").disabled).toBe(true); expect(button("Export save").disabled).toBe(false);
     expect(button("Import config").disabled).toBe(true); expect(button("Export config").disabled).toBe(false);
     expect(container.textContent).toContain("Stop the server"); expect(container.textContent).toContain("Only the server owner");
 });
