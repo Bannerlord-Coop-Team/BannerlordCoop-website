@@ -67,12 +67,14 @@ export function parseVisibilityMutation(value: unknown): VisibilityMutation {
     }
     return value as VisibilityMutation;
 }
-export function parseVisibilityResult(value: unknown, input: VisibilityMutation): { serverId: string; visibility: ServerVisibility; updatedAt: string } {
-    if (!isRecord(value) || !exactKeys(value, ["serverId", "visibility", "updatedAt"])
+export type VisibilityResult = { outcome: "updated" | "existing"; serverId: string; visibility: ServerVisibility; updatedAt: string };
+export function parseVisibilityResult(value: unknown, input: VisibilityMutation): VisibilityResult {
+    if (!isRecord(value) || !exactKeys(value, ["outcome", "serverId", "visibility", "updatedAt"])
+        || (value.outcome !== "updated" && value.outcome !== "existing")
         || value.serverId !== input.serverId || value.visibility !== input.visibility || !timestamp(value.updatedAt)) {
         throw new Error("Invalid visibility result");
     }
-    return value as { serverId: string; visibility: ServerVisibility; updatedAt: string };
+    return value as VisibilityResult;
 }
 export async function readPublicResponse(response: Response): Promise<unknown> {
     if (!/^application\/json(?:\s*;|$)/iu.test(response.headers.get("content-type") ?? "")) throw new Error("Invalid response type");

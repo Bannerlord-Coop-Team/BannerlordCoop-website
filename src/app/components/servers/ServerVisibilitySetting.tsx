@@ -2,7 +2,7 @@
 
 import { setServerVisibility } from "@/app/servers/server-visibility-actions";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 
 type Props = {
     serverId: string;
@@ -15,24 +15,36 @@ export function ServerVisibilitySetting({ serverId, visibility, accessRole, expe
     const [pending, startTransition] = useTransition();
     const [message, setMessage] = useState("");
     const isPublic = visibility === "public";
+    const request = useRef<{
+        serverId: string; visibility: "private" | "public"; expectedUpdatedAt: string; requestId: string;
+    } | null>(null);
     function changeVisibility() {
         if (accessRole !== "owner" || pending) return;
-        if (!isPublic && !window.confirm("Publish this server? Everyone will be able to see its name, region, game IP and port. This does not change the game password or connection permissions.")) return;
+        if (!isPublic && !window.confirm("Mark this server public for discovery? This records your opt-in preference; public listing is not available yet. It does not change game connection permissions.")) return;
+        const target = isPublic ? "private" : "public";
+        if (!request.current || request.current.serverId !== serverId || request.current.visibility !== target
+            || request.current.expectedUpdatedAt !== expectedUpdatedAt) {
+            request.current = { serverId, visibility: target, expectedUpdatedAt, requestId: crypto.randomUUID() };
+        }
+        const attempt = request.current;
         setMessage("");
         startTransition(async () => {
             try {
-                const result = await setServerVisibility({ serverId, visibility: isPublic ? "private" : "public", expectedUpdatedAt, requestId: crypto.randomUUID() });
+                const result = await setServerVisibility(attempt);
                 setMessage(result.message);
-                router.refresh();
-            } catch { setMessage("Visibility could not be updated. Refresh before trying again."); }
+                if (result.ok) {
+                    request.current = null;
+                    router.refresh();
+                }
+            } catch { setMessage("The update could not be confirmed. Try again to retry the same request, or refresh to check the current preference."); }
         });
     }
     return (
         <section className="mt-6 border border-white/10 bg-surface p-5" aria-labelledby="server-visibility-heading">
             <h2 id="server-visibility-heading" className="font-display text-xl font-semibold">Server visibility: {isPublic ? "Public" : "Private"}</h2>
             <p className="mt-2 text-sm text-foreground-muted">
-                Private servers are not listed publicly. Eligible public servers share their name, region, game IP and port with everyone.
-                Suspended, deleted, or entitlement-inactive servers are excluded; ownership transfers reset visibility to private.
+                This saves your discovery preference. Public listing is not available yet.
+                Both settings preserve existing authorized access to this server and its game address.
                 This setting does not block game connections or erase addresses people previously copied.
             </p>
             {accessRole === "owner" ? (

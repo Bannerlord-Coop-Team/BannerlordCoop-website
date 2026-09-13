@@ -19,6 +19,7 @@ it("defaults missing visibility to private and requires explicit publishing conf
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     await act(async () => root.render(<ServerVisibilitySetting {...props} />));
     expect(container.textContent).toContain("Server visibility: Private");
+    expect(container.textContent).toContain("Public listing is not available yet");
     await act(async () => container.querySelector("button")!.click());
     expect(confirm).toHaveBeenCalled();
     expect(mocks.update).not.toHaveBeenCalled();
@@ -27,6 +28,32 @@ it("defaults missing visibility to private and requires explicit publishing conf
     await act(async () => container.querySelector("button")!.click());
     expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ serverId: props.serverId, visibility: "public", expectedUpdatedAt: props.expectedUpdatedAt, requestId: expect.any(String) }));
     expect(mocks.refresh).toHaveBeenCalled();
+});
+it.each(["throw", "error"] as const)("retries the identical UUID and input after an uncertain %s response", async failure => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    if (failure === "throw") mocks.update.mockRejectedValueOnce(new Error("Network lost"));
+    else mocks.update.mockResolvedValueOnce({ ok: false, message: "Response could not be confirmed" });
+    mocks.update.mockResolvedValueOnce({ ok: true, message: "Update acknowledged" });
+    await act(async () => root.render(<ServerVisibilitySetting {...props} />));
+    await act(async () => container.querySelector("button")!.click());
+    const first = mocks.update.mock.calls[0][0];
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    await act(async () => container.querySelector("button")!.click());
+    expect(mocks.update.mock.calls[1][0]).toEqual(first);
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(container.textContent).toContain("Server visibility: Private");
+});
+it("uses a new request after an authoritative generation change", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mocks.update.mockResolvedValue({ ok: false, message: "Refresh required" });
+    await act(async () => root.render(<ServerVisibilitySetting {...props} />));
+    await act(async () => container.querySelector("button")!.click());
+    const first = mocks.update.mock.calls[0][0];
+    const expectedUpdatedAt = "2026-09-13T12:00:00.000Z";
+    await act(async () => root.render(<ServerVisibilitySetting {...props} expectedUpdatedAt={expectedUpdatedAt} />));
+    await act(async () => container.querySelector("button")!.click());
+    expect(mocks.update.mock.calls[1][0].requestId).not.toBe(first.requestId);
+    expect(mocks.update.mock.calls[1][0].expectedUpdatedAt).toBe(expectedUpdatedAt);
 });
 it.each(["manager", "support", "admin"] as const)("%s cannot publish or hide a server", async accessRole => {
     await act(async () => root.render(<ServerVisibilitySetting {...props} accessRole={accessRole} visibility="public" />));

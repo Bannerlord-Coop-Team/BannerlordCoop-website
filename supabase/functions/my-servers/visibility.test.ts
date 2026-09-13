@@ -5,7 +5,7 @@ import { parseVisibilityMutation, parseVisibilityResult } from "../_shared/serve
 
 const requestId = "aaaaaaaa-1111-4111-8111-111111111111";
 const input = { action: "set-server-visibility" as const, serverId: requestId, visibility: "public" as const, expectedUpdatedAt: "2026-09-10T00:00:00.000Z" };
-const result = { serverId: requestId, visibility: "public", updatedAt: "2026-09-10T00:00:01.000Z" };
+const result = { outcome: "updated", serverId: requestId, visibility: "public", updatedAt: "2026-09-10T00:00:01.000Z" };
 function request(body: unknown, token: string | null = "original-token-with-enough-characters", id: string | null = requestId) {
     return new Request("https://edge.test/my-servers", { method: "POST", headers: {
         "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}), ...(id ? { "x-request-id": id } : {}),
@@ -49,6 +49,10 @@ test("preserves authoritative owner denial and stale-generation errors", async (
 
 test("rejects uncorrelated mutation results and unknown fields", async () => {
     assert.deepEqual(parseVisibilityMutation(input), input);
+    assert.deepEqual(parseVisibilityResult(result, input), result);
+    assert.deepEqual(parseVisibilityResult({ ...result, outcome: "existing" }, input), { ...result, outcome: "existing" });
+    assert.throws(() => parseVisibilityResult({ ...result, outcome: "enqueued" }, input));
+    assert.throws(() => parseVisibilityResult({ serverId: result.serverId, visibility: result.visibility, updatedAt: result.updatedAt }, input));
     assert.throws(() => parseVisibilityResult({ ...result, visibility: "private" }, input));
     assert.throws(() => parseVisibilityResult({ ...result, ownerId: "secret" }, input));
     const response = await handler(async () => Response.json({ version: 1, requestId, ok: true, result: { ...result, serverId: "wrong" } }))(request(input));

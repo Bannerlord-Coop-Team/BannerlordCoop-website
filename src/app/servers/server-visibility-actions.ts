@@ -27,9 +27,8 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
         await requestServerVisibility(sessionData.session.access_token, input, requestId);
         revalidatePath("/servers");
         revalidatePath(`/servers/${input.serverId}`);
-        return { ok: true, message: input.visibility === "public"
-            ? "Server is marked public. It appears in the public directory while eligible; its assigned game IP and port can be seen by everyone."
-            : "Server is now private and removed from the public directory." };
+        // A replay acknowledges the original receipt, not necessarily the current preference.
+        return { ok: true, message: "Discovery preference update acknowledged. Refreshing the current setting." };
     } catch (error) {
         const code = error instanceof MyServersApiError ? error.code : "visibility_update_failed";
         console.error("Server visibility update failed", { code });
