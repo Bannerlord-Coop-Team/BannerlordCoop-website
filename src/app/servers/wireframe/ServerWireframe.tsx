@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowUpRight, Check, ChevronDown, ChevronRight, Copy, Database, Download, FileJson, Globe2, LockKeyhole, Pencil, Search, Settings2, Terminal, Upload, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Check, ChevronDown, ChevronRight, Copy, Database, Download, FileJson, Globe2, LockKeyhole, Pencil, Play, RotateCw, Search, Settings2, Square, Terminal, Upload, X } from "lucide-react";
 import Link from "next/link";
 
 const sections = [
@@ -34,6 +34,7 @@ const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-m
 const primary = `${button} !border-gold/50 !bg-gold/15 !text-gold`;
 const input = "w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-gold focus:ring-1 focus:ring-gold";
 const destructive = `${button} !border-amber-400/30 !text-amber-200`;
+const lifecycleButton = "!gap-1 !px-2 !text-xs sm:!gap-2 sm:!px-3 sm:!text-sm";
 const confirmation = "mt-4 rounded-md border border-amber-400/25 bg-amber-400/5 p-4";
 
 function Feedback({ message, onDismiss }: { message: string; onDismiss?: () => void }) {
@@ -65,6 +66,13 @@ function Panel({ title, description, children, action }: { title: string; descri
 
 export default function ServerWireframe() {
     const [section, setSection] = useState<Section>("Console");
+    const [running, setRunning] = useState(true);
+    const [pendingLifecycle, setPendingLifecycle] = useState<"stop" | "restart" | null>(null);
+    const [lifecycleNotice, setLifecycleNotice] = useState("");
+    const startButton = useRef<HTMLButtonElement>(null);
+    const stopButton = useRef<HTMLButtonElement>(null);
+    const restartButton = useRef<HTMLButtonElement>(null);
+    const lifecycleCancel = useRef<HTMLButtonElement>(null);
     const [showAddress, setShowAddress] = useState(false);
     const [name, setName] = useState("The Northern March");
     const [draftName, setDraftName] = useState(name);
@@ -111,6 +119,25 @@ export default function ServerWireframe() {
         const viewport = logViewport.current;
         if (viewport && followingLogs) viewport.scrollTop = viewport.scrollHeight;
     }, [logs, section, followingLogs]);
+
+    useEffect(() => {
+        if (pendingLifecycle) lifecycleCancel.current?.focus();
+    }, [pendingLifecycle]);
+
+    function applyLifecycle(action: "start" | "stop" | "restart") {
+        const result = action === "start" ? "started" : action === "stop" ? "stopped" : "restarted";
+        setRunning(action !== "stop");
+        setPendingLifecycle(null);
+        setLifecycleNotice(`Demo server ${result}. No live server was changed.`);
+        setLogs((previous) => [...previous, `[DEMO] Server ${result} locally. No live server was changed.`]);
+        requestAnimationFrame(() => (action === "stop" ? startButton : action === "start" ? stopButton : restartButton).current?.focus());
+    }
+
+    function cancelLifecycle() {
+        const trigger = pendingLifecycle === "stop" ? stopButton : restartButton;
+        setPendingLifecycle(null);
+        requestAnimationFrame(() => trigger.current?.focus());
+    }
 
     function finishNameEdit() {
         setEditingName(false);
@@ -181,7 +208,7 @@ export default function ServerWireframe() {
             </div>
             <header className="pb-4">
                 <div className="mb-2 flex flex-wrap items-center gap-3 text-xs">
-                    <span className="flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-emerald-300"><span className="size-1.5 rounded-full bg-emerald-400" />Running · demo</span>
+                    <span role="status" className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${running ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" : "border-white/15 bg-white/5 text-foreground-muted"}`}><span className={`size-1.5 rounded-full ${running ? "bg-emerald-400" : "bg-foreground-muted"}`} />{running ? "Running" : "Stopped"} · demo</span>
                     <span className="hidden text-foreground-muted sm:inline">EU West · Campaign server</span>
                     <details ref={visibilityPicker} className="relative ml-auto" onKeyDown={(event) => {
                         if (event.key === "Escape" && visibilityPicker.current) {
@@ -244,13 +271,29 @@ export default function ServerWireframe() {
                 <Feedback message={headerNotice} onDismiss={() => setHeaderNotice("")} />
             </header>
             <nav aria-label="Server workspace" className="mb-5 grid grid-cols-4 border-b border-white/10 sm:flex sm:gap-1">
-                {sections.map(({ name: label, icon: Icon }) => <button key={label} aria-current={section === label ? "page" : undefined} onClick={() => { setSection(label); setConsoleNotice(""); setBackupNotice(""); setSettingsNotice(""); setSaveNotice(""); setConfigNotice(""); }} className={`relative inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 px-1 py-2 text-xs leading-4 transition sm:min-h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm focus-visible:outline-2 focus-visible:outline-gold ${section === label ? "border-gold text-gold" : "border-transparent text-foreground-muted hover:text-foreground"}`}>
+                {sections.map(({ name: label, icon: Icon }) => <button key={label} aria-current={section === label ? "page" : undefined} onClick={() => { setSection(label); setPendingLifecycle(null); setLifecycleNotice(""); setConsoleNotice(""); setBackupNotice(""); setSettingsNotice(""); setSaveNotice(""); setConfigNotice(""); }} className={`relative inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 px-1 py-2 text-xs leading-4 transition sm:min-h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm focus-visible:outline-2 focus-visible:outline-gold ${section === label ? "border-gold text-gold" : "border-transparent text-foreground-muted hover:text-foreground"}`}>
                     <Icon className="size-4" aria-hidden="true" />{label}{((label === "Save & config" && configDirty) || (label === "Settings" && settingsDirty)) && <span aria-label="Unsaved changes" className="absolute right-2 top-2 size-1.5 rounded-full bg-gold sm:static" />}
                 </button>)}
             </nav>
 
             {section === "Console" && <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <Panel title="Console" action={<button className={`${button} !border-transparent !bg-transparent !text-foreground-muted hover:!text-foreground`} onClick={downloadLogs}><Download className="size-4" aria-hidden="true" />Download logs</button>}>
+                    <div className="border-b border-white/10 px-5 py-3">
+                        <div role="group" aria-label="Demo server controls" className="grid grid-cols-3 gap-2 sm:flex">
+                            <button ref={startButton} className={`${running ? button : primary} ${lifecycleButton}`} disabled={running || pendingLifecycle !== null} onClick={() => applyLifecycle("start")}><Play className="size-3.5 shrink-0 sm:size-4" aria-hidden="true" />Start</button>
+                            <button ref={stopButton} className={`${button} ${lifecycleButton}`} disabled={!running || pendingLifecycle !== null} onClick={() => { setLifecycleNotice(""); setPendingLifecycle("stop"); }}><Square className="size-3.5 shrink-0 sm:size-4" aria-hidden="true" />Stop</button>
+                            <button ref={restartButton} className={`${button} ${lifecycleButton}`} disabled={!running || pendingLifecycle !== null} onClick={() => { setLifecycleNotice(""); setPendingLifecycle("restart"); }}><RotateCw className="size-3.5 shrink-0 sm:size-4" aria-hidden="true" />Restart</button>
+                        </div>
+                        {pendingLifecycle && <div className={confirmation} role="group" aria-labelledby="lifecycle-confirmation" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); cancelLifecycle(); } }}>
+                            <h3 id="lifecycle-confirmation" className="text-sm font-semibold">{pendingLifecycle === "stop" ? "Stop" : "Restart"} the server?</h3>
+                            <p className="mt-2 text-sm leading-6 text-foreground-muted">{pendingLifecycle === "stop" ? "This would disconnect players and take the server offline." : "This would disconnect players while the server restarts."} This preview changes only local demo state.</p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                <button ref={lifecycleCancel} className={button} onClick={cancelLifecycle}>Cancel</button>
+                                <button className={destructive} onClick={() => applyLifecycle(pendingLifecycle)}>{pendingLifecycle === "stop" ? "Stop server" : "Restart server"}</button>
+                            </div>
+                        </div>}
+                        <Feedback message={lifecycleNotice} />
+                    </div>
                     <div className="relative">
                         <div ref={logViewport} role="log" aria-label="Demo console output" aria-live="polite" tabIndex={0} onScroll={(event) => {
                             const viewport = event.currentTarget;
@@ -265,16 +308,16 @@ export default function ServerWireframe() {
                     </div>
                     <form className="flex gap-2 border-t border-white/10 p-5" onSubmit={(event) => {
                         event.preventDefault();
-                        if (!command.trim()) return;
+                        if (!running || !command.trim()) return;
                         setLogs((previous) => [...previous, `> ${command.trim()}`, "[DEMO] Command received locally. Nothing was sent to a server."]);
                         setCommand("");
                     }}>
                         <label className="sr-only" htmlFor="console-command">Console command</label>
                         <input ref={commandInput} id="console-command" value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Enter a command…" autoComplete="off" className={`${input} min-w-0 font-mono`} />
-                        <button type="submit" disabled={!command.trim()} className={primary}>Send <ArrowUpRight className="size-4" aria-hidden="true" /></button>
+                        <button type="submit" disabled={!running || !command.trim()} className={primary}>Send <ArrowUpRight className="size-4" aria-hidden="true" /></button>
                     </form>
                     <div className="px-5 pb-5">
-                        <p className="text-xs leading-5 text-foreground-muted">Enter to send · Example commands, not verified game syntax.</p>
+                        <p className="text-xs leading-5 text-foreground-muted">{running ? "Enter to send · Example commands, not verified game syntax." : "Server stopped. Start the demo server to send commands."}</p>
                         <Feedback message={consoleNotice} />
                     </div>
                 </Panel>
