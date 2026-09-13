@@ -3,14 +3,41 @@ import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const SESSION_MILLISECONDS = 5 * 60_000;
 
+type ConsoleRouteDependencies = Readonly<{
+    getAuthClient: typeof getSupabaseServerClient;
+    fetch: typeof fetch;
+    randomUUID: () => string;
+    consoleOrigin: () => string | undefined;
+}>;
+
+const productionDependencies: ConsoleRouteDependencies = {
+    getAuthClient: getSupabaseServerClient,
+    fetch,
+    randomUUID: () => crypto.randomUUID(),
+    consoleOrigin: () => process.env.CONTROL_PLANE_CONSOLE_ORIGIN,
+};
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: { params: Promise<{ serverId: string }> }) {
+    return handleConsoleStream(request, context, productionDependencies);
+}
+
+export function createConsoleStreamHandler(dependencies: ConsoleRouteDependencies) {
+    return (request: Request, context: { params: Promise<{ serverId: string }> }) =>
+        handleConsoleStream(request, context, dependencies);
+}
+
+async function handleConsoleStream(
+    request: Request,
+    context: { params: Promise<{ serverId: string }> },
+    dependencies: ConsoleRouteDependencies,
+): Promise<Response> {
     if (!sameOriginRequest(request)) return new Response("Not found.", { status: 404 });
     const { serverId } = await context.params;
     if (!SERVER_ID.test(serverId)) return new Response("Not found.", { status: 404 });
 
-    const supabase = await getSupabaseServerClient();
+    const supabase = await dependencies.getAuthClient();
     const [{ data: userData, error: userError }, { data: sessionData, error: sessionError }] = await Promise.all([
         supabase.auth.getUser(),
         supabase.auth.getSession(),
@@ -22,7 +49,7 @@ export async function GET(request: Request, context: { params: Promise<{ serverI
 
     let endpoint: URL;
     try {
-        endpoint = consoleStreamEndpoint(process.env.CONTROL_PLANE_CONSOLE_ORIGIN);
+        endpoint = consoleStreamEndpoint(dependencies.consoleOrigin());
     } catch {
         return new Response("Console streaming is unavailable.", { status: 503 });
     }
@@ -30,15 +57,16 @@ export async function GET(request: Request, context: { params: Promise<{ serverI
     const timer = setTimeout(() => controller.abort(), SESSION_MILLISECONDS);
     const abort = () => controller.abort();
     request.signal.addEventListener("abort", abort, { once: true });
+    if (request.signal.aborted) controller.abort();
     let upstream: Response;
     try {
-        upstream = await fetch(endpoint, {
+        upstream = await dependencies.fetch(endpoint, {
             method: "POST",
             headers: {
                 accept: "text/event-stream",
                 authorization: `Bearer ${session.access_token}`,
                 "content-type": "application/json",
-                "x-request-id": crypto.randomUUID(),
+                "x-request-id": dependencies.randomUUID(),
             },
             body: JSON.stringify({ serverId }),
             cache: "no-store",

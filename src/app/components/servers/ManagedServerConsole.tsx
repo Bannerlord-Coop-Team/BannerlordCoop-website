@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 const MAXIMUM_TEXT_CHARACTERS = 128 * 1_024;
 const MAXIMUM_LINES = 2_000;
+const MAXIMUM_SSE_FRAME_BYTES = 16 * 1_024;
 
 type ConsoleState = "disconnected" | "connecting" | "connected" | "expired" | "truncated" | "unavailable";
 
@@ -34,17 +35,13 @@ export function ManagedServerConsole({ serverId }: { serverId: string }) {
             if (!response.ok || response.body === null) throw new Error("unavailable");
             setState("connected");
             const reader = response.body.getReader();
-            const decoder = new TextDecoder();
+            const decoder = new TextDecoder("utf-8", { fatal: true });
             let pending = "";
             for (;;) {
                 const next = await reader.read();
-                if (next.done) break;
-                pending += decoder.decode(next.value, { stream: true });
-                for (;;) {
-                    const boundary = pending.indexOf("\n\n");
-                    if (boundary < 0) break;
-                    const event = parseConsoleEvent(pending.slice(0, boundary));
-                    pending = pending.slice(boundary + 2);
+                const decoded = decodeConsoleStreamChunk(pending, next.done ? undefined : next.value, decoder, next.done);
+                pending = decoded.pending;
+                for (const event of decoded.events) {
                     if (event.type === "line") {
                         setText((current) => boundedConsoleText(current, event.text));
                     } else if (event.type === "truncated") {
@@ -55,6 +52,7 @@ export function ManagedServerConsole({ serverId }: { serverId: string }) {
                         setState("disconnected");
                     }
                 }
+                if (next.done) break;
             }
             if (!controller.signal.aborted) setState((current) => current === "expired" || current === "truncated" ? current : "disconnected");
         } catch {
@@ -86,6 +84,27 @@ export function boundedConsoleText(current: string, line: string): string {
     return lineBounded.length > MAXIMUM_TEXT_CHARACTERS
         ? lineBounded.slice(lineBounded.length - MAXIMUM_TEXT_CHARACTERS)
         : lineBounded;
+}
+
+export function decodeConsoleStreamChunk(
+    previous: string,
+    chunk: Uint8Array | undefined,
+    decoder: TextDecoder,
+    final = false,
+): { pending: string; events: ReturnType<typeof parseConsoleEvent>[] } {
+    let pending = previous + decoder.decode(chunk, { stream: !final });
+    const events: ReturnType<typeof parseConsoleEvent>[] = [];
+    for (;;) {
+        const boundary = pending.indexOf("\n\n");
+        if (boundary < 0) break;
+        if (new TextEncoder().encode(pending.slice(0, boundary)).byteLength > MAXIMUM_SSE_FRAME_BYTES) throw new Error("Console event exceeded limit");
+        events.push(parseConsoleEvent(pending.slice(0, boundary)));
+        pending = pending.slice(boundary + 2);
+    }
+    if (new TextEncoder().encode(pending).byteLength > MAXIMUM_SSE_FRAME_BYTES || (final && pending.length > 0)) {
+        throw new Error("Console event exceeded limit");
+    }
+    return { pending, events };
 }
 
 export function parseConsoleEvent(frame: string): { type: "line"; text: string } | { type: "truncated" | "expired" | "ended" | "ignored" } {
