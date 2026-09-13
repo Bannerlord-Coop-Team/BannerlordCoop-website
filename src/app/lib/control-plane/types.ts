@@ -37,6 +37,12 @@ export type MyServerSummary = Pick<
     | "updatedAt"
 > & {
     accessRole: "owner" | "manager" | "support" | "admin";
+    // Missing visibility is treated as private during the control-plane rollout.
+    visibility?: "private" | "public";
+    // CP #143 supplies these stored fields through authenticated my-servers.
+    // Optional for older deployments; independent of the visibility rollout.
+    connectionIp?: string | null;
+    gamePorts?: number[];
 };
 
 export type MyServerBackupSummary = {

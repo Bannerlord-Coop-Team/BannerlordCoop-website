@@ -2,7 +2,8 @@ import type {
     DirectoryServer,
     HostedServerStatus,
 } from "@/app/lib/hosting/servers";
-import { ChevronRight, LogIn, Server } from "lucide-react";
+import { ChevronRight, Server } from "lucide-react";
+import { CopyJoinButton } from "./CopyJoinButton";
 import Link from "next/link";
 
 export type ManagedServerDirectoryEntry = Omit<
@@ -93,24 +94,10 @@ export function ServerDirectoryTable({
                                 </td>
                                 <td className="px-5 py-4 sm:px-6 sm:py-5">
                                     <div className="flex flex-wrap items-start justify-end gap-2">
-                                        {isOnline ? (
-                                            <a
-                                                href={server.joinUrl}
-                                                className="inline-flex min-h-10 items-center justify-center gap-2 border border-crimson bg-crimson px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson"
-                                            >
-                                                <LogIn aria-hidden="true" className="size-3.5" />
-                                                Join
-                                            </a>
-                                        ) : (
-                                            <button
-                                                type="button"
-                                                disabled
-                                                className="inline-flex min-h-10 cursor-not-allowed items-center justify-center gap-2 border border-white/10 bg-white/[0.03] px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground-dim"
-                                            >
-                                                <LogIn aria-hidden="true" className="size-3.5" />
-                                                Join
-                                            </button>
-                                        )}
+                                        <CopyJoinButton
+                                            address={server.connectionAddress ?? null}
+                                            disabled={!isOnline}
+                                        />
                                         {manageUrl && (
                                             <Link
                                                 href={manageUrl}

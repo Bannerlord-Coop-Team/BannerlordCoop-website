@@ -1,3 +1,4 @@
+import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "../../../../supabase/functions/_shared/server-visibility-contract";
 import type {
     HostingPage,
     MyServerBackupJob,
@@ -140,6 +141,13 @@ export async function getMyServerBackupStatus(
             endpoint.searchParams.set("serverId", serverId);
         },
     }), serverId);
+}
+
+export async function requestServerVisibility(accessToken: string, input: VisibilityMutation, requestId: string) {
+    if (!REQUEST_ID.test(requestId)) throw new MyServersApiError("invalid_request", "The visibility request ID is invalid.");
+    const parsed = parseVisibilityMutation(input);
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify(parsed), requestId });
+    try { return parseVisibilityResult(result, parsed); } catch { throw invalidResponse(); }
 }
 
 export async function requestMyServerOperation(

@@ -1,23 +1,20 @@
 "use client";
 
-import { ServerDirectoryTable } from "@/app/components/servers/ServerDirectoryTable";
-import type { DirectoryServer } from "@/app/lib/hosting/servers";
+import { ServerDirectoryTable, type ManagedServerDirectoryEntry } from "@/app/components/servers/ServerDirectoryTable";
 import { Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 export function AllServersDirectory({
     servers,
 }: {
-    servers: readonly DirectoryServer[];
+    servers: readonly ManagedServerDirectoryEntry[];
 }) {
     const [search, setSearch] = useState("");
-    const [hideEmpty, setHideEmpty] = useState(false);
 
     const filteredServers = useMemo(() => {
         const query = search.trim().toLowerCase();
 
         return servers.filter((server) => {
-            if (hideEmpty && server.players === 0) return false;
             if (!query) return true;
 
             return (
@@ -25,14 +22,14 @@ export function AllServersDirectory({
                 server.connectionType.toLowerCase().includes(query)
             );
         });
-    }, [hideEmpty, search, servers]);
+    }, [search, servers]);
 
     return (
         <div>
             <div className="mb-4 flex flex-col gap-3 border border-white/10 bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="relative w-full sm:max-w-md">
                     <label htmlFor="server-search" className="sr-only">
-                        Search all servers
+                        Search public servers
                     </label>
                     <Search
                         aria-hidden="true"
@@ -59,15 +56,9 @@ export function AllServersDirectory({
                 </div>
 
                 <div className="flex items-center justify-between gap-5 sm:justify-end">
-                    <label className="inline-flex cursor-pointer items-center gap-2.5 font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground-muted">
-                        <input
-                            type="checkbox"
-                            checked={hideEmpty}
-                            onChange={(event) => setHideEmpty(event.target.checked)}
-                            className="size-4 accent-crimson"
-                        />
-                        Hide empty
-                    </label>
+                    <span className="font-label text-xs uppercase tracking-wide text-foreground-muted">
+                        Public servers only
+                    </span>
                     <p className="whitespace-nowrap font-label text-xs font-semibold tabular-nums text-foreground-dim" aria-live="polite">
                         {filteredServers.length} shown
                     </p>

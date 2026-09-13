@@ -32,6 +32,7 @@ export type DirectoryServer = {
     status: HostedServerStatus;
     connectionType: ServerConnectionType;
     joinUrl: string;
+    connectionAddress?: string | null;
     players: number;
 };
 

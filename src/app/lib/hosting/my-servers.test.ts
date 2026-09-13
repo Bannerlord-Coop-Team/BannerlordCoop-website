@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
+import { connectionAddress } from "./connection-address";
 import {
     getMyServerBackupStatus,
     listAllMyServerBackups,
@@ -7,6 +9,7 @@ import {
     MyServersApiError,
     requestMyServerBackupOperation,
     requestMyServerOperation,
+    requestServerVisibility,
 } from "./my-servers";
 
 const ORIGINAL_FETCH = globalThis.fetch;
@@ -75,6 +78,70 @@ test("loads every owner-scoped managed-server page through the Edge Function", a
     } finally {
         restoreEnvironment();
     }
+});
+
+test("uses CP #143 connection fields through the authenticated Edge and website client without visibility metadata", async () => {
+    configureEnvironment();
+    const cases = [
+        { accessRole: "owner", connectionIp: "203.0.113.10", gamePorts: [4203], expected: "203.0.113.10:4203" },
+        { accessRole: "manager", connectionIp: "203.0.113.20", gamePorts: [4201, 4202], expected: "203.0.113.20:4201" },
+        { accessRole: "owner", connectionIp: "2001:db8::1", gamePorts: [4205], expected: "[2001:db8::1]:4205" },
+        { accessRole: "owner", connectionIp: null, gamePorts: [], expected: null },
+    ];
+    try {
+        for (const { expected, ...fields } of cases) {
+            const summary = { ...FIRST_SERVER, ...fields };
+            const edge = createMyServersHandler({
+                allowedOrigins: ["https://bannerlordcoop.com"],
+                controlPlaneUrl: "https://control-plane.example.test",
+                fetchImplementation: async (input, init) => {
+                    const request = new Request(input, init);
+                    assert.equal(request.url, "https://control-plane.example.test/v1/user/control-plane");
+                    assert.equal(request.headers.get("authorization"), `Bearer ${TOKEN}`);
+                    const body = await request.json();
+                    assert.equal(body.operation, "my-servers");
+                    assert.deepEqual(body.input, { cursor: null, limit: 100 });
+                    return Response.json({ version: 1, requestId: body.requestId, ok: true,
+                        result: { items: [summary], nextCursor: null } });
+                },
+            });
+            globalThis.fetch = async (input, init) => {
+                const request = new Request(input, init);
+                assert.equal(new URL(request.url).pathname, "/functions/v1/my-servers");
+                assert.equal(request.cache, "no-store");
+                return edge(request);
+            };
+            const [listed] = await listAllMyServers(TOKEN);
+            assert.deepEqual(listed, summary);
+            assert.equal(listed.visibility, undefined);
+            assert.equal(connectionAddress(listed.connectionIp ?? null, listed.gamePorts ?? []), expected);
+        }
+    } finally {
+        restoreEnvironment();
+    }
+});
+
+test("accepts CP #144 updated and replay receipts through the Edge and client", async () => {
+    configureEnvironment();
+    const requestId = "11111111-1111-4111-8111-111111111111";
+    const input = { action: "set-server-visibility" as const, serverId: FIRST_SERVER.serverId,
+        visibility: "public" as const, expectedUpdatedAt: "2026-09-13T12:00:00.000Z" };
+    try {
+        for (const outcome of ["updated", "existing"] as const) {
+            const result = { outcome, serverId: input.serverId, visibility: input.visibility, updatedAt: "2026-09-13T12:00:01.000Z" };
+            const edge = createMyServersHandler({
+                allowedOrigins: ["https://bannerlordcoop.com"], controlPlaneUrl: "https://control-plane.example.test",
+                fetchImplementation: async (_url, init) => {
+                    assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${TOKEN}`);
+                    assert.deepEqual(JSON.parse(String(init?.body)), { version: 1, requestId,
+                        operation: input.action, input: { serverId: input.serverId, visibility: input.visibility, expectedUpdatedAt: input.expectedUpdatedAt } });
+                    return Response.json({ version: 1, requestId, ok: true, result });
+                },
+            });
+            globalThis.fetch = async (url, init) => edge(new Request(url, init));
+            assert.deepEqual(await requestServerVisibility(TOKEN, input, requestId), result);
+        }
+    } finally { restoreEnvironment(); }
 });
 
 test("loads and validates bounded server-scoped backup pages", async () => {
