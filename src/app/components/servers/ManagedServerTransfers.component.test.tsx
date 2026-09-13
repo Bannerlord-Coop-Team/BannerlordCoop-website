@@ -1,0 +1,99 @@
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { ManagedServerTransfers, readFileIntent } from "./ManagedServerTransfers";
+import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
+import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
+const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), download: vi.fn(), config: vi.fn(), refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
+vi.mock("@/app/servers/managed-server-file-actions", () => ({ submitManagedServerFile: mocks.submit, checkManagedServerFile: mocks.check, downloadManagedServerSave: mocks.download, exportManagedServerConfig: mocks.config }));
+const status: OwnerFileStatus = { serverId: "11111111-1111-4111-8111-111111111111", updatedAt: "2026-09-13T00:00:00.000Z", operationState: "stopped", observedGameState: "stopped", activeSave: { saveId: "22222222-2222-4222-8222-222222222222", displayName: "Campaign" }, managedConfig: DEFAULT_MANAGED_SERVER_CONFIGURATION };
+const job = { kind: "job", outcome: "enqueued", jobId: "33333333-3333-4333-8333-333333333333", action: "export-save", state: "queued" };
+const key = `managed-file-transfer:v1:owner:${status.serverId}`;
+let container: HTMLDivElement;
+let root: Root;
+beforeEach(() => {
+    vi.useFakeTimers(); vi.resetAllMocks(); sessionStorage.clear();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value() { this.open = true; } });
+    Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
+    container = document.createElement("div"); document.body.append(container); root = createRoot(container);
+});
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
+async function render(current = status, owner = true, userId = "owner") {
+    await act(async () => root.render(<ManagedServerTransfers userId={userId} serverId={current.serverId} status={current} canImportConfig={owner} />));
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+}
+function button(label: string) { const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label); if (!found) throw Error(`Missing button ${label}`); return found; }
+async function click(label: string) { await act(async () => button(label).click()); }
+
+it("shows all four actions and disables saves while running and configuration import for managers", async () => {
+    await render({ ...status, operationState: "running", observedGameState: "running" }, false);
+    expect(button("Import save").disabled).toBe(true); expect(button("Export save").disabled).toBe(true);
+    expect(button("Import config").disabled).toBe(true); expect(button("Export config").disabled).toBe(false);
+    expect(container.textContent).toContain("Stop the server"); expect(container.textContent).toContain("Only the server owner");
+});
+it("retains uncertain request identity across retries and page remounts", async () => {
+    mocks.submit.mockResolvedValue({ ok: false, rejected: false, message: "Unconfirmed" });
+    await render(); await click("Export save");
+    const original = JSON.parse(sessionStorage.getItem(key)!);
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+    await click("Retry same request");
+    expect(mocks.submit.mock.calls[1][0].get("requestId")).toBe(original.requestId);
+    expect(mocks.submit.mock.calls[1][0].get("expectedUpdatedAt")).toBe(status.updatedAt);
+    await act(async () => root.unmount()); root = createRoot(container);
+    await render({ ...status, updatedAt: "2026-09-14T00:00:00.000Z" });
+    expect(mocks.submit).toHaveBeenCalledTimes(2);
+    mocks.check.mockResolvedValue({ ok: true, result: { ...job, state: "succeeded" } });
+    await click("Check status");
+    expect(mocks.check).toHaveBeenCalledWith(status.serverId, original.requestId, "owner");
+    expect(button("Download save export").disabled).toBe(false);
+    await click("Dismiss completed transfer"); expect(sessionStorage.getItem(key)).toBeNull();
+});
+it("keeps one pending dispatch and bounds polling after network loss", async () => {
+    mocks.submit.mockResolvedValue({ ok: true, result: job });
+    mocks.check.mockRejectedValue(new Error("Lost connection"));
+    await render(); await act(async () => { button("Export save").click(); button("Export save").click(); });
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+    await act(async () => vi.advanceTimersByTimeAsync(64_000));
+    const calls = mocks.check.mock.calls.length;
+    expect(calls).toBeGreaterThan(0); expect(calls).toBeLessThanOrEqual(15);
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(mocks.check).toHaveBeenCalledTimes(calls);
+    expect(container.textContent).toContain("Check status"); expect(sessionStorage.getItem(key)).not.toBeNull();
+});
+it("clears a definitively rejected stale request so refreshed inputs can be used", async () => {
+    mocks.submit.mockResolvedValue({ ok: false, rejected: true, message: "The server changed" });
+    await render(); await click("Export save");
+    expect(sessionStorage.getItem(key)).toBeNull(); expect(mocks.refresh).toHaveBeenCalled();
+});
+it("does not dispatch when pending intent cannot be persisted, or recover a different account's request", async () => {
+    await render();
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw Error("Disabled storage"); });
+    await click("Export save"); expect(mocks.submit).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("paused");
+    vi.restoreAllMocks();
+    sessionStorage.setItem(key, JSON.stringify({ requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt, action: "export-save", fingerprints: [], displayName: "", saveId: status.activeSave!.saveId }));
+    await render(status, true, "another-owner"); expect(container.textContent).not.toContain("Check status");
+});
+it("reviews configuration changes and rejects secret fields before any submission", async () => {
+    await render(); await click("Import config");
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    async function choose(config: unknown) {
+        const file = new File([JSON.stringify(config)], "config.json", { type: "application/json" });
+        Object.defineProperty(file, "text", { value: async () => JSON.stringify(config) });
+        Object.defineProperty(fileInput, "files", { configurable: true, value: [file] });
+        await act(async () => fileInput.dispatchEvent(new Event("change", { bubbles: true })));
+        await click("Review import");
+    }
+    await choose({ ...status.managedConfig, password: "forbidden" });
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    await choose({ ...status.managedConfig, serverConfig: { ...status.managedConfig.serverConfig, autosaveMinutes: 10 } });
+    expect(container.textContent).toContain("Autosave Minutes: 5 → 10");
+    expect(button("Confirm import").disabled).toBe(false); expect(mocks.submit).not.toHaveBeenCalled();
+});
+it("rejects malformed stored fingerprints and cross-server identity", () => {
+    const value = { requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt, action: "import-save", fingerprints: [], displayName: "Campaign", saveId: status.activeSave!.saveId };
+    expect(() => readFileIntent(JSON.stringify(value), status.serverId)).toThrow();
+    expect(() => readFileIntent("a".repeat(2049), status.serverId)).toThrow();
+});

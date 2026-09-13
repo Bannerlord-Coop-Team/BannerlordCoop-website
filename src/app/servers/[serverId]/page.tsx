@@ -4,7 +4,8 @@ import { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibili
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
 import { LiveServerConsole } from "@/app/components/servers/LiveServerConsole";
-import { ManagedServerBackups } from "@/app/components/servers/ManagedServerBackups";
+import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
+import { getMyServerFiles } from "@/app/lib/hosting/server-files";
 import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import { ServerControlPanel } from "@/app/components/servers/ServerControlPanel";
@@ -423,24 +424,13 @@ async function ManagedServerBackupsSection({
     server: MyServerSummary;
 }) {
     if (server.accessRole === "support" || server.accessRole === "admin") {
-        return (
-            <section id="server-backups" className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-backups-heading">
-                <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
-                    Save protection
-                </p>
-                <h2 id="server-backups-heading" className="mt-2 font-display text-2xl font-semibold text-foreground sm:text-3xl">
-                    Backups and restore
-                </h2>
-                <p className="mt-3 text-sm leading-6 text-foreground-muted">
-                    Backup history and save restore require owner or manager access. Your current access remains read-only.
-                </p>
-            </section>
-        );
+        return <ManagedServerFiles userId={userId} server={server} files={null} backups={[]} status={null} />;
     }
 
-    const [backupsResult, statusResult] = await Promise.allSettled([
+    const [backupsResult, statusResult, filesResult] = await Promise.allSettled([
         listAllMyServerBackups(accessToken, server.serverId),
         getMyServerBackupStatus(accessToken, server.serverId),
+        getMyServerFiles(accessToken, server.serverId),
     ]);
     const backups = backupsResult.status === "fulfilled" ? backupsResult.value : [];
     const status = statusResult.status === "fulfilled" ? statusResult.value : null;
@@ -454,31 +444,14 @@ async function ManagedServerBackupsSection({
         console.error("Managed server backup status failed to load");
     }
 
-    return (
-        <section id="server-backups" className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-backups-heading">
-            <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
-                Save protection
-            </p>
-            <h2 id="server-backups-heading" className="mt-2 font-display text-2xl font-semibold text-foreground sm:text-3xl">
-                Backups and restore
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
-                Create an off-host backup or restore earlier campaign progress. Save restore never downgrades the installed game or mod version.
-            </p>
-            <ManagedServerBackups
-                userId={userId}
-                backups={backups}
-                loadError={loadError}
-                server={server}
-                status={status}
-            />
-        </section>
-    );
+    return <ManagedServerFiles userId={userId} server={server}
+        files={filesResult.status === "fulfilled" ? filesResult.value : null}
+        backups={backups} status={status} loadError={loadError} />;
 }
 
 function ManagedServerBackupsSkeleton() {
     return (
-        <section className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-busy="true" aria-label="Loading save backups">
+        <section className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-busy="true" aria-label="Loading saves, configs and backups">
             <div className="h-3 w-28 animate-pulse bg-white/10" />
             <div className="mt-3 h-8 w-64 max-w-full animate-pulse bg-white/10" />
             <div className="mt-5 h-20 animate-pulse border border-white/10 bg-white/[0.02]" />
