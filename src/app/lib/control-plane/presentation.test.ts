@@ -107,6 +107,17 @@ test("the website creates servers on Stable without asking for a redundant relea
     assert.match(createCard, /New servers use Stable by default/u);
 });
 
+test("the administrator page omits the retired role-deletion control", async () => {
+    const source = await readFile(
+        new URL("../../admin/control-plane/page.tsx", import.meta.url),
+        "utf8",
+    );
+    assert.doesNotMatch(source, /roleDeletionsPaused|Role deletions|Pause role deletions/u);
+    assert.doesNotMatch(source, /Discord-role reconciliation/u);
+    assert.match(source, /Replace all four live pause switches/u);
+    assert.match(source, /explicit administrator grant/u);
+});
+
 test("operation fields explicitly identify required and optional inputs", () => {
     assert.equal(fieldRequirementLabel(true), "Required");
     assert.equal(fieldRequirementLabel(false), "Optional");
@@ -124,18 +135,21 @@ test("server ownership combines the Discord username and durable user id", () =>
 });
 
 test("the VPS view presents slot occupants and resources with their owning host", async () => {
-    const source = await readFile(
+    const pageSource = await readFile(
         new URL("../../admin/control-plane/page.tsx", import.meta.url),
         "utf8",
     );
+    const inventorySource = await readFile(
+        new URL("../../components/admin/VpsHostInventory.tsx", import.meta.url),
+        "utf8",
+    );
 
-    assert.match(source, /needsDiscordUsers = view === "vps"/u);
-    assert.match(source, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\} \/>/u);
-    assert.doesNotMatch(source, /hosts\.map\(\(host\) => <HostResourcesCard/u);
-    assert.match(source, /<OccupiedVpsSlots host=\{host\} usernames=\{usernames\} \/>/u);
-    assert.match(source, /<InlineHostResources resources=\{host\.resources\} \/>/u);
-    assert.match(source, /formatDiscordOwner\(usernames\.get\(slot\.ownerDiscordUserId\), slot\.ownerDiscordUserId\)/u);
-    assert.match(source, /view=server&serverId=\$\{encodeURIComponent\(slot\.serverId\)\}/u);
+    assert.match(pageSource, /needsDiscordUsers = view === "vps"/u);
+    assert.match(pageSource, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\} \/>/u);
+    assert.match(pageSource, /<VpsHostInventory/u);
+    assert.match(inventorySource, /formatDiscordOwner\(ownerLabels\[slot\.ownerDiscordUserId\], slot\.ownerDiscordUserId\)/u);
+    assert.match(inventorySource, /view=server&serverId=\$\{encodeURIComponent\(slot\.serverId\)\}/u);
+    assert.match(inventorySource, /usedPercent >= 90 \? "critical" : usedPercent >= 80 \? "warning"/u);
 });
 
 test("administrator reason fields are optional and explain the audit fallback", async () => {

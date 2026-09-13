@@ -349,14 +349,6 @@ function ManagedServerManagementPage({
                     </div>
                 </section>
 
-                <div className="mt-8 flex gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3.5 text-sm leading-6 text-foreground-muted">
-                    <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
-                    <p>
-                        <strong className="font-semibold text-foreground">Managed lifecycle controls.</strong>{" "}
-                        Start, Stop, and Restart affect only this server&apos;s game container. They never reboot or power off the VPS.
-                    </p>
-                </div>
-
                 <ServerVisibilitySetting
                     serverId={server.serverId}
                     visibility={server.visibility}

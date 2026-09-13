@@ -1,0 +1,73 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { EMPTY_MEMBERSHIP } from "@/app/lib/hosting/membership-onboarding";
+import { accountDisplayName, discordDisplayName } from "@/app/lib/auth/account-display";
+
+const mocks = vi.hoisted(() => ({ status: vi.fn(), invoke: vi.fn() }));
+vi.mock("@/app/account/AccountStatusSync", () => ({ AccountStatusSync: ({ pending }: { pending: boolean }) => <span data-status-pending={pending} /> }));
+vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: () => null }));
+vi.mock("@/app/components/layout/Footer", () => ({ Footer: () => null }));
+vi.mock("@/app/account/actions", () => ({ linkDiscordAccount: vi.fn(), linkPatreonAccount: vi.fn(), disconnectPatreonAccount: vi.fn(), disconnectDiscordAccount: vi.fn() }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
+vi.mock("@/app/lib/hosting/website-account-status", () => ({ getWebsiteAccountStatus: mocks.status }));
+const accountId = "aaaaaaaa-1111-4111-8111-111111111111";
+vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: async () => ({
+    auth: {
+        getUser: async () => ({ data: { user: { id: accountId, user_metadata: { full_name: "Andrew" }, identities: [{ provider: "discord", identity_id: "discord-identity", identity_data: { preferred_username: "andrew_discord" } }] } } }),
+        getSession: async () => ({ data: { session: { user: { id: accountId }, access_token: "test" } } }),
+    },
+    functions: { invoke: mocks.invoke },
+}) }));
+import AccountPage from "./page";
+
+afterEach(() => vi.resetAllMocks());
+async function render(membership = EMPTY_MEMBERSHIP, params: { patreon?: string } = {}, hasDiscord = true) {
+    mocks.status.mockResolvedValue({ hasDiscord, membership });
+    const element = document.createElement("div");
+    element.innerHTML = renderToStaticMarkup(await AccountPage({ searchParams: Promise.resolve(params) }));
+    return element;
+}
+it("shows account and provider names, a clear next action, and no permanent help or refresh", async () => {
+    const view = await render();
+    expect(view.textContent).toContain("Andrew");
+    expect(view.textContent).toContain("andrew_discord");
+    expect(view.textContent).toContain("Connect Patreon");
+    expect(view.textContent).not.toContain("Need help connecting");
+    expect(view.textContent).not.toContain("Check status");
+    expect(view.textContent).not.toContain("Verification: unknown");
+    expect(view.querySelector('a[href="/servers"]')?.textContent).toContain("My Servers");
+});
+it("shows contextual synchronization feedback and visible disconnect controls", async () => {
+    const view = await render({ ...EMPTY_MEMBERSHIP, linked: true, sync: "pending" });
+    expect(view.textContent).toContain("Your server allowance is updating.");
+    expect(view.textContent).not.toContain("Check status");
+    expect(view.querySelector('[data-status-pending="true"]')).not.toBeNull();
+    expect([...view.querySelectorAll("button")].some(button => button.textContent === "Disconnect Patreon")).toBe(true);
+    expect(view.textContent).not.toContain("Confirm disconnect Patreon");
+});
+it("does not claim expired qualifying verification is current", async () => {
+    const view = await render({ ...EMPTY_MEMBERSHIP, linked: true, verification: "qualifying", validUntil: "2000-01-01T00:00:00Z" });
+    expect(view.textContent).not.toContain("Membership verified.");
+    expect(view.textContent).toContain("Verify your membership before creating a new server.");
+});
+it.each(["confirm", "linked", "error", "confirm_error"])("query %s neither completes nor hides reconnect", async patreon => {
+    const view = await render(EMPTY_MEMBERSHIP, { patreon });
+    expect(view.textContent).toContain("Connect Patreon");
+    expect(view.textContent).not.toMatch(/Recover|Resolve|Retry connecting|Finishing/);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+});
+it("initial link and disconnect/reconnect expose Connect solely from current status", async () => {
+    for (const hasDiscord of [false, true, false]) {
+        const view = await render({ ...EMPTY_MEMBERSHIP, linked: hasDiscord }, {}, hasDiscord);
+        expect(view.textContent?.includes("Confirm and connect Discord")).toBe(!hasDiscord);
+        expect(view.textContent?.includes("Connect Patreon")).toBe(!hasDiscord);
+        expect(view.textContent?.includes("Verify with Patreon")).toBe(hasDiscord);
+        expect(view.textContent).not.toMatch(/Recover|Resolve|Cancel pending/);
+    }
+    expect(mocks.invoke).not.toHaveBeenCalled();
+});
+it("uses safe name fallbacks without exposing email or confusing provider identity", () => {
+    expect(accountDisplayName({ user_metadata: { full_name: "  Andrew  " } })).toBe("Andrew");
+    expect(accountDisplayName({ user_metadata: { full_name: {}, name: "", email: "private@example.com" } })).toBe("Your account");
+    expect(discordDisplayName({ identities: [] })).toBeNull();
+});

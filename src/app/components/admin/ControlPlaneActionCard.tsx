@@ -318,6 +318,7 @@ function buildInput(fields: AdminActionField[], formData: FormData) {
             const resolved = resolveDiscordUserReference(raw, (field.options ?? []).map((option) => ({
                 discordUserId: option.value,
                 username: option.label,
+                email: null,
             })));
             if (resolved === null) throw new Error(`${field.label} must be a known unique Discord username or a Discord user ID.`);
             setPath(input, field.name, resolved);

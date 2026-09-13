@@ -11,12 +11,14 @@ type RunnerOnboarding = NonNullable<HostingAdminVpsHost["runnerOnboarding"]>;
 type RunnerUpdate = NonNullable<HostingAdminVpsHost["runnerUpdate"]>;
 
 export function RunnerOnboardingStatus({
+    compact = false,
     serviceName,
     runningServers,
     targetSourceCommit,
     onboarding,
     update,
 }: {
+    compact?: boolean;
     serviceName: string;
     runningServers: number;
     targetSourceCommit: string | null;
@@ -113,11 +115,11 @@ export function RunnerOnboardingStatus({
             >
                 {onboarding.state}
             </span>
-            <p className="mt-2 max-w-56 text-[0.65rem] text-foreground-muted">{humanize(onboarding.progressStage)}</p>
+            {(!compact || !good) && <p className="mt-2 max-w-56 text-[0.65rem] text-foreground-muted">{humanize(onboarding.progressStage)}</p>}
             {onboarding.errorCode && <p className="mt-1 max-w-56 font-mono text-[0.6rem] text-red-200">{onboarding.errorCode}</p>}
-            {onboarding.sourceCommit && <p className="mt-1 font-mono text-[0.6rem] text-foreground-dim" title={onboarding.sourceCommit}>{onboarding.sourceCommit.slice(0, 12)}</p>}
-            {targetSourceCommit && !current && <p className="mt-1 font-mono text-[0.58rem] text-gold/75" title={`Available runner target ${targetSourceCommit}`}>Target {targetSourceCommit.slice(0, 12)}</p>}
-            {update && (
+            {!compact && onboarding.sourceCommit && <p className="mt-1 font-mono text-[0.6rem] text-foreground-dim" title={onboarding.sourceCommit}>{onboarding.sourceCommit.slice(0, 12)}</p>}
+            {!compact && targetSourceCommit && !current && <p className="mt-1 font-mono text-[0.58rem] text-gold/75" title={`Available runner target ${targetSourceCommit}`}>Target {targetSourceCommit.slice(0, 12)}</p>}
+            {!compact && update && (
                 <div className="mt-3 border-t border-white/10 pt-3">
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[0.6rem] uppercase tracking-[0.08em] text-foreground-dim">Latest update</span>
@@ -130,7 +132,14 @@ export function RunnerOnboardingStatus({
                     {update.errorCode && <p className="mt-1 max-w-56 font-mono text-[0.6rem] text-red-200">{update.errorCode}</p>}
                 </div>
             )}
-            {(onboardingPending || updatePending) && <p className="mt-2 text-[0.58rem] uppercase tracking-[0.08em] text-gold/70">Refreshing progress automatically</p>}
+            {compact && update && update.state !== "succeeded" && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="text-[0.58rem] uppercase tracking-[0.08em] text-foreground-dim">Update</span>
+                    <RunnerStateBadge state={update.state} explanation={runnerUpdateStateExplanation(update.state)} />
+                    {update.errorCode && <span className="font-mono text-[0.58rem] text-red-200">{update.errorCode}</span>}
+                </div>
+            )}
+            {!compact && (onboardingPending || updatePending) && <p className="mt-2 text-[0.58rem] uppercase tracking-[0.08em] text-gold/70">Refreshing progress automatically</p>}
             {bad && (
                 <button
                     type="button"

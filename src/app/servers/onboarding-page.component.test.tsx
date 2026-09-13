@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import { onboardingSummary, ONBOARDING_TEST_ID } from "../../../tests/onboarding-fixtures";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn(), publicList: vi.fn() }));
+vi.mock("@/app/lib/hosting/public-servers", () => ({ listPublicServers: mocks.publicList }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
 vi.mock("@/app/lib/hosting/my-servers", () => ({ listAllMyServers: mocks.list, getServerOnboarding: mocks.onboarding }));
 vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: () => <nav>Navigation</nav> }));
@@ -16,13 +17,22 @@ beforeEach(() => {
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "page-user", identities: [{ provider: "discord", identity_data: { sub: "123456789012345678" } }] } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt", user: { id: "page-user" } } } }) } });
     mocks.list.mockResolvedValue([{ serverId: ONBOARDING_TEST_ID, displayName: "Assigned campaign", operationState: "stopped", observedGameState: "stopped", accessRole: "owner" }]);
     mocks.onboarding.mockResolvedValue(onboardingSummary());
+    mocks.publicList.mockResolvedValue([]);
 });
-it("real servers page keeps mixed managed/live inventory and trusted onboarding separate from public placeholders", async () => {
+it("real servers page keeps mixed managed/live inventory and trusted onboarding separate from the public directory", async () => {
     const html = renderToStaticMarkup(await ServersPage());
     expect(html).toContain("Trusted onboarding snapshot"); expect(html).toContain('data-user="page-user"');
     expect(html).toContain("Assigned campaign"); expect(html).toContain("Live campaign"); expect(html).toContain("Public directory");
     expect(html).toContain(`/servers/${ONBOARDING_TEST_ID}`); expect(html).toContain("Offline");
     expect(mocks.onboarding).toHaveBeenCalledWith("test-page-jwt"); expect(mocks.list).toHaveBeenCalledWith("test-page-jwt");
+});
+it("public directory failure does not hide private inventory or fall back to placeholder listings", async () => {
+    mocks.publicList.mockRejectedValue(new Error("public endpoint unavailable"));
+    const html = renderToStaticMarkup(await ServersPage());
+    expect(html).toContain("Directory unavailable");
+    expect(html).not.toContain("Public directory</div>");
+    expect(html).toContain("Assigned campaign");
+    expect(html).toContain("Trusted onboarding snapshot");
 });
 it("summary failure remains unavailable rather than false eligibility or false full regions", async () => {
     mocks.onboarding.mockRejectedValue(new Error("edge not deployed"));

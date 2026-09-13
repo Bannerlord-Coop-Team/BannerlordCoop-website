@@ -1,5 +1,5 @@
 import { MembershipNextStep } from "@/app/components/servers/MembershipNextStep";
-import { composeOnboarding, identityStep, parseAccountStatus, type AccountStatus } from "@/app/lib/hosting/membership-onboarding";
+import { composeOnboarding, identityStep, type AccountStatus } from "@/app/lib/hosting/membership-onboarding";
 import { Navbar } from "@/app/components/layout/Navbar";
 import { AllServersDirectory } from "@/app/components/servers/AllServersDirectory";
 import {
@@ -10,7 +10,8 @@ import { getLiveConsoleAccessLevel } from "@/app/lib/auth/access";
 import { listLiveConsoleServers } from "@/app/lib/console/servers";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { getServerOnboarding, listAllMyServers } from "@/app/lib/hosting/my-servers";
-import { ServerOnboarding, GamePasswordNotice } from "@/app/components/servers/ServerOnboarding";
+import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
+import { ServerOnboarding } from "@/app/components/servers/ServerOnboarding";
 import type { OnboardingSummary } from "../../../supabase/functions/_shared/server-onboarding-contract";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { listPublicServers } from "@/app/lib/hosting/public-servers";
@@ -72,9 +73,8 @@ export default async function ServersPage() {
     let account: AccountStatus | null = null;
     if (user && accessToken) {
         try {
-            const supabase = await getSupabaseServerClient();
-            const result = await supabase.functions.invoke("website-account", { headers: { Authorization: `Bearer ${accessToken}` }, body: { operation: "status" } });
-            if (!result.error) { account = parseAccountStatus(result.data, user.id); if (!account.hasDiscord && identity === null) identity = "identity_repair"; }
+            account = await getWebsiteAccountStatus(user.id, accessToken);
+            if (!account.hasDiscord && identity === null) identity = "identity_repair";
         } catch { /* Independent CP grants must remain usable during membership outages. */ }
     }
     let onboarding: OnboardingSummary | null = null;
@@ -179,7 +179,6 @@ export default async function ServersPage() {
                                     {managedServersError}
                                 </p>
                             )}
-                            {controlPlaneServers.length > 0 && <div className="mb-5"><GamePasswordNotice /></div>}
                             <h3 className="mb-3 font-semibold">Owned servers</h3>
                             <ServerDirectoryTable servers={managedServers.filter(server => ownedIds.includes(server.id))} emptyMessage="No owned servers are currently listed." />
                             <h3 className="mb-3 mt-6 font-semibold">Associated servers (manager, support or administrator)</h3>

@@ -1,5 +1,4 @@
 export const LINK_COOKIE = "__Host-account-link";
-export const PATREON_COOKIE = "__Host-patreon-completion";
 export const LINK_COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: "lax" as const, path: "/", maxAge: 600 };
 export function accountReturn(value: unknown): "/servers" | "/account" { return value === "/servers" ? "/servers" : "/account"; }
 export function accountLinkOrigin(value: string | undefined) {

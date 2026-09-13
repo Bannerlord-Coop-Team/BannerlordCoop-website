@@ -23,7 +23,7 @@ export async function getHomepageVideos(): Promise<MediaVideo[]> {
         const parameters = new URLSearchParams({
             select: "id,source,href,title,description,thumbnail,thumbnail_alt,category,duration",
             published: "eq.true",
-            order: "sort_order.asc,id.asc",
+            order: "published_at.desc.nullslast,sort_order.asc,id.asc",
         });
         const response = await fetch(`${url}/rest/v1/homepage_videos?${parameters}`, {
             headers: { apikey: key },
