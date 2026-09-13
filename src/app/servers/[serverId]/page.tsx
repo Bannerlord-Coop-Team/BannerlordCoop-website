@@ -1,3 +1,4 @@
+import { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
 import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfigPanels";
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
 import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "@/app/components/servers/ServerManagementWorkspace";
@@ -136,7 +137,7 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
         <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><UnavailableServerConsole /></ServerConsoleWorkspace></ServerWorkspacePanel>
         <UnavailableFileWorkspaces />
         <ServerWorkspacePanel section="Settings">
-            <UnavailableServerPanel title="Server settings" actions={["Edit name", "Private", "Public"]} />
+            <ServerSettingsPanel name={server.name} />
             <section className="grid gap-3 sm:grid-cols-3" aria-label="Server information">
                 <ResourceCard icon={MemoryStick} label="Memory" value={server.memory} />
                 <ResourceCard icon={HardDrive} label="Storage" value={server.storage} />
@@ -177,7 +178,7 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
         <ServerWorkspacePanel section="Settings">
-            <UnavailableServerPanel title="Server name" actions={["Edit name"]} />
+            <ServerSettingsPanel name={server.displayName} visibility={server.visibility ?? "private"} />
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
 }
@@ -329,16 +330,14 @@ async function LiveServerManagementPage({
             ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
             : <UnavailableFileWorkspaces />}
         <ServerWorkspacePanel section="Settings">
+            <ServerSettingsPanel name={server.name} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} />
             <section className="grid gap-3 sm:grid-cols-2" aria-label="Server information">
                 <ResourceCard icon={Server} label="Provider" value={server.provider} />
                 <ResourceCard icon={Container} label="Node" value={server.nodeId} />
             </section>
             {canManageAssignments && (
                     <section id="server-access" className="rounded-lg border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-access-heading">
-                        <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
-                            Delegated management
-                        </p>
-                        <h2 id="server-access-heading" className="mt-2 font-display text-2xl font-semibold text-foreground sm:text-3xl">
+                        <h2 id="server-access-heading" className="text-base font-semibold text-foreground">
                             Server access
                         </h2>
                         <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">

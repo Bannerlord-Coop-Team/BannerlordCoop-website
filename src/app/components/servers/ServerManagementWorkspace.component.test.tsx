@@ -1,3 +1,4 @@
+import { ServerSettingsPanel } from "./ServerSettingsPanel";
 import { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -81,4 +82,15 @@ it("keeps supplied real lifecycle controls enabled while console input stays una
     await act(async () => click("Start"));
     expect(start).toHaveBeenCalledOnce();
     expect(container.querySelector("input")?.disabled).toBe(true);
+});
+
+it("shows authoritative settings without enabling unsupported save controls", async () => {
+    await act(async () => root.render(<ServerSettingsPanel name="Real campaign" visibility="public" />));
+    expect(container.querySelector<HTMLInputElement>("#settings-server-name")?.value).toBe("Real campaign");
+    expect(container.querySelector<HTMLInputElement>('input[value="public"]')?.checked).toBe(true);
+    for (const control of container.querySelectorAll("input, button")) expect((control as HTMLInputElement).disabled).toBe(true);
+    await act(async () => root.render(<ServerSettingsPanel name="Renamed campaign" />));
+    expect(container.querySelector<HTMLInputElement>("#settings-server-name")?.value).toBe("Renamed campaign");
+    expect(container.querySelector('input[type="radio"]:checked')).toBeNull();
+    expect(container.textContent).toContain("Directory visibility is unavailable");
 });
