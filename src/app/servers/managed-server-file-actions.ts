@@ -14,7 +14,7 @@ async function currentToken(expectedUserId: string) {
     return session.access_token;
 }
 
-function failure(error: unknown) {
+function failure(error: unknown, notSubmitted = false) {
     const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
     const messages: Record<string, string> = {
         stale_interaction: "The server changed. Refresh before starting a new transfer.",
@@ -25,10 +25,14 @@ function failure(error: unknown) {
         export_not_ready: "The save export is still being prepared.",
         export_unavailable: "The export is unavailable. Check its status and try again.",
     };
-    return { ok: false as const, rejected: ["stale_interaction", "safe_stop_required", "operation_unavailable"].includes(code), message: messages[code] ?? "The transfer outcome could not be confirmed. Check its status or retry the same request." };
+    return { ok: false as const, notSubmitted,
+        rejected: !notSubmitted && ["stale_interaction", "safe_stop_required", "operation_unavailable"].includes(code),
+        message: notSubmitted ? "The transfer was not sent. Check your files and campaign name, refresh the page, and try again."
+            : messages[code] ?? "The transfer outcome could not be confirmed. Check its status or retry the same request." };
 }
 
 export async function submitManagedServerFile(form: FormData, expectedUserId: string) {
+    let submissionStarted = false;
     try {
         const token = await currentToken(expectedUserId);
         const requestId = form.get("requestId");
@@ -50,10 +54,12 @@ export async function submitManagedServerFile(form: FormData, expectedUserId: st
                 try { return { basename: file.name, base64: bytes.toString("base64") }; } finally { bytes.fill(0); }
             })) };
         } else if (common.action === "export-save") input = { ...common, saveId: form.get("saveId") };
-        const result = await submitMyServerFile(token, requestId, parseOwnerFileMutation(input));
+        const mutation = parseOwnerFileMutation(input);
+        submissionStarted = true;
+        const result = await submitMyServerFile(token, requestId, mutation);
         revalidatePath(`/servers/${String(common.serverId)}`);
         return { ok: true as const, result };
-    } catch (error) { return failure(error); }
+    } catch (error) { return failure(error, !submissionStarted); }
 }
 
 export async function checkManagedServerFile(serverId: string, requestId: string, expectedUserId: string) {

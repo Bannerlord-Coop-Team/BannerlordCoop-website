@@ -165,6 +165,7 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
         const save = files.find((file) => file.name.endsWith(".sav"));
         if (!(files.length === 1 && files[0].name.endsWith(".blcexport")) && (!save || !files.some((file) => file.name === save.name.slice(0, -4) + ".json"))) throw new Error("The .sav and .json filenames must match.");
         if (displayName.trim().length < 3 || displayName.trim().length > 48) throw new Error("Enter a campaign name between 3 and 48 characters.");
+        if (/[\p{Cc}\p{Cf}]/u.test(displayName.trim())) throw new Error("The campaign name contains invisible characters. Delete the name and type it again instead of pasting it.");
         return ["The imported campaign becomes the active save after server validation.", "A pre-import backup protects the current campaign."];
     }
 
@@ -199,7 +200,12 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
                 if (response.ok) {
                     accept(response.result);
                     if (response.result.kind === "job" && !["succeeded", "failed", "cancelled"].includes(response.result.state)) setDeadline(Date.now() + 60_000);
-                } else { setMessage(response.message); setDeadline(null); if (response.rejected) { remember(null); router.refresh(); } }
+                } else {
+                    setMessage(response.notSubmitted && previous ? "This attempt was not sent. Your previous request is still saved. Check its status before retrying." : response.message);
+                    setDeadline(null);
+                    // A local retry failure cannot rule out acceptance of the earlier attempt.
+                    if (response.rejected || response.notSubmitted && !previous) { remember(null); router.refresh(); }
+                }
             } catch (error) {
                 const text = error instanceof Error ? error.message : "The transfer could not be submitted.";
                 if (dialogKind) setDialogError(text); else setMessage(text);

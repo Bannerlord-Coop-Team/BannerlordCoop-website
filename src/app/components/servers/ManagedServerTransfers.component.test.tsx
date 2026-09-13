@@ -1,4 +1,5 @@
 import { act } from "react";
+import { randomUUID } from "node:crypto";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerTransfers, readFileIntent } from "./ManagedServerTransfers";
@@ -19,7 +20,7 @@ beforeEach(() => {
     Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 async function render(current = status, owner = true, userId = "owner") {
     await act(async () => root.render(<ManagedServerTransfers userId={userId} serverId={current.serverId} status={current} canImportConfig={owner} />));
     await act(async () => vi.advanceTimersByTimeAsync(0));
@@ -151,4 +152,60 @@ it("requires another review if current server settings change before confirmatio
     await click("Import these settings");
     expect(mocks.submit).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Go back and review your file again");
+});
+
+it("rejects invisible campaign names and allows corrected input after a local submission failure and refresh", async () => {
+    vi.stubGlobal("crypto", { randomUUID, subtle: { digest: async () => new Uint8Array(32).buffer } });
+    await render(); await click("Import save");
+    async function enterName(name: string) {
+        const input = container.querySelector<HTMLInputElement>('input:not([type="file"])')!;
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, name);
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+    }
+    async function chooseFile() {
+        const file = new File(["save"], "campaign.blcexport");
+        Object.defineProperty(file, "arrayBuffer", { value: async () => new Uint8Array([1, 2, 3]).buffer });
+        const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+        Object.defineProperty(input, "files", { configurable: true, value: [file] });
+        await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+    }
+    await chooseFile();
+    for (const name of ["Bad\u200BName", "Bad\u0001Name"]) {
+        await enterName(name); await click("Review import");
+        expect(container.textContent).toContain("contains invisible characters");
+        expect(mocks.submit).not.toHaveBeenCalled();
+        expect(sessionStorage.getItem(key)).toBeNull();
+    }
+    let rejectedId: string;
+    mocks.submit.mockImplementationOnce(async (form: FormData) => {
+        rejectedId = form.get("requestId") as string;
+        expect(JSON.parse(sessionStorage.getItem(key)!).requestId).toBe(rejectedId);
+        return { ok: false, notSubmitted: true, rejected: false, message: "The transfer was not sent." };
+    });
+    await enterName("First campaign"); await click("Review import"); await click("Confirm import");
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+    expect(sessionStorage.getItem(key)).toBeNull();
+    await act(async () => root.unmount()); root = createRoot(container);
+    await render();
+    for (const label of ["Import save", "Export save", "Import config", "Export config"]) expect(button(label).disabled).toBe(false);
+    mocks.submit.mockResolvedValue({ ok: true, result: { ...job, action: "import-save", state: "succeeded" } });
+    await click("Import save"); await enterName("Corrected campaign"); await chooseFile();
+    await click("Review import"); await click("Confirm import");
+    expect(mocks.submit).toHaveBeenCalledTimes(2);
+    expect(mocks.submit.mock.calls[1][0].get("requestId")).not.toBe(rejectedId!);
+    expect(mocks.submit.mock.calls[1][0].get("displayName")).toBe("Corrected campaign");
+    expect(sessionStorage.getItem(key)).toBeNull();
+});
+
+it("retains an earlier uncertain request if its retry fails before submission", async () => {
+    mocks.submit.mockResolvedValueOnce({ ok: false, notSubmitted: false, rejected: false, message: "Unconfirmed" });
+    await render(); await click("Export save");
+    const original = sessionStorage.getItem(key);
+    mocks.submit.mockResolvedValueOnce({ ok: false, notSubmitted: true, rejected: false, message: "Not sent" });
+    await click("Retry same request");
+    expect(sessionStorage.getItem(key)).toBe(original);
+    expect(container.textContent).toContain("Your previous request is still saved");
+    expect(button("Import save").disabled).toBe(true);
 });

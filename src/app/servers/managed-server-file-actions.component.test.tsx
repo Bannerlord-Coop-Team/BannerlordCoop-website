@@ -34,14 +34,14 @@ it("forwards exact original identity/generation and validates configuration agai
     expect(mocks.submit).toHaveBeenCalledWith("original-owner-token", id, { action: "import-config", serverId: id, expectedUpdatedAt: updatedAt, managedConfig: config });
     mocks.submit.mockClear();
     Object.defineProperty(stored, "text", { value: async () => JSON.stringify({ ...config, password: "forbidden" }) });
-    expect((await submitManagedServerFile(form, "owner")).ok).toBe(false);
+    expect(await submitManagedServerFile(form, "owner")).toMatchObject({ ok: false, notSubmitted: true });
     expect(mocks.submit).not.toHaveBeenCalled();
 });
 it("rejects oversize config before reading bytes and preserves unknown transport failures", async () => {
     const file = new File(["x".repeat(65537)], "config.json");
     const form = new FormData();
     form.set("action", "import-config"); form.set("requestId", id); form.set("config", file);
-    expect((await submitManagedServerFile(form, "owner")).ok).toBe(false); expect(mocks.submit).not.toHaveBeenCalled();
+    expect(await submitManagedServerFile(form, "owner")).toMatchObject({ ok: false, notSubmitted: true }); expect(mocks.submit).not.toHaveBeenCalled();
     mocks.status.mockRejectedValue(new Error("Lost connection"));
     expect(await checkManagedServerFile(id, id, "owner")).toMatchObject({ ok: false, rejected: false });
 });
@@ -56,4 +56,21 @@ it("strips native private fields before forwarding an individual server configur
     form.set("config", file);
     expect(await submitManagedServerFile(form, "owner")).toEqual({ ok: true, result });
     expect(mocks.submit).toHaveBeenCalledWith("original-owner-token", id, { action: "import-config", serverId: id, expectedUpdatedAt: updatedAt, configPart: "server", settings: { autosaveMinutes: 10 } });
+});
+
+it("distinguishes local campaign validation from an uncertain upstream submission", async () => {
+    const form = new FormData();
+    for (const [key, value] of Object.entries({ action: "import-save", requestId: id, serverId: id, expectedUpdatedAt: updatedAt, displayName: "Bad\u200BName" })) form.set(key, value);
+    const file = new File(["save"], "campaign.blcexport");
+    Object.defineProperty(file, "arrayBuffer", { value: async () => new Uint8Array([1, 2, 3]).buffer });
+    form.append("files", file);
+    expect(await submitManagedServerFile(form, "owner")).toMatchObject({ ok: false, notSubmitted: true });
+    expect(mocks.submit).not.toHaveBeenCalled();
+    form.set("displayName", "Corrected campaign");
+    mocks.submit.mockRejectedValueOnce(new Error("Response lost after acceptance"));
+    expect(await submitManagedServerFile(form, "owner")).toMatchObject({ ok: false, notSubmitted: false, rejected: false });
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+    mocks.submit.mockResolvedValue({ kind: "job", action: "import-save", state: "queued" });
+    mocks.revalidate.mockImplementation(() => { throw new Error("Refresh failed after acceptance"); });
+    expect(await submitManagedServerFile(form, "owner")).toMatchObject({ ok: false, notSubmitted: false, rejected: false });
 });

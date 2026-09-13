@@ -33,7 +33,11 @@ in account/server-scoped session storage before sending. No file bytes, config
 contents or credentials are persisted in browser storage. A lost response keeps
 that intent. Refresh/retry uses the same request and requires the same files;
 polling is bounded to one minute and can be resumed explicitly. Confirmed
-completion/rejection permits a new request. Storage failures pause transfers.
+completion/rejection permits a new request. A server-action failure before the
+first upstream submission also clears the intent so users can correct their
+input. If a retry fails locally, the earlier uncertain intent remains saved.
+Campaign names reject invisible control/format characters before review.
+Storage failures pause transfers.
 The existing backend validates archive shape, companion JSON and all config keys.
 
 The dedicated Edge POST resource `file-transfer` accepts at most 28 MiB of JSON;
