@@ -249,12 +249,13 @@ async function requestMyServerBackups(
     });
 }
 
-async function requestMyServersApi(
+export async function requestMyServersApi(
     accessToken: string,
     request: {
         method: "GET" | "POST";
         body?: string;
         requestId?: string;
+        maximumResponseBytes?: number;
         configureEndpoint?: (endpoint: URL) => void;
     },
 ): Promise<unknown> {
@@ -285,7 +286,7 @@ async function requestMyServersApi(
         );
     }
 
-    const text = await readBoundedText(response, MAXIMUM_RESPONSE_BYTES);
+    const text = await readBoundedText(response, request.maximumResponseBytes ?? MAXIMUM_RESPONSE_BYTES);
     let envelope: unknown;
     try {
         envelope = JSON.parse(text);
@@ -437,11 +438,24 @@ async function readBoundedText(response: Response, maximumBytes: number) {
     if (declaredLength !== null && Number(declaredLength) > maximumBytes) {
         throw new MyServersApiError("response_too_large", "The server API response was too large.");
     }
-    const text = await response.text();
-    if (new TextEncoder().encode(text).byteLength > maximumBytes) {
-        throw new MyServersApiError("response_too_large", "The server API response was too large.");
-    }
-    return text;
+    if (!response.body) return "";
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8", { fatal: true });
+    let size = 0;
+    let text = "";
+    try {
+        for (;;) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            size += chunk.value.byteLength;
+            if (size > maximumBytes) {
+                await reader.cancel();
+                throw new MyServersApiError("response_too_large", "The server API response was too large.");
+            }
+            text += decoder.decode(chunk.value, { stream: true });
+        }
+        return text + decoder.decode();
+    } finally { reader.releaseLock(); }
 }
 
 function invalidResponse(message = "The managed-server API returned an invalid response.") {
