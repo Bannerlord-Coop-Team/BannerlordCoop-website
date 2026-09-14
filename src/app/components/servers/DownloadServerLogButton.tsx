@@ -5,7 +5,7 @@ import { Download, LoaderCircle } from "lucide-react";
 import { downloadMyServerLog } from "@/app/lib/hosting/server-files";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 
-export function DownloadServerLogButton({ serverId, userId }: { serverId?: string; userId?: string }) {
+export function DownloadServerLogButton({ serverId, userId, className }: { serverId?: string; userId?: string; className: string }) {
     const [pending, setPending] = useState(false);
     const [error, setError] = useState("");
 
@@ -28,13 +28,13 @@ export function DownloadServerLogButton({ serverId, userId }: { serverId?: strin
         } finally { setPending(false); }
     }
 
-    return <div>
+    return <>
         <button type="button" disabled={!serverId || !userId || pending} onClick={download}
             title="Download the latest .log file from the server's logs directory"
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-foreground-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40">
+            className={className}>
             {pending ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
             {pending ? "Downloading…" : "Download logs"}
         </button>
         {error && <p role="alert" className="max-w-sm text-sm text-red-300">{error}</p>}
-    </div>;
+    </>;
 }

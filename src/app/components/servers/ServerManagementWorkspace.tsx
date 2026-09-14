@@ -47,7 +47,7 @@ export function UnavailableServerConsole({ controls, logDownload }: { controls?:
     return <section className="min-w-0 rounded-lg border border-white/10 bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
             <h2 className="text-base font-semibold">Console</h2>
-            <DownloadServerLogButton {...logDownload} />
+            <DownloadServerLogButton {...logDownload} className={`${button} !border-transparent !bg-transparent !text-foreground-muted`} />
         </div>
         <div className="border-b border-white/10 px-5 py-3">{controls ?? <div role="group" aria-label="Server controls" className="grid grid-cols-3 gap-2 sm:flex">{[{ label: "Start", icon: Play }, { label: "Stop", icon: Square }, { label: "Restart", icon: RotateCw }].map(({ label, icon: Icon }) => <button key={label} disabled className={`${button} !gap-1 !px-2 !text-xs sm:!gap-2 sm:!px-3 sm:!text-sm`}><Icon className="size-3.5 shrink-0 sm:size-4" aria-hidden="true" />{label}</button>)}</div>}</div>
         <div role="log" aria-label="Console output" tabIndex={0} className="h-80 overflow-auto bg-surface-raised p-4 font-mono text-[13px] leading-7 text-foreground-muted outline-gold sm:h-96 sm:p-5 sm:text-sm">Console output is not connected for this server.</div>

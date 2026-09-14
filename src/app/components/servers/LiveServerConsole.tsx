@@ -449,7 +449,7 @@ export function LiveServerConsole({
     return <section className="min-w-0 rounded-lg border border-white/10 bg-surface" aria-labelledby="container-console-heading">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
             <h2 id="container-console-heading" className="text-base font-semibold">Console</h2>
-            <DownloadServerLogButton {...logDownload} />
+            <DownloadServerLogButton {...logDownload} className={`${button} !border-transparent !bg-transparent !text-foreground-muted hover:!text-foreground`} />
         </div>
         <div className="border-b border-white/10 px-5 py-3">
             <LiveServerOperationButtons controlsReady={controlsReady} onOperation={requestOperation} pendingOperation={pendingOperation} />

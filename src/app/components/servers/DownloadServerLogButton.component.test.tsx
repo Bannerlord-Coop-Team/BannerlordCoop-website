@@ -19,7 +19,9 @@ it("downloads the server file with its original name and shows API errors", asyn
     vi.stubGlobal("URL", class extends URL { static createObjectURL = createUrl; static revokeObjectURL = vi.fn(); });
     let filename = "";
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { filename = this.download; });
-    await act(async () => root.render(<DownloadServerLogButton serverId="server" userId="user" />));
+    await act(async () => root.render(<DownloadServerLogButton serverId="server" userId="user" className="existing-server-button" />));
+    expect(container.firstElementChild?.tagName).toBe("BUTTON");
+    expect(container.querySelector("button")!.className).toBe("existing-server-button");
     await act(async () => container.querySelector("button")!.click());
     expect(download).toHaveBeenCalledWith("token", "server");
     expect(filename).toBe("latest.log");
