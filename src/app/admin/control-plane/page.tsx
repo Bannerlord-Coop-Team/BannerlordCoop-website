@@ -535,7 +535,13 @@ function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nig
     const nightly = installableBuilds(data.nightly.items);
     const hiddenStable = data.stable.items.length - stable.length;
     const hiddenNightly = data.nightly.items.length - nightly.length;
-    return <div className="mt-8 grid gap-8 xl:grid-cols-2"><section><SectionHeading eyebrow="Validated release channel" title="Stable" count={stable.length} /><ReleaseHistoryNote hidden={hiddenStable} /><BuildTable builds={stable} /></section><section><SectionHeading eyebrow="Validated release channel" title="Nightly" count={nightly.length} /><ReleaseHistoryNote hidden={hiddenNightly} /><BuildTable builds={nightly} /></section></div>;
+    return <div className="mt-8 space-y-8">
+        <ControlPlaneActionCard operation="import-latest-stable" title="Import Latest Stable"
+            description="Verify and import the latest successful Stable publication from its GitHub Actions receipt, including the immutable image digest and compatibility metadata."
+            help="Requires the control plane's dedicated Actions-read credential. This advances the Stable catalog; existing update policies may then select the build. It does not directly update or restart servers."
+            fields={[{ name: "reason", label: "Audit reason", kind: "textarea", required: true }]} />
+        <div className="grid gap-8 xl:grid-cols-2"><section><SectionHeading eyebrow="Validated release channel" title="Stable" count={stable.length} /><ReleaseHistoryNote hidden={hiddenStable} /><BuildTable builds={stable} /></section><section><SectionHeading eyebrow="Validated release channel" title="Nightly" count={nightly.length} /><ReleaseHistoryNote hidden={hiddenNightly} /><BuildTable builds={nightly} /></section></div>
+    </div>;
 }
 
 function OperationsView({ data, discordUsers }: { data: OperationsData; discordUsers: DiscordUserSummary[] }) {

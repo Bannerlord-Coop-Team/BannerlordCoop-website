@@ -95,3 +95,20 @@ it("resets the server and backup state with the form after an action", async () 
     expect(container.querySelector('select[name="backupId"]')).toBeNull();
     expect(container.querySelector<HTMLSelectElement>('select[name="serverId"]')?.value).toBe("");
 });
+
+it("replays an uncertain Stable import with the same request ID until success", async () => {
+    request.mockRejectedValueOnce(new Error("Response lost"));
+    request.mockResolvedValue({ channel: "stable", validationState: "validated", version: "v0.1.5", buildId: "test-build", containerDigest: `sha256:${"a".repeat(64)}` });
+    await act(async () => root.render(<ControlPlaneActionCard operation="import-latest-stable" title="Import Latest Stable" description="Import"
+        fields={[{ name: "reason", label: "Audit reason", required: true }]} />));
+    const reason = container.querySelector<HTMLInputElement>('input[name="reason"]')!;
+    reason.value = "Recover publication";
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(container.textContent).toContain("Response lost");
+    expect(reason.value).toBe("Recover publication");
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(request.mock.calls[1]?.[0]).toMatchObject({ requestId: request.mock.calls[0]?.[0].requestId, operation: "import-latest-stable", input: { reason: "Recover publication" } });
+    expect(container.textContent).toContain("v0.1.5");
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(request.mock.calls[2]?.[0].requestId).not.toBe(request.mock.calls[1]?.[0].requestId);
+});

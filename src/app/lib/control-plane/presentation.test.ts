@@ -360,3 +360,24 @@ test("operation card rows expand to their row width", () => {
     assert.throws(() => operationCardRowClass(0));
     assert.throws(() => operationCardRowClass(4));
 });
+
+test("Builds offers audited latest Stable import without caller-selected release identity", async () => {
+    const source = await readFile(new URL("../../admin/control-plane/page.tsx", import.meta.url), "utf8");
+    const view = source.slice(source.indexOf("function ReleasesView"), source.indexOf("function OperationsView"));
+    assert.match(view, /operation="import-latest-stable"/u);
+    assert.match(view, /title="Import Latest Stable"/u);
+    assert.match(view, /name: "reason"/u);
+    assert.doesNotMatch(view, /name: "(?:digest|repository|runId|buildId)"/u);
+});
+
+test("Stable import result identifies the validated build and immutable image", () => {
+    const digest = `sha256:${"a".repeat(64)}`;
+    const buildId = `mrb1-${"b".repeat(64)}`;
+    const result = presentControlPlaneOperationResult("import-latest-stable", {
+        buildId, version: "v0.1.5", channel: "stable", validationState: "validated", containerDigest: digest, serverRunId: "34874600399",
+    });
+    assert.match(result.message, /v0\.1\.5/u);
+    assert.ok(result.message.includes(buildId));
+    assert.ok(result.message.includes(digest));
+    assert.match(result.message, /does not directly update/u);
+});

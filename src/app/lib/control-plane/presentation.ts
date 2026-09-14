@@ -98,6 +98,16 @@ export function presentControlPlaneOperationResult(
 ): ControlPlaneOperationResultPresentation {
     if (!isRecord(result)) return { message: "Operation completed.", links: [] };
 
+    if (operation === "import-latest-stable" && result.channel === "stable" && result.validationState === "validated") {
+        const version = boundedText(result.version, 64);
+        const buildId = boundedText(result.buildId, 128);
+        const digest = boundedText(result.containerDigest, 71);
+        if (version && buildId && digest) return {
+            message: `Stable ${version} imported and validated. Build: ${buildId}. Image: ${digest}. This does not directly update or restart servers; existing update policies may select this build.`,
+            links: [],
+        };
+    }
+
     const server = isRecord(result.server) ? result.server : null;
     const job = isRecord(result.job) ? result.job : null;
     const serverId = validUuid(server?.serverId) ?? validUuid(job?.serverId);
