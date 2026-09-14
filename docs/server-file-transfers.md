@@ -21,15 +21,15 @@ above them, with a responsive two-card layout and native import review dialogs.
   The dialog explains what each file changes and where to find it, catches wrong
   file choices, and previews changes before confirmation. Native comments, BOM
   and trailing commas are accepted without making users edit the file.
-  Missing settings and the other configuration section are preserved. The
-  existing combined website settings backup remains a separate, labelled option. Import is owner-only; settings apply on
+  Missing settings and the other configuration section are preserved. New imports
+  offer only these two individual files. Import is owner-only; settings apply on
   the next Start. Passwords, campaign paths and host settings are excluded.
 - Export the current validated configuration as `BannerlordCoop-configuration.zip`,
   containing exactly `server-config.json` and `mod-config.json` at its root. Each
   file contains its corresponding native settings section, with no combined
   wrapper. Extract the ZIP, then import either JSON file individually. The page
-  explains extraction and file selection; older combined JSON exports remain
-  importable for compatibility. Managers can export this non-secret
+  explains extraction and file selection; only already-pending combined imports
+  retain recovery support. Managers can export this non-secret
   configuration and manage saves; they cannot import configuration settings.
 
 Server actions revalidate the authenticated Supabase user against the page user
