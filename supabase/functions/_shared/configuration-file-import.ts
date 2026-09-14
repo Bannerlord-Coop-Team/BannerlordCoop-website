@@ -64,7 +64,7 @@ export function readConfigurationFile(text: string, part: ConfigurationPart): { 
     catch { throw new Error('Choose the settings backup downloaded using Export config on this website. For a game file, select server-config.json or mod-config.json above.'); }
   }
   if (Object.keys(raw).some((key) => ['schemaVersion', 'serverConfig', 'modConfig'].includes(key))) {
-    throw new Error('This is a website settings backup. Choose “Website settings backup — both” above.');
+    throw new Error('This older combined backup is not supported here. Choose server-config.json or mod-config.json instead.');
   }
   if (part === 'server' && Object.keys(raw).some((key) => ['difficulty', 'modoptions'].includes(key.toLowerCase()))) {
     throw new Error('This looks like mod-config.json. Choose “mod-config.json — gameplay settings” above.');

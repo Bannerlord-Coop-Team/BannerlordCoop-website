@@ -106,7 +106,7 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
             setMessage("Settings imported. If the server is running, stop it and start it again to use them. If it is stopped, start it when you are ready."); remember(null); setDeadline(null); router.refresh();
         } else if (["succeeded", "failed", "cancelled"].includes(next.state)) {
             setDeadline(null); router.refresh();
-            setMessage(next.state === "succeeded" ? next.action === "export-save" ? "Your save export is ready to download." : "Campaign save imported."
+            setMessage(next.state === "succeeded" ? next.action === "export-save" ? "Your save export is ready to download." : "Campaign added. Your current campaign is unchanged."
                 : `The transfer ${next.state}. Your request is retained for reference.`);
             if (next.state === "succeeded" && next.action === "import-save") remember(null);
         } else setMessage(next.action === "export-save" ? "Preparing your save export…" : "Validating and importing your campaign…");
@@ -168,7 +168,7 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
         if (!(files.length === 1 && files[0].name.endsWith(".blcexport")) && (!save || !files.some((file) => file.name === save.name.slice(0, -4) + ".json"))) throw new Error("The .sav and .json filenames must match.");
         if (displayName.trim().length < 3 || displayName.trim().length > 48) throw new Error("Enter a campaign name between 3 and 48 characters.");
         if (/[\p{Cc}\p{Cf}]/u.test(displayName.trim())) throw new Error("The campaign name contains invisible characters. Delete the name and type it again instead of pasting it.");
-        return ["The imported campaign becomes the active save after server validation.", "A pre-import backup protects the current campaign."];
+        return ["This adds a separate campaign after server validation.", "Your current campaign and existing saves will not be replaced or selected differently."];
     }
 
     async function fingerprints() {
@@ -232,10 +232,10 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
             saveName={status ? status.activeSave?.displayName ?? "No active campaign save" : undefined}
             configuration={status?.managedConfig}
             saveActions={<>
-                <button className={buttonClass} disabled={blocked || !canTransferSave || !status?.activeSave} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />Export save</button>
+                <button className={buttonClass} disabled={blocked || !status?.activeSave || !["running", "stopped", "awaiting-save"].includes(status.operationState)} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />Export save</button>
                 <button className={buttonClass} disabled={blocked || !canTransferSave} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />Import save</button>
             </>}
-            saveNotice={status && !canTransferSave && <p className="mt-3 text-xs leading-5 text-foreground-muted">Stop the server before importing or exporting a campaign save.</p>}
+            saveNotice={<p className="mt-3 text-xs leading-5 text-foreground-muted">Export downloads the current campaign’s latest completed save, even while the server is running. Stop the server before adding an imported campaign; your current campaign will stay selected.</p>}
             configActions={<>
                 <button className={buttonClass} disabled={blocked || !canImportConfig} onClick={() => openImport("import-config")}><Upload aria-hidden className="size-4" />Import config</button>
                 <button className={buttonClass} disabled={blocked} onClick={() => startTransition(async () => {
@@ -258,7 +258,7 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
                 <p className="mt-2 text-xs leading-5 text-foreground-muted">{canImportConfig ? "After importing, stop and start a running server to use the new settings." : "Only the server owner can import configuration settings."}</p>
             </>}
         />
-        <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-foreground-muted"><Info aria-hidden className="mt-0.5 size-3.5 shrink-0" />Imports are reviewed before anything is replaced.</p>
+        <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-foreground-muted"><Info aria-hidden className="mt-0.5 size-3.5 shrink-0" />Review each import before confirming any changes.</p>
         {status === null && <p role="alert" className="mt-3 text-sm text-foreground-muted">File transfers could not be loaded. Refresh the page to try again. Backups remain available in the Backups tab.</p>}
         {storageError && <p role="alert" className="mt-3 text-sm text-red-200">Pending transfers could not be saved or recovered in this browser. Transfers are paused to prevent duplicate requests.</p>}
         {message && <p role="status" className="mt-4 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-sm text-foreground-muted">{isPending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{message}</p>}
@@ -285,16 +285,15 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
                 <p className="text-sm leading-6 text-foreground-muted">{dialogKind === "import-save" ? "Choose a downloaded .blcexport, or a .sav file and its matching .json companion. Maximum 20 MiB total." : "Import one file at a time. You do not need to open or edit it. Your saved game and server password will stay the same."}</p>
                 {dialogKind === "import-config" && <>
                     <label className="block text-sm font-semibold">1. Which file are you importing?
-                        <select className={inputClass} value={configPart} disabled={intent !== null} onChange={(event) => { setConfigPart(event.target.value as ConfigurationPart); setFiles([]); setDialogError(""); }}>
+                        {configPart === "combined" ? <span className="mt-2 block font-normal">Recovering an earlier import of both settings files.</span> : <select className={inputClass} value={configPart} disabled={intent !== null} onChange={(event) => { setConfigPart(event.target.value as ConfigurationPart); setFiles([]); setDialogError(""); }}>
                             <option value="server">server-config.json — server settings</option>
                             <option value="mod">mod-config.json — gameplay settings</option>
-                            <option value="combined">Website settings backup — both (older .json exports)</option>
-                        </select>
+                        </select>}
                     </label>
                     <div className="border border-white/10 p-4 text-sm leading-6 text-foreground-muted">
                         <p className="font-semibold text-foreground">{configPart === "server" ? "Server settings: how often your game saves, server logs and Steam settings." : configPart === "mod" ? "Gameplay settings: difficulty, pausing and other co-op game rules." : "Both sets of settings from a backup downloaded with Export config on this website."}</p>
                         <p className="mt-3 font-semibold text-foreground">2. Find your file</p>
-                        {configPart === "combined" ? <p>This is only for an older BannerlordCoop-configuration.json backup. For a new ZIP export, extract it first, then select server-config.json or mod-config.json above.</p> : <>
+                        {configPart === "combined" ? <p>Re-select the same JSON file to recover your earlier request.</p> : <>
                             <p className="mb-3">If you used Export config on this website, open Downloads, right-click BannerlordCoop-configuration.zip and choose Extract All (or double-click it on a Mac). Open the extracted folder and choose the file below. Do not select the ZIP.</p>
                             <p>For a file from the game, on the computer where you played or hosted, open Documents → Mount and Blade II Bannerlord → CoopData{configPart === "server" ? " → DedicatedServer" : ""}.</p>
                             <p className="mt-2">Choose <strong className="text-foreground">{configPart === "server" ? "server-config.json" : "mod-config.json"}</strong>. If you used a custom data folder, look there instead. If you cannot find the file, cancel and ask support for help.</p>
@@ -311,7 +310,7 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
                 <ul className="mt-4 max-h-60 space-y-2 overflow-y-auto border border-white/10 p-4 text-sm leading-6">{review.map((change) => <li key={change} className="break-words">{change}</li>)}</ul>
                 {ignoredSettings.length > 0 && <div className="mt-4 border border-gold/30 bg-gold/5 p-3 text-sm leading-6"><p className="font-semibold">These settings will not be imported:</p><p>{ignoredSettings.map(settingLabel).join(", ")}. This website manages them separately or does not support changing them.</p></div>}
                 {dialogKind === "import-config" && <p className="mt-4 text-sm font-semibold">{configPart === "server" ? "Your gameplay settings will stay the same." : configPart === "mod" ? "Your server settings will stay the same." : "Both sets of settings can change."}</p>}
-                <p className="mt-4 text-sm text-foreground-muted">{dialogKind === "import-config" ? "Your saved game stays the same. After importing, stop and start the server to use the new settings. If it is already stopped, just start it when you are ready." : "The server stays stopped. Start it when you are ready to play the imported campaign."}</p>
+                <p className="mt-4 text-sm text-foreground-muted">{dialogKind === "import-config" ? "Your saved game stays the same. After importing, stop and start the server to use the new settings. If it is already stopped, just start it when you are ready." : "The server stays stopped and your current campaign stays selected. Importing does not switch campaigns."}</p>
             </div>}
             {dialogError && <p role="alert" className="mt-4 text-sm text-red-200">{dialogError}</p>}
             <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-white/10 pt-4">

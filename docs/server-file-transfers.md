@@ -8,23 +8,28 @@ above them, with a responsive two-card layout and native import review dialogs.
 - Import a downloaded `.blcexport` or a `.sav` and its matching `.json` companion,
   up to 20 MiB total (including archive metadata/encoding). Both
   filenames must be simple basenames. Backend/runner limits may be stricter.
-  The stopped-server workflow creates a protective backup, validates the import,
-  selects the imported campaign and retains its normal rollback behavior.
+  The stopped-server workflow validates the import and adds a separate campaign
+  under a unique stable basename. It does not replace existing saves or select
+  the imported campaign; selection remains a separate operation.
 - Export the active campaign through a durable job and download its archive.
-  Save transfers require the server to be stopped. No server is stopped silently.
+  Export downloads the current campaign’s latest completed on-disk save while
+  the game keeps running. The runner retries an in-progress autosave and checks
+  both files and the save directory for changes around the read. It never stops
+  or starts the game for export. Adding an imported campaign still requires a
+  stopped game because installation switches the managed data directory.
 - Import `server-config.json` or `mod-config.json` individually, up to 64 KiB.
   The dialog explains what each file changes and where to find it, catches wrong
   file choices, and previews changes before confirmation. Native comments, BOM
   and trailing commas are accepted without making users edit the file.
-  Missing settings and the other configuration section are preserved. The
-  existing combined website settings backup remains a separate, labelled option. Import is owner-only; settings apply on
+  Missing settings and the other configuration section are preserved. New imports
+  offer only these two individual files. Import is owner-only; settings apply on
   the next Start. Passwords, campaign paths and host settings are excluded.
 - Export the current validated configuration as `BannerlordCoop-configuration.zip`,
   containing exactly `server-config.json` and `mod-config.json` at its root. Each
   file contains its corresponding native settings section, with no combined
   wrapper. Extract the ZIP, then import either JSON file individually. The page
-  explains extraction and file selection; older combined JSON exports remain
-  importable for compatibility. Managers can export this non-secret
+  explains extraction and file selection; only already-pending combined imports
+  retain recovery support. Managers can export this non-secret
   configuration and manage saves; they cannot import configuration settings.
 
 Server actions revalidate the authenticated Supabase user against the page user
@@ -98,3 +103,9 @@ native templates and verify section preservation through HTTP and IPC.
 The updated [step-by-step import guide](screenshots/server-files-import-guide.png)
 and [individual server-settings review](screenshots/server-files-import.png) are
 real Playwright screenshots of the updated component in a local fixture page.
+
+The non-disruptive transfer update has real Playwright captures from the
+implemented component with a local fixture (no live server mutations):
+[export enabled while running](screenshots/save-transfer-running.png) and
+[separate-campaign import review](screenshots/save-transfer-review.png).
+The temporary preview route is not included in the change.

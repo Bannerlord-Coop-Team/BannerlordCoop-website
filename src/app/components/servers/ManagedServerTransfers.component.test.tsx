@@ -31,9 +31,9 @@ async function render(current = status, owner = true, userId = "owner") {
 function button(label: string) { const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label); if (!found) throw Error(`Missing button ${label}`); return found; }
 async function click(label: string) { await act(async () => button(label).click()); }
 
-it("shows all four actions and disables saves while running and configuration import for managers", async () => {
+it("allows current-save export while running, but requires stopped import and owner config permission", async () => {
     await render({ ...status, operationState: "running", observedGameState: "running" }, false);
-    expect(button("Import save").disabled).toBe(true); expect(button("Export save").disabled).toBe(true);
+    expect(button("Import save").disabled).toBe(true); expect(button("Export save").disabled).toBe(false);
     expect(button("Import config").disabled).toBe(true); expect(button("Export config").disabled).toBe(false);
     expect(container.textContent).toContain("Stop the server"); expect(container.textContent).toContain("Only the server owner");
 });
@@ -80,10 +80,10 @@ it("does not dispatch when pending intent cannot be persisted, or recover a diff
     sessionStorage.setItem(key, JSON.stringify({ requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt, action: "export-save", fingerprints: [], displayName: "", saveId: status.activeSave!.saveId }));
     await render(status, true, "another-owner"); expect(container.textContent).not.toContain("Check status");
 });
-it("reviews configuration changes and rejects secret fields before any submission", async () => {
+it("reviews native configuration changes and rejects unsupported fields before any submission", async () => {
     await render(); await click("Import config");
     const choice = container.querySelector("select")!;
-    await act(async () => { choice.value = "combined"; choice.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect([...choice.options].map((option) => option.value)).toEqual(["server", "mod"]);
     const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     async function choose(config: unknown) {
         const file = new File([JSON.stringify(config)], "config.json", { type: "application/json" });
@@ -92,9 +92,9 @@ it("reviews configuration changes and rejects secret fields before any submissio
         await act(async () => fileInput.dispatchEvent(new Event("change", { bubbles: true })));
         await click("Review import");
     }
-    await choose({ ...status.managedConfig, password: "forbidden" });
+    await choose({ ...status.managedConfig.serverConfig, unsupportedSetting: true });
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
-    await choose({ ...status.managedConfig, serverConfig: { ...status.managedConfig.serverConfig, autosaveMinutes: 10 } });
+    await choose({ ...status.managedConfig.serverConfig, autosaveMinutes: 10 });
     expect(container.textContent).toContain("Autosave Minutes: 5 → 10");
     expect(button("Import these settings").disabled).toBe(false); expect(mocks.submit).not.toHaveBeenCalled();
 });
@@ -134,12 +134,17 @@ it("guides individual imports, catches choosing the wrong file, and previews onl
     expect(mocks.submit).not.toHaveBeenCalled();
 });
 
-it.each(["mod", "server", undefined])("recovers the original config choice for a pending %s import", async (configPart) => {
+it.each(["mod", "server", "combined", undefined])("recovers the original config choice for a pending %s import", async (configPart) => {
     sessionStorage.setItem(key, JSON.stringify({ requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt, action: "import-config", fingerprints: ["a".repeat(64)], displayName: "", saveId: status.activeSave!.saveId, ...(configPart ? { configPart } : {}) }));
     await render(); await click("Retry same request");
-    const choice = container.querySelector("select")!;
-    expect(choice.value).toBe(configPart ?? "combined");
-    expect(choice.disabled).toBe(true);
+    const choice = container.querySelector("select");
+    if (configPart === undefined || configPart === "combined") {
+        expect(choice).toBeNull();
+        expect(container.textContent).toContain("Recovering an earlier import");
+    } else {
+        expect(choice?.value).toBe(configPart);
+        expect(choice?.disabled).toBe(true);
+    }
     expect(mocks.submit).not.toHaveBeenCalled();
 });
 
