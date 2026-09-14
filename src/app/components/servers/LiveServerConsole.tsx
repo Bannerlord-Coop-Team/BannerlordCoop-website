@@ -8,17 +8,10 @@ import {
     LiveServerOperationButtons,
 } from "@/app/components/servers/LiveServerOperationButtons";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
-import {
-    CircleAlert,
-    CircleCheck,
-    Eraser,
-    LoaderCircle,
-    Plug,
-    Send,
-    Unplug,
-} from "lucide-react";
+import { ArrowUpRight, ChevronDown, Download, LoaderCircle, Plug, Unplug } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
+const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm font-medium text-foreground transition hover:border-gold/50 hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
 const MAX_CONSOLE_CHARS = 300_000;
 
 type ConnectionStatus =
@@ -152,6 +145,7 @@ export function LiveServerConsole({
 }) {
     const [command, setCommand] = useState("");
     const [output, setOutput] = useState("");
+    const [followingLogs, setFollowingLogs] = useState(true);
     const [containerState, setContainerState] = useState<ContainerState>("unknown");
     const [controlsReady, setControlsReady] = useState(false);
     const [inputEnabled, setInputEnabled] = useState(false);
@@ -406,9 +400,9 @@ export function LiveServerConsole({
     }, [connect, disconnect]);
 
     useEffect(() => {
-        if (!outputRef.current) return;
+        if (!outputRef.current || !followingLogs) return;
         outputRef.current.scrollTop = outputRef.current.scrollHeight;
-    }, [output]);
+    }, [output, followingLogs]);
 
     function requestOperation(operation: ContainerOperation) {
         const socket = socketRef.current;
@@ -448,160 +442,41 @@ export function LiveServerConsole({
     const operationBusy = pendingOperation !== null;
     const consoleWritable = connected && containerState === "running" && inputEnabled;
 
-    return (
-        <section className="overflow-hidden rounded-sm border border-white/10 bg-[#050605]" aria-labelledby="container-console-heading">
-            <div className="flex flex-col gap-3 border-b border-white/10 bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <div className="flex flex-wrap items-center gap-2.5">
-                        <h2 id="container-console-heading" className="font-display text-2xl font-semibold text-foreground">
-                            Container console
-                        </h2>
-                        <span className={`inline-flex items-center gap-1.5 font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${connected ? "text-emerald-300" : status === "error" ? "text-red-300" : "text-foreground-muted"}`}>
-                            <span aria-hidden="true" className={`size-1.5 rounded-full ${connected ? "bg-emerald-400" : status === "error" ? "bg-red-400" : busy ? "animate-pulse bg-gold" : "bg-foreground-dim"}`} />
-                            {statusLabels[status]}
-                        </span>
-                    </div>
-                    <p className="mt-1 text-xs text-foreground-dim" aria-live="polite">{statusMessage}</p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setOutput("")}
-                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-sm border border-white/15 bg-white/[0.03] px-3 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted transition-colors hover:border-white/25 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                    >
-                        <Eraser aria-hidden="true" className="size-3.5" /> Clear
-                    </button>
-                    {connected || busy ? (
-                        <button
-                            type="button"
-                            onClick={() => disconnect()}
-                            disabled={operationBusy}
-                            title={operationBusy ? "Wait for the server operation to finish before disconnecting." : undefined}
-                            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-sm border border-red-500/35 bg-red-500/10 px-3 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-red-200 transition-colors hover:bg-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:cursor-not-allowed disabled:opacity-35"
-                        >
-                            <Unplug aria-hidden="true" className="size-3.5" /> Disconnect
-                        </button>
-                    ) : (
-                        <button
-                            type="button"
-                            onClick={() => void connect()}
-                            disabled={!gatewayUrl}
-                            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-sm border border-gold/40 bg-gold/10 px-3 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:bg-gold/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                            {busy ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : <Plug aria-hidden="true" className="size-3.5" />}
-                            Connect
-                        </button>
-                    )}
-                </div>
+    return <section className="min-w-0 rounded-lg border border-white/10 bg-surface" aria-labelledby="container-console-heading">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
+            <h2 id="container-console-heading" className="text-base font-semibold">Console</h2>
+            <button type="button" disabled={!output} className={`${button} !border-transparent !bg-transparent !text-foreground-muted hover:!text-foreground`} onClick={() => {
+                const url = URL.createObjectURL(new Blob([output], { type: "text/plain" }));
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `${serverId}-console.txt`;
+                link.click();
+                window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+            }}><Download className="size-4" aria-hidden="true" />Download logs</button>
+        </div>
+        <div className="border-b border-white/10 px-5 py-3">
+            <LiveServerOperationButtons controlsReady={controlsReady} onOperation={requestOperation} pendingOperation={pendingOperation} />
+            {pendingOperation && <p role="status" className="mt-3 text-sm text-gold">{containerOperationLabels[pendingOperation]} in progress</p>}
+        </div>
+        <div className="relative">
+            <pre ref={outputRef} onScroll={event => {
+                const viewport = event.currentTarget;
+                setFollowingLogs(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 24);
+            }} role="log" aria-label="Live Bannerlord container output" tabIndex={0} className="h-80 overflow-auto whitespace-pre-wrap break-words bg-surface-raised p-4 font-mono text-[13px] leading-7 text-foreground outline-gold sm:h-96 sm:p-5 sm:text-sm">{output || "Waiting for container output…"}</pre>
+            {!followingLogs && <button type="button" className={`${button} absolute right-4 bottom-3 !bg-surface-raised shadow-lg`} onClick={() => setFollowingLogs(true)}>Jump to latest <ChevronDown className="size-4" aria-hidden="true" /></button>}
+        </div>
+        <form onSubmit={sendCommand} className="flex gap-2 border-t border-white/10 p-5">
+            <label htmlFor="console-command" className="sr-only">Console command</label>
+            <input id="console-command" value={command} onChange={event => setCommand(event.target.value)} disabled={!consoleWritable} maxLength={4095} autoComplete="off" spellCheck={false} placeholder="Enter a command…" className="w-full min-w-0 rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm text-foreground outline-none focus:border-gold focus:ring-1 focus:ring-gold disabled:cursor-not-allowed disabled:opacity-40" />
+            <button type="submit" disabled={!consoleWritable || !command.trim()} className={`${button} !border-gold/50 !bg-gold/15 !text-gold`}>Send <ArrowUpRight className="size-4" aria-hidden="true" /></button>
+        </form>
+        <div className="px-5 pb-5">
+            <p className="text-xs leading-5 text-foreground-muted">{consoleWritable ? "Enter to send · Commands go to container stdin, not a host shell." : "Console input is unavailable until the running container is connected with stdin enabled."}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+                <p role="status" className="min-w-0 flex-1 text-xs leading-5 text-foreground-muted">{statusLabels[status]} · {containerState} · {statusMessage}</p>
+                {connected || busy ? <button type="button" onClick={() => disconnect()} disabled={operationBusy} className={button}><Unplug className="size-4" aria-hidden="true" />Disconnect</button>
+                    : <button type="button" onClick={() => void connect()} disabled={!gatewayUrl} className={button}>{busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Plug className="size-4" aria-hidden="true" />}Connect</button>}
             </div>
-
-            <div className="flex flex-col gap-4 border-b border-white/10 bg-background/70 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                    <p className="font-label text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-foreground-dim">
-                        Container state
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
-                        <span className={`inline-flex items-center gap-1.5 font-label text-xs font-semibold uppercase tracking-[0.12em] ${containerStateStyle(containerState)}`}>
-                            <span aria-hidden="true" className={`size-1.5 rounded-full ${containerStateDot(containerState)}`} />
-                            {containerState}
-                        </span>
-                        {pendingOperation && (
-                            <span className="inline-flex items-center gap-1.5 text-xs text-gold">
-                                <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
-                                {containerOperationLabels[pendingOperation]} in progress
-                            </span>
-                        )}
-                    </div>
-                </div>
-
-                <LiveServerOperationButtons
-                    controlsReady={controlsReady}
-                    onOperation={requestOperation}
-                    pendingOperation={pendingOperation}
-                />
-            </div>
-
-            <pre
-                ref={outputRef}
-                role="log"
-                aria-label="Live Bannerlord container output"
-                tabIndex={0}
-                className="h-[min(58vh,38rem)] min-h-80 overflow-auto whitespace-pre-wrap break-words px-4 py-4 font-mono text-xs leading-5 text-[#c7d5c4] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold sm:px-5 sm:text-[0.78rem]"
-            >
-                {output || "Waiting for container output…\n"}
-            </pre>
-
-            <form onSubmit={sendCommand} className="border-t border-white/10 bg-surface p-3 sm:p-4">
-                <label htmlFor="console-command" className="sr-only">Send a command to the Bannerlord container</label>
-                <div className="flex gap-2">
-                    <span aria-hidden="true" className="flex min-h-11 items-center font-mono text-sm text-gold">&gt;</span>
-                    <input
-                        id="console-command"
-                        value={command}
-                        onChange={(event) => setCommand(event.target.value)}
-                        disabled={!consoleWritable}
-                        maxLength={4095}
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder={
-                            consoleWritable
-                                ? "Enter a server command"
-                                : containerState === "stopped"
-                                    ? "Start the container before sending commands"
-                                    : connected
-                                        ? "Container stdin is unavailable"
-                                        : "Connect before sending commands"
-                        }
-                        className="min-h-11 min-w-0 flex-1 rounded-sm border border-white/15 bg-background px-3 font-mono text-sm text-foreground outline-none placeholder:text-foreground-dim hover:border-white/25 focus:border-gold focus:ring-1 focus:ring-gold/30 disabled:cursor-not-allowed disabled:opacity-45"
-                    />
-                    <button
-                        type="submit"
-                        disabled={!consoleWritable || !command.trim()}
-                        className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-sm border border-crimson bg-crimson px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                        <Send aria-hidden="true" className="size-4" />
-                        <span className="hidden sm:inline">Send</span>
-                    </button>
-                </div>
-            </form>
-
-            {!gatewayUrl && (
-                <div className="flex gap-3 border-t border-gold/20 bg-gold/[0.07] px-4 py-3 text-xs leading-5 text-foreground-muted">
-                    <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
-                    The console page is ready, but the WSS gateway URL must be configured before it can attach to the remote container.
-                </div>
-            )}
-            {consoleWritable && (
-                <div className="flex gap-3 border-t border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-xs leading-5 text-emerald-100/75">
-                    <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-emerald-300" />
-                    Commands are sent only to the allowlisted container stdin; this is not a host shell.
-                </div>
-            )}
-            {connected && containerState === "running" && !inputEnabled && (
-                <div className="flex gap-3 border-t border-gold/20 bg-gold/[0.07] px-4 py-3 text-xs leading-5 text-foreground-muted">
-                    <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
-                    Container output is available, but stdin is not currently attached.
-                </div>
-            )}
-        </section>
-    );
-}
-
-function containerStateStyle(state: ContainerState) {
-    if (state === "running") return "text-emerald-300";
-    if (state === "error") return "text-red-300";
-    if (["starting", "stopping", "restarting", "updating"].includes(state)) {
-        return "text-gold";
-    }
-    return "text-foreground-muted";
-}
-
-function containerStateDot(state: ContainerState) {
-    if (state === "running") return "bg-emerald-400";
-    if (state === "error") return "bg-red-400";
-    if (["starting", "stopping", "restarting", "updating"].includes(state)) {
-        return "animate-pulse bg-gold";
-    }
-    return "bg-foreground-dim";
+        </div>
+    </section>;
 }

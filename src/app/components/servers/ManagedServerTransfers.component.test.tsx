@@ -249,3 +249,14 @@ it("keeps config export failures retryable without downloading a file", async ()
     expect(button("Export config").disabled).toBe(false);
     expect(sessionStorage.getItem(key)).toBeNull();
 });
+
+it("shows real configuration in the wireframe preview without enabling unsupported editing", async () => {
+    await render();
+    const editor = container.querySelector<HTMLTextAreaElement>("#config-json")!;
+    expect(JSON.parse(editor.value)).toEqual(status.managedConfig);
+    expect(editor.disabled).toBe(true);
+    for (const label of ["JSON", "Form preview", "Discard", "Save config"]) expect(button(label).disabled).toBe(true);
+    expect(button("Import config").disabled).toBe(false);
+    expect(button("Export config").disabled).toBe(false);
+    expect(container.querySelector("#campaign-save-heading")?.closest("section")?.textContent).toContain("Campaign");
+});

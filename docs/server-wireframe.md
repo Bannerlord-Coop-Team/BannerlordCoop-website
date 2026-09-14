@@ -1,6 +1,6 @@
 # Server management wireframe
 
-Public route: `/servers/wireframe`. Append this path to the Cloudflare preview origin after deploying this branch. No sign-in, environment variables or server connection are needed by this route. The authenticated `/servers/[serverId]` implementation is unchanged.
+Public route: `/servers/wireframe`. Append this path to the Cloudflare preview origin after deploying this branch. No sign-in, environment variables or server connection are needed by this route. The authenticated `/servers/[serverId]` page now uses the wireframe's four-workspace layout through `ServerManagementWorkspace`. It retains real identity, authorization, lifecycle controls and live console connections. Managed backups and save/config transfers occupy their own tabs; authorized access management is in Settings. The compact Public/Private dropdown stays in the header, and managed game state, lifecycle and release channel stay visible below the connection address. Unconnected features remain visible but disabled, including the illustrative command picker. Placeholder servers no longer simulate successful operations. Tabs keep controls mounted so connections, drafts and pending work survive navigation. The live console also supports downloading captured logs and pausing auto-scroll. The public route remains the fictional design demo described below.
 
 ## Scope and layout
 
