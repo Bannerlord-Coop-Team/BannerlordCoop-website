@@ -285,16 +285,15 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
                 <p className="text-sm leading-6 text-foreground-muted">{dialogKind === "import-save" ? "Choose a downloaded .blcexport, or a .sav file and its matching .json companion. Maximum 20 MiB total." : "Import one file at a time. You do not need to open or edit it. Your saved game and server password will stay the same."}</p>
                 {dialogKind === "import-config" && <>
                     <label className="block text-sm font-semibold">1. Which file are you importing?
-                        <select className={inputClass} value={configPart} disabled={intent !== null} onChange={(event) => { setConfigPart(event.target.value as ConfigurationPart); setFiles([]); setDialogError(""); }}>
+                        {configPart === "combined" ? <span className="mt-2 block font-normal">Recovering an earlier import of both settings files.</span> : <select className={inputClass} value={configPart} disabled={intent !== null} onChange={(event) => { setConfigPart(event.target.value as ConfigurationPart); setFiles([]); setDialogError(""); }}>
                             <option value="server">server-config.json — server settings</option>
                             <option value="mod">mod-config.json — gameplay settings</option>
-                            <option value="combined">Website settings backup — both (older .json exports)</option>
-                        </select>
+                        </select>}
                     </label>
                     <div className="border border-white/10 p-4 text-sm leading-6 text-foreground-muted">
                         <p className="font-semibold text-foreground">{configPart === "server" ? "Server settings: how often your game saves, server logs and Steam settings." : configPart === "mod" ? "Gameplay settings: difficulty, pausing and other co-op game rules." : "Both sets of settings from a backup downloaded with Export config on this website."}</p>
                         <p className="mt-3 font-semibold text-foreground">2. Find your file</p>
-                        {configPart === "combined" ? <p>This is only for an older BannerlordCoop-configuration.json backup. For a new ZIP export, extract it first, then select server-config.json or mod-config.json above.</p> : <>
+                        {configPart === "combined" ? <p>Re-select the same JSON file to recover your earlier request.</p> : <>
                             <p className="mb-3">If you used Export config on this website, open Downloads, right-click BannerlordCoop-configuration.zip and choose Extract All (or double-click it on a Mac). Open the extracted folder and choose the file below. Do not select the ZIP.</p>
                             <p>For a file from the game, on the computer where you played or hosted, open Documents → Mount and Blade II Bannerlord → CoopData{configPart === "server" ? " → DedicatedServer" : ""}.</p>
                             <p className="mt-2">Choose <strong className="text-foreground">{configPart === "server" ? "server-config.json" : "mod-config.json"}</strong>. If you used a custom data folder, look there instead. If you cannot find the file, cancel and ask support for help.</p>
