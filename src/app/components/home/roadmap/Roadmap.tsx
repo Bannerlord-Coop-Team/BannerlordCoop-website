@@ -3,12 +3,12 @@ import { getRoadmap, type RoadmapItem } from "@/app/lib/roadmap";
 
 const statuses = {
     completed: { label: "Completed", icon: Check, className: "text-emerald-300", cardClassName: "border-white/5 bg-transparent text-foreground/85" },
-    unstable: { label: "Unstable", icon: TriangleAlert, className: "text-amber-300", cardClassName: "border-white/10 bg-surface-raised text-foreground" },
+    experimental: { label: "Experimental", icon: TriangleAlert, className: "text-amber-300", cardClassName: "border-white/10 bg-surface-raised text-foreground" },
     in_progress: { label: "In Progress", icon: CircleEllipsis, className: "text-sky-300", cardClassName: "border-sky-300/25 bg-sky-300/5 text-foreground" },
     planned: { label: "Planned", icon: Circle, className: "text-foreground-muted", cardClassName: "border-white/10 bg-surface-raised text-foreground" },
 };
 
-const statusOrder: RoadmapItem["status"][] = ["planned", "in_progress", "unstable", "completed"];
+const statusOrder: RoadmapItem["status"][] = ["planned", "in_progress", "experimental", "completed"];
 
 export async function Roadmap() {
     const milestones = await getRoadmap();
@@ -101,7 +101,7 @@ export async function Roadmap() {
                                                                 </li>
                                                         ))}
                                                     </ul>
-                                                    {statusKey === "unstable" && (
+                                                    {statusKey === "experimental" && (
                                                         <p className="mt-3 font-sans text-sm leading-5 text-foreground-muted">Implemented, but not yet reliable.</p>
                                                     )}
                                                 </div>

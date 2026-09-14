@@ -22,7 +22,7 @@ describe("Roadmap", () => {
             { id: "current", title: "V1.0 - The Game", roadmap_items: [
                 item("Arena", "planned"),
                 { ...item("Trading", "completed"), description: "Player-to-player" },
-                item("Sieges", "unstable"),
+                item("Sieges", "experimental"),
                 item("Hideout", "in_progress"),
                 item("Quests", "in_progress"),
             ] },
@@ -40,10 +40,10 @@ describe("Roadmap", () => {
         expect(groups[1].querySelector("h3 span")?.textContent).toBe("V1.0");
         expect(groups[1].textContent).toContain("Implemented, but not yet reliable.");
         expect([...groups[1].querySelectorAll("ul")].map((node) => node.getAttribute("aria-label")))
-            .toEqual(["Planned", "In Progress", "Unstable", "Completed"]);
-        const unstableList = groups[1].querySelector('ul[aria-label="Unstable"]');
-        expect(unstableList?.previousElementSibling?.tagName).toBe("H4");
-        expect(unstableList?.nextElementSibling?.textContent).toBe("Implemented, but not yet reliable.");
+            .toEqual(["Planned", "In Progress", "Experimental", "Completed"]);
+        const experimentalList = groups[1].querySelector('ul[aria-label="Experimental"]');
+        expect(experimentalList?.previousElementSibling?.tagName).toBe("H4");
+        expect(experimentalList?.nextElementSibling?.textContent).toBe("Implemented, but not yet reliable.");
         expect(groups[0].querySelectorAll("ul")).toHaveLength(1);
         expect(groups[0].querySelector("ul")?.className).toContain("auto-fit");
         expect(groups[0].querySelector("ul")?.parentElement?.parentElement?.className).not.toContain("xl:grid-cols-4");

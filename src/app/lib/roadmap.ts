@@ -4,7 +4,7 @@ export type RoadmapItem = {
     id: string;
     title: string;
     description: string;
-    status: "completed" | "unstable" | "in_progress" | "planned";
+    status: "completed" | "experimental" | "in_progress" | "planned";
 };
 
 export type RoadmapMilestone = {
