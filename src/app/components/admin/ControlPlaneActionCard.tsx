@@ -57,6 +57,7 @@ export function ControlPlaneActionCard({
 }) {
     const router = useRouter();
     const cardRef = useRef<HTMLElement>(null);
+    const stableImportRequest = useRef<{ inputKey: string; requestId: string } | null>(null);
     const [pending, setPending] = useState(false);
     const [result, setResult] = useState<{
         ok: boolean;
@@ -114,11 +115,16 @@ export function ControlPlaneActionCard({
         }
         setPending(true);
         setResult(null);
-        const requestId = crypto.randomUUID();
         try {
             const input = buildInput(effectiveFields, formData);
             applyControlPlaneOperationDefaults(operation, input);
             normalizeOperationInput(operation, input);
+            let requestId = crypto.randomUUID();
+            if (operation === "import-latest-stable") {
+                const inputKey = JSON.stringify(input);
+                if (stableImportRequest.current?.inputKey === inputKey) requestId = stableImportRequest.current.requestId;
+                else stableImportRequest.current = { inputKey, requestId };
+            }
             const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
             if (!session?.access_token) throw new Error("Authentication is required.");
             const response = await requestControlPlaneAdmin({
@@ -127,6 +133,7 @@ export function ControlPlaneActionCard({
                 operation,
                 ...(fields.length === 0 ? {} : { input }),
             });
+            stableImportRequest.current = null;
             setResult({ ok: true, ...presentControlPlaneOperationResult(operation, response) });
             if (operation === "onboard-vps-host") router.push("/admin/control-plane?view=vps");
             else router.refresh();
@@ -166,7 +173,11 @@ export function ControlPlaneActionCard({
                     </span>
                 )}
             </div>
-            <form action={submit} onReset={() => {
+            <form action={submit} onSubmit={operation === "import-latest-stable" ? (event) => {
+                // Keep the audit reason available when an uncertain import needs retrying.
+                event.preventDefault();
+                if (!pending) void submit(new FormData(event.currentTarget));
+            } : undefined} onReset={() => {
                 setServerValue(String(serverField?.defaultValue ?? ""));
                 setBackupReady(false);
                 setFormRevision((value) => value + 1);

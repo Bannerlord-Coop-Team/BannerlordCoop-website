@@ -20,6 +20,14 @@ The administrator presentation resolves Discord usernames only from bounded Supa
 
 The Operations page's **Register existing OVH VPS** card is the normal additive host-ingestion path. It verifies that an already-purchased service belongs to the configured OVH account, derives the reviewed image within the control plane, records `floor(vCPU / 2)` empty slots, and writes an administrative audit event. It never purchases, renews, powers, assigns, or installs the VPS. Managed-runner enrollment is still required before an assigned slot can Start. Server creation assigns an existing prepared OVH slot in the selected region; it never orders a VPS, and unavailable capacity fails without creating or billing anything. The normal Releases view hides non-validated history, but pending, rejected, and revoked receipts remain retained for explicit inspection and audit rather than being deleted.
 
+### Import Latest Stable
+
+The Builds page provides **Import Latest Stable** with a required audit reason. It sends the existing admin envelope with `operation: "import-latest-stable"`, a request UUID, and `input: { reason }`. No repository, tag, digest, workflow, or actor is selected by the browser. The backend discovers and verifies the authoritative receipt from the latest successful Stable publication, then atomically registers, validates, and audits the build. Success displays the build ID and immutable image digest and refreshes the catalog. While the card remains mounted, retrying unchanged input after an uncertain response retains its request UUID; a changed reason or a submission after confirmed success starts a new request. Reloading the page loses this browser-held retry identity.
+
+Deploy the companion control-plane backend and configure its dedicated optional Actions-read credential before using this action; see that repository's managed-hosting deployment documentation. Missing configuration or unverifiable publication evidence returns an error, not an unverified import. The website never receives the Actions credential. No Edge Function routing change is required: existing authenticated forwarding and backend authorization apply.
+
+Import advances the Stable catalog but does not directly enqueue an installation or restart. Existing server update policies may subsequently select the imported build. The action does not repair Discord publication or re-run a build.
+
 Deploy the Edge Function from the repository root:
 
 ```sh
