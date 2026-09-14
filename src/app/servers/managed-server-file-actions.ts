@@ -18,7 +18,7 @@ function failure(error: unknown, notSubmitted = false) {
     const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
     const messages: Record<string, string> = {
         stale_interaction: "The server changed. Refresh before starting a new transfer.",
-        safe_stop_required: "Stop the server before importing or exporting a campaign save.",
+        safe_stop_required: "Stop the server before adding an imported campaign. Export does not require stopping.",
         server_not_found: "This server is unavailable or your access changed.",
         invalid_request: "The file was rejected. Check the format and try again.",
         request_conflict: "This request conflicts with another operation. Check its status before trying again.",
