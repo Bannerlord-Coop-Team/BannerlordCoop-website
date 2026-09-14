@@ -98,19 +98,13 @@ function OperationButton({
     pending: boolean;
     tone: "default" | "success" | "warning" | "danger";
 }) {
-    const toneStyles = {
-        default: "border-sky-400/35 bg-sky-400/10 text-sky-200 hover:bg-sky-400/20 focus-visible:ring-sky-300",
-        success: "border-emerald-500/35 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 focus-visible:ring-emerald-300",
-        warning: "border-gold/40 bg-gold/10 text-gold hover:bg-gold/20 focus-visible:ring-gold",
-        danger: "border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/20 focus-visible:ring-red-400",
-    } as const;
 
     return (
         <button
             type="button"
             onClick={onClick}
             disabled={disabled}
-            className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-sm border px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-35 ${toneStyles[tone]}`}
+            className={`inline-flex min-h-10 items-center justify-center gap-1 rounded-md border border-white/15 bg-white/[0.03] px-2 py-2 text-xs font-medium text-foreground transition hover:border-gold/50 hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 sm:gap-2 sm:px-3 sm:text-sm ${tone === "success" ? "!border-gold/50 !bg-gold/15 !text-gold" : ""}`}
         >
             {pending ? (
                 <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />

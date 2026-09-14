@@ -1,5 +1,7 @@
+import { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
+import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfigPanels";
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
-import { CopyJoinButton } from "@/app/components/servers/CopyJoinButton";
+import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "@/app/components/servers/ServerManagementWorkspace";
 import { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
@@ -8,7 +10,6 @@ import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles"
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
 import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
-import { ServerControlPanel } from "@/app/components/servers/ServerControlPanel";
 import {
     getLiveConsoleAccessLevel,
     getMemberRole,
@@ -37,25 +38,8 @@ import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { listSupabaseUsers } from "@/app/lib/supabase/users";
-import {
-    ArrowLeft,
-    CircleAlert,
-    CloudCog,
-    Container,
-    Crown,
-    Database,
-    HardDrive,
-    KeyRound,
-    Mail,
-    MapPin,
-    MemoryStick,
-    Server,
-    ShieldCheck,
-    TerminalSquare,
-    UserRound,
-} from "lucide-react";
+import { CloudCog, Container, Database, HardDrive, MemoryStick, Server } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
@@ -145,243 +129,79 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     const server = getServerForRole(serverId, role);
     if (!server) redirect("/servers");
 
-    const isPremium = server.plan === "Premium";
-    const isFleetView = hasServerFleetAccess(role);
-
-    return (
-        <main className="min-h-svh bg-background">
-            <header className="border-b border-white/10 bg-surface">
-                <div className="site-container flex min-h-18 items-center justify-between gap-4 py-3">
-                    <Link
-                        href="/servers"
-                        className="inline-flex items-center gap-2 font-label text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted transition-colors hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                    >
-                        <ArrowLeft aria-hidden="true" className="size-4" />
-                        All servers
-                    </Link>
-                    <div className="flex items-center gap-2 text-gold">
-                        <CloudCog aria-hidden="true" className="size-5" />
-                        <span className="font-label text-xs font-semibold uppercase tracking-[0.18em]">
-                            Management console
-                        </span>
-                    </div>
-                </div>
-            </header>
-
-            <div className="site-container py-10 sm:py-14">
-                <section className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end" aria-labelledby="server-heading">
-                    <div>
-                        <div className="flex flex-wrap items-center gap-3">
-                            <p className="font-label text-xs font-semibold uppercase tracking-[0.22em] text-gold">
-                                {server.plan} server
-                            </p>
-                            {isPremium && (
-                                <span className="inline-flex items-center gap-1.5 rounded-sm border border-gold/25 bg-gold/[0.07] px-2 py-1 font-label text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-gold">
-                                    <Crown aria-hidden="true" className="size-3" /> Priority node
-                                </span>
-                            )}
-                        </div>
-                        <h1 id="server-heading" className="mt-3 font-display text-4xl font-semibold text-foreground sm:text-5xl">
-                            {server.name}
-                        </h1>
-                        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-foreground-muted">
-                            <span className="inline-flex items-center gap-1.5">
-                                <MapPin aria-hidden="true" className="size-4 text-gold-muted" /> {server.location}
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                                <Server aria-hidden="true" className="size-4 text-gold-muted" /> {server.node}
-                            </span>
-                            <span className="font-mono text-xs">{server.version}</span>
-                        </div>
-                    </div>
-
-                    <div className={`flex items-center gap-3 rounded-sm border px-4 py-3 ${isPremium ? "border-gold/25 bg-gold/[0.07]" : "border-white/10 bg-surface"}`}>
-                        {isPremium ? (
-                            <Crown aria-hidden="true" className="size-5 text-gold" />
-                        ) : (
-                            <ShieldCheck aria-hidden="true" className="size-5 text-foreground-muted" />
-                        )}
-                        <div>
-                            <p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted">Active package</p>
-                            <p className="mt-0.5 font-display text-xl font-semibold text-foreground">{server.plan}</p>
-                        </div>
-                    </div>
-                </section>
-
-                {isFleetView && (
-                    <section className="mt-8 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="account-assignment-heading">
-                        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                            <div className="flex items-start gap-3">
-                                <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-gold/25 bg-gold/10 text-gold">
-                                    <UserRound aria-hidden="true" className="size-4" />
-                                </span>
-                                <div>
-                                    <p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-foreground-muted">
-                                        Assigned account
-                                    </p>
-                                    <h2 id="account-assignment-heading" className="mt-1 font-display text-2xl font-semibold text-foreground">
-                                        {server.assignedAccount.displayName}
-                                    </h2>
-                                </div>
-                            </div>
-                            <dl className="grid gap-4 sm:grid-cols-2 lg:min-w-150">
-                                <div>
-                                    <dt className="flex items-center gap-1.5 font-label text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-foreground-dim">
-                                        <Mail aria-hidden="true" className="size-3.5" /> Account email
-                                    </dt>
-                                    <dd className="mt-1 break-all text-sm text-foreground-muted">{server.assignedAccount.email}</dd>
-                                </div>
-                                <div>
-                                    <dt className="flex items-center gap-1.5 font-label text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-foreground-dim">
-                                        <KeyRound aria-hidden="true" className="size-3.5" /> Account ID
-                                    </dt>
-                                    <dd className="mt-1 break-all font-mono text-xs text-foreground-muted">{server.assignedAccount.id}</dd>
-                                </div>
-                            </dl>
-                        </div>
-                    </section>
-                )}
-
-                <div className="mt-8 flex gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3.5 text-sm text-foreground-muted">
-                    <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
-                    <p>
-                        <strong className="font-semibold text-foreground">Preview environment.</strong>{" "}
-                        The VPS control plane is not connected yet. Resource readings, status changes, and logs below are safe local placeholders.
-                    </p>
-                </div>
-
-                <section className="mt-8 grid gap-3 sm:grid-cols-3" aria-label="Server resources">
-                    <ResourceCard icon={MemoryStick} label="Memory" value={server.memory} />
-                    <ResourceCard icon={HardDrive} label="Storage" value={server.storage} />
-                    <ResourceCard icon={Database} label="Backups" value={server.backups} />
-                </section>
-
-                {isPremium && (
-                    <section className="mt-4 rounded-sm border border-gold/20 bg-[linear-gradient(100deg,rgba(170,151,96,0.09),rgba(17,18,15,0.45))] px-5 py-4" aria-label="Premium server benefits">
-                        <div className="flex items-start gap-3">
-                            <Crown aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-gold" />
-                            <div>
-                                <h2 className="font-display text-xl font-semibold text-foreground">Premium management</h2>
-                                <p className="mt-1 text-sm leading-6 text-foreground-muted">
-                                    This preview includes a priority node, increased resources, and more frequent backup scheduling.
-                                </p>
-                            </div>
-                        </div>
-                    </section>
-                )}
-
-                <div className="mt-6">
-                    <ServerControlPanel
-                        initialLogs={[...server.logs]}
-                        initialStatus={server.status}
-                        restartSchedule={server.restartSchedule}
-                        serverName={server.name}
-                    />
-                </div>
-            </div>
-        </main>
-    );
+    return <ServerManagementWorkspace
+        name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.name}</h1>}
+        summary={<>{server.plan} · {server.location} · Preview</>}
+        notice="Preview server. The control plane is not connected; server actions are unavailable."
+    >
+        <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><UnavailableServerConsole /></ServerConsoleWorkspace></ServerWorkspacePanel>
+        <UnavailableFileWorkspaces />
+        <ServerWorkspacePanel section="Settings">
+            <ServerSettingsPanel name={server.name} />
+            <section className="grid gap-3 sm:grid-cols-3" aria-label="Server information">
+                <ResourceCard icon={MemoryStick} label="Memory" value={server.memory} />
+                <ResourceCard icon={HardDrive} label="Storage" value={server.storage} />
+                <ResourceCard icon={Server} label="Version" value={server.version} />
+            </section>
+            {hasServerFleetAccess(role) && <section className="rounded-lg border border-white/10 bg-surface p-5">
+                <h2 className="text-base font-semibold">Assigned account</h2>
+                <p>{server.assignedAccount.displayName}</p>
+                <p className="break-all text-sm text-foreground-muted">{server.assignedAccount.email}</p>
+                <p className="break-all font-mono text-xs text-foreground-muted">{server.assignedAccount.id}</p>
+            </section>}
+        </ServerWorkspacePanel>
+    </ServerManagementWorkspace>;
 }
 
-function ManagedServerManagementPage({
-    userId,
-    accessToken,
-    server,
-}: {
-    userId: string;
-    accessToken: string;
-    server: MyServerSummary;
+function UnavailableFileWorkspaces() {
+    return <>
+        <ServerWorkspacePanel section="Backups"><UnavailableServerPanel title="Backups" actions={["Create backup", "Restore backup"]} /></ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Save & config">
+            <ServerSaveConfigPanels />
+        </ServerWorkspacePanel>
+    </>;
+}
+
+function ManagedServerManagementPage({ userId, accessToken, server }: {
+    userId: string; accessToken: string; server: MyServerSummary;
 }) {
-    return (
-        <main className="min-h-svh bg-background">
-            <header className="border-b border-white/10 bg-surface">
-                <div className="site-container flex min-h-18 items-center justify-between gap-4 py-3">
-                    <Link
-                        href="/servers"
-                        className="inline-flex items-center gap-2 font-label text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted transition-colors hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                    >
-                        <ArrowLeft aria-hidden="true" className="size-4" />
-                        All servers
-                    </Link>
-                    <div className="flex items-center gap-2 text-gold">
-                        <CloudCog aria-hidden="true" className="size-5" />
-                        <span className="font-label text-xs font-semibold uppercase tracking-[0.18em]">
-                            Management console
-                        </span>
-                    </div>
-                </div>
-            </header>
-
-            <div className="site-container py-10 sm:py-14">
-                <section className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end" aria-labelledby="server-heading">
-                    <div>
-                        <p className="font-label text-xs font-semibold uppercase tracking-[0.22em] text-gold">
-                            Managed server
-                        </p>
-                        <h1 id="server-heading" className="mt-3 font-display text-4xl font-semibold text-foreground sm:text-5xl">
-                            {server.displayName}
-                        </h1>
-                        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-foreground-muted">
-                            <span className="inline-flex items-center gap-1.5">
-                                <MapPin aria-hidden="true" className="size-4 text-gold-muted" />
-                                {formatManagedValue(server.friendlyRegion)}
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                                <Container aria-hidden="true" className="size-4 text-gold-muted" />
-                                Game container
-                            </span>
-                        </div>
-                    </div>
-
-                    <CopyJoinButton
-                        address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
-                        disabled={server.observedGameState !== "running"}
-                    />
-                    <div className="flex items-center gap-3 rounded-sm border border-gold/25 bg-gold/[0.07] px-4 py-3">
-                        <ShieldCheck aria-hidden="true" className="size-5 text-gold" />
-                        <div>
-                            <p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted">
-                                Management access
-                            </p>
-                            <p className="mt-0.5 font-display text-xl font-semibold text-foreground">
-                                {managedAccessLabels[server.accessRole]}
-                            </p>
-                        </div>
-                    </div>
-                </section>
-
-                <ServerVisibilitySetting
-                    serverId={server.serverId}
-                    visibility={server.visibility}
-                    accessRole={server.accessRole}
-                    expectedUpdatedAt={server.updatedAt}
-                />
-
-                <section className="mt-8 grid gap-3 sm:grid-cols-3" aria-label="Server status">
-                    <ResourceCard icon={Container} label="Game state" value={formatManagedValue(server.observedGameState)} />
-                    <ResourceCard icon={CloudCog} label="Lifecycle" value={formatManagedValue(server.operationState)} />
-                    <ResourceCard icon={Database} label="Release channel" value={formatManagedValue(server.releaseChannel)} />
-                </section>
-
-                <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
-            </div>
-        </main>
-    );
+    return <ServerManagementWorkspace
+        name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.displayName}</h1>}
+        address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
+        visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} />}
+        summary={<>{formatManagedValue(server.observedGameState)} · {formatManagedValue(server.friendlyRegion)} · {managedAccessLabels[server.accessRole]}</>}
+        status={<section className="grid gap-3 sm:grid-cols-3" aria-label="Server status">
+            <ResourceCard icon={Container} label="Game state" value={formatManagedValue(server.observedGameState)} />
+            <ResourceCard icon={CloudCog} label="Lifecycle" value={formatManagedValue(server.operationState)} />
+            <ResourceCard icon={Database} label="Release channel" value={formatManagedValue(server.releaseChannel)} />
+        </section>}
+    >
+        <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
+        <ServerWorkspacePanel section="Settings">
+            <ServerSettingsPanel name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
+        </ServerWorkspacePanel>
+    </ServerManagementWorkspace>;
 }
 
 function ManagedServerSections({
     userId,
     accessToken,
     server,
+    hasLiveConsole = false,
 }: {
     userId: string;
     accessToken: string;
     server: MyServerSummary;
+    hasLiveConsole?: boolean;
 }) {
     return (
         <ManagedServerPollingProvider>
-            <ManagedServerLifecycleSection server={server} />
-            <Suspense fallback={<ManagedServerBackupsSkeleton />}>
+            <ServerWorkspacePanel section="Console">
+                {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : <ServerConsoleWorkspace>
+                    <UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} />
+                </ServerConsoleWorkspace>}
+            </ServerWorkspacePanel>
+            <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
                 <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
             </Suspense>
         </ManagedServerPollingProvider>
@@ -390,18 +210,7 @@ function ManagedServerSections({
 
 function ManagedServerLifecycleSection({ server }: { server: MyServerSummary }) {
     return (
-        <section id="server-lifecycle" className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-lifecycle-heading">
-            <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
-                Lifecycle
-            </p>
-            <h2 id="server-lifecycle-heading" className="mt-2 font-display text-2xl font-semibold text-foreground sm:text-3xl">
-                Server controls
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
-                Current state: <strong className="font-semibold text-foreground">{formatManagedValue(server.operationState)}</strong>.
-                Disruptive operations require confirmation and may wait for backups or other durable work to finish.
-            </p>
-            <div className="mt-5">
+        <section id="server-lifecycle" aria-label="Server controls">
                 <ManagedServerControls
                     serverId={server.serverId}
                     displayName={server.displayName}
@@ -409,7 +218,6 @@ function ManagedServerLifecycleSection({ server }: { server: MyServerSummary }) 
                     operationState={server.operationState}
                     expectedUpdatedAt={server.updatedAt}
                 />
-            </div>
         </section>
     );
 }
@@ -451,7 +259,7 @@ async function ManagedServerBackupsSection({
 
 function ManagedServerBackupsSkeleton() {
     return (
-        <section className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-busy="true" aria-label="Loading saves, configs and backups">
+        <section className="rounded-lg border border-white/10 bg-surface p-5 sm:p-6" aria-busy="true" aria-label="Loading saves, configs and backups">
             <div className="h-3 w-28 animate-pulse bg-white/10" />
             <div className="mt-3 h-8 w-64 max-w-full animate-pulse bg-white/10" />
             <div className="mt-5 h-20 animate-pulse border border-white/10 bg-white/[0.02]" />
@@ -507,94 +315,29 @@ async function LiveServerManagementPage({
         }
     }
 
-    return (
-        <main className="min-h-svh bg-background">
-            <header className="border-b border-white/10 bg-surface">
-                <div className="site-container flex min-h-18 items-center justify-between gap-4 py-3">
-                    <Link
-                        href="/servers"
-                        className="inline-flex items-center gap-2 font-label text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted transition-colors hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                    >
-                        <ArrowLeft aria-hidden="true" className="size-4" />
-                        All servers
-                    </Link>
-                    <div className="flex items-center gap-2 text-gold">
-                        <CloudCog aria-hidden="true" className="size-5" />
-                        <span className="font-label text-xs font-semibold uppercase tracking-[0.18em]">
-                            Management console
-                        </span>
-                    </div>
-                </div>
-            </header>
-
-            <div className="site-container py-10 sm:py-14">
-                <section className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end" aria-labelledby="server-heading">
-                    <div>
-                        <div className="flex flex-wrap items-center gap-3">
-                            <p className="font-label text-xs font-semibold uppercase tracking-[0.22em] text-gold">
-                                Live dedicated server
-                            </p>
-                            <span className="inline-flex items-center gap-1.5 rounded-sm border border-gold/25 bg-gold/[0.07] px-2 py-1 font-label text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-gold">
-                                <TerminalSquare aria-hidden="true" className="size-3" /> Production console
-                            </span>
-                        </div>
-                        <EditableServerName
-                            key={server.name}
-                            canEdit={accessLevel === "admin" || accessLevel === "owner"}
-                            initialName={server.name}
-                            serverId={server.id}
-                        />
-                        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-foreground-muted">
-                            <span className="inline-flex items-center gap-1.5">
-                                <MapPin aria-hidden="true" className="size-4 text-gold-muted" />
-                                <span className="font-mono text-xs">{server.address}</span>
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                                <Server aria-hidden="true" className="size-4 text-gold-muted" /> {server.provider}
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                                <Container aria-hidden="true" className="size-4 text-gold-muted" /> Docker container
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 rounded-sm border border-gold/25 bg-gold/[0.07] px-4 py-3">
-                        <ShieldCheck aria-hidden="true" className="size-5 text-gold" />
-                        <div>
-                            <p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted">
-                                Management access
-                            </p>
-                            <p className="mt-0.5 font-display text-xl font-semibold text-foreground">
-                                {accessLabels[accessLevel]}
-                            </p>
-                        </div>
-                    </div>
-                </section>
-
-                <div className="mt-8 flex gap-3 border-l-2 border-red-400 bg-red-500/[0.07] px-4 py-3.5 text-sm leading-6 text-foreground-muted">
-                    <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-red-300" />
-                    <p>
-                        <strong className="font-semibold text-foreground">Protected production access.</strong>{" "}
-                        Controls and commands affect the live Bannerlord process immediately. The gateway revalidates your server access and targets only the registered container.
-                    </p>
-                </div>
-
-                <section className="mt-8 grid gap-3 sm:grid-cols-3" aria-label="Server resources">
-                    <ResourceCard icon={MapPin} label="Endpoint" value={server.address} />
-                    <ResourceCard icon={Server} label="Provider" value={server.provider} />
-                    <ResourceCard icon={Container} label="Node" value={server.nodeId} />
-                </section>
-
-                {managedServer !== null && accessToken !== null && (
-                    <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} />
-                )}
-
-                {canManageAssignments && (
-                    <section id="server-access" className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-access-heading">
-                        <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
-                            Delegated management
-                        </p>
-                        <h2 id="server-access-heading" className="mt-2 font-display text-2xl font-semibold text-foreground sm:text-3xl">
+    return <ServerManagementWorkspace
+        name={<EditableServerName key={server.name} canEdit={canManageAssignments} initialName={server.name} serverId={server.id} />}
+        address={server.address}
+        visibility={managedServer !== null
+            ? <ServerVisibilitySetting serverId={managedServer.serverId} visibility={managedServer.visibility} accessRole={managedServer.accessRole} expectedUpdatedAt={managedServer.updatedAt} />
+            : <button disabled className="ml-auto min-h-10 rounded-md border border-white/15 px-3 text-sm text-foreground-muted opacity-50">Visibility unavailable</button>}
+        summary={<>{server.provider} · {accessLabels[accessLevel]} · Live dedicated server</>}
+        initialSection={accessError || accessUpdated ? "Settings" : "Console"}
+        notice="Protected production access. Controls and commands affect the live Bannerlord process immediately. The gateway revalidates your server access."
+    >
+        <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><LiveServerConsole gatewayUrl={getConsoleGatewayUrl()} serverId={server.id} /></ServerConsoleWorkspace></ServerWorkspacePanel>
+        {managedServer !== null && accessToken !== null
+            ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
+            : <UnavailableFileWorkspaces />}
+        <ServerWorkspacePanel section="Settings">
+            <ServerSettingsPanel name={server.name} renameServerId={canManageAssignments ? server.id : undefined} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} visibilityAccess={managedServer ? { serverId: managedServer.serverId, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} />
+            <section className="grid gap-3 sm:grid-cols-2" aria-label="Server information">
+                <ResourceCard icon={Server} label="Provider" value={server.provider} />
+                <ResourceCard icon={Container} label="Node" value={server.nodeId} />
+            </section>
+            {canManageAssignments && (
+                    <section id="server-access" className="rounded-lg border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-access-heading">
+                        <h2 id="server-access-heading" className="text-base font-semibold text-foreground">
                             Server access
                         </h2>
                         <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
@@ -622,16 +365,8 @@ async function LiveServerManagementPage({
                         />
                     </section>
                 )}
-
-                <div className="mt-6">
-                    <LiveServerConsole
-                        gatewayUrl={getConsoleGatewayUrl()}
-                        serverId={server.id}
-                    />
-                </div>
-            </div>
-        </main>
-    );
+        </ServerWorkspacePanel>
+    </ServerManagementWorkspace>;
 }
 
 function formatManagedValue(value: string) {

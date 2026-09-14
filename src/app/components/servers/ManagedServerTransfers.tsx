@@ -1,7 +1,8 @@
 "use client";
 
+import { ServerSaveConfigPanels, fileButtonClass } from "./ServerSaveConfigPanels";
 import { strToU8, zipSync } from "fflate";
-import { Download, Upload, FileText, SlidersHorizontal, Info, X, LoaderCircle } from "lucide-react";
+import { Download, Upload, Info, X, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { checkManagedServerFile, downloadManagedServerSave, exportManagedServerConfig, submitManagedServerFile } from "@/app/servers/managed-server-file-actions";
@@ -13,7 +14,7 @@ type Intent = {
     action: "import-save" | "export-save" | "import-config";
     fingerprints: string[]; displayName: string; saveId: string | null; configPart?: ConfigurationPart;
 };
-const buttonClass = "inline-flex min-h-10 items-center justify-center gap-2 border border-gold/35 bg-gold/[0.07] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim";
+const buttonClass = fileButtonClass;
 const inputClass = "mt-2 block w-full min-w-0 border border-white/15 bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
 
 export function readFileIntent(value: string | null, serverId: string): Intent | null {
@@ -226,25 +227,18 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
         });
     }
 
-    return <div className="mt-5">
-        <div className="grid gap-4 lg:grid-cols-2">
-            <div className="min-w-0 border border-white/10 p-4 sm:p-5">
-                <h3 className="flex items-center gap-3 font-display text-xl font-semibold"><FileText aria-hidden className="size-5 text-gold" />Campaign save</h3>
-                <p className="mt-2 max-w-lg text-sm leading-6 text-foreground-muted">Add a separate campaign from your computer, or download the current campaign’s latest completed save and its companion data.</p>
-                {status?.activeSave && <p className="mt-2 truncate text-xs text-foreground-muted">Current campaign: <span className="text-foreground">{status.activeSave.displayName}</span></p>}
-                <div className="mt-4 flex flex-wrap gap-3">
-                    <button className={buttonClass} disabled={blocked || !canTransferSave} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />Import save</button>
-                    <button className={buttonClass} disabled={blocked || !status?.activeSave || !["running", "stopped", "awaiting-save"].includes(status.operationState)} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />Export save</button>
-                </div>
-                {status && !canTransferSave && <p className="mt-3 text-xs leading-5 text-foreground-muted">Export works while the server is running. Stop the server before adding an imported campaign; your current campaign will stay selected.</p>}
-            </div>
-            <div className="min-w-0 border border-white/10 p-4 sm:p-5">
-                <h3 className="flex items-center gap-3 font-display text-xl font-semibold"><SlidersHorizontal aria-hidden className="size-5 text-gold" />Server configuration</h3>
-                <p className="mt-2 max-w-lg text-sm leading-6 text-foreground-muted">Download a ZIP containing server-config.json and mod-config.json, or import either file individually.</p>
-                <p className="mt-2 text-xs text-foreground-muted">Passwords and campaign paths are excluded.</p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                    <button className={buttonClass} disabled={blocked || !canImportConfig} onClick={() => openImport("import-config")}><Upload aria-hidden className="size-4" />Import config</button>
-                    <button className={buttonClass} disabled={blocked} onClick={() => startTransition(async () => {
+    return <div>
+        <ServerSaveConfigPanels
+            saveName={status ? status.activeSave?.displayName ?? "No active campaign save" : undefined}
+            configuration={status?.managedConfig}
+            saveActions={<>
+                <button className={buttonClass} disabled={blocked || !status?.activeSave || !["running", "stopped", "awaiting-save"].includes(status.operationState)} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />Export save</button>
+                <button className={buttonClass} disabled={blocked || !canTransferSave} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />Import save</button>
+            </>}
+            saveNotice={<p className="mt-3 text-xs leading-5 text-foreground-muted">Export downloads the current campaign’s latest completed save, even while the server is running. Stop the server before adding an imported campaign; your current campaign will stay selected.</p>}
+            configActions={<>
+                <button className={buttonClass} disabled={blocked || !canImportConfig} onClick={() => openImport("import-config")}><Upload aria-hidden className="size-4" />Import config</button>
+                <button className={buttonClass} disabled={blocked} onClick={() => startTransition(async () => {
                         const response = await exportManagedServerConfig(serverId, userId).catch(() => ({ ok: false as const, message: "Configuration download failed. Please try again." }));
                         if (response.ok) {
                             try {
@@ -258,12 +252,14 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
                         }
                         else setMessage(response.message);
                     })}><Download aria-hidden className="size-4" />Export config</button>
-                </div>
-                <p className="mt-3 text-xs leading-5 text-foreground-muted">{canImportConfig ? "After importing, stop and start a running server to use the new settings." : "Only the server owner can import configuration settings."}</p>
-            </div>
-        </div>
+            </>}
+            configNotice={<>
+                <p className="mt-3 text-xs leading-5 text-foreground-muted">Export downloads a ZIP containing server-config.json and mod-config.json. Import either file individually. Passwords and campaign paths are excluded.</p>
+                <p className="mt-2 text-xs leading-5 text-foreground-muted">{canImportConfig ? "After importing, stop and start a running server to use the new settings." : "Only the server owner can import configuration settings."}</p>
+            </>}
+        />
         <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-foreground-muted"><Info aria-hidden className="mt-0.5 size-3.5 shrink-0" />Review each import before confirming any changes.</p>
-        {status === null && <p role="alert" className="mt-3 text-sm text-foreground-muted">File transfers could not be loaded. Refresh the page to try again. Backups remain available below.</p>}
+        {status === null && <p role="alert" className="mt-3 text-sm text-foreground-muted">File transfers could not be loaded. Refresh the page to try again. Backups remain available in the Backups tab.</p>}
         {storageError && <p role="alert" className="mt-3 text-sm text-red-200">Pending transfers could not be saved or recovered in this browser. Transfers are paused to prevent duplicate requests.</p>}
         {message && <p role="status" className="mt-4 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-sm text-foreground-muted">{isPending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{message}</p>}
         {intent && <div className="mt-3 flex flex-wrap gap-3">

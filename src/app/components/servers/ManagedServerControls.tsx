@@ -2,7 +2,7 @@
 
 import { useManagedServerPolling } from "@/app/components/servers/ManagedServerPollingProvider";
 import { operateManagedServer } from "@/app/servers/managed-server-actions";
-import { Power, RotateCw, Square } from "lucide-react";
+import { Play, RotateCw, Square } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 
 const TRANSITIONAL_STATES = new Set([
@@ -94,10 +94,10 @@ export function ManagedServerControls({
 
     return (
         <div className="flex flex-col items-start gap-2">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="grid grid-cols-3 gap-2 sm:flex">
                 <ControlButton
                     label="Start"
-                    icon={Power}
+                    icon={Play}
                     disabled={busy || !canStart}
                     pending={pendingOperation === "start"}
                     onClick={() => requestOperation("start")}
@@ -137,7 +137,7 @@ function ControlButton({
     onClick,
 }: {
     label: string;
-    icon: typeof Power;
+    icon: typeof Play;
     disabled: boolean;
     pending: boolean;
     onClick: () => void;
@@ -147,7 +147,7 @@ function ControlButton({
             type="button"
             disabled={disabled}
             onClick={onClick}
-            className="inline-flex min-h-10 items-center justify-center gap-1.5 border border-gold/35 bg-gold/[0.07] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
+            className="inline-flex min-h-10 items-center justify-center gap-1 rounded-md border border-white/15 bg-white/[0.03] px-2 py-2 text-xs font-medium text-foreground transition hover:border-gold/50 hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 sm:gap-2 sm:px-3 sm:text-sm"
         >
             <Icon aria-hidden="true" className={`size-3.5 ${pending ? "animate-pulse" : ""}`} />
             {pending ? `${label}…` : label}
