@@ -1,4 +1,5 @@
-import { requestMyServersApi } from "./my-servers";
+import { serverLogDownloadHeaders } from "../../../../supabase/functions/_shared/server-log-contract";
+import { requestMyServersApi, myServersEndpoint } from "./my-servers";
 import {
     MAXIMUM_WEB_FILE_RESPONSE_BYTES,
     parseOwnerFileStatus,
@@ -46,4 +47,25 @@ export async function downloadMyServerSave(accessToken: string, serverId: string
             url.searchParams.set("transferRequestId", transferRequestId);
         },
     }));
+}
+
+// Called in the browser: the large file must not pass through a Next server action.
+export async function downloadMyServerLog(accessToken: string, serverId: string) {
+    const { endpoint, publishableKey } = myServersEndpoint();
+    endpoint.searchParams.set("resource", "download-server-log");
+    endpoint.searchParams.set("serverId", serverId);
+    const response = await fetch(endpoint, {
+        headers: { authorization: `Bearer ${accessToken}`, apikey: publishableKey, accept: "application/octet-stream" },
+        cache: "no-store",
+    });
+    if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        if (error?.error?.code === "log_not_found") throw new Error("No .log file was found in this server's logs directory.");
+        if (error?.error?.code === "log_too_large") throw new Error("The latest log exceeds the 100 MiB download limit.");
+        throw new Error("The log could not be downloaded. The server may be unavailable; try again.");
+    }
+    const { filename, byteSize } = serverLogDownloadHeaders(response.headers);
+    const blob = await response.blob();
+    if (blob.size !== byteSize) throw new Error("The log download was incomplete. Try again.");
+    return { filename, blob };
 }

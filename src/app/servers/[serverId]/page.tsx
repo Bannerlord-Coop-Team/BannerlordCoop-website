@@ -198,7 +198,7 @@ function ManagedServerSections({
         <ManagedServerPollingProvider>
             <ServerWorkspacePanel section="Console">
                 {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : <ServerConsoleWorkspace>
-                    <UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} />
+                    <UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} logDownload={{ serverId: server.serverId, userId }} />
                 </ServerConsoleWorkspace>}
             </ServerWorkspacePanel>
             <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
@@ -325,7 +325,7 @@ async function LiveServerManagementPage({
         initialSection={accessError || accessUpdated ? "Settings" : "Console"}
         notice="Protected production access. Controls and commands affect the live Bannerlord process immediately. The gateway revalidates your server access."
     >
-        <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><LiveServerConsole gatewayUrl={getConsoleGatewayUrl()} serverId={server.id} /></ServerConsoleWorkspace></ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><LiveServerConsole gatewayUrl={getConsoleGatewayUrl()} serverId={server.id} logDownload={managedServer ? { serverId: managedServer.serverId, userId } : undefined} /></ServerConsoleWorkspace></ServerWorkspacePanel>
         {managedServer !== null && accessToken !== null
             ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
             : <UnavailableFileWorkspaces />}

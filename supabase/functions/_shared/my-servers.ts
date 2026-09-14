@@ -1,3 +1,4 @@
+import { serverLogDownloadHeaders } from "./server-log-contract.ts";
 import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
 import { parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingRegion } from "./server-onboarding-contract.ts";
@@ -22,7 +23,7 @@ export type MyServersHandlerOptions = {
 };
 
 type UpstreamRequest =
-    | { operation: "server-files"; input: { serverId: string } }
+    | { operation: "server-files" | "my-server-latest-log"; input: { serverId: string } }
     | { operation: "file-transfer-status" | "download-save-export"; input: { serverId: string; transferRequestId: string } }
     | { operation: "file-transfer"; input: OwnerFileMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
@@ -117,11 +118,12 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 redirect: "error",
                 headers: {
                     authorization: `Bearer ${token}`,
+                    ...(upstreamRequest.operation === "my-server-latest-log" ? { accept: "application/octet-stream" } : {}),
                     "content-type": "application/json",
                     "x-request-id": requestId,
                 },
                 body: upstreamBody,
-                signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),
+                signal: upstreamRequest.operation === "my-server-latest-log" ? request.signal : AbortSignal.timeout(upstreamTimeoutMilliseconds),
             });
         } catch {
             return errorResponse(
@@ -132,6 +134,26 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 true,
                 cors,
             );
+        }
+
+        if (upstreamRequest.operation === "my-server-latest-log" && upstream.ok
+            && upstream.headers.get("content-type") === "application/octet-stream") {
+            try { serverLogDownloadHeaders(upstream.headers); }
+            catch {
+                await upstream.body?.cancel();
+                return errorResponse(502, requestId, "invalid_response", "The control plane returned an invalid log download.", false, cors);
+            }
+            // Stream directly; a 100 MiB log cannot be buffered as base64 on the website worker.
+            return new Response(upstream.body, {
+                headers: {
+                    ...cors,
+                    "cache-control": "private, no-store",
+                    "content-type": "application/octet-stream",
+                    "content-disposition": upstream.headers.get("content-disposition")!,
+                    "content-length": upstream.headers.get("content-length")!,
+                    "x-request-id": requestId,
+                },
+            });
         }
 
         let responseBody: string;
@@ -149,6 +171,10 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             }
             if (isRecord(envelope) && envelope.ok === true) {
                 if (!upstream.ok) throw new Error("Inconsistent success status");
+                if (upstreamRequest.operation === "my-server-latest-log") {
+                    if (envelope.result !== null) throw new Error("Expected a binary log response");
+                    return errorResponse(404, requestId, "log_not_found", "No log file was found.", false, cors);
+                }
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
                 if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
                 if (upstreamRequest.operation === "download-save-export") parseOwnerFileDownload(envelope.result);
@@ -201,6 +227,10 @@ function listRequest(request: Request): UpstreamRequest {
         };
     }
 
+    if (resource === "download-server-log") {
+        assertQueryParameters(url, ["resource", "serverId"]);
+        return { operation: "my-server-latest-log", input: { serverId: readServerId(url) } };
+    }
     if (resource === "files") {
         assertQueryParameters(url, ["resource", "serverId"]);
         return { operation: "server-files", input: { serverId: readServerId(url) } };
@@ -391,7 +421,7 @@ function corsHeaders(origin: string) {
         "access-control-allow-headers": "authorization, apikey, content-type, x-client-info, x-request-id",
         "access-control-allow-methods": "GET, POST, OPTIONS",
         "access-control-allow-origin": origin,
-        "access-control-expose-headers": "x-request-id",
+        "access-control-expose-headers": "x-request-id, content-disposition, content-length",
         "access-control-max-age": "600",
         vary: "Origin",
     };
