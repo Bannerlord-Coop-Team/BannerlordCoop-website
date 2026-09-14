@@ -18,7 +18,6 @@ import { listPublicServers } from "@/app/lib/hosting/public-servers";
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
-    CircleAlert,
     Server,
     ShieldCheck,
 } from "lucide-react";
@@ -135,9 +134,6 @@ export default async function ServersPage() {
                         <h1 id="servers-heading" className="mt-3 font-display text-4xl font-semibold text-foreground sm:text-5xl">
                             Servers
                         </h1>
-                        <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground-muted sm:text-base">
-                            Find a public campaign and copy its IP and port to join in-game.
-                        </p>
                     </div>
 
                     <dl className="grid grid-cols-2 border border-white/10 bg-surface">
@@ -145,14 +141,6 @@ export default async function ServersPage() {
                         <DirectoryStat icon={ShieldCheck} label="Online" value={publicServersError ? "—" : onlineServers.length} />
                     </dl>
                 </section>
-
-                <div className="mt-8 flex gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3.5 text-sm text-foreground-muted">
-                    <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
-                    <p>
-                        <strong className="font-semibold text-foreground">Private by default.</strong>{" "}
-                        Only servers published by their owners appear in the public directory. Private servers remain under My Servers for authorized users. Join copies the game IP and port; player counts are not yet available.
-                    </p>
-                </div>
 
                 {user ? <ServerOnboarding userId={user.id} summary={onboarding} websiteSummary={websiteSummary} /> : <MembershipNextStep summary={websiteSummary} />}
 

@@ -39,7 +39,7 @@ export function CopyJoinButton({ address, disabled = false, onCopied }: Props) {
                 {current?.ok ? "Copied!" : "Join"}
             </button>
             <span role="status" className="max-w-64 text-xs text-foreground-muted">
-                {current && (current.ok ? "IP and port copied." : `Could not copy. Copy manually: ${address}`)}
+                {current && !current.ok && `Could not copy. Copy manually: ${address}`}
             </span>
         </div>
     );
