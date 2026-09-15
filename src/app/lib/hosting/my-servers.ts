@@ -170,25 +170,29 @@ export async function requestMyServerOperation(
         body: JSON.stringify(input),
         requestId,
     });
-    if (
-        !isRecord(result)
-        || !hasExactKeys(result, result.outcome === "succeeded"
-            ? ["action", "agentResult", "jobId", "operationId", "outcome"]
-            : ["action", "jobId", "outcome"])
-        || !["enqueued", "existing", "succeeded"].includes(String(result.outcome))
-        || (result.outcome === "succeeded" && (
-            result.operationId !== result.jobId
-            || !isRecord(result.agentResult)
-            || !hasExactKeys(result.agentResult, ["operation", "result"])
-            || !(input.action === "stop" ? ["graceful-stop", "force-stop", "health"]
-                : ["start-game", "health"])
-                .includes(String(result.agentResult.operation))
-            || !isRecord(result.agentResult.result)
-        ))
-        || typeof result.jobId !== "string"
-        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(result.jobId)
-        || result.action !== input.action
-    ) throw invalidResponse();
+    if (!isRecord(result)) throw invalidResponse();
+    if (typeof result.jobId !== "string" || !RESOURCE_ID.test(result.jobId)) throw invalidResponse();
+    if (result.action !== input.action) throw invalidResponse();
+
+    if (result.outcome === "enqueued" || result.outcome === "existing") {
+        if (!hasExactKeys(result, ["action", "jobId", "outcome"])) throw invalidResponse();
+        return { outcome: result.outcome, jobId: result.jobId, action: input.action };
+    }
+
+    if (result.outcome !== "succeeded") throw invalidResponse();
+    if (!hasExactKeys(result, ["action", "agentResult", "jobId", "operationId", "outcome"])) throw invalidResponse();
+    if (result.operationId !== result.jobId) throw invalidResponse();
+
+    const agentResult = result.agentResult;
+    if (!isRecord(agentResult)) throw invalidResponse();
+    if (!hasExactKeys(agentResult, ["operation", "result"])) throw invalidResponse();
+    if (!isRecord(agentResult.result)) throw invalidResponse();
+
+    const allowedOperations = input.action === "stop"
+        ? ["graceful-stop", "force-stop", "health"]
+        : ["start-game", "health"];
+    if (!allowedOperations.includes(String(agentResult.operation))) throw invalidResponse();
+
     return result as MyServerOperationResult;
 }
 
