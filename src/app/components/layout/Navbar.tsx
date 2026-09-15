@@ -5,7 +5,6 @@ import { hasAdminAccess } from "@/app/lib/auth/access";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { Swords } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
 import {DownloadModal} from "@/app/components/home/modulesection/DownloadModal.tsx";
 import { DesktopSideNavigation } from "@/app/components/layout/DesktopSideNavigation";
 
@@ -35,9 +34,9 @@ export async function Navbar() {
                     </Link>
 
                     <nav aria-label="Primary navigation" className="hidden lg:block">
-                        <ul className="flex items-center gap-5 xl:gap-8">
-                            <li>
-                                <Link href="/" className="font-sans text-xs uppercase font-semibold tracking-[0.2em] text-foreground-muted transition-colors duration-300 hover:text-gold focus-visible:outline-none">
+                        <ul className="flex min-h-10 items-center gap-5 xl:gap-8">
+                            <li className="flex items-center">
+                                <Link href="/" className="inline-flex min-h-10 items-center px-2 font-label text-sm font-semibold uppercase leading-none tracking-[0.16em] text-foreground-muted transition-colors duration-300 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                                     Home
                                 </Link>
                             </li>
@@ -48,12 +47,11 @@ export async function Navbar() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     aria-label="Join the Bannerlord Coop Discord server"
-                                    title="Join our Discord"
-                                    className="group inline-flex size-10 items-center justify-center rounded-full transition-colors duration-300 hover:border-gold/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                    className="group inline-flex min-h-10 items-center gap-2 rounded-sm px-2 font-label text-sm font-semibold uppercase leading-none tracking-[0.16em] text-foreground-muted transition-colors duration-300 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                 >
                                     <span
                                         aria-hidden="true"
-                                        className="block size-7 bg-foreground-muted transition-[background-color,transform] duration-300 group-hover:scale-105 group-hover:bg-gold"
+                                        className="block size-6 shrink-0 bg-foreground-muted transition-[background-color,transform] duration-300 group-hover:scale-105 group-hover:bg-gold"
                                         style={{
                                             WebkitMaskImage: "url('/images/discordlogo.svg')",
                                             maskImage: "url('/images/discordlogo.svg')",
@@ -65,15 +63,25 @@ export async function Navbar() {
                                             maskSize: "contain",
                                         }}
                                     />
+
+                                    <span>Discord</span>
                                 </a>
                             </li>
 
-                            <li className="flex items-center gap-3">
-                                <DownloadModal trigger="navbar" />
+                            <DownloadModal trigger="navbar" />
 
-                                {isAuthenticated ? (<ProfileDropdown accountName={accountName}/>) :
-                                    (
-                                    <Link href="/login" className="inline-flex min-h-10 items-center rounded-sm border border-white/20 bg-background/70 px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-foreground transition-colors hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]">
+                            <li className="flex items-center gap-3">
+
+
+                                <span aria-hidden="true" className="h-9 w-0.5 shrink-0 bg-foreground-muted/20"/>
+
+                                {isAuthenticated ? (
+                                    <ProfileDropdown accountName={accountName} />
+                                ) : (
+                                    <Link
+                                        href="/login"
+                                        className="inline-flex min-h-10 items-center rounded-sm bg-background/70 px-3 py-2 font-label text-sm font-semibold uppercase leading-none tracking-[0.16em] text-foreground transition-colors hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5"
+                                    >
                                         Sign in
                                     </Link>
                                 )}
