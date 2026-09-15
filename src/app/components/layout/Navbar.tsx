@@ -5,6 +5,7 @@ import { hasAdminAccess } from "@/app/lib/auth/access";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { Swords } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import {DownloadModal} from "@/app/components/home/modulesection/DownloadModal.tsx";
 import { DesktopSideNavigation } from "@/app/components/layout/DesktopSideNavigation";
 
@@ -36,14 +37,34 @@ export async function Navbar() {
                     <nav aria-label="Primary navigation" className="hidden lg:block">
                         <ul className="flex items-center gap-5 xl:gap-8">
                             <li>
-                                <Link href="/" className="font-sans text-xs uppercase tracking-[0.2em] text-foreground-muted transition-colors duration-300 hover:text-gold focus-visible:outline-none">
+                                <Link href="/" className="font-sans text-xs uppercase font-semibold tracking-[0.2em] text-foreground-muted transition-colors duration-300 hover:text-gold focus-visible:outline-none">
                                     Home
                                 </Link>
                             </li>
 
                             <li>
-                                <a href="https://discord.gg/bannerlordcoop" target="_blank" rel="noopener noreferrer" className="font-sans text-xs uppercase tracking-[0.2em] text-foreground-muted transition-colors hover:text-gold focus-visible:outline-none">
-                                    Discord
+                                <a
+                                    href="https://discord.gg/bannerlordcoop"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label="Join the Bannerlord Coop Discord server"
+                                    title="Join our Discord"
+                                    className="group inline-flex size-10 items-center justify-center rounded-full transition-colors duration-300 hover:border-gold/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                >
+                                    <span
+                                        aria-hidden="true"
+                                        className="block size-7 bg-foreground-muted transition-[background-color,transform] duration-300 group-hover:scale-105 group-hover:bg-gold"
+                                        style={{
+                                            WebkitMaskImage: "url('/images/discordlogo.svg')",
+                                            maskImage: "url('/images/discordlogo.svg')",
+                                            WebkitMaskRepeat: "no-repeat",
+                                            maskRepeat: "no-repeat",
+                                            WebkitMaskPosition: "center",
+                                            maskPosition: "center",
+                                            WebkitMaskSize: "contain",
+                                            maskSize: "contain",
+                                        }}
+                                    />
                                 </a>
                             </li>
 
