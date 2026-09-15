@@ -307,30 +307,36 @@ export async function requestMyServersApi(
     } catch {
         throw invalidResponse();
     }
-    if (!isRecord(envelope) || envelope.version !== 1 || envelope.requestId !== requestId || typeof envelope.ok !== "boolean") {
-        throw invalidResponse();
+    if (!isRecord(envelope)) throw invalidResponse();
+    if (envelope.version !== 1) throw invalidResponse();
+    if (envelope.requestId !== requestId) throw invalidResponse();
+    if (typeof envelope.ok !== "boolean") throw invalidResponse();
+    if (envelope.ok !== response.ok) throw invalidResponse();
+
+    if (envelope.ok) {
+        if (!hasExactKeys(envelope, ["ok", "requestId", "result", "version"])) throw invalidResponse();
+        return envelope.result;
     }
-    if (!envelope.ok) {
-        const error = envelope.error;
-        if (
-            response.ok
-            || !hasExactKeys(envelope, ["error", "ok", "requestId", "version"])
-            || !isRecord(error)
-            || !hasExactKeys(error, error.operationId === undefined
-                ? ["code", "message", "retryable"] : ["code", "message", "operationId", "retryable"])
-            || (error.operationId !== undefined && (typeof error.operationId !== "string" || !REQUEST_ID.test(error.operationId)))
-            || typeof error.code !== "string"
-            || !SAFE_ERROR_CODE.test(error.code)
-            || typeof error.message !== "string"
-            || error.message.length < 1
-            || error.message.length > 512
-            || /[\p{Cc}\p{Cf}]/u.test(error.message)
-            || typeof error.retryable !== "boolean"
-        ) throw invalidResponse();
-        throw new MyServersApiError(error.code, error.message, error.retryable, error.operationId as string | undefined);
-    }
-    if (!response.ok || !hasExactKeys(envelope, ["ok", "requestId", "result", "version"])) throw invalidResponse();
-    return envelope.result;
+
+    if (!hasExactKeys(envelope, ["error", "ok", "requestId", "version"])) throw invalidResponse();
+    const error = envelope.error;
+    if (!isRecord(error)) throw invalidResponse();
+
+    const errorKeys = error.operationId === undefined
+        ? ["code", "message", "retryable"]
+        : ["code", "message", "operationId", "retryable"];
+    if (!hasExactKeys(error, errorKeys)) throw invalidResponse();
+
+    const { code, message, retryable, operationId } = error;
+    if (typeof code !== "string" || !SAFE_ERROR_CODE.test(code)) throw invalidResponse();
+    if (typeof message !== "string") throw invalidResponse();
+    if (message.length < 1 || message.length > 512) throw invalidResponse();
+    if (/[\p{Cc}\p{Cf}]/u.test(message)) throw invalidResponse();
+    if (typeof retryable !== "boolean") throw invalidResponse();
+    if (operationId !== undefined && typeof operationId !== "string") throw invalidResponse();
+    if (operationId !== undefined && !REQUEST_ID.test(operationId)) throw invalidResponse();
+
+    throw new MyServersApiError(code, message, retryable, operationId);
 }
 
 function myServersEndpoint() {
