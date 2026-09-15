@@ -115,6 +115,10 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             endpoint = new URL(`/api/v1/${command}`, controlPlaneEndpoint);
             upstreamBody = JSON.stringify({ serverId: upstreamRequest.input.serverId });
         }
+        if (upstreamRequest.operation === "my-server-latest-log") {
+            endpoint = new URL("/api/v1/logs/latest", controlPlaneEndpoint);
+            upstreamBody = JSON.stringify({ serverId: upstreamRequest.input.serverId });
+        }
         let upstream: Response;
         try {
             upstream = await fetchImplementation(endpoint, {
@@ -155,6 +159,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     "content-type": "application/octet-stream",
                     "content-disposition": upstream.headers.get("content-disposition")!,
                     "content-length": upstream.headers.get("content-length")!,
+                    "x-content-type-options": "nosniff",
                     "x-request-id": requestId,
                 },
             });
@@ -178,8 +183,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             if (isRecord(envelope) && envelope.ok === true) {
                 if (!upstream.ok) throw new Error("Inconsistent success status");
                 if (upstreamRequest.operation === "my-server-latest-log") {
-                    if (envelope.result !== null) throw new Error("Expected a binary log response");
-                    return errorResponse(404, requestId, "log_not_found", "No log file was found.", false, cors);
+                    throw new Error("Expected a binary log response");
                 }
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
                 if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
