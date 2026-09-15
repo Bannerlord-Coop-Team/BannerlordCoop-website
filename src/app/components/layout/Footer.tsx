@@ -50,12 +50,12 @@ export function Footer() {
                         <Link
                             href="/"
                             aria-label="Bannerlord Coop home"
-                            className="inline-flex max-w-full items-center gap-3 text-foreground transition-colors duration-300 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-background"
+                            className="inline-flex max-w-full items-center gap-1 text-foreground transition-colors duration-300 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-background"
                         >
-                            <span className="flex size-10 items-center justify-center border border-gold/35 text-gold">
+                            <span className="flex size-10 items-center justify-center text-gold">
                                 <Swords
                                     aria-hidden="true"
-                                    className="size-5"
+                                    className="size-6"
                                     strokeWidth={1.5}
                                 />
                             </span>

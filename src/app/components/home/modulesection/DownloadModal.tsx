@@ -90,7 +90,7 @@ export function DownloadModal({trigger = "section"} : DownloadModalProps) {
                 onClick={() => setIsOpen(true)}
                 className={trigger === "navbar"
                     ? "inline-flex min-h-9 items-center gap-1.5 rounded-sm border border-crimson/30 bg-crimson/30 px-2.5 py-1.5 font-label text-sm uppercase leading-none tracking-[0.16em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-3"
-                    : "inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-sm border border-crimson bg-crimson px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-white transition-colors duration-300 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-13 sm:w-auto sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
+                    : "inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-sm border border-crimson/30 bg-crimson/30 px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-white transition-colors duration-300 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-13 sm:w-auto sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
                 }>
 
                 <Download aria-hidden="true" className={`${trigger === "navbar" ? "size-3.5" : "size-4"} shrink-0`} strokeWidth={1.75}/>
