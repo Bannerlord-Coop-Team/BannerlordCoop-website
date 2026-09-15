@@ -1,5 +1,7 @@
 "use client";
 
+import { DownloadServerLogButton } from "./DownloadServerLogButton";
+
 import {
     containerOperationConfirmations,
     containerOperationLabels,
@@ -8,7 +10,7 @@ import {
     LiveServerOperationButtons,
 } from "@/app/components/servers/LiveServerOperationButtons";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
-import { ArrowUpRight, ChevronDown, Download, LoaderCircle, Plug, Unplug } from "lucide-react";
+import { ArrowUpRight, ChevronDown, LoaderCircle, Plug, Unplug } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm font-medium text-foreground transition hover:border-gold/50 hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
@@ -139,7 +141,9 @@ function decodeOutput(
 export function LiveServerConsole({
     gatewayUrl,
     serverId,
+    logDownload,
 }: {
+    logDownload?: { serverId: string; userId: string };
     gatewayUrl: string | null;
     serverId: string;
 }) {
@@ -445,14 +449,7 @@ export function LiveServerConsole({
     return <section className="min-w-0 rounded-lg border border-white/10 bg-surface" aria-labelledby="container-console-heading">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
             <h2 id="container-console-heading" className="text-base font-semibold">Console</h2>
-            <button type="button" disabled={!output} className={`${button} !border-transparent !bg-transparent !text-foreground-muted hover:!text-foreground`} onClick={() => {
-                const url = URL.createObjectURL(new Blob([output], { type: "text/plain" }));
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = `${serverId}-console.txt`;
-                link.click();
-                window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-            }}><Download className="size-4" aria-hidden="true" />Download logs</button>
+            <DownloadServerLogButton {...logDownload} className={`${button} !border-transparent !bg-transparent !text-foreground-muted hover:!text-foreground`} />
         </div>
         <div className="border-b border-white/10 px-5 py-3">
             <LiveServerOperationButtons controlsReady={controlsReady} onOperation={requestOperation} pendingOperation={pendingOperation} />
