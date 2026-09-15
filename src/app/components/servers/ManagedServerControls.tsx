@@ -3,7 +3,7 @@
 import { useManagedServerPolling } from "@/app/components/servers/ManagedServerPollingProvider";
 import { operateManagedServer } from "@/app/servers/managed-server-actions";
 import { Play, RotateCw, Square } from "lucide-react";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 const TRANSITIONAL_STATES = new Set([
     "provisioning",
@@ -22,7 +22,6 @@ type ManagedServerControlsProps = {
     displayName: string;
     accessRole: "owner" | "manager" | "support" | "admin";
     operationState: string;
-    expectedUpdatedAt: string;
 };
 
 export function ManagedServerControls({
@@ -30,26 +29,13 @@ export function ManagedServerControls({
     displayName,
     accessRole,
     operationState,
-    expectedUpdatedAt,
 }: ManagedServerControlsProps) {
     const [isPending, startTransition] = useTransition();
     const [pendingOperation, setPendingOperation] = useState<Operation | null>(null);
     const [message, setMessage] = useState("");
-    const { session: pollingSession, beginPolling, endPolling } = useManagedServerPolling();
+    const { session: pollingSession } = useManagedServerPolling();
     const canOperate = accessRole === "owner" || accessRole === "manager";
     const stateIsTransitional = TRANSITIONAL_STATES.has(operationState);
-
-    useEffect(() => {
-        if (
-            pollingSession === null
-            || pollingSession.serverId !== serverId
-            || pollingSession.statusSource !== "server"
-            || stateIsTransitional
-            || expectedUpdatedAt === pollingSession.initialUpdatedAt
-        ) return;
-        const timeout = window.setTimeout(() => endPolling(serverId), 0);
-        return () => window.clearTimeout(timeout);
-    }, [endPolling, expectedUpdatedAt, pollingSession, serverId, stateIsTransitional]);
 
     if (!canOperate) {
         return (
@@ -66,10 +52,10 @@ export function ManagedServerControls({
 
     function requestOperation(operation: Operation) {
         if (operation === "stop" && !window.confirm(
-            `Stop ${displayName}? Connected players will be disconnected.`,
+            `Stop ${displayName}? Players will be disconnected without a save-flush check or advance warning. Unsaved progress may be lost.`,
         )) return;
         if (operation === "restart-game" && !window.confirm(
-            `Restart ${displayName}? Connected players will be disconnected briefly.`,
+            `Restart ${displayName}? Players will be disconnected without a save-flush check or advance warning. Unsaved progress may be lost.`,
         )) return;
 
         setMessage("");
@@ -79,14 +65,10 @@ export function ManagedServerControls({
                 const result = await operateManagedServer({
                     serverId,
                     action: operation,
-                    expectedUpdatedAt,
-                    requestId: crypto.randomUUID(),
                 });
                 setMessage(result.message);
-                if (result.ok) beginPolling(serverId, expectedUpdatedAt, result.jobId);
-                else if (result.operationId) beginPolling(serverId, expectedUpdatedAt, result.operationId);
             } catch {
-                setMessage("The server operation could not be submitted right now.");
+                setMessage("The command could not be confirmed. It may have executed. Refresh server status before sending another command.");
             } finally {
                 setPendingOperation(null);
             }

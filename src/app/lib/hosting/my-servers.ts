@@ -48,13 +48,7 @@ const BACKUP_JOB_STATES = new Set([
 export type MyServerOperation = "start" | "stop" | "restart-game";
 export type MyServerBackupOperation = "create-backup" | "restore-backup";
 
-export type MyServerOperationResult = {
-    jobId: string;
-    action: MyServerOperation;
-} & (
-    | { outcome: "enqueued" | "existing" }
-    | { outcome: "succeeded"; operationId: string; agentResult: { operation: "start-game" | "graceful-stop" | "force-stop" | "health"; result: Record<string, unknown> } }
-);
+export type MyServerOperationResult = { exitCode: 0 };
 
 export type MyServerBackupOperationResult = {
     outcome: "enqueued" | "existing";
@@ -155,45 +149,17 @@ export async function requestServerVisibility(accessToken: string, input: Visibi
 
 export async function requestMyServerOperation(
     accessToken: string,
-    input: {
-        serverId: string;
-        action: MyServerOperation;
-        expectedUpdatedAt: string;
-    },
-    requestId: string,
+    input: { serverId: string; action: MyServerOperation },
 ): Promise<MyServerOperationResult> {
-    if (!REQUEST_ID.test(requestId)) {
-        throw new MyServersApiError("invalid_request", "The server operation request ID is invalid.");
-    }
+    if (!RESOURCE_ID.test(input.serverId)) throw new MyServersApiError("invalid_request", "The server ID is invalid.");
     const result = await requestMyServersApi(accessToken, {
         method: "POST",
         body: JSON.stringify(input),
-        requestId,
     });
     if (!isRecord(result)) throw invalidResponse();
-    if (typeof result.jobId !== "string" || !RESOURCE_ID.test(result.jobId)) throw invalidResponse();
-    if (result.action !== input.action) throw invalidResponse();
-
-    if (result.outcome === "enqueued" || result.outcome === "existing") {
-        if (!hasExactKeys(result, ["action", "jobId", "outcome"])) throw invalidResponse();
-        return { outcome: result.outcome, jobId: result.jobId, action: input.action };
-    }
-
-    if (result.outcome !== "succeeded") throw invalidResponse();
-    if (!hasExactKeys(result, ["action", "agentResult", "jobId", "operationId", "outcome"])) throw invalidResponse();
-    if (result.operationId !== result.jobId) throw invalidResponse();
-
-    const agentResult = result.agentResult;
-    if (!isRecord(agentResult)) throw invalidResponse();
-    if (!hasExactKeys(agentResult, ["operation", "result"])) throw invalidResponse();
-    if (!isRecord(agentResult.result)) throw invalidResponse();
-
-    const allowedOperations = input.action === "stop"
-        ? ["graceful-stop", "force-stop", "health"]
-        : ["start-game", "health"];
-    if (!allowedOperations.includes(String(agentResult.operation))) throw invalidResponse();
-
-    return result as MyServerOperationResult;
+    if (!hasExactKeys(result, ["exitCode"])) throw invalidResponse();
+    if (result.exitCode !== 0) throw invalidResponse();
+    return { exitCode: 0 };
 }
 
 export async function requestMyServerBackupOperation(

@@ -39,25 +39,35 @@ npx supabase functions deploy my-servers --project-ref <project-ref>
 ```
 
 The `my-servers` function accepts authenticated GET inventory requests and
-strict POST lifecycle requests for Start, Stop, or game-container Restart.
-**My Servers** is an inventory and navigation surface; each durable-access row
-links to `/servers/[serverId]`, where the lifecycle controls are rendered from
-the freshly loaded authoritative summary. The detail route grants no authority
-from the URL: it lists through the authenticated Edge boundary and renders a
-matching server only when that current user can access it. Only current durable
-owner and manager access can enqueue an operation; support and server-level
-admin access remain read-only. Requests carry the current
-exact UTC-millisecond `updatedAt` value, and the control plane derives idempotency
-from the request UUID while rechecking access when the durable job begins.
-After acceptance, one shared page poller disables lifecycle controls and refreshes
-for at most 60 seconds; it stops sooner when the target reaches a newer stable
-state. A manager Stop rejected after its ACL is revoked but before the durable
-mutation boundary performs no external work, while one already beyond that
-boundary finishes safely. Entitlement-revocation and administrative-suspension
-Stops remain deliberate safety continuations. Stop never powers off the VPS, and
+strict POST direct commands `{action: "start" | "stop" | "restart-game", serverId}`.
+**My Servers** links each accessible server to `/servers/[serverId]`. The route
+derives access from the authenticated inventory, never from the URL. Only current
+durable owner/manager access can operate; support and server-level admin remain
+read-only. The control plane rechecks durable permission immediately before dispatch.
+
+The Edge Function maps these actions to fixed `POST /api/v1/start`, `/api/v1/stop`,
+and `/api/v1/restart` routes with only `{serverId}` and the caller's bearer token.
+These commands operate on an existing container. They do not provision, queue a
+job, verify saves, warn players, or wait for game readiness. Stop/Restart require
+UI confirmation warning of unsaved progress loss. A container removed by the old
+safe Stop cannot be recreated by direct Start. Stop never powers off the VPS;
 Restart never becomes a VM reboot.
 
-`CONTROL_PLANE_ADMIN_URL` is the Oracle adapter's HTTPS origin; each function appends its fixed `/v1/admin/control-plane` or `/v1/user/control-plane` path. `CONTROL_PLANE_WEB_ORIGINS` is a comma-separated exact allowlist of HTTPS browser origins. Neither value may contain credentials, query parameters, fragments, or path prefixes. JWT verification remains enabled in `supabase/config.toml`.
+The Edge retains the website's correlated version-1 envelope: success contains
+`result: {exitCode: 0}`; nonzero exit returns HTTP 409 with
+`container_command_failed` and the actual exit code in the bounded error message.
+No stdout/stderr is forwarded. Transport failure means an unknown outcome, not
+proof of non-execution. Each HTTP request is a new command; there is no automatic
+retry, lifecycle polling, or operation ID. The page is revalidated once after a
+response, without claiming readiness. Existing backup polling/interlocks remain.
+
+Before enabling these controls, commission compatible ControlPlane #156 agent,
+controller **and persistent process owner**, allow the three exact direct paths
+through the adapter's HTTPS proxy, and deploy the updated `my-servers` Edge
+Function. Do not bypass the process-owner protocol upgrade gate or fall back to
+the generic lifecycle APIs. This website change performs no deployment.
+
+`CONTROL_PLANE_ADMIN_URL` is the Oracle adapter's HTTPS origin; functions append their fixed API paths (including the three direct command routes above). `CONTROL_PLANE_WEB_ORIGINS` is a comma-separated exact allowlist of HTTPS browser origins. Neither value may contain credentials, query parameters, fragments, or path prefixes. JWT verification remains enabled in `supabase/config.toml`.
 
 The website itself needs only the existing public Supabase URL and publishable key. It does not need an Oracle URL or control-plane credential in Netlify.
 

@@ -34,7 +34,7 @@ type UpstreamRequest =
     | { operation: "server-backup-status"; input: { serverId: string } }
     | {
         operation: "server-operation";
-        input: { serverId: string; action: string; expectedUpdatedAt: string };
+        input: { serverId: string; action: string };
     }
     | { operation: "create-backup"; input: { serverId: string; expectedUpdatedAt: string } }
     | {
@@ -105,14 +105,18 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             return errorResponse(400, requestId, "invalid_request", "The server request is invalid.", false, cors);
         }
 
-        const upstreamBody = JSON.stringify({
-            version: 1,
-            requestId,
-            ...upstreamRequest,
-        });
+        const isDirectCommand = upstreamRequest.operation === "server-operation";
+        let endpoint = controlPlaneEndpoint;
+        let upstreamBody = JSON.stringify({ version: 1, requestId, ...upstreamRequest });
+        if (upstreamRequest.operation === "file-transfer") endpoint = new URL("/v1/user/files", controlPlaneEndpoint);
+        if (upstreamRequest.operation === "server-operation") {
+            const command = upstreamRequest.input.action === "restart-game" ? "restart" : upstreamRequest.input.action;
+            endpoint = new URL(`/api/v1/${command}`, controlPlaneEndpoint);
+            upstreamBody = JSON.stringify({ serverId: upstreamRequest.input.serverId });
+        }
         let upstream: Response;
         try {
-            upstream = await fetchImplementation(upstreamRequest.operation === "file-transfer" ? new URL("/v1/user/files", controlPlaneEndpoint) : controlPlaneEndpoint, {
+            upstream = await fetchImplementation(endpoint, {
                 method: "POST",
                 redirect: "error",
                 headers: {
@@ -143,7 +147,9 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? MAXIMUM_LIST_RESPONSE_BYTES
                     : MAXIMUM_OPERATION_RESPONSE_BYTES,
             );
-            const envelope: unknown = JSON.parse(responseBody);
+            const parsed: unknown = JSON.parse(responseBody);
+            const envelope = isDirectCommand ? directCommandEnvelope(parsed, requestId, upstream.status) : parsed;
+            if (isDirectCommand) responseBody = JSON.stringify(envelope);
             if (!isControlPlaneEnvelope(envelope, requestId)) {
                 throw new Error("Invalid control-plane envelope");
             }
@@ -276,16 +282,14 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
         throw new Error("Invalid server ID");
     }
     if (SERVER_OPERATIONS.has(value.action)) {
-        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {
-            throw new Error("Invalid lifecycle operation");
+        if (!hasExactKeys(value, ["action", "serverId"])) {
+            throw new Error("Invalid direct command");
         }
-        assertExpectedUpdatedAt(value.expectedUpdatedAt);
         return {
             operation: "server-operation",
             input: {
                 serverId: value.serverId,
                 action: value.action,
-                expectedUpdatedAt: value.expectedUpdatedAt as string,
             },
         };
     }
@@ -448,6 +452,40 @@ async function readBoundedText(
         offset += chunk.byteLength;
     }
     return new TextDecoder().decode(bytes);
+}
+
+// Direct routes have no public operation ID; keep the Edge envelope for website callers.
+function directCommandEnvelope(value: unknown, requestId: string, status: number): unknown {
+    if (!isRecord(value)) throw new Error("Invalid command response");
+    // Authentication/admission failures use the adapter's existing versioned envelope.
+    if (value.version !== undefined) {
+        if (value.ok !== false || !isControlPlaneEnvelope(value, requestId)) throw new Error("Invalid command error");
+        return value;
+    }
+    if (typeof value.ok !== "boolean") throw new Error("Invalid command response");
+    if (!value.ok && value.result === undefined) {
+        if (!hasExactKeys(value, ["error", "ok"])) throw new Error("Invalid command error");
+        return { version: 1, requestId, ...value };
+    }
+
+    const keys = value.ok ? ["ok", "result"] : ["error", "ok", "result"];
+    if (!hasExactKeys(value, keys)) throw new Error("Invalid command response");
+    if (!isRecord(value.result)) throw new Error("Invalid command result");
+    if (!hasExactKeys(value.result, ["exitCode"])) throw new Error("Invalid command result");
+    const exitCode = value.result.exitCode;
+    if (typeof exitCode !== "number" || !Number.isInteger(exitCode)) throw new Error("Invalid exit code");
+    if (exitCode < 0 || exitCode > 255) throw new Error("Invalid exit code");
+
+    if (value.ok) {
+        if (status !== 200 || exitCode !== 0) throw new Error("Inconsistent command success");
+        return { version: 1, requestId, ok: true, result: { exitCode } };
+    }
+
+    if (status !== 409 || exitCode === 0) throw new Error("Inconsistent command failure");
+    if (!isRecord(value.error) || value.error.code !== "container_command_failed") throw new Error("Invalid command error");
+    return { version: 1, requestId, ok: false, error: {
+        code: "container_command_failed", message: `The container command failed with exit code ${exitCode}.`, retryable: false,
+    } };
 }
 
 function isControlPlaneEnvelope(value: unknown, requestId: string) {
