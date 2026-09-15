@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const GATEWAY_ORIGIN = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
 
 const nextConfig: NextConfig = {
+    turbopack: {root: process.cwd()},
     experimental: { serverActions: { bodySizeLimit: "22mb" } },
     output: process.env.WORKERS_CI === "1" ? "standalone" : undefined,
     async redirects() {
