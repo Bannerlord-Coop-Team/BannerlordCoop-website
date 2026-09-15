@@ -217,47 +217,6 @@ test("loads a sanitized durable backup-operation status", async () => {
     }
 });
 
-test("submits a correlated strict server operation through the same Edge boundary", async () => {
-    configureEnvironment();
-    let request: Request | undefined;
-    globalThis.fetch = async (input, init) => {
-        request = new Request(input, init);
-        return Response.json({
-            version: 1,
-            requestId: request.headers.get("x-request-id"),
-            ok: true,
-            result: {
-                outcome: "enqueued",
-                jobId: "55555555-5555-4555-8555-555555555555",
-                action: "restart-game",
-            },
-        });
-    };
-
-    try {
-        const result = await requestMyServerOperation(TOKEN, {
-            serverId: FIRST_SERVER.serverId,
-            action: "restart-game",
-            expectedUpdatedAt: FIRST_SERVER.updatedAt,
-        }, "11111111-1111-4111-8111-111111111111");
-        assert.deepEqual(result, {
-            outcome: "enqueued",
-            jobId: "55555555-5555-4555-8555-555555555555",
-            action: "restart-game",
-        });
-        assert.equal(request?.method, "POST");
-        assert.equal(request?.headers.get("content-type"), "application/json");
-        assert.equal(request?.headers.get("x-request-id"), "11111111-1111-4111-8111-111111111111");
-        assert.deepEqual(JSON.parse(await request?.text() ?? "{}"), {
-            serverId: FIRST_SERVER.serverId,
-            action: "restart-game",
-            expectedUpdatedAt: FIRST_SERVER.updatedAt,
-        });
-    } finally {
-        restoreEnvironment();
-    }
-});
-
 test("submits closed create and restore backup operations", async () => {
     configureEnvironment();
     const requests: Request[] = [];
@@ -310,58 +269,14 @@ test("submits closed create and restore backup operations", async () => {
     }
 });
 
-test("rejects an operation response containing additional fields", async () => {
-    configureEnvironment();
-    globalThis.fetch = async (input, init) => {
-        const request = new Request(input, init);
-        return Response.json({
-            version: 1,
-            requestId: request.headers.get("x-request-id"),
-            ok: true,
-            result: {
-                outcome: "enqueued",
-                jobId: "55555555-5555-4555-8555-555555555555",
-                action: "start",
-                providerResourceId: "private-provider-resource",
-            },
-        });
-    };
-
-    try {
-        await assert.rejects(
-            requestMyServerOperation(TOKEN, {
-                serverId: FIRST_SERVER.serverId,
-                action: "start",
-                expectedUpdatedAt: FIRST_SERVER.updatedAt,
-            }, "11111111-1111-4111-8111-111111111111"),
-            (error: unknown) => error instanceof MyServersApiError && error.code === "invalid_response",
-        );
-    } finally {
-        restoreEnvironment();
-    }
-});
-
-test("rejects an invalid lifecycle idempotency request ID before fetch", async () => {
+test("rejects an invalid direct-command server ID before fetch", async () => {
     configureEnvironment();
     let called = false;
-    globalThis.fetch = async () => {
-        called = true;
-        return new Response();
-    };
-
+    globalThis.fetch = async () => { called = true; return new Response(); };
     try {
-        await assert.rejects(
-            requestMyServerOperation(TOKEN, {
-                serverId: FIRST_SERVER.serverId,
-                action: "start",
-                expectedUpdatedAt: FIRST_SERVER.updatedAt,
-            }, "not-a-request-id"),
-            (error: unknown) => error instanceof MyServersApiError && error.code === "invalid_request",
-        );
+        await assert.rejects(requestMyServerOperation(TOKEN, { serverId: "invalid", action: "start" }), { code: "invalid_request" });
         assert.equal(called, false);
-    } finally {
-        restoreEnvironment();
-    }
+    } finally { restoreEnvironment(); }
 });
 
 test("rejects private and malformed backup response data", async () => {
@@ -507,49 +422,46 @@ function restoreVariable(name: string, value: string | undefined) {
     else process.env[name] = value;
 }
 
-test("immediate lifecycle confirmations and durable errors cross the Edge boundary", async () => {
+test("direct commands cross the Edge boundary without lifecycle envelopes or retries", async () => {
     configureEnvironment();
-    const operationId = "55555555-5555-4555-8555-555555555555";
-    const requestId = "11111111-1111-4111-8111-111111111111";
-    let result: unknown;
-    let error: unknown;
+    let body: unknown = { ok: true, result: { exitCode: 0 } };
     let status = 200;
+    const requests: Request[] = [];
     const handler = createMyServersHandler({
         allowedOrigins: ["https://bannerlordcoop.com"],
         controlPlaneUrl: "https://control-plane.example.test",
-        fetchImplementation: async () => Response.json({
-            version: 1, requestId, ok: status === 200,
-            ...(status === 200 ? { result } : { error }),
-        }, { status }),
+        fetchImplementation: async (input, init) => {
+            requests.push(new Request(input, init));
+            return Response.json(body, { status });
+        },
     });
     globalThis.fetch = async (input, init) => handler(new Request(input, init));
     const submit = (action: "start" | "stop" | "restart-game") => requestMyServerOperation(TOKEN, {
-        serverId: FIRST_SERVER.serverId, action, expectedUpdatedAt: FIRST_SERVER.updatedAt,
-    }, requestId);
+        serverId: FIRST_SERVER.serverId, action,
+    });
     try {
-        for (const [action, operation] of [
-            ["start", "start-game"], ["stop", "graceful-stop"], ["stop", "force-stop"],
-            ["start", "health"], ["stop", "health"], ["restart-game", "start-game"], ["restart-game", "health"],
-        ] as const) {
-            result = { outcome: "succeeded", jobId: operationId, operationId, action, agentResult: { operation, result: {} } };
-            assert.deepEqual(await submit(action), result);
+        for (const action of ["start", "stop", "restart-game"] as const) {
+            assert.deepEqual(await submit(action), { exitCode: 0 });
+            const request = requests.at(-1)!;
+            assert.equal(request.url, `https://control-plane.example.test/api/v1/${action === "restart-game" ? "restart" : action}`);
+            assert.equal(request.headers.get("authorization"), `Bearer ${TOKEN}`);
+            assert.deepEqual(await request.json(), { serverId: FIRST_SERVER.serverId });
         }
-        for (const agentOperation of ["graceful-stop", "force-stop"]) {
-            result = { outcome: "succeeded", jobId: operationId, operationId, action: "restart-game", agentResult: { operation: agentOperation, result: {} } };
-            await assert.rejects(submit("restart-game"), { code: "invalid_response" });
+        status = 409;
+        body = { ok: false, result: { exitCode: 125 }, error: { code: "container_command_failed", message: "Failed", retryable: false } };
+        await assert.rejects(submit("restart-game"), { code: "container_command_failed", message: "The container command failed with exit code 125.", retryable: false });
+        assert.equal(requests.length, 4);
+        body = { ok: false, error: { code: "container_command_unavailable", message: "Not confirmed.", retryable: false } };
+        await assert.rejects(submit("start"), { code: "container_command_unavailable", retryable: false });
+        for (const invalid of [
+            { ok: true, result: { exitCode: 1 } },
+            { ok: true, result: { exitCode: 0, stdout: "private" } },
+            { ok: false, result: { exitCode: 256 }, error: { code: "container_command_failed" } },
+            { ok: true, result: { outcome: "succeeded", jobId: "old-lifecycle" } },
+        ]) {
+            body = invalid;
+            status = invalid.ok ? 200 : 409;
+            await assert.rejects(submit("start"), { code: "invalid_response" });
         }
-        for (const code of ["operation_timeout", "worker_busy", "operation_in_progress", "save_flush_failed"]) {
-            status = code === "operation_timeout" ? 504 : 409;
-            error = { code, message: "Operation not confirmed.", retryable: false, operationId };
-            await assert.rejects(submit("start"), (caught: unknown) => {
-                assert.ok(caught instanceof MyServersApiError);
-                assert.equal(caught.code, code);
-                assert.equal(caught.operationId, operationId);
-                assert.equal(caught.retryable, false);
-                return true;
-            });
-        }
-        error = { code: "operation_timeout", message: "Not confirmed.", retryable: false, operationId: "invalid" };
-        await assert.rejects(submit("start"), { code: "invalid_response" });
     } finally { restoreEnvironment(); }
 });
