@@ -21,7 +21,9 @@
     "gateway:migrate-d1": "node nightly-gateway/migrate-d1-to-postgres.mjs",
     "gateway:provision-postgres": "node nightly-gateway/provision-postgres.mjs",
     "test:components": "vitest run",
-    "test:membership:locking": "tsx --test tests/membership-role-postgres.test.ts tests/membership-gotrue.test.ts"
+    "test:membership:locking": "tsx --test tests/membership-role-postgres.test.ts tests/membership-gotrue.test.ts",
+    "test:e2e": "playwright test",
+    "test:performance": "lhci autorun"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "1.20.5",
@@ -38,6 +40,9 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@lhci/cli": "^0.15.1",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.15.5",
@@ -50,7 +55,6 @@
     "tsx": "^4.23.12",
     "typescript": "^5",
     "vitest": "^3.2.7",
-    "wrangler": "4.127.1",
-    "@electric-sql/pglite": "0.5.8"
+    "wrangler": "4.127.1"
   }
 }
