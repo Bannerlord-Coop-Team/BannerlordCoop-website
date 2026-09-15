@@ -49,10 +49,12 @@ export type MyServerOperation = "start" | "stop" | "restart-game";
 export type MyServerBackupOperation = "create-backup" | "restore-backup";
 
 export type MyServerOperationResult = {
-    outcome: "enqueued" | "existing";
     jobId: string;
     action: MyServerOperation;
-};
+} & (
+    | { outcome: "enqueued" | "existing" }
+    | { outcome: "succeeded"; operationId: string; agentResult: { operation: "start-game" | "graceful-stop" | "force-stop" | "health"; result: Record<string, unknown> } }
+);
 
 export type MyServerBackupOperationResult = {
     outcome: "enqueued" | "existing";
@@ -65,6 +67,7 @@ export class MyServersApiError extends Error {
         readonly code: string,
         message: string,
         readonly retryable = false,
+        readonly operationId?: string,
     ) {
         super(message);
         this.name = "MyServersApiError";
@@ -169,8 +172,19 @@ export async function requestMyServerOperation(
     });
     if (
         !isRecord(result)
-        || !hasExactKeys(result, ["action", "jobId", "outcome"])
-        || !["enqueued", "existing"].includes(String(result.outcome))
+        || !hasExactKeys(result, result.outcome === "succeeded"
+            ? ["action", "agentResult", "jobId", "operationId", "outcome"]
+            : ["action", "jobId", "outcome"])
+        || !["enqueued", "existing", "succeeded"].includes(String(result.outcome))
+        || (result.outcome === "succeeded" && (
+            result.operationId !== result.jobId
+            || !isRecord(result.agentResult)
+            || !hasExactKeys(result.agentResult, ["operation", "result"])
+            || !(input.action === "stop" ? ["graceful-stop", "force-stop", "health"]
+                : ["start-game", "health"])
+                .includes(String(result.agentResult.operation))
+            || !isRecord(result.agentResult.result)
+        ))
         || typeof result.jobId !== "string"
         || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(result.jobId)
         || result.action !== input.action
@@ -302,7 +316,9 @@ export async function requestMyServersApi(
             response.ok
             || !hasExactKeys(envelope, ["error", "ok", "requestId", "version"])
             || !isRecord(error)
-            || !hasExactKeys(error, ["code", "message", "retryable"])
+            || !hasExactKeys(error, error.operationId === undefined
+                ? ["code", "message", "retryable"] : ["code", "message", "operationId", "retryable"])
+            || (error.operationId !== undefined && (typeof error.operationId !== "string" || !REQUEST_ID.test(error.operationId)))
             || typeof error.code !== "string"
             || !SAFE_ERROR_CODE.test(error.code)
             || typeof error.message !== "string"
@@ -311,7 +327,7 @@ export async function requestMyServersApi(
             || /[\p{Cc}\p{Cf}]/u.test(error.message)
             || typeof error.retryable !== "boolean"
         ) throw invalidResponse();
-        throw new MyServersApiError(error.code, error.message, error.retryable);
+        throw new MyServersApiError(error.code, error.message, error.retryable, error.operationId as string | undefined);
     }
     if (!response.ok || !hasExactKeys(envelope, ["ok", "requestId", "result", "version"])) throw invalidResponse();
     return envelope.result;
