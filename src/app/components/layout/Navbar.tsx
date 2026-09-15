@@ -6,29 +6,8 @@ import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { Swords } from "lucide-react";
 import Link from "next/link";
 import {DownloadModal} from "@/app/components/home/modulesection/DownloadModal.tsx";
+import { DesktopSideNavigation } from "@/app/components/layout/DesktopSideNavigation";
 
-const navigation = [
-    {
-        label: "Home",
-        href: "/",
-    },
-    {
-        label: "Servers",
-        href: "/servers",
-    },
-    {
-        label: "Cheats",
-        href: "/cheats",
-    },
-    {
-        label: "Changelog",
-        href: "/changelog",
-    },
-    {
-        label: "Support",
-        href: "/support",
-    },
-] as const;
 
 export async function Navbar() {
     let isAuthenticated = false;
@@ -41,87 +20,51 @@ export async function Navbar() {
         isAuthenticated = data.user !== null;
         if (data.user) accountName = accountDisplayName(data.user);
         isAdmin = data.user ? hasAdminAccess(data.user) : false;
-    } catch {
-        // Keep public navigation usable when authentication is not configured.
-    }
+    } catch {}
 
     return (
-        <header className="border-b border-white/10 bg-background">
-            <div className="site-container flex h-15 items-center justify-between gap-4">
-                <Link
-                    href="/"
-                    className="flex shrink-0 items-center gap-2 sm:gap-3"
-                    aria-label="Bannerlord Coop home"
-                >
-                    <Swords
-                        aria-hidden="true"
-                        className="size-6 text-gold"
-                        strokeWidth={3}
-                    />
-
-                    <span className="font-display text-sm font-black uppercase tracking-[0.06em] text-foreground transition-colors duration-300 hover:text-gold min-[380px]:text-base min-[380px]:tracking-[0.08em] sm:text-lg sm:tracking-[0.14em]">
+        <>
+            <header className="border-b border-white/10 bg-background">
+                <div className="site-container flex h-15 items-center justify-between gap-4">
+                    <Link href="/" className="flex shrink-0 items-center gap-2 sm:gap-3" aria-label="Bannerlord Coop home">
+                        <Swords aria-hidden="true" className="size-6 text-gold" strokeWidth={3}/>
+                        <span className="font-display text-sm font-black uppercase tracking-[0.06em] text-foreground transition-colors duration-300 hover:text-gold min-[380px]:text-base min-[380px]:tracking-[0.08em] sm:text-lg sm:tracking-[0.14em]">
                         Bannerlord Coop
                     </span>
-                </Link>
+                    </Link>
 
-                <nav aria-label="Primary navigation" className="hidden lg:block">
-                    <ul className="flex items-center gap-5 xl:gap-8">
-                        {navigation.map((item) => (
-                            <li key={item.href}>
-                                <Link
-                                    href={item.href}
-                                    prefetch={item.href === "/servers" ? false : undefined}
-                                    className="font-sans text-xs uppercase tracking-[0.2em] text-foreground-muted transition-colors duration-300 hover:text-gold focus-visible:outline-none"
-                                >
-                                    {item.label}
-                                </Link>
-                            </li>
-                        ))}
-
-                        {isAdmin && (
+                    <nav aria-label="Primary navigation" className="hidden lg:block">
+                        <ul className="flex items-center gap-5 xl:gap-8">
                             <li>
-                                <Link
-                                    href="/admin"
-                                    className="font-sans text-xs uppercase tracking-[0.2em] text-gold transition-colors duration-300 hover:text-foreground focus-visible:outline-none"
-                                >
-                                    Admin
+                                <Link href="/" className="font-sans text-xs uppercase tracking-[0.2em] text-foreground-muted transition-colors duration-300 hover:text-gold focus-visible:outline-none">
+                                    Home
                                 </Link>
                             </li>
-                        )}
 
-                        <li>
-                            <a
-                                href="https://discord.gg/bannerlordcoop"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-sans text-xs uppercase tracking-[0.2em] text-foreground-muted transition-colors hover:text-gold focus-visible:outline-none"
-                            >
-                                Discord
-                            </a>
-                        </li>
+                            <li>
+                                <a href="https://discord.gg/bannerlordcoop" target="_blank" rel="noopener noreferrer" className="font-sans text-xs uppercase tracking-[0.2em] text-foreground-muted transition-colors hover:text-gold focus-visible:outline-none">
+                                    Discord
+                                </a>
+                            </li>
 
-                        <li className="flex items-center gap-3">
-                            <DownloadModal trigger="navbar"/>
+                            <li className="flex items-center gap-3">
+                                <DownloadModal trigger="navbar" />
 
-                            {isAuthenticated ? (
-                                <ProfileDropdown accountName={accountName} />
-                            ) : (
-                                <Link
-                                    href="/login"
-                                    className="inline-flex min-h-10 items-center rounded-sm border border-white/20 bg-background/70 px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-foreground transition-colors hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]"
-                                >
-                                    Sign in
-                                </Link>
-                            )}
-                        </li>
-                    </ul>
-                </nav>
-                <MobileNavigation
-                    accountName={accountName}
-                    isAdmin={isAdmin}
-                    isAuthenticated={isAuthenticated}
-                />
-            </div>
-        </header>
+                                {isAuthenticated ? (<ProfileDropdown accountName={accountName}/>) :
+                                    (
+                                    <Link href="/login" className="inline-flex min-h-10 items-center rounded-sm border border-white/20 bg-background/70 px-3 py-2 font-sans text-xs uppercase tracking-[0.12em] text-foreground transition-colors hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5 xl:py-2.5 xl:tracking-[0.16em]">
+                                        Sign in
+                                    </Link>
+                                )}
+                            </li>
+                        </ul>
+                    </nav>
+
+                    <MobileNavigation accountName={accountName} isAdmin={isAdmin} isAuthenticated={isAuthenticated}/>
+                </div>
+            </header>
+
+            <DesktopSideNavigation isAdmin={isAdmin} />
+        </>
     );
 }
