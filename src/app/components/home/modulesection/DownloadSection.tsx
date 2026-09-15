@@ -1,4 +1,3 @@
-import { MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { ScrollReveal } from "@/app/components/motion/ScrollReveal";
 import { DownloadModal } from "@/app/components/home/modulesection/DownloadModal";
@@ -54,12 +53,21 @@ export function DownloadSection() {
                             href={DISCORD_URL}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-sm border border-white/20 bg-background/60 px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors duration-300 hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-13 sm:w-auto sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
+                            className="inline-flex group min-h-12 w-full items-center justify-center gap-3 rounded-sm border border-white/20 bg-background/60 px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors duration-300 hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-13 sm:w-auto sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
                         >
-                            <MessageCircle
+                            <span
                                 aria-hidden="true"
-                                className="size-4"
-                                strokeWidth={1.75}
+                                className="block size-5 shrink-0 bg-foreground-muted transition-[background-color, scale] duration-300 group-hover:scale-105 group-hover:bg-gold"
+                                style={{
+                                    WebkitMaskImage: "url('/images/discordlogo.svg')",
+                                    maskImage: "url('/images/discordlogo.svg')",
+                                    WebkitMaskRepeat: "no-repeat",
+                                    maskRepeat: "no-repeat",
+                                    WebkitMaskPosition: "center",
+                                    maskPosition: "center",
+                                    WebkitMaskSize: "contain",
+                                    maskSize: "contain",
+                                }}
                             />
                             Join Our Discord
                         </Link>

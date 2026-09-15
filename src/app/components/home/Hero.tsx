@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { ChessKnight } from "lucide-react";
 import { HeroTrailer } from "@/app/components/home/HeroTrailer";
 
 export function Hero() {
@@ -48,18 +49,34 @@ export function Hero() {
                         <div className="mt-8 flex flex-col items-start gap-3 sm:mt-10 sm:flex-row sm:flex-wrap sm:justify-start sm:gap-4">
                             <a
                                 href="#download"
-                                className="inline-flex min-h-12 items-center justify-center rounded-sm border border-crimson bg-crimson px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-white transition-colors duration-300 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
+                                className="inline-flex gap-2 min-h-12 items-center justify-center rounded-sm border border-crimson/40 bg-crimson/40 px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors duration-300 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
                             >
+                                <ChessKnight aria-hidden="true" className="size-4.5 text-foreground" strokeWidth={3}/>
                                 Ride To Conquest
                             </a>
-
                             <a
                                 href="https://discord.gg/bannerlordcoop"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex min-h-12 items-center justify-center rounded-sm border border-white/20 bg-background/70 px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors duration-300 hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
+                                aria-label="Join the Bannerlord Coop Discord server"
+                                className="inline-flex group gap-2 min-h-12 items-center justify-center rounded-sm border border-white/20 bg-background/70 px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors duration-300 hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
                             >
-                                Join the Discord
+                                    <span
+                                        aria-hidden="true"
+                                        className="block size-5 shrink-0 bg-foreground-muted transition-[background-color, scale] duration-300 group-hover:scale-105 group-hover:bg-gold"
+                                        style={{
+                                            WebkitMaskImage: "url('/images/discordlogo.svg')",
+                                            maskImage: "url('/images/discordlogo.svg')",
+                                            WebkitMaskRepeat: "no-repeat",
+                                            maskRepeat: "no-repeat",
+                                            WebkitMaskPosition: "center",
+                                            maskPosition: "center",
+                                            WebkitMaskSize: "contain",
+                                            maskSize: "contain",
+                                        }}
+                                    />
+
+                                <span>Join the Discord</span>
                             </a>
                         </div>
                     </div>
