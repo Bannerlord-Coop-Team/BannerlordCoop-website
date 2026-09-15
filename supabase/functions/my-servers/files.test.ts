@@ -73,11 +73,11 @@ test("latest log download forwards server and bearer and preserves file bytes", 
     const bytes = new Uint8Array(100_000).fill(7);
     const headers = { "content-type": "application/octet-stream", "content-disposition": "attachment; filename*=UTF-8''server-%C3%A9.log", "content-length": String(bytes.length) };
     const response = await handler(async (url, init) => {
-        assert.equal(String(url), "https://cp.test/v1/user/control-plane");
+        assert.equal(String(url), "https://cp.test/api/v1/logs/latest");
         assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${token}`);
         const upstream = JSON.parse(String(init?.body));
-        assert.equal(upstream.operation, "my-server-latest-log");
-        assert.deepEqual(upstream.input, { serverId: requestId });
+        assert.equal(init?.method, "POST");
+        assert.deepEqual(upstream, { serverId: requestId });
         assert.equal(new Headers(init?.headers).get("accept"), "application/octet-stream");
         return new Response(bytes, { headers });
     })(new Request(`https://edge.test/my-servers?resource=download-server-log&serverId=${requestId}`, { headers: { authorization: `Bearer ${token}` } }));
@@ -93,8 +93,8 @@ test("latest log download forwards server and bearer and preserves file bytes", 
 
 test("latest log rejects path input and reports an empty directory", async () => {
     const run = handler(async (_url, init) => {
-        const upstream = JSON.parse(String(init?.body));
-        return Response.json({ version: 1, requestId: upstream.requestId, ok: true, result: null });
+        return Response.json({ version: 1, requestId: new Headers(init?.headers).get("x-request-id"), ok: false,
+            error: { code: "log_not_found", message: "No game log file is available.", retryable: false } }, { status: 404 });
     });
     const url = `https://edge.test/my-servers?resource=download-server-log&serverId=${requestId}`;
     const headers = { authorization: `Bearer ${token}` };
@@ -103,4 +103,24 @@ test("latest log rejects path input and reports an empty directory", async () =>
     const response = await run(new Request(url, { headers }));
     assert.equal(response.status, 404);
     assert.equal((await response.json()).error.code, "log_not_found");
+});
+
+
+test("direct log download preserves access errors and rejects JSON success without retrying", async () => {
+    for (const status of [404, 200]) {
+        let calls = 0;
+        const run = handler(async (_url, init) => {
+            calls++;
+            const id = new Headers(init?.headers).get("x-request-id");
+            if (status === 404) return Response.json({ version: 1, requestId: id, ok: false,
+                error: { code: "server_not_found", message: "Managed server is unavailable.", retryable: false } }, { status });
+            return Response.json({ version: 1, requestId: id, ok: true, result: null });
+        });
+        const response = await run(new Request(`https://edge.test/my-servers?resource=download-server-log&serverId=${requestId}`, {
+            headers: { authorization: `Bearer ${token}` },
+        }));
+        assert.equal(response.status, status === 404 ? 404 : 502);
+        assert.equal((await response.json()).error.code, status === 404 ? "server_not_found" : "invalid_response");
+        assert.equal(calls, 1);
+    }
 });

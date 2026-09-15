@@ -100,3 +100,20 @@ administrator operations to `supabase:<user UUID>`, derived from the independent
 verified session. Customer ownership and owner/manager Discord identities are
 unchanged. Deploy the control-plane principal migration and adapter before the
 Edge Function change; the old adapter will reject accounts without Discord.
+
+## Latest game log download
+
+The existing **Download logs** button uses the authenticated `my-servers` Edge
+Function (`GET ?resource=download-server-log&serverId=<UUID>`). The function now
+forwards `POST /api/v1/logs/latest` with only `{serverId}`, the user's bearer token,
+and `Accept: application/octet-stream`, as introduced in ControlPlane #157.
+
+The existing binary streaming, original filename, 100 MiB limit, and server-side
+access checks remain in place. No queue, polling, or automatic retry is added.
+The direct API returns `404 log_not_found` when no file exists rather than a
+successful JSON null result; the existing button displays that error.
+
+Deployment requires the merged ControlPlane #157 code running, the updated
+`my-servers` Edge Function deployed, and `/api/v1/logs/latest` included in the
+exact HTTPS proxy allowlist. Merging the backend PR alone does not deploy the
+website's Edge Function or expose the loopback route through the proxy.
