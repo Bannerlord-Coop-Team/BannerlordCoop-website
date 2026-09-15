@@ -2,10 +2,10 @@ import { Check, ChevronDown, Circle, CircleEllipsis, TriangleAlert } from "lucid
 import { getRoadmap, type RoadmapItem } from "@/app/lib/roadmap";
 
 const statuses = {
-    completed: { label: "Completed", icon: Check, className: "text-emerald-300", cardClassName: "border-white/5 bg-transparent text-foreground/85" },
-    experimental: { label: "Experimental", icon: TriangleAlert, className: "text-amber-300", cardClassName: "border-white/10 bg-surface-raised text-foreground" },
-    in_progress: { label: "In Progress", icon: CircleEllipsis, className: "text-sky-300", cardClassName: "border-sky-300/25 bg-sky-300/5 text-foreground" },
-    planned: { label: "Planned", icon: Circle, className: "text-foreground-muted", cardClassName: "border-white/10 bg-surface-raised text-foreground" },
+    completed: { label: "Completed", icon: Check, className: "text-emerald-300", cardClassName: "border-emerald-300/15 bg-linear-to-br from-emerald-300/15 via-surface-raised to-surface text-foreground/85" },
+    experimental: { label: "Experimental", icon: TriangleAlert, className: "text-amber-300", cardClassName: "border-amber-300/10 bg-linear-to-br from-amber-300/15 via-surface-raised to-surface text-foreground" },
+    in_progress: { label: "In Progress", icon: CircleEllipsis, className: "text-sky-300", cardClassName: "border-sky-300/15 bg-linear-to-br from-sky-300/15 via-surface-raised to-surface text-foreground" },
+    planned: { label: "Planned", icon: Circle, className: "text-foreground-muted", cardClassName: "border-white/10 bg-linear-to-br from-white/15 via-surface-raised to-surface text-foreground" },
 };
 
 const statusOrder: RoadmapItem["status"][] = ["planned", "in_progress", "experimental", "completed"];
@@ -89,7 +89,7 @@ export async function Roadmap() {
                                                             : "flex flex-col gap-3"}
                                                     >
                                                         {statusItems.map((item) => (
-                                                                <li key={item.id} className={`min-w-0 rounded-sm border px-3 py-3 ${status.cardClassName}`}>
+                                                                <li key={item.id} className={`min-w-0 rounded-lg border px-3 py-3 ${status.cardClassName}`}>
                                                                     <h5 className="wrap-break-word font-sans text-sm font-semibold leading-6">
                                                                         {item.title}
                                                                     </h5>
