@@ -54,7 +54,7 @@ export async function Roadmap() {
                                 open={!allCompleted}
                                 className="group rounded-sm border border-white/10 bg-surface"
                             >
-                                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold sm:p-6 [&::-webkit-details-marker]:hidden">
+                                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold sm:p-6">
                                     <div className="min-w-0">
                                         <h3 className="wrap-break-word font-display text-2xl font-semibold text-foreground sm:text-3xl">
                                             {titleParts ? (
