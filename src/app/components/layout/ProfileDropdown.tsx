@@ -55,10 +55,10 @@ export function ProfileDropdown({ accountName = "Your account" }: { accountName?
                 aria-expanded={isOpen}
                 aria-controls={panelId}
                 onClick={() => setIsOpen((open) => !open)}
-                className="flex min-h-10 items-center justify-center gap-2 rounded-full px-2.5 lg:px-3 border border-white/20 text-foreground transition-colors hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="flex min-h-10 items-center justify-center gap-2 px-2.5 lg:px-3 rounded-lg text-foreground transition-colors hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
                 <UserRound aria-hidden="true" className="size-5 shrink-0" />
-                <span className="hidden max-w-28 truncate text-sm lg:block">{accountName}</span>
+                <span className="hidden max-w-28 truncate font-label text-sm leading-none uppercase tracking-widest lg:block">{accountName}</span>
                 <ChevronDown aria-hidden="true" className="hidden size-3.5 lg:block" />
             </button>
             {isOpen && (
