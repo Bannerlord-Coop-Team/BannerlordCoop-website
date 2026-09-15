@@ -506,3 +506,50 @@ function restoreVariable(name: string, value: string | undefined) {
     if (value === undefined) delete process.env[name];
     else process.env[name] = value;
 }
+
+test("immediate lifecycle confirmations and durable errors cross the Edge boundary", async () => {
+    configureEnvironment();
+    const operationId = "55555555-5555-4555-8555-555555555555";
+    const requestId = "11111111-1111-4111-8111-111111111111";
+    let result: unknown;
+    let error: unknown;
+    let status = 200;
+    const handler = createMyServersHandler({
+        allowedOrigins: ["https://bannerlordcoop.com"],
+        controlPlaneUrl: "https://control-plane.example.test",
+        fetchImplementation: async () => Response.json({
+            version: 1, requestId, ok: status === 200,
+            ...(status === 200 ? { result } : { error }),
+        }, { status }),
+    });
+    globalThis.fetch = async (input, init) => handler(new Request(input, init));
+    const submit = (action: "start" | "stop" | "restart-game") => requestMyServerOperation(TOKEN, {
+        serverId: FIRST_SERVER.serverId, action, expectedUpdatedAt: FIRST_SERVER.updatedAt,
+    }, requestId);
+    try {
+        for (const [action, operation] of [
+            ["start", "start-game"], ["stop", "graceful-stop"], ["stop", "force-stop"],
+            ["start", "health"], ["stop", "health"], ["restart-game", "start-game"], ["restart-game", "health"],
+        ] as const) {
+            result = { outcome: "succeeded", jobId: operationId, operationId, action, agentResult: { operation, result: {} } };
+            assert.deepEqual(await submit(action), result);
+        }
+        for (const agentOperation of ["graceful-stop", "force-stop"]) {
+            result = { outcome: "succeeded", jobId: operationId, operationId, action: "restart-game", agentResult: { operation: agentOperation, result: {} } };
+            await assert.rejects(submit("restart-game"), { code: "invalid_response" });
+        }
+        for (const code of ["operation_timeout", "worker_busy", "operation_in_progress", "save_flush_failed"]) {
+            status = code === "operation_timeout" ? 504 : 409;
+            error = { code, message: "Operation not confirmed.", retryable: false, operationId };
+            await assert.rejects(submit("start"), (caught: unknown) => {
+                assert.ok(caught instanceof MyServersApiError);
+                assert.equal(caught.code, code);
+                assert.equal(caught.operationId, operationId);
+                assert.equal(caught.retryable, false);
+                return true;
+            });
+        }
+        error = { code: "operation_timeout", message: "Not confirmed.", retryable: false, operationId: "invalid" };
+        await assert.rejects(submit("start"), { code: "invalid_response" });
+    } finally { restoreEnvironment(); }
+});

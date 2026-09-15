@@ -84,6 +84,7 @@ export function ManagedServerControls({
                 });
                 setMessage(result.message);
                 if (result.ok) beginPolling(serverId, expectedUpdatedAt, result.jobId);
+                else if (result.operationId) beginPolling(serverId, expectedUpdatedAt, result.operationId);
             } catch {
                 setMessage("The server operation could not be submitted right now.");
             } finally {

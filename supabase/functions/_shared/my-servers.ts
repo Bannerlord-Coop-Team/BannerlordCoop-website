@@ -456,7 +456,10 @@ function isControlPlaneEnvelope(value: unknown, requestId: string) {
     }
     if (value.ok) return hasExactKeys(value, ["ok", "requestId", "result", "version"]);
     if (!hasExactKeys(value, ["error", "ok", "requestId", "version"]) || !isRecord(value.error)
-        || !hasExactKeys(value.error, ["code", "message", "retryable"])) return false;
+        || !hasExactKeys(value.error, value.error.operationId === undefined
+            ? ["code", "message", "retryable"] : ["code", "message", "operationId", "retryable"])) return false;
+    if (value.error.operationId !== undefined
+        && (typeof value.error.operationId !== "string" || !REQUEST_ID.test(value.error.operationId))) return false;
     return typeof value.error.code === "string"
         && SAFE_ERROR_CODE.test(value.error.code)
         && typeof value.error.message === "string"
