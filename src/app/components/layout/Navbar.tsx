@@ -34,7 +34,7 @@ export async function Navbar() {
                     </Link>
 
                     <nav aria-label="Primary navigation" className="hidden lg:block">
-                        <ul className="flex min-h-10 items-center gap-5 xl:gap-8">
+                        <ul className="flex min-h-10 items-center gap-4">
                             <li className="flex items-center">
                                 <Link href="/" className="inline-flex min-h-10 items-center px-2 font-label text-sm font-semibold uppercase leading-none tracking-[0.16em] text-foreground-muted transition-colors duration-300 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                                     Home
@@ -68,19 +68,19 @@ export async function Navbar() {
                                 </a>
                             </li>
 
-                            <DownloadModal trigger="navbar" />
+                            <li className="flex items-center">
+                                <DownloadModal trigger="navbar" />
+                            </li>
 
-                            <li className="flex items-center gap-3">
+                            <li aria-hidden="true" className="h-9 w-0.5 shrink-0 bg-foreground-muted/20" />
 
-
-                                <span aria-hidden="true" className="h-9 w-0.5 shrink-0 bg-foreground-muted/20"/>
-
+                            <li className="flex items-center">
                                 {isAuthenticated ? (
                                     <ProfileDropdown accountName={accountName} />
                                 ) : (
                                     <Link
                                         href="/login"
-                                        className="inline-flex min-h-10 items-center rounded-sm bg-background/70 px-3 py-2 font-label text-sm font-semibold uppercase leading-none tracking-[0.16em] text-foreground transition-colors hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:px-5"
+                                        className="inline-flex min-h-10 items-center rounded-sm bg-background/70 px-2.5 font-label text-sm font-semibold uppercase leading-none tracking-[0.16em] text-foreground transition-colors hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                     >
                                         Sign in
                                     </Link>
