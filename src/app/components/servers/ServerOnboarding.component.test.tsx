@@ -37,7 +37,10 @@ async function name(value: string) {
     const input = container.querySelector<HTMLInputElement>("#onboarding-server-name")!;
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
 }
-async function choose(region: string) { await act(async () => container.querySelector<HTMLInputElement>(`input[value="${region}"]`)!.click()); }
+async function choose(region: string) {
+    await click(region.startsWith("us-") ? "North America" : "Europe");
+    await act(async () => container.querySelector<HTMLInputElement>(`input[value="${region}"]`)!.click());
+}
 async function setup() { await render(); await click("Set up server "); }
 function stored(user = "account-a") { const raw = sessionStorage.getItem(onboardingIntentKey(user)); return raw ? JSON.parse(raw) : null; }
 function deferred() {
@@ -55,8 +58,23 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         }
         expect(mocks.request).not.toHaveBeenCalled();
     });
+    it("groups regions into accessible continent tabs and disables coming-soon continents", async () => {
+        await setup();
+        const regions = () => [...container.querySelectorAll<HTMLInputElement>('input[name="region"]')].map((input) => input.value);
+        expect(regions()).toEqual(["us-west", "us-east"]);
+        for (const label of ["South America", "Asia", "Oceana"]) expect(button(`${label}Coming soon`).disabled).toBe(true);
+        await click("Europe");
+        expect(regions()).toEqual(["france", "germany", "united-kingdom", "poland"]);
+        expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe("france");
+        expect(button("Europe").getAttribute("aria-selected")).toBe("true");
+        await act(async () => button("Europe").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+        expect(regions()).toEqual(["us-west", "us-east"]);
+        expect(document.activeElement).toBe(button("North America"));
+        expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe("us-west");
+        expect(mocks.request).not.toHaveBeenCalled();
+    });
     it("validates normalized name, submits once, reports assigned not running and refreshes real inventory", async () => {
-        await setup(); expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(6);
+        await setup(); expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(2);
         await name("!bad"); await click("Create server"); expect(mocks.request).not.toHaveBeenCalled(); expect(container.querySelector('[role="alert"]')?.textContent).toContain("3–48");
         await name("  My   Campaign  ");
         const submit = button("Create server");
