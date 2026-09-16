@@ -152,6 +152,14 @@ function OnboardingReceipt({ result }: { result: OnboardingResult }) {
         </> : <p className="mt-3 text-sm leading-6">Your private request for {ONBOARDING_REGION_LABELS[result.request.region]} is saved and outstanding (including an existing request). No server or capacity was reserved and no quota was consumed. No email, ETA or automatic allocation is promised.</p>}
     </div>;
 }
+const CONTINENTS: { label: string; regions: OnboardingRegion[] }[] = [
+    { label: "North America", regions: ["us-west", "us-east"] },
+    { label: "Europe", regions: ["france", "germany", "united-kingdom", "poland"] },
+    { label: "South America", regions: [] },
+    { label: "Asia", regions: [] },
+    { label: "Oceana", regions: [] },
+];
+
 function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, onSubmit, onDismiss, onRefresh, fallbackFocus }: {
     summary: OnboardingSummary | null; canOffer: boolean; disabled: boolean; pending: boolean; result: OnboardingResult | null; recovery: ReactNode;
     onSubmit: (name: string, region: OnboardingRegion, available: boolean) => void; onDismiss: () => void; onRefresh: () => void; fallbackFocus: () => void;
@@ -164,6 +172,7 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
     const [name, setName] = useState("");
     const [selected, setSelected] = useState<OnboardingRegion>("us-west");
     const [error, setError] = useState("");
+    const continent = CONTINENTS.findIndex((continent) => continent.regions.includes(selected));
     const entry = summary?.regions.find((entry) => entry.region === selected);
     useEffect(() => {
         const dialog = dialogRef.current!;
@@ -202,7 +211,7 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
         onCancel={(event) => { event.preventDefault(); onDismiss(); }}
         onKeyDown={(event) => {
             if (event.key !== "Tab") return;
-            const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), a[href], [tabindex="0"]')].filter((element) => !element.matches(":disabled"));
+            const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled):not([tabindex="-1"]), input:not(:disabled), a[href], [tabindex="0"]')].filter((element) => !element.matches(":disabled"));
             const first = controls[0]; const last = controls[controls.length - 1];
             if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
             else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -220,7 +229,24 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
                     <p id="onboarding-name-hint" className="mt-2 text-xs leading-5 text-foreground-muted">3–48 characters. Letters or numbers at both ends. Spaces and supported punctuation inside. Whitespace is normalized.</p>
                     {error && <p id="onboarding-name-error" role="alert" className="mt-2 text-sm text-red-200">{error}</p>}
                     <fieldset className="mt-6"><legend className="text-sm font-medium">Server region</legend>
-                        <div className="mt-3 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2 sm:grid-cols-3">{summary?.regions.map((region) => <label key={region.region} className={`relative flex cursor-pointer items-start gap-2 rounded-sm border p-3 transition-colors hover:border-gold/60 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${selected === region.region ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
+                        <div role="tablist" aria-label="Continent" className="mt-3 flex flex-wrap gap-2">
+                            {CONTINENTS.map((item, index) => <button key={item.label} type="button" role="tab"
+                                id={`continent-tab-${index}`} aria-selected={continent === index} aria-controls={item.regions.length ? "continent-regions" : undefined}
+                                tabIndex={continent === index ? 0 : -1} disabled={!item.regions.length}
+                                onClick={() => { setSelected(item.regions[0]); setError(""); }}
+                                onKeyDown={(event) => {
+                                    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                                    event.preventDefault();
+                                    const next = event.key === "Home" ? 0 : event.key === "End" ? 1 : 1 - continent;
+                                    setSelected(CONTINENTS[next].regions[0]);
+                                    setError("");
+                                    document.getElementById(`continent-tab-${next}`)?.focus();
+                                }}
+                                className={`min-h-11 rounded-sm border px-3 py-2 text-sm ${focusRing} disabled:cursor-not-allowed disabled:opacity-45 ${continent === index ? "border-gold bg-gold/10 text-gold" : "border-white/15 text-foreground-muted"}`}>
+                                {item.label}{!item.regions.length && <span className="mt-1 block text-[0.65rem]">Coming soon</span>}
+                            </button>)}
+                        </div>
+                        <div role="tabpanel" id="continent-regions" aria-labelledby={`continent-tab-${continent}`} className="mt-3 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">{summary?.regions.filter((region) => CONTINENTS[continent].regions.includes(region.region)).map((region) => <label key={region.region} className={`relative flex cursor-pointer items-start gap-2 rounded-sm border p-3 transition-colors hover:border-gold/60 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${selected === region.region ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
                             <input type="radio" name="region" value={region.region} checked={selected === region.region} onChange={() => setSelected(region.region)} className="mt-1 size-3.5 shrink-0 accent-gold" />
                             <span className="min-w-0"><span className="block text-sm font-medium">{region.label}</span><span className={`mt-2 block text-xs ${region.available ? "text-emerald-200" : "text-amber-200"}`}>{region.available ? "Available" : "Full"}{region.request ? " · Requested" : ""}</span></span>
                         </label>)}</div>
