@@ -6,6 +6,8 @@ export class ControlPlaneAdminError extends Error {
         readonly code: string,
         message: string,
         readonly retryable = false,
+        readonly requestId?: string,
+        readonly operationId?: string,
     ) {
         super(message);
         this.name = "ControlPlaneAdminError";
@@ -18,7 +20,7 @@ export type ControlPlaneAdminEnvelope<T> =
         version: 1;
         requestId: string;
         ok: false;
-        error: { code: string; message: string; retryable: boolean };
+        error: { code: string; message: string; retryable: boolean; operationId?: string };
     };
 
 export async function requestControlPlaneAdmin<T>(options: {
@@ -74,7 +76,7 @@ export async function requestControlPlaneAdmin<T>(options: {
         );
     }
     if (!parsed.ok) {
-        throw new ControlPlaneAdminError(parsed.error.code, parsed.error.message, parsed.error.retryable);
+        throw new ControlPlaneAdminError(parsed.error.code, parsed.error.message, parsed.error.retryable, response.ok ? undefined : requestId, parsed.error.operationId);
     }
     return parsed.result as T;
 }
@@ -109,12 +111,14 @@ function isEnvelope(value: unknown, requestId: string): value is ControlPlaneAdm
     return error !== null;
 }
 
-function readError(value: unknown): { code: string; message: string; retryable: boolean } | null {
+function readError(value: unknown): { code: string; message: string; retryable: boolean; operationId?: string } | null {
     if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
     const candidate = (value as Record<string, unknown>).error;
     if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) return null;
     const error = candidate as Record<string, unknown>;
+    if (error.operationId !== undefined && typeof error.operationId !== "string") return null;
     return typeof error.code === "string" && typeof error.message === "string"
-        ? { code: error.code, message: error.message, retryable: error.retryable === true }
+        ? { code: error.code, message: error.message, retryable: error.retryable === true,
+            ...(error.operationId === undefined ? {} : { operationId: error.operationId }) }
         : null;
 }
