@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCheck, LoaderCircle } from "lucide-react";
-import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
+import { requestControlPlaneAdminWithRefresh } from "@/app/lib/control-plane/stale-request";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -16,27 +16,31 @@ export function JobFailureAcknowledgeButton({
     const router = useRouter();
     const [pending, setPending] = useState(false);
     const [error, setError] = useState("");
+    const [retainedReason, setRetainedReason] = useState("");
 
     async function acknowledge() {
         const reason = window.prompt(
             "Why is this failure safe to silence? The job and its failure remain in history.",
+            retainedReason,
         )?.trim();
         if (!reason) return;
         if (reason.length < 3) {
             setError("Enter at least three characters.");
             return;
         }
+        setRetainedReason(reason);
         setPending(true);
         setError("");
         try {
             const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
             if (!session?.access_token) throw new Error("Authentication is required.");
-            await requestControlPlaneAdmin({
+            await requestControlPlaneAdminWithRefresh({
                 accessToken: session.access_token,
                 requestId: crypto.randomUUID(),
                 operation: "acknowledge-job-failure",
                 input: { jobId, expectedUpdatedAt, reason },
-            });
+            }, () => router.refresh());
+            setRetainedReason("");
             router.refresh();
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : "The failure could not be silenced.");
