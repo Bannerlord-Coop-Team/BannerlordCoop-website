@@ -58,7 +58,6 @@ export function Hero() {
                                 href="https://discord.gg/bannerlordcoop"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                aria-label="Join the Bannerlord Coop Discord server"
                                 className="inline-flex group gap-2 min-h-12 items-center justify-center rounded-sm border border-white/20 bg-background/70 px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors duration-300 hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
                             >
                                     <span
