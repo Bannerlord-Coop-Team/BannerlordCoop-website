@@ -6,6 +6,7 @@ import { ArrowRight, Check, UserRound } from "lucide-react";
 import { Footer } from "@/app/components/layout/Footer";
 import { Navbar } from "@/app/components/layout/Navbar";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
+import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { AccountStatus } from "@/app/lib/hosting/membership-onboarding";
 import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
 import type { Metadata } from "next";
@@ -59,8 +60,18 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                     <div className="flex flex-wrap items-center justify-between gap-3"><h3 id="discord-heading" className="font-semibold">Discord</h3><ConnectionBadge connected={status?.hasDiscord} /></div>
                     <p className="mt-3 break-words text-sm leading-6 text-foreground-muted">{status?.hasDiscord ? discordName ?? "Your Discord account is connected." : "Connect Discord to this website account to set up a server."}</p>
                     {status?.hasDiscord && <DisconnectAccount provider="Discord" action={disconnectDiscordAccount.bind(null, user.id, discordIdentity?.identity_id ?? "")} disabledReason={!discordIdentity?.identity_id ? "Discord identity could not be confirmed. Waiting for updated account status." : !hasOtherSignIn ? "Discord is your only sign-in method. Connect another sign-in method before disconnecting it." : undefined} />}
-                    {status && !status.hasDiscord && <form action={linkDiscordAccount} className="mt-4"><input type="hidden" name="returnPath" value="/account" /><button type="submit" className={primaryButton}>Confirm and connect Discord</button></form>}
-                </section>
+
+                    {status && !status.hasDiscord && (
+                        <form action={linkDiscordAccount} className="mt-4">
+                            <input type="hidden" name="returnPath" value="/account" />
+                            <LoadingButton
+                                pendingText="Connecting Discord…"
+                                className={primaryButton}
+                            >
+                                Confirm and connect Discord
+                            </LoadingButton>
+                        </form>
+                    )}</section>
                 <section className="p-5 sm:p-6" aria-labelledby="patreon-heading">
                     <div className="flex flex-wrap items-center justify-between gap-3"><h3 id="patreon-heading" className="font-semibold">Patreon</h3><ConnectionBadge connected={status?.membership.linked} /></div>
                     <p className="mt-3 text-sm leading-6 text-foreground-muted">{status?.membership.linked ? "Your Patreon account is linked." : "Connect Patreon to check your membership benefits and server allowance."}</p>
@@ -68,7 +79,24 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                         <p role="status">{status.membership.verification === "qualifying" && status.membership.validUntil && Date.parse(status.membership.validUntil) > checkedAt ? "Membership verified." : status.membership.verification === "nonqualifying" ? "No eligible membership benefits were found." : status.membership.verification === "review_required" ? "Your membership needs review. Contact support before trying again." : "Verify your membership before creating a new server."}{status.membership.sync === "pending" ? " Your server allowance is updating." : status.membership.sync === "unavailable" ? " Your server allowance could not be checked." : ""}</p>
                         <p>You may need to verify your membership again before creating a new server. Existing servers aren’t automatically stopped when verification expires.</p>
                     </div>}
-                    {status && <form action={linkPatreonAccount} className="mt-4"><input type="hidden" name="returnPath" value="/account" /><button type="submit" className={primaryButton}>{status.membership.linked ? "Verify with Patreon" : "Connect Patreon"}</button></form>}
+
+                    {status && (
+                        <form action={linkPatreonAccount} className="mt-4">
+                            <input type="hidden" name="returnPath" value="/account" />
+                            <LoadingButton
+                                pendingText={
+                                    status.membership.linked
+                                        ? "Opening Patreon…"
+                                        : "Connecting Patreon…"
+                                }
+                                className={primaryButton}
+                            >
+                                {status.membership.linked
+                                    ? "Verify with Patreon"
+                                    : "Connect Patreon"}
+                            </LoadingButton>
+                        </form>
+                    )}
                     {status?.membership.linked && <DisconnectAccount provider="Patreon" action={disconnectPatreonAccount.bind(null, user.id)} />}
                 </section>
             </div>
