@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("uses mobile navigation on small screens", async ({ page }) => {
     await page.goto("/");
 
-    await expect(page.getByRole("navigation", { name: "Side navigation" })).toBeHidden();
+    await expect(page.getByRole("navigation", { name: "Side navigation" })).toHaveCount(0);
 
     const menuButton = page.getByRole("button", {name: "Open navigation menu",});
 

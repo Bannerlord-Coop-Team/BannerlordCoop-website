@@ -1,14 +1,16 @@
 "use client";
 
 import { signOut } from "@/app/auth/actions";
-import { ChevronDown, UserRound } from "lucide-react";
+import { ChevronDown, ShieldCheck, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 
 const itemClassName =
     "block w-full rounded-sm px-4 py-3 text-left font-sans text-sm text-foreground transition-colors hover:bg-white/5 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
+const iconItemClassName =
+    "flex w-full items-center gap-2 rounded-sm px-4 py-3 text-left font-sans text-sm text-gold transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
 
-export function ProfileDropdown({ accountName = "Your account" }: { accountName?: string }) {
+export function ProfileDropdown({ accountName = "Your account", isAdmin = false }: { accountName?: string; isAdmin?: boolean }) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -73,6 +75,12 @@ export function ProfileDropdown({ accountName = "Your account" }: { accountName?
                     <Link href="/servers" prefetch={false} onClick={() => setIsOpen(false)} className={itemClassName}>
                         My Servers
                     </Link>
+                    {isAdmin && (
+                        <Link href="/admin" onClick={() => setIsOpen(false)} className={iconItemClassName}>
+                            <ShieldCheck aria-hidden="true" className="size-4 shrink-0" />
+                            Admin
+                        </Link>
+                    )}
                     <hr className="my-1 border-white/10" />
                     <form action={signOut} onSubmit={() => setIsOpen(false)}>
                         <button type="submit" className={itemClassName}>
