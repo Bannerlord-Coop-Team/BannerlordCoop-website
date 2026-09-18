@@ -1,6 +1,6 @@
-import { LoginForm } from "@/app/components/auth/LoginForm";
-import { ArrowLeft, Swords } from "lucide-react";
-import type { Metadata } from "next";
+import {LoginForm} from "@/app/components/auth/LoginForm";
+import {ArrowLeft, Swords} from "lucide-react";
+import type {Metadata} from "next";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -36,7 +36,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     sizes="55vw"
                     className="object-cover object-[57%_center]"
                 />
-                <div aria-hidden="true" className="absolute inset-0 bg-black/15" />
+                <div
+                    aria-hidden="true"
+                    className="absolute inset-0 bg-black/15"
+                />
                 <div
                     aria-hidden="true"
                     className="absolute inset-0 bg-linear-to-r from-background/75 via-background/10 to-background/45"
@@ -56,7 +59,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     aria-label="Bannerlord Coop home"
                 >
                     <span className="flex size-10 items-center justify-center rounded-full border border-gold/35 bg-background/60 text-gold backdrop-blur-sm">
-                        <Swords aria-hidden="true" className="size-5" strokeWidth={2.5} />
+                        <Swords
+                            aria-hidden="true"
+                            className="size-5"
+                            strokeWidth={2.5}
+                        />
                     </span>
                     <span className="font-display text-lg font-semibold uppercase tracking-[0.12em]">
                         Bannerlord Coop
@@ -69,7 +76,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                         “No banner rises alone.”
                     </blockquote>
                     <p className="mt-4 max-w-lg text-sm leading-6 text-foreground-muted xl:text-base xl:leading-7">
-                        Gather your allies, reclaim your campaign, and continue the conquest together.
+                        Gather your allies, reclaim your campaign, and continue
+                        the conquest together.
                     </p>
                 </div>
             </aside>
@@ -94,7 +102,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                         className="flex items-center gap-2 text-foreground lg:hidden"
                         aria-label="Bannerlord Coop home"
                     >
-                        <Swords aria-hidden="true" className="size-5 text-gold" strokeWidth={2.5} />
+                        <Swords
+                            aria-hidden="true"
+                            className="size-5 text-gold"
+                            strokeWidth={2.5}
+                        />
                         <span className="font-display text-sm font-semibold uppercase tracking-[0.1em]">
                             Bannerlord Coop
                         </span>
@@ -104,13 +116,18 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                         className="inline-flex min-h-10 items-center gap-2 rounded-sm px-2 font-label text-xs font-semibold uppercase tracking-[0.16em] text-foreground-muted transition-colors hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                     >
                         <ArrowLeft aria-hidden="true" className="size-4" />
-                        <span className="hidden min-[380px]:inline">Back to home</span>
+                        <span className="hidden min-[380px]:inline">
+                            Back to home
+                        </span>
                     </Link>
                 </header>
 
                 <div className="relative z-10 flex flex-1 items-center px-5 py-8 sm:px-8 lg:px-12 lg:py-12 xl:px-20">
                     <div className="mx-auto w-full max-w-lg rounded-sm border border-white/10 bg-surface/90 p-6 shadow-2xl shadow-black/25 backdrop-blur-xl sm:p-9 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none">
-                        <LoginForm initialError={initialError} nextPath={nextPath} />
+                        <LoginForm
+                            initialError={initialError}
+                            nextPath={nextPath}
+                        />
                     </div>
                 </div>
 
