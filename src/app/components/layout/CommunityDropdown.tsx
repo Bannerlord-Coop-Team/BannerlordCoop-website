@@ -40,6 +40,12 @@ export function CommunityDropdown() {
         <div
             ref={dropdownRef}
             className="relative"
+            onPointerEnter={(event) => {
+                if (event.pointerType === "mouse") setIsOpen(true);
+            }}
+            onPointerLeave={(event) => {
+                if (event.pointerType === "mouse") setIsOpen(false);
+            }}
             onBlur={(event) => {
                 if (!event.currentTarget.contains(event.relatedTarget)) setIsOpen(false);
             }}
