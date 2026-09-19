@@ -129,11 +129,16 @@ The ordinary `enqueued`/`existing` update-job response links to job progress.
 The backend resolves the server's configured Stable/Nightly GHCR channel to an
 immutable digest. It creates a new registry deployment identity even for an
 unchanged digest and replaces the existing build pin. Clear the pin to resume
-catalog maintenance. Registry authorization is not an Actions receipt and image
-compatibility is unverified. Existing backup/rollback protections remain; running
-games restart and stopped games stay stopped.
+catalog maintenance; global channel heads are unchanged. Registry authorization
+is not an Actions receipt. Source revision and game/client compatibility are
+unknown. Existing client download metadata is retained only as a baseline, not
+verification of the new image. Confirm campaign compatibility before proceeding.
+Existing backup/rollback protections remain; running games restart and stopped
+games stay stopped.
 
-Do not release this UI before the backend `force-update-server` operation, its
-new database migration, and compatible agent/game-controller versions are deployed.
+Backend implementation: ControlPlane commit `1ef8e02` on `ao/admin-force-update`.
+Do not release this UI before the backend `force-update-server` operation,
+`202609190001_control_plane_registry_releases.sql` migration, and compatible
+managed-agent **and** game-controller versions are deployed.
 Older runners reject the new deployment identity. Local mocked UI tests do not
 verify these deployment prerequisites or an end-to-end installation.

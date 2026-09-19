@@ -30,7 +30,8 @@ it("offers only the server generation and required audit reason with downtime wa
     expect(container.textContent).toContain("Players will be disconnected");
     expect(container.textContent).toContain("rollback safeguards");
     expect(container.textContent).toContain("Replaces the existing build pin");
-    expect(container.textContent).toContain("Image compatibility is unverified");
+    expect(container.textContent).toContain("Source revision and game/client compatibility are unknown");
+    expect(container.textContent).toContain("Existing client download details are only a baseline");
     expect(container.textContent).toContain("Running games restart; stopped games stay stopped");
     expect([...container.querySelectorAll("[name]")].map((field) => field.getAttribute("name"))).toEqual(["serverId", "reason"]);
     expect(container.querySelector<HTMLTextAreaElement>('textarea[name="reason"]')?.required).toBe(true);
