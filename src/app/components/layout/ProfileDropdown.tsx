@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut } from "@/app/auth/actions";
+import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import { ChevronDown, ShieldCheck, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
@@ -82,10 +83,10 @@ export function ProfileDropdown({ accountName = "Your account", isAdmin = false 
                         </Link>
                     )}
                     <hr className="my-1 border-white/10" />
-                    <form action={signOut} onSubmit={() => setIsOpen(false)}>
-                        <button type="submit" className={itemClassName}>
+                    <form action={signOut}>
+                        <LoadingButton pendingText="Signing out…" className={`${itemClassName} gap-2`}>
                             Sign out
-                        </button>
+                        </LoadingButton>
                     </form>
                 </div>
             )}
