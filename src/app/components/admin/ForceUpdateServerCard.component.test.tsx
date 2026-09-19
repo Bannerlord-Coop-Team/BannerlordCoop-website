@@ -2,7 +2,12 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import { ForceUpdateServerCard } from "./ForceUpdateServerCard";
+import { ControlPlaneActionCard, type AdminActionField } from "./ControlPlaneActionCard";
+import { forceUpdateServerAction } from "./force-update-server-action";
+
+function ForceUpdateServerCard({ serverField }: { serverField: AdminActionField }) {
+    return <ControlPlaneActionCard {...forceUpdateServerAction(serverField)} />;
+}
 import { adminActionOptionValue } from "@/app/lib/control-plane/presentation";
 
 const { request, refresh } = vi.hoisted(() => ({ request: vi.fn(), refresh: vi.fn() }));
@@ -24,6 +29,9 @@ it("offers only the server generation and required audit reason with downtime wa
     expect(container.textContent).toContain("even when that digest is already installed");
     expect(container.textContent).toContain("Players will be disconnected");
     expect(container.textContent).toContain("rollback safeguards");
+    expect(container.textContent).toContain("Replaces the existing build pin");
+    expect(container.textContent).toContain("Image compatibility is unverified");
+    expect(container.textContent).toContain("Running games restart; stopped games stay stopped");
     expect([...container.querySelectorAll("[name]")].map((field) => field.getAttribute("name"))).toEqual(["serverId", "reason"]);
     expect(container.querySelector<HTMLTextAreaElement>('textarea[name="reason"]')?.required).toBe(true);
     expect(JSON.parse(container.querySelector<HTMLSelectElement>('select[name="serverId"]')!.value)).toEqual({ id: option.value, updatedAt: option.updatedAt });
