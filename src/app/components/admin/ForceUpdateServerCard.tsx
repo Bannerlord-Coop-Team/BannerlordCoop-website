@@ -1,6 +1,6 @@
 import { ControlPlaneActionCard, type AdminActionField } from "./ControlPlaneActionCard";
 
-// Not mounted in Operations until the backend contract and exact-request retry are verified.
+// Not mounted in Operations until the backend force-update-server operation is available.
 export function ForceUpdateServerCard({ serverField }: { serverField: AdminActionField }) {
     return <ControlPlaneActionCard
         operation="force-update-server"
