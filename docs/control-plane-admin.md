@@ -117,3 +117,28 @@ Deployment requires the merged ControlPlane #157 code running, the updated
 `my-servers` Edge Function deployed, and `/api/v1/logs/latest` included in the
 exact HTTPS proxy allowlist. Merging the backend PR alone does not deploy the
 website's Edge Function or expose the loopback route through the proxy.
+
+## Force Update (backend rollout dependency)
+
+Operations → Server lifecycle offers **Force Update** beside Update server.
+It sends `force-update-server` through the existing authenticated admin API with
+only `serverId`, `expectedUpdatedAt`, and a required audit `reason`. Each deliberate
+submission gets a fresh request UUID; there is no special automatic retry flow.
+The ordinary `enqueued`/`existing` update-job response links to job progress.
+
+The backend resolves the server's configured Stable/Nightly GHCR channel to an
+immutable digest. It creates a new registry deployment identity even for an
+unchanged digest and replaces the existing build pin. Clear the pin to resume
+catalog maintenance; global channel heads are unchanged. Registry authorization
+is not an Actions receipt. Source revision and game/client compatibility are
+unknown. Existing client download metadata is retained only as a baseline, not
+verification of the new image. Confirm campaign compatibility before proceeding.
+Existing backup/rollback protections remain; running games restart and stopped
+games stay stopped.
+
+Backend implementation: ControlPlane commit `1ef8e02` on `ao/admin-force-update`.
+Do not release this UI before the backend `force-update-server` operation,
+`202609190001_control_plane_registry_releases.sql` migration, and compatible
+managed-agent **and** game-controller versions are deployed.
+Older runners reject the new deployment identity. Local mocked UI tests do not
+verify these deployment prerequisites or an end-to-end installation.
