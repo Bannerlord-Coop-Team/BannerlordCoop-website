@@ -291,3 +291,17 @@ test("release contention does not hide an actionable worker failure", async () =
         assert.equal(response.status,503);assert.deepEqual(await response.json(),{code});
     }
 });
+
+test("failure-record contention does not hide the upstream failure", async () => {
+    const rpc=createPatreonRoleRpc({supabaseUrl:"https://project.supabase.co",serviceKey:"synthetic-service-role-only",campaignId,tierId,
+        fetchImplementation:async(_url,init)=>{const operation=JSON.parse(String(init?.body)).p_operation;
+            if(operation==="acquire")return Response.json({token,jobs:[{memberId,generation:1}],scanDue:false});
+            if(operation==="failed")return Response.json({code:"55P03",message:"private"},{status:500});
+            if(operation==="release")return Response.json({released:true});throw new Error("unexpected_operation");},
+    });
+    const handler=createPatreonRoleHandler({campaignId,tierId,creatorAccessToken,webhookSecret,syncSecret,rpc,
+        fetchImplementation:async()=>new Response(null,{status:429}),
+    });
+    const response=await handler(sync());
+    assert.equal(response.status,503);assert.deepEqual(await response.json(),{code:"sync_incomplete"});
+});

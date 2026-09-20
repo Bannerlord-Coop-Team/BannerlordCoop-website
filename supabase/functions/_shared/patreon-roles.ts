@@ -205,9 +205,13 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
                         if (error instanceof DatabaseContention) throw error;
                         failed = true;
                         // Retry the durable job. Never interpret HTTP errors as lost membership.
-                        deferred = object(await options.rpc("failed", {
-                            token, memberId: job.memberId, generation: job.generation,
-                        })).deferred === true;
+                        try {
+                            deferred = object(await options.rpc("failed", {
+                                token, memberId: job.memberId, generation: job.generation,
+                            })).deferred === true;
+                        } catch (recordError) {
+                            if (!(recordError instanceof DatabaseContention)) throw recordError;
+                        }
                         break; // Bound load after token expiry, throttling or network failure.
                     }
                 }
