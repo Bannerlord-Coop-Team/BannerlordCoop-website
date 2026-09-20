@@ -3,11 +3,13 @@
 `get_network_stats()` uses `server_statistics.updated_at` for its two-minute
 freshness window. Migration `202609100011_network_stats_updated_at_index.sql`
 indexes that column without changing the RPC, grants, rows, or freshness rule.
-`last_seen_at` indexes remain available to their existing callers; the two
-columns can differ after other updates, so substituting them is not equivalent.
+Production statistics later showed that neither `last_seen_at` index had a
+reader while every heartbeat maintained both. Migration `202609200001` drops
+those two indexes and retains `server_statistics_updated_at_idx`; the two
+timestamp columns can differ, so the freshness contract remains unchanged.
 
 Apply through the reviewed Supabase migration workflow. The transaction has a
-five-second lock timeout and a sixty-second statement timeout; failed creation
+five-second lock timeout and a sixty-second statement timeout; a failed change
 rolls back and can be retried during a quieter window. No production migration
 is implied by a source change. The membership migration inventory remains a
 frozen snapshot of its original release; this later migration is tested separately.
