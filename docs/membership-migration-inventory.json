@@ -1,6 +1,6 @@
 {
   "websiteBaselineHead": "ba0d34cb9023360bb13632112bc4509484c096b6",
-  "cpSourceHead": "4160f7bda49c6dd7dab57b912811c793dec90ac3",
+  "cpSourceHead": "ec0ee38924203669a6ce048ab916881970fe6e69",
   "deploymentContract": "Upgrade only through CP coordinated exact release catalog; baseline must already exist. No fresh bootstrap, marker replay, or remote applied-state proof. Fixed historical representations are not SQL-equivalent aliases.",
   "migrations": [
     {
@@ -355,6 +355,30 @@
       "websiteBytes": 7616,
       "representationException": false,
       "releaseClassification": "pending forward migration; coordinated website/Edge cutover removes recovery intents; do not deploy independently"
+    },
+    {
+      "version": "202609130001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202609130001_control_plane_server_visibility.sql",
+      "websiteSha256": "97b9ff190f1ec4d02b879f2569a2fa113ded51583f7dd109e278a8d28244bb55",
+      "websiteBytes": 1607,
+      "cpPath": "supabase/migrations/202609130001_control_plane_server_visibility.sql",
+      "cpSha256": "97b9ff190f1ec4d02b879f2569a2fa113ded51583f7dd109e278a8d28244bb55",
+      "cpBytes": 1607,
+      "representationException": false,
+      "releaseClassification": "already-applied control-plane history mirrored into the website migration stream; NEVER replay"
+    },
+    {
+      "version": "202609190001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202609190001_control_plane_registry_releases.sql",
+      "websiteSha256": "ce2dd5c8d748389bc31e951ec73bb01ae164a68570f31a240fa2a9e667270003",
+      "websiteBytes": 8315,
+      "cpPath": "supabase/migrations/202609190001_control_plane_registry_releases.sql",
+      "cpSha256": "ce2dd5c8d748389bc31e951ec73bb01ae164a68570f31a240fa2a9e667270003",
+      "cpBytes": 8315,
+      "representationException": false,
+      "releaseClassification": "already-applied control-plane history mirrored into the website migration stream; NEVER replay"
     },
     {
       "version": "20260919010000",
