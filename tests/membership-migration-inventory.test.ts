@@ -6,10 +6,10 @@ import test from "node:test";
 test("membership shared upgrade inventory pins own history and exact new CP Git mirrors without historical rewrites", async () => {
     const inventory = JSON.parse(await readFile("docs/membership-migration-inventory.json", "utf8"));
     const expected = inventory.migrations as { version: string; websitePath: string; websiteSha256: string; websiteBytes: number; cpSha256?: string; cpBytes?: number; representationException: boolean }[];
-    assert.equal(inventory.cpSourceHead, "4160f7bda49c6dd7dab57b912811c793dec90ac3");
+    assert.equal(inventory.cpSourceHead, "ec0ee38924203669a6ce048ab916881970fe6e69");
     assert.equal(inventory.websiteBaselineHead, "ba0d34cb9023360bb13632112bc4509484c096b6");
-    assert.equal(expected.length,32); assert.equal(new Set(expected.map(e=>e.version)).size,32);
-    assert.equal(expected.filter(e=>!e.representationException).length,22);
+    assert.equal(expected.length,34); assert.equal(new Set(expected.map(e=>e.version)).size,34);
+    assert.equal(expected.filter(e=>!e.representationException).length,24);
     assert.equal(inventory.integratedWebsiteMainHead,"f012d9412d98a1e8f50bcc3887c655a813959500");
     for (const version of ["20260907220000","20260907230000"]) {
         const entry=inventory.migrations.find((e:{version:string})=>e.version===version);
