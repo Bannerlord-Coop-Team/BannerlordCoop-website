@@ -11,6 +11,19 @@ const SERVER_REGION_LABELS = {
 
 const MAINTENANCE_SLOTS = ["03:00-04:00", "10:00-11:00", "18:00-19:00"] as const;
 
+const LEGACY_STABLE_METADATA = {
+    "ghcr-stable-35b1b6ebeb038a5a69f4ef8a2a84031c3726702452e38874fd4b2f339de92203": {
+        storedVersion: "stable-35b1b6ebeb03",
+        version: "v0.1.5",
+        supportedGameVersion: "v1.4.8",
+    },
+    "ghcr-stable-c995ff97ce3c6cfe1b175f0586f90593892606b4f7ec182c9390b3903dd2d526": {
+        storedVersion: "stable-c995ff97ce3c",
+        version: "v0.1.5",
+        supportedGameVersion: "v1.4.8",
+    },
+} as const;
+
 export const MAINTENANCE_TIME_ZONE = "America/Chicago";
 
 export type ControlPlaneOperationResultLink = {
@@ -32,6 +45,26 @@ export function releaseRevision(build: ReleaseBuild) {
     return build.sourceRevision === "registry-observed" && digest
         ? digest
         : build.sourceRevision;
+}
+
+export function releaseVersion(build: ReleaseBuild) {
+    return legacyStableMetadata(build)?.version ?? build.version;
+}
+
+export function releaseGameVersion(build: ReleaseBuild) {
+    return legacyStableMetadata(build)?.supportedGameVersion ?? build.supportedGameVersion;
+}
+
+function legacyStableMetadata(build: ReleaseBuild) {
+    const metadata = LEGACY_STABLE_METADATA[
+        build.buildId as keyof typeof LEGACY_STABLE_METADATA
+    ];
+    return build.channel === "stable"
+        && build.sourceRevision === "registry-observed"
+        && build.supportedGameVersion === "unknown"
+        && metadata?.storedVersion === build.version
+        ? metadata
+        : undefined;
 }
 
 export function fieldRequirementLabel(required: boolean) {

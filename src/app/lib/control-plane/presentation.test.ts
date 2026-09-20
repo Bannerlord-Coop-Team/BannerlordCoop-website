@@ -9,7 +9,9 @@ import {
     fieldRequirementLabel,
     formatDiscordOwner,
     installableBuilds,
+    releaseGameVersion,
     releaseRevision,
+    releaseVersion,
     MAINTENANCE_TIME_ZONE,
     maintenanceSlotOptions,
     operationCardRowClass,
@@ -282,6 +284,24 @@ test("registry-observed releases present their immutable image digest as the rev
         digest,
     );
     assert.equal(releaseRevision(build("receipt", "validated", "a".repeat(40))), "a".repeat(40));
+});
+
+test("the two legacy Stable digests show their verified semantic release metadata", () => {
+    for (const [buildId, storedVersion] of [
+        ["ghcr-stable-35b1b6ebeb038a5a69f4ef8a2a84031c3726702452e38874fd4b2f339de92203", "stable-35b1b6ebeb03"],
+        ["ghcr-stable-c995ff97ce3c6cfe1b175f0586f90593892606b4f7ec182c9390b3903dd2d526", "stable-c995ff97ce3c"],
+    ]) {
+        const release = {
+            ...build(buildId, "validated", "registry-observed"),
+            channel: "stable" as const,
+            version: storedVersion,
+            supportedGameVersion: "unknown",
+        };
+        assert.equal(releaseVersion(release), "v0.1.5");
+        assert.equal(releaseGameVersion(release), "v1.4.8");
+        assert.equal(releaseVersion({ ...release, sourceRevision: "a".repeat(40) }), storedVersion);
+        assert.equal(releaseGameVersion({ ...release, sourceRevision: "a".repeat(40) }), "unknown");
+    }
 });
 
 test("overview statistic cards fill the final row evenly", () => {
