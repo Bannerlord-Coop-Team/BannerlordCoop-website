@@ -9,6 +9,7 @@ import {
     fieldRequirementLabel,
     formatDiscordOwner,
     installableBuilds,
+    releaseRevision,
     MAINTENANCE_TIME_ZONE,
     maintenanceSlotOptions,
     operationCardRowClass,
@@ -272,6 +273,15 @@ test("the normal release catalog keeps only validated builds and their commit re
 
     assert.deepEqual(visible, [validated]);
     assert.equal(visible[0]?.sourceRevision, "a".repeat(40));
+});
+
+test("registry-observed releases present their immutable image digest as the revision", () => {
+    const digest = "d".repeat(64);
+    assert.equal(
+        releaseRevision(build(`ghcr-stable-${digest}`, "validated", "registry-observed")),
+        digest,
+    );
+    assert.equal(releaseRevision(build("receipt", "validated", "a".repeat(40))), "a".repeat(40));
 });
 
 test("overview statistic cards fill the final row evenly", () => {

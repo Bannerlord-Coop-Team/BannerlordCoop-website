@@ -22,7 +22,7 @@ test("membership shared upgrade inventory pins own history and exact new CP Git 
         migrationName:"drop_unused_community_servers",source:"supabase_migrations.schema_migrations.statements",
     });
     assert.equal(retiredCommunityServers.releaseClassification,"required already-applied external history; NEVER replay");
-    assert.deepEqual((await readdir("supabase/migrations")).filter(f=>f.endsWith(".sql") && !["202609100010_control_plane_monitor_indexes.sql", "202609100011_network_stats_updated_at_index.sql", "202609100001_control_plane_web_admin_principals.sql", "20260910162653_create_homepage_videos.sql", "20260910164925_homepage_video_publication_dates.sql", "20260914130215_create_roadmap.sql", "20260914132950_rename_roadmap_unstable_to_experimental.sql"].includes(f)).sort(),expected.map(e=>e.websitePath.split("/").at(-1)).sort());
+    assert.deepEqual((await readdir("supabase/migrations")).filter(f=>f.endsWith(".sql") && !["202609100010_control_plane_monitor_indexes.sql", "202609100011_network_stats_updated_at_index.sql", "202609100001_control_plane_web_admin_principals.sql", "20260910162653_create_homepage_videos.sql", "20260910164925_homepage_video_publication_dates.sql", "20260914130215_create_roadmap.sql", "20260914132950_rename_roadmap_unstable_to_experimental.sql", "202609200001_control_plane_registry_release_metadata_backfill.sql"].includes(f)).sort(),expected.map(e=>e.websitePath.split("/").at(-1)).sort());
     assert.deepEqual(expected.filter(e=>e.representationException).map(e=>e.version),["20260821074242","20260821083000","20260821100640","20260821112235","202608240001","202608260001","202608260002","202608260003","202608260004","202608260005"]);
     for (const entry of expected) {
         // Canonical Git text bytes; CRLF checkouts are not new SQL provenance.
@@ -33,6 +33,12 @@ test("membership shared upgrade inventory pins own history and exact new CP Git 
             assert.equal(entry.websiteSha256,entry.cpSha256); assert.equal(entry.websiteBytes,entry.cpBytes);
         }
     }
+});
+
+test("registry release metadata backfill mirrors the exact reviewed control-plane migration", async () => {
+    const sql = await readFile("supabase/migrations/202609200001_control_plane_registry_release_metadata_backfill.sql", "utf8");
+    assert.equal(createHash("sha256").update(sql.replaceAll("\r\n", "\n")).digest("hex"), "a0b7f6e9e29384b7b5bf5ce74283a1086f012d76bbd52c9c75bf1438a83f6049");
+    assert.match(sql, /SET version = 'v0\.1\.5', supported_game_version = 'v1\.4\.8'/);
 });
 
 test("actionable retry migration removes only the obsolete statistics cron", async () => {

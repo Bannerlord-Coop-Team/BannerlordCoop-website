@@ -27,6 +27,13 @@ export function installableBuilds(builds: readonly ReleaseBuild[]) {
     return builds.filter((build) => build.validationState === "validated");
 }
 
+export function releaseRevision(build: ReleaseBuild) {
+    const digest = /^ghcr-stable-([a-f\d]{64})$/u.exec(build.buildId)?.[1];
+    return build.sourceRevision === "registry-observed" && digest
+        ? digest
+        : build.sourceRevision;
+}
+
 export function fieldRequirementLabel(required: boolean) {
     return required ? "Required" : "Optional";
 }
