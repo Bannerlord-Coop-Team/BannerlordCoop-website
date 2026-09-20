@@ -176,7 +176,7 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
         if (request.headers.has("x-patreon-sync-key")) {
             if (!secretEqual(request.headers.get("x-patreon-sync-key") ?? "", options.syncSecret)) return reply(401, "unauthorized");
             let token: string | undefined;
-            let outcome: Response;
+            let outcome = reply(503, "sync_unavailable");
             try {
                 const acquired = await options.rpc("acquire", {});
                 if (acquired === null) return reply(200, "already_running");
@@ -238,9 +238,11 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
                 if (token) {
                     try { await options.rpc("release", { token }); }
                     catch (error) {
-                        outcome = error instanceof DatabaseContention
-                            ? reply(202, "sync_deferred")
-                            : reply(503, "sync_unavailable");
+                        if (outcome.status < 500) {
+                            outcome = error instanceof DatabaseContention
+                                ? reply(202, "sync_deferred")
+                                : reply(503, "sync_unavailable");
+                        }
                     }
                 }
             }

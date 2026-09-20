@@ -276,3 +276,18 @@ test("lock refusal is a normal deferred worker outcome and never marks upstream 
     await assert.rejects(typedRetry("acquire",{}),DatabaseContention);
     assert.deepEqual(await typedRetry("failed",{}),{retry:true});
 });
+
+test("release contention does not hide an actionable worker failure", async () => {
+    const { DatabaseContention }=await import("../_shared/database-contention.ts");
+    for (const [jobs, scanDue, fetchImplementation, code] of [
+        [[{memberId,generation:1}],false,async()=>new Response(null,{status:429}),"sync_incomplete"],
+        [[],true,async()=>Response.json({}),"sync_unavailable"],
+    ] as const) {
+        const handler=createPatreonRoleHandler({campaignId,tierId,creatorAccessToken,webhookSecret,syncSecret,
+            fetchImplementation,
+            rpc:async(op)=>{if(op==="acquire")return {token,jobs,scanDue,cursor:"",scanGeneration:1};if(op==="failed")return {retry:true};if(op==="release")throw new DatabaseContention();return {applied:true};},
+        });
+        const response=await handler(sync());
+        assert.equal(response.status,503);assert.deepEqual(await response.json(),{code});
+    }
+});

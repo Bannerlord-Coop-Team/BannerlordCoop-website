@@ -52,6 +52,7 @@ begin
             set due_at = 'infinity'::timestamptz
             where membership.member_id = v_member_id
                 and membership.website_user_id is null
+                and membership.patreon_user_id is not null
                 and not exists (
                     select 1 from public.patreon_accounts account
                     where account.patreon_user_id = membership.patreon_user_id

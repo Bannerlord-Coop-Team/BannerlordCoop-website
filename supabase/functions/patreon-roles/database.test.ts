@@ -321,6 +321,7 @@ test("upstream failure preserves the current grant and leaves a retryable job", 
 
 test("upstream failure parks an unlinked member until new authoritative work arrives", async () => {
     await rpc("queue", { memberId: member });
+    await db.query("update patreon_roles.memberships set patreon_user_id='999' where member_id=$1", [member]);
     const lease = await acquire();
     assert.deepEqual(await rpc("failed", { token: lease.token, ...lease.jobs[0] }), { deferred: true });
     assert.equal((await db.query<{ parked: boolean }>(
@@ -333,6 +334,16 @@ test("upstream failure parks an unlinked member until new authoritative work arr
         "select due_at<=now() as due from patreon_roles.memberships where member_id=$1",
         [member],
     )).rows[0].due, true);
+});
+
+test("upstream failure keeps an unresolved member retryable even when an account is linked", async () => {
+    await addUser(); await link(); await rpc("queue", { memberId: member });
+    const lease = await acquire();
+    assert.deepEqual(await rpc("failed", { token: lease.token, ...lease.jobs[0] }), { retry: true });
+    assert.equal((await db.query<{ retryable: boolean }>(
+        "select patreon_user_id is null and isfinite(due_at) as retryable from patreon_roles.memberships where member_id=$1",
+        [member],
+    )).rows[0].retryable, true);
 });
 
 test("relinking revokes immediately and fences an in-flight response for the previous identity", async () => {
