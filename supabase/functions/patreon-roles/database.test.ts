@@ -40,6 +40,7 @@ before(async () => {
         await db.exec(await readFile(new URL(`../../migrations/${name}.sql`, import.meta.url), "utf8"));
     }
     await db.exec(await readFile(new URL("../../migrations/20260908030000_patreon_event_reconciliation.sql", import.meta.url), "utf8"));
+    await db.exec(await readFile(new URL("../../migrations/20260919010000_actionable_patreon_retries.sql", import.meta.url), "utf8"));
     assert.equal((await metadata()).role, "Standard Server");
     assert.equal((await db.query("select * from public.patreon_accounts")).rows.length, 1);
 });
@@ -311,11 +312,27 @@ test("new webhook generations and replaced worker leases reject stale results", 
 test("upstream failure preserves the current grant and leaves a retryable job", async () => {
     await eligibleUser(); const previous = await metadata();
     await rpc("queue", { memberId: member }); const lease = await acquire();
-    await rpc("failed", { token: lease.token, ...lease.jobs[0] });
+    assert.deepEqual(await rpc("failed", { token: lease.token, ...lease.jobs[0] }), { retry: true });
     assert.deepEqual(await metadata(), previous);
     await rpc("release", { token: lease.token });
     await db.exec("update patreon_roles.memberships set due_at=now()");
     assert.equal((await acquire()).jobs.length, 1);
+});
+
+test("upstream failure parks an unlinked member until new authoritative work arrives", async () => {
+    await rpc("queue", { memberId: member });
+    const lease = await acquire();
+    assert.deepEqual(await rpc("failed", { token: lease.token, ...lease.jobs[0] }), { deferred: true });
+    assert.equal((await db.query<{ parked: boolean }>(
+        "select due_at='infinity'::timestamptz as parked from patreon_roles.memberships where member_id=$1",
+        [member],
+    )).rows[0].parked, true);
+    await rpc("release", { token: lease.token });
+    await rpc("queue", { memberId: member });
+    assert.equal((await db.query<{ due: boolean }>(
+        "select due_at<=now() as due from patreon_roles.memberships where member_id=$1",
+        [member],
+    )).rows[0].due, true);
 });
 
 test("relinking revokes immediately and fences an in-flight response for the previous identity", async () => {

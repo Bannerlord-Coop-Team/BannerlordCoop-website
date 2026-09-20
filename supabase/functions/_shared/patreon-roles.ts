@@ -188,6 +188,7 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
                 const started = now();
                 // Drain existing work before discovery, so a failing scan cannot block revocations.
                 let failed = false;
+                let deferred = false;
                 for (const rawJob of lease.jobs) {
                     if (now() - started > 25_000) break;
                     const job = object(rawJob);
@@ -204,7 +205,9 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
                         if (error instanceof DatabaseContention) throw error;
                         failed = true;
                         // Retry the durable job. Never interpret HTTP errors as lost membership.
-                        await options.rpc("failed", { token, memberId: job.memberId, generation: job.generation });
+                        deferred = object(await options.rpc("failed", {
+                            token, memberId: job.memberId, generation: job.generation,
+                        })).deferred === true;
                         break; // Bound load after token expiry, throttling or network failure.
                     }
                 }
@@ -224,13 +227,21 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
                     const cursor = discoveryCursor(page, options.campaignId, lease.cursor);
                     await options.rpc("discovered", { token, memberIds, members, cursor, scanGeneration: lease.scanGeneration });
                 }
-                outcome = reply(failed ? 503 : 200, failed ? "sync_incomplete" : "synced");
+                outcome = failed
+                    ? reply(deferred ? 202 : 503, deferred ? "sync_deferred" : "sync_incomplete")
+                    : reply(200, "synced");
             } catch (error) {
-                outcome = reply(503, error instanceof DatabaseContention ? "sync_retry" : "sync_unavailable");
+                outcome = error instanceof DatabaseContention
+                    ? reply(202, "sync_deferred")
+                    : reply(503, "sync_unavailable");
             } finally {
                 if (token) {
                     try { await options.rpc("release", { token }); }
-                    catch (error) { outcome = reply(503, error instanceof DatabaseContention ? "sync_retry" : "sync_unavailable"); }
+                    catch (error) {
+                        outcome = error instanceof DatabaseContention
+                            ? reply(202, "sync_deferred")
+                            : reply(503, "sync_unavailable");
+                    }
                 }
             }
             return outcome;
@@ -273,6 +284,9 @@ export function createPatreonRoleRpc(options: {
         body: JSON.stringify({ p_campaign: options.campaignId, p_tier: options.tierId, p_operation: operation, p_input: input }),
         });
         if (!response.ok) await checkDatabaseContention(response);
-        return json(response);
+        const value = await json(response);
+        if (operation !== "failed" && value !== null && typeof value === "object" && !Array.isArray(value)
+            && (value as ObjectValue).retry === true) throw new DatabaseContention();
+        return value;
     };
 }
