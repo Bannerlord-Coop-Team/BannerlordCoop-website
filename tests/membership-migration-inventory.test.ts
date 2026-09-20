@@ -8,8 +8,8 @@ test("membership shared upgrade inventory pins own history and exact new CP Git 
     const expected = inventory.migrations as { version: string; websitePath: string; websiteSha256: string; websiteBytes: number; cpSha256?: string; cpBytes?: number; representationException: boolean }[];
     assert.equal(inventory.cpSourceHead, "4160f7bda49c6dd7dab57b912811c793dec90ac3");
     assert.equal(inventory.websiteBaselineHead, "ba0d34cb9023360bb13632112bc4509484c096b6");
-    assert.equal(expected.length,31); assert.equal(new Set(expected.map(e=>e.version)).size,31);
-    assert.equal(expected.filter(e=>!e.representationException).length,21);
+    assert.equal(expected.length,32); assert.equal(new Set(expected.map(e=>e.version)).size,32);
+    assert.equal(expected.filter(e=>!e.representationException).length,22);
     assert.equal(inventory.integratedWebsiteMainHead,"f012d9412d98a1e8f50bcc3887c655a813959500");
     for (const version of ["20260907220000","20260907230000"]) {
         const entry=inventory.migrations.find((e:{version:string})=>e.version===version);
@@ -22,7 +22,7 @@ test("membership shared upgrade inventory pins own history and exact new CP Git 
         migrationName:"drop_unused_community_servers",source:"supabase_migrations.schema_migrations.statements",
     });
     assert.equal(retiredCommunityServers.releaseClassification,"required already-applied external history; NEVER replay");
-    assert.deepEqual((await readdir("supabase/migrations")).filter(f=>f.endsWith(".sql") && !["202609100010_control_plane_monitor_indexes.sql", "202609100011_network_stats_updated_at_index.sql", "202609100001_control_plane_web_admin_principals.sql", "20260910162653_create_homepage_videos.sql", "20260910164925_homepage_video_publication_dates.sql"].includes(f)).sort(),expected.map(e=>e.websitePath.split("/").at(-1)).sort());
+    assert.deepEqual((await readdir("supabase/migrations")).filter(f=>f.endsWith(".sql") && !["202609100010_control_plane_monitor_indexes.sql", "202609100011_network_stats_updated_at_index.sql", "202609100001_control_plane_web_admin_principals.sql", "20260910162653_create_homepage_videos.sql", "20260910164925_homepage_video_publication_dates.sql", "20260914130215_create_roadmap.sql", "20260914132950_rename_roadmap_unstable_to_experimental.sql"].includes(f)).sort(),expected.map(e=>e.websitePath.split("/").at(-1)).sort());
     assert.deepEqual(expected.filter(e=>e.representationException).map(e=>e.version),["20260821074242","20260821083000","20260821100640","20260821112235","202608240001","202608260001","202608260002","202608260003","202608260004","202608260005"]);
     for (const entry of expected) {
         // Canonical Git text bytes; CRLF checkouts are not new SQL provenance.
@@ -33,6 +33,14 @@ test("membership shared upgrade inventory pins own history and exact new CP Git 
             assert.equal(entry.websiteSha256,entry.cpSha256); assert.equal(entry.websiteBytes,entry.cpBytes);
         }
     }
+});
+
+test("actionable retry migration removes only the obsolete statistics cron", async () => {
+    const sql = await readFile("supabase/migrations/20260919010000_actionable_patreon_retries.sql", "utf8");
+    assert.match(sql, /jobname = \$1/);
+    assert.match(sql, /using 'platform_statistics_cleanup_daily'/);
+    assert.match(sql, /cron\.unschedule\(\$1\)/);
+    assert.doesNotMatch(sql, /delete\s+from\s+public\.server_statistics/i);
 });
 
 test("applied control-plane administrator migration retains exact merged SQL", async () => {

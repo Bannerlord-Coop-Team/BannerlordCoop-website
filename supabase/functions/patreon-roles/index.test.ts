@@ -158,6 +158,18 @@ test("404, throttling, token expiry, oversized and malformed responses never bec
     }
 });
 
+test("unlinked upstream failures are durably deferred without reporting an operational error", async () => {
+    const { options, calls } = setup(async () => new Response(null, { status: 404 }));
+    const rpc = options.rpc;
+    options.rpc = async (operation, input) => operation === "failed"
+        ? { deferred: true }
+        : rpc(operation, input);
+    const response = await createPatreonRoleHandler(options)(sync());
+    assert.equal(response.status, 202);
+    assert.deepEqual(await response.json(), { code: "sync_deferred" });
+    assert.deepEqual(calls.map((call) => call.operation), ["acquire", "release"]);
+});
+
 test("a current worker lease prevents duplicate work", async () => {
     const { options } = setup(async () => { throw new Error("must not fetch"); });
     options.rpc = async () => null;
@@ -247,7 +259,7 @@ test("invalid or inconsistent pagination never advances discovery", async () => 
     }
 });
 
-test("lock refusal is sanitized at actual worker complete/release and never marks upstream failure or returns success", async () => {
+test("lock refusal is a normal deferred worker outcome and never marks upstream failure", async () => {
     const { DatabaseContention }=await import("../_shared/database-contention.ts");
     for(const refused of ["acquire","complete","release"]) {
         const calls:string[]=[];
@@ -256,8 +268,40 @@ test("lock refusal is sanitized at actual worker complete/release and never mark
             rpc:async(op)=>{calls.push(op);if(op===refused)throw new DatabaseContention();if(op==="acquire")return {token,jobs:[{memberId,generation:1}],scanDue:false};return {applied:true};},
         });
         const response=await handler(new Request("https://example.test",{method:"POST",headers:{"x-patreon-sync-key":syncSecret}}));
-        assert.equal(response.status,503);assert.deepEqual(await response.json(),{code:"sync_retry"});assert.ok(!calls.includes("failed"));
+        assert.equal(response.status,202);assert.deepEqual(await response.json(),{code:"sync_deferred"});assert.ok(!calls.includes("failed"));
     }
     const rpc=createPatreonRoleRpc({supabaseUrl:"https://project.supabase.co",serviceKey:"synthetic-service-role-only",campaignId,tierId,fetchImplementation:async()=>Response.json({code:"55P03",message:"private"},{status:500})});
     await assert.rejects(rpc("queue",{memberId}),DatabaseContention);
+    const typedRetry=createPatreonRoleRpc({supabaseUrl:"https://project.supabase.co",serviceKey:"synthetic-service-role-only",campaignId,tierId,fetchImplementation:async()=>Response.json({retry:true})});
+    await assert.rejects(typedRetry("acquire",{}),DatabaseContention);
+    assert.deepEqual(await typedRetry("failed",{}),{retry:true});
+});
+
+test("release contention does not hide an actionable worker failure", async () => {
+    const { DatabaseContention }=await import("../_shared/database-contention.ts");
+    for (const [jobs, scanDue, fetchImplementation, code] of [
+        [[{memberId,generation:1}],false,async()=>new Response(null,{status:429}),"sync_incomplete"],
+        [[],true,async()=>Response.json({}),"sync_unavailable"],
+    ] as const) {
+        const handler=createPatreonRoleHandler({campaignId,tierId,creatorAccessToken,webhookSecret,syncSecret,
+            fetchImplementation,
+            rpc:async(op)=>{if(op==="acquire")return {token,jobs,scanDue,cursor:"",scanGeneration:1};if(op==="failed")return {retry:true};if(op==="release")throw new DatabaseContention();return {applied:true};},
+        });
+        const response=await handler(sync());
+        assert.equal(response.status,503);assert.deepEqual(await response.json(),{code});
+    }
+});
+
+test("failure-record contention does not hide the upstream failure", async () => {
+    const rpc=createPatreonRoleRpc({supabaseUrl:"https://project.supabase.co",serviceKey:"synthetic-service-role-only",campaignId,tierId,
+        fetchImplementation:async(_url,init)=>{const operation=JSON.parse(String(init?.body)).p_operation;
+            if(operation==="acquire")return Response.json({token,jobs:[{memberId,generation:1}],scanDue:false});
+            if(operation==="failed")return Response.json({code:"55P03",message:"private"},{status:500});
+            if(operation==="release")return Response.json({released:true});throw new Error("unexpected_operation");},
+    });
+    const handler=createPatreonRoleHandler({campaignId,tierId,creatorAccessToken,webhookSecret,syncSecret,rpc,
+        fetchImplementation:async()=>new Response(null,{status:429}),
+    });
+    const response=await handler(sync());
+    assert.equal(response.status,503);assert.deepEqual(await response.json(),{code:"sync_incomplete"});
 });

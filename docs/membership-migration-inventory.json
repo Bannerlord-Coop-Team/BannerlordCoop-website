@@ -355,6 +355,15 @@
       "websiteBytes": 7616,
       "representationException": false,
       "releaseClassification": "pending forward migration; coordinated website/Edge cutover removes recovery intents; do not deploy independently"
+    },
+    {
+      "version": "20260919010000",
+      "owner": "website",
+      "websitePath": "supabase/migrations/20260919010000_actionable_patreon_retries.sql",
+      "websiteSha256": "c42a08ab918ccfa121a724388cd25251662b91c83c8fb28ebbb7f8da8b093699",
+      "websiteBytes": 3759,
+      "representationException": false,
+      "releaseClassification": "pending website-owned operational cleanup; deploy with the matching Patreon Edge worker"
     }
   ],
   "integratedWebsiteMainHead": "f012d9412d98a1e8f50bcc3887c655a813959500",

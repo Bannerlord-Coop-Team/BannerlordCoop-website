@@ -28,7 +28,7 @@ before(async () => {
         returns bigint language sql as $$
             insert into net.requests(url,headers,body,timeout_ms) values(url,headers,body,timeout_milliseconds) returning id;
         $$;`);
-    for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation"]) {
+    for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation", "20260919010000_actionable_patreon_retries"]) {
         await db.exec(await readFile(new URL(`../../migrations/${name}.sql`, import.meta.url), "utf8"));
     }
 });
