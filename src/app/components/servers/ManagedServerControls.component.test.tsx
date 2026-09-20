@@ -4,7 +4,7 @@ import { expect, it, vi } from "vitest";
 import { ManagedServerControls } from "./ManagedServerControls";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 
-const { request, beginPolling } = vi.hoisted(() => ({ request: vi.fn(), beginPolling: vi.fn() }));
+const { request, requestUpdate, beginPolling } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), beginPolling: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({
     getSupabaseServerClient: async () => ({ auth: {
@@ -15,6 +15,7 @@ vi.mock("@/app/lib/supabase/server", () => ({
 vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
     ...await original<typeof import("@/app/lib/hosting/my-servers")>(),
     requestMyServerOperation: request,
+    requestMyServerUpdate: requestUpdate,
 }));
 vi.mock("./ManagedServerPollingProvider", () => ({
     useManagedServerPolling: () => ({ session: null, beginPolling, endPolling: vi.fn() }),
@@ -35,7 +36,7 @@ it.each([
     const root = createRoot(container);
     try {
         await act(async () => root.render(<ManagedServerControls serverId={serverId} displayName="Campaign"
-            accessRole="owner" operationState="stopped" />));
+            accessRole="owner" operationState="stopped" expectedUpdatedAt="2026-09-20T12:00:00.000Z" />));
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain(message);
         expect(beginPolling).not.toHaveBeenCalled();
@@ -51,12 +52,37 @@ it("warns that direct Stop/Restart can lose unsaved progress and respects cancel
     const root = createRoot(container);
     try {
         await act(async () => root.render(<ManagedServerControls serverId="22222222-2222-4222-8222-222222222222"
-            displayName="Campaign" accessRole="owner" operationState="running" />));
+            displayName="Campaign" accessRole="owner" operationState="running" expectedUpdatedAt="2026-09-20T12:00:00.000Z" />));
         for (const index of [1, 2]) {
             await act(async () => container.querySelectorAll("button")[index].click());
             expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("Unsaved progress may be lost"));
         }
         expect(request).not.toHaveBeenCalled();
+    } finally {
+        await act(async () => root.unmount());
+        confirm.mockRestore();
+    }
+});
+
+it("confirms and queues an immediate update with the displayed server revision", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    requestUpdate.mockReset().mockResolvedValue({
+        outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "update",
+    });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+        await act(async () => root.render(<ManagedServerControls serverId="22222222-2222-4222-8222-222222222222"
+            displayName="Campaign" accessRole="owner" operationState="running"
+            expectedUpdatedAt="2026-09-20T12:00:00.000Z" />));
+        await act(async () => container.querySelectorAll("button")[3].click());
+        expect(confirm).toHaveBeenCalledWith(expect.stringContaining("backup will be taken first"));
+        expect(requestUpdate).toHaveBeenCalledWith("token", {
+            serverId: "22222222-2222-4222-8222-222222222222",
+            expectedUpdatedAt: "2026-09-20T12:00:00.000Z",
+        }, expect.any(String));
+        expect(container.textContent).toContain("Update queued");
     } finally {
         await act(async () => root.unmount());
         confirm.mockRestore();

@@ -2,7 +2,7 @@
 
 import { useManagedServerPolling } from "@/app/components/servers/ManagedServerPollingProvider";
 import { operateManagedServer } from "@/app/servers/managed-server-actions";
-import { Play, RotateCw, Square } from "lucide-react";
+import { Download, Play, RotateCw, Square } from "lucide-react";
 import { useState, useTransition } from "react";
 
 const TRANSITIONAL_STATES = new Set([
@@ -15,13 +15,14 @@ const TRANSITIONAL_STATES = new Set([
     "deleting",
 ]);
 
-type Operation = "start" | "stop" | "restart-game";
+type Operation = "start" | "stop" | "restart-game" | "update-now";
 
 type ManagedServerControlsProps = {
     serverId: string;
     displayName: string;
     accessRole: "owner" | "manager" | "support" | "admin";
     operationState: string;
+    expectedUpdatedAt: string;
 };
 
 export function ManagedServerControls({
@@ -29,6 +30,7 @@ export function ManagedServerControls({
     displayName,
     accessRole,
     operationState,
+    expectedUpdatedAt,
 }: ManagedServerControlsProps) {
     const [isPending, startTransition] = useTransition();
     const [pendingOperation, setPendingOperation] = useState<Operation | null>(null);
@@ -57,6 +59,9 @@ export function ManagedServerControls({
         if (operation === "restart-game" && !window.confirm(
             `Restart ${displayName}? Players will be disconnected without a save-flush check or advance warning. Unsaved progress may be lost.`,
         )) return;
+        if (operation === "update-now" && !window.confirm(
+            `Update ${displayName} now? A backup will be taken first. If the server is running, players will be disconnected while its selected release is installed.`,
+        )) return;
 
         setMessage("");
         setPendingOperation(operation);
@@ -65,6 +70,7 @@ export function ManagedServerControls({
                 const result = await operateManagedServer({
                     serverId,
                     action: operation,
+                    ...(operation === "update-now" ? { expectedUpdatedAt } : {}),
                 });
                 setMessage(result.message);
             } catch {
@@ -77,7 +83,7 @@ export function ManagedServerControls({
 
     return (
         <div className="flex flex-col items-start gap-2">
-            <div className="grid grid-cols-3 gap-2 sm:flex">
+            <div className="grid grid-cols-2 gap-2 sm:flex">
                 <ControlButton
                     label="Start"
                     icon={Play}
@@ -98,6 +104,13 @@ export function ManagedServerControls({
                     disabled={busy || !canRestart}
                     pending={pendingOperation === "restart-game"}
                     onClick={() => requestOperation("restart-game")}
+                />
+                <ControlButton
+                    label="Update now"
+                    icon={Download}
+                    disabled={busy}
+                    pending={pendingOperation === "update-now"}
+                    onClick={() => requestOperation("update-now")}
                 />
             </div>
             {message && (

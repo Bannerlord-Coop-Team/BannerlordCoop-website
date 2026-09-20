@@ -3,6 +3,7 @@
 import {
     MyServersApiError,
     requestMyServerOperation,
+    requestMyServerUpdate,
     type MyServerOperation,
 } from "@/app/lib/hosting/my-servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -36,7 +37,18 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
     }
 
     try {
-        await requestMyServerOperation(accessToken, parsed);
+        if (parsed.action === "update-now") {
+            const update = await requestMyServerUpdate(accessToken, {
+                serverId: parsed.serverId,
+                expectedUpdatedAt: parsed.expectedUpdatedAt,
+            }, crypto.randomUUID());
+            revalidatePath("/servers");
+            return { ok: true, message: update.outcome === "existing"
+                ? "An update is already queued for this server."
+                : "Update queued. A backup will be taken before the selected release is installed." };
+        } else {
+            await requestMyServerOperation(accessToken, parsed);
+        }
         revalidatePath("/servers");
         return { ok: true, message: `${operationLabel(parsed.action)} command exited successfully (code 0). This does not confirm game readiness.` };
     } catch (error) {
@@ -48,6 +60,17 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         if (code === "container_command_failed" && error instanceof MyServersApiError) {
             return { ok: false, message: error.message };
         }
+        if (parsed.action === "update-now") {
+            if (code === "stale_interaction") {
+                return { ok: false, message: "Server status changed. Refresh the page, then try Update now again." };
+            }
+            if (code === "no_update_available") {
+                return { ok: false, message: "This server already has its selected release." };
+            }
+            if (code === "validated_build_unavailable") {
+                return { ok: false, message: "No validated release is currently available for this server." };
+            }
+        }
         return { ok: false, message: "The command could not be confirmed. It may have executed. Refresh server status before sending another command." };
     }
 }
@@ -55,9 +78,19 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
 function parseOperation(value: unknown): {
     serverId: string;
     action: MyServerOperation;
+} | {
+    serverId: string;
+    action: "update-now";
+    expectedUpdatedAt: string;
 } | null {
-    if (!isRecord(value) || !hasExactKeys(value, ["action", "serverId"])) return null;
+    if (!isRecord(value) || typeof value.action !== "string") return null;
     if (typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)) return null;
+    if (value.action === "update-now") {
+        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) return null;
+        if (typeof value.expectedUpdatedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value.expectedUpdatedAt)) return null;
+        return { serverId: value.serverId, action: value.action, expectedUpdatedAt: value.expectedUpdatedAt };
+    }
+    if (!hasExactKeys(value, ["action", "serverId"])) return null;
     if (typeof value.action !== "string" || !OPERATIONS.has(value.action as MyServerOperation)) return null;
     return {
         serverId: value.serverId,

@@ -56,6 +56,12 @@ export type MyServerBackupOperationResult = {
     action: "backup" | "restore";
 };
 
+export type MyServerUpdateResult = {
+    outcome: "enqueued" | "existing";
+    jobId: string;
+    action: "update";
+};
+
 export class MyServersApiError extends Error {
     constructor(
         readonly code: string,
@@ -160,6 +166,37 @@ export async function requestMyServerOperation(
     if (!hasExactKeys(result, ["exitCode"])) throw invalidResponse();
     if (result.exitCode !== 0) throw invalidResponse();
     return { exitCode: 0 };
+}
+
+export async function requestMyServerUpdate(
+    accessToken: string,
+    input: { serverId: string; expectedUpdatedAt: string },
+    requestId: string,
+): Promise<MyServerUpdateResult> {
+    if (
+        !RESOURCE_ID.test(input.serverId)
+        || !ISO_TIMESTAMP.test(input.expectedUpdatedAt)
+        || !Number.isFinite(Date.parse(input.expectedUpdatedAt))
+    ) {
+        throw new MyServersApiError("invalid_request", "The update request is invalid.");
+    }
+    if (!REQUEST_ID.test(requestId)) {
+        throw new MyServersApiError("invalid_request", "The update request ID is invalid.");
+    }
+    const result = await requestMyServersApi(accessToken, {
+        method: "POST",
+        body: JSON.stringify({ action: "update-now", ...input }),
+        requestId,
+    });
+    if (
+        !isRecord(result)
+        || !hasExactKeys(result, ["action", "jobId", "outcome"])
+        || !["enqueued", "existing"].includes(String(result.outcome))
+        || typeof result.jobId !== "string"
+        || !RESOURCE_ID.test(result.jobId)
+        || result.action !== "update"
+    ) throw invalidResponse();
+    return result as MyServerUpdateResult;
 }
 
 export async function requestMyServerBackupOperation(

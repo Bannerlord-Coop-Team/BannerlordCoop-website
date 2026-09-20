@@ -9,6 +9,7 @@ import {
     MyServersApiError,
     requestMyServerBackupOperation,
     requestMyServerOperation,
+    requestMyServerUpdate,
     requestServerVisibility,
 } from "./my-servers";
 
@@ -463,5 +464,35 @@ test("direct commands cross the Edge boundary without lifecycle envelopes or ret
             status = invalid.ok ? 200 : 409;
             await assert.rejects(submit("start"), { code: "invalid_response" });
         }
+    } finally { restoreEnvironment(); }
+});
+
+test("owner updates cross the Edge boundary as one stale-safe durable request", async () => {
+    configureEnvironment();
+    const requests: Request[] = [];
+    const handler = createMyServersHandler({
+        allowedOrigins: ["https://bannerlordcoop.com"],
+        controlPlaneUrl: "https://control-plane.example.test",
+        fetchImplementation: async (input, init) => {
+            requests.push(new Request(input, init));
+            return Response.json({ version: 1, requestId: "11111111-1111-4111-8111-111111111111", ok: true, result: {
+                outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "update",
+            } });
+        },
+    });
+    globalThis.fetch = async (input, init) => handler(new Request(input, init));
+    try {
+        assert.deepEqual(await requestMyServerUpdate(TOKEN, {
+            serverId: FIRST_SERVER.serverId,
+            expectedUpdatedAt: "2026-09-20T12:00:00.000Z",
+        }, "11111111-1111-4111-8111-111111111111"), {
+            outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "update",
+        });
+        assert.deepEqual(await requests[0]?.json(), {
+            version: 1,
+            requestId: "11111111-1111-4111-8111-111111111111",
+            operation: "update-server",
+            input: { serverId: FIRST_SERVER.serverId, expectedUpdatedAt: "2026-09-20T12:00:00.000Z" },
+        });
     } finally { restoreEnvironment(); }
 });
