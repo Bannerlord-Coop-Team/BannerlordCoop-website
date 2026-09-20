@@ -66,6 +66,32 @@ test("routes a direct restart with only serverId and verified bearer identity", 
     assert.deepEqual(await response.json(), { version: 1, requestId: REQUEST_ID, ok: true, result: { exitCode: 0 } });
 });
 
+test("routes update now through the stale-safe owner update operation", async () => {
+    let upstreamBody: unknown;
+    const handler = createHandler(async (input, init) => {
+        upstreamBody = await new Request(input, init).json();
+        return successEnvelope({
+            outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "update",
+        });
+    });
+    const response = await handler(operationRequest({
+        serverId: "22222222-2222-4222-8222-222222222222",
+        action: "update-now",
+        expectedUpdatedAt: "2026-09-20T12:00:00.000Z",
+    }));
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(upstreamBody, {
+        version: 1,
+        requestId: REQUEST_ID,
+        operation: "update-server",
+        input: {
+            serverId: "22222222-2222-4222-8222-222222222222",
+            expectedUpdatedAt: "2026-09-20T12:00:00.000Z",
+        },
+    });
+});
+
 test("routes bounded backup history and status requests through closed operations", async () => {
     const upstreamBodies: unknown[] = [];
     const handler = createHandler(async (input, init) => {

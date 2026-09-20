@@ -33,6 +33,7 @@ type UpstreamRequest =
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "server-backup-status"; input: { serverId: string } }
+    | { operation: "update-server"; input: { serverId: string; expectedUpdatedAt: string } }
     | {
         operation: "server-operation";
         input: { serverId: string; action: string };
@@ -86,8 +87,8 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 : request.method === "POST"
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
-            // New onboarding mutations must retain the caller's durable UUID.
-            if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility") {
+            // Durable mutations must retain the caller's UUID for exactly-once handling.
+            if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -352,6 +353,19 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
             input: {
                 serverId: value.serverId,
                 backupId: value.backupId,
+                expectedUpdatedAt: value.expectedUpdatedAt as string,
+            },
+        };
+    }
+    if (value.action === "update-now") {
+        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {
+            throw new Error("Invalid update operation");
+        }
+        assertExpectedUpdatedAt(value.expectedUpdatedAt);
+        return {
+            operation: "update-server",
+            input: {
+                serverId: value.serverId,
                 expectedUpdatedAt: value.expectedUpdatedAt as string,
             },
         };
