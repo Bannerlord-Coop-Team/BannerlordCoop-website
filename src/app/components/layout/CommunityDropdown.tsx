@@ -57,32 +57,34 @@ export function CommunityDropdown() {
             </button>
 
             {isOpen && (
-                <div id={panelId} className="absolute left-1/2 top-full z-70 mt-2 w-48 -translate-x-1/2 rounded-sm border border-white/10 bg-surface-raised p-1 shadow-2xl">
-                    <a href="https://discord.gg/bannerlordcoop" target="_blank" rel="noopener noreferrer" onClick={() => setIsOpen(false)} className={itemClassName}>
-                        <span
-                            aria-hidden="true"
-                            className={`${iconClassName} bg-current`}
-                            style={{
-                                WebkitMaskImage: "url('/images/discordlogo.svg')",
-                                maskImage: "url('/images/discordlogo.svg')",
-                                WebkitMaskRepeat: "no-repeat",
-                                maskRepeat: "no-repeat",
-                                WebkitMaskPosition: "center",
-                                maskPosition: "center",
-                                WebkitMaskSize: "contain",
-                                maskSize: "contain",
-                            }}
-                        />
-                        Discord
-                    </a>
-                    <Link href="/changelog" onClick={() => setIsOpen(false)} className={itemClassName}>
-                        <History aria-hidden="true" className={iconClassName} />
-                        Changelog
-                    </Link>
-                    <Link href="/support" onClick={() => setIsOpen(false)} className={itemClassName}>
-                        <CircleHelp aria-hidden="true" className={iconClassName} />
-                        Support
-                    </Link>
+                <div id={panelId} className="absolute left-1/2 top-full z-70 w-48 -translate-x-1/2 pt-2">
+                    <div className="rounded-sm border border-white/10 bg-surface-raised p-1 shadow-2xl">
+                        <a href="https://discord.gg/bannerlordcoop" target="_blank" rel="noopener noreferrer" onClick={() => setIsOpen(false)} className={itemClassName}>
+                            <span
+                                aria-hidden="true"
+                                className={`${iconClassName} bg-current`}
+                                style={{
+                                    WebkitMaskImage: "url('/images/discordlogo.svg')",
+                                    maskImage: "url('/images/discordlogo.svg')",
+                                    WebkitMaskRepeat: "no-repeat",
+                                    maskRepeat: "no-repeat",
+                                    WebkitMaskPosition: "center",
+                                    maskPosition: "center",
+                                    WebkitMaskSize: "contain",
+                                    maskSize: "contain",
+                                }}
+                            />
+                            Discord
+                        </a>
+                        <Link href="/changelog" onClick={() => setIsOpen(false)} className={itemClassName}>
+                            <History aria-hidden="true" className={iconClassName} />
+                            Changelog
+                        </Link>
+                        <Link href="/support" onClick={() => setIsOpen(false)} className={itemClassName}>
+                            <CircleHelp aria-hidden="true" className={iconClassName} />
+                            Support
+                        </Link>
+                    </div>
                 </div>
             )}
         </div>
