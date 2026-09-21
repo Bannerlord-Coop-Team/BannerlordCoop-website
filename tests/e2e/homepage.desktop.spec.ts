@@ -17,6 +17,17 @@ test("uses the complete top navigation on large screens", async ({ page }) => {
         await expect(primaryNavigation.getByRole("link", { name, exact: true })).toBeVisible();
     }
 
+    const changelogLink = primaryNavigation.getByRole("link", { name: "Changelog", exact: true });
+    const triggerBox = await communityButton.boundingBox();
+    const linkBox = await changelogLink.boundingBox();
+    expect(triggerBox).not.toBeNull();
+    expect(linkBox).not.toBeNull();
+    if (triggerBox && linkBox) {
+        await page.mouse.move(triggerBox.x + triggerBox.width / 2, triggerBox.y + triggerBox.height / 2);
+        await page.mouse.move(linkBox.x + linkBox.width / 2, linkBox.y + linkBox.height / 2, { steps: 10 });
+    }
+    await expect(changelogLink).toBeVisible();
+
     await page.getByRole("heading", { name: "Rally The Warband Raise The Banner Conquer Calradia" }).click();
     await expect(communityButton).toHaveAttribute("aria-expanded", "false");
     await expect(primaryNavigation.getByRole("link", { name: "Discord", exact: true })).toHaveCount(0);
