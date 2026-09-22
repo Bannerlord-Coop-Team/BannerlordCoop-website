@@ -1,14 +1,16 @@
 // Closed website/CP contract. Provider IDs and evidence never belong in public UI DTOs.
 export const POLICY_VERSION = "patreon-paid-usd20-v1" as const;
+export const ALLOCATION_POLICY_VERSION = "patreon-paid-usd50-v1" as const;
+type PolicyVersion = typeof POLICY_VERSION | typeof ALLOCATION_POLICY_VERSION;
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 export const IDENTIFIER = /^[1-9][0-9]{0,31}$/u;
 export const DECIMAL = /^(0|[1-9][0-9]{0,19})$/u;
 export const HASH = /^[a-f0-9]{64}$/u;
 export const FRESHNESS_MS = 86_400_000;
 export type Verification = "qualifying" | "nonqualifying" | "unknown" | "review_required" | "unverified";
-export type Evidence = { verification: Verification; campaignId: string | null; memberId: string | null; tierIds: string[]; verifiedAt: string | null; paidThroughAt: string | null; policyVersion: typeof POLICY_VERSION; evidenceSha256: string | null };
+export type Evidence = { verification: Verification; campaignId: string | null; memberId: string | null; tierIds: string[]; verifiedAt: string | null; paidThroughAt: string | null; policyVersion: PolicyVersion; evidenceSha256: string | null };
 export type Snapshot = Evidence & { version: 1; accountId: string; discordUserId: string | null; patreonUserId: string | null; linkGeneration: string; revision: string; linkState: "linked" | "unlinked" | "identity_changed" | "account_deleted" };
-export type Policy = { campaignId: string; qualifyingTierIds: string[]; currency: "USD"; minimumCents: 2000; policyVersion: typeof POLICY_VERSION };
+export type Policy = { campaignId: string; qualifyingTierIds: string[]; currency: "USD"; minimumCents: 2000 | 5000; policyVersion: PolicyVersion };
 export function record(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
 export function exact(value: Record<string, unknown>, keys: readonly string[]) { return Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key)); }
 export function timestamp(value: unknown): value is string { return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value; }
@@ -16,7 +18,7 @@ export function parsePolicy(value: string | undefined): Policy | null {
     if (value === undefined || value === "") return null;
     if (value.length > 4096) throw new Error("Invalid membership policy");
     const p: unknown = JSON.parse(value);
-    if (!record(p) || !exact(p, ["campaignId", "qualifyingTierIds", "currency", "minimumCents", "policyVersion"]) || typeof p.campaignId !== "string" || !IDENTIFIER.test(p.campaignId) || p.currency !== "USD" || p.minimumCents !== 2000 || p.policyVersion !== POLICY_VERSION || !Array.isArray(p.qualifyingTierIds) || p.qualifyingTierIds.length < 1 || p.qualifyingTierIds.length > 50 || !p.qualifyingTierIds.every(id => typeof id === "string" && IDENTIFIER.test(id)) || new Set(p.qualifyingTierIds).size !== p.qualifyingTierIds.length) throw new Error("Invalid membership policy");
+    if (!record(p) || !exact(p, ["campaignId", "qualifyingTierIds", "currency", "minimumCents", "policyVersion"]) || typeof p.campaignId !== "string" || !IDENTIFIER.test(p.campaignId) || p.currency !== "USD" || (p.policyVersion !== POLICY_VERSION && p.policyVersion !== ALLOCATION_POLICY_VERSION) || p.minimumCents !== (p.policyVersion === ALLOCATION_POLICY_VERSION ? 5000 : 2000) || !Array.isArray(p.qualifyingTierIds) || p.qualifyingTierIds.length < 1 || p.qualifyingTierIds.length > 50 || !p.qualifyingTierIds.every(id => typeof id === "string" && IDENTIFIER.test(id)) || new Set(p.qualifyingTierIds).size !== p.qualifyingTierIds.length) throw new Error("Invalid membership policy");
     return p as Policy;
 }
 export function currentDiscord(user: unknown): string | null {
@@ -88,7 +90,7 @@ export async function boundedJson(response: Response, max = 65_536, onFailure?: 
     }
 }
 export function parseSnapshot(value: unknown): Snapshot {
-    if (!record(value) || !exact(value, ["version", "accountId", "discordUserId", "patreonUserId", "linkGeneration", "revision", "linkState", "verification", "campaignId", "memberId", "tierIds", "verifiedAt", "paidThroughAt", "policyVersion", "evidenceSha256"]) || value.version !== 1 || typeof value.accountId !== "string" || !UUID.test(value.accountId) || typeof value.linkGeneration !== "string" || !DECIMAL.test(value.linkGeneration) || typeof value.revision !== "string" || !DECIMAL.test(value.revision) || !["linked", "unlinked", "identity_changed", "account_deleted"].includes(value.linkState as string) || !["qualifying", "nonqualifying", "unknown", "review_required", "unverified"].includes(value.verification as string) || value.policyVersion !== POLICY_VERSION) throw new Error("Invalid membership snapshot");
+    if (!record(value) || !exact(value, ["version", "accountId", "discordUserId", "patreonUserId", "linkGeneration", "revision", "linkState", "verification", "campaignId", "memberId", "tierIds", "verifiedAt", "paidThroughAt", "policyVersion", "evidenceSha256"]) || value.version !== 1 || typeof value.accountId !== "string" || !UUID.test(value.accountId) || typeof value.linkGeneration !== "string" || !DECIMAL.test(value.linkGeneration) || typeof value.revision !== "string" || !DECIMAL.test(value.revision) || !["linked", "unlinked", "identity_changed", "account_deleted"].includes(value.linkState as string) || !["qualifying", "nonqualifying", "unknown", "review_required", "unverified"].includes(value.verification as string) || (value.policyVersion !== POLICY_VERSION && value.policyVersion !== ALLOCATION_POLICY_VERSION)) throw new Error("Invalid membership snapshot");
     if (value.memberId !== null && (typeof value.memberId !== "string" || !UUID.test(value.memberId))) throw new Error("Invalid member identifier");
     for (const field of ["patreonUserId", "campaignId"]) if (value[field] !== null && (typeof value[field] !== "string" || !IDENTIFIER.test(value[field] as string))) throw new Error("Invalid identifier");
     if (value.discordUserId !== null && (typeof value.discordUserId !== "string" || !/^[0-9]{17,20}$/u.test(value.discordUserId))) throw new Error("Invalid Discord ID");

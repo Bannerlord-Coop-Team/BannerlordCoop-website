@@ -1,3 +1,5 @@
+import { ALLOCATION_POLICY_VERSION, parsePolicy, timestamp, type Policy } from "./membership.ts";
+import { verifyPatreonAllocation } from "./patreon-membership.ts";
 import { checkDatabaseContention, DatabaseContention } from "./database-contention.ts";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Buffer } from "node:buffer";
@@ -15,6 +17,7 @@ type ObjectValue = Record<string, unknown>;
 type Rpc = (operation: string, input: ObjectValue) => Promise<unknown>;
 
 export interface PatreonRoleOptions {
+    allocationPolicy?: Policy | null;
     campaignId: string;
     tierId: string;
     creatorAccessToken: string;
@@ -159,6 +162,8 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
     for (const secret of [options.creatorAccessToken, options.webhookSecret, options.syncSecret]) {
         if (!secret || secret.length < 16 || secret.length > 4096) throw new Error("invalid_patreon_secret");
     }
+    const allocationPolicy = options.allocationPolicy ? parsePolicy(JSON.stringify(options.allocationPolicy)) : null;
+    if (allocationPolicy && (allocationPolicy.campaignId !== options.campaignId || allocationPolicy.policyVersion !== ALLOCATION_POLICY_VERSION)) throw new Error("invalid_allocation_policy");
     const fetcher = options.fetchImplementation ?? fetch;
     const now = options.now ?? Date.now;
     async function patreon(path: string, params: Record<string, string>) {
@@ -178,13 +183,14 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
             let token: string | undefined;
             let outcome = reply(503, "sync_unavailable");
             try {
-                const acquired = await options.rpc("acquire", {});
+                const acquired = await options.rpc("acquire", allocationPolicy ? { allocationPolicy } : {});
                 if (acquired === null) return reply(200, "already_running");
                 const lease = object(acquired);
                 if (typeof lease.token !== "string" || !MEMBER_ID.test(lease.token) || !Array.isArray(lease.jobs) || lease.jobs.length > 20) {
                     throw new Error("invalid_lease");
                 }
                 token = lease.token;
+                if (allocationPolicy && (lease.allocationPolicyVersion !== allocationPolicy.policyVersion || !timestamp(lease.allocationVerifiedAt))) throw new Error("invalid_allocation_lease");
                 const started = now();
                 // Drain existing work before discovery, so a failing scan cannot block revocations.
                 let failed = false;
@@ -196,11 +202,15 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
                         || !Number.isSafeInteger(job.generation) || Number(job.generation) < 1) throw new Error("invalid_job");
                     try {
                         const result = await patreon(`members/${job.memberId}`, {
-                            include: "campaign,currently_entitled_tiers,user",
-                            "fields[member]": "is_free_trial,is_gifted,last_charge_status",
+                            include: allocationPolicy ? "campaign,currently_entitled_tiers.campaign,user" : "campaign,currently_entitled_tiers,user",
+                            "fields[member]": allocationPolicy ? "patron_status,last_charge_status,last_charge_date,currently_entitled_amount_cents,is_free_trial,is_gifted" : "is_free_trial,is_gifted,last_charge_status",
+                            ...(allocationPolicy ? { "fields[campaign]": "currency", "fields[tier]": "amount_cents" } : {}),
                         });
                         const snapshot = parsePatreonMembership(result, options.campaignId, options.tierId, job.memberId);
-                        await options.rpc("complete", { token, generation: job.generation, ...snapshot });
+                        const allocationEvidence = allocationPolicy ? await verifyPatreonAllocation(result, allocationPolicy, lease.allocationVerifiedAt as string) : undefined;
+                        await options.rpc("complete", { token, generation: job.generation, ...snapshot,
+                            ...(allocationPolicy ? { allocationEvidence, allocationFence: job.allocationFence ?? null } : {}),
+                        });
                     } catch (error) {
                         if (error instanceof DatabaseContention) throw error;
                         failed = true;

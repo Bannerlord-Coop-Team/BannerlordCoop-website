@@ -206,3 +206,19 @@ test("participating database contention maps exact SQLSTATE to closed503 at real
         }
     }
 });
+
+test("$50 allocation policy checks provider amounts and versions for OAuth and webhook evidence", async () => {
+    const fifty: Policy = { ...policy, minimumCents: 5000, policyVersion: "patreon-paid-usd50-v1" };
+    assert.deepEqual(parsePolicy(JSON.stringify(fifty)), fifty);
+    for (const bad of [{ ...fifty, minimumCents: 2000 }, { ...policy, minimumCents: 5000 }]) assert.throws(() => parsePolicy(JSON.stringify(bad)));
+    const body = identity();
+    body.included[2].attributes.amount_cents = 5000;
+    for (const [amount, expected] of [[4999, "nonqualifying"], [5000, "qualifying"], [10000, "qualifying"]] as const) {
+        body.included[0].attributes.currently_entitled_amount_cents = amount;
+        const result = await verifyPatreonMembership(body, fifty, now);
+        assert.equal(result.evidence.verification, expected);
+        assert.equal(result.evidence.policyVersion, fifty.policyVersion);
+    }
+    body.included[2].attributes.amount_cents = 2000;
+    assert.equal((await verifyPatreonMembership(body, fifty, now)).evidence.verification, "review_required");
+});

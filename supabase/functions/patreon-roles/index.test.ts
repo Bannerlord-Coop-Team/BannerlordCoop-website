@@ -305,3 +305,12 @@ test("failure-record contention does not hide the upstream failure", async () =>
     const response=await handler(sync());
     assert.equal(response.status,503);assert.deepEqual(await response.json(),{code:"sync_incomplete"});
 });
+
+test("allocation workers refuse a pre-migration or mismatched lease before reading Patreon", async () => {
+    const { options, calls } = setup(async () => { throw new Error("must not fetch before migration"); });
+    const allocationPolicy = { campaignId, qualifyingTierIds: [tierId], currency: "USD" as const, minimumCents: 5000 as const, policyVersion: "patreon-paid-usd50-v1" as const };
+    const response = await createPatreonRoleHandler({ ...options, allocationPolicy })(sync());
+    assert.equal(response.status, 503);
+    assert.deepEqual(calls.map(call => call.operation), ["acquire", "release"]);
+    assert.throws(() => createPatreonRoleHandler({ ...options, allocationPolicy: { ...allocationPolicy, campaignId: "999" } }));
+});

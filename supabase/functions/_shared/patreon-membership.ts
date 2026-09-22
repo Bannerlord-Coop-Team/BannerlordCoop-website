@@ -37,13 +37,13 @@ function relationship(value: Record<string, unknown>, name: string): unknown {
     completePagination(relation, Array.isArray(relation.data) ? relation.data.length : relation.data === null ? 0 : 1);
     return relation.data;
 }
-// This is current subscription-benefit evidence, NOT proof of a settled $20 charge.
+// This is current subscription-benefit evidence, NOT proof of a settled charge.
 // Patreon documents entitled tiers/amount as including a current pledge. An upgrade
 // already reported entitled with active_patron + Paid deliberately qualifies.
 export async function verifyPatreonMembership(body: unknown, policy: Policy | null, now = new Date().toISOString()): Promise<{ patreonUserId: string; evidence: Evidence }> {
     if (!record(body) || !resource(body.data, "user")) throw new Error("Invalid Patreon identity");
     const user = body.data;
-    const evidence: Evidence = { verification: policy === null ? "unverified" : "review_required", campaignId: policy?.campaignId ?? null, memberId: null, tierIds: [], verifiedAt: policy === null ? null : now, paidThroughAt: null, policyVersion: POLICY_VERSION, evidenceSha256: null };
+    const evidence: Evidence = { verification: policy === null ? "unverified" : "review_required", campaignId: policy?.campaignId ?? null, memberId: null, tierIds: [], verifiedAt: policy === null ? null : now, paidThroughAt: null, policyVersion: policy?.policyVersion ?? POLICY_VERSION, evidenceSha256: null };
     if (policy !== null) {
         try {
             completePagination(body, 1);
@@ -79,7 +79,7 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
                     if (!tier || !record(tier.attributes) || !Number.isSafeInteger(tier.attributes.amount_cents) || (tier.attributes.amount_cents as number) < 0) throw new Error("Missing tier amount");
                     const tierCampaign = relationship(tier, "campaign");
                     if (!resource(tierCampaign, "campaign") || tierCampaign.id !== policy.campaignId) throw new Error("Tier belongs to another campaign");
-                    if (policy.qualifyingTierIds.includes(ref.id) && (tier.attributes.amount_cents as number) < 2000) throw new Error("Policy mapping disagrees with provider");
+                    if (policy.qualifyingTierIds.includes(ref.id) && (tier.attributes.amount_cents as number) < policy.minimumCents) throw new Error("Policy mapping disagrees with provider");
                     tierIds.push(ref.id);
                 }
                 evidence.tierIds = tierIds.sort();
@@ -87,11 +87,23 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
                 if (!record(a) || !Number.isSafeInteger(a.currently_entitled_amount_cents) || (a.currently_entitled_amount_cents as number) < 0 || typeof a.last_charge_date !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/u.test(a.last_charge_date) || !Number.isFinite(Date.parse(a.last_charge_date)) || new Date(a.last_charge_date).toISOString().slice(0,19) !== a.last_charge_date.slice(0,19) || Date.parse(a.last_charge_date) > Date.parse(now) || a.is_free_trial !== false || a.is_gifted !== false) throw new Error("Missing payment/status evidence");
                 if (a.patron_status === "declined_patron" || a.last_charge_status === "Declined") evidence.verification = "nonqualifying";
                 else if (a.patron_status !== "active_patron" || a.last_charge_status !== "Paid") evidence.verification = "review_required";
-                else evidence.verification = tierIds.some(id => policy.qualifyingTierIds.includes(id)) && (a.currently_entitled_amount_cents as number) >= 2000 ? "qualifying" : "nonqualifying";
+                else evidence.verification = tierIds.some(id => policy.qualifyingTierIds.includes(id)) && (a.currently_entitled_amount_cents as number) >= policy.minimumCents ? "qualifying" : "nonqualifying";
             }
         } catch { evidence.verification = "review_required"; }
         // Only normalized evidence is retained, never raw provider bodies or credentials.
         evidence.evidenceSha256 = await sha256(JSON.stringify({ patreonUserId: user.id, ...evidence }));
     }
     return { patreonUserId: user.id, evidence };
+}
+
+/** Reuse OAuth evidence validation for a creator-authenticated member read. */
+export async function verifyPatreonAllocation(body: unknown, policy: Policy, now: string) {
+    if (!record(body) || !resource(body.data, "member") || !Array.isArray(body.included)) throw new Error("Invalid member response");
+    const user = relationship(body.data, "user");
+    if (!resource(user, "user")) throw new Error("Invalid member identity");
+    const result = await verifyPatreonMembership({
+        data: { type: "user", id: user.id, relationships: { memberships: { data: [{ type: "member", id: body.data.id }] } } },
+        included: [body.data, ...body.included], links: body.links, meta: body.meta,
+    }, policy, now);
+    return result.evidence;
 }
