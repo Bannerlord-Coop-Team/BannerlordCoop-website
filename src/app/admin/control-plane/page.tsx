@@ -232,12 +232,13 @@ async function ControlPlaneViewContent({
     );
 }
 
+/** Loads the authenticated data needed by the selected administration view. */
 async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null) {
     switch (view) {
         case "overview":
             return requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" });
         case "operations": {
-            const [overview, inventory, selectedDashboard] = await Promise.all([
+            const [overview, inventory, selectedDashboard, releases] = await Promise.all([
                 requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" }),
                 requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts" }),
                 serverId
@@ -247,9 +248,10 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                         input: { serverId },
                     })
                     : Promise.resolve(null),
+                loadReleaseCatalog(token),
             ]);
             return {
-                overview,
+                overview: { ...overview, stableBuilds: releases.stable, nightlyBuilds: releases.nightly },
                 inventory,
                 selectedServer: selectedDashboard?.dashboard.server ?? null,
             } satisfies OperationsData;
@@ -281,16 +283,21 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                     limit: 100,
                 },
             });
-        case "releases": {
-            const [stable, nightly] = await Promise.all([
-                requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, operation: "builds", input: { channel: "stable", cursor: null, limit: 100 } }),
-                requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, operation: "builds", input: { channel: "nightly", cursor: null, limit: 100 } }),
-            ]);
-            return { stable, nightly };
-        }
+        case "releases":
+            return loadReleaseCatalog(token);
         case "audit":
             return requestControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, operation: "audit", input: { cursor: null, limit: 100 } });
     }
+}
+
+/** Fetches the full bounded GHCR catalog rather than the overview's 20-version summaries. */
+async function loadReleaseCatalog(token: string) {
+    // Discovery considers at most 100 candidate versions, so 100 per channel covers the catalog.
+    const [stable, nightly] = await Promise.all([
+        requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, operation: "builds", input: { channel: "stable", cursor: null, limit: 100 } }),
+        requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, operation: "builds", input: { channel: "nightly", cursor: null, limit: 100 } }),
+    ]);
+    return { stable, nightly };
 }
 
 function ViewTabs({ active }: { active: View }) {

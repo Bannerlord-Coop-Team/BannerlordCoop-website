@@ -375,3 +375,14 @@ test("Builds refreshes GHCR discovery and displays exact release labels", async 
     assert.match(source, /Follow channel \(remove version pin\)/u);
     assert.match(source, /RecordedRelease build=\{result.dashboard.installedBuild\}/u);
 });
+
+// Operations must offer the full discovery bound, not the overview's truncated 20-version lists.
+test("release selectors load the same full catalog as the Releases view", async () => {
+    const source = await readFile(new URL("../../admin/control-plane/page.tsx", import.meta.url), "utf8");
+    const operations = source.slice(source.indexOf('case "operations":'), source.indexOf('case "vps":'));
+    assert.match(operations, /loadReleaseCatalog\(token\)/u);
+    assert.match(operations, /stableBuilds: releases.stable, nightlyBuilds: releases.nightly/u);
+    const catalog = source.slice(source.indexOf("async function loadReleaseCatalog"), source.indexOf("function ViewTabs"));
+    assert.match(catalog, /channel: "stable", cursor: null, limit: 100/u);
+    assert.match(catalog, /channel: "nightly", cursor: null, limit: 100/u);
+});
