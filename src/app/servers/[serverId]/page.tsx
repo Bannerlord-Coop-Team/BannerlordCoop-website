@@ -75,9 +75,9 @@ export const metadata: Metadata = {
     description: "Manage a Bannerlord Coop server."
 };
 
+// Authorizes the requested server before resolving its available management capabilities.
 export default async function ServerPage({ params, searchParams }: ServerPageProps) {
     const [{ serverId }, query] = await Promise.all([params, searchParams]);
-    const liveServer = getLiveConsoleServer(serverId);
     const supabase = await getSupabaseServerClient();
     const [{ data: userData }, { data: sessionData }] = await Promise.all([
         supabase.auth.getUser(),
@@ -87,39 +87,43 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
 
     if (!user) redirect(`/login?next=/servers/${encodeURIComponent(serverId)}`);
 
-    let managedServer: MyServerSummary | null = null;
     const accessToken = sessionData.session?.access_token ?? null;
-    if (accessToken !== null) {
-        try {
-            managedServer = (await listAllMyServers(accessToken))
-                .find((server) => server.serverId === serverId) ?? null;
-        } catch (error) {
-            console.error("Managed server detail failed to load", error);
-        }
+    if (accessToken === null) redirect(`/login?next=/servers/${encodeURIComponent(serverId)}`);
+
+    const liveServer = getLiveConsoleServer(serverId);
+    const liveAccessLevel = liveServer ? getLiveConsoleAccessLevel(user, liveServer.id) : null;
+    if (liveServer && !liveAccessLevel) redirect("/servers");
+
+    let managedServer: MyServerSummary | null = null;
+    try {
+        const managedServerId = liveServer?.managedServerId ?? serverId;
+        managedServer = (await listAllMyServers(accessToken))
+            .find((server) => server.serverId === managedServerId) ?? null;
+    } catch (error) {
+        console.error("Managed server detail failed to load", error);
     }
 
-    if (liveServer) {
-        const accessLevel = getLiveConsoleAccessLevel(user, liveServer.id);
-        if (accessLevel) {
-            const displayNames = await getServerDisplayNames([liveServer.id]);
-            return (
-                <LiveServerManagementPage
-                    accessError={firstValue(query.accessError)}
-                    accessLevel={accessLevel}
-                    accessToken={accessToken}
-                    accessUpdated={firstValue(query.accessUpdated)}
-                    userId={user.id}
-                    managedServer={managedServer}
-                    server={{
-                        ...liveServer,
-                        name: displayNames.get(liveServer.id) ?? liveServer.name,
-                    }}
-                />
-            );
-        }
+    if (liveServer && liveAccessLevel) {
+        const displayNames = await getServerDisplayNames([liveServer.id]);
+        return (
+            <LiveServerManagementPage
+                accessError={firstValue(query.accessError)}
+                accessLevel={liveAccessLevel}
+                accessToken={accessToken}
+                accessUpdated={firstValue(query.accessUpdated)}
+                userId={user.id}
+                managedServer={managedServer}
+                logDownload={managedServer && (managedServer.accessRole === "owner" || managedServer.accessRole === "manager")
+                    ? { serverId: managedServer.serverId, userId: user.id } : undefined}
+                server={{
+                    ...liveServer,
+                    name: displayNames.get(liveServer.id) ?? liveServer.name,
+                }}
+            />
+        );
     }
 
-    if (managedServer !== null && accessToken !== null) {
+    if (managedServer !== null) {
         return <ManagedServerManagementPage userId={user.id} accessToken={accessToken} server={managedServer} />;
     }
 
@@ -267,6 +271,7 @@ function ManagedServerBackupsSkeleton() {
     );
 }
 
+// Renders authorized live controls with independently authorized managed log downloads.
 async function LiveServerManagementPage({
     userId,
     accessError,
@@ -274,14 +279,16 @@ async function LiveServerManagementPage({
     accessToken,
     accessUpdated,
     managedServer,
+    logDownload,
     server,
 }: {
     userId: string;
     accessError?: string;
     accessLevel: LiveConsoleAccessLevel;
-    accessToken: string | null;
+    accessToken: string;
     accessUpdated?: string;
     managedServer: MyServerSummary | null;
+    logDownload?: { serverId: string; userId: string };
     server: LiveConsoleServer;
 }) {
     const canManageAssignments = accessLevel === "admin" || accessLevel === "owner";
@@ -325,8 +332,11 @@ async function LiveServerManagementPage({
         initialSection={accessError || accessUpdated ? "Settings" : "Console"}
         notice="Protected production access. Controls and commands affect the live Bannerlord process immediately. The gateway revalidates your server access."
     >
-        <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><LiveServerConsole gatewayUrl={getConsoleGatewayUrl()} serverId={server.id} logDownload={managedServer ? { serverId: managedServer.serverId, userId } : undefined} /></ServerConsoleWorkspace></ServerWorkspacePanel>
-        {managedServer !== null && accessToken !== null
+        <ServerWorkspacePanel section="Console">
+            <ServerConsoleWorkspace><LiveServerConsole gatewayUrl={getConsoleGatewayUrl()} serverId={server.id} logDownload={logDownload} /></ServerConsoleWorkspace>
+            {!logDownload && <p className="text-sm text-foreground-muted">Log downloads require a linked managed server and owner or manager access. Ask an administrator to check onboarding, the server mapping, and your managed-server access.</p>}
+        </ServerWorkspacePanel>
+        {managedServer !== null
             ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
             : <UnavailableFileWorkspaces />}
         <ServerWorkspacePanel section="Settings">
