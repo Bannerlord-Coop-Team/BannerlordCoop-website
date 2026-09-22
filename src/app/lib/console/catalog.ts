@@ -4,11 +4,14 @@ export type LiveConsoleServer = {
     address: string;
     nodeId: string;
     provider: string;
+    managedServerId?: string;
 };
 
 const SERVER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
-const CATALOG_KEYS = new Set(["address", "id", "name", "nodeId", "provider"]);
+const MANAGED_SERVER_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const CATALOG_KEYS = new Set(["address", "id", "name", "nodeId", "provider", "managedServerId"]);
 
+// Reads a bounded, nonempty display or identity field from the catalog.
 function catalogString(
     value: unknown,
     field: keyof LiveConsoleServer,
@@ -22,6 +25,7 @@ function catalogString(
     return value.trim();
 }
 
+// Validates the operator-owned live catalog, including optional managed log identities.
 export function parseConsoleServerCatalog(
     raw: string | undefined,
     fallback: readonly LiveConsoleServer[],
@@ -58,6 +62,12 @@ export function parseConsoleServerCatalog(
             nodeId: catalogString(record.nodeId, "nodeId", index),
             provider: catalogString(record.provider, "provider", index),
         };
+        if ("managedServerId" in record) {
+            if (typeof record.managedServerId !== "string" || !MANAGED_SERVER_ID_PATTERN.test(record.managedServerId)) {
+                throw new Error(`CONSOLE_SERVER_CATALOG[${index}].managedServerId is invalid.`);
+            }
+            server.managedServerId = record.managedServerId.toLowerCase();
+        }
         if (!SERVER_ID_PATTERN.test(server.id)) {
             throw new Error(`CONSOLE_SERVER_CATALOG[${index}].id is invalid.`);
         }

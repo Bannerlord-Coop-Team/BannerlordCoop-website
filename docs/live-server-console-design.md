@@ -233,3 +233,58 @@ Manual administrator role saves use the separate service-only finite `set_member
 RPC from website080003. Both writers merge only their keys under current Auth row
 locks, never stale unrelated metadata. Refusal is busy/retry, not success. Refresh
 assignments before retrying multi-account edits. See [combined locking and retry](membership-locking.md).
+
+## Managed log-download identity
+
+The canonical `/servers/[serverId]` page denies a recognized live server before
+loading managed assignments or considering a preview if the verified user lacks
+live-server access. Managed access alone cannot authorize that live page. The
+console gateway continues to independently authorize every console connection.
+
+A live catalog ID need not equal its real managed UUID. The website-only
+`CONSOLE_SERVER_CATALOG` accepts an optional `managedServerId` for **log downloads
+only**:
+
+```json
+[{"id":"live-server-one","name":"Server One","address":"203.0.113.10:4200","nodeId":"node-one","provider":"External VPS","managedServerId":"abcdef12-1234-4123-8123-123456789abc"}]
+```
+
+This implements the managed-identity mapping alternative in
+[ControlPlane issue #190](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/issues/190),
+not a new download backend for standalone Docker servers. Before configuring it:
+
+1. Confirm the live identity and managed UUID identify the **same actual game
+   server and log data**, not merely the same VPS, owner, display name, or port.
+   Use the existing managed-hosting enrollment/assignment workflow if the resource
+   is not yet managed. Registering inventory or creating a placeholder database
+   record is insufficient. Never create a second writer/controller for an active
+   live container just to enable this button.
+2. Confirm the managed server has an active resource generation and a reachable
+   managed agent supporting `read-latest-log`. Existing external Docker console
+   agents do not implement that protocol; this change does not convert them or
+   adopt their containers. Any migration requires a separately reviewed rollout
+   following the control-plane
+   [managed-agent runbook](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/blob/main/docs/managed-hosting/managed-agent-service.md).
+3. Grant intended download users the existing managed owner/manager access through
+   supported access workflows. Live owner/operator/admin assignments are not
+   managed grants; this field neither grants access nor transfers ownership.
+4. Set the mapping in the server-only website catalog through the normal reviewed
+   configuration rollout. Do not change gateway/node server IDs or send the UUID
+   as a console identity. With an authorized account, verify the downloaded file
+   belongs to this exact server; also verify an unrelated account is denied.
+   No live onboarding, configuration, or download is performed by this PR.
+
+The page resolves the configured UUID **only** within the current user's
+`listAllMyServers` response and offers logs only for owner/manager access. An
+explicit missing/inaccessible mapping never falls back to another server. Without
+a mapping, existing same-ID matching remains supported. Missing managed access,
+a failed managed lookup, or missing onboarding leaves downloads unavailable with
+an explanation; it does not prevent an otherwise authorized live console page.
+
+Downloads use the unchanged managed latest-log endpoint, not the truncated
+console display or Docker stdout. Its bearer reauthentication, current managed
+ACL/generation checks, safe `.log` filename, actual file bytes, and **100 MiB**
+limit remain authoritative. Lifecycle, visibility, settings, saves and backups
+are not enabled by this log mapping. Preview servers and `/servers/wireframe`
+remain demos. A genuinely standalone live server still needs managed onboarding
+or a separately implemented authorized file-download integration.
