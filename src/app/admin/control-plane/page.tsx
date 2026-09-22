@@ -632,7 +632,7 @@ function BuildTable({ builds }: { builds: ReleaseBuild[] }) {
             <h3 className="break-all font-semibold">{releaseVersion(build)}</h3>
             {build.currentChannel && <span className="border border-gold/30 px-2 py-1 text-xs text-gold">Current {releaseChannelLabel(build.channel)}</span>}
         </div>
-        <p className="mt-2 text-xs text-foreground-muted">Published <LocalDateTime value={build.publishedAt} /></p>
+        <p className="mt-2 text-xs text-foreground-muted">{build.registryMetadata ? "Observed" : "Published"} <LocalDateTime value={build.publishedAt} /></p>
         <ReleaseMetadata build={build} />
     </article>)}{builds.length === 0 && <Empty>No verified GHCR versions available in this channel.</Empty>}</div>;
 }

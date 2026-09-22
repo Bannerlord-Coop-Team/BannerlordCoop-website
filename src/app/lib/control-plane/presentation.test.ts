@@ -372,6 +372,7 @@ test("Builds refreshes GHCR discovery and displays exact release labels", async 
         assert.ok(source.includes(`io.bannerlordcoop.${key}`));
     }
     assert.match(source, /build.currentChannel/u);
+    assert.ok(source.includes('build.registryMetadata ? "Observed" : "Published"'));
     assert.match(source, /Follow channel \(remove version pin\)/u);
     assert.match(source, /RecordedRelease build=\{result.dashboard.installedBuild\}/u);
 });
