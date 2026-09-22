@@ -28,13 +28,13 @@ before(async () => {
         returns bigint language sql as $$
             insert into net.requests(url,headers,body,timeout_ms) values(url,headers,body,timeout_milliseconds) returning id;
         $$;`);
-    for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation", "20260919010000_actionable_patreon_retries"]) {
+    for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation", "20260910200000_membership_receipt_claims", "20260919010000_actionable_patreon_retries", "202609220001_patreon_allocation_webhooks"]) {
         await db.exec(await readFile(new URL(`../../migrations/${name}.sql`, import.meta.url), "utf8"));
     }
 });
 after(async () => { await db?.close(); });
 beforeEach(async () => {
-    await db.exec("reset role; truncate patreon_roles.audit,patreon_roles.grants,patreon_roles.memberships,patreon_roles.sync_state,auth.users,net.requests,vault.decrypted_secrets cascade");
+    await db.exec("reset role; truncate public.membership_heads,public.membership_outbox,patreon_roles.audit,patreon_roles.grants,patreon_roles.memberships,patreon_roles.sync_state,auth.users,net.requests,vault.decrypted_secrets cascade");
     await db.query("insert into vault.decrypted_secrets values ('patreon_roles_function_url',$1),('patreon_roles_sync_secret',$2)", [endpoint, syncSecret]);
     await db.query("insert into patreon_roles.sync_state(campaign_id,tier_id,scan_due) values($1,$2,now()+interval '6 hours')", [campaign, tier]);
     await db.query("insert into auth.users(id,email_confirmed_at,raw_app_meta_data) values($1,now(),'{\"role\":\"User\"}')", [user]);
@@ -333,3 +333,125 @@ for (const scenario of ["linked event", "unlinked event", "active claim", "aband
         } finally { await upgrade.close(); }
     });
 }
+
+const allocationPolicy = { campaignId: campaign, qualifyingTierIds: [tier], currency: "USD" as const, minimumCents: 5000 as const, policyVersion: "patreon-paid-usd50-v1" as const };
+function allocationSnapshot(amount = 5000) {
+    const data = snapshot();
+    return { data: { ...data.data, attributes: { ...data.data.attributes,
+        patron_status: "active_patron", currently_entitled_amount_cents: amount, last_charge_date: "2026-09-01T00:00:00Z" } },
+        included: [
+            { type: "campaign", id: campaign, attributes: { currency: "USD" } },
+            { type: "tier", id: tier, attributes: { amount_cents: 5000 }, relationships: { campaign: { data: { type: "campaign", id: campaign } } } },
+        ],
+    };
+}
+function allocationHandler(fetchImplementation: typeof fetch = async () => Response.json(allocationSnapshot())) {
+    return createPatreonRoleHandler({ campaignId: campaign, tierId: tier, allocationPolicy,
+        creatorAccessToken: "fixture-creator-token", syncSecret, webhookSecret, rpc, fetchImplementation });
+}
+async function allocationLink() {
+    await known(); await link();
+    await db.query("insert into public.membership_heads(account_id,discord_user_id,patreon_user_id,link_state,link_generation,revision) values($1,'123456789012345678',$2,'linked',1,1)", [user, patreonUser]);
+}
+async function allocationHead() {
+    return (await db.query<{ revision: number; evidence: { verification: string; policyVersion: string }; link_state: string }>("select revision,evidence,link_state from public.membership_heads where account_id=$1", [user])).rows[0];
+}
+async function allocationEvent(worker = allocationHandler()) {
+    const body = JSON.stringify(snapshot());
+    assert.equal((await worker(new Request(endpoint, { method: "POST", body, headers: {
+        "x-patreon-event": "members:update", "x-patreon-signature": createHmac("md5", webhookSecret).update(body).digest("hex"),
+    } }))).status, 202);
+}
+
+test("signed events grant one allocation evidence source and remove it after a downgrade without changing manual roles", async () => {
+    await allocationLink();
+    await db.query("update auth.users set raw_app_meta_data='{\"role\":\"Premium Server\"}' where id=$1", [user]);
+    await allocationEvent(); await allocationEvent();
+    assert.equal((await runWorker(allocationHandler())).status, 200);
+    assert.equal((await allocationHead()).evidence.verification, "qualifying");
+    assert.equal((await allocationHead()).evidence.policyVersion, "patreon-paid-usd50-v1");
+    assert.equal(Number((await allocationHead()).revision), 2);
+    assert.equal((await db.query("select * from public.membership_outbox")).rows.length, 1);
+    const downgraded = allocationHandler(async () => Response.json(allocationSnapshot(4999)));
+    await allocationEvent(downgraded); await runWorker(downgraded);
+    assert.equal((await allocationHead()).evidence.verification, "nonqualifying");
+    assert.equal(await role(), "Premium Server");
+});
+
+test("cancelled or expired members lose allocation evidence; transport failures retain the last finite evidence", async () => {
+    await allocationLink(); await runWorker(allocationHandler());
+    const before = await allocationHead();
+    const unavailable = allocationHandler(async () => new Response("", { status: 503 }));
+    await allocationEvent(unavailable); await runWorker(unavailable);
+    assert.deepEqual(await allocationHead(), before);
+    const cancelled = allocationSnapshot();
+    cancelled.data.attributes.patron_status = "former_patron";
+    cancelled.data.relationships.currently_entitled_tiers.data = [];
+    const worker = allocationHandler(async () => Response.json(cancelled));
+    await allocationEvent(worker); await runWorker(worker);
+    assert.notEqual((await allocationHead()).evidence.verification, "qualifying");
+});
+
+test("an in-flight member response cannot restore an unlinked account or replace newer OAuth evidence", async () => {
+    await allocationLink();
+    let unlinked = false;
+    const worker = allocationHandler(async () => {
+        if (!unlinked) {
+            unlinked = true;
+            await db.query("select public.membership_unlink($1,'123456789012345678')", [user]);
+        }
+        return Response.json(allocationSnapshot());
+    });
+    await runWorker(worker);
+    assert.equal((await allocationHead()).link_state, "unlinked");
+    assert.equal((await allocationHead()).evidence.verification, "unverified");
+});
+
+test("unknown member identity requires a fresh read after discovery and stale account revisions retry", async () => {
+    await allocationLink();
+    await db.exec("update patreon_roles.memberships set patreon_user_id=null");
+    await runWorker(allocationHandler());
+    assert.equal((await allocationHead()).evidence.verification, "unverified");
+    await runWorker(allocationHandler());
+    assert.equal((await allocationHead()).evidence.verification, "qualifying");
+    await allocationEvent();
+    const before = Number((await allocationHead()).revision);
+    const worker = allocationHandler(async () => {
+        await db.query("update public.membership_heads set revision=revision+1,evidence=public.membership_empty_evidence() where account_id=$1", [user]);
+        return Response.json(allocationSnapshot());
+    });
+    await runWorker(worker);
+    assert.equal(Number((await allocationHead()).revision), before+1);
+    assert.equal((await allocationHead()).evidence.verification, "unverified");
+    await runWorker(allocationHandler());
+    assert.equal((await allocationHead()).evidence.verification, "qualifying");
+});
+
+test("allocation migration preserves role-only workers and keeps its previous seam private", async () => {
+    await allocationLink(); await runWorker();
+    assert.equal(await role(), "Standard Server");
+    assert.equal((await allocationHead()).evidence.verification, "unverified");
+    for (const dbRole of ["anon", "authenticated", "service_role"]) {
+        assert.equal((await db.query<{ allowed: boolean }>("select has_function_privilege($1,'patreon_roles.role_sync_without_allocations(text,text,text,jsonb)','execute') allowed", [dbRole])).rows[0].allowed, false);
+    }
+});
+
+test("allocation evidence validation rolls back role effects and $50 OAuth completion retains exact replay", async () => {
+    await allocationLink();
+    const lease = await rpc("acquire", { allocationPolicy }) as Lease & { jobs: ({ memberId: string; generation: number; allocationFence: object })[] };
+    const job = lease.jobs[0];
+    await assert.rejects(rpc("complete", { token: lease.token, ...job, userId: patreonUser, eligible: true,
+        allocationEvidence: { verification: "qualifying" } }), /invalid_allocation_evidence/);
+    assert.equal(await role(), "User");
+    assert.equal((await allocationHead()).evidence.verification, "unverified");
+    await rpc("release", { token: lease.token });
+    const hash = "a".repeat(64);
+    await db.query("select public.membership_begin($1,'123456789012345678',$2,$3,'/servers')", [user, crypto.randomUUID(), hash]);
+    await db.query("update public.patreon_oauth_states set kind='complete',patreon_user_id=$2,evidence=public.membership_empty_evidence() || '{\"policyVersion\":\"patreon-paid-usd50-v1\"}'::jsonb where token_hash=$1", [hash, patreonUser]);
+    const complete = () => db.query("select public.membership_complete($1,'123456789012345678',$2) result", [user, hash]);
+    assert.deepEqual((await complete()).rows, (await complete()).rows);
+    assert.equal((await allocationHead()).evidence.policyVersion, "patreon-paid-usd50-v1");
+    for (const dbRole of ["anon", "authenticated"]) {
+        assert.equal((await db.query<{ allowed: boolean }>("select has_function_privilege($1,'public.patreon_role_sync(text,text,text,jsonb)','execute') allowed", [dbRole])).rows[0].allowed, false);
+    }
+});

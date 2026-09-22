@@ -43,8 +43,9 @@ OAuth tokens are still discarded.
 - Changing/deleting an OAuth link immediately withdraws the old integration
   grant in the same database transaction. New links schedule verification;
   cached membership records do not transfer a grant to another account.
-- This changes website roles only. It does not allocate or delete servers,
-  change control-plane quotas, send Patreon messages, or export saves. Existing
+- The role policy changes website roles only. The optional [allocation webhook
+  integration](patreon-allocation-webhooks.md) independently refreshes the $50+
+  allocation allowance. Neither policy claims slots or deletes servers. Existing
   server ownership and lifecycle rules continue to apply after role revocation.
 
 ## Worker and persistence
