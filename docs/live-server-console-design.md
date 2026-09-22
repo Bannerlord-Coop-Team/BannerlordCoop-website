@@ -234,7 +234,7 @@ RPC from website080003. Both writers merge only their keys under current Auth ro
 locks, never stale unrelated metadata. Refusal is busy/retry, not success. Refresh
 assignments before retrying multi-account edits. See [combined locking and retry](membership-locking.md).
 
-## Managed log-download identity
+## Managed server identity
 
 The canonical `/servers/[serverId]` page denies a recognized live server before
 loading managed assignments or considering a preview if the verified user lacks
@@ -242,8 +242,7 @@ live-server access. Managed access alone cannot authorize that live page. The
 console gateway continues to independently authorize every console connection.
 
 A live catalog ID need not equal its real managed UUID. The website-only
-`CONSOLE_SERVER_CATALOG` accepts an optional `managedServerId` for **log downloads
-only**:
+`CONSOLE_SERVER_CATALOG` accepts an optional `managedServerId` for the server's **managed capabilities**:
 
 ```json
 [{"id":"live-server-one","name":"Server One","address":"203.0.113.10:4200","nodeId":"node-one","provider":"External VPS","managedServerId":"abcdef12-1234-4123-8123-123456789abc"}]
@@ -274,8 +273,10 @@ not a new download backend for standalone Docker servers. Before configuring it:
    belongs to this exact server; also verify an unrelated account is denied.
    No live onboarding, configuration, or download is performed by this PR.
 
-The page resolves the configured UUID **only** within the current user's
-`listAllMyServers` response and offers logs only for owner/manager access. An
+The page requires a session token and resolves the configured UUID once, **only**
+within the current user's `listAllMyServers` response. All managed controls use
+that same server summary and their existing permission checks; logs require
+owner/manager access. An
 explicit missing/inaccessible mapping never falls back to another server. Without
 a mapping, existing same-ID matching remains supported. Missing managed access,
 a failed managed lookup, or missing onboarding leaves downloads unavailable with
@@ -285,6 +286,7 @@ Downloads use the unchanged managed latest-log endpoint, not the truncated
 console display or Docker stdout. Its bearer reauthentication, current managed
 ACL/generation checks, safe `.log` filename, actual file bytes, and **100 MiB**
 limit remain authoritative. Lifecycle, visibility, settings, saves and backups
-are not enabled by this log mapping. Preview servers and `/servers/wireframe`
+use the same resolved managed identity and retain their existing permission and
+state restrictions. Mapping does not grant any additional permissions. Preview servers and `/servers/wireframe`
 remain demos. A genuinely standalone live server still needs managed onboarding
 or a separately implemented authorized file-download integration.

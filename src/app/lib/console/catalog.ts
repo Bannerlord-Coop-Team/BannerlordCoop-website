@@ -25,7 +25,7 @@ function catalogString(
     return value.trim();
 }
 
-// Validates the operator-owned live catalog, including optional managed log identities.
+// Validates the operator-owned live catalog, including optional managed server identities.
 export function parseConsoleServerCatalog(
     raw: string | undefined,
     fallback: readonly LiveConsoleServer[],

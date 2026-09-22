@@ -46,6 +46,14 @@ it("redirects anonymous visitors to login", async () => {
     expect(mocks.managedServers).not.toHaveBeenCalled();
 });
 
+it("redirects a verified user without a session token before loading server data", async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: null } });
+    await expect(page()).rejects.toThrow("redirect:/login?next=/servers/live-server");
+    expect(mocks.managedServers).not.toHaveBeenCalled();
+    expect(mocks.displayNames).not.toHaveBeenCalled();
+    expect(mocks.preview).not.toHaveBeenCalled();
+});
+
 it("denies known live servers before managed or preview fallthrough, even for a same-ID managed assignment", async () => {
     mocks.liveAccess.mockReturnValue(null);
     mocks.managedServers.mockResolvedValue([{ serverId: liveId, accessRole: "owner" }]);
@@ -55,14 +63,13 @@ it("denies known live servers before managed or preview fallthrough, even for a 
     expect(mocks.preview).not.toHaveBeenCalled();
 });
 
-it.each(["owner", "operator", "admin"])("resolves the authorized mapped log identity for live %s access only", async (accessLevel) => {
+it.each(["owner", "operator", "admin"])("resolves one managed identity for live %s access and all managed controls", async (accessLevel) => {
     mocks.liveAccess.mockReturnValue(accessLevel);
     const result = await page();
-    expect(mocks.managedServers).toHaveBeenCalledWith("token");
+    expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token");
     expect(result.props.logDownload).toEqual({ serverId: managedId, userId: "user" });
     expect(result.props.server.id).toBe(liveId);
-    // Mapping logs must not expose lifecycle, settings, or save actions for a different ID.
-    expect(result.props.managedServer).toBeNull();
+    expect(result.props.managedServer).toEqual({ serverId: managedId, accessRole: "manager" });
 });
 
 it.each(["missing", "support", "admin"])("keeps mapped logs unavailable for %s managed access without falling back", async (accessRole) => {
@@ -70,7 +77,9 @@ it.each(["missing", "support", "admin"])("keeps mapped logs unavailable for %s m
         { serverId: liveId, accessRole: "owner" },
         ...(accessRole === "missing" ? [] : [{ serverId: managedId, accessRole }]),
     ]);
-    expect((await page()).props.logDownload).toBeUndefined();
+    const result = await page();
+    expect(result.props.logDownload).toBeUndefined();
+    expect(result.props.managedServer).toEqual(accessRole === "missing" ? null : { serverId: managedId, accessRole });
 });
 
 it("preserves same-ID downloads when no explicit mapping exists", async () => {

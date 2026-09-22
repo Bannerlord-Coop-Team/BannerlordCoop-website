@@ -91,19 +91,16 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     const liveAccessLevel = liveServer ? getLiveConsoleAccessLevel(user, liveServer.id) : null;
     if (liveServer && !liveAccessLevel) redirect("/servers");
 
-    let managedServer: MyServerSummary | null = null;
-    let managedLogServer: MyServerSummary | null = null;
     const accessToken = sessionData.session?.access_token ?? null;
-    if (accessToken !== null) {
-        try {
-            const managedServers = await listAllMyServers(accessToken);
-            managedServer = managedServers.find((server) => server.serverId === serverId) ?? null;
-            const logServerId = liveServer?.managedServerId ?? serverId;
-            managedLogServer = managedServers.find((server) => server.serverId === logServerId
-                && (server.accessRole === "owner" || server.accessRole === "manager")) ?? null;
-        } catch (error) {
-            console.error("Managed server detail failed to load", error);
-        }
+    if (accessToken === null) redirect(`/login?next=/servers/${encodeURIComponent(serverId)}`);
+
+    let managedServer: MyServerSummary | null = null;
+    try {
+        const managedServerId = liveServer?.managedServerId ?? serverId;
+        managedServer = (await listAllMyServers(accessToken))
+            .find((server) => server.serverId === managedServerId) ?? null;
+    } catch (error) {
+        console.error("Managed server detail failed to load", error);
     }
 
     if (liveServer && liveAccessLevel) {
@@ -116,7 +113,8 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
                 accessUpdated={firstValue(query.accessUpdated)}
                 userId={user.id}
                 managedServer={managedServer}
-                logDownload={managedLogServer ? { serverId: managedLogServer.serverId, userId: user.id } : undefined}
+                logDownload={managedServer && (managedServer.accessRole === "owner" || managedServer.accessRole === "manager")
+                    ? { serverId: managedServer.serverId, userId: user.id } : undefined}
                 server={{
                     ...liveServer,
                     name: displayNames.get(liveServer.id) ?? liveServer.name,
@@ -125,7 +123,7 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
         );
     }
 
-    if (managedServer !== null && accessToken !== null) {
+    if (managedServer !== null) {
         return <ManagedServerManagementPage userId={user.id} accessToken={accessToken} server={managedServer} />;
     }
 
@@ -287,7 +285,7 @@ async function LiveServerManagementPage({
     userId: string;
     accessError?: string;
     accessLevel: LiveConsoleAccessLevel;
-    accessToken: string | null;
+    accessToken: string;
     accessUpdated?: string;
     managedServer: MyServerSummary | null;
     logDownload?: { serverId: string; userId: string };
@@ -338,7 +336,7 @@ async function LiveServerManagementPage({
             <ServerConsoleWorkspace><LiveServerConsole gatewayUrl={getConsoleGatewayUrl()} serverId={server.id} logDownload={logDownload} /></ServerConsoleWorkspace>
             {!logDownload && <p className="text-sm text-foreground-muted">Log downloads require a linked managed server and owner or manager access. Ask an administrator to check onboarding, the server mapping, and your managed-server access.</p>}
         </ServerWorkspacePanel>
-        {managedServer !== null && accessToken !== null
+        {managedServer !== null
             ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
             : <UnavailableFileWorkspaces />}
         <ServerWorkspacePanel section="Settings">
