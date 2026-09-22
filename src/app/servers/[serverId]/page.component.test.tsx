@@ -152,7 +152,14 @@ it.each(["mapping-required", "access-required", "lookup-failed"] as const)("expl
         expect(setup?.props).toEqual({ reason, serverId: liveId });
         const html = renderToStaticMarkup(setup);
         expect(html).toContain(reason === "lookup-failed" ? "Reload backup access" : "View managed servers and setup options");
-        expect(html).not.toContain("<button");
+        if (reason === "lookup-failed") {
+            // A same-page fragment link would not reload; GET must request fresh access.
+            expect(html).toContain(`action="/servers/${liveId}#server-backups" method="get"`);
+        } else {
+            expect(html).not.toContain("<button");
+        }
+        expect(html).not.toContain("Create backup");
+        expect(html).not.toContain("Restore save");
         expect(await findServerElement(tree, "ManagedServerFiles")).toBeNull();
         expect(mocks.backups).not.toHaveBeenCalled();
         expect(mocks.backupStatus).not.toHaveBeenCalled();

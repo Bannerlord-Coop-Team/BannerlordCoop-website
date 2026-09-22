@@ -12,7 +12,9 @@ export function LiveServerBackupSetup({ reason, serverId }: {
             <p role="alert" className="mt-3 text-sm leading-6 text-foreground-muted">
                 Managed backup access could not be checked. This does not mean your backups are missing. Reload this page before trying a backup operation.
             </p>
-            <a href={`/servers/${encodeURIComponent(serverId)}#server-backups`} className="mt-4 inline-block text-sm text-gold underline focus-visible:outline-2 focus-visible:outline-gold">Reload backup access</a>
+            <form action={`/servers/${encodeURIComponent(serverId)}#server-backups`} method="get" className="mt-4">
+                <button type="submit" className="text-sm text-gold underline focus-visible:outline-2 focus-visible:outline-gold">Reload backup access</button>
+            </form>
         </> : <>
             <p className="mt-3 text-sm leading-6 text-foreground-muted">
                 {reason === "mapping-required"
