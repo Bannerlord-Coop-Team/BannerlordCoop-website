@@ -9,8 +9,7 @@ import {
     fieldRequirementLabel,
     formatDiscordOwner,
     installableBuilds,
-    releaseGameVersion,
-    releaseRevision,
+    releaseChannelLabel,
     releaseVersion,
     MAINTENANCE_TIME_ZONE,
     maintenanceSlotOptions,
@@ -91,7 +90,7 @@ test("maintenance choices show their authoritative timezone without changing pro
     ]);
 });
 
-test("the website creates servers on Stable without asking for a redundant release choice", async () => {
+test("the website creates servers on Public without asking for a redundant release choice", async () => {
     const input: Record<string, unknown> = { displayName: "Calradia" };
     applyControlPlaneOperationDefaults("create-server", input);
     assert.deepEqual(input, { displayName: "Calradia", releaseChannel: "stable" });
@@ -107,7 +106,7 @@ test("the website creates servers on Stable without asking for a redundant relea
     const createCard = source.match(/operation: "create-server"[\s\S]+?operation: "set-global-controls"/u)?.[0];
     assert.ok(createCard);
     assert.doesNotMatch(createCard, /name: "releaseChannel"/u);
-    assert.match(createCard, /New servers use Stable by default/u);
+    assert.match(createCard, /New servers use Public by default/u);
 });
 
 test("the administrator page omits the retired role-deletion control", async () => {
@@ -265,43 +264,16 @@ function build(buildId: string, validationState: string, sourceRevision: string)
     };
 }
 
-test("the normal release catalog keeps only validated builds and their commit revisions", () => {
-    const validated = build("validated", "validated", "a".repeat(40));
-    const visible = installableBuilds([
-        build("pending", "pending", "b".repeat(40)),
-        validated,
-        build("rejected", "rejected", "c".repeat(40)),
-    ]);
-
-    assert.deepEqual(visible, [validated]);
-    assert.equal(visible[0]?.sourceRevision, "a".repeat(40));
-});
-
-test("registry-observed releases present their immutable image digest as the revision", () => {
-    const digest = "d".repeat(64);
-    assert.equal(
-        releaseRevision(build(`ghcr-stable-${digest}`, "validated", "registry-observed")),
-        digest,
-    );
-    assert.equal(releaseRevision(build("receipt", "validated", "a".repeat(40))), "a".repeat(40));
-});
-
-test("the two legacy Stable digests show their verified semantic release metadata", () => {
-    for (const [buildId, storedVersion] of [
-        ["ghcr-stable-35b1b6ebeb038a5a69f4ef8a2a84031c3726702452e38874fd4b2f339de92203", "stable-35b1b6ebeb03"],
-        ["ghcr-stable-c995ff97ce3c6cfe1b175f0586f90593892606b4f7ec182c9390b3903dd2d526", "stable-c995ff97ce3c"],
-    ]) {
-        const release = {
-            ...build(buildId, "validated", "registry-observed"),
-            channel: "stable" as const,
-            version: storedVersion,
-            supportedGameVersion: "unknown",
-        };
-        assert.equal(releaseVersion(release), "v0.1.5");
-        assert.equal(releaseGameVersion(release), "v1.4.8");
-        assert.equal(releaseVersion({ ...release, sourceRevision: "a".repeat(40) }), storedVersion);
-        assert.equal(releaseGameVersion({ ...release, sourceRevision: "a".repeat(40) }), "unknown");
-    }
+// Protect registry-only selection while retaining honest historical version display.
+test("only verified registry versions are selectable; historical versions are not fabricated", () => {
+    const historical = { ...build("ghcr-stable-35b1b6ebeb038a5a69f4ef8a2a84031c3726702452e38874fd4b2f339de92203", "validated", "registry-observed"), version: "stable-35b1b6ebeb03" };
+    const registry = { ...build("transport-key", "validated", "a".repeat(40)), requiredClientModVersion: "v0.1.5",
+        registryMetadata: { versionTag: "v0.1.5-client12345678-serverabcdefgh", clientRevision: "a".repeat(40), serverRevision: "b".repeat(40) }, currentChannel: true };
+    assert.deepEqual(installableBuilds([historical, registry, { ...registry, validationState: "revoked" }]), [registry]);
+    assert.equal(releaseVersion(registry), registry.registryMetadata.versionTag);
+    assert.equal(releaseVersion(historical), "stable-35b1b6ebeb03");
+    assert.equal(releaseChannelLabel("stable"), "Public");
+    assert.equal(releaseChannelLabel("nightly"), "Nightly");
 });
 
 test("overview statistic cards fill the final row evenly", () => {
@@ -391,23 +363,15 @@ test("operation card rows expand to their row width", () => {
     assert.throws(() => operationCardRowClass(4));
 });
 
-test("Builds offers audited latest Stable import without caller-selected release identity", async () => {
+// Ensure discovery replaces receipt import and renders backend metadata rather than legacy guesses.
+test("Builds refreshes GHCR discovery and displays exact release labels", async () => {
     const source = await readFile(new URL("../../admin/control-plane/page.tsx", import.meta.url), "utf8");
-    const view = source.slice(source.indexOf("function ReleasesView"), source.indexOf("function OperationsView"));
-    assert.match(view, /operation="import-latest-stable"/u);
-    assert.match(view, /title="Import Latest Stable"/u);
-    assert.match(view, /name: "reason"/u);
-    assert.doesNotMatch(view, /name: "(?:digest|repository|runId|buildId)"/u);
-});
-
-test("Stable import result identifies the validated build and immutable image", () => {
-    const digest = `sha256:${"a".repeat(64)}`;
-    const buildId = `mrb1-${"b".repeat(64)}`;
-    const result = presentControlPlaneOperationResult("import-latest-stable", {
-        buildId, version: "v0.1.5", channel: "stable", validationState: "validated", containerDigest: digest, serverRunId: "34874600399",
-    });
-    assert.match(result.message, /v0\.1\.5/u);
-    assert.ok(result.message.includes(buildId));
-    assert.ok(result.message.includes(digest));
-    assert.match(result.message, /does not directly update/u);
+    assert.match(source, /<RefreshReleaseCatalog/u);
+    assert.doesNotMatch(source, /import-latest-stable|LEGACY_STABLE_METADATA/u);
+    for (const key of ["client.revision", "client.version", "dedicated-server.revision", "game.version"]) {
+        assert.ok(source.includes(`io.bannerlordcoop.${key}`));
+    }
+    assert.match(source, /build.currentChannel/u);
+    assert.match(source, /Follow channel \(remove version pin\)/u);
+    assert.match(source, /RecordedRelease build=\{result.dashboard.installedBuild\}/u);
 });
