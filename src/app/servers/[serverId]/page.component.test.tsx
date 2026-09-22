@@ -43,12 +43,14 @@ beforeEach(() => {
 it("redirects anonymous visitors to login", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } });
     await expect(page()).rejects.toThrow("redirect:/login?next=/servers/live-server");
+    expect(mocks.liveServer).not.toHaveBeenCalled();
     expect(mocks.managedServers).not.toHaveBeenCalled();
 });
 
 it("redirects a verified user without a session token before loading server data", async () => {
     mocks.getSession.mockResolvedValue({ data: { session: null } });
     await expect(page()).rejects.toThrow("redirect:/login?next=/servers/live-server");
+    expect(mocks.liveServer).not.toHaveBeenCalled();
     expect(mocks.managedServers).not.toHaveBeenCalled();
     expect(mocks.displayNames).not.toHaveBeenCalled();
     expect(mocks.preview).not.toHaveBeenCalled();

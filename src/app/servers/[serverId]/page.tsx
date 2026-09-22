@@ -78,7 +78,6 @@ export const metadata: Metadata = {
 // Authorizes the requested server before resolving its available management capabilities.
 export default async function ServerPage({ params, searchParams }: ServerPageProps) {
     const [{ serverId }, query] = await Promise.all([params, searchParams]);
-    const liveServer = getLiveConsoleServer(serverId);
     const supabase = await getSupabaseServerClient();
     const [{ data: userData }, { data: sessionData }] = await Promise.all([
         supabase.auth.getUser(),
@@ -88,11 +87,12 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
 
     if (!user) redirect(`/login?next=/servers/${encodeURIComponent(serverId)}`);
 
-    const liveAccessLevel = liveServer ? getLiveConsoleAccessLevel(user, liveServer.id) : null;
-    if (liveServer && !liveAccessLevel) redirect("/servers");
-
     const accessToken = sessionData.session?.access_token ?? null;
     if (accessToken === null) redirect(`/login?next=/servers/${encodeURIComponent(serverId)}`);
+
+    const liveServer = getLiveConsoleServer(serverId);
+    const liveAccessLevel = liveServer ? getLiveConsoleAccessLevel(user, liveServer.id) : null;
+    if (liveServer && !liveAccessLevel) redirect("/servers");
 
     let managedServer: MyServerSummary | null = null;
     try {
