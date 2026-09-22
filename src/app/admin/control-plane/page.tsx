@@ -546,7 +546,7 @@ function AuditView({ page }: { page: HostingPage<AuditEvent> }) { return <sectio
 function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> } }) {
     return <div className="mt-8 space-y-8">
         <section className="flex flex-wrap items-center justify-between gap-4">
-            <p className="max-w-3xl text-sm leading-6 text-foreground-muted">Available versions come from GHCR images with verified release labels. Refresh checks discovery again; it does not install a version or move a channel alias. Historical installed versions remain visible on the server detail page.</p>
+            <p className="max-w-3xl text-sm leading-6 text-foreground-muted">Available versions come from GHCR images with verified release labels. Reload uses the current catalog, which may be cached for up to five minutes. It does not install a version or move a channel alias. Historical installed versions remain visible on the server detail page.</p>
             <RefreshReleaseCatalog />
         </section>
         <div className="grid gap-8 xl:grid-cols-2">{(["stable", "nightly"] as const).map(channel => <section key={channel}>
