@@ -136,12 +136,13 @@ account records, lifecycle operations and upstream errors are never cached.
 Expired pages are not served after an upstream failure. Instances do not share
 cache state; cold starts and concurrent misses may query the control plane again.
 
-Deploy this change only through a separately authorized Edge Function rollout.
-This adds the Edge cache; it does not yet remove the control plane's existing
-five-minute lifecycle/discovery cache. Until that backend refactor is deployed,
-the two cache lifetimes can compound to approximately ten minutes of release-list
-staleness. Removing the backend cache remains a prerequisite for the intended
-single-cache architecture.
+Deploy this change only through a separately authorized Edge Function rollout,
+coordinated with control-plane PR #198's on-demand `RegistryReleaseApi`. That
+backend removes the local cache and background release refresh loop: direct
+Builds requests and lifecycle selections query GHCR, while the Edge endpoint
+caches presentation responses only. Health probes and ordinary Start/Stop/Restart
+remain independent of release discovery. Do not deploy this cache in front of an
+older caching backend; the two lifetimes would compound.
 
 Focused verification:
 
