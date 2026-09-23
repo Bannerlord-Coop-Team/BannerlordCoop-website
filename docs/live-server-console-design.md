@@ -290,3 +290,25 @@ use the same resolved managed identity and retain their existing permission and
 state restrictions. Mapping does not grant any additional permissions. Preview servers and `/servers/wireframe`
 remain demos. A genuinely standalone live server still needs managed onboarding
 or a separately implemented authorized file-download integration.
+
+### Console command picker
+
+The live Server page lists the dedicated server's built-in stdin commands: `help`,
+`status`, `players`, `save`, `stop`, `say <text>`, and `kick <id|name>` (see
+`DedicatedServer.Core/Server/ServerConsole.cs` in DedicatedServer). Search matches
+command names, descriptions, and groups. Mobile users expand **Browse commands**.
+Selecting a row replaces and focuses the console draft; it never sends a command.
+Review the draft and replace any argument placeholders before pressing Send or Enter.
+`stop` saves and shuts down the game server; it is not a host shutdown.
+
+Search, browsing, and selection share the input's existing availability gate:
+connected, running, and stdin enabled. Unavailable servers, fictional previews,
+and `/servers/wireframe` remain non-operational. The picker is a curated list of
+built-ins plus the existing Cheats catalog's published server/either-side commands.
+Client-only commands, DEBUG-only registrations, and fixtures are excluded using the
+same publication filter as `/cheats`. Cheat selections insert the documented usage,
+including argument placeholders; descriptions remain visible, and search also
+matches categories, aliases, and argument guidance. The list scrolls within the
+picker. Availability of game commands depends on the installed build and game
+state; this is not runtime command discovery. This change uses the existing gateway
+input path and adds no backend or permissions.

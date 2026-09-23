@@ -1,9 +1,11 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, FileJson, Play, RotateCw, Search, Settings2, Square, Terminal } from "lucide-react";
 
+import commandsData from "@/app/cheats/commands.json";
+import { isPublishedCheat } from "@/app/cheats/debugOnly";
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
 
 const sections = [
@@ -22,21 +24,41 @@ export function ServerWorkspacePanel({ section, children }: { section: Section; 
     return <div hidden={current !== section} className="space-y-5">{children}</div>;
 }
 
-export function ServerConsoleWorkspace({ children }: { children: ReactNode }) {
+// DedicatedServer.Core/Server/ServerConsole.cs: built-in stdin commands.
+const consoleCommands = [
+    { group: "Information", commands: [["help", "List available console commands"], ["status", "Show campaign time, parties, and players"], ["players", "List connected players and their IDs"]] },
+    { group: "Campaign", commands: [["save", "Save the current campaign"], ["stop", "Save the world and shut down the server"]] },
+    { group: "Players", commands: [["say <text>", "Broadcast a message to all players"], ["kick <id|name>", "Disconnect a player; use players to find their ID"]] },
+    { group: "Game commands & cheats", commands: commandsData.commands
+        .filter(command => command.side !== "client" && isPublishedCheat(command))
+        .map(command => [command.usage, command.summary, [command.category, ...command.aliases, ...command.arguments.map(argument => argument.description)].join(" ")]) },
+];
+
+export function ServerConsoleWorkspace({ children, onSelectCommand }: { children: ReactNode; onSelectCommand?: (command: string) => void }) {
+    const [query, setQuery] = useState("");
+    const [expanded, setExpanded] = useState(false);
+    const id = useId();
+    const available = !!onSelectCommand;
+    const search = query.trim().toLowerCase();
+    const groups = consoleCommands.map(({ group, commands }) => ({
+        group, commands: commands.filter(command => `${group} ${command.join(" ")}`.toLowerCase().includes(search)),
+    })).filter(({ commands }) => commands.length > 0);
     return <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-5">{children}</div>
         <aside className="min-w-0 rounded-lg border border-white/10 bg-surface" aria-label="Console commands">
             <div className="hidden border-b border-white/10 p-5 lg:block"><h2 className="text-base font-semibold">Commands</h2><p className="mt-1 text-sm text-foreground-muted">Insert, review, then send.</p></div>
-            <button disabled className="flex min-h-12 w-full items-center justify-between px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40 lg:hidden">Browse commands <ChevronDown className="size-4" aria-hidden="true" /></button>
-            <div className="hidden p-5 lg:block">
-                <label htmlFor="command-search" className="sr-only">Search console commands</label>
-                <div className="relative"><Search className="absolute top-3 left-3 size-4 text-foreground-muted" aria-hidden="true" /><input id="command-search" disabled className="w-full rounded-md border border-white/15 bg-background py-2.5 pr-3 pl-9 text-sm disabled:cursor-not-allowed disabled:opacity-40" placeholder="Search commands…" /></div>
-                <p className="mt-3 text-xs leading-5 text-foreground-muted">Example commands only. The command picker is not connected yet.</p>
-                <div className="mt-4 space-y-4">
-                    {[{ group: "Information", commands: [["help", "List available console commands"], ["players", "Show connected players"]] }, { group: "Campaign", commands: [["save", "Save the current campaign"]] }, { group: "Players", commands: [["announce", "Send a message to all players"]] }].map(({ group, commands }) => <section key={group}>
+            <button type="button" disabled={!available} aria-expanded={expanded && available} aria-controls={`${id}-commands`} onClick={() => setExpanded(!expanded)} className="flex min-h-12 w-full items-center justify-between px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 lg:hidden">Browse commands <ChevronDown className="size-4" aria-hidden="true" /></button>
+            <div id={`${id}-commands`} className={`${expanded && available ? "block" : "hidden"} p-5 lg:block`}>
+                <label htmlFor={`${id}-search`} className="sr-only">Search console commands</label>
+                <div className="relative"><Search className="absolute top-3 left-3 size-4 text-foreground-muted" aria-hidden="true" /><input id={`${id}-search`} type="search" value={query} onChange={event => setQuery(event.target.value)} disabled={!available} className="w-full rounded-md border border-white/15 bg-background py-2.5 pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40" placeholder="Search commands…" /></div>
+                <p className="mt-3 text-xs leading-5 text-foreground-muted">{available ? "Selecting a command replaces the input without sending. Edit any <arguments> before sending." : "Commands are unavailable until a writable live console is connected."}</p>
+                <p className="mt-2 text-xs leading-5 text-foreground-muted">Game commands and cheats depend on the installed build and game state. Client-only and DEBUG-only commands are excluded.</p>
+                <div className="mt-4 max-h-96 space-y-4 overflow-y-auto overscroll-contain pr-1">
+                    {groups.map(({ group, commands }) => <section key={group}>
                         <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-foreground-muted">{group}</h3>
-                        <ul className="divide-y divide-white/10">{commands.map(([command, description]) => <li key={command}><button disabled className="flex w-full items-center justify-between gap-3 rounded px-1 py-3 text-left disabled:cursor-not-allowed disabled:opacity-40"><span><code className="block text-sm text-foreground">{command}</code><span className="mt-1 block text-[13px] leading-5 text-foreground-muted">{description}</span></span><ChevronRight className="size-4 shrink-0 text-foreground-muted" aria-hidden="true" /></button></li>)}</ul>
+                        <ul className="divide-y divide-white/10">{commands.map(([command, description]) => <li key={command}><button type="button" disabled={!available} onClick={() => { onSelectCommand?.(command); setExpanded(false); }} className="flex w-full items-center justify-between gap-3 rounded px-1 py-3 text-left hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40"><span className="min-w-0"><code className="block break-words text-sm text-foreground [overflow-wrap:anywhere]">{command}</code><span className="mt-1 block text-[13px] leading-5 text-foreground-muted">{description}</span></span><ChevronRight className="size-4 shrink-0 text-foreground-muted" aria-hidden="true" /></button></li>)}</ul>
                     </section>)}
+                    {groups.length === 0 && <p role="status" className="text-sm text-foreground-muted">No commands match your search.</p>}
                 </div>
             </div>
         </aside>

@@ -1,5 +1,6 @@
 "use client";
 
+import { ServerConsoleWorkspace } from "./ServerManagementWorkspace";
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
 
 import {
@@ -148,6 +149,7 @@ export function LiveServerConsole({
     serverId: string;
 }) {
     const [command, setCommand] = useState("");
+    const commandRef = useRef<HTMLInputElement | null>(null);
     const [output, setOutput] = useState("");
     const [followingLogs, setFollowingLogs] = useState(true);
     const [containerState, setContainerState] = useState<ContainerState>("unknown");
@@ -446,7 +448,10 @@ export function LiveServerConsole({
     const operationBusy = pendingOperation !== null;
     const consoleWritable = connected && containerState === "running" && inputEnabled;
 
-    return <section className="min-w-0 rounded-lg border border-white/10 bg-surface" aria-labelledby="container-console-heading">
+    return <ServerConsoleWorkspace onSelectCommand={consoleWritable ? (value) => {
+        setCommand(value);
+        commandRef.current?.focus();
+    } : undefined}><section className="min-w-0 rounded-lg border border-white/10 bg-surface" aria-labelledby="container-console-heading">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
             <h2 id="container-console-heading" className="text-base font-semibold">Console</h2>
             <DownloadServerLogButton {...logDownload} className={`${button} !border-transparent !bg-transparent !text-foreground-muted hover:!text-foreground`} />
@@ -464,7 +469,7 @@ export function LiveServerConsole({
         </div>
         <form onSubmit={sendCommand} className="flex gap-2 border-t border-white/10 p-5">
             <label htmlFor="console-command" className="sr-only">Console command</label>
-            <input id="console-command" value={command} onChange={event => setCommand(event.target.value)} disabled={!consoleWritable} maxLength={4095} autoComplete="off" spellCheck={false} placeholder="Enter a command…" className="w-full min-w-0 rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm text-foreground outline-none focus:border-gold focus:ring-1 focus:ring-gold disabled:cursor-not-allowed disabled:opacity-40" />
+            <input ref={commandRef} id="console-command" value={command} onChange={event => setCommand(event.target.value)} disabled={!consoleWritable} maxLength={4095} autoComplete="off" spellCheck={false} placeholder="Enter a command…" className="w-full min-w-0 rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm text-foreground outline-none focus:border-gold focus:ring-1 focus:ring-gold disabled:cursor-not-allowed disabled:opacity-40" />
             <button type="submit" disabled={!consoleWritable || !command.trim()} className={`${button} !border-gold/50 !bg-gold/15 !text-gold`}>Send <ArrowUpRight className="size-4" aria-hidden="true" /></button>
         </form>
         <div className="px-5 pb-5">
@@ -475,5 +480,5 @@ export function LiveServerConsole({
                     : <button type="button" onClick={() => void connect()} disabled={!gatewayUrl} className={button}>{busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Plug className="size-4" aria-hidden="true" />}Connect</button>}
             </div>
         </div>
-    </section>;
+    </section></ServerConsoleWorkspace>;
 }
