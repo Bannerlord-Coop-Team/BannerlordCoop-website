@@ -102,16 +102,19 @@ test("accepts authenticated server-side calls without emitting CORS", async () =
     assert.equal(response.headers.get("access-control-allow-origin"), null);
 });
 
-function createHandler(fetchImplementation: typeof fetch) {
+/** Creates an isolated Edge handler with injected network and clock. */
+function createHandler(fetchImplementation: typeof fetch, now?: () => number) {
     return createControlPlaneAdminHandler({
         allowedOrigins: [ORIGIN, "https://bannerlordcoop.netlify.app"],
         supabaseUrl: "https://project.supabase.co",
         supabasePublishableKey: "publishable-key-with-enough-characters",
         controlPlaneAdminUrl: "https://control-plane.example.test",
         fetchImplementation,
+        now,
     });
 }
 
+/** Creates an authenticated request with the requested envelope. */
 function adminRequest(body = JSON.stringify({ version: 1, requestId: REQUEST_ID, operation: "overview" }), includeOrigin = true) {
     return new Request("https://function.example.test", {
         method: "POST",
@@ -137,3 +140,127 @@ for (const identities of [undefined, [], [{ provider: "google", id: "google", id
         assert.equal(calls, 2);
     });
 }
+
+/** Creates the same paginated release-list envelope used by the admin website. */
+function releaseRequest(requestId = REQUEST_ID, channel = "stable", cursor: string | null = null, limit = 100) {
+    return adminRequest(JSON.stringify({ version: 1, requestId, operation: "builds", input: { channel, cursor, limit } }));
+}
+
+/** Returns a successful release page correlated with the forwarded request. */
+function releaseResponse(init?: RequestInit) {
+    const request = JSON.parse(String(init?.body));
+    return Response.json({ version: 1, requestId: request.requestId, ok: true,
+        result: { items: [{ buildId: "v0.1.5", channel: request.input.channel }], nextCursor: null } });
+}
+
+test("caches release pages for five minutes while reauthenticating and correlating each request", async () => {
+    let now = 0;
+    let authCalls = 0;
+    let upstreamCalls = 0;
+    const handler = createHandler(async (input, init) => {
+        if (String(input).endsWith("/auth/v1/user")) { authCalls++; return Response.json(ADMIN); }
+        upstreamCalls++;
+        return releaseResponse(init);
+    }, () => now);
+    await handler(releaseRequest());
+    now = 299_999;
+    const requestId = "33333333-3333-4333-8333-333333333333";
+    const cached = await handler(releaseRequest(requestId));
+    assert.equal((await cached.json()).requestId, requestId);
+    assert.equal(cached.headers.get("cache-control"), "no-store");
+    assert.equal(upstreamCalls, 1);
+    assert.equal(authCalls, 2);
+    now = 300_000;
+    await handler(releaseRequest());
+    assert.equal(upstreamCalls, 2);
+});
+
+test("never serves a warm release cache after authentication or admin access is lost", async () => {
+    let role = "Admin";
+    let upstreamCalls = 0;
+    const handler = createHandler(async (input, init) => {
+        if (String(input).endsWith("/auth/v1/user")) return role === "expired"
+            ? new Response(null, { status: 401 }) : Response.json({ ...ADMIN, app_metadata: { role } });
+        upstreamCalls++;
+        return releaseResponse(init);
+    });
+    await handler(releaseRequest());
+    role = "User";
+    assert.equal((await handler(releaseRequest())).status, 403);
+    role = "expired";
+    assert.equal((await handler(releaseRequest())).status, 401);
+    assert.equal(upstreamCalls, 1);
+});
+
+test("isolates channel, cursor and page size and bounds the cache to one page per channel", async () => {
+    let upstreamCalls = 0;
+    const handler = createHandler(async (input, init) => {
+        if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
+        upstreamCalls++;
+        return releaseResponse(init);
+    });
+    await handler(releaseRequest());
+    await handler(releaseRequest(REQUEST_ID, "nightly"));
+    await handler(releaseRequest());
+    assert.equal(upstreamCalls, 2);
+    await handler(releaseRequest(REQUEST_ID, "stable", "v0.1.5"));
+    await handler(releaseRequest(REQUEST_ID, "stable", "v0.1.5", 20));
+    await handler(releaseRequest());
+    assert.equal(upstreamCalls, 5);
+});
+
+test("does not serve expired releases or cache failed upstream requests", async () => {
+    let now = 0;
+    let unavailable = false;
+    let upstreamCalls = 0;
+    const handler = createHandler(async (input, init) => {
+        if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
+        upstreamCalls++;
+        if (unavailable) throw new Error("private upstream failure");
+        return releaseResponse(init);
+    }, () => now);
+    await handler(releaseRequest());
+    now = 300_000;
+    unavailable = true;
+    assert.equal((await handler(releaseRequest())).status, 502);
+    assert.equal((await handler(releaseRequest())).status, 502);
+    unavailable = false;
+    assert.equal((await handler(releaseRequest())).status, 200);
+    assert.equal(upstreamCalls, 4);
+});
+
+test("does not cache error envelopes, malformed pages or mismatched request IDs", async () => {
+    for (const response of [
+        { version: 1, requestId: REQUEST_ID, ok: false, error: { code: "forbidden" } },
+        { version: 1, requestId: REQUEST_ID, ok: true, result: {} },
+        { version: 1, requestId: "other", ok: true, result: { items: [], nextCursor: null } },
+    ]) {
+        let upstreamCalls = 0;
+        const handler = createHandler(async (input) => {
+            if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
+            upstreamCalls++;
+            return Response.json(response);
+        });
+        await handler(releaseRequest());
+        await handler(releaseRequest());
+        assert.equal(upstreamCalls, 2);
+    }
+});
+
+test("does not cache lifecycle operations or requests with unknown release fields", async () => {
+    let upstreamCalls = 0;
+    const handler = createHandler(async (input, init) => {
+        if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
+        upstreamCalls++;
+        return releaseResponse(init);
+    });
+    for (const envelope of [
+        { operation: "start-server", input: { channel: "stable", cursor: null, limit: 100 } },
+        { operation: "builds", input: { channel: "stable", cursor: null, limit: 100, unknown: true } },
+    ]) {
+        const raw = JSON.stringify({ version: 1, requestId: REQUEST_ID, ...envelope });
+        await handler(adminRequest(raw));
+        await handler(adminRequest(raw));
+    }
+    assert.equal(upstreamCalls, 4);
+});

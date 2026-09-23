@@ -94,7 +94,7 @@ const OPERATION_EXPLANATIONS: Record<string, string> = {
     "suspend-server": "Places an administrative hold on the server, blocks owner operations, cancels unsafe expanding jobs, and queues a graceful stop.",
     "transfer-owner": "Transfers ownership only after recipient entitlement, quota, active-job, and provider-generation checks.",
     "update-vps-runner": "Deploys the control plane's current reviewed runner revision across every isolated slot on one onboarded VPS. The durable workflow quiesces and restores the slots, verifies build and save continuity, and rolls back on failed validation; it accepts no browser-supplied SSH or executable input.",
-    "update-server": "Installs the selected build. Choose a specific release to pin it, or the latest release to remove a pin and resume automatic updates.",
+    "update-server": "Installs the selected version. Choose a specific GHCR version to pin it, or Follow channel to remove the pin and resume automatic updates.",
     "update-settings": "Changes the release channel or maintenance window with a stale-state guard; it does not immediately install a build.",
     "validate-build": "Re-verifies the exact persisted release receipt and promotes a pending build only if all provenance and artifact checks still agree.",
 };

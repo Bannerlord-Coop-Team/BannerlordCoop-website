@@ -1,3 +1,4 @@
+import { RefreshReleaseCatalog } from "@/app/components/admin/RefreshReleaseCatalog";
 import {
     ControlPlaneActionCard,
     type AdminActionField,
@@ -28,8 +29,7 @@ import {
     operationCardRowClass,
     operationCardRows,
     overviewStatRowClass,
-    releaseGameVersion,
-    releaseRevision,
+    releaseChannelLabel,
     releaseVersion,
     serverLifecycleOperationHref,
 } from "@/app/lib/control-plane/presentation";
@@ -232,12 +232,13 @@ async function ControlPlaneViewContent({
     );
 }
 
+/** Loads the authenticated data needed by the selected administration view. */
 async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null) {
     switch (view) {
         case "overview":
             return requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" });
         case "operations": {
-            const [overview, inventory, selectedDashboard] = await Promise.all([
+            const [overview, inventory, selectedDashboard, releases] = await Promise.all([
                 requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" }),
                 requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts" }),
                 serverId
@@ -247,9 +248,10 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                         input: { serverId },
                     })
                     : Promise.resolve(null),
+                loadReleaseCatalog(token),
             ]);
             return {
-                overview,
+                overview: { ...overview, stableBuilds: releases.stable, nightlyBuilds: releases.nightly },
                 inventory,
                 selectedServer: selectedDashboard?.dashboard.server ?? null,
             } satisfies OperationsData;
@@ -281,16 +283,21 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                     limit: 100,
                 },
             });
-        case "releases": {
-            const [stable, nightly] = await Promise.all([
-                requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, operation: "builds", input: { channel: "stable", cursor: null, limit: 100 } }),
-                requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, operation: "builds", input: { channel: "nightly", cursor: null, limit: 100 } }),
-            ]);
-            return { stable, nightly };
-        }
+        case "releases":
+            return loadReleaseCatalog(token);
         case "audit":
             return requestControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, operation: "audit", input: { cursor: null, limit: 100 } });
     }
+}
+
+/** Fetches the full bounded GHCR catalog rather than the overview's 20-version summaries. */
+async function loadReleaseCatalog(token: string) {
+    // Discovery considers at most 100 candidate versions, so 100 per channel covers the catalog.
+    const [stable, nightly] = await Promise.all([
+        requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, operation: "builds", input: { channel: "stable", cursor: null, limit: 100 } }),
+        requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, operation: "builds", input: { channel: "nightly", cursor: null, limit: 100 } }),
+    ]);
+    return { stable, nightly };
 }
 
 function ViewTabs({ active }: { active: View }) {
@@ -416,7 +423,7 @@ function ServersView({ page, query, discordUsers }: { page: HostingPage<ManagedS
                             <td className="p-4 text-xs text-foreground-muted"><p className="font-semibold text-foreground">{formatDiscordUsername(usernames.get(server.ownerDiscordUserId))}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.ownerDiscordUserId}</p></td>
                             <td className="p-4"><State value={server.operationState} /></td>
                             <td className="p-4"><RuntimeObservation server={server} /></td>
-                            <td className="p-4 text-xs text-foreground-muted">{server.releaseChannel}<br />{shortId(server.installedBuildId)}</td>
+                            <td className="p-4 text-xs text-foreground-muted">{releaseChannelLabel(server.releaseChannel)}<br />{shortId(server.installedBuildId)}</td>
                             <td className="p-4 text-xs text-foreground-muted">{server.provider}<br />{shortId(server.providerResourceId)}</td>
                             <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={server.updatedAt} /></td>
                         </ClickableTableRow>
@@ -430,6 +437,8 @@ function ServersView({ page, query, discordUsers }: { page: HostingPage<ManagedS
 
 function ServerView({ result, discordUsers }: { result: ServerDashboardResult; discordUsers: DiscordUserSummary[] }) {
     const { server } = result.dashboard;
+    const pinnedBuild = [result.dashboard.installedBuild, result.dashboard.desiredBuild]
+        .find(build => build?.buildId === server.pinnedBuildId) ?? null;
     const activeJob = result.dashboard.activeJob;
     const username = discordUsernameMap(discordUsers).get(server.ownerDiscordUserId);
     return (
@@ -454,7 +463,7 @@ function ServerView({ result, discordUsers }: { result: ServerDashboardResult; d
             <section className="grid gap-6 lg:grid-cols-3">
                 <Panel title="Ownership"><Definition label="Discord owner" value={formatDiscordOwner(username, server.ownerDiscordUserId)} /><Definition label="Region" value={server.friendlyRegion} /><Definition label="Provider" value={server.provider} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
                 <Panel title="Desired / observed"><Definition label="Desired" value={server.desiredState} /><Definition label="VM" value={server.observedVmState} /><Definition label="Game" value={server.observedGameState} /><Definition label="Agent" value={result.dashboard.runtime?.agentHealthy ? "Healthy" : "Unavailable"} tone={result.dashboard.runtime?.agentHealthy ? "ok" : "warning"} /></Panel>
-                <Panel title="Composition"><Definition label="Channel" value={server.releaseChannel} /><Definition label="Installed" value={server.installedBuildId ?? "None"} /><Definition label="Desired" value={server.desiredBuildId ?? "None"} /><Definition label="Pinned" value={server.pinnedBuildId ?? "None"} /><Definition label="Save" value={result.dashboard.activeSave?.displayName ?? "Default bootstrap pending"} /></Panel>
+                <Panel title="Composition"><Definition label="Channel" value={releaseChannelLabel(server.releaseChannel)} /><Definition label="Installed version" value={<RecordedRelease build={result.dashboard.installedBuild} buildId={server.installedBuildId} />} /><Definition label="Desired version" value={<RecordedRelease build={result.dashboard.desiredBuild} buildId={server.desiredBuildId} />} /><Definition label="Update policy" value={server.pinnedBuildId ? "Pinned version" : `Follow ${releaseChannelLabel(server.releaseChannel)} channel`} />{server.pinnedBuildId && <Definition label="Pinned version" value={<RecordedRelease build={pinnedBuild} buildId={server.pinnedBuildId} />} />}<Definition label="Save" value={result.dashboard.activeSave?.displayName ?? "Default bootstrap pending"} /></Panel>
             </section>
             <section><SectionHeading eyebrow="Recovery" title="Backups" count={result.backups.items.length} /><BackupsTable backups={result.backups.items} /></section>
             <section><SectionHeading eyebrow="Trace" title="Server audit" count={result.audit.items.length} /><AuditTable events={result.audit.items} /></section>
@@ -533,17 +542,17 @@ function JobsView({
 }
 function AuditView({ page }: { page: HostingPage<AuditEvent> }) { return <section className="mt-8"><SectionHeading eyebrow="Hash-chained history" title="Audit events" count={page.items.length} /><AuditTable events={page.items} /></section>; }
 
+/** Lists only registry-verified releases, with explicit channel alias markers. */
 function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> } }) {
-    const stable = installableBuilds(data.stable.items);
-    const nightly = installableBuilds(data.nightly.items);
-    const hiddenStable = data.stable.items.length - stable.length;
-    const hiddenNightly = data.nightly.items.length - nightly.length;
     return <div className="mt-8 space-y-8">
-        <ControlPlaneActionCard operation="import-latest-stable" title="Import Latest Stable"
-            description="Verify and import the latest successful Stable publication from its GitHub Actions receipt, including the immutable image digest and compatibility metadata."
-            help="Requires the control plane's dedicated Actions-read credential. This advances the Stable catalog; existing update policies may then select the build. It does not directly update or restart servers."
-            fields={[{ name: "reason", label: "Audit reason", kind: "textarea", required: true }]} />
-        <div className="grid gap-8 xl:grid-cols-2"><section><SectionHeading eyebrow="Validated release channel" title="Stable" count={stable.length} /><ReleaseHistoryNote hidden={hiddenStable} /><BuildTable builds={stable} /></section><section><SectionHeading eyebrow="Validated release channel" title="Nightly" count={nightly.length} /><ReleaseHistoryNote hidden={hiddenNightly} /><BuildTable builds={nightly} /></section></div>
+        <section className="flex flex-wrap items-center justify-between gap-4">
+            <p className="max-w-3xl text-sm leading-6 text-foreground-muted">Available versions come from GHCR images with verified release labels. Reload uses the current catalog, which may be cached for up to five minutes. It does not install a version or move a channel alias. Historical installed versions remain visible on the server detail page.</p>
+            <RefreshReleaseCatalog />
+        </section>
+        <div className="grid gap-8 xl:grid-cols-2">{(["stable", "nightly"] as const).map(channel => <section key={channel}>
+            <SectionHeading eyebrow="GHCR release channel" title={releaseChannelLabel(channel)} count={installableBuilds(data[channel].items).length} />
+            <BuildTable builds={installableBuilds(data[channel].items)} />
+        </section>)}</div>
     </div>;
 }
 
@@ -559,7 +568,7 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
         ? undefined
         : serverOptions.find((option) => option.value === selectedServer.serverId);
     const jobOptions: AdminActionOption[] = overview.jobs.items.map((job) => ({ label: `${job.action} · ${job.state} · ${shortId(job.jobId)}`, value: job.jobId, updatedAt: job.updatedAt }));
-    const buildOptions = installableBuilds([...overview.stableBuilds.items, ...overview.nightlyBuilds.items]).map((build) => ({ label: `${build.channel} · ${releaseVersion(build)} · ${build.sourceRevision.slice(0, 8)}`, value: build.buildId, releaseChannel: build.channel }));
+    const buildOptions = installableBuilds([...overview.stableBuilds.items, ...overview.nightlyBuilds.items]).map((build) => ({ label: `Pinned version: ${releaseVersion(build)} · ${releaseChannelLabel(build.channel)}${build.currentChannel ? " (current)" : ""}`, value: build.buildId, releaseChannel: build.channel }));
     const discordUserOptions: AdminActionOption[] = discordUsers.flatMap((user) => user.username
         ? [{ label: user.username, value: user.discordUserId }]
         : []);
@@ -574,7 +583,7 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
         { group: "Fleet", operation: "onboard-vps-host", title: "Onboard existing OVH VPS", description: "Choose one already-purchased VPS, then click Onboard VPS. The control plane revalidates its OVH account identity, location, vCPU capacity, and primary IPv4; acquires and pins its Ed25519 host identity; uses the preinstalled fleet-operator key; installs and hardens every managed runner slot; establishes private mTLS routes; and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.", fields: [
             { name: "serviceName", label: "Available OVH VPS", kind: "select", required: true, options: availableVpsOptions, defaultValue: availableVpsOptions.length === 1 ? availableVpsOptions[0]!.value : "", help: "Only unregistered VPS products discovered in the authenticated OVH account are shown. Select the saved bannerlord-fleet-operator key when installing the VPS; no SSH key, IP address, vCPU count, region, or audit reason is entered here." },
         ] },
-        { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity in stopped state. New servers use Stable by default; choose Nightly later with Change release settings if needed. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from an explicit administrator grant. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
+        { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity in stopped state. New servers use Public by default; choose Nightly later with Change release settings if needed. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from an explicit administrator grant. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
             discordUserField("ownerDiscordUserId", "Owner Discord username or ID"),
             { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: createRegionOptions, help: "Only regions with a prepared, currently available slot on a registered VPS are shown. The control plane revalidates capacity when you submit; no VPS is purchased automatically." },
             { name: "maintenanceSlot", label: "Maintenance slot", kind: "select", required: true, options: maintenanceOptions, help: `All maintenance windows use ${MAINTENANCE_TIME_ZONE} (Central Time and its daylight-saving changes).` },
@@ -585,11 +594,11 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
             { name: "nightlyRolloutsPaused", label: "Pause Nightly rollouts", kind: "checkbox", defaultValue: overview.controls.nightlyRolloutsPaused, help: "Checked means automatic Nightly rollout work is paused." }, reasonField,
         ] },
         { group: "Server lifecycle", operation: "server-operation", title: "Lifecycle operation", description: "Start, stop, restart, delete, reboot, or emergency-stop a current server generation.", destructive: true, layoutPriority: 1, fields: [serverField, { name: "action", label: "Action", kind: "select", required: true, options: enumOptions(["start", "stop", "restart-game", "delete", "reboot-vm", "force-stop"]) }, reasonField] },
-        { group: "Server lifecycle", operation: "update-server", title: "Update server", description: "Install the current selection, follow the latest release, or choose a build to install and keep pinned. A backup is taken before installation.", fields: [serverField, { name: "buildId", label: "Build", kind: "select", required: true, defaultValue: "__keep__", options: [{ value: "__keep__", label: "Current selection (keep any pin)" }, { value: "__latest__", label: "Latest release (remove pin)" }, ...buildOptions], help: "Choosing a specific build installs and pins it in one request. A pin prevents automatic updates to newer builds." }, reasonField] },
+        { group: "Server lifecycle", operation: "update-server", title: "Update server", description: "Install the current selection, follow the channel, or choose a GHCR version to install and keep pinned. A backup is taken before installation.", fields: [serverField, { name: "buildId", label: "Version selection", kind: "select", required: true, defaultValue: "__keep__", options: [{ value: "__keep__", label: "Keep current selection (preserve follow/pin)" }, { value: "__latest__", label: "Follow channel (remove version pin)" }, ...buildOptions], help: "Follow channel installs the current channel release and permits automatic updates. Choosing a version installs and pins that exact version; it will not automatically follow newer releases." }, reasonField] },
         { group: "Server lifecycle", operation: "rollback-server", title: "Reinstall previous build", description: "Install and pin the previous release in this channel, keeping the current campaign. Takes a safety backup first. To recover an older campaign instead, use Restore backup.", destructive: true, fields: [serverField, reasonField] },
         { group: "Server lifecycle", operation: "restore-backup", title: "Restore backup", description: "Choose a server to browse its retained backups. Restoring replaces the current campaign and takes a safety backup first.", destructive: true, fields: [serverField, { name: "backupId", label: "Backup", kind: "backup", required: true }, reasonField] },
         { group: "Server lifecycle", operation: "collect-diagnostics", title: "Collect diagnostics", description: "Queue bounded, sanitized diagnostics. Raw secrets and arbitrary files remain inaccessible.", fields: [serverField, { name: "lookbackSeconds", label: "Lookback seconds", kind: "number", required: true, minimum: 60, maximum: 86400, defaultValue: 3600 }, reasonField] },
-        { group: "Server lifecycle", operation: "update-settings", title: "Change release settings", description: "Change channel and/or maintenance slot with a stale-state guard.", fields: [serverField, { name: "patch.releaseChannel", label: "Release channel", kind: "select", options: enumOptions(["stable", "nightly"]) }, { name: "patch.maintenanceSlot", label: "Maintenance slot", kind: "select", options: maintenanceOptions, help: `All maintenance windows use ${MAINTENANCE_TIME_ZONE} (Central Time and its daylight-saving changes).` }, reasonField] },
+        { group: "Server lifecycle", operation: "update-settings", title: "Change release settings", description: "Change channel and/or maintenance slot with a stale-state guard.", fields: [serverField, { name: "patch.releaseChannel", label: "Release channel", kind: "select", options: ["stable", "nightly"].map((value) => ({ label: releaseChannelLabel(value), value })) }, { name: "patch.maintenanceSlot", label: "Maintenance slot", kind: "select", options: maintenanceOptions, help: `All maintenance windows use ${MAINTENANCE_TIME_ZONE} (Central Time and its daylight-saving changes).` }, reasonField] },
         { group: "Server lifecycle", operation: "reset-password", title: "Reset game password", description: "Generate a password or set a custom value; generated output is shown once.", destructive: true, fields: [serverField, { name: "choice.kind", label: "Password source", kind: "select", required: true, options: enumOptions(["generated", "custom"]) }, { name: "choice.password", label: "Custom password", kind: "password", placeholder: "Required only for custom" }, reasonField] },
         { group: "Server lifecycle", operation: "suspend-server", title: "Suspend server", description: "Durably suspend owner operations and queue a safe stop.", destructive: true, fields: [plainServerField, reasonField] },
         { group: "Server lifecycle", operation: "reactivate-server", title: "Reactivate server", description: "Clear administrative suspension after entitlement checks.", fields: [plainServerField, reasonField] },
@@ -602,7 +611,7 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
         { group: "Jobs", operation: "retry-job", title: "Retry job", description: "Move an eligible failed/retry-wait job back to the durable queue.", fields: [{ name: "jobId", label: "Job", kind: "job", required: true, options: jobOptions }, reasonField] },
         { group: "Jobs", operation: "cancel-job", title: "Cancel job", description: "Request cancellation at the next safe checkpoint.", destructive: true, fields: [{ name: "jobId", label: "Job", kind: "job", required: true, options: jobOptions }, reasonField] },
         { group: "Jobs", operation: "diagnostics", title: "Open diagnostics result", description: "Read the sanitized result of a completed diagnostics job.", fields: [{ name: "jobId", label: "Diagnostics job UUID", required: true }] },
-        { group: "Maintenance and communication", operation: "batch-maintenance", title: "Batch maintenance", description: "Queue updates for a bounded fleet snapshot, optionally limited to one channel.", fields: [{ name: "releaseChannel", label: "Channel", kind: "select", valueType: "nullable", options: enumOptions(["stable", "nightly"]) }, reasonField] },
+        { group: "Maintenance and communication", operation: "batch-maintenance", title: "Batch maintenance", description: "Queue updates for a bounded fleet snapshot, optionally limited to one channel.", fields: [{ name: "releaseChannel", label: "Channel", kind: "select", valueType: "nullable", options: ["stable", "nightly"].map((value) => ({ label: releaseChannelLabel(value), value })) }, reasonField] },
         { group: "Maintenance and communication", operation: "announce-owners", title: "Announce to owners", description: "Queue a durable private notification campaign for entitled owners.", fields: [{ name: "message", label: "Message", kind: "textarea", required: true }, reasonField] },
     ];
     const groups = [...new Set(cards.map((card) => card.group))];
@@ -616,7 +625,39 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
 function JobsTable({ jobs, allowFailureAcknowledgement = false }: { jobs: HostingJob[]; allowFailureAcknowledgement?: boolean }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-240 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Action</th><th className="p-4">State</th><th className="p-4">Server</th><th className="p-4">Progress</th><th className="p-4">Attempts</th><th className="p-4">Updated</th>{allowFailureAcknowledgement && <th className="p-4">Alert</th>}</tr></thead><tbody className="divide-y divide-white/10">{jobs.map((job) => { const explanation = jobActionExplanation(job.action); return <tr key={job.jobId} className={job.failureAcknowledgedAt ? "opacity-60" : undefined}><td className="p-4"><p className="cursor-help font-semibold text-foreground" title={explanation} aria-label={`${job.action}: ${explanation}`}>{job.action}</p><p className="font-mono text-[0.62rem] text-foreground-dim">{job.jobId}</p></td><td className="p-4"><State value={job.state} /></td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(job.serverId)}</td><td className="p-4 text-xs text-foreground-muted">{job.progressStage}{job.errorCode ? ` · ${job.errorCode}` : ""}</td><td className="p-4 text-xs text-foreground-muted">{job.attemptCount}/{job.maximumAttempts}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={job.updatedAt} /></td>{allowFailureAcknowledgement && <td className="p-4">{job.failureAcknowledgedAt ? <span className="cursor-help text-xs text-foreground-muted" title={`Acknowledged ${job.failureAcknowledgedAt}`}>Silenced</span> : <JobFailureAcknowledgeButton jobId={job.jobId} expectedUpdatedAt={job.updatedAt} />}</td>}</tr>; })}</tbody></table>{jobs.length === 0 && <Empty>No jobs in this view.</Empty>}</div>; }
 function BackupsTable({ backups }: { backups: Backup[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-200 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Backup</th><th className="p-4">Type</th><th className="p-4">State</th><th className="p-4">Size</th><th className="p-4">Created</th><th className="p-4">Expires</th></tr></thead><tbody className="divide-y divide-white/10">{backups.map((backup) => <tr key={backup.backupId}><td className="p-4 font-mono text-xs text-foreground-muted">{backup.backupId}</td><td className="p-4 text-xs text-foreground-muted">{backup.backupType}</td><td className="p-4"><State value={backup.restoreState} /></td><td className="p-4 text-xs text-foreground-muted">{formatBytes(backup.byteSize)}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={backup.createdAt} /></td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={backup.retentionExpiresAt} /></td></tr>)}</tbody></table>{backups.length === 0 && <Empty>No retained backups.</Empty>}</div>; }
 function AuditTable({ events }: { events: AuditEvent[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-240 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Time</th><th className="p-4">Action</th><th className="p-4">Actor</th><th className="p-4">Server</th><th className="p-4">Reason</th><th className="p-4">Correlation</th></tr></thead><tbody className="divide-y divide-white/10">{events.map((event) => { const explanation = auditActionExplanation(event.action); return <tr key={event.eventId} className="cursor-help hover:bg-white/[0.025]" title={explanation} aria-label={`${event.action}: ${explanation}`}><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={event.occurredAt} /></td><td className="p-4 text-xs font-semibold text-foreground underline decoration-dotted underline-offset-4">{event.action}</td><td className="p-4 text-xs text-foreground-muted">{event.actorType}<br />{shortId(event.actorId)}</td><td className="p-4 font-mono text-xs text-foreground-muted">{shortId(event.targetServerId)}</td><td className="max-w-80 p-4 text-xs text-foreground-muted">{event.reason ?? "—"}</td><td className="p-4 font-mono text-[0.62rem] text-foreground-dim">{shortId(event.correlationId)}</td></tr>; })}</tbody></table>{events.length === 0 && <Empty>No audit events in this view.</Empty>}</div>; }
-function BuildTable({ builds }: { builds: ReleaseBuild[] }) { return <div className="mt-4 border border-white/10 bg-surface"><table className="w-full table-fixed text-left text-sm"><colgroup><col className="w-[28%]" /><col className="w-[17%]" /><col className="w-[20%]" /><col className="w-[12%]" /><col className="w-[23%]" /></colgroup><thead className="border-b border-white/10 font-label text-[0.6rem] uppercase tracking-[0.09em] text-foreground-muted"><tr><th className="px-2 py-4 sm:px-4">Version</th><th className="px-2 py-4 sm:px-4">Commit</th><th className="px-2 py-4 sm:px-4">Validation</th><th className="px-2 py-4 sm:px-4">Game</th><th className="px-2 py-4 sm:px-4">Published</th></tr></thead><tbody className="divide-y divide-white/10">{builds.map((build) => { const revision = releaseRevision(build); const version = releaseVersion(build); const gameVersion = releaseGameVersion(build); return <tr key={build.buildId}><td className="min-w-0 px-2 py-4 sm:px-4"><p className="truncate font-semibold text-foreground" title={version}>{version}</p><p className="truncate font-mono text-[0.6rem] text-foreground-dim" title={build.buildId}>{shortId(build.buildId)}</p></td><td className="break-all px-2 py-4 font-mono text-xs text-foreground-muted sm:px-4" title={revision}>{shortRevision(revision)}</td><td className="px-2 py-4 sm:px-4"><State value={build.validationState} /></td><td className="break-words px-2 py-4 text-xs text-foreground-muted sm:px-4">{gameVersion}</td><td className="px-2 py-4 text-xs text-foreground-muted sm:px-4"><LocalDateTime value={build.publishedAt} /></td></tr>; })}</tbody></table>{builds.length === 0 && <Empty>No validated builds in this channel.</Empty>}</div>; }
+/** Presents version identities and the exact compatibility metadata supplied by GHCR discovery. */
+function BuildTable({ builds }: { builds: ReleaseBuild[] }) {
+    return <div className="mt-4 space-y-3">{builds.map(build => <article key={build.buildId} className="border border-white/10 bg-surface p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="break-all font-semibold">{releaseVersion(build)}</h3>
+            {build.currentChannel && <span className="border border-gold/30 px-2 py-1 text-xs text-gold">Current {releaseChannelLabel(build.channel)}</span>}
+        </div>
+        <p className="mt-2 text-xs text-foreground-muted">{build.registryMetadata ? "Observed" : "Published"} <LocalDateTime value={build.publishedAt} /></p>
+        <ReleaseMetadata build={build} />
+    </article>)}{builds.length === 0 && <Empty>No verified GHCR versions available in this channel.</Empty>}</div>;
+}
+
+/** Shows authoritative label values, without inferring compatibility for historical builds. */
+function ReleaseMetadata({ build }: { build: ReleaseBuild }) {
+    return <details className="mt-3 text-xs text-foreground-muted"><summary className="cursor-pointer py-2">Release label details</summary>
+        {build.registryMetadata ? <dl className="divide-y divide-white/10">
+            {[
+                ["io.bannerlordcoop.client.revision", build.registryMetadata.clientRevision],
+                ["io.bannerlordcoop.client.version", build.requiredClientModVersion],
+                ["io.bannerlordcoop.dedicated-server.revision", build.registryMetadata.serverRevision],
+                ["io.bannerlordcoop.game.version", build.supportedGameVersion],
+            ].map(([label, value]) => <div key={label} className="py-2 text-left">
+                <dt className="break-all">{label}</dt><dd className="mt-1 break-all font-mono text-foreground">{value ?? "Unavailable"}</dd>
+            </div>)}
+        </dl> : <p className="py-2">Verified registry labels are unavailable for this historical version.</p>}
+    </details>;
+}
+
+/** Keeps the recorded installed or desired version visible even when it is absent from GHCR discovery. */
+function RecordedRelease({ build, buildId }: { build: ReleaseBuild | null; buildId: string | null }) {
+    if (!build) return <>{buildId ? `Metadata unavailable (${buildId})` : "None"}</>;
+    return <div><span>{releaseVersion(build)}</span><ReleaseMetadata build={build} /></div>;
+}
 
 function HostResourcesCard({ name, resources }: { name: string; resources: HostingAdminHostResources | null }) {
     return (
@@ -643,7 +684,6 @@ function SectionHeading({ eyebrow, title, count }: { eyebrow: string; title: str
 function State({ value }: { value: string }) { const good = ["running", "succeeded", "validated", "available", "healthy"].includes(value); const bad = ["failed", "degraded", "revoked", "rejected", "cancelled", "unavailable"].includes(value); const explanation = stateExplanation(value); return <span title={explanation} aria-label={`${value}: ${explanation}`} className={`inline-flex cursor-help border px-2 py-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] ${good ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : bad ? "border-crimson/30 bg-crimson/10 text-red-200" : "border-gold/25 bg-gold/8 text-gold"}`}>{value}</span>; }
 function Empty({ children }: { children: React.ReactNode }) { return <div className="px-6 py-12 text-center text-sm text-foreground-muted">{children}</div>; }
 
-function ReleaseHistoryNote({ hidden }: { hidden: number }) { return hidden > 0 ? <p className="mt-3 min-h-10 text-xs leading-5 text-foreground-muted">Showing installable validated builds. {hidden} non-validated historical {hidden === 1 ? "record is" : "records are"} hidden here; release publication and approval are handled by the release pipeline.</p> : <p className="mt-3 min-h-10 text-xs leading-5 text-foreground-muted">Only installable validated builds are shown.</p>; }
 
 function RuntimeObservation({ server }: { server: ManagedServer }) {
     const suspendedWhileRunning = server.operationState === "suspended" && server.observedGameState === "running";
@@ -675,4 +715,3 @@ function formatBytes(value: number) { return value < 1_048_576 ? `${Math.round(v
 function formatStorageBytes(value: number) { return value >= 1_073_741_824 ? `${(value / 1_073_741_824).toFixed(1)} GiB` : formatBytes(value); }
 function formatUptime(seconds: number) { const days = Math.floor(seconds / 86_400); const hours = Math.floor((seconds % 86_400) / 3_600); return days > 0 ? `${days}d ${hours}h` : `${hours}h`; }
 function shortId(value: string | null) { return value ? (value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value) : "—"; }
-function shortRevision(value: string) { return value.slice(0, 12); }

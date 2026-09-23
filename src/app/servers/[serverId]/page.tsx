@@ -1,3 +1,4 @@
+import { releaseChannelLabel } from "@/app/lib/control-plane/presentation";
 import { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
 import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfigPanels";
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
@@ -177,7 +178,7 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
         status={<section className="grid gap-3 sm:grid-cols-3" aria-label="Server status">
             <ResourceCard icon={Container} label="Game state" value={formatManagedValue(server.observedGameState)} />
             <ResourceCard icon={CloudCog} label="Lifecycle" value={formatManagedValue(server.operationState)} />
-            <ResourceCard icon={Database} label="Release channel" value={formatManagedValue(server.releaseChannel)} />
+            <ResourceCard icon={Database} label="Release channel" value={releaseChannelLabel(server.releaseChannel)} />
         </section>}
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />

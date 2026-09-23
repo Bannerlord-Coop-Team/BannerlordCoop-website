@@ -117,3 +117,36 @@ Deployment requires the merged ControlPlane #157 code running, the updated
 `my-servers` Edge Function deployed, and `/api/v1/logs/latest` included in the
 exact HTTPS proxy allowlist. Merging the backend PR alone does not deploy the
 website's Edge Function or expose the loopback route through the proxy.
+
+
+## Release-list Edge cache
+
+The existing `control-plane-admin` Edge Function caches successful `builds`
+responses in memory for five minutes per function instance. The browser keeps
+using the same authenticated version-1 API; no new endpoint, secret, database
+table, Redis service, or GHCR credential is required in Supabase. The control
+plane still owns GHCR access and label/integrity validation.
+
+Authentication and the protected Admin role are checked on **every** request,
+including cache hits. Only release-list pages are cached, with at most one page
+per Public/Nightly channel. Cursor and page size must match; requesting another
+page replaces that channel's cached page. Responses use the current request ID
+and origin and retain `Cache-Control: no-store` for browser/proxy caches. Tokens,
+account records, lifecycle operations and upstream errors are never cached.
+Expired pages are not served after an upstream failure. Instances do not share
+cache state; cold starts and concurrent misses may query the control plane again.
+
+Deploy this change only through a separately authorized Edge Function rollout,
+coordinated with control-plane PR #198's on-demand `RegistryReleaseApi`. That
+backend removes the local cache and background release refresh loop: direct
+Builds requests and lifecycle selections query GHCR, while the Edge endpoint
+caches presentation responses only. Health probes and ordinary Start/Stop/Restart
+remain independent of release discovery. Do not deploy this cache in front of an
+older caching backend; the two lifetimes would compound.
+
+Focused verification:
+
+```sh
+npx tsx --test supabase/functions/control-plane-admin/index.test.ts
+npx eslint supabase/functions/_shared/control-plane-admin.ts supabase/functions/control-plane-admin/index.test.ts
+```
