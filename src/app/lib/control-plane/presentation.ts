@@ -11,19 +11,6 @@ const SERVER_REGION_LABELS = {
 
 const MAINTENANCE_SLOTS = ["03:00-04:00", "10:00-11:00", "18:00-19:00"] as const;
 
-const LEGACY_STABLE_METADATA = {
-    "ghcr-stable-35b1b6ebeb038a5a69f4ef8a2a84031c3726702452e38874fd4b2f339de92203": {
-        storedVersion: "stable-35b1b6ebeb03",
-        version: "v0.1.5",
-        supportedGameVersion: "v1.4.8",
-    },
-    "ghcr-stable-c995ff97ce3c6cfe1b175f0586f90593892606b4f7ec182c9390b3903dd2d526": {
-        storedVersion: "stable-c995ff97ce3c",
-        version: "v0.1.5",
-        supportedGameVersion: "v1.4.8",
-    },
-} as const;
-
 export const MAINTENANCE_TIME_ZONE = "America/Chicago";
 
 export type ControlPlaneOperationResultLink = {
@@ -36,35 +23,21 @@ export type ControlPlaneOperationResultPresentation = {
     links: ControlPlaneOperationResultLink[];
 };
 
+/** Restricts selectable versions to validated registry discoveries, excluding historical receipts. */
 export function installableBuilds(builds: readonly ReleaseBuild[]) {
-    return builds.filter((build) => build.validationState === "validated");
+    return builds.filter((build) => build.validationState === "validated" && build.registryMetadata);
 }
 
-export function releaseRevision(build: ReleaseBuild) {
-    const digest = /^ghcr-stable-([a-f\d]{64})$/u.exec(build.buildId)?.[1];
-    return build.sourceRevision === "registry-observed" && digest
-        ? digest
-        : build.sourceRevision;
-}
-
+/** Uses the registry version tag for selection and preserves recorded historical versions. */
 export function releaseVersion(build: ReleaseBuild) {
-    return legacyStableMetadata(build)?.version ?? build.version;
+    return build.registryMetadata?.versionTag ?? build.version;
 }
 
-export function releaseGameVersion(build: ReleaseBuild) {
-    return legacyStableMetadata(build)?.supportedGameVersion ?? build.supportedGameVersion;
-}
-
-function legacyStableMetadata(build: ReleaseBuild) {
-    const metadata = LEGACY_STABLE_METADATA[
-        build.buildId as keyof typeof LEGACY_STABLE_METADATA
-    ];
-    return build.channel === "stable"
-        && build.sourceRevision === "registry-observed"
-        && build.supportedGameVersion === "unknown"
-        && metadata?.storedVersion === build.version
-        ? metadata
-        : undefined;
+/** Displays channel names without changing their transport values. */
+export function releaseChannelLabel(channel: string) {
+    if (channel === "stable") return "Public";
+    if (channel === "nightly") return "Nightly";
+    return channel;
 }
 
 export function fieldRequirementLabel(required: boolean) {
@@ -137,16 +110,6 @@ export function presentControlPlaneOperationResult(
     result: unknown,
 ): ControlPlaneOperationResultPresentation {
     if (!isRecord(result)) return { message: "Operation completed.", links: [] };
-
-    if (operation === "import-latest-stable" && result.channel === "stable" && result.validationState === "validated") {
-        const version = boundedText(result.version, 64);
-        const buildId = boundedText(result.buildId, 128);
-        const digest = boundedText(result.containerDigest, 71);
-        if (version && buildId && digest) return {
-            message: `Stable ${version} imported and validated. Build: ${buildId}. Image: ${digest}. This does not directly update or restart servers; existing update policies may select this build.`,
-            links: [],
-        };
-    }
 
     const server = isRecord(result.server) ? result.server : null;
     const job = isRecord(result.job) ? result.job : null;

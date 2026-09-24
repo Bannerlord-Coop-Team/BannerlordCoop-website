@@ -312,3 +312,6 @@ matches categories, aliases, and argument guidance. The list scrolls within the
 picker. Availability of game commands depends on the installed build and game
 state; this is not runtime command discovery. This change uses the existing gateway
 input path and adds no backend or permissions.
+
+For backup-specific onboarding, unavailable states and rollout verification, see
+[backups for live-console servers](live-server-backups.md).

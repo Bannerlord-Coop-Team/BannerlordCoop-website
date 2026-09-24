@@ -78,7 +78,7 @@ it("offers only the selected channel's builds and sends pinning as one update re
     await act(async () => root.render(<ControlPlaneActionCard operation="update-server" title="Update server" description="Update"
         fields={[servers, { name: "buildId", label: "Build", kind: "select", required: true, options: [
             { label: "Latest", value: "__latest__" },
-            { label: "Stable release", value: "stable-build", releaseChannel: "stable" },
+            { label: "Pinned version: v0.1.5 · Public", value: "stable-build", releaseChannel: "stable" },
             { label: "Nightly release", value: "nightly-build", releaseChannel: "nightly" },
         ] }]} />));
     await select("serverId", 1);
@@ -99,21 +99,19 @@ it("resets the server and backup state with the form after an action", async () 
     expect(container.querySelector<HTMLSelectElement>('select[name="serverId"]')?.value).toBe("");
 });
 
-it("replays an uncertain Stable import with the same request ID until success", async () => {
-    request.mockRejectedValueOnce(new Error("Response lost"));
-    request.mockResolvedValue({ channel: "stable", validationState: "validated", version: "v0.1.5", buildId: "test-build", containerDigest: `sha256:${"a".repeat(64)}` });
-    await act(async () => root.render(<ControlPlaneActionCard operation="import-latest-stable" title="Import Latest Stable" description="Import"
-        fields={[{ name: "reason", label: "Audit reason", required: true }]} />));
-    const reason = container.querySelector<HTMLInputElement>('input[name="reason"]')!;
-    reason.value = "Recover publication";
+// Follow and keep must remain distinct transport intents when changing a version pin.
+it("sends null for Follow channel and omits the build for Keep current selection", async () => {
+    request.mockResolvedValue({ outcome: "enqueued" });
+    await act(async () => root.render(<ControlPlaneActionCard operation="update-server" title="Update" description="Update"
+        fields={[servers, { name: "buildId", label: "Version selection", kind: "select", required: true, options: [
+            { label: "Follow channel", value: "__latest__" }, { label: "Keep current selection", value: "__keep__" },
+        ] }]} />));
+    await select("serverId", 1); await select("buildId", 1);
     await act(async () => container.querySelector("form")!.requestSubmit());
-    expect(container.textContent).toContain("Response lost");
-    expect(reason.value).toBe("Recover publication");
+    expect(request.mock.calls[0][0].input.buildId).toBeNull();
+    await select("buildId", 2);
     await act(async () => container.querySelector("form")!.requestSubmit());
-    expect(request.mock.calls[1]?.[0]).toMatchObject({ requestId: request.mock.calls[0]?.[0].requestId, operation: "import-latest-stable", input: { reason: "Recover publication" } });
-    expect(container.textContent).toContain("v0.1.5");
-    await act(async () => container.querySelector("form")!.requestSubmit());
-    expect(request.mock.calls[2]?.[0].requestId).not.toBe(request.mock.calls[1]?.[0].requestId);
+    expect(request.mock.calls[1][0].input).not.toHaveProperty("buildId");
 });
 
 it("continues a stale job with unchanged intent and preserves selections across refreshed props", async () => {

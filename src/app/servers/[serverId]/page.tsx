@@ -1,3 +1,4 @@
+import { releaseChannelLabel } from "@/app/lib/control-plane/presentation";
 import { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
 import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfigPanels";
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
@@ -6,6 +7,7 @@ import { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibili
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
 import { LiveServerConsole } from "@/app/components/servers/LiveServerConsole";
+import { LiveServerBackupSetup, type LiveServerBackupUnavailableReason } from "@/app/components/servers/LiveServerBackupSetup";
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
 import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
@@ -95,11 +97,13 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     if (liveServer && !liveAccessLevel) redirect("/servers");
 
     let managedServer: MyServerSummary | null = null;
+    let managedLookupFailed = false;
     try {
         const managedServerId = liveServer?.managedServerId ?? serverId;
         managedServer = (await listAllMyServers(accessToken))
             .find((server) => server.serverId === managedServerId) ?? null;
     } catch (error) {
+        managedLookupFailed = true;
         console.error("Managed server detail failed to load", error);
     }
 
@@ -113,6 +117,7 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
                 accessUpdated={firstValue(query.accessUpdated)}
                 userId={user.id}
                 managedServer={managedServer}
+                backupUnavailableReason={managedLookupFailed ? "lookup-failed" : liveServer.managedServerId ? "access-required" : "mapping-required"}
                 logDownload={managedServer && (managedServer.accessRole === "owner" || managedServer.accessRole === "manager")
                     ? { serverId: managedServer.serverId, userId: user.id } : undefined}
                 server={{
@@ -177,7 +182,7 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
         status={<section className="grid gap-3 sm:grid-cols-3" aria-label="Server status">
             <ResourceCard icon={Container} label="Game state" value={formatManagedValue(server.observedGameState)} />
             <ResourceCard icon={CloudCog} label="Lifecycle" value={formatManagedValue(server.operationState)} />
-            <ResourceCard icon={Database} label="Release channel" value={formatManagedValue(server.releaseChannel)} />
+            <ResourceCard icon={Database} label="Release channel" value={releaseChannelLabel(server.releaseChannel)} />
         </section>}
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
@@ -279,6 +284,7 @@ async function LiveServerManagementPage({
     accessToken,
     accessUpdated,
     managedServer,
+    backupUnavailableReason,
     logDownload,
     server,
 }: {
@@ -288,6 +294,7 @@ async function LiveServerManagementPage({
     accessToken: string;
     accessUpdated?: string;
     managedServer: MyServerSummary | null;
+    backupUnavailableReason: LiveServerBackupUnavailableReason;
     logDownload?: { serverId: string; userId: string };
     server: LiveConsoleServer;
 }) {
@@ -338,7 +345,10 @@ async function LiveServerManagementPage({
         </ServerWorkspacePanel>
         {managedServer !== null
             ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
-            : <UnavailableFileWorkspaces />}
+            : <>
+                <ServerWorkspacePanel section="Backups"><LiveServerBackupSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>
+                <ServerWorkspacePanel section="Save & config"><ServerSaveConfigPanels /></ServerWorkspacePanel>
+            </>}
         <ServerWorkspacePanel section="Settings">
             <ServerSettingsPanel name={server.name} renameServerId={canManageAssignments ? server.id : undefined} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} visibilityAccess={managedServer ? { serverId: managedServer.serverId, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} />
             <section className="grid gap-3 sm:grid-cols-2" aria-label="Server information">

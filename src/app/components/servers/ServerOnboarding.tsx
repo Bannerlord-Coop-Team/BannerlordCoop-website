@@ -147,7 +147,7 @@ function OnboardingReceipt({ result }: { result: OnboardingResult }) {
         <h3 className="font-display text-2xl font-semibold">{result.action === "create-server" ? "Server assigned" : "Region request confirmed"}</h3>
         {result.action === "create-server" ? <>
             <p className="mt-3 break-words text-sm leading-6">{result.displayName} was assigned in {ONBOARDING_REGION_LABELS[result.region]}. It was stopped at creation; this receipt is not live status. Check My Servers or manage the server for its current state.</p>
-            <p className="mt-3 text-sm text-foreground-muted">Stable release · maintenance 03:00–04:00 America/Chicago. Setup does not start the server. Its first Start uses the bundled default save; no import is required.</p>
+            <p className="mt-3 text-sm text-foreground-muted">Public release · maintenance 03:00–04:00 America/Chicago. Setup does not start the server. Its first Start uses the bundled default save; no import is required.</p>
             <Link href={`/servers/${encodeURIComponent(result.serverId)}`} className={`${primaryButton} mt-5`}>Manage server <ArrowRight aria-hidden="true" className="size-4" /></Link>
         </> : <p className="mt-3 text-sm leading-6">Your private request for {ONBOARDING_REGION_LABELS[result.request.region]} is saved and outstanding (including an existing request). No server or capacity was reserved and no quota was consumed. No email, ETA or automatic allocation is promised.</p>}
     </div>;
