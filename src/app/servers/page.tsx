@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { MembershipNextStep } from "@/app/components/servers/MembershipNextStep";
 import { composeOnboarding, identityStep, type AccountStatus } from "@/app/lib/hosting/membership-onboarding";
 import { Navbar } from "@/app/components/layout/Navbar";
@@ -18,6 +19,7 @@ import { listPublicServers } from "@/app/lib/hosting/public-servers";
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
+    LoaderCircle,
     Server,
     ShieldCheck,
 } from "lucide-react";
@@ -32,6 +34,7 @@ export const metadata: Metadata = {
     description: "Browse and join Bannerlord Coop servers.",
 };
 
+/** Renders the page shell without waiting for either server inventory. */
 export default async function ServersPage() {
     let user: User | null = null;
     let accessToken: string | null = null;
@@ -81,45 +84,8 @@ export default async function ServersPage() {
         try { onboarding = await getServerOnboarding(accessToken); }
         catch { /* Unknown eligibility/capacity must never become a positive or empty snapshot. */ }
     }
-    let managedServersError = "";
-    let controlPlaneServers: ManagedServerDirectoryEntry[] = [];
-    let ownedIds: string[] = [];
-    if (user) {
-        if (!accessToken) {
-            managedServersError = "Your authenticated server session is unavailable. Please sign in again.";
-        } else {
-            try {
-                const listed = await listAllMyServers(accessToken);
-                ownedIds = listed.filter(server => server.accessRole === "owner").map(server => server.serverId);
-                controlPlaneServers = listed.map(toDirectoryServer);
-            } catch (error) {
-                console.error("Managed server inventory failed to load", error);
-                managedServersError = "Managed servers could not be loaded right now.";
-            }
-        }
-    }
-    const managedServers = uniqueServers([
-        ...controlPlaneServers,
-        ...liveServers,
-    ]);
-    const managedServerCount = managedServers.length;
-    const websiteSummary = composeOnboarding(user?.id ?? null, identity, account, onboarding, ownedIds);
-    let allServers: ManagedServerDirectoryEntry[] = [];
-    let publicServersError = "";
-    try {
-        allServers = (await listPublicServers()).map(server => ({
-            id: server.serverId,
-            name: server.displayName,
-            status: server.observedGameState === "running" ? "Online" : server.observedGameState === "stopped" ? "Offline" : "Unknown",
-            connectionType: "Direct",
-            joinUrl: "",
-            connectionAddress: connectionAddress(server.connectionIp, server.gamePorts),
-            players: null,
-        }));
-    } catch {
-        publicServersError = "The public server directory could not be loaded right now. Please try again later.";
-    }
-    const onlineServers = allServers.filter(server => server.status === "Online");
+    const managedInventory = loadManagedInventory(user, accessToken, liveServers);
+    const publicInventory = loadPublicInventory();
 
     return (
         <>
@@ -136,13 +102,22 @@ export default async function ServersPage() {
                         </h1>
                     </div>
 
-                    <dl className="grid grid-cols-2 border border-white/10 bg-surface">
-                        <DirectoryStat icon={Server} label="Public servers" value={publicServersError ? "—" : allServers.length} />
-                        <DirectoryStat icon={ShieldCheck} label="Online" value={publicServersError ? "—" : onlineServers.length} />
-                    </dl>
+                    <Suspense fallback={<DirectoryLoading label="Loading server counts…" />}>
+                        {publicInventory.then(({ allServers, publicServersError }) => (
+                            <dl className="grid grid-cols-2 border border-white/10 bg-surface">
+                                <DirectoryStat icon={Server} label="Public servers" value={publicServersError ? "—" : allServers.length} />
+                                <DirectoryStat icon={ShieldCheck} label="Online" value={publicServersError ? "—" : allServers.filter(server => server.status === "Online").length} />
+                            </dl>
+                        ))}
+                    </Suspense>
                 </section>
 
-                {user ? <ServerOnboarding userId={user.id} summary={onboarding} websiteSummary={websiteSummary} /> : <MembershipNextStep summary={websiteSummary} />}
+                <Suspense fallback={<DirectoryLoading label="Loading hosting status…" />}>
+                    {managedInventory.then(({ ownedIds }) => {
+                        const websiteSummary = composeOnboarding(user?.id ?? null, identity, account, onboarding, ownedIds);
+                        return user ? <ServerOnboarding userId={user.id} summary={onboarding} websiteSummary={websiteSummary} /> : <MembershipNextStep summary={websiteSummary} />;
+                    })}
+                </Suspense>
 
                 <section id="my-servers" className="mt-12" aria-labelledby="my-servers-heading">
                     <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
@@ -154,42 +129,42 @@ export default async function ServersPage() {
                                 My Servers
                             </h2>
                         </div>
-                        {user && (
-                            <p className="text-sm text-foreground-muted">
-                                {managedServerCount} {managedServerCount === 1 ? "server" : "servers"} associated with your account
-                            </p>
-                        )}
                     </div>
-                    {user ? (
-                        <div>
-                            {managedServersError && (
-                                <p role="alert" className="mb-4 border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
-                                    {managedServersError}
-                                </p>
-                            )}
-                            <h3 className="mb-3 font-semibold">Owned servers</h3>
-                            <ServerDirectoryTable servers={managedServers.filter(server => ownedIds.includes(server.id))} emptyMessage="No owned servers are currently listed." />
-                            <h3 className="mb-3 mt-6 font-semibold">Associated servers (manager, support or administrator)</h3>
-                            <ServerDirectoryTable
-                                servers={managedServers.filter(server => !ownedIds.includes(server.id))}
-                                emptyMessage={managedServersError
-                                    ? "No managed-server data is currently available."
-                                    : "You do not own or operate any servers yet."}
-                            />
-                        </div>
-                    ) : (
-                        <div className="flex min-h-36 flex-col items-center justify-center gap-4 border border-dashed border-white/15 bg-surface px-6 text-center">
-                            <p className="text-sm text-foreground-muted">
-                                Sign in to view servers associated with your account.
-                            </p>
-                            <Link
-                                href="/login?next=/servers"
-                                className="inline-flex min-h-10 items-center justify-center border border-gold/35 bg-gold/[0.07] px-5 font-label text-xs font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                            >
-                                Sign in
-                            </Link>
-                        </div>
-                    )}
+                    <Suspense fallback={<DirectoryLoading label="Loading your servers…" />}>
+                        {managedInventory.then(({ managedServers, managedServersError, ownedIds }) => (
+                            user ? (
+                                <div>
+                                    <p className="mb-4 text-sm text-foreground-muted">{managedServers.length} {managedServers.length === 1 ? "server" : "servers"} associated with your account</p>
+                                    {managedServersError && (
+                                        <p role="alert" className="mb-4 border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
+                                            {managedServersError}
+                                        </p>
+                                    )}
+                                    <h3 className="mb-3 font-semibold">Owned servers</h3>
+                                    <ServerDirectoryTable servers={managedServers.filter(server => ownedIds.includes(server.id))} emptyMessage="No owned servers are currently listed." />
+                                    <h3 className="mb-3 mt-6 font-semibold">Associated servers (manager, support or administrator)</h3>
+                                    <ServerDirectoryTable
+                                        servers={managedServers.filter(server => !ownedIds.includes(server.id))}
+                                        emptyMessage={managedServersError
+                                            ? "No managed-server data is currently available."
+                                            : "You do not own or operate any servers yet."}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="flex min-h-36 flex-col items-center justify-center gap-4 border border-dashed border-white/15 bg-surface px-6 text-center">
+                                    <p className="text-sm text-foreground-muted">
+                                        Sign in to view servers associated with your account.
+                                    </p>
+                                    <Link
+                                        href="/login?next=/servers"
+                                        className="inline-flex min-h-10 items-center justify-center border border-gold/35 bg-gold/[0.07] px-5 font-label text-xs font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                                    >
+                                        Sign in
+                                    </Link>
+                                </div>
+                            )
+                        ))}
+                    </Suspense>
                 </section>
 
                 <section className="mt-14" aria-labelledby="all-servers-heading">
@@ -202,13 +177,17 @@ export default async function ServersPage() {
                                 Public Servers
                             </h2>
                         </div>
-                        <p className="text-sm text-foreground-muted">
-                            {publicServersError ? "Directory unavailable" : `${allServers.length} ${allServers.length === 1 ? "server" : "servers"} in the directory`}
-                        </p>
                     </div>
-                    {publicServersError ? (
-                        <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">{publicServersError}</p>
-                    ) : <AllServersDirectory servers={allServers} />}
+                    <Suspense fallback={<DirectoryLoading label="Loading public servers…" />}>
+                        {publicInventory.then(({ allServers, publicServersError }) => <>
+                            <p className="mb-4 text-sm text-foreground-muted">
+                                {publicServersError ? "Directory unavailable" : `${allServers.length} ${allServers.length === 1 ? "server" : "servers"} in the directory`}
+                            </p>
+                        {publicServersError ? (
+                            <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">{publicServersError}</p>
+                        ) : <AllServersDirectory servers={allServers} />}
+                        </>)}
+                    </Suspense>
                 </section>
                 </div>
             </main>
@@ -216,6 +195,54 @@ export default async function ServersPage() {
     );
 }
 
+/** Loads private inventory once for the directory and ownership-aware onboarding. */
+async function loadManagedInventory(user: User | null, accessToken: string | null, liveServers: ManagedServerDirectoryEntry[]) {
+    const unavailable = { managedServers: uniqueServers(liveServers), managedServersError: "", ownedIds: [] as string[] };
+    if (!user) return unavailable;
+    if (!accessToken) return { ...unavailable, managedServersError: "Your authenticated server session is unavailable. Please sign in again." };
+
+    try {
+        const listed = await listAllMyServers(accessToken);
+        return {
+            managedServers: uniqueServers([...listed.map(toDirectoryServer), ...liveServers]),
+            managedServersError: "",
+            ownedIds: listed.filter(server => server.accessRole === "owner").map(server => server.serverId),
+        };
+    } catch (error) {
+        console.error("Managed server inventory failed to load", error);
+        return { ...unavailable, managedServersError: "Managed servers could not be loaded right now." };
+    }
+}
+
+/** Loads public inventory independently, keeping failures inside its section. */
+async function loadPublicInventory() {
+    let allServers: ManagedServerDirectoryEntry[] = [];
+    let publicServersError = "";
+    try {
+        allServers = (await listPublicServers()).map(server => ({
+            id: server.serverId,
+            name: server.displayName,
+            status: server.observedGameState === "running" ? "Online" : server.observedGameState === "stopped" ? "Offline" : "Unknown",
+            connectionType: "Direct",
+            joinUrl: "",
+            connectionAddress: connectionAddress(server.connectionIp, server.gamePorts),
+            players: null,
+        }));
+    } catch {
+        publicServersError = "The public server directory could not be loaded right now. Please try again later.";
+    }
+    return { allServers, publicServersError };
+}
+
+/** Announces a section's pending data while respecting reduced-motion preferences. */
+function DirectoryLoading({ label }: { label: string }) {
+    return <div role="status" className="flex min-h-24 items-center justify-center gap-3 text-sm text-foreground-muted">
+        <LoaderCircle aria-hidden="true" className="size-5 animate-spin motion-reduce:animate-none" />
+        <span>{label}</span>
+    </div>;
+}
+
+/** Maps an authenticated server record into its directory presentation. */
 function toDirectoryServer(server: MyServerSummary): ManagedServerDirectoryEntry {
     const isRunning = server.observedGameState === "running";
     const isStopped = server.observedGameState === "stopped"
@@ -232,6 +259,7 @@ function toDirectoryServer(server: MyServerSummary): ManagedServerDirectoryEntry
     };
 }
 
+/** Merges live and managed entries without duplicating server identities. */
 function uniqueServers(servers: readonly ManagedServerDirectoryEntry[]) {
     const unique = new Map<string, ManagedServerDirectoryEntry>();
     for (const server of servers) {
@@ -247,6 +275,7 @@ function uniqueServers(servers: readonly ManagedServerDirectoryEntry[]) {
     return [...unique.values()];
 }
 
+/** Displays one public-directory total. */
 function DirectoryStat({
     icon: Icon,
     label,
