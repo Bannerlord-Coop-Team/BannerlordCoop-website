@@ -340,7 +340,7 @@ async function LiveServerManagementPage({
         notice="Protected production access. Controls and commands affect the live Bannerlord process immediately. The gateway revalidates your server access."
     >
         <ServerWorkspacePanel section="Console">
-            <ServerConsoleWorkspace><LiveServerConsole gatewayUrl={getConsoleGatewayUrl()} serverId={server.id} logDownload={logDownload} /></ServerConsoleWorkspace>
+            <LiveServerConsole gatewayUrl={getConsoleGatewayUrl()} serverId={server.id} logDownload={logDownload} />
             {!logDownload && <p className="text-sm text-foreground-muted">Log downloads require a linked managed server and owner or manager access. Ask an administrator to check onboarding, the server mapping, and your managed-server access.</p>}
         </ServerWorkspacePanel>
         {managedServer !== null
