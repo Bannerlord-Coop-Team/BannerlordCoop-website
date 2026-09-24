@@ -290,3 +290,6 @@ use the same resolved managed identity and retain their existing permission and
 state restrictions. Mapping does not grant any additional permissions. Preview servers and `/servers/wireframe`
 remain demos. A genuinely standalone live server still needs managed onboarding
 or a separately implemented authorized file-download integration.
+
+For backup-specific onboarding, unavailable states and rollout verification, see
+[backups for live-console servers](live-server-backups.md).
