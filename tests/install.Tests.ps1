@@ -436,8 +436,18 @@ if ($statusPending.Action -cne 'Continue') {
     throw 'An HTTP 428 token poll did not continue waiting for Discord.'
 }
 $invalid = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ token_type = 'Basic'; access_token = 'nope' })
-if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid.') {
+if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid. Details: response=invalid; bearer=false; token_length=4') {
     throw 'A malformed success body did not keep the invalid-token message.'
+}
+$htmlToken = Get-NightlyTokenPollDecision -Response '<html>intercepted</html>'
+if ($htmlToken.Action -cne 'Fail' -or $htmlToken.Message -notmatch 'response=html' -or
+    $htmlToken.Message -match 'intercepted|access_token') {
+    throw 'An HTML token response did not report its safe response shape.'
+}
+$invalidSupport = @(Get-InstallationSupportLines $invalid.Message)
+if ($invalidSupport.Count -ne 2 -or $invalidSupport[0] -notmatch 'open its verification link in a web browser' -or
+    $invalidSupport[0] -match 'Cloudflare WARP|GoodbyeDPI') {
+    throw 'An invalid token still led to unrelated DNS advice instead of the browser workaround.'
 }
 $supportLines = @(Get-InstallationSupportLines)
 if ($supportLines.Count -ne 2 -or
@@ -593,18 +603,14 @@ function Invoke-RestMethod {
     if ($script:TokenPolls -eq 1) {
         return [pscustomobject]@{ error = 'authorization_pending' }
     }
-    return [pscustomobject]@{
-        token_type = 'Bearer'
-        access_token = 't' * 43
-        expires_in = 3600
-    }
+    return (@{ token_type = 'Bearer'; access_token = 't' * 43; expires_in = 3600 } | ConvertTo-Json -Compress)
 }
 $polledToken = Get-NightlyAccessToken
 if ($script:OpenedVerificationUri -notmatch '/activate\?code=AB2D-EF3H$') {
     throw 'The installer did not open the Discord verification URL.'
 }
 if ($script:TokenPolls -ne 2 -or $polledToken -cne ('t' * 43)) {
-    throw 'A pending JSON body still failed the installer before Discord finished.'
+    throw 'A JSON-text bearer response failed after pending authorization.'
 }
 
 $script:NightlyObservedProcessNames = @('goodbyedpi')
