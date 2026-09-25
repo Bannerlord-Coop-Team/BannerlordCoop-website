@@ -820,6 +820,7 @@ function Get-NightlyTokenPollDecision {
         $ErrorRecord
     )
 
+    $Response = ConvertTo-NightlyJsonObject $Response
     $statusCode = 0
     $errorCode = Get-NightlyGatewayErrorCode $Response
     if ($null -ne $ErrorRecord) {
@@ -903,6 +904,8 @@ function Get-NightlyAccessToken {
     }
     Write-Host "Verification code: $($session.user_code)" -ForegroundColor Yellow
     $verificationUri = [string]$session.verification_uri
+    Write-Host "Verification link: $verificationUri"
+    Write-Host 'If Discord desktop does not complete verification, open that link in a web browser.'
     if (Test-NightlyPhoneQrRecommended) {
         $dpiTool = Get-NightlyDpiToolName (Get-NightlyObservedProcessNames)
         if (-not $dpiTool) { $dpiTool = 'GoodbyeDPI' }
@@ -2091,7 +2094,9 @@ function Get-InstallationSupportLines {
     param([string]$FailureMessage = '')
 
     $lines = @()
-    if ($FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged|internal_error|HTTP 50|not available yet|#nightly-releases') {
+    if ($FailureMessage -match 'The nightly authorization token is invalid') {
+        $lines += 'If Discord desktop did not complete verification, run the installer again and open its verification link in a web browser.'
+    } elseif ($FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged|internal_error|HTTP 50|not available yet|#nightly-releases') {
         $lines += 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.'
     }
     $lines += 'If you need help, copy this message and ask in the Bannerlord Coop Discord.'

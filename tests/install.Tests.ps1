@@ -439,6 +439,11 @@ $invalid = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ token_type
 if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid.') {
     throw 'A malformed success body did not keep the invalid-token message.'
 }
+$invalidSupport = @(Get-InstallationSupportLines $invalid.Message)
+if ($invalidSupport.Count -ne 2 -or $invalidSupport[0] -notmatch 'open its verification link in a web browser' -or
+    $invalidSupport[0] -match 'Cloudflare WARP|GoodbyeDPI') {
+    throw 'An invalid token still led to unrelated DNS advice instead of the browser workaround.'
+}
 $supportLines = @(Get-InstallationSupportLines)
 if ($supportLines.Count -ne 2 -or
     $supportLines[0] -cne 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.' -or
@@ -593,18 +598,14 @@ function Invoke-RestMethod {
     if ($script:TokenPolls -eq 1) {
         return [pscustomobject]@{ error = 'authorization_pending' }
     }
-    return [pscustomobject]@{
-        token_type = 'Bearer'
-        access_token = 't' * 43
-        expires_in = 3600
-    }
+    return (@{ token_type = 'Bearer'; access_token = 't' * 43; expires_in = 3600 } | ConvertTo-Json -Compress)
 }
 $polledToken = Get-NightlyAccessToken
 if ($script:OpenedVerificationUri -notmatch '/activate\?code=AB2D-EF3H$') {
     throw 'The installer did not open the Discord verification URL.'
 }
 if ($script:TokenPolls -ne 2 -or $polledToken -cne ('t' * 43)) {
-    throw 'A pending JSON body still failed the installer before Discord finished.'
+    throw 'A JSON-text bearer response failed after pending authorization.'
 }
 
 $script:NightlyObservedProcessNames = @('goodbyedpi')
