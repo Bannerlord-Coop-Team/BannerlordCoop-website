@@ -863,10 +863,17 @@ function Get-NightlyTokenPollDecision {
         }
     }
     if ($null -eq $ErrorRecord) {
+        $kind = Get-NightlyResponseInterceptKind $Response
+        $shape = "response=$kind"
+        if ($kind -ceq 'invalid') {
+            $bearer = [string]$Response.token_type -ceq 'Bearer'
+            $tokenLength = ([string]$Response.access_token).Length
+            $shape += "; bearer=$($bearer.ToString().ToLowerInvariant()); token_length=$tokenLength"
+        }
         return [pscustomobject]@{
             Action = 'Fail'
             Token = ''
-            Message = 'The nightly authorization token is invalid.'
+            Message = "The nightly authorization token is invalid. Details: $shape"
         }
     }
     return [pscustomobject]@{ Action = 'Rethrow'; Token = ''; Message = '' }

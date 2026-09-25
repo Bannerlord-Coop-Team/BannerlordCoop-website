@@ -436,8 +436,13 @@ if ($statusPending.Action -cne 'Continue') {
     throw 'An HTTP 428 token poll did not continue waiting for Discord.'
 }
 $invalid = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ token_type = 'Basic'; access_token = 'nope' })
-if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid.') {
+if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid. Details: response=invalid; bearer=false; token_length=4') {
     throw 'A malformed success body did not keep the invalid-token message.'
+}
+$htmlToken = Get-NightlyTokenPollDecision -Response '<html>intercepted</html>'
+if ($htmlToken.Action -cne 'Fail' -or $htmlToken.Message -notmatch 'response=html' -or
+    $htmlToken.Message -match 'intercepted|access_token') {
+    throw 'An HTML token response did not report its safe response shape.'
 }
 $invalidSupport = @(Get-InstallationSupportLines $invalid.Message)
 if ($invalidSupport.Count -ne 2 -or $invalidSupport[0] -notmatch 'open its verification link in a web browser' -or
