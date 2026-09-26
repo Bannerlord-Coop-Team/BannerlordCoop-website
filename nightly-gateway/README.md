@@ -39,6 +39,13 @@ implementation aligned when those contracts change, including downloading the
 validated client `publicUrl` rather than the mutable legacy URL. Linux-specific
 Steam discovery and Wine/Proton handling remain in `install-linux.sh`.
 
+For a Windows authorization failure, ask for the complete **Session diagnostics
+v2** block from the installer. It records both PowerShell attempts and the curl
+fallback, with response type, field lengths and validation results, HTTP status
+or curl exit code. It omits device codes, user codes, activation links, and raw
+response bodies. A cropped `body=` excerpt from an older installer is not
+enough to identify which validation check failed.
+
 Run `npm run test:installer-linux` on Linux or WSL with Bash, Python 3, and 7-Zip
 (`7zz` or `7z`) installed. The suite executes the interactive installer against
 local HTTP fixtures and temporary installs, including rollback failures, without
