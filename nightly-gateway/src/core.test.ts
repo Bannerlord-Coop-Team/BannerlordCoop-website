@@ -65,6 +65,7 @@ function testEnvironment(options: TestDatabaseOptions = {}): { env: Env; stateme
             DISCORD_BOT_TOKEN: "B".repeat(59),
             DISCORD_CLIENT_ID: "1537575576745803799",
             DISCORD_CLIENT_SECRET: "test-secret",
+            TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64url"),
             PUBLIC_ORIGIN: gateway,
         } as unknown as Env,
         statements,
@@ -218,7 +219,7 @@ test("the sponsor portal directs code recipients to the installer redemption flo
     }
 });
 
-test("supporters, Testers, and Staff get nightly access and share the same seat limit", () => {
+test("supporters, Testers, Staff, and Competition Winners get nightly access and share the same seat limit", () => {
     assert.equal(hasNightlyAccessRole(["1532151760012050452"]), true);
     assert.equal(hasNightlyAccessRole(["1532744756151455834"]), true);
     assert.equal(hasNightlyAccessRole(["1533090199104524338"]), true);
@@ -229,11 +230,41 @@ test("supporters, Testers, and Staff get nightly access and share the same seat 
     assert.equal(hasNightlyAccessRole(["709516608741048390"]), true);
     assert.equal(hasNightlyAccessRole(["730631536122003548"]), true);
     assert.equal(hasNightlyAccessRole(["730631233524072588"]), true);
+    assert.equal(hasNightlyAccessRole(["1551834978570997792"]), true);
     assert.equal(hasNightlyAccessRole(["709516043332354119"]), false);
     assert.equal(isEligibleNightlySponsor({ roles: ["1532151760012050452"] }), true);
+    assert.equal(isEligibleNightlySponsor({ roles: ["1551834978570997792"] }), true);
     assert.equal(isEligibleNightlySponsor({ roles: [] }), false);
     assert.equal(isEligibleNightlySponsor(null), false);
     assert.equal(SPONSORED_ACCOUNT_LIMIT, 10);
+});
+
+test("Competition Winners can authorize installs and manage sponsor seats without website promotion", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((input: string | URL | Request) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes("/users/@me/guilds/") && url.endsWith("/member")) {
+            return Promise.resolve(Response.json({ roles: ["1551834978570997792"] }));
+        }
+        return discordOAuthFetch(input);
+    }) as typeof fetch;
+    try {
+        for (const portalLogin of [false, true]) {
+            const { env, statements } = testEnvironment({ portalLogin });
+            const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${"G".repeat(43)}`), env);
+            assert.equal(response.status, portalLogin ? 302 : 200);
+            if (portalLogin) {
+                assert.equal(response.headers.get("location"), `${gateway}/sponsor`);
+                assert.ok(statements.some((sql) => sql.includes("INSERT INTO sponsor_sessions")));
+            } else {
+                assert.match(await response.text(), /Access approved/);
+                assert.ok(statements.some((sql) => sql.includes("status = 'approved'")));
+            }
+        }
+        assert.doesNotMatch(nightlyAccessPage(), /Competition Winner|1551834978570997792/i);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
 });
 
 test("sponsor form tokens are bound to the authenticated browser session", async () => {
