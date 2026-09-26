@@ -134,24 +134,13 @@ function ConvertTo-NightlyJsonObject {
     return $Value
 }
 
-function Get-NightlyResponseSnippet {
-    param($Response, [string]$Text)
+function Get-NightlyExceptionShape {
+    param($ErrorRecord)
 
-    $value = ''
-    if (-not [string]::IsNullOrWhiteSpace($Text)) {
-        $value = $Text
-    } elseif ($null -ne $Response) {
-        if ($Response -is [string]) {
-            $value = [string]$Response
-        } else {
-            try { $value = [string]($Response | ConvertTo-Json -Compress) } catch { $value = [string]$Response }
-        }
-    }
-    if ([string]::IsNullOrWhiteSpace($value)) { return '' }
-    $value = ($value -replace '\s+', ' ').Trim()
-    $value = $value -replace '(?i)("(?:access_token|device_code|pin|refresh_token)"\s*:\s*")[^"]+"', '$1[redacted]"'
-    if ($value.Length -gt 180) { $value = $value.Substring(0, 180) + '...' }
-    return $value
+    $exception = $ErrorRecord.Exception
+    $shape = "type=$($exception.GetType().Name) http=$(Get-HttpStatusCode $ErrorRecord) hresult=$($exception.HResult)"
+    if ($exception -is [Net.WebException]) { $shape += " web_status=$($exception.Status)" }
+    return $shape
 }
 
 function Get-NightlyFailureDetailSuffix {
@@ -166,17 +155,12 @@ function Get-NightlyFailureDetailSuffix {
     $body = Get-NightlyErrorRecordText $ErrorRecord
     $errorCode = Get-NightlyGatewayErrorCode $SessionResponse
     if (-not $errorCode) { $errorCode = Get-NightlyGatewayErrorCodeFromText $body }
-    $exceptionMessage = ''
-    if ($null -ne $ErrorRecord) {
-        try { $exceptionMessage = [string]$ErrorRecord.Exception.Message } catch { }
-    }
-    $snippet = Get-NightlyResponseSnippet $SessionResponse $body
     $parts = @()
     if ($statusCode -gt 0) { $parts += "HTTP $statusCode" }
     if ($errorCode) { $parts += "error=$errorCode" }
     if ($Kind -and $Kind -cne 'empty') { $parts += "kind=$Kind" }
-    if (-not [string]::IsNullOrWhiteSpace($exceptionMessage)) { $parts += $exceptionMessage }
-    if ($snippet -and $snippet -cne $exceptionMessage) { $parts += "body=$snippet" }
+    if ($null -ne $SessionResponse) { $parts += "shape=$(Get-NightlyDeviceSessionShape $SessionResponse)" }
+    if ($null -ne $ErrorRecord) { $parts += "exception=$(Get-NightlyExceptionShape $ErrorRecord)" }
     if ($parts.Count -eq 0) { return '' }
     return ' Details: ' + ($parts -join '; ')
 }
@@ -209,6 +193,46 @@ function Test-NightlyDeviceSessionResponse {
     return [string]$Response.device_code -match '^[A-Za-z0-9_-]{43}$' -and
         [string]$Response.user_code -match '^[A-Z2-9]{4}-[A-Z2-9]{4}$' -and
         [string]$Response.verification_uri -match '^https://bannerlordcoop-nightly-gateway\.garrett-luskey\.workers\.dev/activate\?'
+}
+
+function Get-NightlyDeviceSessionShape {
+    param($Response)
+
+    if ($null -eq $Response) { return 'empty' }
+    if ($Response -is [xml]) { return 'xml' }
+    if ($Response -is [string]) {
+        $text = [string]$Response
+        $start = if ($text.Length -gt 0 -and [int][char]$text[0] -eq 0xFEFF) { 'bom' }
+            elseif ($text.TrimStart().StartsWith('{')) { 'json-object' }
+            elseif ($text.TrimStart().StartsWith('[')) { 'json-array' }
+            elseif ($text.TrimStart().StartsWith('"')) { 'quoted-text' }
+            else { 'other' }
+        return "text length=$($text.Length) start=$start"
+    }
+    if ($Response -is [array]) { return "array count=$($Response.Count)" }
+
+    $deviceCode = [string]$Response.device_code
+    $userCode = [string]$Response.user_code
+    $uri = [string]$Response.verification_uri
+    $deviceValid = ($deviceCode -match '^[A-Za-z0-9_-]{43}$').ToString().ToLowerInvariant()
+    $userValid = ($userCode -match '^[A-Z2-9]{4}-[A-Z2-9]{4}$').ToString().ToLowerInvariant()
+    $uriValid = ($uri -match '^https://bannerlordcoop-nightly-gateway\.garrett-luskey\.workers\.dev/activate\?').ToString().ToLowerInvariant()
+    $expires = [string]$Response.expires_in
+    $interval = [string]$Response.interval
+    if ($expires -notmatch '^\d{1,5}$') { $expires = 'invalid' }
+    if ($interval -notmatch '^\d{1,3}$') { $interval = 'invalid' }
+    $errorCode = Get-NightlyGatewayErrorCode $Response
+    return "object type=$($Response.GetType().Name) device_length=$($deviceCode.Length) device_valid=$deviceValid user_length=$($userCode.Length) user_valid=$userValid uri_length=$($uri.Length) uri_valid=$uriValid expires=$expires interval=$interval error=$errorCode"
+}
+
+function Get-NightlySessionAttemptSummary {
+    param([string]$Source, $Response, $ErrorRecord)
+
+    if ($null -ne $ErrorRecord) {
+        return "$Source exception=$(Get-NightlyExceptionShape $ErrorRecord)"
+    }
+    $accepted = (Test-NightlyDeviceSessionResponse $Response).ToString().ToLowerInvariant()
+    return "$Source $(Get-NightlyDeviceSessionShape $Response) accepted=$accepted"
 }
 
 function Get-NightlyObservedProcessNames {
@@ -790,28 +814,55 @@ function Get-NightlyAuthorizationDiagnosis {
     }
     return Add-NightlyDiagnosisDetails ([pscustomobject]@{
         Code = 'invalid_response'
-        Message = 'The nightly authorization service returned an invalid response. If you use GoodbyeDPI or another DNS tool, try Cloudflare WARP or turn that tool off, then run the installer again.'
+        Message = 'The nightly authorization service returned a response the installer could not validate.'
     }) $SessionResponse $ErrorRecord $kind
 }
 
 function Get-NightlyDeviceSessionFromCurl {
     $curl = Join-Path $env:SystemRoot 'System32\curl.exe'
-    if (-not (Test-Path -LiteralPath $curl -PathType Leaf)) { return $null }
-    $output = & $curl --silent --show-error --connect-timeout 15 --max-time 30 `
-        --user-agent 'BannerlordCoopInstaller' `
-        -X POST --data 'client=installer' `
-        -H 'Content-Type: application/x-www-form-urlencoded' `
-        "$($script:NightlyGatewayUri)/v1/device/sessions" 2>&1
-    return ConvertTo-NightlyJsonObject ([string]($output | Out-String))
+    if (-not (Test-Path -LiteralPath $curl -PathType Leaf)) {
+        return [pscustomobject]@{ Response = $null; Summary = 'curl unavailable' }
+    }
+    try {
+        $marker = "__COOP_HTTP_$([guid]::NewGuid().ToString('N'))"
+        $output = & $curl --silent --connect-timeout 15 --max-time 30 `
+            --write-out "`n${marker}:%{http_code}" `
+            --user-agent 'BannerlordCoopInstaller' `
+            -X POST --data 'client=installer' `
+            -H 'Content-Type: application/x-www-form-urlencoded' `
+            "$($script:NightlyGatewayUri)/v1/device/sessions" 2>$null
+        $exitCode = $LASTEXITCODE
+        $body = [string]($output | Out-String)
+        $httpStatus = 'unknown'
+        $markerAt = $body.LastIndexOf("`n${marker}:")
+        if ($markerAt -ge 0) {
+            $statusText = $body.Substring($markerAt + $marker.Length + 2).Trim()
+            if ($statusText -match '^\d{3}$') { $httpStatus = $statusText }
+            $body = $body.Substring(0, $markerAt).TrimEnd()
+        }
+        $response = ConvertTo-NightlyJsonObject $body
+        $accepted = (Test-NightlyDeviceSessionResponse $response).ToString().ToLowerInvariant()
+        return [pscustomobject]@{
+            Response = $response
+            Summary = "curl exit=$exitCode http=$httpStatus $(Get-NightlyDeviceSessionShape $response) accepted=$accepted"
+        }
+    } catch {
+        return [pscustomobject]@{
+            Response = $null
+            Summary = "curl exception=$($_.Exception.GetType().Name)"
+        }
+    }
 }
 
 function Get-NightlyDeviceSessionFailureMessage {
     param(
         $SessionResponse,
-        $ErrorRecord
+        $ErrorRecord,
+        [string[]]$Attempts
     )
 
-    return [string](Get-NightlyAuthorizationDiagnosis -SessionResponse $SessionResponse -ErrorRecord $ErrorRecord).Message
+    $message = [string](Get-NightlyAuthorizationDiagnosis -SessionResponse $SessionResponse -ErrorRecord $ErrorRecord).Message
+    return "$message`nSession diagnostics v2 (safe to share):`n  $($Attempts -join "`n  ")"
 }
 
 function Get-NightlyTokenPollDecision {
@@ -887,27 +938,31 @@ function Get-NightlyAccessToken {
 
     $session = $null
     $lastRecord = $null
+    $sessionAttempts = @()
     for ($attempt = 1; $attempt -le 2; $attempt++) {
         try {
             $session = ConvertTo-NightlyJsonObject (Invoke-RestMethod -Method Post `
                 -Uri "$($script:NightlyGatewayUri)/v1/device/sessions" `
                 -ContentType 'application/x-www-form-urlencoded' -Body 'client=installer')
             $lastRecord = $null
+            $sessionAttempts += Get-NightlySessionAttemptSummary "powershell$attempt" $session $null
             if (Test-NightlyDeviceSessionResponse $session) { break }
         } catch {
             $lastRecord = $_
             $session = $null
+            $sessionAttempts += Get-NightlySessionAttemptSummary "powershell$attempt" $null $_
         }
         if ($attempt -lt 2 -and $script:NightlySessionRetrySeconds -gt 0) {
             Start-Sleep -Seconds $script:NightlySessionRetrySeconds
         }
     }
     if (-not (Test-NightlyDeviceSessionResponse $session) -and -not $script:NightlyAuthorizationSkipLiveProbes) {
-        $curlSession = Get-NightlyDeviceSessionFromCurl
-        if (Test-NightlyDeviceSessionResponse $curlSession) { $session = $curlSession }
+        $curlResult = Get-NightlyDeviceSessionFromCurl
+        $sessionAttempts += $curlResult.Summary
+        if (Test-NightlyDeviceSessionResponse $curlResult.Response) { $session = $curlResult.Response }
     }
     if (-not (Test-NightlyDeviceSessionResponse $session)) {
-        throw (Get-NightlyDeviceSessionFailureMessage -SessionResponse $session -ErrorRecord $lastRecord)
+        throw (Get-NightlyDeviceSessionFailureMessage -SessionResponse $session -ErrorRecord $lastRecord -Attempts $sessionAttempts)
     }
     Write-Host "Verification code: $($session.user_code)" -ForegroundColor Yellow
     $verificationUri = [string]$session.verification_uri
@@ -2103,7 +2158,7 @@ function Get-InstallationSupportLines {
     $lines = @()
     if ($FailureMessage -match 'The nightly authorization token is invalid') {
         $lines += 'If Discord desktop did not complete verification, run the installer again and open its verification link in a web browser.'
-    } elseif ($FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged|internal_error|HTTP 50|not available yet|#nightly-releases') {
+    } elseif ($FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged|internal_error|HTTP 50|not available yet|#nightly-releases|could not validate') {
         $lines += 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.'
     }
     $lines += 'If you need help, copy this message and ask in the Bannerlord Coop Discord.'
