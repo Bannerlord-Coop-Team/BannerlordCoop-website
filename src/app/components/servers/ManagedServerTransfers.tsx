@@ -43,11 +43,11 @@ function saveDownload(bytes: BlobPart, fileName: string) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
-export function ManagedServerTransfers({ userId, serverId, status, canImportConfig }: { userId: string; serverId: string; status: OwnerFileStatus | null; canImportConfig: boolean }) {
-    return <TransferSession key={`${userId}:${serverId}`} userId={userId} serverId={serverId} status={status} canImportConfig={canImportConfig} />;
+export function ManagedServerTransfers({ userId, serverId, status, canImportConfig, canExportSave }: { userId: string; serverId: string; status: OwnerFileStatus | null; canImportConfig: boolean; canExportSave: boolean }) {
+    return <TransferSession key={`${userId}:${serverId}`} userId={userId} serverId={serverId} status={status} canImportConfig={canImportConfig} canExportSave={canExportSave} />;
 }
 
-function TransferSession({ userId, serverId, status, canImportConfig }: { userId: string; serverId: string; status: OwnerFileStatus | null; canImportConfig: boolean }) {
+function TransferSession({ userId, serverId, status, canImportConfig, canExportSave }: { userId: string; serverId: string; status: OwnerFileStatus | null; canImportConfig: boolean; canExportSave: boolean }) {
     const router = useRouter();
     const storageKey = `managed-file-transfer:v1:${userId}:${serverId}`;
     const [ready, setReady] = useState(false);
@@ -232,10 +232,10 @@ function TransferSession({ userId, serverId, status, canImportConfig }: { userId
             saveName={status ? status.activeSave?.displayName ?? "No active campaign save" : undefined}
             configuration={status?.managedConfig}
             saveActions={<>
-                <button className={buttonClass} disabled={blocked || !status?.activeSave || !["running", "stopped", "awaiting-save"].includes(status.operationState)} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />Export save</button>
+                <button className={buttonClass} disabled={blocked || !canExportSave || !status?.activeSave || !["running", "stopped", "awaiting-save"].includes(status.operationState)} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />Export save</button>
                 <button className={buttonClass} disabled={blocked || !canTransferSave} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />Import save</button>
             </>}
-            saveNotice={<p className="mt-3 text-xs leading-5 text-foreground-muted">Export downloads the current campaign’s latest completed save, even while the server is running. Stop the server before adding an imported campaign; your current campaign will stay selected.</p>}
+            saveNotice={<p className="mt-3 text-xs leading-5 text-foreground-muted">Only the server owner can export saves. Export downloads the current campaign’s latest completed save, even while the server is running. Stop the server before adding an imported campaign; your current campaign will stay selected.</p>}
             configActions={<>
                 <button className={buttonClass} disabled={blocked || !canImportConfig} onClick={() => openImport("import-config")}><Upload aria-hidden className="size-4" />Import config</button>
                 <button className={buttonClass} disabled={blocked} onClick={() => startTransition(async () => {

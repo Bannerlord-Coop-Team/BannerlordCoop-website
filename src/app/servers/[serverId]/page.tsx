@@ -9,6 +9,7 @@ import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
 import { LiveServerConsole } from "@/app/components/servers/LiveServerConsole";
 import { LiveServerBackupSetup, type LiveServerBackupUnavailableReason } from "@/app/components/servers/LiveServerBackupSetup";
+import { LiveServerFileSetup } from "@/app/components/servers/LiveServerFileSetup";
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
 import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
@@ -348,7 +349,7 @@ async function LiveServerManagementPage({
             ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
             : <>
                 <ServerWorkspacePanel section="Backups"><LiveServerBackupSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>
-                <ServerWorkspacePanel section="Save & config"><ServerSaveConfigPanels /></ServerWorkspacePanel>
+                <ServerWorkspacePanel section="Save & config"><LiveServerFileSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>
             </>}
         <ServerWorkspacePanel section="Settings">
             <ServerSettingsPanel name={server.name} renameServerId={canManageAssignments ? server.id : undefined} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} visibilityAccess={managedServer ? { serverId: managedServer.serverId, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} />

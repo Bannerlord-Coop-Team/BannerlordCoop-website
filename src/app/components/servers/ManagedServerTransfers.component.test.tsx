@@ -25,7 +25,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 async function render(current = status, owner = true, userId = "owner") {
-    await act(async () => root.render(<ManagedServerTransfers userId={userId} serverId={current.serverId} status={current} canImportConfig={owner} />));
+    await act(async () => root.render(<ManagedServerTransfers userId={userId} serverId={current.serverId} status={current} canImportConfig={owner} canExportSave={owner} />));
     await act(async () => vi.advanceTimersByTimeAsync(0));
 }
 function button(label: string) { const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label); if (!found) throw Error(`Missing button ${label}`); return found; }
@@ -33,7 +33,7 @@ async function click(label: string) { await act(async () => button(label).click(
 
 it("allows current-save export while running, but requires stopped import and owner config permission", async () => {
     await render({ ...status, operationState: "running", observedGameState: "running" }, false);
-    expect(button("Import save").disabled).toBe(true); expect(button("Export save").disabled).toBe(false);
+    expect(button("Import save").disabled).toBe(true); expect(button("Export save").disabled).toBe(true);
     expect(button("Import config").disabled).toBe(true); expect(button("Export config").disabled).toBe(false);
     expect(container.textContent).toContain("Stop the server"); expect(container.textContent).toContain("Only the server owner");
 });
