@@ -1,4 +1,6 @@
-import { act, Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import { act, Children, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
+import type { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
+import type { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -10,7 +12,7 @@ const mocks = vi.hoisted(() => ({
     getUser: vi.fn(), getSession: vi.fn(), liveServer: vi.fn(),
     liveAccess: vi.fn(), managedServers: vi.fn(), displayNames: vi.fn(),
     preview: vi.fn(),
-    backups: vi.fn(), backupStatus: vi.fn(), files: vi.fn(), requestBackup: vi.fn(), refresh: vi.fn(),
+    backups: vi.fn(), backupStatus: vi.fn(), files: vi.fn(), requestBackup: vi.fn(), requestVisibility: vi.fn(), refresh: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
     // Model Next's terminal redirect without rendering a denied page.
@@ -34,6 +36,7 @@ vi.mock("@/app/lib/hosting/my-servers", async (importOriginal) => ({
     listAllMyServerBackups: mocks.backups,
     getMyServerBackupStatus: mocks.backupStatus,
     requestMyServerBackupOperation: mocks.requestBackup,
+    requestServerVisibility: mocks.requestVisibility,
 }));
 vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: mocks.displayNames }));
 vi.mock("@/app/lib/hosting/servers", () => ({ getServerForRole: mocks.preview }));
@@ -123,6 +126,9 @@ it("preserves managed-only pages without requiring live authorization", async ()
 });
 
 // Resolve the page's server components, leaving client components for React to render.
+function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
+function findServerElement(node: ReactNode, name: "ServerSettingsPanel"): Promise<ReactElement<ComponentProps<typeof ServerSettingsPanel>> | null>;
+function findServerElement(node: ReactNode, name: string): Promise<ReactElement | null>;
 async function findServerElement(node: ReactNode, name: string): Promise<ReactElement | null> {
     for (const child of Children.toArray(node)) {
         if (!isValidElement<{ children?: ReactNode }>(child)) continue;
@@ -237,5 +243,102 @@ it.each([
         await act(async () => root.unmount());
         confirm.mockRestore();
         vi.useRealTimers();
+    }
+});
+
+it.each(["mapping-required", "access-required", "lookup-failed"] as const)("links live visibility to actionable %s guidance without granting access", async reason => {
+    // An unrelated owned server must never substitute for the configured identity.
+    mocks.managedServers.mockResolvedValue([{ serverId: "unrelated", accessRole: "owner" }]);
+    if (reason === "mapping-required") mocks.liveServer.mockReturnValue({ ...liveServer, managedServerId: undefined });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+        if (reason === "lookup-failed") mocks.managedServers.mockRejectedValue(new Error("Unavailable"));
+        const tree = await page();
+        const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+        expect(renderToStaticMarkup(workspace!.props.visibility)).toContain('href="#server-visibility"');
+        const setup = await findServerElement(tree, "LiveServerVisibilitySetup");
+        expect(setup?.props).toEqual({ reason, serverId: liveId });
+        const html = renderToStaticMarkup(setup);
+        expect(html).toContain('id="server-visibility"');
+        if (reason === "lookup-failed") {
+            expect(html).toContain(`action="/servers/${liveId}#server-visibility" method="get"`);
+            expect(html).not.toContain("setup options");
+        } else {
+            expect(html).toContain("managed owner");
+            expect(html).toContain("does not publish");
+            expect(html).not.toContain("<button");
+        }
+        const settings = await findServerElement(tree, "ServerSettingsPanel");
+        expect(settings!.props.visibilityAccess).toBeUndefined();
+        expect(settings!.props.visibility).toBeUndefined();
+        expect(mocks.requestVisibility).not.toHaveBeenCalled();
+    } finally { error.mockRestore(); }
+});
+
+it.each(["owner", "manager", "admin", "support"])("uses mapped managed %s authority in both visibility controls", async accessRole => {
+    mocks.liveAccess.mockReturnValue("owner");
+    mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole, visibility: "public", updatedAt: "2026-09-26T12:00:00.000Z" }]);
+    const tree = await page();
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+    const header = workspace!.props.visibility;
+    const settings = await findServerElement(tree, "ServerSettingsPanel");
+    expect(header.props).toEqual({ serverId: managedId, visibility: "public", accessRole, expectedUpdatedAt: "2026-09-26T12:00:00.000Z" });
+    expect(settings!.props.visibility).toBe("public");
+    expect(settings!.props.visibilityAccess).toEqual({ serverId: managedId, expectedUpdatedAt: "2026-09-26T12:00:00.000Z", canEdit: accessRole === "owner" });
+    expect(await findServerElement(tree, "LiveServerVisibilitySetup")).toBeNull();
+});
+
+it("keeps preview visibility non-operational without live onboarding", async () => {
+    mocks.liveServer.mockReturnValue(null);
+    mocks.managedServers.mockResolvedValue([]);
+    mocks.preview.mockReturnValue({ name: "Demo", assignedAccount: {} });
+    const tree = await page("preview");
+    expect(await findServerElement(tree, "LiveServerVisibilitySetup")).toBeNull();
+    const settings = await findServerElement(tree, "ServerSettingsPanel");
+    expect(settings!.props.visibilityAccess).toBeUndefined();
+    expect(settings!.props.visibility).toBeUndefined();
+});
+
+it("updates the mapped identity through both controls and waits for authoritative refresh", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    mocks.getSession.mockResolvedValue({ data: { session: { access_token: "token", user: { id: "user" } } } });
+    const updatedAt = "2026-09-26T12:00:00.000Z";
+    const nextUpdatedAt = "2026-09-26T12:01:00.000Z";
+    mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole: "owner", visibility: "private", updatedAt }]);
+    mocks.requestVisibility.mockResolvedValue({ outcome: "updated" });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    async function renderVisibility() {
+        const tree = await page();
+        const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+        const settings = await findServerElement(tree, "ServerSettingsPanel");
+        await act(async () => root.render(<>{workspace!.props.visibility}{settings}</>));
+    }
+    try {
+        await renderVisibility();
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!.click());
+        expect(mocks.requestVisibility).toHaveBeenLastCalledWith("token", { action: "set-server-visibility", serverId: managedId, visibility: "public", expectedUpdatedAt: updatedAt }, expect.any(String));
+        expect(mocks.refresh).toHaveBeenCalledOnce();
+        // An acknowledged receipt does not prove the current state (it may be a replay).
+        expect(container.querySelector("summary")!.textContent).toContain("Private");
+        expect(container.querySelector<HTMLInputElement>('input[value="private"]')!.checked).toBe(true);
+        mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole: "owner", visibility: "public", updatedAt: nextUpdatedAt }]);
+        await renderVisibility();
+        expect(container.querySelector("summary")!.textContent).toContain("Public");
+        expect(container.querySelector<HTMLInputElement>('input[value="public"]')!.checked).toBe(true);
+        await act(async () => container.querySelector<HTMLInputElement>('input[value="private"]')!.click());
+        await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+        expect(mocks.requestVisibility).toHaveBeenLastCalledWith("token", { action: "set-server-visibility", serverId: managedId, visibility: "private", expectedUpdatedAt: nextUpdatedAt }, expect.any(String));
+        expect(mocks.refresh).toHaveBeenCalledTimes(2);
+        expect(container.querySelector("summary")!.textContent).toContain("Public");
+        mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole: "owner", visibility: "private", updatedAt: "2026-09-26T12:02:00.000Z" }]);
+        await renderVisibility();
+        expect(container.querySelector("summary")!.textContent).toContain("Private");
+        expect(container.querySelector<HTMLInputElement>('input[value="private"]')!.checked).toBe(true);
+        expect(confirm).toHaveBeenCalledOnce();
+    } finally {
+        await act(async () => root.unmount());
+        confirm.mockRestore();
     }
 });

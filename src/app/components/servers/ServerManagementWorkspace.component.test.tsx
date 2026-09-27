@@ -154,3 +154,23 @@ it("saves a managed owner's visibility without attempting unsupported renaming",
     await act(async () => root.render(<ServerSettingsPanel name="Campaign" visibility="private" visibilityAccess={{ ...visibilityAccess, expectedUpdatedAt: "2026-09-14T00:00:00.000Z" }} />));
     expect(container.textContent).toContain("No pending changes");
 });
+
+it("opens visibility setup from the header and a direct reload link", async () => {
+    const content = <ServerManagementWorkspace name={<h1>Live server</h1>} summary="Live" visibility={<a href="#server-visibility">Set up visibility</a>}>
+        <ServerWorkspacePanel section="Console"><div>Live console</div></ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Settings"><section id="server-visibility">Visibility setup</section></ServerWorkspacePanel>
+    </ServerManagementWorkspace>;
+    await act(async () => root.render(content));
+    expect(container.querySelector("#server-visibility")!.closest("[hidden]")).not.toBeNull();
+    await act(async () => {
+        window.history.replaceState(null, "", "#server-visibility");
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(container.querySelector("#server-visibility")!.closest("[hidden]")).toBeNull();
+    await act(async () => click("Console"));
+    await act(async () => container.querySelector<HTMLAnchorElement>('a[href="#server-visibility"]')!.click());
+    expect(container.querySelector("#server-visibility")!.closest("[hidden]")).toBeNull();
+    await act(async () => root.render(null));
+    await act(async () => root.render(content));
+    expect(container.querySelector("#server-visibility")!.closest("[hidden]")).toBeNull();
+});

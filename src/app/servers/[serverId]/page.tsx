@@ -4,6 +4,7 @@ import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfi
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
 import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "@/app/components/servers/ServerManagementWorkspace";
 import { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
+import { LiveServerVisibilitySetup } from "@/app/components/servers/LiveServerVisibilitySetup";
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
 import { LiveServerConsole } from "@/app/components/servers/LiveServerConsole";
@@ -334,7 +335,7 @@ async function LiveServerManagementPage({
         address={server.address}
         visibility={managedServer !== null
             ? <ServerVisibilitySetting serverId={managedServer.serverId} visibility={managedServer.visibility} accessRole={managedServer.accessRole} expectedUpdatedAt={managedServer.updatedAt} />
-            : <button disabled className="ml-auto min-h-10 rounded-md border border-white/15 px-3 text-sm text-foreground-muted opacity-50">Visibility unavailable</button>}
+            : <a href="#server-visibility" className="ml-auto inline-flex min-h-10 items-center rounded-md border border-white/15 px-3 text-sm text-gold underline focus-visible:outline-2 focus-visible:outline-gold">Set up visibility</a>}
         summary={<>{server.provider} · {accessLabels[accessLevel]} · Live dedicated server</>}
         initialSection={accessError || accessUpdated ? "Settings" : "Console"}
         notice="Protected production access. Controls and commands affect the live Bannerlord process immediately. The gateway revalidates your server access."
@@ -351,6 +352,7 @@ async function LiveServerManagementPage({
             </>}
         <ServerWorkspacePanel section="Settings">
             <ServerSettingsPanel name={server.name} renameServerId={canManageAssignments ? server.id : undefined} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} visibilityAccess={managedServer ? { serverId: managedServer.serverId, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} />
+            {managedServer === null && <LiveServerVisibilitySetup reason={backupUnavailableReason} serverId={server.id} />}
             <section className="grid gap-3 sm:grid-cols-2" aria-label="Server information">
                 <ResourceCard icon={Server} label="Provider" value={server.provider} />
                 <ResourceCard icon={Container} label="Node" value={server.nodeId} />
