@@ -17,7 +17,8 @@ export async function listPublicServers(fetcher: typeof fetch = fetch): Promise<
         const requestId = crypto.randomUUID();
         const response = await fetcher(endpoint, {
             headers: { apikey: key, "x-request-id": requestId, accept: "application/json" },
-            cache: "no-store", redirect: "error", signal,
+            // workerd supports manual redirects; the non-OK check below rejects every 3xx.
+            cache: "no-store", redirect: "manual", signal,
         });
         if (!response.ok) { await response.body?.cancel(); throw new Error("Public directory unavailable"); }
         const envelope = await readPublicResponse(response);
