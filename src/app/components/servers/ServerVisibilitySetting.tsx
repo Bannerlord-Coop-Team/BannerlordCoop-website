@@ -22,7 +22,7 @@ export function ServerVisibilitySetting({ serverId, visibility, accessRole, expe
     } | null>(null);
     function changeVisibility(target: "private" | "public") {
         if (accessRole !== "owner" || pending || target === (isPublic ? "public" : "private")) return;
-        if (target === "public" && !window.confirm("Mark this server public for discovery? This records your opt-in preference; public listing is not available yet. It does not change game connection permissions.")) return;
+        if (target === "public" && !window.confirm("Make this server discoverable in the public directory with its game address? Visibility does not grant management access or change game connection permissions.")) return;
         if (!request.current || request.current.serverId !== serverId || request.current.visibility !== target
             || request.current.expectedUpdatedAt !== expectedUpdatedAt) {
             request.current = { serverId, visibility: target, expectedUpdatedAt, requestId: crypto.randomUUID() };
@@ -67,7 +67,7 @@ export function ServerVisibilitySetting({ serverId, visibility, accessRole, expe
                         </button>;
                     })}
                 </div>
-                <p className="border-t border-white/10 px-3 py-2 text-xs leading-5 text-foreground-muted">This saves your discovery preference. Public listing is not available yet. Visibility does not change management access or game connection permissions.</p>
+                <p className="border-t border-white/10 px-3 py-2 text-xs leading-5 text-foreground-muted">Public visibility allows this server to appear in the public directory with its game address. Visibility does not grant management access or change game connection permissions.</p>
             </div>
         </details> : <span title="Only the server owner can change visibility." className="inline-flex min-h-10 items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-sm text-foreground-muted"><Icon className="size-4" aria-hidden="true" />{label}<span className="sr-only">Only the server owner can change visibility.</span></span>}
         <p role="status" className="max-w-64 text-xs text-foreground-muted">{message}</p>

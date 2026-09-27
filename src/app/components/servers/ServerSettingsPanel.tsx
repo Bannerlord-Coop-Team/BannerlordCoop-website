@@ -32,7 +32,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
     function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (pending || !dirty || (nameDirty && !nameState.draft.trim())) return;
-        if (visibilityDirty && visibilityState.draft === "public" && !window.confirm("Mark this server public for discovery? This records your opt-in preference; public listing is not available yet. It does not change game connection permissions.")) return;
+        if (visibilityDirty && visibilityState.draft === "public" && !window.confirm("Make this server discoverable in the public directory with its game address? Visibility does not grant management access or change game connection permissions.")) return;
         setMessage("");
         startTransition(async () => {
             const messages: string[] = [];
@@ -78,9 +78,9 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
             </div>
             <fieldset disabled={!canChangeVisibility || pending}>
                 <legend className="text-sm font-medium">Directory visibility</legend>
-                <p className="mt-2 text-sm leading-6 text-foreground-muted">Discovery preference only; public listing is not available yet. Visibility does not grant management access or change game connection permissions.</p>
+                <p className="mt-2 text-sm leading-6 text-foreground-muted">Public visibility allows this server to appear in the public directory with its game address. Visibility does not grant management access or change game connection permissions.</p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {([{ value: "private", title: "Private", description: "Not opted in to public discovery.", icon: LockKeyhole }, { value: "public", title: "Public", description: "Opted in to public discovery when available.", icon: Globe2 }] as const).map(({ value, title, description, icon: Icon }) => <label key={value} className={`flex items-start gap-3 rounded-md border p-4 ${!canChangeVisibility || pending ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${visibilityState.draft === value ? "border-gold/50 bg-gold/5" : "border-white/10"}`}>
+                    {([{ value: "private", title: "Private", description: "Hidden from the public directory.", icon: LockKeyhole }, { value: "public", title: "Public", description: "Include this server in the public directory.", icon: Globe2 }] as const).map(({ value, title, description, icon: Icon }) => <label key={value} className={`flex items-start gap-3 rounded-md border p-4 ${!canChangeVisibility || pending ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${visibilityState.draft === value ? "border-gold/50 bg-gold/5" : "border-white/10"}`}>
                         <input disabled={!canChangeVisibility || pending} type="radio" name="settings-visibility" value={value} checked={visibilityState.draft === value} onChange={() => { setVisibilityState(current => ({ ...current, draft: value })); setMessage(""); }} className="mt-1 accent-gold" />
                         <span><span className="flex items-center gap-2 text-sm font-medium"><Icon className={`size-4 ${visibilityState.draft === value ? "text-gold" : "text-foreground-muted"}`} aria-hidden="true" />{title}</span><span className="mt-2 block text-xs leading-5 text-foreground-muted">{description}</span></span>
                     </label>)}
