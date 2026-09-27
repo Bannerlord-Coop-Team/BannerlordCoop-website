@@ -21,7 +21,7 @@ With authorized managed access, the existing `ManagedServerFiles` and
 `ManagedServerTransfers` display the active campaign name and managed
 configuration returned by `getMyServerFiles` for the resolved UUID:
 
-- Owners and managers can export the latest completed save while running,
+- Only owners can export the latest completed save while running,
   stopped or awaiting a save, when an active save exists.
 - Save import requires the server to be stopped and adds a separate campaign;
   it does not replace or select over the current campaign.

@@ -96,7 +96,7 @@ it.each(["mapping-required", "access-required", "lookup-failed"])("provides file
     expect(mocks.files).not.toHaveBeenCalled(); expect(mocks.submit).not.toHaveBeenCalled();
 });
 
-it.each(["owner", "manager"])("shows actual mapped save/config for managed %s and sends exports through the authenticated action", async (accessRole) => {
+it.each(["owner", "manager"])("shows actual mapped save/config for managed %s and permits only owner save exports", async (accessRole) => {
     mocks.servers.mockResolvedValue([{ serverId: managedId, accessRole }]);
     await render();
     expect(mocks.files).toHaveBeenCalledExactlyOnceWith("token", managedId);
@@ -105,7 +105,9 @@ it.each(["owner", "manager"])("shows actual mapped save/config for managed %s an
     expect(button("Import save").disabled).toBe(false);
     expect(button("Export config").disabled).toBe(false);
     expect(button("Import config").disabled).toBe(accessRole !== "owner");
+    expect(button("Export save").disabled).toBe(accessRole !== "owner");
     await act(async () => button("Export save").click());
+    if (accessRole !== "owner") { expect(mocks.submit).not.toHaveBeenCalled(); return; }
     expect(mocks.submit).toHaveBeenCalledExactlyOnceWith("token", expect.stringMatching(/^[0-9a-f-]{36}$/), {
         serverId: managedId, action: "export-save", saveId: status.activeSave!.saveId, expectedUpdatedAt: status.updatedAt,
     });
