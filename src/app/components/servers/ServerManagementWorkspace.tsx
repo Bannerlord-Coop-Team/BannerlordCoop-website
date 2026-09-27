@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useId, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, FileJson, Play, RotateCw, Search, Settings2, Square, Terminal } from "lucide-react";
 
@@ -15,13 +15,16 @@ const sections = [
     { name: "Settings", icon: Settings2 },
 ] as const;
 type Section = typeof sections[number]["name"];
-const WorkspaceContext = createContext<Section>("Console");
+const WorkspaceContext = createContext<{ current: Section; initial: Section }>({ current: "Console", initial: "Console" });
+const subscribe = () => () => {};
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-foreground hover:border-gold/50 focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
 
 export function ServerWorkspacePanel({ section, children }: { section: Section; children: ReactNode }) {
-    const current = useContext(WorkspaceContext);
+    const { current, initial } = useContext(WorkspaceContext);
+    // Streamed panels must first match their server HTML, even if the hash already changed tabs.
+    const visibleSection = useSyncExternalStore(subscribe, () => current, () => initial);
     // Preserve console connections, pending operations and transfer drafts across tabs.
-    return <div hidden={current !== section} className="space-y-5">{children}</div>;
+    return <div hidden={visibleSection !== section} className="space-y-5">{children}</div>;
 }
 
 // DedicatedServer.Core/Server/ServerConsole.cs: built-in stdin commands.
@@ -110,7 +113,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
         return () => window.removeEventListener("hashchange", followHash);
     }, []);
 
-    return <WorkspaceContext.Provider value={section}><main className="min-h-svh bg-background">
+    return <WorkspaceContext.Provider value={{ current: section, initial: initialSection }}><main className="min-h-svh bg-background">
         <div className="site-container py-6 sm:py-10">
             <Link href="/servers" className="inline-flex items-center gap-2 text-sm text-foreground-muted hover:text-gold"><ArrowLeft className="size-4" aria-hidden="true" />All servers</Link>
             {notice && <p className="my-5 rounded-md border border-white/10 bg-surface px-4 py-3 text-sm leading-6 text-foreground-muted">{notice}</p>}
