@@ -19,9 +19,11 @@ it("defaults missing visibility to private and requires explicit publishing conf
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     await act(async () => root.render(<ServerVisibilitySetting {...props} />));
     expect(container.querySelector("summary")?.textContent).toContain("Private");
-    expect(container.textContent).toContain("Public listing is not available yet");
+    expect(container.textContent).toContain("public directory with its game address");
+    expect(container.textContent).toContain("does not grant management access or change game connection permissions");
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!.click());
-    expect(confirm).toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("public directory with its game address"));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("does not grant management access or change game connection permissions"));
     expect(mocks.update).not.toHaveBeenCalled();
     confirm.mockReturnValue(true);
     mocks.update.mockResolvedValue({ ok: true, message: "Published" });
