@@ -4,18 +4,18 @@
 
 The website implements the public directory page at `/servers` and the anonymous `public-servers` Edge proxy, which expects the control-plane public directory API described below. Settings and the header describe Public as allowing discovery with the server's game address; Private excludes the server from the directory. Visibility does not grant management access or change game connection permissions.
 
-This website integration does not establish backend support or deployment availability. CP #144 supplies visibility persistence and mutation, not the anonymous listing route. Confirm that the target control-plane version implements `/v1/public/control-plane` before rollout; a missing backend route is an integration gap, not a temporary outage. If configuration, the Edge function, or the upstream directory is unavailable, `/servers` reports that the directory could not be loaded right now. It never substitutes private inventory or demo servers. Check the deployed route and its dependencies when diagnosing an outage; the Settings copy is not a deployment health indicator.
+This website integration does not establish backend support or deployment availability. CP #144 supplies visibility persistence and mutation. The companion backend change for [CP #196](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/issues/196) adds the anonymous listing route and migration 088 for ownership consent. Confirm that this backend and its migration are deployed before rollout; a missing backend route is an integration gap, not a temporary outage. If configuration, the Edge function, or the upstream directory is unavailable, `/servers` reports that the directory could not be loaded right now. It never substitutes private inventory or demo servers. Check the deployed route and its dependencies when diagnosing an outage; the Settings copy is not a deployment health indicator.
 
 ## Public-directory contract and backend requirements
 
-- Every existing and newly created server is private by default.
+- New servers are private by default. Migration 088 preserves an existing Public preference only when the latest visibility receipt proves the current owner chose Public; inherited or unproven preferences become visibly Private so the owner can opt in again.
 - Public servers appear in the anonymous `/servers` directory with their game IP and port.
 - Private server addresses are returned only to callers already authorized for that server. A hidden button is not an authorization boundary.
 - Authorized users can copy the game endpoint as `IP:port` (bracketed IPv6).
 - Changing visibility does not change game connection permissions, firewall rules, passwords, or player allowlists.
 - Publishing requires an explicit authorized mutation, not discovery of a running server or the presence of an IP.
 - The paired backend excludes deleted, suspended, and entitlement-inactive servers even when marked public. Invalid/unassigned endpoints remain null/empty, disabling Join without inventing an address.
-- Public-directory rollout still needs an explicit ownership-transfer consent policy. CP #144 does not reset visibility on transfer; its fresh mutations advance updatedAt, including same-value writes. Replays return the original receipt and do not reapply later state.
+- The paired backend resets visibility to Private atomically when ownership changes, including provider-generation ownership cutover. The new owner must explicitly choose Public. Visibility mutations retain the existing receipt and concurrency contract: fresh writes advance updatedAt, while replays return the original receipt without reapplying later state.
 - Removing a server from public listing cannot erase addresses that visitors previously copied.
 
 ## Minimal boundaries
@@ -71,7 +71,7 @@ Authenticated Join uses the merged [CP #143](https://github.com/Bannerlord-Coop-
 
 Visibility persistence and mutation use the authenticated API. The website public directory calls the separate anonymous integration below; an authenticated endpoint alone is not public consent or evidence that the required public backend route exists.
 
-- Anonymous Edge `GET /functions/v1/public-servers?limit=100&cursor=...` calls only CP `POST /v1/public/control-plane`, operation `public-servers`, input `{cursor, limit}`. The normal version-1 correlated success envelope uses `result: {items, nextCursor}`. Public cursor length is capped at 2048, page size at 100, and game port arrays at 32. This does not alter the existing private API cursor limit.
+- Anonymous Edge `GET /functions/v1/public-servers?limit=100&cursor=...` calls only CP `POST /v1/public/control-plane`, operation `public-servers`, input `{cursor, limit}`. The normal version-1 correlated success envelope uses `result: {items, nextCursor}`. The Edge accepts cursors up to 2048 characters; the paired backend enforces its tighter 1024-character cursor limit. Page size is capped at 100 and game port arrays at 32. This does not alter the existing private API cursor limit.
 - Authenticated Edge `POST /functions/v1/my-servers` accepts action `set-server-visibility` with `serverId`, `visibility`, and `expectedUpdatedAt`, plus the caller's UUID `x-request-id`. It forwards the unchanged bearer to CP `/v1/user/control-plane`, operation `set-server-visibility`. CP #144 success is synchronous `{outcome: "updated" | "existing", serverId, visibility, updatedAt}` in the normal `result` envelope, not a job. The Edge and client require that exact result. The mounted setting retains the UUID and exact input across uncertain retries; a changed authoritative generation starts a new request. Success refreshes My Servers rather than treating an old replay receipt as current state. CP enforces durable idempotency and current ownership.
 - The new public Edge function deliberately has `verify_jwt = false`; `my-servers` retains `verify_jwt = true`. Both reuse the existing `CONTROL_PLANE_ADMIN_URL` origin and `CONTROL_PLANE_WEB_ORIGINS` allowlist. No service-role key or user session is sent to the public endpoint.
 
