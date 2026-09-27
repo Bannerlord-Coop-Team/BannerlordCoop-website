@@ -100,7 +100,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
     useEffect(() => {
         function followHash() {
             const target = window.location.hash;
-            if (target === "#server-access") setSection("Settings");
+            if (target === "#server-access" || target === "#server-visibility") setSection("Settings");
             if (target === "#server-backups") setSection("Backups");
             if (target === "#server-files") setSection("Save & config");
             if (target === "#server-lifecycle") setSection("Console");
@@ -115,7 +115,10 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
             <Link href="/servers" className="inline-flex items-center gap-2 text-sm text-foreground-muted hover:text-gold"><ArrowLeft className="size-4" aria-hidden="true" />All servers</Link>
             {notice && <p className="my-5 rounded-md border border-white/10 bg-surface px-4 py-3 text-sm leading-6 text-foreground-muted">{notice}</p>}
             <header className="mt-5 mb-5">
-                <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-foreground-muted">{summary}{visibility}</div>
+                <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-foreground-muted" onClick={event => {
+                    // Reopening setup after switching tabs does not change an existing hash.
+                    if (event.target instanceof Element && event.target.closest('a[href="#server-visibility"]')) setSection("Settings");
+                }}>{summary}{visibility}</div>
                 {name}
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
                     <span className="text-foreground-muted">Server IP:Port</span>

@@ -75,3 +75,17 @@ test("accepts empty/unassigned endpoints but rejects malformed or duplicated sum
     assert.equal(parsePublicServerPage({ items: [{ ...server, gamePorts: Array(32).fill(4200) }], nextCursor: null }).items.length, 1);
     assert.throws(() => parsePublicServerPage({ items: [{ ...server, gamePorts: Array(33).fill(4200) }], nextCursor: null }));
 });
+
+test("preserves accepted Unicode display names through Edge and retains closed fields and strict cursors", async () => {
+    for (const displayName of ["Family 👨‍👩‍👧‍👦", "Campaign\u200bOne", "Campaign\u0085One"]) {
+        const item = { ...server, displayName };
+        const response = await handler(async () => ok({ items: [item], nextCursor: "next-page" }))(request());
+        assert.equal(response.status, 200);
+        assert.deepEqual((await response.json()).result, { items: [item], nextCursor: "next-page" });
+        assert.throws(() => parsePublicServerPage({ items: [{ ...item, ownerId: "private" }], nextCursor: null }));
+    }
+    for (const displayName of ["Line\nBreak", "Control\u0000Name", "Control\u007fName"]) {
+        assert.throws(() => parsePublicServerPage({ items: [{ ...server, displayName }], nextCursor: null }));
+    }
+    assert.throws(() => parsePublicServerPage({ items: [server], nextCursor: "next\u200dpage" }));
+});
