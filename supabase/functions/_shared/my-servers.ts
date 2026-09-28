@@ -38,6 +38,7 @@ type UpstreamRequest =
         operation: "server-operation";
         input: { serverId: string; action: string };
     }
+    | { operation: "set-password"; input: { serverId: string; expectedUpdatedAt: string; password: string } }
     | { operation: "create-backup"; input: { serverId: string; expectedUpdatedAt: string } }
     | {
         operation: "restore-backup";
@@ -186,6 +187,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "my-server-latest-log") {
                     throw new Error("Expected a binary log response");
                 }
+                if (upstreamRequest.operation === "set-password" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["changed", "restartQueued"]) || envelope.result.changed !== true || typeof envelope.result.restartQueued !== "boolean")) throw new Error("Invalid password response");
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
                 if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
                 if (upstreamRequest.operation === "download-save-export") parseOwnerFileDownload(envelope.result);
@@ -327,6 +329,11 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
                 action: value.action,
             },
         };
+    }
+    if (value.action === "set-password") {
+        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "password", "serverId"]) || typeof value.password !== "string" || value.password.length < 1 || value.password.length > 128) throw new Error("Invalid password request");
+        assertExpectedUpdatedAt(value.expectedUpdatedAt);
+        return { operation: "set-password", input: { serverId: value.serverId as string, expectedUpdatedAt: value.expectedUpdatedAt as string, password: value.password } };
     }
     if (value.action === "create-backup") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {

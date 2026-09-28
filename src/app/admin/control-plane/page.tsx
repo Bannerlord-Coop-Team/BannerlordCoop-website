@@ -22,7 +22,7 @@ import {
 import {
     adminActionOptionValue,
     createServerRegionOptions,
-    formatDiscordOwner,
+    formatAccountOwner,
     installableBuilds,
     MAINTENANCE_TIME_ZONE,
     maintenanceSlotOptions,
@@ -48,8 +48,8 @@ import type {
     ServerDashboardResult,
 } from "@/app/lib/control-plane/types";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
-import { listDiscordUsers } from "@/app/lib/supabase/users";
-import type { DiscordUserSummary } from "@/app/lib/supabase/discord-users";
+import { listWebsiteAccounts } from "@/app/lib/supabase/users";
+import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import {
     Activity,
     ArrowLeft,
@@ -190,20 +190,20 @@ async function ControlPlaneViewContent({
     jobCursor: string | null;
 }) {
     let data: unknown = null;
-    let discordUsers: DiscordUserSummary[] = [];
+    let accounts: WebsiteAccountSummary[] = [];
     let error = "";
     try {
-        const needsDiscordUsers = view === "vps" || view === "servers" || view === "server" || view === "operations";
+        const needsAccounts = view === "vps" || view === "servers" || view === "server" || view === "operations";
         const [viewResult, usersResult] = await Promise.allSettled([
             loadView(token, view, query, serverId, jobState, jobAction, unacknowledgedOnly, jobCursor),
-            needsDiscordUsers ? listDiscordUsers() : Promise.resolve({ users: [], truncated: false }),
+            needsAccounts ? listWebsiteAccounts() : Promise.resolve({ users: [], truncated: false }),
         ]);
         if (viewResult.status === "rejected") throw viewResult.reason;
         data = viewResult.value;
         if (usersResult.status === "fulfilled") {
-            discordUsers = usersResult.value.users;
+            accounts = usersResult.value.users;
         } else {
-            console.error("Discord user directory failed to load", usersResult.reason);
+            console.error("Account directory failed to load", usersResult.reason);
         }
     } catch (cause) {
         console.error("Control plane admin view failed to load", cause);
@@ -221,13 +221,13 @@ async function ControlPlaneViewContent({
                 </div>
             )}
             {!error && view === "overview" && <OverviewView overview={data as Overview} />}
-            {!error && view === "vps" && <VpsView inventory={data as HostingAdminVpsInventory} discordUsers={discordUsers} />}
-            {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} discordUsers={discordUsers} />}
-            {!error && view === "server" && <ServerView result={data as ServerDashboardResult} discordUsers={discordUsers} />}
+            {!error && view === "vps" && <VpsView inventory={data as HostingAdminVpsInventory} accounts={accounts} />}
+            {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} accounts={accounts} />}
+            {!error && view === "server" && <ServerView result={data as ServerDashboardResult} accounts={accounts} />}
             {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} state={jobState} action={jobAction} unacknowledgedOnly={unacknowledgedOnly} cursor={jobCursor} serverId={serverId} />}
             {!error && view === "releases" && <ReleasesView data={data as { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }} />}
             {!error && view === "audit" && <AuditView page={data as HostingPage<AuditEvent>} />}
-            {!error && view === "operations" && <OperationsView data={data as OperationsData} discordUsers={discordUsers} />}
+            {!error && view === "operations" && <OperationsView data={data as OperationsData} accounts={accounts} />}
         </>
     );
 }
@@ -326,9 +326,9 @@ function ViewTabs({ active }: { active: View }) {
     );
 }
 
-function VpsView({ inventory, discordUsers }: { inventory: HostingAdminVpsInventory; discordUsers: DiscordUserSummary[] }) {
+function VpsView({ inventory, accounts }: { inventory: HostingAdminVpsInventory; accounts: WebsiteAccountSummary[] }) {
     const { controlPlaneHost, hosts } = inventory;
-    const ownerLabels = discordOwnerLabelMap(discordUsers);
+    const ownerLabels = accountLabelMap(accounts);
     const availableServiceNames = Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : [];
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
@@ -382,7 +382,7 @@ function OverviewView({ overview }: { overview: Overview }) {
             <section className="grid gap-6 lg:grid-cols-2">
                 <Panel title="Fleet capacity and reconciliation" help="Physical VPS capacity, assigned game-server slots, and the latest comparison between desired state and provider/runner evidence.">
                     <Definition label="Managed VPS" value={String(fleet.managedVpsCount)} help="Runner-onboarded VPS hosts plus legacy registered hosts that still own a managed slot." />
-                    <Definition label="Managed Bannerlord server instances" value={String(fleet.usedQuota)} help="Slots currently assigned to Discord owners as managed Bannerlord servers." />
+                    <Definition label="Managed Bannerlord server instances" value={String(fleet.usedQuota)} help="Slots currently assigned to website accounts as managed Bannerlord servers." />
                     <Definition label="Total slots" value={String(fleet.totalSlots)} help="Declared game-server capacity across managed VPS inventory. Capacity is one slot per two vCPUs." />
                     <Definition label="Available slots" value={String(fleet.availableSlots)} help="Prepared, healthy runner slots that are ready to be assigned to a managed server." />
                     <Definition label="Orphan candidates" value={String(fleet.provider.orphanCandidateCount)} help="Provider resources that appear to belong to this fleet but do not currently match durable control-plane ownership." />
@@ -401,8 +401,8 @@ function OverviewView({ overview }: { overview: Overview }) {
     );
 }
 
-function ServersView({ page, query, discordUsers }: { page: HostingPage<ManagedServer>; query: string; discordUsers: DiscordUserSummary[] }) {
-    const usernames = discordUsernameMap(discordUsers);
+function ServersView({ page, query, accounts }: { page: HostingPage<ManagedServer>; query: string; accounts: WebsiteAccountSummary[] }) {
+    const usernames = accountLabelMap(accounts);
     return (
         <section className="mt-8">
             <form method="get" className="flex max-w-xl gap-2">
@@ -420,7 +420,7 @@ function ServersView({ page, query, discordUsers }: { page: HostingPage<ManagedS
                             label={`Open Lifecycle operation for ${server.displayName}`}
                         >
                             <td className="p-4"><p className="font-semibold text-gold group-hover:underline">{server.displayName}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.serverId}</p></td>
-                            <td className="p-4 text-xs text-foreground-muted"><p className="font-semibold text-foreground">{formatDiscordUsername(usernames.get(server.ownerDiscordUserId))}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.ownerDiscordUserId}</p></td>
+                            <td className="p-4 text-xs text-foreground-muted"><p className="font-semibold text-foreground">{formatAccountLabel(usernames.get(server.ownerDiscordUserId))}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.ownerDiscordUserId}</p></td>
                             <td className="p-4"><State value={server.operationState} /></td>
                             <td className="p-4"><RuntimeObservation server={server} /></td>
                             <td className="p-4 text-xs text-foreground-muted">{releaseChannelLabel(server.releaseChannel)}<br />{shortId(server.installedBuildId)}</td>
@@ -435,12 +435,12 @@ function ServersView({ page, query, discordUsers }: { page: HostingPage<ManagedS
     );
 }
 
-function ServerView({ result, discordUsers }: { result: ServerDashboardResult; discordUsers: DiscordUserSummary[] }) {
+function ServerView({ result, accounts }: { result: ServerDashboardResult; accounts: WebsiteAccountSummary[] }) {
     const { server } = result.dashboard;
     const pinnedBuild = [result.dashboard.installedBuild, result.dashboard.desiredBuild]
         .find(build => build?.buildId === server.pinnedBuildId) ?? null;
     const activeJob = result.dashboard.activeJob;
-    const username = discordUsernameMap(discordUsers).get(server.ownerDiscordUserId);
+    const username = accountLabelMap(accounts).get(server.ownerDiscordUserId);
     return (
         <div className="mt-8 space-y-8">
             <ControlPlaneLiveRefresh active={activeJob !== null} label="Refreshing server progress automatically" />
@@ -461,7 +461,7 @@ function ServerView({ result, discordUsers }: { result: ServerDashboardResult; d
                 </section>
             )}
             <section className="grid gap-6 lg:grid-cols-3">
-                <Panel title="Ownership"><Definition label="Discord owner" value={formatDiscordOwner(username, server.ownerDiscordUserId)} /><Definition label="Region" value={server.friendlyRegion} /><Definition label="Provider" value={server.provider} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
+                <Panel title="Ownership"><Definition label="Owner account" value={formatAccountOwner(username, server.ownerDiscordUserId)} /><Definition label="Region" value={server.friendlyRegion} /><Definition label="Provider" value={server.provider} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
                 <Panel title="Desired / observed"><Definition label="Desired" value={server.desiredState} /><Definition label="VM" value={server.observedVmState} /><Definition label="Game" value={server.observedGameState} /><Definition label="Agent" value={result.dashboard.runtime?.agentHealthy ? "Healthy" : "Unavailable"} tone={result.dashboard.runtime?.agentHealthy ? "ok" : "warning"} /></Panel>
                 <Panel title="Composition"><Definition label="Channel" value={releaseChannelLabel(server.releaseChannel)} /><Definition label="Installed version" value={<RecordedRelease build={result.dashboard.installedBuild} buildId={server.installedBuildId} />} /><Definition label="Desired version" value={<RecordedRelease build={result.dashboard.desiredBuild} buildId={server.desiredBuildId} />} /><Definition label="Update policy" value={server.pinnedBuildId ? "Pinned version" : `Follow ${releaseChannelLabel(server.releaseChannel)} channel`} />{server.pinnedBuildId && <Definition label="Pinned version" value={<RecordedRelease build={pinnedBuild} buildId={server.pinnedBuildId} />} />}<Definition label="Save" value={result.dashboard.activeSave?.displayName ?? "Default bootstrap pending"} /></Panel>
             </section>
@@ -556,7 +556,7 @@ function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nig
     </div>;
 }
 
-function OperationsView({ data, discordUsers }: { data: OperationsData; discordUsers: DiscordUserSummary[] }) {
+function OperationsView({ data, accounts }: { data: OperationsData; accounts: WebsiteAccountSummary[] }) {
     const { overview, inventory, selectedServer } = data;
     const listedServers = selectedServer !== null
         && !overview.servers.items.some((server) => server.serverId === selectedServer.serverId)
@@ -569,13 +569,11 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
         : serverOptions.find((option) => option.value === selectedServer.serverId);
     const jobOptions: AdminActionOption[] = overview.jobs.items.map((job) => ({ label: `${job.action} · ${job.state} · ${shortId(job.jobId)}`, value: job.jobId, updatedAt: job.updatedAt }));
     const buildOptions = installableBuilds([...overview.stableBuilds.items, ...overview.nightlyBuilds.items]).map((build) => ({ label: `Pinned version: ${releaseVersion(build)} · ${releaseChannelLabel(build.channel)}${build.currentChannel ? " (current)" : ""}`, value: build.buildId, releaseChannel: build.channel }));
-    const discordUserOptions: AdminActionOption[] = discordUsers.flatMap((user) => user.username
-        ? [{ label: user.username, value: user.discordUserId }]
-        : []);
+    const accountOptions: AdminActionOption[] = accounts.map(user => ({ label: user.label, value: user.accountId }));
     const availableVpsOptions: AdminActionOption[] = (Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : []).map((serviceName) => ({ label: serviceName, value: serviceName }));
     const createRegionOptions: AdminActionOption[] = createServerRegionOptions(inventory.hosts);
     const maintenanceOptions: AdminActionOption[] = maintenanceSlotOptions();
-    const discordUserField = (name: string, label: string): AdminActionField => ({ name, label, kind: "discord-user", required: true, options: discordUserOptions, help: "Enter the account's unique Discord username or its numeric Discord user ID. The username must belong to a user who has signed into this website with Discord." });
+    const accountField = (name: string, label: string): AdminActionField => ({ name, label, kind: "account", required: true, options: accountOptions, help: "Choose a website account by its email or account ID." });
     const reasonField: AdminActionField = { name: "reason", label: "Reason", kind: "textarea", placeholder: "Optional context for this action", help: "Optional context stored in the immutable administrative audit event. When blank, the control plane records a fixed portal-action reason." };
     const serverField: AdminActionField = { name: "serverId", label: "Server", kind: "server", required: true, options: serverOptions, defaultValue: selectedServerOption === undefined ? "" : adminActionOptionValue("server", selectedServerOption), help: "The selected row carries its current update generation so a stale action fails safely." };
     const plainServerField: AdminActionField = { name: "serverId", label: "Server", kind: "select", required: true, options: serverPlainOptions, defaultValue: selectedServerOption?.value ?? "" };
@@ -584,7 +582,7 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
             { name: "serviceName", label: "Available OVH VPS", kind: "select", required: true, options: availableVpsOptions, defaultValue: availableVpsOptions.length === 1 ? availableVpsOptions[0]!.value : "", help: "Only unregistered VPS products discovered in the authenticated OVH account are shown. Select the saved bannerlord-fleet-operator key when installing the VPS; no SSH key, IP address, vCPU count, region, or audit reason is entered here." },
         ] },
         { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity in stopped state. New servers use Public by default; choose Nightly later with Change release settings if needed. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from an explicit administrator grant. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
-            discordUserField("ownerDiscordUserId", "Owner Discord username or ID"),
+            accountField("ownerDiscordUserId", "Owner account"),
             { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: createRegionOptions, help: "Only regions with a prepared, currently available slot on a registered VPS are shown. The control plane revalidates capacity when you submit; no VPS is purchased automatically." },
             { name: "maintenanceSlot", label: "Maintenance slot", kind: "select", required: true, options: maintenanceOptions, help: `All maintenance windows use ${MAINTENANCE_TIME_ZONE} (Central Time and its daylight-saving changes).` },
         ] },
@@ -605,14 +603,13 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
         { group: "Server lifecycle", operation: "extend-deletion", title: "Extend pending deletion", description: "Move a pending deletion deadline forward by a bounded number of hours.", fields: [serverField, { name: "extensionHours", label: "Extension hours", kind: "number", required: true, minimum: 1, maximum: 8760 }, reasonField] },
         { group: "Server lifecycle", operation: "cancel-deletion", title: "Cancel pending deletion", description: "Cancel the pending deletion if current entitlement permits it.", fields: [serverField, reasonField] },
         { group: "Server lifecycle", operation: "execute-deletion", title: "Execute pending deletion", description: "Queue the final deletion path now.", destructive: true, fields: [serverField, reasonField] },
-        { group: "Ownership and capacity", operation: "set-bonus-quota", title: "Set bonus quota", description: "Replace an owner’s administrative bonus server quota.", fields: [discordUserField("targetDiscordUserId", "Discord username or ID"), { name: "bonusQuota", label: "Bonus quota", kind: "number", required: true, minimum: 0, maximum: 100 }, reasonField] },
-        { group: "Ownership and capacity", operation: "transfer-owner", title: "Transfer ownership", description: "Transfer a server or queue the required replacement workflow.", destructive: true, fields: [serverField, discordUserField("recipientDiscordUserId", "Recipient Discord username or ID"), { name: "recipientRoleIds", label: "Recipient role IDs", valueType: "csv", placeholder: "Comma separated" }, reasonField] },
-        { group: "Ownership and capacity", operation: "set-manager", title: "Set manager", description: "Grant or revoke manager access for one Discord user.", fields: [plainServerField, discordUserField("managerDiscordUserId", "Manager Discord username or ID"), { name: "enabled", label: "Grant access (unchecked revokes)", kind: "checkbox", defaultValue: true }, reasonField] },
+        { group: "Ownership and capacity", operation: "set-bonus-quota", title: "Set bonus quota", description: "Replace an owner’s administrative bonus server quota.", fields: [accountField("targetDiscordUserId", "Account"), { name: "bonusQuota", label: "Bonus quota", kind: "number", required: true, minimum: 0, maximum: 100 }, reasonField] },
+        { group: "Ownership and capacity", operation: "transfer-owner", title: "Transfer ownership", description: "Transfer a server or queue the required replacement workflow.", destructive: true, fields: [serverField, accountField("recipientDiscordUserId", "Recipient account"), reasonField] },
+        { group: "Ownership and capacity", operation: "set-manager", title: "Set manager", description: "Grant or revoke manager access for one website account.", fields: [plainServerField, accountField("managerDiscordUserId", "Manager account"), { name: "enabled", label: "Grant access (unchecked revokes)", kind: "checkbox", defaultValue: true }, reasonField] },
         { group: "Jobs", operation: "retry-job", title: "Retry job", description: "Move an eligible failed/retry-wait job back to the durable queue.", fields: [{ name: "jobId", label: "Job", kind: "job", required: true, options: jobOptions }, reasonField] },
         { group: "Jobs", operation: "cancel-job", title: "Cancel job", description: "Request cancellation at the next safe checkpoint.", destructive: true, fields: [{ name: "jobId", label: "Job", kind: "job", required: true, options: jobOptions }, reasonField] },
         { group: "Jobs", operation: "diagnostics", title: "Open diagnostics result", description: "Read the sanitized result of a completed diagnostics job.", fields: [{ name: "jobId", label: "Diagnostics job UUID", required: true }] },
-        { group: "Maintenance and communication", operation: "batch-maintenance", title: "Batch maintenance", description: "Queue updates for a bounded fleet snapshot, optionally limited to one channel.", fields: [{ name: "releaseChannel", label: "Channel", kind: "select", valueType: "nullable", options: ["stable", "nightly"].map((value) => ({ label: releaseChannelLabel(value), value })) }, reasonField] },
-        { group: "Maintenance and communication", operation: "announce-owners", title: "Announce to owners", description: "Queue a durable private notification campaign for entitled owners.", fields: [{ name: "message", label: "Message", kind: "textarea", required: true }, reasonField] },
+        { group: "Maintenance", operation: "batch-maintenance", title: "Batch maintenance", description: "Queue updates for a bounded fleet snapshot, optionally limited to one channel.", fields: [{ name: "releaseChannel", label: "Channel", kind: "select", valueType: "nullable", options: ["stable", "nightly"].map((value) => ({ label: releaseChannelLabel(value), value })) }, reasonField] },
     ];
     const groups = [...new Set(cards.map((card) => card.group))];
     return <div className="mt-8 space-y-12">{groups.map((group) => {
@@ -703,9 +700,8 @@ function controlRows(controls: GlobalControls) { return [
 ]; }
 function chunk<T>(items: readonly T[], size: number): T[][] { const rows: T[][] = []; for (let index = 0; index < items.length; index += size) rows.push(items.slice(index, index + size)); return rows; }
 function enumOptions(values: readonly string[]): AdminActionOption[] { return values.map((value) => ({ label: value, value })); }
-function discordUsernameMap(users: readonly DiscordUserSummary[]) { return new Map(users.flatMap((user) => user.username ? [[user.discordUserId, user.username] as const] : [])); }
-function discordOwnerLabelMap(users: readonly DiscordUserSummary[]) { return new Map(users.map((user) => [user.discordUserId, user.username ?? user.email ?? user.discordUserId])); }
-function formatDiscordUsername(username: string | undefined) { return username ? `@${username}` : "Username unavailable"; }
+function accountLabelMap(users: readonly WebsiteAccountSummary[]) { return new Map(users.map(user => [user.accountId, user.label])); }
+function formatAccountLabel(label: string | undefined) { return label ?? "Legacy owner"; }
 function first(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
 function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations"].includes(value ?? "") ? value as View : "overview"; }
 function parseJobState(value: string | undefined): "failed" | "active" | null { return value === "failed" || value === "active" ? value : null; }

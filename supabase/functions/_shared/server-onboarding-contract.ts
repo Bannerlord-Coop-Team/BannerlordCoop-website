@@ -20,7 +20,7 @@ export type OnboardingSummary = {
     regions: { region: OnboardingRegion; label: string; available: boolean; request: RegionRequest | null }[];
 };
 export type OnboardingResult =
-    | { action: "create-server"; serverId: string; displayName: string; region: OnboardingRegion; state: "stopped"; createdAt: string; passwordManagement: "discord-owner-controls" }
+    | { action: "create-server"; serverId: string; displayName: string; region: OnboardingRegion; state: "stopped"; createdAt: string; passwordManagement: "website-owner-controls" | "discord-owner-controls" }
     | { action: "request-region"; request: RegionRequest };
 
 export function isOnboardingUuid(value: unknown): value is string {
@@ -84,7 +84,7 @@ export function parseOnboardingResult(value: unknown, expected: OnboardingMutati
         && isOnboardingUuid(value.serverId) && value.displayName === expected.displayName
         && normalizeOnboardingName(value.displayName) === value.displayName
         && value.region === expected.region && value.state === "stopped" && timestamp(value.createdAt)
-        && value.passwordManagement === "discord-owner-controls") {
+        && (value.passwordManagement === "website-owner-controls" || value.passwordManagement === "discord-owner-controls")) {
         return { action: value.action, serverId: value.serverId, displayName: expected.displayName, region: expected.region,
             state: value.state, createdAt: value.createdAt, passwordManagement: value.passwordManagement };
     }

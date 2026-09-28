@@ -87,7 +87,7 @@ const OPERATION_EXPLANATIONS: Record<string, string> = {
     "revoke-build": "Withdraws a validated build from future selection while retaining its immutable receipt and audit history.",
     "rollback-server": "Reinstalls and pins the previous release in this channel while keeping the current campaign and taking a safety backup.",
     "server-operation": "Queues a lifecycle action for the selected server generation. Stop affects only the game container; provider-host actions use separate guarded paths.",
-    "set-bonus-quota": "Replaces one owner's administrative bonus quota; it does not manufacture a Discord entitlement.",
+    "set-bonus-quota": "Replaces one owner's administrative bonus quota; it does not manufacture a membership entitlement.",
     "set-build-pin": "Pins one exact validated build or clears the pin so the server follows its selected release channel.",
     "set-global-controls": "Atomically replaces all four live pause switches and records the administrator reason. Checked means that workflow is currently paused.",
     "set-manager": "Grants or revokes bounded manager access. Managers do not receive ownership, deletion, export, or administrative capabilities.",
@@ -111,7 +111,7 @@ const DESTRUCTIVE_EXPLANATIONS: Record<string, string> = {
     "rollback-server": "This reinstalls an older build while keeping the current campaign. It does not restore an older save.",
     "server-operation": "This card includes delete, reboot, and emergency-stop actions with material service impact.",
     "suspend-server": "Suspension blocks owner operations and stops the game container.",
-    "transfer-owner": "Ownership, access, and future lifecycle authority move to another Discord account.",
+    "transfer-owner": "Ownership, access, and future lifecycle authority move to another website account.",
 };
 
 const AUDIT_ACTION_EXPLANATIONS: Record<string, string> = {
@@ -119,7 +119,7 @@ const AUDIT_ACTION_EXPLANATIONS: Record<string, string> = {
     "hosting.admin.ovhcloud_vps_host_registration_requested": "An administrator requested that an existing OVH VPS be verified and added to managed inventory.",
     "hosting.admin.ovhcloud_vps_runner_onboarding_requested": "An administrator requested full managed-runner commissioning for an existing OVH VPS.",
     "hosting.admin.ovhcloud_vps_runner_update_requested": "An administrator requested a transactional host-wide managed-runner update to the control plane's reviewed revision.",
-    "hosting.admin.server_create_requested": "An administrator requested assignment of existing managed capacity to a Discord owner.",
+    "hosting.admin.server_create_requested": "An administrator requested assignment of existing managed capacity to a website account.",
     "hosting.admin.server_reactivated": "An administrator removed the server's administrative hold. Reactivation does not automatically start the game.",
     "hosting.admin.server_suspended": "An administrator placed the server on hold, blocked owner operations, and queued a graceful game stop.",
     "hosting.provider.ovhcloud_vps_host_registered": "The control plane verified and recorded an existing OVH VPS as inventory. This event alone does not publish schedulable capacity.",

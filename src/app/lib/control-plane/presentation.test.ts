@@ -7,7 +7,7 @@ import {
     applyControlPlaneOperationDefaults,
     createServerRegionOptions,
     fieldRequirementLabel,
-    formatDiscordOwner,
+    formatAccountOwner,
     installableBuilds,
     releaseChannelLabel,
     releaseVersion,
@@ -127,12 +127,12 @@ test("operation fields explicitly identify required and optional inputs", () => 
 
 test("server ownership combines the Discord username and durable user id", () => {
     assert.equal(
-        formatDiscordOwner("shot_up", "763278507085922325"),
+        formatAccountOwner("shot_up", "763278507085922325"),
         "shot_up (763278507085922325)",
     );
     assert.equal(
-        formatDiscordOwner(undefined, "763278507085922325"),
-        "Username unavailable (763278507085922325)",
+        formatAccountOwner(undefined, "763278507085922325"),
+        "Legacy owner (763278507085922325)",
     );
 });
 
@@ -146,10 +146,10 @@ test("the VPS view presents slot occupants and resources with their owning host"
         "utf8",
     );
 
-    assert.match(pageSource, /needsDiscordUsers = view === "vps"/u);
+    assert.match(pageSource, /needsAccounts = view === "vps"/u);
     assert.match(pageSource, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\} \/>/u);
     assert.match(pageSource, /<VpsHostInventory/u);
-    assert.match(inventorySource, /formatDiscordOwner\(ownerLabels\[slot\.ownerDiscordUserId\], slot\.ownerDiscordUserId\)/u);
+    assert.match(inventorySource, /formatAccountOwner\(ownerLabels\[slot\.ownerDiscordUserId\], slot\.ownerDiscordUserId\)/u);
     assert.match(inventorySource, /view=server&serverId=\$\{encodeURIComponent\(slot\.serverId\)\}/u);
     assert.match(inventorySource, /usedPercent >= 90 \? "critical" : usedPercent >= 80 \? "warning"/u);
 });

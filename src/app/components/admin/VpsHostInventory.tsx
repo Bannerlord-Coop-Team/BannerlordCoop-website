@@ -2,7 +2,7 @@
 
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
-import { formatDiscordOwner } from "@/app/lib/control-plane/presentation";
+import { formatAccountOwner } from "@/app/lib/control-plane/presentation";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import type {
     HostingAdminHostResources,
@@ -169,7 +169,7 @@ function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit }: { id:
                         <div role="rowgroup" className="divide-y divide-white/10">
                             {slots.map((slot) => <div role="row" key={`${slot.slotIndex}:${slot.serverId}`} className={`grid ${SLOT_GRID} items-center justify-center gap-x-4 gap-y-4 px-6 py-2.5 text-xs`}>
                                 <div role="cell" data-label="Slot / UDP" className={SLOT_LABEL}><p className="font-label font-semibold uppercase tracking-[0.08em] text-gold">Slot {slot.slotIndex + 1} · UDP {slot.gamePort}</p></div>
-                                <div role="cell" data-label="Player / Server" className={SLOT_LABEL}><p className="truncate font-semibold text-foreground" title={formatDiscordOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}>{formatDiscordOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
+                                <div role="cell" data-label="Player / Server" className={SLOT_LABEL}><p className="truncate font-semibold text-foreground" title={formatAccountOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}>{formatAccountOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
                                 <div role="cell" data-label="CPU" className={SLOT_LABEL}><p className="text-foreground-muted">{formatCpu(slot.resources)}</p></div>
                                 <div role="cell" data-label="Memory" className={SLOT_LABEL}><p className="text-foreground-muted">{formatMemory(slot.resources)}</p></div>
                                 <div role="cell" data-label="Status" className={SLOT_LABEL}><StateBadge value={slot.operationState} /></div>

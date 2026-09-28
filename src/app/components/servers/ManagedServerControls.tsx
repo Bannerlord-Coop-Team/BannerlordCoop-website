@@ -1,7 +1,7 @@
 "use client";
 
 import { useManagedServerPolling } from "@/app/components/servers/ManagedServerPollingProvider";
-import { operateManagedServer } from "@/app/servers/managed-server-actions";
+import { operateManagedServer, setManagedServerPassword } from "@/app/servers/managed-server-actions";
 import { Download, Play, RotateCw, Square } from "lucide-react";
 import { useState, useTransition } from "react";
 
@@ -34,6 +34,7 @@ export function ManagedServerControls({
 }: ManagedServerControlsProps) {
     const [isPending, startTransition] = useTransition();
     const [pendingOperation, setPendingOperation] = useState<Operation | null>(null);
+    const [password, setPassword] = useState("");
     const [message, setMessage] = useState("");
     const { session: pollingSession } = useManagedServerPolling();
     const canOperate = accessRole === "owner" || accessRole === "manager";
@@ -113,6 +114,18 @@ export function ManagedServerControls({
                     onClick={() => requestOperation("update-now")}
                 />
             </div>
+            {accessRole === "owner" && <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={event => {
+                event.preventDefault();
+                if (busy || !password) return;
+                if (operationState === "running" && !window.confirm("Change the password and restart the server after warning players?")) return;
+                startTransition(async () => {
+                    const result = await setManagedServerPassword({ serverId, expectedUpdatedAt, password });
+                    setPassword(""); setMessage(result.message);
+                });
+            }}>
+                <label className="text-xs">New game password<input className="mt-1 block border border-white/20 bg-surface px-2 py-1" type="password" autoComplete="new-password" required maxLength={128} value={password} onChange={event => setPassword(event.target.value)} disabled={busy} /></label>
+                <button type="submit" disabled={busy || !password} className="border border-white/20 px-3 py-1 text-xs disabled:opacity-50">Set password</button>
+            </form>}
             {message && (
                 <p
                     aria-live="polite"

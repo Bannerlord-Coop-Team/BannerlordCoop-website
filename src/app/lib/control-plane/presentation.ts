@@ -44,8 +44,8 @@ export function fieldRequirementLabel(required: boolean) {
     return required ? "Required" : "Optional";
 }
 
-export function formatDiscordOwner(username: string | undefined, discordUserId: string) {
-    return `${username ?? "Username unavailable"} (${discordUserId})`;
+export function formatAccountOwner(username: string | undefined, discordUserId: string) {
+    return `${username ?? "Legacy owner"} (${discordUserId})`;
 }
 
 export function serverRegionOptions() {

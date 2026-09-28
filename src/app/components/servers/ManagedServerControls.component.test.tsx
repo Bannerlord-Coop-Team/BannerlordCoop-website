@@ -4,7 +4,7 @@ import { expect, it, vi } from "vitest";
 import { ManagedServerControls } from "./ManagedServerControls";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 
-const { request, requestUpdate, beginPolling } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), beginPolling: vi.fn() }));
+const { request, requestUpdate, requestPassword, beginPolling } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({
     getSupabaseServerClient: async () => ({ auth: {
@@ -16,6 +16,7 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
     ...await original<typeof import("@/app/lib/hosting/my-servers")>(),
     requestMyServerOperation: request,
     requestMyServerUpdate: requestUpdate,
+    requestMyServerPassword: requestPassword,
 }));
 vi.mock("./ManagedServerPollingProvider", () => ({
     useManagedServerPolling: () => ({ session: null, beginPolling, endPolling: vi.fn() }),
@@ -87,4 +88,24 @@ it("confirms and queues an immediate update with the displayed server revision",
         await act(async () => root.unmount());
         confirm.mockRestore();
     }
+});
+
+it("sets a private website password once and clears the input", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    requestPassword.mockReset().mockResolvedValue({ changed: true, restartQueued: false });
+    const container = document.createElement("div"); const root = createRoot(container);
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    try {
+        await act(async () => root.render(<ManagedServerControls serverId={serverId} displayName="Campaign" accessRole="owner" operationState="stopped" expectedUpdatedAt="2026-09-28T00:00:00.000Z" />));
+        const input = container.querySelector<HTMLInputElement>('input[type="password"]')!;
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Private-fixture-password");
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+        expect(requestPassword).toHaveBeenCalledExactlyOnceWith("token", { serverId, expectedUpdatedAt: "2026-09-28T00:00:00.000Z", password: "Private-fixture-password" }, expect.any(String));
+        expect(input.value).toBe("");
+        expect(container.textContent).toContain("Password changed");
+        expect(container.textContent).not.toContain("Private-fixture-password");
+    } finally { await act(async () => root.unmount()); }
 });

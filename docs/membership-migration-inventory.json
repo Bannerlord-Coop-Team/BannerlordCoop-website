@@ -421,6 +421,28 @@
       "cpBytes": 2165,
       "representationException": false,
       "releaseClassification": "already-applied control-plane history mirrored into the website migration stream; NEVER replay"
+    },
+    {
+      "version": "202609280001",
+      "websitePath": "supabase/migrations/202609280001_control_plane_website_accounts.sql",
+      "websiteSha256": "cc4736ac6bcab484f6edf2eebec0b9e810cb0d57458a05c5bf106128b491aca8",
+      "websiteBytes": 3275,
+      "cpPath": "supabase/migrations/202609280001_control_plane_website_accounts.sql",
+      "cpSha256": "cc4736ac6bcab484f6edf2eebec0b9e810cb0d57458a05c5bf106128b491aca8",
+      "cpBytes": 3275,
+      "representationException": false,
+      "releaseClassification": "pending coordinated website-only hosting cutover; not deployed"
+    },
+    {
+      "version": "202609280002",
+      "websitePath": "supabase/migrations/202609280002_account_owned_membership.sql",
+      "websiteSha256": "91047b552eafd9c19b8c1403a36a10d9bbede42bf8098a3518472b52ef3c3472",
+      "websiteBytes": 2182,
+      "cpPath": "supabase/migrations/202609280002_account_owned_membership.sql",
+      "cpSha256": "91047b552eafd9c19b8c1403a36a10d9bbede42bf8098a3518472b52ef3c3472",
+      "cpBytes": 2182,
+      "representationException": false,
+      "releaseClassification": "pending coordinated website-only hosting cutover; not deployed"
     }
   ],
   "integratedWebsiteMainHead": "f012d9412d98a1e8f50bcc3887c655a813959500",
