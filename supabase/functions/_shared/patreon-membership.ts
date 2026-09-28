@@ -40,7 +40,7 @@ function relationship(value: Record<string, unknown>, name: string): unknown {
 // This is current subscription-benefit evidence, NOT proof of a settled charge.
 // Patreon documents entitled tiers/amount as including a current pledge. An upgrade
 // already reported entitled with active_patron + Paid deliberately qualifies.
-export async function verifyPatreonMembership(body: unknown, policy: Policy | null, now = new Date().toISOString()): Promise<{ patreonUserId: string; evidence: Evidence }> {
+export async function verifyPatreonMembership(body: unknown, policy: Policy | null, now = new Date().toISOString(), confirmEndedAccess = false): Promise<{ patreonUserId: string; evidence: Evidence }> {
     if (!record(body) || !resource(body.data, "user")) throw new Error("Invalid Patreon identity");
     const user = body.data;
     const evidence: Evidence = { verification: policy === null ? "unverified" : "review_required", campaignId: policy?.campaignId ?? null, memberId: null, tierIds: [], verifiedAt: policy === null ? null : now, paidThroughAt: null, policyVersion: policy?.policyVersion ?? POLICY_VERSION, evidenceSha256: null };
@@ -85,7 +85,14 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
                 evidence.tierIds = tierIds.sort();
                 const a = member.attributes;
                 if (!record(a) || !Number.isSafeInteger(a.currently_entitled_amount_cents) || (a.currently_entitled_amount_cents as number) < 0 || typeof a.last_charge_date !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/u.test(a.last_charge_date) || !Number.isFinite(Date.parse(a.last_charge_date)) || new Date(a.last_charge_date).toISOString().slice(0,19) !== a.last_charge_date.slice(0,19) || Date.parse(a.last_charge_date) > Date.parse(now) || a.is_free_trial !== false || a.is_gifted !== false) throw new Error("Missing payment/status evidence");
-                if (a.patron_status === "declined_patron" || a.last_charge_status === "Declined") evidence.verification = "nonqualifying";
+                // A cancellation can retain paid benefits. Only a complete creator-authenticated
+                // read proving former membership AND no remaining entitlement confirms loss.
+                if (confirmEndedAccess && a.patron_status === "former_patron" && a.last_charge_status === "Paid"
+                    && a.currently_entitled_amount_cents === 0 && tierIds.length === 0) {
+                    evidence.verification = "nonqualifying";
+                    evidence.paidAccessEndedAt = now;
+                }
+                else if (a.patron_status === "declined_patron" || a.last_charge_status === "Declined") evidence.verification = "nonqualifying";
                 else if (a.patron_status !== "active_patron" || a.last_charge_status !== "Paid") evidence.verification = "review_required";
                 else evidence.verification = tierIds.some(id => policy.qualifyingTierIds.includes(id)) && (a.currently_entitled_amount_cents as number) >= policy.minimumCents ? "qualifying" : "nonqualifying";
             }
@@ -104,6 +111,6 @@ export async function verifyPatreonAllocation(body: unknown, policy: Policy, now
     const result = await verifyPatreonMembership({
         data: { type: "user", id: user.id, relationships: { memberships: { data: [{ type: "member", id: body.data.id }] } } },
         included: [body.data, ...body.included], links: body.links, meta: body.meta,
-    }, policy, now);
+    }, policy, now, true);
     return result.evidence;
 }

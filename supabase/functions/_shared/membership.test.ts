@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { currentDiscord, parsePolicy, POLICY_VERSION, parseSnapshot, validUntil, type Policy } from "./membership.ts";
-import { verifyPatreonMembership, PATREON_IDENTITY_URL } from "./patreon-membership.ts";
+import { verifyPatreonMembership, verifyPatreonAllocation, PATREON_IDENTITY_URL } from "./patreon-membership.ts";
 import { createWebsiteAccountHandler } from "./website-account.ts";
 import { createPatreonHandler } from "./patreon.ts";
 import { createControlPlaneMembershipHandler } from "./control-plane-membership.ts";
@@ -221,4 +221,30 @@ test("$50 allocation policy checks provider amounts and versions for OAuth and w
     }
     body.included[2].attributes.amount_cents = 2000;
     assert.equal((await verifyPatreonMembership(body, fifty, now)).evidence.verification, "review_required");
+});
+
+
+test("confirmed former membership with no remaining benefits emits loss, never cancellation or ambiguity alone", async () => {
+    const fifty: Policy = { ...policy, minimumCents: 5000, policyVersion: "patreon-paid-usd50-v1" };
+    const body = identity();
+    body.included[2].attributes.amount_cents = 5000;
+    body.included[0].attributes.patron_status = "former_patron";
+    const read = () => verifyPatreonAllocation({ data: body.included[0], included: body.included.slice(1) }, fifty, now);
+    assert.equal((await read()).paidAccessEndedAt, undefined); // Paid benefits remain after cancellation.
+    body.included[0].attributes.currently_entitled_amount_cents = 0;
+    assert.ok(body.included[0].relationships?.currently_entitled_tiers);
+    body.included[0].relationships.currently_entitled_tiers.data = [];
+    const ended = await read();
+    assert.equal(ended.verification, "nonqualifying"); assert.equal(ended.paidAccessEndedAt, now);
+    assert.equal(ended.paidThroughAt, null); // No invented billing period.
+    assert.equal((await verifyPatreonMembership(body, fifty, now)).evidence.paidAccessEndedAt, undefined);
+    assert.deepEqual(parseSnapshot({ version: 1, accountId, discordUserId: "123456789012345678",
+        patreonUserId: "1", linkGeneration: "1", revision: "1", linkState: "linked", ...ended }).paidAccessEndedAt, now);
+    for (const status of ["active_patron", "declined_patron", "unsupported"]) {
+        body.included[0].attributes.patron_status = status;
+        assert.equal((await read()).paidAccessEndedAt, undefined);
+    }
+    body.included[0].attributes.patron_status = "former_patron";
+    const incomplete = { data: body.included[0], included: body.included.slice(1), links: { next: "https://untrusted.invalid" } };
+    assert.equal((await verifyPatreonAllocation(incomplete, fifty, now)).paidAccessEndedAt, undefined);
 });

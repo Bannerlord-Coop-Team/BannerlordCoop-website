@@ -8,7 +8,7 @@ export const DECIMAL = /^(0|[1-9][0-9]{0,19})$/u;
 export const HASH = /^[a-f0-9]{64}$/u;
 export const FRESHNESS_MS = 86_400_000;
 export type Verification = "qualifying" | "nonqualifying" | "unknown" | "review_required" | "unverified";
-export type Evidence = { verification: Verification; campaignId: string | null; memberId: string | null; tierIds: string[]; verifiedAt: string | null; paidThroughAt: string | null; policyVersion: PolicyVersion; evidenceSha256: string | null };
+export type Evidence = { verification: Verification; campaignId: string | null; memberId: string | null; tierIds: string[]; verifiedAt: string | null; paidThroughAt: string | null; paidAccessEndedAt?: string | null; policyVersion: PolicyVersion; evidenceSha256: string | null };
 export type Snapshot = Evidence & { version: 1; accountId: string; discordUserId: string | null; patreonUserId: string | null; linkGeneration: string; revision: string; linkState: "linked" | "unlinked" | "identity_changed" | "account_deleted" };
 export type Policy = { campaignId: string; qualifyingTierIds: string[]; currency: "USD"; minimumCents: 2000 | 5000; policyVersion: PolicyVersion };
 export function record(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
@@ -90,13 +90,14 @@ export async function boundedJson(response: Response, max = 65_536, onFailure?: 
     }
 }
 export function parseSnapshot(value: unknown): Snapshot {
-    if (!record(value) || !exact(value, ["version", "accountId", "discordUserId", "patreonUserId", "linkGeneration", "revision", "linkState", "verification", "campaignId", "memberId", "tierIds", "verifiedAt", "paidThroughAt", "policyVersion", "evidenceSha256"]) || value.version !== 1 || typeof value.accountId !== "string" || !UUID.test(value.accountId) || typeof value.linkGeneration !== "string" || !DECIMAL.test(value.linkGeneration) || typeof value.revision !== "string" || !DECIMAL.test(value.revision) || !["linked", "unlinked", "identity_changed", "account_deleted"].includes(value.linkState as string) || !["qualifying", "nonqualifying", "unknown", "review_required", "unverified"].includes(value.verification as string) || (value.policyVersion !== POLICY_VERSION && value.policyVersion !== ALLOCATION_POLICY_VERSION)) throw new Error("Invalid membership snapshot");
+    if (!record(value) || !exact(value, [...(Object.hasOwn(value, "paidAccessEndedAt") ? ["paidAccessEndedAt"] : []), "version", "accountId", "discordUserId", "patreonUserId", "linkGeneration", "revision", "linkState", "verification", "campaignId", "memberId", "tierIds", "verifiedAt", "paidThroughAt", "policyVersion", "evidenceSha256"]) || value.version !== 1 || typeof value.accountId !== "string" || !UUID.test(value.accountId) || typeof value.linkGeneration !== "string" || !DECIMAL.test(value.linkGeneration) || typeof value.revision !== "string" || !DECIMAL.test(value.revision) || !["linked", "unlinked", "identity_changed", "account_deleted"].includes(value.linkState as string) || !["qualifying", "nonqualifying", "unknown", "review_required", "unverified"].includes(value.verification as string) || (value.policyVersion !== POLICY_VERSION && value.policyVersion !== ALLOCATION_POLICY_VERSION)) throw new Error("Invalid membership snapshot");
     if (value.memberId !== null && (typeof value.memberId !== "string" || !UUID.test(value.memberId))) throw new Error("Invalid member identifier");
     for (const field of ["patreonUserId", "campaignId"]) if (value[field] !== null && (typeof value[field] !== "string" || !IDENTIFIER.test(value[field] as string))) throw new Error("Invalid identifier");
     if (value.discordUserId !== null && (typeof value.discordUserId !== "string" || !/^[0-9]{17,20}$/u.test(value.discordUserId))) throw new Error("Invalid Discord ID");
     if (!Array.isArray(value.tierIds) || value.tierIds.length > 50 || !value.tierIds.every(id => typeof id === "string" && IDENTIFIER.test(id)) || new Set(value.tierIds).size !== value.tierIds.length) throw new Error("Invalid tiers");
     for (const field of ["verifiedAt", "paidThroughAt"]) if (value[field] !== null && !timestamp(value[field])) throw new Error("Invalid timestamp");
     if (value.evidenceSha256 !== null && (typeof value.evidenceSha256 !== "string" || !HASH.test(value.evidenceSha256))) throw new Error("Invalid digest");
+    if (value.paidAccessEndedAt !== undefined && value.paidAccessEndedAt !== null && !timestamp(value.paidAccessEndedAt)) throw new Error("Invalid paid access end");
     return value as Snapshot;
 }
 export function validUntil(s: Evidence) { return s.verifiedAt === null ? null : new Date(Math.min(Date.parse(s.verifiedAt) + FRESHNESS_MS, s.paidThroughAt === null ? Infinity : Date.parse(s.paidThroughAt))).toISOString(); }
