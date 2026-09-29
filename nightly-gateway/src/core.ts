@@ -17,6 +17,7 @@ export const NIGHTLY_ACCESS_ROLE_IDS = Object.freeze([
     ...SUPPORTER_ROLE_IDS,
     ...STAFF_ROLE_IDS,
     TESTER_ROLE_ID,
+    "1551834978570997792", // Competition Winner; eligible but not advertised on the website.
 ]);
 export const SPONSORED_ACCOUNT_LIMIT = 10;
 export const DEVICE_SESSION_SECONDS = 10 * 60;

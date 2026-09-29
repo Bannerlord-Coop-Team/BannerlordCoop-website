@@ -1,3 +1,4 @@
+import { parsePolicy } from "../_shared/membership.ts";
 import { createPatreonRoleHandler, createPatreonRoleRpc } from "../_shared/patreon-roles.ts";
 
 declare const Deno: {
@@ -16,6 +17,7 @@ const tierId = required("PATREON_STANDARD_TIER_ID");
 Deno.serve(createPatreonRoleHandler({
     campaignId,
     tierId,
+    allocationPolicy: parsePolicy(Deno.env.get("HOSTING_MEMBERSHIP_WEBHOOK_POLICY_JSON")),
     creatorAccessToken: required("PATREON_CREATOR_ACCESS_TOKEN"),
     webhookSecret: required("PATREON_WEBHOOK_SECRET"),
     syncSecret: required("PATREON_SYNC_SECRET"),

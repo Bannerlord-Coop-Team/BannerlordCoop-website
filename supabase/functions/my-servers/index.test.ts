@@ -49,33 +49,45 @@ test("routes a bounded list request through my-servers without caller identity f
     });
 });
 
-test("routes a strict lifecycle operation without caller authority", async () => {
+test("routes a direct restart with only serverId and verified bearer identity", async () => {
     let upstreamRequest: Request | undefined;
     const handler = createHandler(async (input, init) => {
         upstreamRequest = new Request(input, init);
+        return Response.json({ ok: true, result: { exitCode: 0 } });
+    });
+    const response = await handler(operationRequest({
+        serverId: "22222222-2222-4222-8222-222222222222", action: "restart-game",
+    }));
+    assert.equal(response.status, 200);
+    assert.equal(upstreamRequest?.url, "https://control-plane.example.test/api/v1/restart");
+    assert.equal(upstreamRequest?.method, "POST");
+    assert.equal(upstreamRequest?.headers.get("authorization"), `Bearer ${TOKEN}`);
+    assert.deepEqual(await upstreamRequest?.json(), { serverId: "22222222-2222-4222-8222-222222222222" });
+    assert.deepEqual(await response.json(), { version: 1, requestId: REQUEST_ID, ok: true, result: { exitCode: 0 } });
+});
+
+test("routes update now through the stale-safe owner update operation", async () => {
+    let upstreamBody: unknown;
+    const handler = createHandler(async (input, init) => {
+        upstreamBody = await new Request(input, init).json();
         return successEnvelope({
-            outcome: "enqueued",
-            jobId: "55555555-5555-4555-8555-555555555555",
-            action: "restart-game",
+            outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "update",
         });
     });
     const response = await handler(operationRequest({
         serverId: "22222222-2222-4222-8222-222222222222",
-        action: "restart-game",
-        expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+        action: "update-now",
+        expectedUpdatedAt: "2026-09-20T12:00:00.000Z",
     }));
-    const upstreamBody = JSON.parse(await upstreamRequest?.text() ?? "{}");
 
     assert.equal(response.status, 200);
-    assert.equal(upstreamRequest?.method, "POST");
     assert.deepEqual(upstreamBody, {
         version: 1,
         requestId: REQUEST_ID,
-        operation: "server-operation",
+        operation: "update-server",
         input: {
             serverId: "22222222-2222-4222-8222-222222222222",
-            action: "restart-game",
-            expectedUpdatedAt: "2026-09-02T14:45:07.479Z",
+            expectedUpdatedAt: "2026-09-20T12:00:00.000Z",
         },
     });
 });
@@ -341,3 +353,21 @@ function operationRequest(input: Record<string, unknown>, query = "") {
         body: JSON.stringify(input),
     });
 }
+
+test("direct commands preserve admission failures and do not retry transport loss", async () => {
+    const input = { serverId: "22222222-2222-4222-8222-222222222222", action: "restart-game" };
+    for (const status of [401, 403, 404]) {
+        const error = { code: status === 404 ? "server_not_found" : "unauthenticated", message: "Access denied.", retryable: false };
+        const body = status === 404 ? { ok: false, error } : { version: 1, requestId: REQUEST_ID, ok: false, error };
+        const handler = createHandler(async () => Response.json(body, { status }));
+        const response = await handler(operationRequest(input));
+        assert.equal(response.status, status);
+        assert.deepEqual((await response.json()).error, error);
+    }
+    let calls = 0;
+    const handler = createHandler(async () => { calls++; throw new Error("Connection lost"); });
+    const response = await handler(operationRequest(input));
+    assert.equal(response.status, 502);
+    assert.equal((await response.json()).error.code, "control_plane_unavailable");
+    assert.equal(calls, 1);
+});

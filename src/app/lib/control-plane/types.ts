@@ -91,6 +91,9 @@ export type HostingJob = {
 };
 
 export type ReleaseBuild = {
+    registryMetadata?: { versionTag: string; clientRevision: string; serverRevision: string };
+    currentChannel?: boolean;
+    requiredClientModVersion?: string;
     buildId: string;
     channel: "stable" | "nightly";
     version: string;

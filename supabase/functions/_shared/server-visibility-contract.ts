@@ -25,6 +25,11 @@ export function exactKeys(value: Record<string, unknown>, keys: readonly string[
 function text(value: unknown, max: number): value is string {
     return typeof value === "string" && value.length > 0 && value.length <= max && !/[\p{Cc}\p{Cf}]/u.test(value);
 }
+// Names use the ControlPlane write contract's C0/DEL policy, not the cursor/metadata policy.
+function isDisplayName(value: unknown): value is string {
+    return typeof value === "string" && value.length > 0 && value.length <= 200
+        && Array.from(value).every(character => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127);
+}
 export function isGameIp(value: unknown): value is string {
     if (typeof value !== "string" || value.length > 64) return false;
     if (/^(?:\d{1,3}\.){3}\d{1,3}$/u.test(value)) {
@@ -46,7 +51,7 @@ export function parsePublicServerPage(value: unknown): PublicServerPage {
     const items = value.items.map(item => {
         if (!isRecord(item) || !exactKeys(item, ["serverId", "displayName", "friendlyRegion", "observedGameState", "connectionIp", "gamePorts"])
             || typeof item.serverId !== "string" || !SERVER_ID.test(item.serverId)
-            || !text(item.displayName, 200) || (item.friendlyRegion !== null && !text(item.friendlyRegion, 128))
+            || !isDisplayName(item.displayName) || (item.friendlyRegion !== null && !text(item.friendlyRegion, 128))
             || (item.observedGameState !== null && !text(item.observedGameState, 64))
             || (item.connectionIp !== null && !isGameIp(item.connectionIp)) || !isGamePorts(item.gamePorts)
             || ids.has(item.serverId)) throw new Error("Invalid public server summary");

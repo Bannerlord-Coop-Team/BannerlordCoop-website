@@ -9,6 +9,7 @@ import {
     MyServersApiError,
     requestMyServerBackupOperation,
     requestMyServerOperation,
+    requestMyServerUpdate,
     requestServerVisibility,
 } from "./my-servers";
 
@@ -217,47 +218,6 @@ test("loads a sanitized durable backup-operation status", async () => {
     }
 });
 
-test("submits a correlated strict server operation through the same Edge boundary", async () => {
-    configureEnvironment();
-    let request: Request | undefined;
-    globalThis.fetch = async (input, init) => {
-        request = new Request(input, init);
-        return Response.json({
-            version: 1,
-            requestId: request.headers.get("x-request-id"),
-            ok: true,
-            result: {
-                outcome: "enqueued",
-                jobId: "55555555-5555-4555-8555-555555555555",
-                action: "restart-game",
-            },
-        });
-    };
-
-    try {
-        const result = await requestMyServerOperation(TOKEN, {
-            serverId: FIRST_SERVER.serverId,
-            action: "restart-game",
-            expectedUpdatedAt: FIRST_SERVER.updatedAt,
-        }, "11111111-1111-4111-8111-111111111111");
-        assert.deepEqual(result, {
-            outcome: "enqueued",
-            jobId: "55555555-5555-4555-8555-555555555555",
-            action: "restart-game",
-        });
-        assert.equal(request?.method, "POST");
-        assert.equal(request?.headers.get("content-type"), "application/json");
-        assert.equal(request?.headers.get("x-request-id"), "11111111-1111-4111-8111-111111111111");
-        assert.deepEqual(JSON.parse(await request?.text() ?? "{}"), {
-            serverId: FIRST_SERVER.serverId,
-            action: "restart-game",
-            expectedUpdatedAt: FIRST_SERVER.updatedAt,
-        });
-    } finally {
-        restoreEnvironment();
-    }
-});
-
 test("submits closed create and restore backup operations", async () => {
     configureEnvironment();
     const requests: Request[] = [];
@@ -310,58 +270,14 @@ test("submits closed create and restore backup operations", async () => {
     }
 });
 
-test("rejects an operation response containing additional fields", async () => {
-    configureEnvironment();
-    globalThis.fetch = async (input, init) => {
-        const request = new Request(input, init);
-        return Response.json({
-            version: 1,
-            requestId: request.headers.get("x-request-id"),
-            ok: true,
-            result: {
-                outcome: "enqueued",
-                jobId: "55555555-5555-4555-8555-555555555555",
-                action: "start",
-                providerResourceId: "private-provider-resource",
-            },
-        });
-    };
-
-    try {
-        await assert.rejects(
-            requestMyServerOperation(TOKEN, {
-                serverId: FIRST_SERVER.serverId,
-                action: "start",
-                expectedUpdatedAt: FIRST_SERVER.updatedAt,
-            }, "11111111-1111-4111-8111-111111111111"),
-            (error: unknown) => error instanceof MyServersApiError && error.code === "invalid_response",
-        );
-    } finally {
-        restoreEnvironment();
-    }
-});
-
-test("rejects an invalid lifecycle idempotency request ID before fetch", async () => {
+test("rejects an invalid direct-command server ID before fetch", async () => {
     configureEnvironment();
     let called = false;
-    globalThis.fetch = async () => {
-        called = true;
-        return new Response();
-    };
-
+    globalThis.fetch = async () => { called = true; return new Response(); };
     try {
-        await assert.rejects(
-            requestMyServerOperation(TOKEN, {
-                serverId: FIRST_SERVER.serverId,
-                action: "start",
-                expectedUpdatedAt: FIRST_SERVER.updatedAt,
-            }, "not-a-request-id"),
-            (error: unknown) => error instanceof MyServersApiError && error.code === "invalid_request",
-        );
+        await assert.rejects(requestMyServerOperation(TOKEN, { serverId: "invalid", action: "start" }), { code: "invalid_request" });
         assert.equal(called, false);
-    } finally {
-        restoreEnvironment();
-    }
+    } finally { restoreEnvironment(); }
 });
 
 test("rejects private and malformed backup response data", async () => {
@@ -506,3 +422,77 @@ function restoreVariable(name: string, value: string | undefined) {
     if (value === undefined) delete process.env[name];
     else process.env[name] = value;
 }
+
+test("direct commands cross the Edge boundary without lifecycle envelopes or retries", async () => {
+    configureEnvironment();
+    let body: unknown = { ok: true, result: { exitCode: 0 } };
+    let status = 200;
+    const requests: Request[] = [];
+    const handler = createMyServersHandler({
+        allowedOrigins: ["https://bannerlordcoop.com"],
+        controlPlaneUrl: "https://control-plane.example.test",
+        fetchImplementation: async (input, init) => {
+            requests.push(new Request(input, init));
+            return Response.json(body, { status });
+        },
+    });
+    globalThis.fetch = async (input, init) => handler(new Request(input, init));
+    const submit = (action: "start" | "stop" | "restart-game") => requestMyServerOperation(TOKEN, {
+        serverId: FIRST_SERVER.serverId, action,
+    });
+    try {
+        for (const action of ["start", "stop", "restart-game"] as const) {
+            assert.deepEqual(await submit(action), { exitCode: 0 });
+            const request = requests.at(-1)!;
+            assert.equal(request.url, `https://control-plane.example.test/api/v1/${action === "restart-game" ? "restart" : action}`);
+            assert.equal(request.headers.get("authorization"), `Bearer ${TOKEN}`);
+            assert.deepEqual(await request.json(), { serverId: FIRST_SERVER.serverId });
+        }
+        status = 409;
+        body = { ok: false, result: { exitCode: 125 }, error: { code: "container_command_failed", message: "Failed", retryable: false } };
+        await assert.rejects(submit("restart-game"), { code: "container_command_failed", message: "The container command failed with exit code 125.", retryable: false });
+        assert.equal(requests.length, 4);
+        body = { ok: false, error: { code: "container_command_unavailable", message: "Not confirmed.", retryable: false } };
+        await assert.rejects(submit("start"), { code: "container_command_unavailable", retryable: false });
+        for (const invalid of [
+            { ok: true, result: { exitCode: 1 } },
+            { ok: true, result: { exitCode: 0, stdout: "private" } },
+            { ok: false, result: { exitCode: 256 }, error: { code: "container_command_failed" } },
+            { ok: true, result: { outcome: "succeeded", jobId: "old-lifecycle" } },
+        ]) {
+            body = invalid;
+            status = invalid.ok ? 200 : 409;
+            await assert.rejects(submit("start"), { code: "invalid_response" });
+        }
+    } finally { restoreEnvironment(); }
+});
+
+test("owner updates cross the Edge boundary as one stale-safe durable request", async () => {
+    configureEnvironment();
+    const requests: Request[] = [];
+    const handler = createMyServersHandler({
+        allowedOrigins: ["https://bannerlordcoop.com"],
+        controlPlaneUrl: "https://control-plane.example.test",
+        fetchImplementation: async (input, init) => {
+            requests.push(new Request(input, init));
+            return Response.json({ version: 1, requestId: "11111111-1111-4111-8111-111111111111", ok: true, result: {
+                outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "update",
+            } });
+        },
+    });
+    globalThis.fetch = async (input, init) => handler(new Request(input, init));
+    try {
+        assert.deepEqual(await requestMyServerUpdate(TOKEN, {
+            serverId: FIRST_SERVER.serverId,
+            expectedUpdatedAt: "2026-09-20T12:00:00.000Z",
+        }, "11111111-1111-4111-8111-111111111111"), {
+            outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "update",
+        });
+        assert.deepEqual(await requests[0]?.json(), {
+            version: 1,
+            requestId: "11111111-1111-4111-8111-111111111111",
+            operation: "update-server",
+            input: { serverId: FIRST_SERVER.serverId, expectedUpdatedAt: "2026-09-20T12:00:00.000Z" },
+        });
+    } finally { restoreEnvironment(); }
+});

@@ -42,7 +42,7 @@ export function MobileNavigation({
             if (event.key === "Escape") closeMenu();
         }
 
-        const desktopMedia = window.matchMedia("(min-width: 1024px)");
+        const desktopMedia = window.matchMedia("(min-width: 1280px)");
         desktopMedia.addEventListener("change", closeMenu);
         document.addEventListener("keydown", handleKeyDown);
         menuRef.current?.querySelector<HTMLElement>("a")?.focus();
@@ -60,8 +60,8 @@ export function MobileNavigation({
     }
 
     return (
-        <div className="flex items-center gap-2 lg:hidden">
-            {isAuthenticated && <ProfileDropdown accountName={accountName} />}
+        <div className="flex items-center gap-2 xl:hidden">
+            {isAuthenticated && <ProfileDropdown accountName={accountName} isAdmin={isAdmin} />}
             <button
                 ref={triggerRef}
                 type="button"

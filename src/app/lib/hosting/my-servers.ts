@@ -48,11 +48,7 @@ const BACKUP_JOB_STATES = new Set([
 export type MyServerOperation = "start" | "stop" | "restart-game";
 export type MyServerBackupOperation = "create-backup" | "restore-backup";
 
-export type MyServerOperationResult = {
-    outcome: "enqueued" | "existing";
-    jobId: string;
-    action: MyServerOperation;
-};
+export type MyServerOperationResult = { exitCode: 0 };
 
 export type MyServerBackupOperationResult = {
     outcome: "enqueued" | "existing";
@@ -60,11 +56,18 @@ export type MyServerBackupOperationResult = {
     action: "backup" | "restore";
 };
 
+export type MyServerUpdateResult = {
+    outcome: "enqueued" | "existing";
+    jobId: string;
+    action: "update";
+};
+
 export class MyServersApiError extends Error {
     constructor(
         readonly code: string,
         message: string,
         readonly retryable = false,
+        readonly operationId?: string,
     ) {
         super(message);
         this.name = "MyServersApiError";
@@ -152,19 +155,37 @@ export async function requestServerVisibility(accessToken: string, input: Visibi
 
 export async function requestMyServerOperation(
     accessToken: string,
-    input: {
-        serverId: string;
-        action: MyServerOperation;
-        expectedUpdatedAt: string;
-    },
-    requestId: string,
+    input: { serverId: string; action: MyServerOperation },
 ): Promise<MyServerOperationResult> {
-    if (!REQUEST_ID.test(requestId)) {
-        throw new MyServersApiError("invalid_request", "The server operation request ID is invalid.");
-    }
+    if (!RESOURCE_ID.test(input.serverId)) throw new MyServersApiError("invalid_request", "The server ID is invalid.");
     const result = await requestMyServersApi(accessToken, {
         method: "POST",
         body: JSON.stringify(input),
+    });
+    if (!isRecord(result)) throw invalidResponse();
+    if (!hasExactKeys(result, ["exitCode"])) throw invalidResponse();
+    if (result.exitCode !== 0) throw invalidResponse();
+    return { exitCode: 0 };
+}
+
+export async function requestMyServerUpdate(
+    accessToken: string,
+    input: { serverId: string; expectedUpdatedAt: string },
+    requestId: string,
+): Promise<MyServerUpdateResult> {
+    if (
+        !RESOURCE_ID.test(input.serverId)
+        || !ISO_TIMESTAMP.test(input.expectedUpdatedAt)
+        || !Number.isFinite(Date.parse(input.expectedUpdatedAt))
+    ) {
+        throw new MyServersApiError("invalid_request", "The update request is invalid.");
+    }
+    if (!REQUEST_ID.test(requestId)) {
+        throw new MyServersApiError("invalid_request", "The update request ID is invalid.");
+    }
+    const result = await requestMyServersApi(accessToken, {
+        method: "POST",
+        body: JSON.stringify({ action: "update-now", ...input }),
         requestId,
     });
     if (
@@ -172,10 +193,10 @@ export async function requestMyServerOperation(
         || !hasExactKeys(result, ["action", "jobId", "outcome"])
         || !["enqueued", "existing"].includes(String(result.outcome))
         || typeof result.jobId !== "string"
-        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(result.jobId)
-        || result.action !== input.action
+        || !RESOURCE_ID.test(result.jobId)
+        || result.action !== "update"
     ) throw invalidResponse();
-    return result as MyServerOperationResult;
+    return result as MyServerUpdateResult;
 }
 
 export async function requestMyServerBackupOperation(
@@ -249,12 +270,13 @@ async function requestMyServerBackups(
     });
 }
 
-async function requestMyServersApi(
+export async function requestMyServersApi(
     accessToken: string,
     request: {
         method: "GET" | "POST";
         body?: string;
         requestId?: string;
+        maximumResponseBytes?: number;
         configureEndpoint?: (endpoint: URL) => void;
     },
 ): Promise<unknown> {
@@ -285,38 +307,46 @@ async function requestMyServersApi(
         );
     }
 
-    const text = await readBoundedText(response, MAXIMUM_RESPONSE_BYTES);
+    const text = await readBoundedText(response, request.maximumResponseBytes ?? MAXIMUM_RESPONSE_BYTES);
     let envelope: unknown;
     try {
         envelope = JSON.parse(text);
     } catch {
         throw invalidResponse();
     }
-    if (!isRecord(envelope) || envelope.version !== 1 || envelope.requestId !== requestId || typeof envelope.ok !== "boolean") {
-        throw invalidResponse();
+    if (!isRecord(envelope)) throw invalidResponse();
+    if (envelope.version !== 1) throw invalidResponse();
+    if (envelope.requestId !== requestId) throw invalidResponse();
+    if (typeof envelope.ok !== "boolean") throw invalidResponse();
+    if (envelope.ok !== response.ok) throw invalidResponse();
+
+    if (envelope.ok) {
+        if (!hasExactKeys(envelope, ["ok", "requestId", "result", "version"])) throw invalidResponse();
+        return envelope.result;
     }
-    if (!envelope.ok) {
-        const error = envelope.error;
-        if (
-            response.ok
-            || !hasExactKeys(envelope, ["error", "ok", "requestId", "version"])
-            || !isRecord(error)
-            || !hasExactKeys(error, ["code", "message", "retryable"])
-            || typeof error.code !== "string"
-            || !SAFE_ERROR_CODE.test(error.code)
-            || typeof error.message !== "string"
-            || error.message.length < 1
-            || error.message.length > 512
-            || /[\p{Cc}\p{Cf}]/u.test(error.message)
-            || typeof error.retryable !== "boolean"
-        ) throw invalidResponse();
-        throw new MyServersApiError(error.code, error.message, error.retryable);
-    }
-    if (!response.ok || !hasExactKeys(envelope, ["ok", "requestId", "result", "version"])) throw invalidResponse();
-    return envelope.result;
+
+    if (!hasExactKeys(envelope, ["error", "ok", "requestId", "version"])) throw invalidResponse();
+    const error = envelope.error;
+    if (!isRecord(error)) throw invalidResponse();
+
+    const errorKeys = error.operationId === undefined
+        ? ["code", "message", "retryable"]
+        : ["code", "message", "operationId", "retryable"];
+    if (!hasExactKeys(error, errorKeys)) throw invalidResponse();
+
+    const { code, message, retryable, operationId } = error;
+    if (typeof code !== "string" || !SAFE_ERROR_CODE.test(code)) throw invalidResponse();
+    if (typeof message !== "string") throw invalidResponse();
+    if (message.length < 1 || message.length > 512) throw invalidResponse();
+    if (/[\p{Cc}\p{Cf}]/u.test(message)) throw invalidResponse();
+    if (typeof retryable !== "boolean") throw invalidResponse();
+    if (operationId !== undefined && typeof operationId !== "string") throw invalidResponse();
+    if (operationId !== undefined && !REQUEST_ID.test(operationId)) throw invalidResponse();
+
+    throw new MyServersApiError(code, message, retryable, operationId);
 }
 
-function myServersEndpoint() {
+export function myServersEndpoint() {
     const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
     const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
     if (!rawUrl || !publishableKey) {
@@ -437,11 +467,24 @@ async function readBoundedText(response: Response, maximumBytes: number) {
     if (declaredLength !== null && Number(declaredLength) > maximumBytes) {
         throw new MyServersApiError("response_too_large", "The server API response was too large.");
     }
-    const text = await response.text();
-    if (new TextEncoder().encode(text).byteLength > maximumBytes) {
-        throw new MyServersApiError("response_too_large", "The server API response was too large.");
-    }
-    return text;
+    if (!response.body) return "";
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8", { fatal: true });
+    let size = 0;
+    let text = "";
+    try {
+        for (;;) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            size += chunk.value.byteLength;
+            if (size > maximumBytes) {
+                await reader.cancel();
+                throw new MyServersApiError("response_too_large", "The server API response was too large.");
+            }
+            text += decoder.decode(chunk.value, { stream: true });
+        }
+        return text + decoder.decode();
+    } finally { reader.releaseLock(); }
 }
 
 function invalidResponse(message = "The managed-server API returned an invalid response.") {

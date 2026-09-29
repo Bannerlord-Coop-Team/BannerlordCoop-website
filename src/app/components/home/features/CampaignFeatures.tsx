@@ -11,7 +11,7 @@ const features: CoopFeature[] = [
         description:
             "Travel across the same persistent campaign map while controlling your own character, party, clan, troops, and resources.",
         icon: Crown,
-        image: "/images/features/coop.jpg",
+        image: "/images/features/shared.png",
         imageAlt:
             "Warriors overlooking the landscape of Calradia",
         variant: "hero",
@@ -36,7 +36,7 @@ const features: CoopFeature[] = [
         description:
             "Enter field battles as allies or opponents, with AI parties able to join under supported campaign conditions.",
         icon: Castle,
-        image: "/images/features/siege.webp",
+        image: "/images/features/battles.png",
         imageAlt:
             "A medieval siege against a fortified settlement",
         variant: "image",
@@ -61,7 +61,7 @@ const features: CoopFeature[] = [
         description:
             "Movement, encounters, battles, and campaign progress stay synchronized as every player shapes the same world.",
         icon: Gem,
-        image: "/images/features/castle.jpg",
+        image: "/images/features/persistent.png",
         imageAlt:
             "A castle overlooking the persistent world of Calradia",
         variant: "wide",

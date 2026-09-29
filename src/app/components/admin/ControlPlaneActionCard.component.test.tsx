@@ -3,11 +3,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ControlPlaneActionCard, type AdminActionField } from "./ControlPlaneActionCard";
 import type { Backup, HostingPage } from "@/app/lib/control-plane/types";
+import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 
-const { request, session } = vi.hoisted(() => ({ request: vi.fn(), session: vi.fn() }));
-vi.mock("@/app/lib/control-plane/client", () => ({ requestControlPlaneAdmin: request }));
+const { request, session, refresh } = vi.hoisted(() => ({ request: vi.fn(), session: vi.fn(), refresh: vi.fn() }));
+vi.mock("@/app/lib/control-plane/client", async (importOriginal) => ({
+    ...await importOriginal<typeof import("@/app/lib/control-plane/client")>(), requestControlPlaneAdmin: request,
+}));
 vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({ auth: { getSession: session } }) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 const servers: AdminActionField = { name: "serverId", label: "Server", kind: "server", required: true, options: [
     { label: "Alpha", value: "server-a", updatedAt: "2026-09-06T12:00:00Z", releaseChannel: "stable" },
     { label: "Bravo", value: "server-b", updatedAt: "2026-09-06T12:00:00Z", releaseChannel: "nightly" },
@@ -75,7 +78,7 @@ it("offers only the selected channel's builds and sends pinning as one update re
     await act(async () => root.render(<ControlPlaneActionCard operation="update-server" title="Update server" description="Update"
         fields={[servers, { name: "buildId", label: "Build", kind: "select", required: true, options: [
             { label: "Latest", value: "__latest__" },
-            { label: "Stable release", value: "stable-build", releaseChannel: "stable" },
+            { label: "Pinned version: v0.1.5 · Public", value: "stable-build", releaseChannel: "stable" },
             { label: "Nightly release", value: "nightly-build", releaseChannel: "nightly" },
         ] }]} />));
     await select("serverId", 1);
@@ -94,4 +97,51 @@ it("resets the server and backup state with the form after an action", async () 
     expect(submit().disabled).toBe(true);
     expect(container.querySelector('select[name="backupId"]')).toBeNull();
     expect(container.querySelector<HTMLSelectElement>('select[name="serverId"]')?.value).toBe("");
+});
+
+// Follow and keep must remain distinct transport intents when changing a version pin.
+it("sends null for Follow channel and omits the build for Keep current selection", async () => {
+    request.mockResolvedValue({ outcome: "enqueued" });
+    await act(async () => root.render(<ControlPlaneActionCard operation="update-server" title="Update" description="Update"
+        fields={[servers, { name: "buildId", label: "Version selection", kind: "select", required: true, options: [
+            { label: "Follow channel", value: "__latest__" }, { label: "Keep current selection", value: "__keep__" },
+        ] }]} />));
+    await select("serverId", 1); await select("buildId", 1);
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(request.mock.calls[0][0].input.buildId).toBeNull();
+    await select("buildId", 2);
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(request.mock.calls[1][0].input).not.toHaveProperty("buildId");
+});
+
+it("continues a stale job with unchanged intent and preserves selections across refreshed props", async () => {
+    const updatedAt = "2026-09-06T13:00:00.000Z";
+    request.mockImplementationOnce(async (options) => { throw new ControlPlaneAdminError("stale_interaction", "Stale", false, options.requestId); });
+    request.mockResolvedValueOnce({ dashboard: { server: { serverId: "server-a", updatedAt } } });
+    request.mockResolvedValueOnce({ outcome: "enqueued", job: { jobId: "job-a", serverId: "server-a", action: "update", state: "queued" } });
+    const fields: AdminActionField[] = [servers, { name: "reason", label: "Reason", kind: "textarea" }];
+    const render = (next: AdminActionField[]) => root.render(<ControlPlaneActionCard operation="update-server" title="Update" description="Update" fields={next} />);
+    await act(async () => render(fields));
+    await select("serverId", 1);
+    container.querySelector<HTMLTextAreaElement>("textarea")!.value = "Preserve my reason";
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(request.mock.calls[2][0]).toMatchObject({ requestId: request.mock.calls[0][0].requestId,
+        input: { serverId: "server-a", expectedUpdatedAt: updatedAt, reason: "Preserve my reason" } });
+    expect(refresh).toHaveBeenCalled();
+    await act(async () => render([{ ...servers, options: servers.options!.map((option) => ({ ...option, updatedAt })) }, fields[1]]));
+    expect(container.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("Preserve my reason");
+    expect(JSON.parse(container.querySelector<HTMLSelectElement>('select[name="serverId"]')!.value)).toEqual({ id: "server-a", updatedAt });
+});
+
+it("refreshes non-replayable stale actions without clearing the form or resubmitting", async () => {
+    request.mockImplementation(async (options) => { throw new ControlPlaneAdminError("stale_interaction", "Stale", false, options.requestId); });
+    await act(async () => root.render(<ControlPlaneActionCard operation="update-settings" title="Settings" description="Settings"
+        fields={[servers, { name: "reason", label: "Reason", kind: "textarea" }]} />));
+    await select("serverId", 1);
+    container.querySelector<HTMLTextAreaElement>("textarea")!.value = "Keep settings intent";
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(request).toHaveBeenCalledOnce(); expect(refresh).toHaveBeenCalledOnce();
+    expect(container.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("Keep settings intent");
+    expect(container.querySelector<HTMLSelectElement>('select[name="serverId"]')!.selectedIndex).toBe(1);
 });

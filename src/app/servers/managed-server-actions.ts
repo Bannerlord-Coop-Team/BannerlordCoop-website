@@ -3,19 +3,16 @@
 import {
     MyServersApiError,
     requestMyServerOperation,
+    requestMyServerUpdate,
     type MyServerOperation,
 } from "@/app/lib/hosting/my-servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const OPERATIONS = new Set<MyServerOperation>(["start", "stop", "restart-game"]);
 
-export type ManagedServerActionResult =
-    | { ok: true; message: string; jobId: string }
-    | { ok: false; message: string };
+export type ManagedServerActionResult = { ok: boolean; message: string };
 
 export async function operateManagedServer(input: unknown): Promise<ManagedServerActionResult> {
     const parsed = parseOperation(input);
@@ -40,62 +37,64 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
     }
 
     try {
-        const { requestId, ...operation } = parsed;
-        const result = await requestMyServerOperation(accessToken, operation, requestId);
-        revalidatePath("/servers");
-        return {
-            ok: true,
-            message: result.outcome === "existing"
-                ? "That server operation is already in progress."
-                : `${operationLabel(parsed.action)} request accepted.`,
-            jobId: result.jobId,
-        };
-    } catch (error) {
-        const code = error instanceof MyServersApiError ? error.code : "operation_failed";
-        console.error("Managed server operation failed", { code });
-        if (code === "stale_interaction") {
+        if (parsed.action === "update-now") {
+            const update = await requestMyServerUpdate(accessToken, {
+                serverId: parsed.serverId,
+                expectedUpdatedAt: parsed.expectedUpdatedAt,
+            }, crypto.randomUUID());
             revalidatePath("/servers");
-            return { ok: false, message: "The server state changed. Refresh and try again." };
+            return { ok: true, message: update.outcome === "existing"
+                ? "An update is already queued for this server."
+                : "Update queued. A backup will be taken before the selected release is installed." };
+        } else {
+            await requestMyServerOperation(accessToken, parsed);
         }
+        revalidatePath("/servers");
+        return { ok: true, message: `${operationLabel(parsed.action)} command exited successfully (code 0). This does not confirm game readiness.` };
+    } catch (error) {
+        revalidatePath("/servers");
+        const code = error instanceof MyServersApiError ? error.code : "operation_failed";
         if (code === "server_not_found") {
             return { ok: false, message: "This server is unavailable or your access was removed." };
         }
-        if (code === "operation_in_progress") {
-            revalidatePath("/servers");
-            return { ok: false, message: "Another server operation is in progress. Wait for it to finish and try again." };
+        if (code === "container_command_failed" && error instanceof MyServersApiError) {
+            return { ok: false, message: error.message };
         }
-        if (code === "operation_unavailable") {
-            revalidatePath("/servers");
-            return { ok: false, message: "That operation is not available in the server's current state." };
+        if (parsed.action === "update-now") {
+            if (code === "stale_interaction") {
+                return { ok: false, message: "Server status changed. Refresh the page, then try Update now again." };
+            }
+            if (code === "no_update_available") {
+                return { ok: false, message: "This server already has its selected release." };
+            }
+            if (code === "validated_build_unavailable") {
+                return { ok: false, message: "No validated release is currently available for this server." };
+            }
         }
-        if (code === "rate_limited" || code === "busy") {
-            return { ok: false, message: "Too many requests were submitted. Please wait and try again." };
-        }
-        return { ok: false, message: "The server operation could not be submitted right now." };
+        return { ok: false, message: "The command could not be confirmed. It may have executed. Refresh server status before sending another command." };
     }
 }
 
 function parseOperation(value: unknown): {
     serverId: string;
     action: MyServerOperation;
+} | {
+    serverId: string;
+    action: "update-now";
     expectedUpdatedAt: string;
-    requestId: string;
 } | null {
-    if (!isRecord(value) || !hasExactKeys(value, ["action", "expectedUpdatedAt", "requestId", "serverId"])) return null;
+    if (!isRecord(value) || typeof value.action !== "string") return null;
     if (typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)) return null;
-    if (typeof value.requestId !== "string" || !REQUEST_ID.test(value.requestId)) return null;
+    if (value.action === "update-now") {
+        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) return null;
+        if (typeof value.expectedUpdatedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value.expectedUpdatedAt)) return null;
+        return { serverId: value.serverId, action: value.action, expectedUpdatedAt: value.expectedUpdatedAt };
+    }
+    if (!hasExactKeys(value, ["action", "serverId"])) return null;
     if (typeof value.action !== "string" || !OPERATIONS.has(value.action as MyServerOperation)) return null;
-    if (
-        typeof value.expectedUpdatedAt !== "string"
-        || value.expectedUpdatedAt.length > 64
-        || !ISO_TIMESTAMP.test(value.expectedUpdatedAt)
-        || !Number.isFinite(Date.parse(value.expectedUpdatedAt))
-    ) return null;
     return {
         serverId: value.serverId,
         action: value.action as MyServerOperation,
-        expectedUpdatedAt: value.expectedUpdatedAt,
-        requestId: value.requestId,
     };
 }
 

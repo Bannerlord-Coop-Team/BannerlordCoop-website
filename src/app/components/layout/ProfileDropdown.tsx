@@ -1,14 +1,17 @@
 "use client";
 
 import { signOut } from "@/app/auth/actions";
-import { ChevronDown, UserRound } from "lucide-react";
+import { LoadingButton } from "@/app/components/ui/LoadingButton";
+import { ChevronDown, ShieldCheck, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 
 const itemClassName =
     "block w-full rounded-sm px-4 py-3 text-left font-sans text-sm text-foreground transition-colors hover:bg-white/5 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
+const iconItemClassName =
+    "flex w-full items-center gap-2 rounded-sm px-4 py-3 text-left font-sans text-sm text-gold transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
 
-export function ProfileDropdown({ accountName = "Your account" }: { accountName?: string }) {
+export function ProfileDropdown({ accountName = "Your account", isAdmin = false }: { accountName?: string; isAdmin?: boolean }) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -55,10 +58,10 @@ export function ProfileDropdown({ accountName = "Your account" }: { accountName?
                 aria-expanded={isOpen}
                 aria-controls={panelId}
                 onClick={() => setIsOpen((open) => !open)}
-                className="flex min-h-10 items-center justify-center gap-2 rounded-full px-2.5 lg:px-3 border border-white/20 text-foreground transition-colors hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="flex min-h-10 items-center justify-center gap-2 px-2.5 lg:px-3 rounded-lg text-foreground transition-colors hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
                 <UserRound aria-hidden="true" className="size-5 shrink-0" />
-                <span className="hidden max-w-28 truncate text-sm lg:block">{accountName}</span>
+                <span className="hidden max-w-28 truncate font-label text-sm leading-none uppercase tracking-widest lg:block">{accountName}</span>
                 <ChevronDown aria-hidden="true" className="hidden size-3.5 lg:block" />
             </button>
             {isOpen && (
@@ -73,11 +76,17 @@ export function ProfileDropdown({ accountName = "Your account" }: { accountName?
                     <Link href="/servers" prefetch={false} onClick={() => setIsOpen(false)} className={itemClassName}>
                         My Servers
                     </Link>
+                    {isAdmin && (
+                        <Link href="/admin" onClick={() => setIsOpen(false)} className={iconItemClassName}>
+                            <ShieldCheck aria-hidden="true" className="size-4 shrink-0" />
+                            Admin
+                        </Link>
+                    )}
                     <hr className="my-1 border-white/10" />
-                    <form action={signOut} onSubmit={() => setIsOpen(false)}>
-                        <button type="submit" className={itemClassName}>
+                    <form action={signOut}>
+                        <LoadingButton pendingText="Signing out…" className={`${itemClassName} gap-2`}>
                             Sign out
-                        </button>
+                        </LoadingButton>
                     </form>
                 </div>
             )}

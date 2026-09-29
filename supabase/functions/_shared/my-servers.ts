@@ -1,3 +1,5 @@
+import { serverLogDownloadHeaders } from "./server-log-contract.ts";
+import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
 import { parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingRegion } from "./server-onboarding-contract.ts";
 
@@ -21,6 +23,9 @@ export type MyServersHandlerOptions = {
 };
 
 type UpstreamRequest =
+    | { operation: "server-files" | "my-server-latest-log"; input: { serverId: string } }
+    | { operation: "file-transfer-status" | "download-save-export"; input: { serverId: string; transferRequestId: string } }
+    | { operation: "file-transfer"; input: OwnerFileMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
     | { operation: "server-onboarding"; input: Record<string, never> }
     | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion } }
@@ -28,9 +33,10 @@ type UpstreamRequest =
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "server-backup-status"; input: { serverId: string } }
+    | { operation: "update-server"; input: { serverId: string; expectedUpdatedAt: string } }
     | {
         operation: "server-operation";
-        input: { serverId: string; action: string; expectedUpdatedAt: string };
+        input: { serverId: string; action: string };
     }
     | { operation: "create-backup"; input: { serverId: string; expectedUpdatedAt: string } }
     | {
@@ -81,8 +87,8 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 : request.method === "POST"
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
-            // New onboarding mutations must retain the caller's durable UUID.
-            if (upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility") {
+            // Durable mutations must retain the caller's UUID for exactly-once handling.
+            if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -101,23 +107,32 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             return errorResponse(400, requestId, "invalid_request", "The server request is invalid.", false, cors);
         }
 
-        const upstreamBody = JSON.stringify({
-            version: 1,
-            requestId,
-            ...upstreamRequest,
-        });
+        const isDirectCommand = upstreamRequest.operation === "server-operation";
+        let endpoint = controlPlaneEndpoint;
+        let upstreamBody = JSON.stringify({ version: 1, requestId, ...upstreamRequest });
+        if (upstreamRequest.operation === "file-transfer") endpoint = new URL("/v1/user/files", controlPlaneEndpoint);
+        if (upstreamRequest.operation === "server-operation") {
+            const command = upstreamRequest.input.action === "restart-game" ? "restart" : upstreamRequest.input.action;
+            endpoint = new URL(`/api/v1/${command}`, controlPlaneEndpoint);
+            upstreamBody = JSON.stringify({ serverId: upstreamRequest.input.serverId });
+        }
+        if (upstreamRequest.operation === "my-server-latest-log") {
+            endpoint = new URL("/api/v1/logs/latest", controlPlaneEndpoint);
+            upstreamBody = JSON.stringify({ serverId: upstreamRequest.input.serverId });
+        }
         let upstream: Response;
         try {
-            upstream = await fetchImplementation(controlPlaneEndpoint, {
+            upstream = await fetchImplementation(endpoint, {
                 method: "POST",
                 redirect: "error",
                 headers: {
                     authorization: `Bearer ${token}`,
+                    ...(upstreamRequest.operation === "my-server-latest-log" ? { accept: "application/octet-stream" } : {}),
                     "content-type": "application/json",
                     "x-request-id": requestId,
                 },
                 body: upstreamBody,
-                signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),
+                signal: upstreamRequest.operation === "my-server-latest-log" ? request.signal : AbortSignal.timeout(upstreamTimeoutMilliseconds),
             });
         } catch {
             return errorResponse(
@@ -130,20 +145,50 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             );
         }
 
+        if (upstreamRequest.operation === "my-server-latest-log" && upstream.ok
+            && upstream.headers.get("content-type") === "application/octet-stream") {
+            try { serverLogDownloadHeaders(upstream.headers); }
+            catch {
+                await upstream.body?.cancel();
+                return errorResponse(502, requestId, "invalid_response", "The control plane returned an invalid log download.", false, cors);
+            }
+            // Stream directly; a 100 MiB log cannot be buffered as base64 on the website worker.
+            return new Response(upstream.body, {
+                headers: {
+                    ...cors,
+                    "cache-control": "private, no-store",
+                    "content-type": "application/octet-stream",
+                    "content-disposition": upstream.headers.get("content-disposition")!,
+                    "content-length": upstream.headers.get("content-length")!,
+                    "x-content-type-options": "nosniff",
+                    "x-request-id": requestId,
+                },
+            });
+        }
+
         let responseBody: string;
         try {
             responseBody = await readBoundedText(
                 upstream,
-                upstreamRequest.operation === "my-servers" || upstreamRequest.operation === "server-backups"
+                upstreamRequest.operation === "download-save-export" ? MAXIMUM_WEB_FILE_RESPONSE_BYTES
+                    : upstreamRequest.operation === "my-servers" || upstreamRequest.operation === "server-backups"
                     ? MAXIMUM_LIST_RESPONSE_BYTES
                     : MAXIMUM_OPERATION_RESPONSE_BYTES,
             );
-            const envelope: unknown = JSON.parse(responseBody);
+            const parsed: unknown = JSON.parse(responseBody);
+            const envelope = isDirectCommand ? directCommandEnvelope(parsed, requestId, upstream.status) : parsed;
+            if (isDirectCommand) responseBody = JSON.stringify(envelope);
             if (!isControlPlaneEnvelope(envelope, requestId)) {
                 throw new Error("Invalid control-plane envelope");
             }
             if (isRecord(envelope) && envelope.ok === true) {
                 if (!upstream.ok) throw new Error("Inconsistent success status");
+                if (upstreamRequest.operation === "my-server-latest-log") {
+                    throw new Error("Expected a binary log response");
+                }
+                if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
+                if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
+                if (upstreamRequest.operation === "download-save-export") parseOwnerFileDownload(envelope.result);
                 if (upstreamRequest.operation === "server-onboarding") parseOnboardingSummary(envelope.result);
                 if (upstreamRequest.operation === "set-server-visibility") {
                     parseVisibilityResult(envelope.result, { action: "set-server-visibility", ...upstreamRequest.input });
@@ -193,6 +238,21 @@ function listRequest(request: Request): UpstreamRequest {
         };
     }
 
+    if (resource === "download-server-log") {
+        assertQueryParameters(url, ["resource", "serverId"]);
+        return { operation: "my-server-latest-log", input: { serverId: readServerId(url) } };
+    }
+    if (resource === "files") {
+        assertQueryParameters(url, ["resource", "serverId"]);
+        return { operation: "server-files", input: { serverId: readServerId(url) } };
+    }
+    if (resource === "file-transfer-status" || resource === "download-save-export") {
+        assertQueryParameters(url, ["resource", "serverId", "transferRequestId"]);
+        const transferRequestId = url.searchParams.get("transferRequestId");
+        requireUuid(transferRequestId);
+        return { operation: resource, input: { serverId: readServerId(url), transferRequestId } };
+    }
+
     if (resource === "onboarding") {
         assertQueryParameters(url, ["resource"]);
         return { operation: "server-onboarding", input: {} };
@@ -221,19 +281,23 @@ function listRequest(request: Request): UpstreamRequest {
 }
 
 async function operationRequest(request: Request): Promise<UpstreamRequest> {
-    if ([...new URL(request.url).searchParams.keys()].length !== 0) {
+    const url = new URL(request.url);
+    const isFileTransfer = url.searchParams.get("resource") === "file-transfer";
+    if (isFileTransfer) assertQueryParameters(url, ["resource"]);
+    if (!isFileTransfer && [...url.searchParams.keys()].length !== 0) {
         throw new Error("Operation query parameters are unsupported");
     }
     if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
         throw new ContentTypeError();
     }
-    const text = await readBoundedText(request, MAXIMUM_REQUEST_BYTES);
+    const text = await readBoundedText(request, isFileTransfer ? MAXIMUM_WEB_FILE_REQUEST_BYTES : MAXIMUM_REQUEST_BYTES);
     let value: unknown;
     try {
         value = JSON.parse(text);
     } catch {
         throw new Error("Invalid JSON");
     }
+    if (isFileTransfer) return { operation: "file-transfer", input: parseOwnerFileMutation(value) };
     if (!isRecord(value) || typeof value.action !== "string") {
         throw new Error("Invalid operation");
     }
@@ -253,16 +317,14 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
         throw new Error("Invalid server ID");
     }
     if (SERVER_OPERATIONS.has(value.action)) {
-        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {
-            throw new Error("Invalid lifecycle operation");
+        if (!hasExactKeys(value, ["action", "serverId"])) {
+            throw new Error("Invalid direct command");
         }
-        assertExpectedUpdatedAt(value.expectedUpdatedAt);
         return {
             operation: "server-operation",
             input: {
                 serverId: value.serverId,
                 action: value.action,
-                expectedUpdatedAt: value.expectedUpdatedAt as string,
             },
         };
     }
@@ -291,6 +353,19 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
             input: {
                 serverId: value.serverId,
                 backupId: value.backupId,
+                expectedUpdatedAt: value.expectedUpdatedAt as string,
+            },
+        };
+    }
+    if (value.action === "update-now") {
+        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {
+            throw new Error("Invalid update operation");
+        }
+        assertExpectedUpdatedAt(value.expectedUpdatedAt);
+        return {
+            operation: "update-server",
+            input: {
+                serverId: value.serverId,
                 expectedUpdatedAt: value.expectedUpdatedAt as string,
             },
         };
@@ -368,7 +443,7 @@ function corsHeaders(origin: string) {
         "access-control-allow-headers": "authorization, apikey, content-type, x-client-info, x-request-id",
         "access-control-allow-methods": "GET, POST, OPTIONS",
         "access-control-allow-origin": origin,
-        "access-control-expose-headers": "x-request-id",
+        "access-control-expose-headers": "x-request-id, content-disposition, content-length",
         "access-control-max-age": "600",
         vary: "Origin",
     };
@@ -427,13 +502,50 @@ async function readBoundedText(
     return new TextDecoder().decode(bytes);
 }
 
+// Direct routes have no public operation ID; keep the Edge envelope for website callers.
+function directCommandEnvelope(value: unknown, requestId: string, status: number): unknown {
+    if (!isRecord(value)) throw new Error("Invalid command response");
+    // Authentication/admission failures use the adapter's existing versioned envelope.
+    if (value.version !== undefined) {
+        if (value.ok !== false || !isControlPlaneEnvelope(value, requestId)) throw new Error("Invalid command error");
+        return value;
+    }
+    if (typeof value.ok !== "boolean") throw new Error("Invalid command response");
+    if (!value.ok && value.result === undefined) {
+        if (!hasExactKeys(value, ["error", "ok"])) throw new Error("Invalid command error");
+        return { version: 1, requestId, ...value };
+    }
+
+    const keys = value.ok ? ["ok", "result"] : ["error", "ok", "result"];
+    if (!hasExactKeys(value, keys)) throw new Error("Invalid command response");
+    if (!isRecord(value.result)) throw new Error("Invalid command result");
+    if (!hasExactKeys(value.result, ["exitCode"])) throw new Error("Invalid command result");
+    const exitCode = value.result.exitCode;
+    if (typeof exitCode !== "number" || !Number.isInteger(exitCode)) throw new Error("Invalid exit code");
+    if (exitCode < 0 || exitCode > 255) throw new Error("Invalid exit code");
+
+    if (value.ok) {
+        if (status !== 200 || exitCode !== 0) throw new Error("Inconsistent command success");
+        return { version: 1, requestId, ok: true, result: { exitCode } };
+    }
+
+    if (status !== 409 || exitCode === 0) throw new Error("Inconsistent command failure");
+    if (!isRecord(value.error) || value.error.code !== "container_command_failed") throw new Error("Invalid command error");
+    return { version: 1, requestId, ok: false, error: {
+        code: "container_command_failed", message: `The container command failed with exit code ${exitCode}.`, retryable: false,
+    } };
+}
+
 function isControlPlaneEnvelope(value: unknown, requestId: string) {
     if (!isRecord(value) || value.version !== 1 || value.requestId !== requestId || typeof value.ok !== "boolean") {
         return false;
     }
     if (value.ok) return hasExactKeys(value, ["ok", "requestId", "result", "version"]);
     if (!hasExactKeys(value, ["error", "ok", "requestId", "version"]) || !isRecord(value.error)
-        || !hasExactKeys(value.error, ["code", "message", "retryable"])) return false;
+        || !hasExactKeys(value.error, value.error.operationId === undefined
+            ? ["code", "message", "retryable"] : ["code", "message", "operationId", "retryable"])) return false;
+    if (value.error.operationId !== undefined
+        && (typeof value.error.operationId !== "string" || !REQUEST_ID.test(value.error.operationId))) return false;
     return typeof value.error.code === "string"
         && SAFE_ERROR_CODE.test(value.error.code)
         && typeof value.error.message === "string"

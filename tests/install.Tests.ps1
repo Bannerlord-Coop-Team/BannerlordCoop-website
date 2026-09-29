@@ -436,8 +436,18 @@ if ($statusPending.Action -cne 'Continue') {
     throw 'An HTTP 428 token poll did not continue waiting for Discord.'
 }
 $invalid = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ token_type = 'Basic'; access_token = 'nope' })
-if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid.') {
+if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid. Details: response=invalid; bearer=false; token_length=4') {
     throw 'A malformed success body did not keep the invalid-token message.'
+}
+$htmlToken = Get-NightlyTokenPollDecision -Response '<html>intercepted</html>'
+if ($htmlToken.Action -cne 'Fail' -or $htmlToken.Message -notmatch 'response=html' -or
+    $htmlToken.Message -match 'intercepted|access_token') {
+    throw 'An HTML token response did not report its safe response shape.'
+}
+$invalidSupport = @(Get-InstallationSupportLines $invalid.Message)
+if ($invalidSupport.Count -ne 2 -or $invalidSupport[0] -notmatch 'open its verification link in a web browser' -or
+    $invalidSupport[0] -match 'Cloudflare WARP|GoodbyeDPI') {
+    throw 'An invalid token still led to unrelated DNS advice instead of the browser workaround.'
 }
 $supportLines = @(Get-InstallationSupportLines)
 if ($supportLines.Count -ne 2 -or
@@ -531,15 +541,18 @@ if ($challengeDiagnosis.Code -cne 'cloudflare_challenge') {
     throw 'A Cloudflare interstitial was not turned into a WARP action.'
 }
 $genericDiagnosis = Get-NightlyAuthorizationDiagnosis -SessionResponse ([pscustomobject]@{}) -ProcessNames @() -TlsIssuer '' -DnsAddresses @('1.1.1.1') -WinDivertRunning $false
-if ($genericDiagnosis.Code -cne 'invalid_response' -or $genericDiagnosis.Message -notmatch 'try Cloudflare WARP' -or $genericDiagnosis.Message -notmatch 'Details:') {
-    throw 'An unclassified invalid session did not keep the WARP fallback action.'
+if ($genericDiagnosis.Code -cne 'invalid_response' -or $genericDiagnosis.Message -notmatch 'could not validate' -or $genericDiagnosis.Message -notmatch 'Details:') {
+    throw 'An unclassified invalid session did not report a validation failure.'
+}
+if ((Get-InstallationSupportLines $genericDiagnosis.Message) -match 'try Cloudflare WARP') {
+    throw 'An invalid JSON session still prompted speculative DNS advice.'
 }
 
 $closedRecord = $null
 try { throw [Net.WebException]::new('The underlying connection was closed: An unexpected error occurred on a send.') } catch { $closedRecord = $_ }
 $closedDiagnosis = Get-NightlyAuthorizationDiagnosis -SessionResponse $null -ErrorRecord $closedRecord -ProcessNames @() -TlsIssuer '' -DnsAddresses @('1.1.1.1') -WinDivertRunning $false
-if ($closedDiagnosis.Message -notmatch 'underlying connection was closed' -or $closedDiagnosis.Message -notmatch 'Details:') {
-    throw 'A connection-reset session failure hid the actual Windows error.'
+if ($closedDiagnosis.Message -notmatch 'exception=type=WebException http=0' -or $closedDiagnosis.Message -notmatch 'Details:') {
+    throw 'A connection-reset session failure hid the safe Windows error shape.'
 }
 
 $statusFromMessage = Get-HttpStatusCode $closedRecord
@@ -567,8 +580,42 @@ $jsonSession = ConvertTo-NightlyJsonObject (@'
 if (-not (Test-NightlyDeviceSessionResponse $jsonSession)) {
     throw 'A JSON string device session was not parsed before validation.'
 }
-if ((Get-NightlyResponseSnippet ([pscustomobject]@{ device_code = 'secret-device-code'; error = 'x' }) '') -match 'secret-device-code') {
-    throw 'A failure snippet leaked a device_code.'
+if ((Get-NightlyDeviceSessionShape $jsonSession) -notmatch 'type=PSCustomObject device_length=43 device_valid=true user_length=9 user_valid=true uri_length=') {
+    throw 'A valid session did not report its safe validation shape.'
+}
+if ((Get-NightlyDeviceSessionShape ([string][char]0xFEFF + '{"device_code":"secret"}')) -notmatch 'text length=.+ start=bom') {
+    throw 'A leading BOM was not identified without exposing response text.'
+}
+$script:NightlyAuthorizationSkipLiveProbes = $false
+$script:NightlySessionRetrySeconds = 0
+function Get-NightlyGatewayTlsIssuer { return '' }
+function Get-NightlyGatewayDnsAddresses { return @('1.1.1.1') }
+function Test-WinDivertServiceRunning { return $false }
+function Get-NightlyDeviceSessionFromCurl {
+    return [pscustomobject]@{ Response = $null; Summary = 'curl exit=60 text length=0 start=other' }
+}
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    return [pscustomobject]@{
+        device_code = 's' * 42
+        user_code = 'KTL7-7FEH'
+        verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=KTL7-7FEH'
+        expires_in = 600
+        interval = 3
+    }
+}
+$sessionFailure = $null
+try { Get-NightlyAccessToken | Out-Null } catch { $sessionFailure = $_.Exception.Message }
+$script:NightlyAuthorizationSkipLiveProbes = $true
+if ($sessionFailure -notmatch 'Session diagnostics v2' -or
+    $sessionFailure -notmatch 'powershell1 object type=PSCustomObject device_length=42 device_valid=false' -or
+    $sessionFailure -notmatch 'powershell2 object type=PSCustomObject device_length=42 device_valid=false' -or
+    $sessionFailure -notmatch 'accepted=false' -or
+    $sessionFailure -notmatch 'curl exit=60') {
+    throw 'An invalid session did not retain safe diagnostics for every attempt.'
+}
+if ($sessionFailure -match 'ssssssss|KTL7-7FEH|activate\?code=|body=') {
+    throw 'An invalid session exposed a device code, user code, or raw response body.'
 }
 
 $script:NightlyTokenPollMinimumSeconds = 0
@@ -593,18 +640,14 @@ function Invoke-RestMethod {
     if ($script:TokenPolls -eq 1) {
         return [pscustomobject]@{ error = 'authorization_pending' }
     }
-    return [pscustomobject]@{
-        token_type = 'Bearer'
-        access_token = 't' * 43
-        expires_in = 3600
-    }
+    return (@{ token_type = 'Bearer'; access_token = 't' * 43; expires_in = 3600 } | ConvertTo-Json -Compress)
 }
 $polledToken = Get-NightlyAccessToken
 if ($script:OpenedVerificationUri -notmatch '/activate\?code=AB2D-EF3H$') {
     throw 'The installer did not open the Discord verification URL.'
 }
 if ($script:TokenPolls -ne 2 -or $polledToken -cne ('t' * 43)) {
-    throw 'A pending JSON body still failed the installer before Discord finished.'
+    throw 'A JSON-text bearer response failed after pending authorization.'
 }
 
 $script:NightlyObservedProcessNames = @('goodbyedpi')
@@ -619,6 +662,31 @@ if ($dpiQrOutput -notmatch 'mobile data' -or
     $dpiQrOutput -notmatch [regex]::Escape('https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H') -or
     $dpiQrOutput -notmatch [char]0x2588) {
     throw 'GoodbyeDPI did not show a phone QR for the activate URL.'
+}
+
+$script:NightlyAuthorizationSkipLiveProbes = $false
+$script:NightlySessionRetrySeconds = 0
+function Get-NightlyDeviceSessionFromCurl {
+    return [pscustomobject]@{
+        Response = [pscustomobject]@{
+            device_code = 'c' * 43
+            user_code = 'AB2D-EF3H'
+            verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H'
+            expires_in = 600
+            interval = 0
+        }
+        Summary = 'curl exit=0 http=201 accepted=true'
+    }
+}
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    if ([string]$Uri -match '/v1/device/sessions$') { return [pscustomobject]@{} }
+    return [pscustomobject]@{ token_type = 'Bearer'; access_token = 't' * 43 }
+}
+$curlToken = Get-NightlyAccessToken
+$script:NightlyAuthorizationSkipLiveProbes = $true
+if ($curlToken -cne ('t' * 43)) {
+    throw 'A valid curl fallback session did not continue to token verification.'
 }
 
 $script:TokenPolls = 0

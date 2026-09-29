@@ -2,6 +2,7 @@
 
 import {
     MyServersApiError,
+    getMyServerBackupStatus,
     requestMyServerBackupOperation,
 } from "@/app/lib/hosting/my-servers";
 import { parseManagedServerBackupInput } from "@/app/servers/managed-server-backup-input";
@@ -41,18 +42,23 @@ export async function manageServerBackup(input: unknown, expectedPageUserId: unk
     }
 
     try {
-        const result = parsed.action === "create-backup"
-            ? await requestMyServerBackupOperation(accessToken, {
-                serverId: parsed.serverId,
-                action: parsed.action,
-                expectedUpdatedAt: parsed.expectedUpdatedAt,
-            }, parsed.requestId)
-            : await requestMyServerBackupOperation(accessToken, {
-                serverId: parsed.serverId,
-                backupId: parsed.backupId,
-                action: parsed.action,
-                expectedUpdatedAt: parsed.expectedUpdatedAt,
-            }, parsed.requestId);
+        const { requestId, ...operation } = parsed;
+        const submit = (expectedUpdatedAt: string) => requestMyServerBackupOperation(
+            accessToken, { ...operation, expectedUpdatedAt }, requestId,
+        );
+        let result;
+        try {
+            result = await submit(parsed.expectedUpdatedAt);
+        } catch (error) {
+            if (!(error instanceof MyServersApiError) || error.code !== "stale_interaction" || error.operationId !== undefined) throw error;
+            revalidatePath("/servers");
+            revalidatePath(`/servers/${parsed.serverId}`);
+            const current = await getMyServerBackupStatus(accessToken, parsed.serverId);
+            if (current.updatedAt === parsed.expectedUpdatedAt) throw error;
+            // The backend checks durable replay before generation, then rejects stale
+            // state before enqueue. Preserve the UUID/backup selection and retry once.
+            result = await submit(current.updatedAt);
+        }
         revalidatePath("/servers");
         revalidatePath(`/servers/${parsed.serverId}`);
         return {
@@ -77,7 +83,7 @@ export async function manageServerBackup(input: unknown, expectedPageUserId: unk
         if (code === "stale_interaction") {
             revalidatePath("/servers");
             revalidatePath(`/servers/${parsed.serverId}`);
-            return rejected("The server or backup state changed. Refresh and try again.");
+            return uncertain("The server is still changing. Your request is saved; retry it when the server settles.");
         }
         if (code === "server_not_found" || code === "access_denied") {
             // Authority is checked before replay, so this cannot resolve an earlier submission.

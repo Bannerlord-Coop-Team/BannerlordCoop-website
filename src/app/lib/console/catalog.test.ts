@@ -61,3 +61,20 @@ test("rejects ambiguous or unsupported catalog entries", () => {
         /id is invalid/,
     );
 });
+
+test("accepts and normalizes an explicit managed log identity", () => {
+    const managedServerId = "ABCDEF12-1234-4123-8123-123456789ABC";
+    const [server] = parseConsoleServerCatalog(JSON.stringify([
+        { ...fallback[0], managedServerId },
+    ]), fallback);
+    assert.equal(server.id, fallback[0].id);
+    assert.equal(server.managedServerId, managedServerId.toLowerCase());
+});
+
+test("rejects supplied invalid managed identities instead of falling back to the live ID", () => {
+    for (const managedServerId of [null, "", "../other", "live-server", 42, " abcdef12-1234-4123-8123-123456789abc "]) {
+        assert.throws(() => parseConsoleServerCatalog(JSON.stringify([
+            { ...fallback[0], managedServerId },
+        ]), fallback), /managedServerId is invalid/);
+    }
+});

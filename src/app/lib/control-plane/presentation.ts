@@ -23,8 +23,21 @@ export type ControlPlaneOperationResultPresentation = {
     links: ControlPlaneOperationResultLink[];
 };
 
+/** Restricts selectable versions to validated registry discoveries, excluding historical receipts. */
 export function installableBuilds(builds: readonly ReleaseBuild[]) {
-    return builds.filter((build) => build.validationState === "validated");
+    return builds.filter((build) => build.validationState === "validated" && build.registryMetadata);
+}
+
+/** Uses the registry version tag for selection and preserves recorded historical versions. */
+export function releaseVersion(build: ReleaseBuild) {
+    return build.registryMetadata?.versionTag ?? build.version;
+}
+
+/** Displays channel names without changing their transport values. */
+export function releaseChannelLabel(channel: string) {
+    if (channel === "stable") return "Public";
+    if (channel === "nightly") return "Nightly";
+    return channel;
 }
 
 export function fieldRequirementLabel(required: boolean) {

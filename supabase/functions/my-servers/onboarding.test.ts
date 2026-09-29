@@ -31,9 +31,9 @@ test("onboarding Edge routes fixed summary/create/request operations and lowerca
         { version: 1, requestId: ONBOARDING_TEST_ID, operation: "request-region", input: { region: "france" } },
     ]);
 });
-test("onboarding extension preserves existing lifecycle request ID spelling", async () => {
+test("onboarding extension preserves existing backup request ID spelling", async () => {
     const calls: unknown[] = [];
-    const response = await handler({ outcome: "enqueued", jobId: ONBOARDING_TEST_ID, action: "start" }, calls)(request({ action: "start", serverId: ONBOARDING_TEST_ID, expectedUpdatedAt: "2026-09-07T14:00:00.000Z" }, ONBOARDING_TEST_ID.toUpperCase()));
+    const response = await handler({ outcome: "enqueued", jobId: ONBOARDING_TEST_ID, action: "backup" }, calls)(request({ action: "create-backup", serverId: ONBOARDING_TEST_ID, expectedUpdatedAt: "2026-09-07T14:00:00.000Z" }, ONBOARDING_TEST_ID.toUpperCase()));
     assert.equal(response.status, 200);
     assert.equal((await response.json()).requestId, ONBOARDING_TEST_ID.toUpperCase());
 });

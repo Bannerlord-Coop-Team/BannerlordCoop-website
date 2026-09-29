@@ -6,18 +6,21 @@ opens Discord OAuth in the user's browser, and receives a short-lived bearer
 token only after the gateway verifies one of these conditions:
 
 - the signed-in Discord member currently has one of the fixed Staff, Tester,
-  Patreon, Boosty, or Afdian roles in the Bannerlord Coop guild; or
+  Competition Winner, Patreon, Boosty, or Afdian roles in the Bannerlord Coop guild; or
 - the signed-in Discord account occupies one of a current eligible member's ten
   sponsored-account seats.
 
 Sponsored access is attached to the friend's Discord account, not to a machine
 or a download count. Before each installer session is approved, the gateway
-asks Discord whether that sponsor still has a qualifying Staff, Tester, or
+asks Discord whether that sponsor still has a qualifying Staff, Tester, Competition Winner, or
 supporter role. If they left the guild or lost the role, their grant, seats,
 and active download sessions are removed. Sponsored friends do not need the
 sponsor to sign in again. Removing a sponsored account also revokes its active
 gateway sessions. Every eligible member has one shared ten-seat pool
 regardless of how many qualifying roles they hold.
+
+Competition Winner is an installer eligibility role only, not a website membership
+role. Keep it out of public website role lists and promotional copy.
 
 This controls the official installer and download paths. A person who has
 legitimately received the archive bytes can still copy those bytes; client-side
@@ -38,6 +41,13 @@ authorization decisions, and incremental server update behavior. Keep the Linux
 implementation aligned when those contracts change, including downloading the
 validated client `publicUrl` rather than the mutable legacy URL. Linux-specific
 Steam discovery and Wine/Proton handling remain in `install-linux.sh`.
+
+For a Windows authorization failure, ask for the complete **Session diagnostics
+v2** block from the installer. It records both PowerShell attempts and the curl
+fallback, with response type, field lengths and validation results, HTTP status
+or curl exit code. It omits device codes, user codes, activation links, and raw
+response bodies. A cropped `body=` excerpt from an older installer is not
+enough to identify which validation check failed.
 
 Run `npm run test:installer-linux` on Linux or WSL with Bash, Python 3, and 7-Zip
 (`7zz` or `7z`) installed. The suite executes the interactive installer against

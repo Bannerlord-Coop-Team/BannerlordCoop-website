@@ -1,6 +1,7 @@
 import { Hero } from "@/app/components/home/Hero";
 import { CommunityStats } from "@/app/components/home/community/CommunityStats";
 import { CoopFeatures } from "@/app/components/home/features/CampaignFeatures";
+import { Roadmap } from "@/app/components/home/roadmap/Roadmap";
 import { AboutProject } from "@/app/components/home/idea/AboutProject";
 import { CommunityMedia } from "@/app/components/home/media/CommunityMedia";
 import { DownloadSection } from "@/app/components/home/modulesection/DownloadSection";
@@ -60,6 +61,7 @@ export default async function Home() {
                 />
                 <CommunityMedia />
                 <CoopFeatures />
+                <Roadmap />
                 <AboutProject />
                 <DownloadSection />
             </main>

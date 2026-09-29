@@ -16,11 +16,27 @@ it("shows the account name and server link, and closes with Escape restoring foc
         await act(async () => trigger.click());
         expect(trigger.getAttribute("aria-expanded")).toBe("true");
         expect(container.querySelector('a[href="/servers"]')?.textContent).toBe("My Servers");
+        expect(container.querySelector('a[href="/admin"]')).toBeNull();
         expect(container.textContent).toContain("Sign out");
         expect(container.textContent).not.toContain("Link account");
         await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
         expect(trigger.getAttribute("aria-expanded")).toBe("false");
         expect(document.activeElement).toBe(trigger);
+    } finally {
+        await act(async () => root.unmount());
+        container.remove();
+    }
+});
+
+it("shows the admin link for administrators", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+        await act(async () => root.render(<ProfileDropdown accountName="Andrew" isAdmin />));
+        await act(async () => container.querySelector("button")!.click());
+        expect(container.querySelector('a[href="/admin"]')?.textContent).toContain("Admin");
     } finally {
         await act(async () => root.unmount());
         container.remove();

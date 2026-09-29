@@ -1,6 +1,6 @@
 {
   "websiteBaselineHead": "ba0d34cb9023360bb13632112bc4509484c096b6",
-  "cpSourceHead": "4160f7bda49c6dd7dab57b912811c793dec90ac3",
+  "cpSourceHead": "e890d6263bdbc4468af6284b87105560ae3c9b2c",
   "deploymentContract": "Upgrade only through CP coordinated exact release catalog; baseline must already exist. No fresh bootstrap, marker replay, or remote applied-state proof. Fixed historical representations are not SQL-equivalent aliases.",
   "migrations": [
     {
@@ -355,6 +355,72 @@
       "websiteBytes": 7616,
       "representationException": false,
       "releaseClassification": "pending forward migration; coordinated website/Edge cutover removes recovery intents; do not deploy independently"
+    },
+    {
+      "version": "202609130001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202609130001_control_plane_server_visibility.sql",
+      "websiteSha256": "97b9ff190f1ec4d02b879f2569a2fa113ded51583f7dd109e278a8d28244bb55",
+      "websiteBytes": 1607,
+      "cpPath": "supabase/migrations/202609130001_control_plane_server_visibility.sql",
+      "cpSha256": "97b9ff190f1ec4d02b879f2569a2fa113ded51583f7dd109e278a8d28244bb55",
+      "cpBytes": 1607,
+      "representationException": false,
+      "releaseClassification": "already-applied control-plane history mirrored into the website migration stream; NEVER replay"
+    },
+    {
+      "version": "202609190001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202609190001_control_plane_registry_releases.sql",
+      "websiteSha256": "ce2dd5c8d748389bc31e951ec73bb01ae164a68570f31a240fa2a9e667270003",
+      "websiteBytes": 8315,
+      "cpPath": "supabase/migrations/202609190001_control_plane_registry_releases.sql",
+      "cpSha256": "ce2dd5c8d748389bc31e951ec73bb01ae164a68570f31a240fa2a9e667270003",
+      "cpBytes": 8315,
+      "representationException": false,
+      "releaseClassification": "already-applied control-plane history mirrored into the website migration stream; NEVER replay"
+    },
+    {
+      "version": "20260919010000",
+      "owner": "website",
+      "websitePath": "supabase/migrations/20260919010000_actionable_patreon_retries.sql",
+      "websiteSha256": "c42a08ab918ccfa121a724388cd25251662b91c83c8fb28ebbb7f8da8b093699",
+      "websiteBytes": 3759,
+      "representationException": false,
+      "releaseClassification": "pending website-owned operational cleanup; deploy with the matching Patreon Edge worker"
+    },
+    {
+      "version": "202609220001",
+      "owner": "website",
+      "websitePath": "supabase/migrations/202609220001_patreon_allocation_webhooks.sql",
+      "websiteSha256": "c30e142d49bed120609876247d694ebaf33dea789724da01a270b3c2eee5c79d",
+      "websiteBytes": 11839,
+      "representationException": false,
+      "releaseClassification": "pending allocation webhook migration; requires matching website worker and control-plane USD50 policy support"
+    },
+    {
+      "version": "202609220002",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202609220002_control_plane_ghcr_catalog.sql",
+      "websiteSha256": "652fbb5c90d849ec9688e1fd682e0846edfd078bbf01898c579762ac80f8bd20",
+      "websiteBytes": 2539,
+      "cpPath": "supabase/migrations/202609220002_control_plane_ghcr_catalog.sql",
+      "cpSha256": "652fbb5c90d849ec9688e1fd682e0846edfd078bbf01898c579762ac80f8bd20",
+      "cpBytes": 2539,
+      "representationException": false,
+      "releaseClassification": "already-applied control-plane history mirrored into the website migration stream; NEVER replay"
+    },
+    {
+      "version": "202609270001",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202609270001_control_plane_public_directory.sql",
+      "websiteSha256": "f23977f98d18fa7fea8340c1b1cdcf8656974055bdf64543dc9a62624e869695",
+      "websiteBytes": 2165,
+      "cpPath": "supabase/migrations/202609270001_control_plane_public_directory.sql",
+      "cpSha256": "f23977f98d18fa7fea8340c1b1cdcf8656974055bdf64543dc9a62624e869695",
+      "cpBytes": 2165,
+      "representationException": false,
+      "releaseClassification": "already-applied control-plane history mirrored into the website migration stream; NEVER replay"
     }
   ],
   "integratedWebsiteMainHead": "f012d9412d98a1e8f50bcc3887c655a813959500",

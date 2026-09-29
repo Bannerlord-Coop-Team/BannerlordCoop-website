@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleHelp, LoaderCircle, Play, TriangleAlert } from "lucide-react";
-import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
+import { requestControlPlaneAdminWithRefresh } from "@/app/lib/control-plane/stale-request";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { resolveDiscordUserReference } from "@/app/lib/supabase/discord-users";
 import {
@@ -68,7 +68,7 @@ export function ControlPlaneActionCard({
     const [serverValue, setServerValue] = useState(String(serverField?.defaultValue ?? ""));
     const [backupReady, setBackupReady] = useState(false);
     const [formRevision, setFormRevision] = useState(0);
-    const selectedServer = serverField?.options?.find((option) => adminActionOptionValue("server", option) === serverValue);
+    const selectedServer = serverField?.options?.find((option) => option.value === selectedTargetId(serverValue));
     const effectiveFields = fields.map((field) => field.name === "buildId" && operation === "update-server"
         ? { ...field, options: field.options?.filter((option) => !option.releaseChannel || option.releaseChannel === selectedServer?.releaseChannel) }
         : field);
@@ -109,24 +109,25 @@ export function ControlPlaneActionCard({
     }, [operation]);
 
     async function submit(formData: FormData) {
+        if (pending) return;
         if (destructive && !window.confirm(`Run “${title}”? The control plane will enforce its current-state and confirmation gates.`)) {
             return;
         }
         setPending(true);
         setResult(null);
-        const requestId = crypto.randomUUID();
         try {
             const input = buildInput(effectiveFields, formData);
             applyControlPlaneOperationDefaults(operation, input);
             normalizeOperationInput(operation, input);
+            const requestId = crypto.randomUUID();
             const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
             if (!session?.access_token) throw new Error("Authentication is required.");
-            const response = await requestControlPlaneAdmin({
+            const response = await requestControlPlaneAdminWithRefresh({
                 accessToken: session.access_token,
                 requestId,
                 operation,
                 ...(fields.length === 0 ? {} : { input }),
-            });
+            }, () => router.refresh());
             setResult({ ok: true, ...presentControlPlaneOperationResult(operation, response) });
             if (operation === "onboard-vps-host") router.push("/admin/control-plane?view=vps");
             else router.refresh();
@@ -166,7 +167,12 @@ export function ControlPlaneActionCard({
                     </span>
                 )}
             </div>
-            <form action={submit} onReset={() => {
+            <form onSubmit={(event) => {
+                // React form actions reset uncontrolled fields even on a handled rejection.
+                // Keep the original selections and reason throughout refresh/recovery.
+                event.preventDefault();
+                if (!pending) void submit(new FormData(event.currentTarget));
+            }} onReset={() => {
                 setServerValue(String(serverField?.defaultValue ?? ""));
                 setBackupReady(false);
                 setFormRevision((value) => value + 1);
@@ -180,7 +186,7 @@ export function ControlPlaneActionCard({
                 <div className="grid gap-3">
                     {effectiveFields.map((field) => field.kind === "backup"
                         ? <ControlPlaneBackupPicker key={`${serverValue}:${formRevision}`} serverId={selectedServer?.value ?? null} onReady={setBackupReady} />
-                        : <ActionField key={field.name === "buildId" ? `${field.name}:${serverValue}` : field.name} field={field} />)}
+                        : <ActionField key={field.name === "buildId" ? `${field.name}:${serverValue}` : `${field.name}:${formRevision}`} field={field} />)}
                 </div>
                 {unavailableField && <p className="mt-3 text-xs leading-5 text-amber-300">No eligible {unavailableField.label.toLowerCase()} is currently available.</p>}
                 <div className="mt-auto pt-4">
@@ -225,6 +231,7 @@ export function ControlPlaneActionCard({
     );
 }
 function ActionField({ field }: { field: AdminActionField }) {
+    const [targetValue, setTargetValue] = useState(String(field.defaultValue ?? ""));
     if (field.kind === "checkbox") {
         return (
             <label className="flex items-center gap-3 text-xs text-foreground-muted">
@@ -248,7 +255,9 @@ function ActionField({ field }: { field: AdminActionField }) {
         return (
             <label>
                 {label}
-                <select name={field.name} required={field.required} defaultValue={String(field.defaultValue ?? "")} className={className}>
+                <select name={field.name} required={field.required} {...(field.kind === "server" || field.kind === "job"
+                    ? { value: currentTargetValue(field, targetValue), onChange: (event: React.ChangeEvent<HTMLSelectElement>) => setTargetValue(event.target.value) }
+                    : { defaultValue: String(field.defaultValue ?? "") })} className={className}>
                     {field.required ? <option value="" disabled>{field.options?.length ? "Select…" : "No options available"}</option> : <option value="">None</option>}
                     {field.options?.map((option) => (
                         <option
@@ -298,6 +307,16 @@ function ActionField({ field }: { field: AdminActionField }) {
         </label>
     );
 }
+function selectedTargetId(value: string): string | null {
+    if (!value) return null;
+    return (JSON.parse(value) as { id: string }).id;
+}
+
+function currentTargetValue(field: AdminActionField, value: string) {
+    const option = field.options?.find((option) => option.value === selectedTargetId(value));
+    return option ? adminActionOptionValue(field.kind, option) : "";
+}
+
 function FieldRequirement({ required }: { required: boolean }) {
     return <span className={`border px-1.5 py-0.5 text-[0.5rem] tracking-[0.08em] ${required ? "border-gold/30 text-gold" : "border-white/10 text-foreground-dim"}`}>{fieldRequirementLabel(required)}</span>;
 }
