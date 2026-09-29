@@ -10,13 +10,13 @@ The backend requires active, unused allocation under `max(administrativeBase, qu
 | --- | --- | --- |
 | `GET my-servers?resource=onboarding` | `server-onboarding` | `{}` |
 | `POST my-servers` `{action:'create-server',displayName,region}` | `create-server` | `{displayName,region}` |
-| `POST my-servers` `{action:'request-region',region}` | `request-region` | `{region}` |
+| Legacy retry only: `POST my-servers` `{action:'request-region',region}` | `request-region` | `{region}` |
 
 All use existing Supabase JWT forwarding to authenticated `POST /v1/user/control-plane`, `{version:1,requestId,operation,input}`. Mutations require a caller-generated UUID in `x-request-id`, normalized to lowercase. There is no browser service secret or owner/role/host/build/slot selection. Adequate independent administrative grants bypass membership steps; an administrator role alone is not allocation authority. New membership runtime configuration is documented separately. The shared closed DTO parser is used by **both** Edge and website facade. Unknown enums, extra/private fields, missing fields, inconsistent eligibility, wrong regions/names, invalid timestamps, mismatched receipts/envelopes and inconsistent HTTP success/failure are rejected as unavailable, not displayed as safe data.
 
-Canonical order: **US-West, US-East, France, Germany, United Kingdom, Poland**. Name policy matches backend raw 3–48 UTF-16 code units, then NFKC, trim and whitespace collapse, normalized 3–48 policy. Letters/numbers at both ends; letters/numbers/spaces/periods/apostrophes/hyphens inside. Region requests do not send a name.
+Canonical order: **US-West, US-East, France, Germany, United Kingdom, Poland**. Name policy matches backend raw 3–48 UTF-16 code units, then NFKC, trim and whitespace collapse, normalized 3–48 policy. Letters/numbers at both ends; letters/numbers/spaces/periods/apostrophes/hyphens inside. Legacy region-request retries do not send a name.
 
-Both new mutations require `eligibility.eligible && unavailableReason === null`. Availability is advisory. Available regions offer Create; full regions remain selectable and offer Request, or display their existing outstanding request. Summary failure is **unknown/unavailable**, not evidence of entitlement or full capacity. Inventory failure is independent of onboarding/recovery.
+New server creation requires `eligibility.eligible && unavailableReason === null`. Availability is advisory. Available regions offer Create. Full regions remain selectable to explain their status, disable Create, and show “[Region] is full—choose another region or check back later.” The website no longer offers Request region or displays the outstanding-request panel or Requested badges. Summary failure is **unknown/unavailable**, not evidence of entitlement or full capacity. Inventory failure is independent of onboarding/recovery.
 
 ```mermaid
 sequenceDiagram
@@ -47,7 +47,7 @@ Create reserves/assigns an existing prepared slot and creates a **stopped** serv
 
 **Password limitation:** Manage your game password through the existing Discord owner controls: **My Servers → choose server → Settings / Configure your server → Custom game password (optional)**. Enter a new custom password and submit. Blank preserves the generated password that cannot be read from this website. Discord does not mask this input or echo the submitted password. Do not direct owners to the administrator-only Generate Password action.
 
-Region requests are private durable backend writes. One outstanding owner+region request deduplicates even different UUIDs. The returned request UUID may therefore differ from the submitted envelope UUID. Summary reload displays existing requests. Requests consume **no quota** and create **no server, reservation, job, email or notification**; no ETA or automatic capacity/allocation is promised. They remain outstanding if capacity arrives or a server is subsequently created.
+Region requests are private durable backend writes. One outstanding owner+region request deduplicates even different UUIDs. The returned request UUID may therefore differ from the submitted envelope UUID. Existing requests remain in backend storage but are not displayed in the normal setup flow. The website creates no new region requests; exact retries of previously retained uncertain requests remain supported so their outcomes can be confirmed. Their confirmation explains that no server was created or reserved and directs the owner back to setup. Requests consume **no quota** and create **no server, reservation, job, email or notification**; no ETA or automatic capacity/allocation is promised. They remain outstanding if capacity arrives or a server is subsequently created.
 
 Recovery follows the existing managed-server-backup pattern, with one pending onboarding intent per authenticated website account in **sessionStorage**. Exact action/name/region/UUID is written and read back before dispatch; there is no expected generation field in this backend contract. Concurrent double clicks are synchronously guarded. Corrupt/inaccessible storage blocks mutations. Account-keyed remounting separates identity state, and exact compare-clear prevents late responses deleting newer intents.
 
@@ -108,9 +108,9 @@ The browser command must be separately authorized where local processes are gate
 Tests distinguish:
 
 - **Real in-process facade → real strict Edge → synthetic upstream**, including UUID, JWT forwarding, complete DTO validation and HTTP errors. This is not a real backend or Supabase JWT verification test.
-- Mounted **real UI and real server actions**, with auth/facade dependencies mocked, covering create/request/validation/eligibility, uncertain exact retries/reload, account mismatch, storage failure, terminal/transitional inventory and late response safety.
+- Mounted **real UI and real server actions**, with auth/facade dependencies mocked, covering create/full-region blocking/legacy request recovery/validation/eligibility, uncertain exact retries/reload, account mismatch, storage failure, terminal/transitional inventory and late response safety.
 - Real page composition with mocked external dependencies preserves mixed live-console/managed inventory, public placeholder labeling and unavailable onboarding behavior.
-- **Mock-only browser integration**: native desktop/mobile dialog, Tab/Escape/restore, create stopped inventory, requested summary reload, capacity race, uncertain retry after reload/consumed quota/account mismatch/switch. No end-to-end production TLS, JWT, Discord linkage, Supabase persistence, backend assignment or game start is proved by these browser checks.
+- **Mock-only browser integration**: native desktop/mobile dialog, Tab/Escape/restore, create stopped inventory, full-region guidance and hidden historical requests after reload, capacity race, uncertain retry after reload/consumed quota/account mismatch/switch. No end-to-end production TLS, JWT, Discord linkage, Supabase persistence, backend assignment or game start is proved by these browser checks.
 
 Known baseline full lint failures are only `src/app/cheats/CheatsDirectory.tsx:229` and `src/app/cheats/CheatsView.tsx:40` (`react-hooks/set-state-in-effect`), verified byte-identical to base `84530ab`. Focused changed-file lint passes. Ordinary Windows tests skip the existing Linux installer subprocess test; no skip predicate was changed.
 
@@ -122,7 +122,7 @@ All images below are **synthetic auth/API**, not real backend results. The banne
 
 1. Eligible unused quota: open setup by keyboard; inspect all six regions. Try invalid punctuation or a short name: no dispatch; correction normalizes whitespace.
 2. Create US-West: receipt says assigned/stopped at creation, includes a real-shaped manage URL and Discord password notice. The mock inventory refreshes Offline; it is not running evidence.
-3. Select France (full), with no name: Request; confirmed outstanding summary persists on reload; choosing it again shows an existing request instead of a fresh mutation.
+3. Select France (full): the named full-region message appears and Create is disabled, including on form submission with Enter. No request is saved. A historical region request remains hidden after reload. Choose an available region to create normally; refreshed capacity also re-enables Create even when an old request exists.
 4. Simulate capacity race: no-change message; stale snapshot cannot submit until refreshed.
 5. Simulate lost response: close/reload, consume quota, change current auth or switch page account. Original account retains an accessible exact retry. Replayed success clears only that exact intent.
 6. On mobile390×844 and desktop1440×1000: native dialog has focus containment, Escape closes, trigger/fallback focus restores, and closing while pending does not claim cancellation.
@@ -132,11 +132,11 @@ All images below are **synthetic auth/API**, not real backend results. The banne
 | [Desktop banner](server-onboarding/mock-desktop-banner.png) | Approved design adapted to explicit quota |
 | [Desktop dialog](server-onboarding/mock-desktop-dialog.png) | Name and six selectable regions |
 | [Desktop assigned](server-onboarding/mock-desktop-assigned.png) | Historical stopped receipt/password limitation |
-| [Desktop requested](server-onboarding/mock-desktop-requested.png) | Durable-shaped private request confirmation |
+| [Desktop requested](server-onboarding/mock-desktop-requested.png) | Historical request UI, superseded by full-region guidance |
 | [Capacity race](server-onboarding/mock-desktop-capacity-race.png) | Safe stale snapshot rejection |
 | [Recovery](server-onboarding/mock-desktop-recovery.png) | Retry persists through account mismatch/consumed quota |
 | [Mobile banner](server-onboarding/mock-mobile-banner.png) | Responsive layout |
 | [Mobile dialog](server-onboarding/mock-mobile-dialog.png) | Scrollable two-column region grid |
-| [Mobile requested](server-onboarding/mock-mobile-requested.png) | Confirmed request without guarantees |
+| [Mobile requested](server-onboarding/mock-mobile-requested.png) | Historical request UI, superseded by full-region guidance |
 
 Independent reviewer acceptance is still required. Full-stack browser/backend testing, live rollout, database/provider changes, push/PR/merge and deployments remain out of scope without separate authorization.
