@@ -131,11 +131,11 @@ function CapacitySummary({ host }: { host: HostingAdminVpsHost }) {
 
 function SlotSummary({ host, ownerLabels }: { host: HostingAdminVpsHost; ownerLabels: Record<string, string> }) {
     const slots = Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
-    return <ul className="space-y-1 text-xs">
+    return <ul className="space-y-1 text-[0.625rem] leading-4">
         {slots.map((slot) => {
             const ownerName = formatAccountOwner(slot, ownerLabels);
             const label = `${ownerName} (${slot.displayName})`;
-            return <li key={`${slot.slotIndex}:${slot.serverId}`} className="flex min-w-0 items-center gap-2"><span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${slot.operationState === "running" ? "bg-emerald-400" : "bg-white/30"}`} /><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="truncate font-semibold text-foreground hover:text-gold hover:underline" title={label}>{label}</Link></li>;
+            return <li key={`${slot.slotIndex}:${slot.serverId}`} className="flex min-w-0 items-center gap-2"><span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${slot.operationState === "running" ? "bg-emerald-400" : "bg-white/30"}`} /><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="min-w-0 break-words font-medium text-foreground hover:text-gold hover:underline" title={label}>{label}</Link></li>;
         })}
         {host.availableServers > 0 && <li className="flex items-center gap-2 text-foreground-dim"><span aria-hidden="true" className="size-2 rounded-full bg-white/20" />{host.availableServers} available</li>}
     </ul>;
