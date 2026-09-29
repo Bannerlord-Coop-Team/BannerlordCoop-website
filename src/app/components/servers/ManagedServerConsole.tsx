@@ -49,12 +49,12 @@ export function ManagedServerConsole({ server, userId, controls }: { server: MyS
                 if (response.result.status !== "pending") {
                     router.refresh();
                     setPolling(false);
-                    setMessage("Command finished. Review the result, then acknowledge it to suppress the Discord recovery notification.");
+                    setMessage("Command finished. Review the result, then acknowledge it before starting a new command.");
                     return;
                 }
                 if (Date.now() >= deadline) {
                     setPolling(false);
-                    setMessage("Still pending. Check again or watch for the private Discord completion notification. Do not submit a duplicate command.");
+                    setMessage("Still pending. Keep this page open and check again. Do not submit a duplicate command.");
                     return;
                 }
                 timer = setTimeout(poll, 3_000);
@@ -121,7 +121,7 @@ export function ManagedServerConsole({ server, userId, controls }: { server: MyS
         try {
             const response = await acknowledgeManagedConsoleCommand(job, userId);
             if (!response.ok || !response.result.acknowledged) {
-                setMessage("The result remains here, but acknowledgement could not be confirmed. Discord may also notify you. Retry acknowledgement.");
+                setMessage("The result remains here, but acknowledgement could not be confirmed. Retry acknowledgement; do not resend the command.");
                 return;
             }
             setAcknowledged(true);
@@ -142,7 +142,7 @@ export function ManagedServerConsole({ server, userId, controls }: { server: MyS
         <section className="min-w-0 rounded-lg border border-white/10 bg-surface">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
                 <h2 className="font-semibold">Game commands</h2>
-                <DownloadServerLogButton serverId={server.serverId} userId={userId} />
+                <DownloadServerLogButton serverId={server.serverId} userId={userId} className={button} />
             </div>
             <div className="border-b border-white/10 p-5">{controls}</div>
             <div className="space-y-4 p-5">
@@ -160,7 +160,7 @@ export function ManagedServerConsole({ server, userId, controls }: { server: MyS
                 {terminal && !acknowledged && <button className={button} disabled={busy} onClick={acknowledge}>Acknowledge result</button>}
                 {acknowledged && <button className={button} onClick={newCommand}>New command</button>}
                 <p role="status" className="text-sm text-foreground-muted">{message}</p>
-                {submission && !terminal && <p className="text-xs text-foreground-muted">Keep this page open to check the same request. If you leave, check Discord before sending this command again.</p>}
+                {submission && !terminal && <p className="text-xs text-foreground-muted">Keep this page open to check the same request. Leaving this page loses the local request reference; do not resend an uncertain command.</p>}
             </div>
         </section>
     </ServerConsoleWorkspace>;

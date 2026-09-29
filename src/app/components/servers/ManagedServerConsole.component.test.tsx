@@ -74,6 +74,7 @@ it("polls request-bound results, renders plaintext and retains terminal output i
     await act(async () => button("Acknowledge result").click());
     expect(container.querySelector("pre")!.textContent).toBe("<script>unsafe()</script>");
     expect(container.textContent).toContain("acknowledgement could not be confirmed");
+    expect(container.textContent).not.toContain("Discord");
     await act(async () => vi.advanceTimersByTimeAsync(6000));
     expect(mocks.check).toHaveBeenCalledTimes(1);
 });
@@ -90,6 +91,7 @@ it("stops automatic polling after a minute and manually checks the same job with
     await act(async () => button("Send").click());
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(button("Check result").disabled).toBe(false);
+    expect(container.textContent).not.toContain("Discord");
     const callsAtTimeout = mocks.check.mock.calls.length;
     const originalReference = mocks.check.mock.calls[0];
     await act(async () => vi.advanceTimersByTimeAsync(30_000));

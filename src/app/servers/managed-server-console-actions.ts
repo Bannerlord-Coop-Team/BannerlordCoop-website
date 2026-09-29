@@ -18,15 +18,15 @@ function failure(error: unknown, notSubmitted = false) {
     const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
     const messages: Record<string, string> = {
         server_not_found: "This server is unavailable or your access changed.",
-        identity_unavailable: "Link your Discord account and sign in again before using commands.",
-        operation_unavailable: "The server is not running. Refresh server status; if delivery was previously uncertain, check Discord before sending a new command.",
+        identity_unavailable: "Your account could not be verified. Sign in again before using commands.",
+        operation_unavailable: "The server is not running. Refresh server status; if delivery was previously uncertain, check the existing request before sending a new command.",
         request_conflict: "The server changed or another command is active. Keep this request; check its outcome before sending a new command.",
         invalid_request: "Enter one supported coop.* command with valid arguments.",
         rate_limited: "Too many requests. Wait before checking again.",
     };
     return { ok: false as const, notSubmitted, message: notSubmitted
         ? "The command was not sent. Check your command and sign-in session."
-        : messages[code] ?? "The outcome could not be confirmed. Retry only this same request or check Discord; do not resend as a new command." };
+        : messages[code] ?? "The outcome could not be confirmed. Retry only this same request; do not resend as a new command." };
 }
 
 /** Validates and authenticates an enqueue while preserving the caller's durable request ID. */
@@ -49,7 +49,7 @@ export async function checkManagedConsoleCommand(input: unknown, expectedUserId:
     } catch (error) { return failure(error); }
 }
 
-/** Suppresses Discord recovery only after the user acknowledges the displayed terminal result. */
+/** Acknowledges the displayed terminal result under the current account authorization. */
 export async function acknowledgeManagedConsoleCommand(input: unknown, expectedUserId: string) {
     try {
         const reference = parseConsoleReference(input);
