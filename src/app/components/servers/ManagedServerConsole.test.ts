@@ -8,7 +8,7 @@ import {
 import {
     consoleStreamEndpoint,
     createConsoleStreamHandler,
-} from "../../api/servers/[serverId]/console/route";
+} from "../../lib/console/stream-handler";
 
 const SERVER_ID = "11111111-1111-4111-8111-111111111111";
 

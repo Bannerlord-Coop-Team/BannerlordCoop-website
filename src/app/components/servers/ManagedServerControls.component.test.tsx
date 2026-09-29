@@ -24,7 +24,7 @@ vi.mock("./ManagedServerPollingProvider", () => ({
 }));
 
 it.each([
-    [null, "command exited successfully (code 0)"],
+    [null, "Server started and game readiness confirmed"],
     ["container_command_unavailable", "It may have executed"],
     ["container_command_failed", "exit code 125"],
 ])("shows the command result without polling or retrying: %s", async (code, message) => {
@@ -44,6 +44,14 @@ it.each([
         expect(beginPolling).not.toHaveBeenCalled();
         expect(request).toHaveBeenCalledExactlyOnceWith("token", { serverId, action: "start" });
     } finally { await act(async () => root.unmount()); }
+});
+
+it.each([undefined, "55555555-5555-4555-8555-555555555555"])("recognizes an accepted Start only with its durable operation ID: %s", async (operationId) => {
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, operationId));
+    const result = await serverActions.operateManagedServer({ serverId: "22222222-2222-4222-8222-222222222222", action: "start" });
+    expect(result.ok).toBe(operationId !== undefined);
+    expect(result.message).toContain(operationId === undefined ? "may have executed" : "Start request accepted");
+    expect(request).toHaveBeenCalledTimes(1);
 });
 
 it("warns that direct Stop/Restart can lose unsaved progress and respects cancellation", async () => {

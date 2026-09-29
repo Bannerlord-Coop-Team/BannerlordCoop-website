@@ -51,6 +51,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             await requestMyServerOperation(accessToken, parsed);
         }
         revalidatePath("/servers");
+        if (parsed.action === "start") return { ok: true, message: "Server started and game readiness confirmed." };
         return { ok: true, message: `${operationLabel(parsed.action)} command exited successfully (code 0). This does not confirm game readiness.` };
     } catch (error) {
         revalidatePath("/servers");
@@ -60,6 +61,10 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         }
         if (code === "container_command_failed" && error instanceof MyServersApiError) {
             return { ok: false, message: error.message };
+        }
+        if (parsed.action === "start" && code === "operation_timeout"
+            && error instanceof MyServersApiError && error.operationId !== undefined) {
+            return { ok: true, message: "Start request accepted. The game has not confirmed readiness yet. Refresh server status before sending another command." };
         }
         if (parsed.action === "update-now") {
             if (code === "stale_interaction") {

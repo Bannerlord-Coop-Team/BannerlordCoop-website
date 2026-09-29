@@ -47,10 +47,13 @@ read-only. The control plane rechecks durable permission immediately before disp
 
 The Edge Function maps these actions to fixed `POST /api/v1/start`, `/api/v1/stop`,
 and `/api/v1/restart` routes with only `{serverId}` and the caller's bearer token.
-These commands operate on an existing container. They do not provision, queue a
-job, verify saves, warn players, or wait for game readiness. Stop/Restart require
-UI confirmation warning of unsaved progress loss. A container removed by the old
-safe Stop cannot be recreated by direct Start. Stop never powers off the VPS;
+Start uses the durable managed lifecycle to recreate a missing container with
+the selected save and configuration, and confirms success only after readiness.
+If the response deadline expires with a durable operation ID, the website shows
+that Start was accepted and asks the owner to refresh status; it does not claim
+the game is ready or submit another request. Stop/Restart operate directly on
+the existing container and require UI confirmation warning of unsaved progress
+loss. Stop never powers off the VPS;
 Restart never becomes a VM reboot.
 
 The Edge retains the website's correlated version-1 envelope: success contains
@@ -58,8 +61,10 @@ The Edge retains the website's correlated version-1 envelope: success contains
 `container_command_failed` and the actual exit code in the bounded error message.
 No stdout/stderr is forwarded. Transport failure means an unknown outcome, not
 proof of non-execution. Each HTTP request is a new command; there is no automatic
-retry, lifecycle polling, or operation ID. The page is revalidated once after a
-response, without claiming readiness. Existing backup polling/interlocks remain.
+retry or lifecycle polling. Start timeout errors retain the durable operation
+ID. The page is revalidated once after a response. Only successful lifecycle
+Start claims readiness; direct Stop/Restart success reports the exit code.
+Existing backup polling/interlocks remain.
 
 Before enabling these controls, commission compatible ControlPlane #156 agent,
 controller **and persistent process owner**, allow the three exact direct paths
