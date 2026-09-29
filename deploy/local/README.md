@@ -59,7 +59,7 @@ SMTP and Mailpit are not included. Production magic-link and OAuth login remain 
 
 ## Acceptance boundary
 
-An image build alone is not an integration pass. The coordinated test must sign in through `/dev-login` with local credentials, open the seeded server, submit a command through actual Next.js server actions and Edge, verify its exact arrival at the synthetic controller through CP/agent transport, return its output to the browser, and acknowledge the result.
+An image build alone is not an integration pass. The console test obtains a genuine local GoTrue password session and installs normal `@supabase/ssr`-encoded cookies in browser memory, then opens the exact seeded server directly. It submits a command through actual Next.js server actions and Edge, verifies its exact arrival at the synthetic controller through CP/agent transport, returns its output to the browser, and acknowledges the result. Website/server authorization still validates the genuine session; this is not an authentication bypass. The login UI is tested separately.
 
 Managed command coverage requires website account/console PRs #183 and #185 and ControlPlane account/console PRs #207 and #209 in the checked-out sources. This container setup does not replace those changes or mock their application handlers. Actual Bannerlord behavior is outside the synthetic controller test.
 
@@ -78,6 +78,16 @@ To check an already prepared local stack without starting or rebuilding services
 node deploy/local/test-console-browser.mjs /path/to/fixture.json /path/to/evidence-directory
 ```
 
-The fixture supplies `serverId`, `command`, `expectedOutput`, and `tlsSpki`. Use a new evidence directory for each attempt. The script waits for the local SSR form's React submit handler before clicking, asserts the actual Auth response has the fixed account ID and no Discord identity, submits once, compares plain-text output exactly, and acknowledges it. It records screenshots and sanitized browser evidence, not session tokens. If failure happens after Send, correlate the durable request with CP before attempting another command. Browser evidence alone must be paired with the runner receipt and durable job/ack state.
+The fixture supplies `serverId`, `command`, `expectedOutput`, and `tlsSpki`. The browser process also requires `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (the disposable anon JWT) and `NODE_EXTRA_CA_CERTS` (the local CA file) in its environment, never session tokens on the command line. The Auth transport pins IPv4 loopback while retaining the canonical TLS server name and normal CA verification, so it does not depend on host DNS resolving the local alias. Use a new evidence directory for each attempt. The script asserts the genuine password Auth response has the fixed account ID and no Discord identity, uses the Supabase SSR library to encode/chunk cookies, submits once, compares plain-text output exactly, and acknowledges it. Cookies and session tokens remain in memory only; evidence contains screenshots and sanitized status, not tokens. If failure happens after Send, correlate the durable request with CP before attempting another command. Browser evidence alone must be paired with the runner receipt and durable job/ack state.
 
-A manually coordinated local run passed this complete synthetic path with `coop.debug.players.list`, output `[synthetic-controller] no game process`, one runner delivery, and a succeeded UUID-owned durable job with acknowledged completion. The coordinated one-command orchestrator also passed a fresh local run after browser navigation was changed to wait for commit plus UI readiness rather than completion of streamed page resources. An earlier pre-Send cold-load failure was preserved, and the successful run stopped its services while retaining evidence. Neither pass exercises real Bannerlord STDIN or establishes exhaustive reliability.
+Run the separate login-page smoke against an already prepared stack:
+
+```sh
+node deploy/local/test-login-browser.mjs /path/to/fixture.json /path/to/login-evidence-directory
+```
+
+The matching CP wrapper exposes this separately as `npm run test:e2e:login -- --website /path/to/website-checkout`; it is not part of the default console test.
+
+That smoke waits for the local form's React submit handler, signs in through the UI, verifies the returned Discord-free account, and checks navigation to `/servers`. It never submits a console command. Production login code is unchanged.
+
+Before separating session setup from login UI, a manually coordinated local run passed this complete synthetic path with `coop.debug.players.list`, output `[synthetic-controller] no game process`, one runner delivery, and a succeeded UUID-owned durable job with acknowledged completion. The coordinated one-command orchestrator also passed a fresh local run after browser navigation was changed to wait for commit plus UI readiness rather than completion of streamed page resources. An earlier pre-Send cold-load failure was preserved, and the successful run stopped its services while retaining evidence. Neither historical pass exercises real Bannerlord STDIN or establishes exhaustive reliability. The session-seeded console variant requires its own fresh coordinated validation.
