@@ -4,19 +4,21 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "./ServerManagementWorkspace";
 
-const settingsMocks = vi.hoisted(() => ({ rename: vi.fn(), visibility: vi.fn(), refresh: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: settingsMocks.refresh }) }));
+const settingsMocks = vi.hoisted(() => ({ rename: vi.fn(), visibility: vi.fn(), refresh: vi.fn(), release: vi.fn(), releaseStatus: vi.fn() }));
+vi.mock("next/navigation", () => { const router = { refresh: settingsMocks.refresh }; return { useRouter: () => router }; });
 vi.mock("@/app/servers/name-actions", () => ({ renameLiveServer: settingsMocks.rename }));
 vi.mock("@/app/servers/server-visibility-actions", () => ({ setServerVisibility: settingsMocks.visibility }));
+vi.mock("@/app/servers/server-release-actions", () => ({ changeServerRelease: settingsMocks.release, readServerReleaseStatus: settingsMocks.releaseStatus }));
 let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
     settingsMocks.rename.mockReset(); settingsMocks.visibility.mockReset(); settingsMocks.refresh.mockReset();
+    settingsMocks.release.mockReset(); settingsMocks.releaseStatus.mockReset();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     window.history.replaceState(null, "", "/servers/test");
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
 function click(label: string) {
     const target = [...container.querySelectorAll("button")].find(button => button.textContent === label)!;
     target.click();
@@ -173,4 +175,77 @@ it("opens visibility setup from the header and a direct reload link", async () =
     await act(async () => root.render(null));
     await act(async () => root.render(content));
     expect(container.querySelector("#server-visibility")!.closest("[hidden]")).toBeNull();
+});
+
+
+it("saves the selected release only on Save and shows durable progress through completion", async () => {
+    vi.useFakeTimers();
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    const jobId = "22222222-2222-4222-8222-222222222222";
+    const expectedUpdatedAt = "2026-09-29T12:00:00.000Z";
+    settingsMocks.releaseStatus.mockResolvedValueOnce({ serverId, releaseChannel: "stable", job: null })
+        .mockResolvedValueOnce({ serverId, releaseChannel: "nightly", job: { jobId, state: "running", progress: "Saving and stopping the server" } })
+        .mockResolvedValueOnce({ serverId, releaseChannel: "nightly", job: { jobId, state: "running", progress: "Installing the selected server version" } })
+        .mockResolvedValueOnce({ serverId, releaseChannel: "nightly", job: { jobId, state: "running", progress: "Starting the server and checking readiness" } })
+        .mockResolvedValue({ serverId, releaseChannel: "nightly", job: { jobId, state: "succeeded", progress: "Finishing up" } });
+    settingsMocks.release.mockResolvedValue({ ok: true, jobId, message: "Release change queued." });
+    await act(async () => root.render(<ServerSettingsPanel name="Campaign" releaseAccess={{ serverId, channel: "stable", expectedUpdatedAt, canEdit: true }} />));
+    const select = container.querySelector<HTMLSelectElement>("#settings-release-channel")!;
+    expect([...select.options].map(option => option.text)).toEqual(["Stable", "Nightly"]);
+    await act(async () => { select.value = "nightly"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(settingsMocks.release).not.toHaveBeenCalled();
+    await act(async () => click("Save settings"));
+    expect(settingsMocks.release).toHaveBeenCalledWith({ serverId, releaseChannel: "nightly", expectedUpdatedAt, requestId: expect.any(String) });
+    expect(select.disabled).toBe(true);
+    expect(container.textContent).toContain("Saving and stopping the server");
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(container.textContent).toContain("Installing the selected server version");
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(container.textContent).toContain("Starting the server and checking readiness");
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(container.textContent).toContain("Release update completed");
+    const polls = settingsMocks.releaseStatus.mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(8_000));
+    expect(settingsMocks.releaseStatus).toHaveBeenCalledTimes(polls);
+    vi.useRealTimers();
+});
+
+it("retains the release request identity after an unconfirmed response", async () => {
+    settingsMocks.releaseStatus.mockResolvedValue({ serverId: "11111111-1111-4111-8111-111111111111", releaseChannel: "stable", job: null });
+    settingsMocks.release.mockResolvedValue({ ok: false, message: "Unconfirmed" });
+    await act(async () => root.render(<ServerSettingsPanel name="Campaign" releaseAccess={{ serverId: "11111111-1111-4111-8111-111111111111", channel: "stable", expectedUpdatedAt: "2026-09-29T12:00:00.000Z", canEdit: true }} />));
+    await act(async () => { const select = container.querySelector<HTMLSelectElement>("select")!; select.value = "nightly"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    await act(async () => click("Save settings"));
+    await act(async () => click("Save settings"));
+    expect(settingsMocks.release.mock.calls[1][0]).toEqual(settingsMocks.release.mock.calls[0][0]);
+});
+
+
+it("carries visibility's new generation into a combined channel save", async () => {
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    const before = "2026-09-29T12:00:00.000Z", after = "2026-09-29T12:00:01.000Z";
+    settingsMocks.releaseStatus.mockResolvedValue({ serverId, releaseChannel: "stable", job: null });
+    settingsMocks.visibility.mockResolvedValue({ ok: true, updatedAt: after, message: "Visibility saved" });
+    settingsMocks.release.mockResolvedValue({ ok: false, rejected: true, message: "Nightly unavailable" });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await act(async () => root.render(<ServerSettingsPanel name="Campaign" visibility="private"
+        visibilityAccess={{ serverId, expectedUpdatedAt: before, canEdit: true }}
+        releaseAccess={{ serverId, channel: "stable", expectedUpdatedAt: before, canEdit: true }} />));
+    await act(async () => {
+        container.querySelector<HTMLInputElement>('input[value="public"]')!.click();
+        const select = container.querySelector<HTMLSelectElement>("select")!;
+        select.value = "nightly"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => click("Save settings"));
+    expect(settingsMocks.release).toHaveBeenCalledWith(expect.objectContaining({ expectedUpdatedAt: after, releaseChannel: "nightly" }));
+    expect(container.textContent).toContain("Visibility saved Nightly unavailable");
+});
+
+it("restores failed update status on reload without claiming completion", async () => {
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    settingsMocks.releaseStatus.mockResolvedValue({ serverId, releaseChannel: "nightly", job: { jobId: serverId, state: "failed", progress: "Finishing up" } });
+    await act(async () => root.render(<ServerSettingsPanel name="Campaign" releaseAccess={{ serverId, channel: "nightly", expectedUpdatedAt: "2026-09-29T12:00:00.000Z", canEdit: true }} />));
+    expect(container.textContent).toContain("Release update failed");
+    expect(container.textContent).not.toContain("Release update completed");
+    expect(settingsMocks.release).not.toHaveBeenCalled();
 });
