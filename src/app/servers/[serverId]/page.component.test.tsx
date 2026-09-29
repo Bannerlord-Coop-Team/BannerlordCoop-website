@@ -1,4 +1,6 @@
 import { act, Children, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
+import type { ManagedServerConsole } from "@/app/components/servers/ManagedServerConsole";
+import type { ServerWorkspacePanel } from "@/app/components/servers/ServerManagementWorkspace";
 import type { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
 import type { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
 import { createRoot } from "react-dom/client";
@@ -128,6 +130,8 @@ it("preserves managed-only pages without requiring live authorization", async ()
 // Resolve the page's server components, leaving client components for React to render.
 function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
 function findServerElement(node: ReactNode, name: "ServerSettingsPanel"): Promise<ReactElement<ComponentProps<typeof ServerSettingsPanel>> | null>;
+function findServerElement(node: ReactNode, name: "ServerWorkspacePanel"): Promise<ReactElement<ComponentProps<typeof ServerWorkspacePanel>> | null>;
+function findServerElement(node: ReactNode, name: "ManagedServerConsole"): Promise<ReactElement<ComponentProps<typeof ManagedServerConsole>> | null>;
 function findServerElement(node: ReactNode, name: string): Promise<ReactElement | null>;
 async function findServerElement(node: ReactNode, name: string): Promise<ReactElement | null> {
     for (const child of Children.toArray(node)) {
