@@ -158,6 +158,14 @@ Registered hosts, capacity, and assignments render without live provider or runn
 reads. A browser request then loads the existing full inventory, preserving open
 host details while resource and billing fields show loading indicators. Failures
 remain visible with a retry button and leave the initial inventory usable.
+While visible, the tab polls the existing authenticated API five seconds after
+completion of each request, replacing readings in place without clearing the
+previous snapshot or expanded details. Runner progress shares this refresh loop
+instead of refreshing the entire page. Failed refreshes label retained readings
+as the last readings and retry automatically; a successful response with missing
+telemetry shows unavailable rather than retaining an older measurement. Hidden
+tabs pause polling and refresh on return. Leaving the tab cancels its request.
+This is background polling, not a server-push stream.
 A superseded request cannot replace a newer page inventory. Legacy full responses
 without `liveDataIncluded` render directly. Deploy the companion backend's bounded
 inventory-read option before deploying this page; no Edge Function change is needed.

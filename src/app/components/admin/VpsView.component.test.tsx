@@ -11,14 +11,15 @@ vi.mock("./RunnerOnboardingStatus", () => ({ RunnerOnboardingStatus: () => <span
 let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    vi.useFakeTimers();
     mocks.session.mockResolvedValue({ data: { session: { access_token: "test-token" } } });
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); });
 function inventory(liveDataIncluded = false, name = "host-a"): HostingAdminVpsInventory {
     const item = host(name, resources(60, 40), 0);
     return { liveDataIncluded, hosts: [{ ...item, resources: liveDataIncluded ? item.resources : null,
@@ -46,7 +47,7 @@ it("shows usable inventory before readings and preserves an expanded row when th
     expect(container.textContent).not.toContain("Loading");
     expect(container.textContent).toContain("47.7%");
     expect(container.querySelector('button[aria-label="Collapse details for host-a"]')).not.toBeNull();
-    expect(mocks.request).toHaveBeenCalledWith({ accessToken: "test-token", operation: "vps-hosts" });
+    expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({ accessToken: "test-token", operation: "vps-hosts" }));
 });
 it("keeps inventory on failure and retries live readings", async () => {
     mocks.request.mockRejectedValueOnce(new Error("Provider unavailable")).mockResolvedValueOnce(inventory(true));
@@ -72,6 +73,68 @@ it("ignores an old result after the server supplies a new inventory", async () =
 it.each([true, undefined])("does not reload an already complete or legacy response (%s)", async (flag) => {
     await act(async () => root.render(<VpsView inventory={{ ...inventory(true), liveDataIncluded: flag }} accounts={[]} />));
     expect(mocks.request).not.toHaveBeenCalled();
+});
+
+it("updates readings in place without overlapping slow requests or collapsing details", async () => {
+    const next = deferred();
+    mocks.request.mockResolvedValueOnce(inventory(true)).mockReturnValueOnce(next.promise);
+    await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-a"]')!.click());
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("47.7%");
+    expect(container.textContent).not.toContain("Loading");
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    const updated = inventory(true);
+    updated.controlPlaneHost!.cpuPercent = 12.3;
+    await act(async () => next.resolve(updated));
+    expect(container.textContent).toContain("12.3%");
+    expect(container.querySelector('button[aria-label="Collapse details for host-a"]')).not.toBeNull();
+});
+
+it("labels retained readings on failure and recovers automatically", async () => {
+    mocks.request.mockResolvedValueOnce(inventory(true))
+        .mockRejectedValueOnce(new Error("Provider unavailable"))
+        .mockResolvedValueOnce({ ...inventory(true), controlPlaneHost: null });
+    await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(container.textContent).toContain("47.7%");
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Showing the last readings");
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.textContent).toContain("No current trusted resource observation");
+});
+
+it("pauses hidden tabs, resumes on return, and cancels requests on unmount", async () => {
+    mocks.request.mockResolvedValue(inventory(true));
+    await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    visibility.mockReturnValue("visible");
+    const next = deferred();
+    mocks.request.mockReturnValueOnce(next.promise);
+    await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    const signal = mocks.request.mock.calls[1][0].signal as AbortSignal;
+    await act(async () => root.render(null));
+    expect(signal.aborted).toBe(true);
+    await act(async () => next.resolve(inventory(true)));
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    visibility.mockRestore();
+});
+
+it("refreshes an initially complete snapshot after the interval", async () => {
+    const updated = inventory(true);
+    updated.controlPlaneHost!.cpuPercent = 12.3;
+    mocks.request.mockResolvedValue(updated);
+    await act(async () => root.render(<VpsView inventory={inventory(true)} accounts={[]} />));
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("12.3%");
 });
 
 function host(name: string, hostResources: HostingAdminHostResources, slotIndex: number, updating = false): HostingAdminVpsHost {
