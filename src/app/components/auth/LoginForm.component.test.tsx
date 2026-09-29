@@ -27,12 +27,11 @@ afterEach(async () => {
 });
 
 // Verifies that visitors are not offered the unavailable magic-link flow.
-it("offers only Google and Discord with an email-unavailable notice", async () => {
+it("offers only Google and Discord without email sign-in messaging", async () => {
     await act(async () => root.render(<LoginForm />));
     expect(Array.from(container.querySelectorAll("button"), button => button.textContent?.trim())).toEqual(["Google", "Discord"]);
     expect(container.querySelector("form, input")).toBeNull();
-    expect(container.textContent).toContain("Email sign-in is temporarily unavailable. Please use Google or Discord.");
-    expect(container.textContent).not.toContain("magic link");
+    expect(container.textContent).not.toMatch(/email|magic link/i);
     expect(signInWithOAuth).not.toHaveBeenCalled();
 });
 

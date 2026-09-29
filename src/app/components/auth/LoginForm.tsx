@@ -158,10 +158,6 @@ export function LoginForm({
                 </ProviderButton>
             </div>
 
-            <p className="mt-6 text-sm leading-6 text-foreground-muted">
-                Email sign-in is temporarily unavailable. Please use Google or Discord.
-            </p>
-
             <div className="mt-6 flex items-start gap-3 border-t border-white/10 pt-5 text-xs leading-5 text-foreground-muted">
                 <LockKeyhole aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold-muted" />
                 <p>
