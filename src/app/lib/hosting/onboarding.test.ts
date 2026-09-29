@@ -1,3 +1,4 @@
+import { parseOnboardingMutation, parseOnboardingResult } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getServerOnboarding, requestServerOnboarding, MyServersApiError } from "./my-servers";
@@ -16,7 +17,7 @@ test("real website facade → real strict Edge → synthetic upstream preserves 
     const edge = createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test", fetchImplementation: async (_url, init) => {
         const body = JSON.parse(init?.body as string); calls.push(body);
         assert.equal(new Headers(init?.headers).get("authorization"), "Bearer synthetic-test-access-token");
-        return Response.json({ version: 1, requestId: body.requestId, ok: true, result: body.operation === "server-onboarding" ? onboardingSummary() : onboardingCreated() });
+        return Response.json({ version: 1, requestId: body.requestId, ok: true, result: body.operation === "server-onboarding" ? onboardingSummary() : { ...onboardingCreated(), ...(body.input.releaseChannel ? { releaseChannel: body.input.releaseChannel } : {}) } });
     } });
     globalThis.fetch = async (url, init) => {
         const request = new Request(url, init); assert.equal(request.url.startsWith("https://supabase.example.test/functions/v1/my-servers"), true);
@@ -26,6 +27,11 @@ test("real website facade → real strict Edge → synthetic upstream preserves 
         assert.deepEqual(await getServerOnboarding("synthetic-test-access-token"), onboardingSummary());
         assert.deepEqual(await requestServerOnboarding("synthetic-test-access-token", { ...intent, displayName: "  My   Campaign  ", requestId: ONBOARDING_TEST_ID.toUpperCase() }), onboardingCreated());
         assert.deepEqual(calls[1], { version: 1, requestId: ONBOARDING_TEST_ID, operation: "create-server", input: { displayName: "My Campaign", region: "us-west" } });
+        const nightly = { ...intent, releaseChannel: "nightly" as const };
+        assert.deepEqual(await requestServerOnboarding("synthetic-test-access-token", nightly), { ...onboardingCreated(), releaseChannel: "nightly" });
+        assert.equal((calls[2].input as Record<string, unknown>).releaseChannel, "nightly");
+        assert.throws(() => parseOnboardingResult(onboardingCreated(), nightly));
+        assert.throws(() => parseOnboardingMutation({ action: "create-server", displayName: "My Campaign", region: "us-west", releaseChannel: "preview" }));
         globalThis.fetch = async (_url, init) => Response.json({ version: 1, requestId: new Headers(init?.headers).get("x-request-id"), ok: true, result: { ...onboardingCreated(), credential: "private" } });
         await assert.rejects(requestServerOnboarding("synthetic-test-access-token", intent), (error: unknown) => error instanceof MyServersApiError && error.code === "invalid_response");
         globalThis.fetch = async (_url, init) => Response.json({ version: 1, requestId: new Headers(init?.headers).get("x-request-id"), ok: false, error: { code: "rate_limited", message: "Wait", retryable: false } }, { status: 429 });
