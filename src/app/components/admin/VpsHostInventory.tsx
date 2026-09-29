@@ -131,7 +131,7 @@ function SlotSummary({ host, ownerLabels }: { host: HostingAdminVpsHost; ownerLa
     const slots = Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
     return <ul className="space-y-1 text-xs">
         {slots.map((slot) => {
-            const ownerName = ownerLabels[slot.ownerDiscordUserId] ?? slot.ownerDiscordUserId;
+            const ownerName = formatAccountOwner(slot, ownerLabels);
             const label = `${ownerName} (${slot.displayName})`;
             return <li key={`${slot.slotIndex}:${slot.serverId}`} className="flex min-w-0 items-center gap-2"><span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${slot.operationState === "running" ? "bg-emerald-400" : "bg-white/30"}`} /><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="truncate font-semibold text-foreground hover:text-gold hover:underline" title={label}>{label}</Link></li>;
         })}
@@ -169,7 +169,7 @@ function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit }: { id:
                         <div role="rowgroup" className="divide-y divide-white/10">
                             {slots.map((slot) => <div role="row" key={`${slot.slotIndex}:${slot.serverId}`} className={`grid ${SLOT_GRID} items-center justify-center gap-x-4 gap-y-4 px-6 py-2.5 text-xs`}>
                                 <div role="cell" data-label="Slot / UDP" className={SLOT_LABEL}><p className="font-label font-semibold uppercase tracking-[0.08em] text-gold">Slot {slot.slotIndex + 1} · UDP {slot.gamePort}</p></div>
-                                <div role="cell" data-label="Player / Server" className={SLOT_LABEL}><p className="truncate font-semibold text-foreground" title={formatAccountOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}>{formatAccountOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
+                                <div role="cell" data-label="Player / Server" className={SLOT_LABEL}><p className="truncate font-semibold text-foreground" title={formatAccountOwner(slot, ownerLabels)}>{formatAccountOwner(slot, ownerLabels)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
                                 <div role="cell" data-label="CPU" className={SLOT_LABEL}><p className="text-foreground-muted">{formatCpu(slot.resources)}</p></div>
                                 <div role="cell" data-label="Memory" className={SLOT_LABEL}><p className="text-foreground-muted">{formatMemory(slot.resources)}</p></div>
                                 <div role="cell" data-label="Status" className={SLOT_LABEL}><StateBadge value={slot.operationState} /></div>
