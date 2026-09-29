@@ -20,14 +20,14 @@ async function renderPage() {
 }
 beforeEach(() => {
     vi.clearAllMocks();
-    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "page-user", identities: [{ provider: "discord", identity_data: { sub: "123456789012345678" } }] } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt", user: { id: "page-user" } } } }) } });
+    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "44444444-4444-4444-8444-444444444444", identities: [{ provider: "discord", identity_data: { sub: "123456789012345678" } }] } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt", user: { id: "44444444-4444-4444-8444-444444444444" } } } }) } });
     mocks.list.mockResolvedValue([{ serverId: ONBOARDING_TEST_ID, displayName: "Assigned campaign", operationState: "stopped", observedGameState: "stopped", accessRole: "owner" }]);
     mocks.onboarding.mockResolvedValue(onboardingSummary());
     mocks.publicList.mockResolvedValue([]);
 });
 it("real servers page keeps mixed managed/live inventory and trusted onboarding separate from the public directory", async () => {
     const html = await renderPage();
-    expect(html).toContain("Trusted onboarding snapshot"); expect(html).toContain('data-user="page-user"');
+    expect(html).toContain("Trusted onboarding snapshot"); expect(html).toContain('data-user="44444444-4444-4444-8444-444444444444"');
     expect(html).toContain("Assigned campaign"); expect(html).toContain("Live campaign"); expect(html).toContain("Public directory");
     expect(html).toContain(`/servers/${ONBOARDING_TEST_ID}`); expect(html).toContain("Offline");
     expect(mocks.onboarding).toHaveBeenCalledWith("test-page-jwt"); expect(mocks.list).toHaveBeenCalledWith("test-page-jwt");
@@ -54,10 +54,10 @@ it("signed-out page never requests private onboarding or inventory", async () =>
     const html = await renderPage(); expect(html).toContain("Sign in to view"); expect(mocks.onboarding).not.toHaveBeenCalled(); expect(mocks.list).not.toHaveBeenCalled();
 });
 
-it("missing Discord is composed before CP allocation fetch, while existing inventory stays accessible", async () => {
-    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "page-user", identities: [] } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt", user: { id: "page-user" } } } }) } });
+it("website-only accounts fetch allocations and keep existing inventory accessible", async () => {
+    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "44444444-4444-4444-8444-444444444444", identities: [] } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt", user: { id: "44444444-4444-4444-8444-444444444444" } } } }) } });
     const html = await renderPage();
-    expect(mocks.onboarding).not.toHaveBeenCalled(); expect(mocks.list).toHaveBeenCalled(); expect(html).toContain("Assigned campaign");
+    expect(mocks.onboarding).toHaveBeenCalled(); expect(mocks.list).toHaveBeenCalled(); expect(html).toContain("Assigned campaign");
     expect(html).toContain("Owned servers"); expect(html).toContain("Associated servers");
 });
 

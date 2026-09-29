@@ -71,12 +71,11 @@ export default async function ServersPage() {
         }),
     );
     // Resolve authoritative identities before any allocation fetch. No metadata/email fallback.
-    let identity = identityStep(user);
+    const identity = identityStep(user);
     let account: AccountStatus | null = null;
     if (user && accessToken) {
         try {
             account = await getWebsiteAccountStatus(user.id, accessToken);
-            if (!account.hasDiscord && identity === null) identity = "identity_repair";
         } catch { /* Independent CP grants must remain usable during membership outages. */ }
     }
     let onboarding: OnboardingSummary | null = null;

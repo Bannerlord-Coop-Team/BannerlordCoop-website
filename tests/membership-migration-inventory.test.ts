@@ -8,8 +8,8 @@ test("membership shared upgrade inventory pins own history and exact new CP Git 
     const expected = inventory.migrations as { version: string; websitePath: string; websiteSha256: string; websiteBytes: number; cpSha256?: string; cpBytes?: number; representationException: boolean }[];
     assert.equal(inventory.cpSourceHead, "e890d6263bdbc4468af6284b87105560ae3c9b2c");
     assert.equal(inventory.websiteBaselineHead, "ba0d34cb9023360bb13632112bc4509484c096b6");
-    assert.equal(expected.length,37); assert.equal(new Set(expected.map(e=>e.version)).size,37);
-    assert.equal(expected.filter(e=>!e.representationException).length,27);
+    assert.equal(expected.length,40); assert.equal(new Set(expected.map(e=>e.version)).size,40);
+    assert.equal(expected.filter(e=>!e.representationException).length,30);
     assert.equal(inventory.integratedWebsiteMainHead,"f012d9412d98a1e8f50bcc3887c655a813959500");
     for (const version of ["20260907220000","20260907230000"]) {
         const entry=inventory.migrations.find((e:{version:string})=>e.version===version);

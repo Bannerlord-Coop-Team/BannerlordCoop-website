@@ -58,7 +58,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <div className="mt-4 divide-y divide-white/10 rounded-sm border border-white/10 bg-surface">
                 <section className="p-5 sm:p-6" aria-labelledby="discord-heading">
                     <div className="flex flex-wrap items-center justify-between gap-3"><h3 id="discord-heading" className="font-semibold">Discord</h3><ConnectionBadge connected={status?.hasDiscord} /></div>
-                    <p className="mt-3 break-words text-sm leading-6 text-foreground-muted">{status?.hasDiscord ? discordName ?? "Your Discord account is connected." : "Connect Discord to this website account to set up a server."}</p>
+                    <p className="mt-3 break-words text-sm leading-6 text-foreground-muted">{status?.hasDiscord ? discordName ?? "Your Discord account is connected." : "Discord is optional. You can set up and manage servers with this website account."}</p>
                     {status?.hasDiscord && <DisconnectAccount provider="Discord" action={disconnectDiscordAccount.bind(null, user.id, discordIdentity?.identity_id ?? "")} disabledReason={!discordIdentity?.identity_id ? "Discord identity could not be confirmed. Waiting for updated account status." : !hasOtherSignIn ? "Discord is your only sign-in method. Connect another sign-in method before disconnecting it." : undefined} />}
 
                     {status && !status.hasDiscord && (

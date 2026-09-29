@@ -21,6 +21,10 @@ export function parsePolicy(value: string | undefined): Policy | null {
     if (!record(p) || !exact(p, ["campaignId", "qualifyingTierIds", "currency", "minimumCents", "policyVersion"]) || typeof p.campaignId !== "string" || !IDENTIFIER.test(p.campaignId) || p.currency !== "USD" || (p.policyVersion !== POLICY_VERSION && p.policyVersion !== ALLOCATION_POLICY_VERSION) || p.minimumCents !== (p.policyVersion === ALLOCATION_POLICY_VERSION ? 5000 : 2000) || !Array.isArray(p.qualifyingTierIds) || p.qualifyingTierIds.length < 1 || p.qualifyingTierIds.length > 50 || !p.qualifyingTierIds.every(id => typeof id === "string" && IDENTIFIER.test(id)) || new Set(p.qualifyingTierIds).size !== p.qualifyingTierIds.length) throw new Error("Invalid membership policy");
     return p as Policy;
 }
+/** Optional legacy metadata must never gate account-owned membership. */
+export function optionalDiscord(user: unknown): string | null {
+    try { return currentDiscord(user); } catch { return null; }
+}
 export function currentDiscord(user: unknown): string | null {
     if (!record(user) || !Array.isArray(user.identities)) throw new Error("Authoritative identities unavailable");
     const identities = user.identities.filter(i => record(i) && i.provider === "discord");
