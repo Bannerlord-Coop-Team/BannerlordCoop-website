@@ -38,3 +38,12 @@ retains the exact merged SQL; the unmerged account migrations use versions 002 a
 003 to avoid colliding with that history. A rejected browser password action clears
 the input and explains that the outcome is unknown and status must be refreshed
 before trying again; it never retries automatically.
+
+The administrator Slots, Servers and Ownership views display the website account
+email (then phone/account UUID when no email exists). They resolve historical
+numeric owners using `ownerAccountId` supplied by the control plane's immutable
+binding, including after Discord unlink. Deploy the matching control-plane API
+change before the website to resolve these legacy owners. Unbound owners display
+`Legacy owner (ID)`; a missing/deleted account or unavailable directory displays
+`Account unavailable (UUID)`. Emails remain in the authenticated administrator
+website and never determine ownership or appear in public server listings.

@@ -125,15 +125,16 @@ test("operation fields explicitly identify required and optional inputs", () => 
     assert.equal(fieldRequirementLabel(false), "Optional");
 });
 
-test("server ownership combines the Discord username and durable user id", () => {
-    assert.equal(
-        formatAccountOwner("shot_up", "763278507085922325"),
-        "shot_up (763278507085922325)",
-    );
-    assert.equal(
-        formatAccountOwner(undefined, "763278507085922325"),
-        "Legacy owner (763278507085922325)",
-    );
+test("server ownership resolves the durable website account and has explicit fallbacks", () => {
+    const accountId = "44444444-4444-4444-8444-444444444444";
+    const legacyId = "763278507085922325";
+    const labels = { [accountId]: "owner@example.com", [legacyId]: "wrong@example.com" };
+    assert.equal(formatAccountOwner({ ownerDiscordUserId: legacyId, ownerAccountId: accountId }, labels), "owner@example.com");
+    assert.equal(formatAccountOwner({ ownerDiscordUserId: accountId, ownerAccountId: accountId }, labels), "owner@example.com");
+    assert.equal(formatAccountOwner({ ownerDiscordUserId: accountId }, labels), "owner@example.com");
+    assert.equal(formatAccountOwner({ ownerDiscordUserId: legacyId, ownerAccountId: null }, labels), `Legacy owner (${legacyId})`);
+    assert.equal(formatAccountOwner({ ownerDiscordUserId: legacyId }, labels), `Legacy owner (${legacyId})`);
+    assert.equal(formatAccountOwner({ ownerDiscordUserId: legacyId, ownerAccountId: accountId }, {}), `Account unavailable (${accountId})`);
 });
 
 test("the VPS view presents slot occupants and resources with their owning host", async () => {
@@ -149,7 +150,7 @@ test("the VPS view presents slot occupants and resources with their owning host"
     assert.match(pageSource, /needsAccounts = view === "vps"/u);
     assert.match(pageSource, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\} \/>/u);
     assert.match(pageSource, /<VpsHostInventory/u);
-    assert.match(inventorySource, /formatAccountOwner\(ownerLabels\[slot\.ownerDiscordUserId\], slot\.ownerDiscordUserId\)/u);
+    assert.match(inventorySource, /formatAccountOwner\(slot, ownerLabels\)/u);
     assert.match(inventorySource, /view=server&serverId=\$\{encodeURIComponent\(slot\.serverId\)\}/u);
     assert.match(inventorySource, /usedPercent >= 90 \? "critical" : usedPercent >= 80 \? "warning"/u);
 });

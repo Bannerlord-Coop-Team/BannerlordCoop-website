@@ -348,7 +348,7 @@ function VpsView({ inventory, accounts }: { inventory: HostingAdminVpsInventory;
             </div>
             <VpsHostInventory
                 hosts={hosts}
-                ownerLabels={Object.fromEntries(ownerLabels)}
+                ownerLabels={ownerLabels}
                 runnerTargetSourceCommit={runnerTargetSourceCommit}
             />
         </section>
@@ -402,7 +402,7 @@ function OverviewView({ overview }: { overview: Overview }) {
 }
 
 function ServersView({ page, query, accounts }: { page: HostingPage<ManagedServer>; query: string; accounts: WebsiteAccountSummary[] }) {
-    const usernames = accountLabelMap(accounts);
+    const ownerLabels = accountLabelMap(accounts);
     return (
         <section className="mt-8">
             <form method="get" className="flex max-w-xl gap-2">
@@ -420,7 +420,7 @@ function ServersView({ page, query, accounts }: { page: HostingPage<ManagedServe
                             label={`Open Lifecycle operation for ${server.displayName}`}
                         >
                             <td className="p-4"><p className="font-semibold text-gold group-hover:underline">{server.displayName}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.serverId}</p></td>
-                            <td className="p-4 text-xs text-foreground-muted"><p className="font-semibold text-foreground">{formatAccountLabel(usernames.get(server.ownerDiscordUserId))}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.ownerDiscordUserId}</p></td>
+                            <td className="p-4 text-xs text-foreground-muted"><p className="font-semibold text-foreground">{formatAccountOwner(server, ownerLabels)}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.ownerAccountId ?? server.ownerDiscordUserId}</p></td>
                             <td className="p-4"><State value={server.operationState} /></td>
                             <td className="p-4"><RuntimeObservation server={server} /></td>
                             <td className="p-4 text-xs text-foreground-muted">{releaseChannelLabel(server.releaseChannel)}<br />{shortId(server.installedBuildId)}</td>
@@ -440,7 +440,7 @@ function ServerView({ result, accounts }: { result: ServerDashboardResult; accou
     const pinnedBuild = [result.dashboard.installedBuild, result.dashboard.desiredBuild]
         .find(build => build?.buildId === server.pinnedBuildId) ?? null;
     const activeJob = result.dashboard.activeJob;
-    const username = accountLabelMap(accounts).get(server.ownerDiscordUserId);
+    const ownerLabels = accountLabelMap(accounts);
     return (
         <div className="mt-8 space-y-8">
             <ControlPlaneLiveRefresh active={activeJob !== null} label="Refreshing server progress automatically" />
@@ -461,7 +461,7 @@ function ServerView({ result, accounts }: { result: ServerDashboardResult; accou
                 </section>
             )}
             <section className="grid gap-6 lg:grid-cols-3">
-                <Panel title="Ownership"><Definition label="Owner account" value={formatAccountOwner(username, server.ownerDiscordUserId)} /><Definition label="Region" value={server.friendlyRegion} /><Definition label="Provider" value={server.provider} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
+                <Panel title="Ownership"><Definition label="Owner account" value={formatAccountOwner(server, ownerLabels)} /><Definition label="Region" value={server.friendlyRegion} /><Definition label="Provider" value={server.provider} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
                 <Panel title="Desired / observed"><Definition label="Desired" value={server.desiredState} /><Definition label="VM" value={server.observedVmState} /><Definition label="Game" value={server.observedGameState} /><Definition label="Agent" value={result.dashboard.runtime?.agentHealthy ? "Healthy" : "Unavailable"} tone={result.dashboard.runtime?.agentHealthy ? "ok" : "warning"} /></Panel>
                 <Panel title="Composition"><Definition label="Channel" value={releaseChannelLabel(server.releaseChannel)} /><Definition label="Installed version" value={<RecordedRelease build={result.dashboard.installedBuild} buildId={server.installedBuildId} />} /><Definition label="Desired version" value={<RecordedRelease build={result.dashboard.desiredBuild} buildId={server.desiredBuildId} />} /><Definition label="Update policy" value={server.pinnedBuildId ? "Pinned version" : `Follow ${releaseChannelLabel(server.releaseChannel)} channel`} />{server.pinnedBuildId && <Definition label="Pinned version" value={<RecordedRelease build={pinnedBuild} buildId={server.pinnedBuildId} />} />}<Definition label="Save" value={result.dashboard.activeSave?.displayName ?? "Default bootstrap pending"} /></Panel>
             </section>
@@ -700,8 +700,7 @@ function controlRows(controls: GlobalControls) { return [
 ]; }
 function chunk<T>(items: readonly T[], size: number): T[][] { const rows: T[][] = []; for (let index = 0; index < items.length; index += size) rows.push(items.slice(index, index + size)); return rows; }
 function enumOptions(values: readonly string[]): AdminActionOption[] { return values.map((value) => ({ label: value, value })); }
-function accountLabelMap(users: readonly WebsiteAccountSummary[]) { return new Map(users.map(user => [user.accountId, user.label])); }
-function formatAccountLabel(label: string | undefined) { return label ?? "Legacy owner"; }
+function accountLabelMap(users: readonly WebsiteAccountSummary[]) { return Object.fromEntries(users.map(user => [user.accountId, user.label])); }
 function first(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
 function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations"].includes(value ?? "") ? value as View : "overview"; }
 function parseJobState(value: string | undefined): "failed" | "active" | null { return value === "failed" || value === "active" ? value : null; }
