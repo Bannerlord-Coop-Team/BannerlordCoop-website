@@ -73,14 +73,28 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe("us-west");
         expect(mocks.request).not.toHaveBeenCalled();
     });
+    it("retains Nightly selection across an uncertain response and exact retry", async () => {
+        mocks.request.mockRejectedValueOnce(new Error("response lost"));
+        await setup(); await name("My Campaign"); await act(async () => container.querySelector<HTMLInputElement>('input[value="nightly"]')!.click()); await click("Create server");
+        const original = stored();
+        expect(original.releaseChannel).toBe("nightly");
+        expect(container.querySelector('input[value="nightly"]')?.matches(":disabled")).toBe(true);
+        mocks.request.mockResolvedValueOnce({ ...onboardingCreated(), releaseChannel: "nightly" });
+        await click("Retry pending request");
+        expect(mocks.request.mock.calls[1][1]).toEqual(original);
+        expect(container.textContent).toContain("Nightly Release · maintenance");
+        expect(stored()).toBeNull();
+    });
     it("validates normalized name, submits once, reports assigned not running and refreshes real inventory", async () => {
-        await setup(); expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(2);
+        await setup(); expect(container.querySelectorAll('input[name="region"]')).toHaveLength(2);
+        expect(container.querySelector<HTMLInputElement>('input[value="stable"]')?.checked).toBe(true);
+        expect(container.textContent).not.toContain("Capacity is advisory");
         await name("!bad"); await click("Create server"); expect(mocks.request).not.toHaveBeenCalled(); expect(container.querySelector('[role="alert"]')?.textContent).toContain("3–48");
         await name("  My   Campaign  ");
         const submit = button("Create server");
         await act(async () => { submit.click(); submit.click(); });
         expect(mocks.request).toHaveBeenCalledTimes(1);
-        expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", displayName: "My Campaign", region: "us-west" });
+        expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", displayName: "My Campaign", region: "us-west", releaseChannel: "stable" });
         expect(stored()).toBeNull(); expect(container.textContent).toContain("Server assigned"); expect(container.textContent).toContain("stopped at creation");
         expect(container.textContent).not.toContain("Discord owner controls");
         expect(container.textContent).not.toContain("Refresh status and My Servers");

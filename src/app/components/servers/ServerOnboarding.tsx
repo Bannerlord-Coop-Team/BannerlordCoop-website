@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { submitServerOnboarding } from "@/app/servers/onboarding-actions";
 import { clearOnboardingIntent, onboardingIntentKey, readOnboardingIntent, storeOnboardingIntent } from "@/app/servers/onboarding-intent";
-import { normalizeOnboardingName, ONBOARDING_REGION_LABELS, type OnboardingIntent, type OnboardingRegion, type OnboardingResult, type OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { normalizeOnboardingName, ONBOARDING_REGION_LABELS, type OnboardingReleaseChannel, type OnboardingIntent, type OnboardingRegion, type OnboardingResult, type OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 const primaryButton = `inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-gold px-5 py-3 font-label text-sm font-semibold uppercase tracking-[0.1em] text-background transition-colors hover:bg-[#c3b07b] disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`;
@@ -94,13 +94,13 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
             }
         }
     }
-    function createCandidate(displayName: string, region: OnboardingRegion) {
+    function createCandidate(displayName: string, region: OnboardingRegion, releaseChannel: OnboardingReleaseChannel) {
         if (!canOffer || busy || intentRef.current !== null || inFlight.current) return;
         const entry = summary?.regions.find((entry) => entry.region === region);
         if (!entry?.available) return;
         try {
             const requestId = crypto.randomUUID();
-            void dispatch({ action: "create-server", displayName, region, requestId });
+            void dispatch({ action: "create-server", displayName, region, releaseChannel, requestId });
         } catch { setStorageError(true); }
     }
     const recovery = <>
@@ -142,7 +142,7 @@ function OnboardingReceipt({ result }: { result: OnboardingResult }) {
         <h3 className="font-display text-2xl font-semibold">{result.action === "create-server" ? "Server assigned" : "Region request confirmed"}</h3>
         {result.action === "create-server" ? <>
             <p className="mt-3 break-words text-sm leading-6">{result.displayName} was assigned in {ONBOARDING_REGION_LABELS[result.region]}. It was stopped at creation; this receipt is not live status. Check My Servers or manage the server for its current state.</p>
-            <p className="mt-3 text-sm text-foreground-muted">Public release · maintenance 03:00–04:00 America/Chicago. Setup does not start the server. Its first Start uses the bundled default save; no import is required.</p>
+            <p className="mt-3 text-sm text-foreground-muted">{result.releaseChannel === "nightly" ? "Nightly Release" : "Public Release"} · maintenance 03:00–04:00 America/Chicago. Setup does not start the server. Its first Start uses the bundled default save; no import is required.</p>
             <Link href={`/servers/${encodeURIComponent(result.serverId)}`} className={`${primaryButton} mt-5`}>Manage server <ArrowRight aria-hidden="true" className="size-4" /></Link>
         </> : <p className="mt-3 text-sm leading-6">Your earlier request for {ONBOARDING_REGION_LABELS[result.request.region]} was recorded, but no server was created or reserved. Choose an available region in server setup, or check back later.</p>}
     </div>;
@@ -157,7 +157,7 @@ const CONTINENTS: { label: string; regions: OnboardingRegion[] }[] = [
 
 function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, onSubmit, onDismiss, onRefresh, fallbackFocus }: {
     summary: OnboardingSummary | null; canOffer: boolean; disabled: boolean; pending: boolean; result: OnboardingResult | null; recovery: ReactNode;
-    onSubmit: (name: string, region: OnboardingRegion) => void; onDismiss: () => void; onRefresh: () => void; fallbackFocus: () => void;
+    onSubmit: (name: string, region: OnboardingRegion, releaseChannel: OnboardingReleaseChannel) => void; onDismiss: () => void; onRefresh: () => void; fallbackFocus: () => void;
 }) {
     const dialogRef = useRef<HTMLDialogElement>(null);
     const nameRef = useRef<HTMLInputElement>(null);
@@ -165,6 +165,7 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
     const closeRef = useRef<HTMLButtonElement>(null);
     const fallback = useRef(fallbackFocus);
     const [name, setName] = useState("");
+    const [releaseChannel, setReleaseChannel] = useState<OnboardingReleaseChannel>("stable");
     const [selected, setSelected] = useState<OnboardingRegion>("us-west");
     const [error, setError] = useState("");
     const continent = CONTINENTS.findIndex((continent) => continent.regions.includes(selected));
@@ -200,7 +201,7 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
         }
         setError("");
         setName(normalized);
-        onSubmit(normalized, entry.region);
+        onSubmit(normalized, entry.region, releaseChannel);
     }
     return <dialog ref={dialogRef} aria-labelledby="server-setup-title" aria-describedby="server-setup-description"
         onCancel={(event) => { event.preventDefault(); onDismiss(); }}
@@ -223,6 +224,13 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
                     <input ref={nameRef} id="onboarding-server-name" value={name} onChange={(event) => { setName(event.target.value); setError(""); }} autoComplete="off" placeholder="e.g. The Calradia Company" aria-invalid={!!error} aria-describedby={`onboarding-name-hint${error ? " onboarding-name-error" : ""}`} className={`mt-2 block min-h-12 w-full rounded-sm border border-white/20 bg-background px-3 py-2 text-base ${focusRing}`} />
                     <p id="onboarding-name-hint" className="mt-2 text-xs leading-5 text-foreground-muted">3–48 characters. Letters or numbers at both ends. Spaces and supported punctuation inside. Whitespace is normalized.</p>
                     {error && <p id="onboarding-name-error" role="alert" className="mt-2 text-sm text-red-200">{error}</p>}
+                    <fieldset className="mt-6">
+                        <legend className="text-sm font-medium">Release</legend>
+                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">{(["stable", "nightly"] as const).map((channel) => <label key={channel} className={`flex cursor-pointer items-start gap-2 rounded-sm border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${releaseChannel === channel ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
+                            <input type="radio" name="release-channel" value={channel} checked={releaseChannel === channel} onChange={() => setReleaseChannel(channel)} className="mt-1 size-3.5 shrink-0 accent-gold" />
+                            <span className="text-sm font-medium">{channel === "stable" ? "Public Release" : "Nightly Release"}</span>
+                        </label>)}</div>
+                    </fieldset>
                     <fieldset className="mt-6"><legend className="text-sm font-medium">Server region</legend>
                         <div role="tablist" aria-label="Continent" className="mt-3 flex flex-wrap gap-2">
                             {CONTINENTS.map((item, index) => <button key={item.label} type="button" role="tab"
@@ -249,7 +257,7 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
                 </fieldset>
                 {!canOffer && <p role="status" className="mt-4 text-sm text-gold">Availability changed or could not be confirmed. Refresh before choosing again.</p>}
                 {entry && !entry.available && <p role="status" className="mt-4 text-sm text-gold">{entry.label} is full—choose another region or check back later.</p>}
-                <p role="status" className="mt-4 text-sm text-gold">{pending ? "Submitting… Closing does not cancel this request." : "Capacity is advisory until the backend accepts the request."}</p>
+                {pending && <p role="status" className="mt-4 text-sm text-gold">Submitting… Closing does not cancel this request.</p>}
                 {recovery}
                 <div className="mt-5 flex flex-col-reverse gap-3 border-t border-white/10 pt-5 sm:flex-row sm:flex-wrap sm:justify-end">
                     <button type="button" onClick={onDismiss} className={secondaryButton}>{pending ? "Close (request continues)" : "Close"}</button>

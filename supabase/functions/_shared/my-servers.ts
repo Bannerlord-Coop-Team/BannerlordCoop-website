@@ -31,7 +31,7 @@ type UpstreamRequest =
     | { operation: "file-transfer"; input: OwnerFileMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
     | { operation: "server-onboarding"; input: Record<string, never> }
-    | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion } }
+    | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion; releaseChannel?: "stable" | "nightly" } }
     | { operation: "request-region"; input: { region: OnboardingRegion } }
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
@@ -325,7 +325,7 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
     if (value.action === "create-server" || value.action === "request-region") {
         const parsed = parseOnboardingMutation(value);
         return parsed.action === "create-server"
-            ? { operation: parsed.action, input: { displayName: parsed.displayName, region: parsed.region } }
+            ? { operation: parsed.action, input: { displayName: parsed.displayName, region: parsed.region, ...(parsed.releaseChannel !== undefined ? { releaseChannel: parsed.releaseChannel } : {}) } }
             : { operation: parsed.action, input: { region: parsed.region } };
     }
     if (typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)) {

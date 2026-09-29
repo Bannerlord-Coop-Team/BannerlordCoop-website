@@ -9,7 +9,7 @@ The backend requires active, unused allocation under `max(administrativeBase, qu
 | Website Edge request | Fixed backend operation | Exact backend input |
 | --- | --- | --- |
 | `GET my-servers?resource=onboarding` | `server-onboarding` | `{}` |
-| `POST my-servers` `{action:'create-server',displayName,region}` | `create-server` | `{displayName,region}` |
+| `POST my-servers` `{action:'create-server',displayName,region,releaseChannel?}` | `create-server` | `{displayName,region,releaseChannel?}` |
 | Legacy retry only: `POST my-servers` `{action:'request-region',region}` | `request-region` | `{region}` |
 
 All use existing Supabase JWT forwarding to authenticated `POST /v1/user/control-plane`, `{version:1,requestId,operation,input}`. Mutations require a caller-generated UUID in `x-request-id`, normalized to lowercase. There is no browser service secret or owner/role/host/build/slot selection. Adequate independent administrative grants bypass membership steps; an administrator role alone is not allocation authority. New membership runtime configuration is documented separately. The shared closed DTO parser is used by **both** Edge and website facade. Unknown enums, extra/private fields, missing fields, inconsistent eligibility, wrong regions/names, invalid timestamps, mismatched receipts/envelopes and inconsistent HTTP success/failure are rejected as unavailable, not displayed as safe data.
@@ -43,7 +43,7 @@ sequenceDiagram
 
 ## Results and recovery
 
-Create reserves/assigns an existing prepared slot and creates a **stopped** server. It does not purchase infrastructure, provision, or start it. The receipt says **Server assigned**, not running/ready. Current lifecycle comes from the refreshed managed inventory/manage page, not the historical receipt. Defaults: verified Stable, maintenance **03:00–04:00 America/Chicago**, existing standard configuration. First Start uses the bundled default save; no import is required.
+Create reserves/assigns an existing prepared slot and creates a **stopped** server. It does not purchase infrastructure, provision, or start it. The receipt says **Server assigned**, not running/ready. Current lifecycle comes from the refreshed managed inventory/manage page, not the historical receipt. The release selector defaults to **Public Release** (`stable`) and also offers **Nightly Release** (`nightly`). The selected channel is retained in the durable creation intent and verified against the receipt; retries preserve it. Older retained intents without a channel mean Public Release. The backend requires a verified build in that channel without fallback. Defaults: maintenance **03:00–04:00 America/Chicago**, existing standard configuration. First Start uses the bundled default save; no import is required.
 
 **Password limitation:** Manage your game password through the existing Discord owner controls: **My Servers → choose server → Settings / Configure your server → Custom game password (optional)**. Enter a new custom password and submit. Blank preserves the generated password that cannot be read from this website. Discord does not mask this input or echo the submitted password. Do not direct owners to the administrator-only Generate Password action.
 
@@ -140,3 +140,5 @@ All images below are **synthetic auth/API**, not real backend results. The banne
 | [Mobile requested](server-onboarding/mock-mobile-requested.png) | Historical request UI, superseded by full-region guidance |
 
 Independent reviewer acceptance is still required. Full-stack browser/backend testing, live rollout, database/provider changes, push/PR/merge and deployments remain out of scope without separate authorization.
+
+Deploy the control-plane channel contract first, then the `my-servers` Edge function and website. Region requests carry no release selection.
