@@ -195,6 +195,7 @@ export type HostingAdminVpsHost = {
 };
 
 export type HostingAdminVpsInventory = {
+    liveDataIncluded?: boolean;
     controlPlaneHost: HostingAdminHostResources | null;
     hosts: HostingAdminVpsHost[];
     availableServiceNames: string[];
