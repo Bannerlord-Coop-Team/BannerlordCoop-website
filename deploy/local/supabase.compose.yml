@@ -1,0 +1,64 @@
+# Included by the ControlPlane local stack; gateway and db are owned there.
+services:
+  auth:
+    image: supabase/gotrue:v2.177.0
+    mem_limit: 192m
+    network_mode: service:gateway
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: https://supabase-tls.localhost:8443/auth/v1
+      GOTRUE_SITE_URL: https://supabase-tls.localhost:3443
+      GOTRUE_URI_ALLOW_LIST: https://supabase-tls.localhost:3443/auth/callback
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${LOCAL_POSTGRES_PASSWORD:?Generate the disposable local env first}@127.0.0.1:5432/controlplane
+      GOTRUE_JWT_SECRET: ${LOCAL_JWT_SECRET:?Generate the disposable local env first}
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+
+  rest:
+    image: postgrest/postgrest:v12.2.12
+    mem_limit: 128m
+    network_mode: service:gateway
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${LOCAL_POSTGRES_PASSWORD:?Generate the disposable local env first}@127.0.0.1:5432/controlplane
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${LOCAL_JWT_SECRET:?Generate the disposable local env first}
+      PGRST_SERVER_HOST: 0.0.0.0
+      PGRST_SERVER_PORT: 3001
+
+  edge:
+    image: supabase/edge-runtime:v1.67.4
+    mem_limit: 512m
+    network_mode: service:gateway
+    depends_on:
+      auth:
+        condition: service_started
+      rest:
+        condition: service_started
+    command: [start, --main-service, /home/deno/local-main]
+    environment:
+      SUPABASE_URL: https://supabase-tls.localhost:8443
+      DENO_CERT: /local-ca/local.crt
+      SSL_CERT_FILE: /local-ca/local.crt
+      DENO_TLS_CA_STORE: system
+      SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?Generate the disposable local env first}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?Generate the disposable local env first}
+      SUPABASE_PUBLISHABLE_KEYS: '{"default":"${NEXT_PUBLIC_SUPABASE_ANON_KEY:?Generate the disposable local env first}"}'
+      CONTROL_PLANE_ADMIN_URL: https://supabase-tls.localhost:9443
+      CONTROL_PLANE_WEB_ORIGINS: https://supabase-tls.localhost:3443
+    volumes:
+      - ${LOCAL_TLS_ROOT:?Set LOCAL_TLS_ROOT}/ca.crt:/local-ca/local.crt:ro
+      - ./edge-main:/home/deno/local-main:ro
+      - ../../supabase/functions:/home/deno/functions:ro

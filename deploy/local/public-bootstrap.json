@@ -1,0 +1,32 @@
+{
+  "scope": "Disposable local account/server testing only; not a complete production or development Supabase schema snapshot",
+  "prerequisites": [
+    "GoTrue has initialized real auth.users and auth.identities",
+    "Local database roles anon, authenticated and service_role exist",
+    "Run once on a fresh local database as the migration owner, before seeding accounts"
+  ],
+  "sourceEvidence": "tests/membership-postgres.test.ts uses this membership migration sequence against an isolated PostgreSQL database; server_settings has its own complete source migration",
+  "migrations": [
+    "supabase/migrations/202608240001_create_server_settings.sql",
+    "supabase/migrations/20260907212654_create_patreon_links.sql",
+    "supabase/migrations/20260907220000_patreon_website_roles.sql",
+    "supabase/migrations/20260907230000_atomic_live_console_assignments.sql",
+    "supabase/migrations/202609080002_membership_onboarding.sql",
+    "supabase/migrations/202609080003_membership_role_locking.sql",
+    "supabase/migrations/20260908030000_patreon_event_reconciliation.sql",
+    "supabase/migrations/20260910200000_membership_receipt_claims.sql",
+    "supabase/migrations/202609110001_edge_owned_link_commit.sql"
+  ],
+  "accountOwnershipDependency": "After real Auth tables, the public baseline above and the prerequisite ControlPlane schema exist, the central stack applies the following coordinated migrations once. Do not apply website mirrors again if the ControlPlane migration runner already applied them.",
+  "coordinatedAccountMigrations": [
+    "supabase/migrations/202609280001_control_plane_retired_tables.sql",
+    "supabase/migrations/202609280002_control_plane_website_accounts.sql",
+    "supabase/migrations/202609280003_account_owned_membership.sql"
+  ],
+  "excluded": [
+    "Historical placeholder migrations",
+    "ControlPlane-owned schema migrations (central stack responsibility)",
+    "Legacy community-server statistics, homepage content and nightly installer schemas",
+    "Production users, provider tokens, paid membership evidence and OAuth identities"
+  ]
+}
