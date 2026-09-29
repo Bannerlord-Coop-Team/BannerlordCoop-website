@@ -8,6 +8,8 @@ vi.mock("@/app/components/admin/RunnerOnboardingStatus", () => ({
     RunnerOnboardingStatus: ({ compact }: { compact?: boolean }) => <button type="button">{compact ? "Runner current" : "Runner details"}</button>,
 }));
 
+const ACCOUNT_ID = "44444444-4444-4444-8444-444444444444";
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -27,12 +29,12 @@ describe("compact VPS host inventory", () => {
     it("keeps summaries compact and reveals only one host detail panel at a time", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-a", resources(70, 30), 0, true), host("host-b", resources(80, 20), 1)]}
-            ownerLabels={{ "owner-1": "shot_up" }}
+            ownerLabels={{ [ACCOUNT_ID]: "owner@example.com" }}
             runnerTargetSourceCommit="target-source"
         />));
 
         expect(container.textContent).toContain("host-a");
-        expect(container.textContent).toContain("shot_up (testserver)");
+        expect(container.textContent).toContain("owner@example.com (testserver)");
         const capacity = container.querySelector('dl[aria-label="3 total slots, 1 running, 2 free"]');
         expect(capacity?.querySelectorAll("dt")).toHaveLength(3);
         expect(capacity?.textContent).toBe("Slots3Running1Free2");
@@ -43,13 +45,13 @@ describe("compact VPS host inventory", () => {
         await act(async () => firstToggle.click());
         expect(firstToggle.getAttribute("aria-expanded")).toBe("true");
         expect(container.textContent).toContain("Slot 1 · UDP 4200");
-        expect(container.textContent).toContain("shot_up (owner-1)");
+        expect(container.textContent).toContain("owner@example.com");
         expect(container.textContent).toContain("Player / Server");
         expect(container.textContent).toContain("Target target-sourc");
         expect(container.textContent).toContain("Verifying Capabilities");
         const slotTable = container.querySelector('[role="table"][aria-label="Occupied slots for host-a"]');
         expect(slotTable).not.toBeNull();
-        expect(slotTable?.textContent?.indexOf("shot_up (owner-1)")).toBeLessThan(slotTable?.textContent?.indexOf("testserver") ?? 0);
+        expect(slotTable?.textContent?.indexOf("owner@example.com")).toBeLessThan(slotTable?.textContent?.indexOf("testserver") ?? 0);
 
         const secondToggle = container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-b"]')!;
         await act(async () => secondToggle.click());
@@ -72,14 +74,18 @@ describe("compact VPS host inventory", () => {
         expect(container.textContent).not.toContain("UDP 4200");
     });
 
-    it("uses an email owner label when the directory has no Discord username", async () => {
+    it("uses the bound account email for a legacy numeric owner", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-email", resources(60, 40), 0)]}
-            ownerLabels={{ "owner-1": "owner@example.com" }}
+            ownerLabels={{ [ACCOUNT_ID]: "owner@example.com" }}
             runnerTargetSourceCommit="target-source"
         />));
 
         expect(container.textContent).toContain("owner@example.com (testserver)");
+        expect(container.textContent).not.toContain("763278507085922325");
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-email"]')!.click());
+        expect(container.querySelector('[aria-label="Occupied slots for host-email"]')?.textContent).toContain("owner@example.com");
+        expect(container.textContent).not.toContain("763278507085922325");
     });
 });
 
@@ -122,7 +128,8 @@ function host(name: string, hostResources: HostingAdminHostResources, slotIndex:
             gamePort: 4200 + slotIndex,
             serverId: `server-${slotIndex}`,
             displayName: slotIndex === 0 ? "testserver" : "Joke's Cool Server",
-            ownerDiscordUserId: "owner-1",
+            ownerDiscordUserId: "763278507085922325",
+            ownerAccountId: ACCOUNT_ID,
             operationState: "running",
             resources: {
                 observedAt: "2026-09-10T18:00:00.000Z",

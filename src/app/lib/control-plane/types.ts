@@ -1,6 +1,8 @@
 export type ManagedServer = {
     serverId: string;
     ownerDiscordUserId: string;
+    /** Administrator display identity; omitted by older control-plane releases. */
+    ownerAccountId?: string | null;
     displayName: string;
     provider: string;
     providerResourceId: string | null;
@@ -164,6 +166,7 @@ export type HostingAdminVpsHost = {
         serverId: string;
         displayName: string;
         ownerDiscordUserId: string;
+        ownerAccountId?: string | null;
         operationState: string;
         resources?: HostingServerResources | null;
     }>;
