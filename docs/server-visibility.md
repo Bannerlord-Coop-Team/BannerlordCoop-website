@@ -20,6 +20,8 @@ This website integration does not establish backend support or deployment availa
 
 ## Minimal boundaries
 
+The `/servers` shell and anonymous directory start immediately. Authentication, live-server display names, and account/hosting status cannot hold up the public listing. Once authentication resolves, My Servers loads alongside account status and live display names; it does not wait for membership or allocation checks. Account synchronization still completes before the hosting allocation read, and onboarding uses the same private inventory request as My Servers. Navigation and each section stream through their own loading boundary. No responses or credentials are cached by this page orchestration.
+
 The control plane owns visibility persistence, authorization, and public projection. The website never fetches an administrative inventory to filter it into public data. Missing visibility is private; missing endpoints disable Join. Public reads use a dedicated read-only endpoint, with a bounded allowlisted response and no caching. Private inventory retains its current authentication boundary.
 
 Owner-facing visibility updates use the authenticated user API and optimistic concurrency. Only the current owner may change visibility; manager, support, and administrator rows remain read-only in this user API. The merged CP #143 authenticated summary exposes stored connection fields using its existing durable owner/shared-access checks; the website consumes that authorized response without inventing a different access policy. CP #144 preserves that policy. The older #107 owner/manager-only endpoint restriction is not assumed or enforced by the website; any change needs explicit backend policy agreement. UI hiding is only presentation, not authorization.
@@ -78,5 +80,7 @@ Visibility persistence and mutation use the authenticated API. The website publi
 ## Verification and rollout
 
 Required tests cover private-by-default persistence, unauthorized update rejection, private endpoint non-disclosure, public-to-private removal, strict public response projection, no-store responses, missing-field rollout, clipboard failures, and optimistic-concurrency failures. Public information already delivered to a browser cannot be recalled; no-store prevents intentional shared caching but is not a revocation mechanism for previously learned addresses.
+
+Run `npx vitest run src/app/servers/onboarding-page.component.test.tsx` for directory streaming regressions. These hold authentication, account status, allocation, and display-name dependencies pending independently and require the public listing to arrive; account/allocation delays must also leave My Servers usable. They verify one inventory request and reject mismatched user/session tokens. This proves request independence, not a production latency target; measure when the actual lists become visible as well as total navigation time after deployment.
 
 Verify the deployed website, Edge function, and control-plane routes separately before claiming live availability. Migration files, if required, are reviewed source changes only. Production deployment and live SQL are not part of this copy correction.
