@@ -219,3 +219,33 @@ it("retains the release request identity after an unconfirmed response", async (
     await act(async () => click("Save settings"));
     expect(settingsMocks.release.mock.calls[1][0]).toEqual(settingsMocks.release.mock.calls[0][0]);
 });
+
+
+it("carries visibility's new generation into a combined channel save", async () => {
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    const before = "2026-09-29T12:00:00.000Z", after = "2026-09-29T12:00:01.000Z";
+    settingsMocks.releaseStatus.mockResolvedValue({ serverId, releaseChannel: "stable", job: null });
+    settingsMocks.visibility.mockResolvedValue({ ok: true, updatedAt: after, message: "Visibility saved" });
+    settingsMocks.release.mockResolvedValue({ ok: false, rejected: true, message: "Nightly unavailable" });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await act(async () => root.render(<ServerSettingsPanel name="Campaign" visibility="private"
+        visibilityAccess={{ serverId, expectedUpdatedAt: before, canEdit: true }}
+        releaseAccess={{ serverId, channel: "stable", expectedUpdatedAt: before, canEdit: true }} />));
+    await act(async () => {
+        container.querySelector<HTMLInputElement>('input[value="public"]')!.click();
+        const select = container.querySelector<HTMLSelectElement>("select")!;
+        select.value = "nightly"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => click("Save settings"));
+    expect(settingsMocks.release).toHaveBeenCalledWith(expect.objectContaining({ expectedUpdatedAt: after, releaseChannel: "nightly" }));
+    expect(container.textContent).toContain("Visibility saved Nightly unavailable");
+});
+
+it("restores failed update status on reload without claiming completion", async () => {
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    settingsMocks.releaseStatus.mockResolvedValue({ serverId, releaseChannel: "nightly", job: { jobId: serverId, state: "failed", progress: "Finishing up" } });
+    await act(async () => root.render(<ServerSettingsPanel name="Campaign" releaseAccess={{ serverId, channel: "nightly", expectedUpdatedAt: "2026-09-29T12:00:00.000Z", canEdit: true }} />));
+    expect(container.textContent).toContain("Release update failed");
+    expect(container.textContent).not.toContain("Release update completed");
+    expect(settingsMocks.release).not.toHaveBeenCalled();
+});

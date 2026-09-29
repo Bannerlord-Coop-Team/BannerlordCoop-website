@@ -35,7 +35,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
         let timer: ReturnType<typeof setTimeout>;
         const deadline = Date.now() + 15 * 60_000;
         async function poll() {
-            const status = await readServerReleaseStatus(releaseServerId!);
+            const status = await readServerReleaseStatus(releaseServerId!).catch(() => null);
             if (cancelled) return;
             const matches = status && (!expectedJob.current || status.job?.jobId === expectedJob.current);
             if (matches) {
@@ -112,6 +112,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
                 }
                 setMessage(messages.join(" "));
             } catch {
+                if (channelDirty) { expectedJob.current = null; setPollVersion(value => value + 1); }
                 setMessage([...messages, "The update could not be confirmed. Retry or refresh to check the current settings."].join(" "));
             } finally {
                 router.refresh();
