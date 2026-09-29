@@ -315,3 +315,19 @@ input path and adds no backend or permissions.
 
 For backup-specific onboarding, unavailable states and rollout verification, see
 [backups for live-console servers](live-server-backups.md).
+
+
+### Owner release channel settings
+
+Managed server Settings exposes Stable/Nightly to the current owner. Saving a
+changed channel uses the authenticated `my-servers` edge boundary's
+`set-release-channel` request with a retained UUID and the current generation.
+The control plane owns the atomic channel change and stop/backup/update/start job.
+The pane polls `server-update-status` every four seconds while active, restores
+progress on reload, stops on terminal results, and pauses after fifteen minutes
+with an explicit Check progress action. Failure never displays as completion.
+If visibility is saved in the same form, its returned generation is used for the
+channel request; a visibility failure stops the remaining save and is shown.
+
+Rollout requires the control-plane API first, then the `my-servers` edge function
+and website. No new database migration or Discord notification type is required.

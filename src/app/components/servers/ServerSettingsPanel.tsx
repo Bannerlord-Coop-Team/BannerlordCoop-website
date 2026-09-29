@@ -1,9 +1,11 @@
 "use client";
 
-import { useRef, useState, useTransition, type FormEvent } from "react";
+import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { renameLiveServer } from "@/app/servers/name-actions";
 import { setServerVisibility } from "@/app/servers/server-visibility-actions";
+import { changeServerRelease, readServerReleaseStatus } from "@/app/servers/server-release-actions";
+import type { ReleaseChannel, ReleaseStatus } from "../../../../supabase/functions/_shared/server-release-contract";
 import { Globe2, LockKeyhole } from "lucide-react";
 
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-40";
@@ -11,31 +13,67 @@ const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-m
 type Visibility = "private" | "public";
 type VisibilityAccess = { serverId: string; expectedUpdatedAt: string; canEdit: boolean };
 
-export function ServerSettingsPanel({ name, visibility, renameServerId, visibilityAccess }: {
+export function ServerSettingsPanel({ name, visibility, renameServerId, visibilityAccess, releaseAccess }: {
+    releaseAccess?: VisibilityAccess & { channel: ReleaseChannel };
     name: string; visibility?: Visibility; renameServerId?: string; visibilityAccess?: VisibilityAccess;
 }) {
     const router = useRouter();
     const [pending, startTransition] = useTransition();
     const [nameState, setNameState] = useState({ source: name, saved: name, draft: name });
     const [visibilityState, setVisibilityState] = useState({ source: visibility, draft: visibility });
+    const [channelState, setChannelState] = useState({ source: releaseAccess?.channel, draft: releaseAccess?.channel });
+    const [releaseStatus, setReleaseStatus] = useState<ReleaseStatus | null>(null);
+    const [pollVersion, setPollVersion] = useState(0);
+    const [progressError, setProgressError] = useState("");
+    const releaseRequest = useRef<{ serverId: string; releaseChannel: ReleaseChannel; expectedUpdatedAt: string; requestId: string } | null>(null);
+    const expectedJob = useRef<string | null>(null);
+    const releaseServerId = releaseAccess?.serverId;
+    const canReadRelease = releaseAccess?.canEdit === true;
+    useEffect(() => {
+        if (!releaseServerId || !canReadRelease) return;
+        let cancelled = false;
+        let timer: ReturnType<typeof setTimeout>;
+        const deadline = Date.now() + 15 * 60_000;
+        async function poll() {
+            const status = await readServerReleaseStatus(releaseServerId!);
+            if (cancelled) return;
+            const matches = status && (!expectedJob.current || status.job?.jobId === expectedJob.current);
+            if (matches) {
+                setReleaseStatus(status);
+                setProgressError("");
+                if (!status.job || ["succeeded", "failed", "cancelled"].includes(status.job.state)) {
+                    router.refresh();
+                    return;
+                }
+            } else setProgressError("Update progress is unavailable. The operation may still be running.");
+            if (Date.now() < deadline) timer = setTimeout(poll, 4_000);
+            else setProgressError("Progress checks paused. Refresh to check whether the release change finished.");
+        }
+        void poll();
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [releaseServerId, canReadRelease, pollVersion, router]);
+    const updateBusy = releaseStatus?.job != null && ["queued", "running", "retry-wait"].includes(releaseStatus.job.state);
     const [message, setMessage] = useState("");
     const request = useRef<{ serverId: string; visibility: Visibility; expectedUpdatedAt: string; requestId: string } | null>(null);
     // Refreshes from either header control update that field without discarding the other draft.
     if (nameState.source !== name) setNameState({ source: name, saved: name, draft: name });
     if (visibilityState.source !== visibility) setVisibilityState({ source: visibility, draft: visibility });
+    if (channelState.source !== releaseAccess?.channel) setChannelState({ source: releaseAccess?.channel, draft: releaseAccess?.channel });
+    const channelDirty = releaseAccess?.canEdit === true && channelState.draft !== releaseAccess.channel;
     const canRename = !!renameServerId;
     const canChangeVisibility = visibilityAccess?.canEdit === true && visibility !== undefined;
     const nameDirty = canRename && nameState.draft.trim() !== nameState.saved;
     const visibilityDirty = canChangeVisibility && visibilityState.draft !== visibility;
-    const dirty = nameDirty || visibilityDirty;
+    const dirty = nameDirty || visibilityDirty || channelDirty;
 
     function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (pending || !dirty || (nameDirty && !nameState.draft.trim())) return;
+        if (pending || updateBusy || !dirty || (nameDirty && !nameState.draft.trim())) return;
         if (visibilityDirty && visibilityState.draft === "public" && !window.confirm("Make this server discoverable in the public directory with its game address? Visibility does not grant management access or change game connection permissions.")) return;
         setMessage("");
         startTransition(async () => {
             const messages: string[] = [];
+            let expectedUpdatedAt = releaseAccess?.expectedUpdatedAt;
             try {
                 if (nameDirty && renameServerId) {
                     const form = new FormData();
@@ -52,8 +90,25 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
                     }
                     const result = await setServerVisibility(request.current);
                     messages.push(result.message);
-                    if (result.ok) request.current = null;
+                    if (result.ok) { request.current = null; expectedUpdatedAt = result.updatedAt; }
+                    else { setMessage(messages.join(" ")); return; }
                     // A receipt may be a replay. Only refreshed props establish the current visibility.
+                }
+                if (channelDirty && releaseAccess && channelState.draft && expectedUpdatedAt) {
+                    if (!releaseRequest.current || releaseRequest.current.releaseChannel !== channelState.draft || releaseRequest.current.serverId !== releaseAccess.serverId) {
+                        releaseRequest.current = { serverId: releaseAccess.serverId, releaseChannel: channelState.draft, expectedUpdatedAt, requestId: crypto.randomUUID() };
+                    }
+                    const result = await changeServerRelease(releaseRequest.current);
+                    messages.push(result.message);
+                    if (result.rejected) releaseRequest.current = null;
+                    if (!result.ok) { expectedJob.current = null; setPollVersion(value => value + 1); }
+                    if (result.ok && result.jobId) {
+                        expectedJob.current = result.jobId;
+                        releaseRequest.current = null;
+                        setReleaseStatus({ serverId: releaseAccess.serverId, releaseChannel: channelState.draft,
+                            job: { jobId: result.jobId, state: "queued", progress: "Waiting to begin" } });
+                        setPollVersion(value => value + 1);
+                    }
                 }
                 setMessage(messages.join(" "));
             } catch {
@@ -76,6 +131,19 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
                 <input id="settings-server-name" disabled={!canRename || pending} required maxLength={80} value={nameState.draft} onChange={event => { setNameState(current => ({ ...current, draft: event.target.value })); setMessage(""); }} className="mt-2 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50" />
                 <p className="mt-2 text-xs leading-5 text-foreground-muted">{canRename ? "The server display name." : "Renaming is unavailable for this server or your access level."}</p>
             </div>
+            {releaseAccess && <div>
+                <label htmlFor="settings-release-channel" className="text-sm font-medium">Release channel</label>
+                <select id="settings-release-channel" aria-describedby="release-channel-help" value={channelState.draft} disabled={!releaseAccess.canEdit || pending || updateBusy}
+                    onChange={event => { setChannelState(current => ({ ...current, draft: event.target.value as ReleaseChannel })); setMessage(""); }}
+                    className="mt-2 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm disabled:opacity-50">
+                    <option value="stable">Stable</option><option value="nightly">Nightly</option>
+                </select>
+                <p id="release-channel-help" className="mt-2 text-sm leading-6 text-foreground-muted">Saving a different channel stops the server, backs up the campaign, installs that release, and starts the server. Connected players will be disconnected. Nightly is experimental.</p>
+                <div role="status" aria-live="polite" className="mt-3 text-sm text-foreground-muted">
+                    {releaseStatus?.job && <p>{releaseStatus.job.state === "succeeded" ? "Release update completed." : releaseStatus.job.state === "failed" ? "Release update failed. Check server status before retrying or contact hosting support." : releaseStatus.job.state === "cancelled" ? "Release update was cancelled." : releaseStatus.job.progress}</p>}
+                    {progressError && <p>{progressError} <button type="button" className="underline" onClick={() => setPollVersion(value => value + 1)}>Check progress</button></p>}
+                </div>
+            </div>}
             <fieldset disabled={!canChangeVisibility || pending}>
                 <legend className="text-sm font-medium">Directory visibility</legend>
                 <p className="mt-2 text-sm leading-6 text-foreground-muted">Public visibility allows this server to appear in the public directory with its game address. Visibility does not grant management access or change game connection permissions.</p>
@@ -90,7 +158,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
         </div>
         <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-b-lg border-t border-white/10 bg-surface px-5 py-4">
             <div className="min-w-0 basis-full text-sm text-foreground-muted sm:flex-1"><p>{dirty ? "Unsaved changes" : "No pending changes"}</p><p role="status" className="mt-2">{message}</p></div>
-            {dirty && <div className="ml-auto flex gap-2"><button type="button" disabled={pending} className={button} onClick={() => { setNameState(current => ({ ...current, draft: current.saved })); setVisibilityState({ source: visibility, draft: visibility }); setMessage(""); }}>Discard</button><button type="submit" disabled={pending || (nameDirty && !nameState.draft.trim())} className={`${button} !border-gold/50 !bg-gold/15 !text-gold`}>{pending ? "Saving…" : "Save settings"}</button></div>}
+            {dirty && <div className="ml-auto flex gap-2"><button type="button" disabled={pending} className={button} onClick={() => { setNameState(current => ({ ...current, draft: current.saved })); setVisibilityState({ source: visibility, draft: visibility }); setChannelState({ source: releaseAccess?.channel, draft: releaseAccess?.channel }); setMessage(""); }}>Discard</button><button type="submit" disabled={pending || updateBusy || (nameDirty && !nameState.draft.trim())} className={`${button} !border-gold/50 !bg-gold/15 !text-gold`}>{pending ? "Saving…" : "Save settings"}</button></div>}
         </div>
         </form>
     </section>;
