@@ -23,7 +23,7 @@ try {
         if (["https://supabase-tls.localhost:3443", "https://supabase-tls.localhost:8443"].includes(url.origin)) return route.continue();
         return route.abort();
     });
-    await page.goto("https://supabase-tls.localhost:3443/dev-login");
+    await page.goto("https://supabase-tls.localhost:3443/dev-login", { waitUntil: "commit" });
     // The local SSR form is visible before React attaches its password handler.
     await page.waitForFunction(() => {
         const form = document.querySelector("form");
@@ -40,8 +40,9 @@ try {
     assert.ok(Array.isArray(user.identities));
     assert.ok(user.identities.every(identity => identity.provider !== "discord"));
     evidence.signedInWithoutDiscord = true;
-    await page.waitForURL("https://supabase-tls.localhost:3443/servers");
-    await page.goto(`https://supabase-tls.localhost:3443/servers/${manifest.serverId}`);
+    // Streamed inventory and dev resources need not finish loading before opening the target server.
+    await page.waitForURL("https://supabase-tls.localhost:3443/servers", { waitUntil: "commit" });
+    await page.goto(`https://supabase-tls.localhost:3443/servers/${manifest.serverId}`, { waitUntil: "commit" });
     await page.getByLabel("Game command", { exact: true }).fill(manifest.command);
     page.once("dialog", dialog => dialog.accept());
     await page.getByRole("button", { name: "Send", exact: true }).click();
