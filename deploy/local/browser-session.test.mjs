@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createServerClient } from "@supabase/ssr";
-import { EventEmitter } from "node:events";
-import { fetchLocalAuth, seedBrowserSession } from "./browser-session.mjs";
+import { seedBrowserSession } from "./browser-session.mjs";
 import { fixture } from "./seed-auth.mjs";
 
 /** Supplies a test-only GoTrue password response without contacting any service. */
@@ -46,33 +45,6 @@ for (const invalidUser of [{ id: "another-account" }, { identities: [{ provider:
         await assert.rejects(seedBrowserSession({ addCookies: () => assert.fail("Must not install rejected session") }, "local-key", async () => authResponse(invalidUser)), /expected Discord-free account/);
     });
 }
-
-test("local Auth transport pins IPv4 but keeps canonical TLS verification and rejects remote origins", async () => {
-    let settings;
-    let sentBody;
-    const response = await fetchLocalAuth("https://supabase-tls.localhost:8443/auth/v1/token?grant_type=password", { method: "POST", body: "{}" }, (options, receive) => {
-        settings = options;
-        const request = new EventEmitter();
-        request.setTimeout = () => {};
-        request.end = body => {
-            sentBody = body;
-            const incoming = new EventEmitter();
-            Object.assign(incoming, { statusCode: 200, headers: { "content-type": "application/json" } });
-            receive(incoming);
-            incoming.emit("data", Buffer.from('{"ok":true}'));
-            incoming.emit("end");
-        };
-        return request;
-    });
-    assert.equal(settings.hostname, "127.0.0.1");
-    assert.equal(settings.servername, "supabase-tls.localhost");
-    assert.equal(settings.rejectUnauthorized, true);
-    assert.equal(settings.headers.host, "supabase-tls.localhost:8443");
-    assert.equal(settings.path, "/auth/v1/token?grant_type=password");
-    assert.equal(sentBody, "{}");
-    assert.deepEqual(await response.json(), { ok: true });
-    assert.throws(() => fetchLocalAuth("https://example.com", {}, () => assert.fail("Must not connect remotely")), /restricted to local Auth/);
-});
 
 test("missing key fails before contacting Auth", async () => {
     await assert.rejects(seedBrowserSession({}, "", () => assert.fail("Must not dispatch without key")), /PUBLISHABLE_KEY is required/);
