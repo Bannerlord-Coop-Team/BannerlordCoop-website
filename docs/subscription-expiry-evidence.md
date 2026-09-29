@@ -10,7 +10,8 @@ observations do not produce it. OAuth linking remains unchanged.
 `202609280006_membership_paid_access_end.sql` accepts this bounded evidence through
 the existing worker lease, account and link-generation fence. Old eight-field
 producer evidence remains valid. `202609280005_control_plane_subscription_grace.sql`
-is an exact mirror of the paired ControlPlane migration; applied migrations are
+is an exact mirror of the paired ControlPlane migration (catalog entry 090, after
+main's retirement migration 089 / `202609280001_control_plane_retired_tables.sql`); applied migrations are
 never rewritten. Both copies and their hashes are recorded in the migration inventory.
 
 The paired ControlPlane change for issue 205 records new membership-funded

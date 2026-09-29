@@ -26,5 +26,5 @@ CREATE POLICY runtime_subscription_grace ON control_plane.hosting_subscription_g
     TO bannerlord_control_plane_runtime USING (true) WITH CHECK (true);
 GRANT SELECT, INSERT, UPDATE ON control_plane.hosting_subscription_grace TO bannerlord_control_plane_runtime;
 INSERT INTO control_plane.schema_migrations(version, applied_at)
-VALUES ('089_managed_hosting_subscription_grace.sql', '2026-09-28T00:05:00.000Z');
+VALUES ('090_managed_hosting_subscription_grace.sql', '2026-09-28T00:05:00.000Z');
 COMMIT;
