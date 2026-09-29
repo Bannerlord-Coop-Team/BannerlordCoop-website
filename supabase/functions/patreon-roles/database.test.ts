@@ -41,6 +41,8 @@ before(async () => {
     }
     await db.exec(await readFile(new URL("../../migrations/20260908030000_patreon_event_reconciliation.sql", import.meta.url), "utf8"));
     await db.exec(await readFile(new URL("../../migrations/20260919010000_actionable_patreon_retries.sql", import.meta.url), "utf8"));
+    await db.exec(await readFile(new URL("../../migrations/202609220001_patreon_allocation_webhooks.sql", import.meta.url), "utf8"));
+    await db.exec(await readFile(new URL("../../migrations/202609280006_membership_paid_access_end.sql", import.meta.url), "utf8"));
     assert.equal((await metadata()).role, "Standard Server");
     assert.equal((await db.query("select * from public.patreon_accounts")).rows.length, 1);
 });
@@ -443,4 +445,35 @@ test("signed event through the real worker and SQL RPC grants, retains paid-thro
     snapshot.data.relationships.currently_entitled_tiers.data = [];
     await event(); assert.equal((await sync()).status, 200);
     assert.equal((await metadata()).role, "User");
+});
+
+
+test("allocation loss migration accepts bounded explicit evidence and rolls malformed completion back", async () => {
+    await addUser(); await link(); await apply(false);
+    await db.query(`insert into public.membership_heads(account_id,discord_user_id,patreon_user_id,link_generation,revision,link_state)
+        values ($1,'123456789012345678','123',1,1,'linked') on conflict(account_id) do update
+        set discord_user_id=excluded.discord_user_id,patreon_user_id=excluded.patreon_user_id,
+            link_generation=1,revision=1,link_state='linked'`, [user]);
+    const policy = { campaignId: campaign, qualifyingTierIds: [tier], currency: "USD", minimumCents: 5000, policyVersion: "patreon-paid-usd50-v1" };
+    await rpc("queue", { memberId: member });
+    const lease = await rpc("acquire", { allocationPolicy: policy });
+    assert.ok(lease);
+    const job = (lease.jobs as Job[]).find(job => job.memberId === member)!;
+    const fence = (job as Job & { allocationFence: unknown }).allocationFence;
+    assert.deepEqual(fence, { accountId: user, generation: "1", revision: "1" });
+    const verifiedAt = lease.allocationVerifiedAt;
+    const evidence = { verification: "nonqualifying", campaignId: campaign, memberId: member, tierIds: [],
+        verifiedAt, paidThroughAt: null, policyVersion: policy.policyVersion, evidenceSha256: "a".repeat(64), paidAccessEndedAt: verifiedAt };
+    for (const invalid of [{ paidAccessEndedAt: "2030-01-01T00:00:00.000Z" }, { paidAccessEndedAt: null },
+        { verification: "review_required" }, { tierIds: [tier] }, { extra: true }]) {
+        await assert.rejects(rpc("complete", { token: lease.token, ...job, userId: "123", eligible: false,
+            allocationEvidence: { ...evidence, ...invalid }, allocationFence: fence }));
+    }
+    const applied = await rpc("complete", { token: lease.token, ...job, userId: "123", eligible: false,
+        allocationEvidence: evidence, allocationFence: fence });
+    assert.equal(applied?.applied, true);
+    const head = (await db.query<{ evidence: unknown; revision: number }>(
+        "select evidence,revision from public.membership_heads where account_id=$1", [user])).rows[0];
+    assert.deepEqual(head.evidence, evidence);
+    assert.equal(Number(head.revision), 2);
 });

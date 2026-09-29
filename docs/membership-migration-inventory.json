@@ -455,6 +455,30 @@
       "cpBytes": 2182,
       "representationException": false,
       "releaseClassification": "pending coordinated website-only hosting cutover; not deployed"
+    },
+    {
+      "version": "202609280005",
+      "owner": "control-plane",
+      "websitePath": "supabase/migrations/202609280005_control_plane_subscription_grace.sql",
+      "websiteSha256": "576b52a6de4dc03418d3fb430ec4aba08a9066a7919f71b3e1c85cba059b9655",
+      "websiteBytes": 2093,
+      "cpPath": "supabase/migrations/202609280005_control_plane_subscription_grace.sql",
+      "cpSha256": "576b52a6de4dc03418d3fb430ec4aba08a9066a7919f71b3e1c85cba059b9655",
+      "cpBytes": 2093,
+      "representationException": false,
+      "releaseClassification": "pending issue 205 coordinated subscription grace rollout; migration and control-plane reader before website producer"
+    },
+    {
+      "version": "202609280006",
+      "owner": "website",
+      "websitePath": "supabase/migrations/202609280006_membership_paid_access_end.sql",
+      "websiteSha256": "e5e2898399013b911393c81d4d06d13311f4aa51118b1e73c9255bc750fd414f",
+      "websiteBytes": 7990,
+      "cpPath": "supabase/migrations/202609280006_membership_paid_access_end.sql",
+      "cpSha256": "e5e2898399013b911393c81d4d06d13311f4aa51118b1e73c9255bc750fd414f",
+      "cpBytes": 7990,
+      "representationException": false,
+      "releaseClassification": "pending issue 205 coordinated subscription grace rollout; migration and control-plane reader before website producer"
     }
   ],
   "integratedWebsiteMainHead": "f012d9412d98a1e8f50bcc3887c655a813959500",
