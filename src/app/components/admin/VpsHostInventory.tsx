@@ -145,7 +145,7 @@ function SystemSummary({ resources }: { resources: HostingAdminHostResources | n
     const alert = pressure.level !== "normal";
     const diskTone = pressure.level === "critical" ? "text-red-200" : pressure.level === "warning" ? "text-amber-300" : "text-foreground-muted";
     return <dl className="space-y-1 text-xs text-foreground-muted">
-        <div className="flex gap-2"><dt>CPU</dt><dd>{resources.cpuPercent.toFixed(1)}%</dd></div>
+        <div className="flex gap-2" title="CPU time used across all host CPUs during a short sample. Excludes idle time, I/O waits and time taken by the hypervisor."><dt>CPU</dt><dd>{resources.cpuPercent.toFixed(1)}%</dd></div>
         <div className="flex gap-2"><dt>Mem</dt><dd>{formatStorageBytes(resources.memoryUsedBytes)} / {formatStorageBytes(resources.memoryTotalBytes)}</dd></div>
         <div className={`flex items-center gap-2 ${diskTone}`} aria-label={`Disk ${pressure.level}: ${pressure.usedPercent}% used, ${formatStorageBytes(resources.diskFreeBytes)} free`}>
             {alert && <AlertTriangle aria-hidden="true" className="size-3.5 shrink-0" />}
