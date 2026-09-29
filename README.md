@@ -88,7 +88,11 @@ npm run build
 
 ## Authentication
 
-The `/login` page uses [Supabase Auth](https://supabase.com/docs/guides/auth) for Google, Discord, and passwordless email sign-in.
+The `/login` page uses [Supabase Auth](https://supabase.com/docs/guides/auth) for Google and Discord sign-in.
+
+Email magic-link sign-in is temporarily removed from the website because Supabase's default email service is limited to two messages per hour per project. Configure custom SMTP and verify delivery before restoring email login.
+
+This is a website-only change: Supabase provider settings and existing sessions are unchanged. Before deploying, check for email-only users who have no linked Google or Discord identity; they will not be able to sign in through the website while this option is unavailable.
 
 1. Create a Supabase project and copy its project URL and publishable key into `.env.local`.
 2. Enable Google and Discord under **Authentication → Providers** and add the OAuth credentials from each provider.
@@ -109,7 +113,7 @@ To enable it:
 
 1. Copy the server-only Supabase secret key from **Project Settings → API Keys** into `SUPABASE_SECRET_KEY`. Never use this value in a `NEXT_PUBLIC_` variable or browser component.
 2. Set `SUPABASE_ADMIN_EMAILS` to the email address of the first administrator. Multiple bootstrap administrators may be comma-separated.
-3. Restart the development server, sign in using that email, and open `/admin`.
+3. Restart the development server, sign in with Google or Discord using that email, and open `/admin`.
 
 Bootstrap administrators always retain admin access, preventing an accidental total lockout. Assigned roles take effect after the user's Auth session refreshes or they sign in again.
 

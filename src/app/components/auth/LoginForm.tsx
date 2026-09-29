@@ -1,12 +1,12 @@
 "use client";
 
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
-import { ArrowRight, LoaderCircle, LockKeyhole, Mail, MailCheck } from "lucide-react";
-import { FormEvent, ReactNode, useState } from "react";
+import { LoaderCircle, LockKeyhole } from "lucide-react";
+import { ReactNode, useState } from "react";
 
 type OAuthProvider = "google" | "discord";
-type PendingAction = OAuthProvider | "email" | null;
 
+// Renders the Google sign-in provider icon.
 function GoogleIcon() {
     return (
         <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5">
@@ -30,6 +30,7 @@ function GoogleIcon() {
     );
 }
 
+// Renders the Discord sign-in provider icon.
 function DiscordIcon() {
     return (
         <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 fill-current">
@@ -38,6 +39,7 @@ function DiscordIcon() {
     );
 }
 
+// Renders a provider action with its disabled and connecting states.
 function ProviderButton({
     children,
     disabled,
@@ -68,6 +70,7 @@ function ProviderButton({
     );
 }
 
+// Offers Google and Discord sign-in while email login is unavailable.
 export function LoginForm({
     initialError,
     nextPath,
@@ -75,23 +78,24 @@ export function LoginForm({
     initialError?: string;
     nextPath?: string;
 }) {
-    const [email, setEmail] = useState("");
-    const [pending, setPending] = useState<PendingAction>(null);
+    const [pending, setPending] = useState<OAuthProvider | null>(null);
     const [error, setError] = useState(initialError ?? "");
-    const [emailSent, setEmailSent] = useState(false);
 
+    // Builds the OAuth callback URL with the requested continuation.
     function callbackUrl() {
         const callback = new URL("/auth/callback", window.location.origin);
         if (nextPath) callback.searchParams.set("next", nextPath);
         return callback.toString();
     }
 
+    // Converts a sign-in failure into user-facing text.
     function messageFrom(errorValue: unknown) {
         return errorValue instanceof Error
             ? errorValue.message
             : "Something went wrong. Please try again.";
     }
 
+    // Starts provider sign-in and restores the form if it fails.
     async function signInWithProvider(provider: OAuthProvider) {
         setError("");
         setPending(provider);
@@ -108,60 +112,6 @@ export function LoginForm({
             setError(messageFrom(signInError));
             setPending(null);
         }
-    }
-
-    async function signInWithEmail(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        setError("");
-        setPending("email");
-
-        try {
-            const supabase = getSupabaseBrowserClient();
-            const { error: signInError } = await supabase.auth.signInWithOtp({
-                email: email.trim(),
-                options: {
-                    emailRedirectTo: callbackUrl(),
-                    shouldCreateUser: true,
-                },
-            });
-
-            if (signInError) throw signInError;
-            setEmailSent(true);
-        } catch (signInError) {
-            setError(messageFrom(signInError));
-        } finally {
-            setPending(null);
-        }
-    }
-
-    if (emailSent) {
-        return (
-            <div className="py-4 text-center" aria-live="polite">
-                <div className="mx-auto flex size-14 items-center justify-center rounded-full border border-gold/30 bg-gold/10 text-gold">
-                    <MailCheck aria-hidden="true" className="size-6" />
-                </div>
-                <p className="mt-6 font-label text-xs font-semibold uppercase tracking-[0.22em] text-gold">
-                    Dispatch sent
-                </p>
-                <h1 className="mt-3 font-display text-4xl font-semibold text-foreground">
-                    Check your inbox
-                </h1>
-                <p className="mx-auto mt-4 max-w-sm text-sm leading-6 text-foreground-muted">
-                    We sent a secure sign-in link to <strong className="font-medium text-foreground">{email}</strong>.
-                    The link can only be used once.
-                </p>
-                <button
-                    type="button"
-                    onClick={() => {
-                        setEmailSent(false);
-                        setEmail("");
-                    }}
-                    className="mt-8 font-label text-xs font-semibold uppercase tracking-[0.16em] text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                >
-                    Use a different email
-                </button>
-            </div>
-        );
     }
 
     const isBusy = pending !== null;
@@ -208,66 +158,14 @@ export function LoginForm({
                 </ProviderButton>
             </div>
 
-            <div className="my-7 flex items-center gap-4" aria-hidden="true">
-                <span className="h-px flex-1 bg-white/10" />
-                <span className="font-label text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-foreground-muted">
-                    Or use email
-                </span>
-                <span className="h-px flex-1 bg-white/10" />
-            </div>
-
-            <form onSubmit={signInWithEmail}>
-                <label
-                    htmlFor="email"
-                    className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-foreground-muted"
-                >
-                    Email address
-                </label>
-                <div className="relative mt-2">
-                    <Mail
-                        aria-hidden="true"
-                        className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-foreground-muted"
-                    />
-                    <input
-                        id="email"
-                        name="email"
-                        type="email"
-                        autoComplete="email"
-                        required
-                        disabled={isBusy}
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        placeholder="commander@example.com"
-                        className="min-h-13 w-full rounded-sm border border-white/15 bg-background/65 py-3 pr-4 pl-11 text-sm text-foreground outline-none transition-colors placeholder:text-foreground-muted hover:border-white/25 focus:border-gold/65 focus:ring-1 focus:ring-gold/30 disabled:cursor-not-allowed disabled:opacity-60"
-                    />
-                </div>
-
-                <button
-                    type="submit"
-                    disabled={isBusy}
-                    className="group mt-4 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-sm border border-crimson bg-crimson px-5 font-label text-sm font-semibold uppercase tracking-[0.14em] text-white transition-colors duration-200 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                    {pending === "email" ? (
-                        <>
-                            <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
-                            Sending link
-                        </>
-                    ) : (
-                        <>
-                            Continue with email
-                            <ArrowRight
-                                aria-hidden="true"
-                                className="size-4 transition-transform group-hover:translate-x-0.5"
-                            />
-                        </>
-                    )}
-                </button>
-            </form>
+            <p className="mt-6 text-sm leading-6 text-foreground-muted">
+                Email sign-in is temporarily unavailable. Please use Google or Discord.
+            </p>
 
             <div className="mt-6 flex items-start gap-3 border-t border-white/10 pt-5 text-xs leading-5 text-foreground-muted">
                 <LockKeyhole aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold-muted" />
                 <p>
-                    We&apos;ll email you a one-time magic link. No password to remember, and we never post to your connected accounts.
+                    We never post to your connected accounts.
                 </p>
             </div>
         </>
