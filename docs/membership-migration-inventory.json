@@ -432,7 +432,7 @@
       "cpSha256": "4d92ab0a7846155b2847ac3f18f007381516029ebc3b14a0b6ab66d40e087d14",
       "cpBytes": 1300,
       "representationException": false,
-      "releaseClassification": "already-applied control-plane history mirrored into the website migration stream; NEVER replay"
+      "releaseClassification": "control-plane retirement prerequisite; verify applied history under its runbook before account cutover"
     },
     {
       "version": "202609280002",
