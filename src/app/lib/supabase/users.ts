@@ -32,3 +32,9 @@ export async function listDiscordUsers() {
     const { users, truncated } = await listSupabaseUsers();
     return { users: uniqueDiscordUsers(users), truncated };
 }
+
+export async function listWebsiteAccounts() {
+    const { users, truncated } = await listSupabaseUsers();
+    return { users: users.map(user => ({ accountId: user.id, label: user.email || user.phone || user.id })), truncated };
+}
+export type WebsiteAccountSummary = { accountId: string; label: string };

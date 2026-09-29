@@ -13,6 +13,8 @@ import { LiveServerFileSetup } from "@/app/components/servers/LiveServerFileSetu
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
 import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
+import { DownloadServerLogButton } from "@/app/components/servers/DownloadServerLogButton";
+import { ManagedServerConsole } from "@/app/components/servers/ManagedServerConsole";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import {
     getLiveConsoleAccessLevel,
@@ -194,6 +196,7 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
     </ServerManagementWorkspace>;
 }
 
+// Keeps managed controls and output in the console workspace without duplicating an existing live console.
 function ManagedServerSections({
     userId,
     accessToken,
@@ -209,7 +212,11 @@ function ManagedServerSections({
         <ManagedServerPollingProvider>
             <ServerWorkspacePanel section="Console">
                 {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : <ServerConsoleWorkspace>
-                    <UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} logDownload={{ serverId: server.serverId, userId }} />
+                    {server.accessRole === "owner" || server.accessRole === "manager" ? <>
+                        <ManagedServerLifecycleSection server={server} />
+                        <ManagedServerConsole serverId={server.serverId} />
+                        <DownloadServerLogButton serverId={server.serverId} userId={userId} className="inline-flex items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-sm" />
+                    </> : <UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} logDownload={{ serverId: server.serverId, userId }} />}
                 </ServerConsoleWorkspace>}
             </ServerWorkspacePanel>
             <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>

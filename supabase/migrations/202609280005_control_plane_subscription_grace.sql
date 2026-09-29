@@ -5,7 +5,7 @@ CREATE TABLE control_plane.hosting_subscription_grace (
     server_id TEXT PRIMARY KEY REFERENCES control_plane.managed_servers(server_id),
     account_id TEXT NOT NULL CHECK (length(account_id) = 36),
     campaign_id TEXT NOT NULL CHECK (length(campaign_id) BETWEEN 1 AND 32),
-    owner_id TEXT NOT NULL CHECK (length(owner_id) BETWEEN 17 AND 20),
+    owner_id TEXT NOT NULL CHECK (length(owner_id) BETWEEN 17 AND 20 OR length(owner_id) = 36),
     patreon_user_id TEXT NOT NULL CHECK (length(patreon_user_id) BETWEEN 1 AND 32),
     link_generation TEXT NOT NULL CHECK (length(link_generation) BETWEEN 1 AND 20),
     grace_id TEXT CHECK (grace_id IS NULL OR length(grace_id) = 36),
@@ -26,5 +26,5 @@ CREATE POLICY runtime_subscription_grace ON control_plane.hosting_subscription_g
     TO bannerlord_control_plane_runtime USING (true) WITH CHECK (true);
 GRANT SELECT, INSERT, UPDATE ON control_plane.hosting_subscription_grace TO bannerlord_control_plane_runtime;
 INSERT INTO control_plane.schema_migrations(version, applied_at)
-VALUES ('090_managed_hosting_subscription_grace.sql', '2026-09-28T00:05:00.000Z');
+VALUES ('091_managed_hosting_subscription_grace.sql', '2026-09-28T00:05:00.000Z');
 COMMIT;

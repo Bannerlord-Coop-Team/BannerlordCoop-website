@@ -1,5 +1,5 @@
 import { DatabaseContention, databaseContentionResponse, checkDatabaseContention } from "./database-contention.ts";
-import { boundedJson, currentDiscord, exact, record, type Policy } from "./membership.ts";
+import { boundedJson, optionalDiscord, exact, record, type Policy } from "./membership.ts";
 import { membershipStore, MembershipRateLimit, membershipRateLimitResponse } from "./membership-store.ts";
 import { PATREON_IDENTITY_URL, verifyPatreonMembership } from "./patreon-membership.ts";
 
@@ -119,13 +119,13 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
                 if (mode === "complete") {
                     const body = await boundedJson(new Response(request.body, { headers: request.headers }), 4096);
                     if (!record(body) || !exact(body, ["token"]) || typeof body.token !== "string" || !tokenPattern.test(body.token)) return response("Invalid completion token", 400);
-                    const result = await store.rpc("membership_complete", { p_account_id: user.id, p_discord_user_id: currentDiscord(user), p_token_hash: await hash(body.token) });
+                    const result = await store.rpc("membership_complete", { p_account_id: user.id, p_discord_user_id: optionalDiscord(user), p_token_hash: await hash(body.token) });
                     return response(JSON.stringify(result), 200, { "Content-Type": "application/json" });
                 }
                 const body = await boundedJson(new Response(request.body, { headers: request.headers }), 4096);
                 if (!record(body) || !exact(body, ["returnPath"]) || !["/account", "/servers"].includes(body.returnPath as string)) return response("Invalid return path", 400);
                 const ticket = token();
-                await store.rpc("membership_begin", { p_account_id: user.id, p_discord_user_id: currentDiscord(user), p_operation_id: crypto.randomUUID(), p_token_hash: await hash(ticket), p_return_path: body.returnPath });
+                await store.rpc("membership_begin", { p_account_id: user.id, p_discord_user_id: optionalDiscord(user), p_operation_id: crypto.randomUUID(), p_token_hash: await hash(ticket), p_return_path: body.returnPath });
                 const url = new URL(callback);
                 url.searchParams.set("ticket", ticket);
                 return response(JSON.stringify({ url: url.href }), 200, { "Content-Type": "application/json" });

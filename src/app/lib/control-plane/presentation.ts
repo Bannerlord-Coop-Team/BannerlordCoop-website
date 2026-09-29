@@ -44,8 +44,14 @@ export function fieldRequirementLabel(required: boolean) {
     return required ? "Required" : "Optional";
 }
 
-export function formatDiscordOwner(username: string | undefined, discordUserId: string) {
-    return `${username ?? "Username unavailable"} (${discordUserId})`;
+export function formatAccountOwner(
+    owner: { ownerDiscordUserId: string; ownerAccountId?: string | null },
+    accountLabels: Readonly<Record<string, string>>,
+) {
+    // Older API responses can still identify new accounts by their UUID principal.
+    const accountId = owner.ownerAccountId ?? validUuid(owner.ownerDiscordUserId);
+    if (accountId === null) return `Legacy owner (${owner.ownerDiscordUserId})`;
+    return accountLabels[accountId] ?? `Account unavailable (${accountId})`;
 }
 
 export function serverRegionOptions() {

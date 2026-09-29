@@ -16,13 +16,17 @@ const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => ["P
 Object.assign(env, { NEXT_TELEMETRY_DISABLED: "1", HOME: join(owned, "home"), USERPROFILE: join(owned, "home") });
 await new Promise((yes, no) => { const probe = createServer(); probe.once("error", no); probe.listen(port, "127.0.0.1", () => probe.close(yes)); });
 await mkdir(source, { recursive: true }); await mkdir(env.HOME, { recursive: true });
-for (const path of ["src/app/components/servers/ServerOnboarding.tsx", "src/app/components/servers/ServerDirectoryTable.tsx", "src/app/servers/onboarding-intent.ts", "supabase/functions/_shared/server-onboarding-contract.ts", "tests/onboarding-fixtures.ts", "src/app/globals.css", "postcss.config.mjs", "tsconfig.json"]) {
+for (const path of ["src/app/components/servers/ServerOnboarding.tsx", "src/app/components/servers/ServerDirectoryTable.tsx", "src/app/components/servers/CopyJoinButton.tsx", "src/app/components/servers/MembershipNextStep.tsx", "src/app/servers/onboarding-intent.ts", "supabase/functions/_shared/server-onboarding-contract.ts", "tests/onboarding-fixtures.ts", "src/app/globals.css", "postcss.config.mjs", "tsconfig.json"]) {
     await mkdir(dirname(join(source, path)), { recursive: true }); await copyFile(path, join(source, path));
 }
 await writeFile(join(source, "package.json"), JSON.stringify({ private: true, dependencies: { next: "16.3.3", react: "19.2.8", "react-dom": "19.2.8" } }));
 await writeFile(join(source, "next.config.mjs"), `export default { devIndicators: false, transpilePackages: [${JSON.stringify(basename(owned))}], outputFileTracingRoot: ${JSON.stringify(source)}, webpack(config) { config.resolve.alias['@'] = ${JSON.stringify(join(source, "src"))}; return config; } };`);
 await writeFile(join(source, "src/app/page.tsx"), (await readFile("tests/onboarding-browser-fixture.tsx", "utf8")).replace('"./onboarding-fixtures"', '"../../tests/onboarding-fixtures"'));
 await writeFile(join(source, "src/app/layout.tsx"), `import './globals.css'; export default function Layout({children}) { return <html lang="en"><body>{children}</body></html>; }`);
+await mkdir(join(source, "src/app/account"), { recursive: true });
+await writeFile(join(source, "src/app/account/actions.ts"), `// MOCK-ONLY: never invoke a real account action.
+export async function linkPatreonAccount() { throw new Error('Account linking is outside this fixture'); }
+`);
 await writeFile(join(source, "src/app/servers/onboarding-actions.ts"), `// MOCK-ONLY: disposable browser fixture, never deployed.
 import { onboardingCreated, onboardingRequested } from '../../../tests/onboarding-fixtures';
 export async function submitServerOnboarding(input, expectedUser) {
@@ -117,9 +121,15 @@ try {
     await click("Reset mock"); await click("Set up server"); await setName(); await click("Create server"); await until(`document.body.textContent.includes('Server assigned')`);
     await screenshot("mock-desktop-assigned.png"); await click("Done");
     await until(`document.body.textContent.includes('My Campaign') && document.body.textContent.includes('Offline')`);
-    await click("Reset mock"); await click("Set up server"); await evaluate(`document.querySelector('input[value="france"]').click()`); await click("Request region");
-    await until(`document.body.textContent.includes('Region request confirmed')`); await screenshot("mock-desktop-requested.png"); await click("Done");
-    await cdp("Page.reload"); await until(`document.body.textContent.includes('France — request saved (outstanding)')`);
+    await click("Reset mock"); await click("Set up server"); await click("Europe");
+    await until(`document.body.textContent.includes('France is full—choose another region or check back later.')`);
+    assert.equal(await evaluate(`document.querySelector('button[type="submit"]').disabled`), true);
+    await evaluate(`document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))`);
+    assert.equal(await evaluate(`sessionStorage.getItem('fixture-calls')`), null);
+    await screenshot("mock-desktop-full-region.png"); await click("Close");
+    await setFixture("fixture-requested", "yes"); await cdp("Page.reload");
+    await until(`document.body.textContent.includes('You have a server available')`);
+    assert.equal(await evaluate(`document.body.textContent.includes('outstanding region requests')`), false);
     await click("Reset mock"); await setFixture("fixture-response", "race"); await click("Set up server"); await setName(); await click("Create server");
     await until(`document.body.textContent.includes('No change was made')`); await screenshot("mock-desktop-capacity-race.png"); await click("Close");
     await click("Reset mock"); await setFixture("fixture-response", "lost"); await click("Set up server"); await setName(); await click("Create server");
@@ -137,11 +147,13 @@ try {
     await screenshot("mock-mobile-banner.png"); await click("Set up server");
     assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth`), true);
     await screenshot("mock-mobile-dialog.png");
-    await evaluate(`document.querySelector('input[value="france"]').click()`); await click("Request region"); await until(`document.body.textContent.includes('Region request confirmed')`);
-    await screenshot("mock-mobile-requested.png"); await click("Done");
+    await click("Europe");
+    await until(`document.body.textContent.includes('France is full—choose another region or check back later.')`);
+    assert.equal(await evaluate(`document.querySelector('button[type="submit"]').disabled`), true);
+    await screenshot("mock-mobile-full-region.png"); await click("Close");
     assert.deepEqual(errors, []); assert.deepEqual(blocked, []);
     await writeFile(join(owned, "page-traffic.json"), JSON.stringify({ pageTraffic, blocked, errors }, null, 2));
-    console.log("MOCK-ONLY browser checks passed: desktop/mobile, native dialog focus/Tab/Escape/restore including pending and uncertain Escape/Close, assigned stopped inventory, durable requested summary reload, capacity race, uncertain exact retry/reload/consumed quota/account mismatch and switch. Observed page traffic was loopback only; browser-internal egress isolation is not proved.");
+    console.log("MOCK-ONLY browser checks passed: desktop/mobile, native dialog focus/Tab/Escape/restore including pending and uncertain Escape/Close, assigned stopped inventory, full-region guidance and hidden historical requests after reload, capacity race, uncertain exact retry/reload/consumed quota/account mismatch and switch. Observed page traffic was loopback only; browser-internal egress isolation is not proved.");
     await cdp("Browser.close");
 } finally {
     ws?.close();

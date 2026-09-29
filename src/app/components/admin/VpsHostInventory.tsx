@@ -2,7 +2,7 @@
 
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
-import { formatDiscordOwner } from "@/app/lib/control-plane/presentation";
+import { formatAccountOwner } from "@/app/lib/control-plane/presentation";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import type {
     HostingAdminHostResources,
@@ -131,7 +131,7 @@ function SlotSummary({ host, ownerLabels }: { host: HostingAdminVpsHost; ownerLa
     const slots = Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
     return <ul className="space-y-1 text-xs">
         {slots.map((slot) => {
-            const ownerName = ownerLabels[slot.ownerDiscordUserId] ?? slot.ownerDiscordUserId;
+            const ownerName = formatAccountOwner(slot, ownerLabels);
             const label = `${ownerName} (${slot.displayName})`;
             return <li key={`${slot.slotIndex}:${slot.serverId}`} className="flex min-w-0 items-center gap-2"><span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${slot.operationState === "running" ? "bg-emerald-400" : "bg-white/30"}`} /><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="truncate font-semibold text-foreground hover:text-gold hover:underline" title={label}>{label}</Link></li>;
         })}
@@ -145,7 +145,7 @@ function SystemSummary({ resources }: { resources: HostingAdminHostResources | n
     const alert = pressure.level !== "normal";
     const diskTone = pressure.level === "critical" ? "text-red-200" : pressure.level === "warning" ? "text-amber-300" : "text-foreground-muted";
     return <dl className="space-y-1 text-xs text-foreground-muted">
-        <div className="flex gap-2"><dt>CPU</dt><dd>{resources.cpuPercent.toFixed(1)}%</dd></div>
+        <div className="flex gap-2" title="CPU time used across all host CPUs during a short sample. Excludes idle time, I/O waits and time taken by the hypervisor."><dt>CPU</dt><dd>{resources.cpuPercent.toFixed(1)}%</dd></div>
         <div className="flex gap-2"><dt>Mem</dt><dd>{formatStorageBytes(resources.memoryUsedBytes)} / {formatStorageBytes(resources.memoryTotalBytes)}</dd></div>
         <div className={`flex items-center gap-2 ${diskTone}`} aria-label={`Disk ${pressure.level}: ${pressure.usedPercent}% used, ${formatStorageBytes(resources.diskFreeBytes)} free`}>
             {alert && <AlertTriangle aria-hidden="true" className="size-3.5 shrink-0" />}
@@ -169,7 +169,7 @@ function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit }: { id:
                         <div role="rowgroup" className="divide-y divide-white/10">
                             {slots.map((slot) => <div role="row" key={`${slot.slotIndex}:${slot.serverId}`} className={`grid ${SLOT_GRID} items-center justify-center gap-x-4 gap-y-4 px-6 py-2.5 text-xs`}>
                                 <div role="cell" data-label="Slot / UDP" className={SLOT_LABEL}><p className="font-label font-semibold uppercase tracking-[0.08em] text-gold">Slot {slot.slotIndex + 1} · UDP {slot.gamePort}</p></div>
-                                <div role="cell" data-label="Player / Server" className={SLOT_LABEL}><p className="truncate font-semibold text-foreground" title={formatDiscordOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}>{formatDiscordOwner(ownerLabels[slot.ownerDiscordUserId], slot.ownerDiscordUserId)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
+                                <div role="cell" data-label="Player / Server" className={SLOT_LABEL}><p className="truncate font-semibold text-foreground" title={formatAccountOwner(slot, ownerLabels)}>{formatAccountOwner(slot, ownerLabels)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
                                 <div role="cell" data-label="CPU" className={SLOT_LABEL}><p className="text-foreground-muted">{formatCpu(slot.resources)}</p></div>
                                 <div role="cell" data-label="Memory" className={SLOT_LABEL}><p className="text-foreground-muted">{formatMemory(slot.resources)}</p></div>
                                 <div role="cell" data-label="Status" className={SLOT_LABEL}><StateBadge value={slot.operationState} /></div>

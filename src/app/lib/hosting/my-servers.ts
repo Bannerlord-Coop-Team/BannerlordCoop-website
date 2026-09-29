@@ -499,3 +499,9 @@ function hasExactKeys(value: Record<string, unknown>, expected: readonly string[
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+export async function requestMyServerPassword(accessToken: string, input: { serverId: string; expectedUpdatedAt: string; password: string }, requestId: string) {
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify({ action: "set-password", ...input }), requestId });
+    if (!isRecord(result) || !hasExactKeys(result, ["changed", "restartQueued"]) || result.changed !== true || typeof result.restartQueued !== "boolean") throw invalidResponse();
+    return { changed: true, restartQueued: result.restartQueued };
+}

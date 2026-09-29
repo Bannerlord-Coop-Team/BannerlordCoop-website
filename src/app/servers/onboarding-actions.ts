@@ -20,7 +20,7 @@ export async function submitServerOnboarding(input: unknown, expectedPageUserId:
         const [{ data: userData }, { data: sessionData }] = await Promise.all([
             supabase.auth.getUser(), supabase.auth.getSession(),
         ]);
-        // Only narrows dispatch. The current verified JWT and backend Discord linkage
+        // Only narrows dispatch. The current verified JWT and backend account binding
         // remain the sole source of authority, not this page-supplied account ID.
         if (!userData.user || typeof expectedPageUserId !== "string" || expectedPageUserId !== userData.user.id) {
             return uncertain("Sign in with the account that submitted this request, then retry the pending request.");

@@ -425,24 +425,46 @@
     {
       "version": "202609280001",
       "owner": "control-plane",
-      "representationException": false,
-      "releaseClassification": "control-plane main retirement migration mirrored before pending subscription grace; verify applied history before rollout",
       "websitePath": "supabase/migrations/202609280001_control_plane_retired_tables.sql",
       "websiteSha256": "4d92ab0a7846155b2847ac3f18f007381516029ebc3b14a0b6ab66d40e087d14",
       "websiteBytes": 1300,
       "cpPath": "supabase/migrations/202609280001_control_plane_retired_tables.sql",
       "cpSha256": "4d92ab0a7846155b2847ac3f18f007381516029ebc3b14a0b6ab66d40e087d14",
-      "cpBytes": 1300
+      "cpBytes": 1300,
+      "representationException": false,
+      "releaseClassification": "control-plane retirement prerequisite; verify applied history under its runbook before account cutover"
+    },
+    {
+      "version": "202609280002",
+      "websitePath": "supabase/migrations/202609280002_control_plane_website_accounts.sql",
+      "websiteSha256": "97eb153bb6d7b877b1d7159bf28a6023bc4a5789f77116702145cfcc87825d52",
+      "websiteBytes": 3275,
+      "cpPath": "supabase/migrations/202609280002_control_plane_website_accounts.sql",
+      "cpSha256": "97eb153bb6d7b877b1d7159bf28a6023bc4a5789f77116702145cfcc87825d52",
+      "cpBytes": 3275,
+      "representationException": false,
+      "releaseClassification": "pending coordinated website-only hosting cutover; not deployed"
+    },
+    {
+      "version": "202609280003",
+      "websitePath": "supabase/migrations/202609280003_account_owned_membership.sql",
+      "websiteSha256": "91047b552eafd9c19b8c1403a36a10d9bbede42bf8098a3518472b52ef3c3472",
+      "websiteBytes": 2182,
+      "cpPath": "supabase/migrations/202609280003_account_owned_membership.sql",
+      "cpSha256": "91047b552eafd9c19b8c1403a36a10d9bbede42bf8098a3518472b52ef3c3472",
+      "cpBytes": 2182,
+      "representationException": false,
+      "releaseClassification": "pending coordinated website-only hosting cutover; not deployed"
     },
     {
       "version": "202609280005",
       "owner": "control-plane",
       "websitePath": "supabase/migrations/202609280005_control_plane_subscription_grace.sql",
-      "websiteSha256": "95aae6a4e0c11d23c570fd4be2e922a364ffd02443e3ce375b6056497a08a3f7",
-      "websiteBytes": 2068,
+      "websiteSha256": "576b52a6de4dc03418d3fb430ec4aba08a9066a7919f71b3e1c85cba059b9655",
+      "websiteBytes": 2093,
       "cpPath": "supabase/migrations/202609280005_control_plane_subscription_grace.sql",
-      "cpSha256": "95aae6a4e0c11d23c570fd4be2e922a364ffd02443e3ce375b6056497a08a3f7",
-      "cpBytes": 2068,
+      "cpSha256": "576b52a6de4dc03418d3fb430ec4aba08a9066a7919f71b3e1c85cba059b9655",
+      "cpBytes": 2093,
       "representationException": false,
       "releaseClassification": "pending issue 205 coordinated subscription grace rollout; migration and control-plane reader before website producer"
     },

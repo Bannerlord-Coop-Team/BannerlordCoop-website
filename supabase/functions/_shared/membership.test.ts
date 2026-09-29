@@ -60,7 +60,7 @@ test("authoritative Discord identities never fall back to metadata or merge conf
     assert.equal(currentDiscord({ identities: [], user_metadata: { provider_id: "123456789012345678" } }), null);
     assert.throws(() => currentDiscord({ user_metadata: { provider_id: "123456789012345678" } }));
     assert.throws(() => currentDiscord({ identities: [{ provider: "discord", identity_data: { sub: "123456789012345678", id: "999456789012345678" } }] }));
-    assert.equal(identityStep(null), "signed_out"); assert.equal(identityStep({ identities: [] }), "needs_discord");
+    assert.equal(identityStep(null), "signed_out"); assert.equal(identityStep({ id: accountId, identities: [] }), null);
 });
 test("strict CP endpoint authenticates dedicated token and always fences exact authoritative Auth; outage cannot return positive", async () => {
     const calls: string[] = []; let outage = false; let deleted = false;
@@ -121,9 +121,9 @@ test("CP claim/ack retries typed contention with the same durable identities", a
 });
 test("website identity first, independent grant bypasses outage/configuration and expiry is exact", () => {
     const allocation = onboardingSummary();
-    assert.equal(composeOnboarding(accountId, "needs_discord", null, allocation).status, "needs_discord");
+    assert.equal(composeOnboarding(accountId, "identity_repair", null, allocation).status, "identity_repair");
     assert.equal(composeOnboarding(accountId, null, null, allocation).status, "eligible");
-    const status = parseAccountStatus({ version: 1, accountId, hasDiscord: true, configured: true, verificationPending: false, membership: { linked: true, verification: "qualifying", sync: "applied", verifiedAt: now, validUntil: "2026-09-08T12:00:00.000Z", retryAt: null, refreshMode: "oauth_reauthorization" } }, accountId);
+    const status = parseAccountStatus({ version: 1, accountId, hasDiscord: false, configured: true, verificationPending: false, membership: { linked: true, verification: "qualifying", sync: "applied", verifiedAt: now, validUntil: "2026-09-08T12:00:00.000Z", retryAt: null, refreshMode: "oauth_reauthorization" } }, accountId);
     allocation.sources.administrativeBase = 0; allocation.sources.membershipAllowance = 1;
     assert.equal(composeOnboarding(accountId, null, status, allocation, [], Date.parse(status.membership.validUntil!)-1).status, "eligible");
     assert.equal(composeOnboarding(accountId, null, status, allocation, [], Date.parse(status.membership.validUntil!)).status, "verification_expired");
@@ -168,7 +168,7 @@ test("applied qualifying membership with denied allocation offers support or dis
     const allocation = onboardingSummary(); allocation.sources.administrativeBase = 0;
     allocation.eligibility = { eligible: false, reason: "no_grant", granted: 0, used: 0, remaining: 0 };
     allocation.membership.enabled = true;
-    const account = parseAccountStatus({ version: 1, accountId, hasDiscord: true, configured: true, verificationPending: false, membership: { linked: true, verification: "qualifying", sync: "applied", verifiedAt: now, validUntil: "2026-09-08T12:00:00.000Z", retryAt: null, refreshMode: "oauth_reauthorization" } }, accountId);
+    const account = parseAccountStatus({ version: 1, accountId, hasDiscord: false, configured: true, verificationPending: false, membership: { linked: true, verification: "qualifying", sync: "applied", verifiedAt: now, validUntil: "2026-09-08T12:00:00.000Z", retryAt: null, refreshMode: "oauth_reauthorization" } }, accountId);
     assert.equal(composeOnboarding(accountId, null, account, allocation, [], Date.parse(now)).status, "review_required");
     allocation.membership.enabled = false;
     assert.equal(composeOnboarding(accountId, null, account, allocation, [], Date.parse(now)).status, "configuration_blocked");

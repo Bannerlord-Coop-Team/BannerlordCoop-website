@@ -3,7 +3,6 @@
 import { CircleHelp, LoaderCircle, Play, TriangleAlert } from "lucide-react";
 import { requestControlPlaneAdminWithRefresh } from "@/app/lib/control-plane/stale-request";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
-import { resolveDiscordUserReference } from "@/app/lib/supabase/discord-users";
 import {
     adminActionOptionValue,
     applyControlPlaneOperationDefaults,
@@ -27,7 +26,7 @@ export type AdminActionOption = {
 export type AdminActionField = {
     name: string;
     label: string;
-    kind?: "text" | "textarea" | "number" | "checkbox" | "select" | "server" | "job" | "password" | "discord-user" | "backup";
+    kind?: "text" | "textarea" | "number" | "checkbox" | "select" | "server" | "job" | "password" | "account" | "backup";
     placeholder?: string;
     required?: boolean;
     minimum?: number;
@@ -271,8 +270,8 @@ function ActionField({ field }: { field: AdminActionField }) {
             </label>
         );
     }
-    if (field.kind === "discord-user") {
-        const listId = `discord-users-${field.name.replaceAll(".", "-")}`;
+    if (field.kind === "account") {
+        const listId = `website-accounts-${field.name.replaceAll(".", "-")}`;
         return (
             <label>
                 {label}
@@ -280,12 +279,12 @@ function ActionField({ field }: { field: AdminActionField }) {
                     name={field.name}
                     list={listId}
                     required={field.required}
-                    placeholder={field.placeholder ?? "@username or Discord ID"}
+                    placeholder={field.placeholder ?? "Website account ID"}
                     className={className}
                     autoComplete="off"
                 />
                 <datalist id={listId}>
-                    {field.options?.map((option) => <option key={option.value} value={`@${option.label}`}>{option.value}</option>)}
+                    {field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </datalist>
             </label>
         );
@@ -332,15 +331,10 @@ function buildInput(fields: AdminActionField[], formData: FormData) {
             if (selected.updatedAt) setPath(input, "expectedUpdatedAt", selected.updatedAt);
             continue;
         }
-        if (field.kind === "discord-user") {
+        if (field.kind === "account") {
             const raw = String(formData.get(field.name) ?? "").trim();
-            const resolved = resolveDiscordUserReference(raw, (field.options ?? []).map((option) => ({
-                discordUserId: option.value,
-                username: option.label,
-                email: null,
-            })));
-            if (resolved === null) throw new Error(`${field.label} must be a known unique Discord username or a Discord user ID.`);
-            setPath(input, field.name, resolved);
+            if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(raw)) throw new Error(`${field.label} must be a website account ID.`);
+            setPath(input, field.name, raw);
             continue;
         }
         const raw = formData.get(field.name);
