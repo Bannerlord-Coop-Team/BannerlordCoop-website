@@ -34,61 +34,18 @@ export const metadata: Metadata = {
     description: "Browse and join Bannerlord Coop servers.",
 };
 
-/** Renders the page shell without waiting for either server inventory. */
-export default async function ServersPage() {
-    let user: User | null = null;
-    let accessToken: string | null = null;
-
-    try {
-        const supabase = await getSupabaseServerClient();
-        const [{ data: userData }, { data: sessionData }] = await Promise.all([
-            supabase.auth.getUser(),
-            supabase.auth.getSession(),
-        ]);
-        user = userData.user;
-        accessToken = user && sessionData.session?.user.id === user.id ? sessionData.session.access_token : null;
-    } catch {
-        // Keep the public server directory available when auth is not configured.
-    }
-
-    const accessibleLiveServers = user
-        ? listLiveConsoleServers().filter((server) =>
-            getLiveConsoleAccessLevel(user, server.id),
-        )
-        : [];
-    const liveServerDisplayNames = await getServerDisplayNames(
-        accessibleLiveServers.map((server) => server.id),
-    );
-    const liveServers: ManagedServerDirectoryEntry[] = accessibleLiveServers.map(
-        (server) => ({
-            id: server.id,
-            name: liveServerDisplayNames.get(server.id) ?? server.name,
-            status: "Unknown",
-            connectionType: "Direct",
-            joinUrl: `bannerlordcoop://join/${server.id}`,
-            players: null,
-            manageUrl: `/servers/${encodeURIComponent(server.id)}`,
-        }),
-    );
-    // Resolve authoritative identities before any allocation fetch. No metadata/email fallback.
-    const identity = identityStep(user);
-    let account: AccountStatus | null = null;
-    if (user && accessToken) {
-        try {
-            account = await getWebsiteAccountStatus(user.id, accessToken);
-        } catch { /* Independent CP grants must remain usable during membership outages. */ }
-    }
-    let onboarding: OnboardingSummary | null = null;
-    if (user && accessToken && identity === null) {
-        try { onboarding = await getServerOnboarding(accessToken); }
-        catch { /* Unknown eligibility/capacity must never become a positive or empty snapshot. */ }
-    }
-    const managedInventory = loadManagedInventory(user, accessToken, liveServers);
+/** Starts independent requests without holding the directory shell behind account status. */
+export default function ServersPage() {
     const publicInventory = loadPublicInventory();
+    const viewer = loadViewer();
+    const managedInventory = viewer.then(({ user, accessToken }) => loadManagedInventory(user, accessToken));
+    const hostingStatus = viewer.then(({ user, accessToken }) => loadHostingStatus(user, accessToken));
 
     return (
         <>
-            <Navbar />
+            <Suspense fallback={<div role="status" aria-label="Loading navigation" className="h-16 border-b border-white/10 bg-background" />}>
+                <Navbar />
+            </Suspense>
             <main className="min-h-svh bg-background">
                 <div className="site-container py-10 sm:py-14">
                 <section className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end" aria-labelledby="servers-heading">
@@ -112,7 +69,7 @@ export default async function ServersPage() {
                 </section>
 
                 <Suspense fallback={<DirectoryLoading label="Loading hosting status…" />}>
-                    {managedInventory.then(({ ownedIds }) => {
+                    {Promise.all([hostingStatus, managedInventory]).then(([{ user, identity, account, onboarding }, { ownedIds }]) => {
                         const websiteSummary = composeOnboarding(user?.id ?? null, identity, account, onboarding, ownedIds);
                         return user ? <ServerOnboarding userId={user.id} summary={onboarding} websiteSummary={websiteSummary} /> : <MembershipNextStep summary={websiteSummary} />;
                     })}
@@ -130,7 +87,7 @@ export default async function ServersPage() {
                         </div>
                     </div>
                     <Suspense fallback={<DirectoryLoading label="Loading your servers…" />}>
-                        {managedInventory.then(({ managedServers, managedServersError, ownedIds }) => (
+                        {managedInventory.then(({ user, managedServers, managedServersError, ownedIds }) => (
                             user ? (
                                 <div>
                                     <p className="mb-4 text-sm text-foreground-muted">{managedServers.length} {managedServers.length === 1 ? "server" : "servers"} associated with your account</p>
@@ -194,23 +151,91 @@ export default async function ServersPage() {
     );
 }
 
-/** Loads private inventory once for the directory and ownership-aware onboarding. */
-async function loadManagedInventory(user: User | null, accessToken: string | null, liveServers: ManagedServerDirectoryEntry[]) {
-    const unavailable = { managedServers: uniqueServers(liveServers), managedServersError: "", ownedIds: [] as string[] };
-    if (!user) return unavailable;
-    if (!accessToken) return { ...unavailable, managedServersError: "Your authenticated server session is unavailable. Please sign in again." };
+/** Private requests share one verified user/session pair for this render. */
+async function loadViewer() {
+    let user: User | null = null;
+    let accessToken: string | null = null;
 
     try {
-        const listed = await listAllMyServers(accessToken);
-        return {
-            managedServers: uniqueServers([...listed.map(toDirectoryServer), ...liveServers]),
-            managedServersError: "",
-            ownedIds: listed.filter(server => server.accessRole === "owner").map(server => server.serverId),
-        };
-    } catch (error) {
-        console.error("Managed server inventory failed to load", error);
-        return { ...unavailable, managedServersError: "Managed servers could not be loaded right now." };
+        const supabase = await getSupabaseServerClient();
+        const [{ data: userData }, { data: sessionData }] = await Promise.all([
+            supabase.auth.getUser(),
+            supabase.auth.getSession(),
+        ]);
+        user = userData.user;
+        accessToken = user && sessionData.session?.user.id === user.id ? sessionData.session.access_token : null;
+    } catch {
+        // Keep the public server directory available when auth is not configured.
     }
+
+    return { user, accessToken };
+}
+
+/** Resolve names only for live servers the verified user can manage. */
+async function loadLiveServers(user: User | null) {
+    const accessibleLiveServers = user
+        ? listLiveConsoleServers().filter((server) =>
+            getLiveConsoleAccessLevel(user, server.id),
+        )
+        : [];
+    const liveServerDisplayNames = await getServerDisplayNames(
+        accessibleLiveServers.map((server) => server.id),
+    );
+    const liveServers: ManagedServerDirectoryEntry[] = accessibleLiveServers.map(
+        (server) => ({
+            id: server.id,
+            name: liveServerDisplayNames.get(server.id) ?? server.name,
+            status: "Unknown",
+            connectionType: "Direct",
+            joinUrl: `bannerlordcoop://join/${server.id}`,
+            players: null,
+            manageUrl: `/servers/${encodeURIComponent(server.id)}`,
+        }),
+    );
+    return liveServers;
+}
+
+/** Keep account synchronization before allocation reads, outside either directory's path. */
+async function loadHostingStatus(user: User | null, accessToken: string | null) {
+    // Resolve authoritative identities before any allocation fetch. No metadata/email fallback.
+    const identity = identityStep(user);
+    let account: AccountStatus | null = null;
+    if (user && accessToken) {
+        try {
+            account = await getWebsiteAccountStatus(user.id, accessToken);
+        } catch { /* Independent CP grants must remain usable during membership outages. */ }
+    }
+    let onboarding: OnboardingSummary | null = null;
+    if (user && accessToken && identity === null) {
+        try { onboarding = await getServerOnboarding(accessToken); }
+        catch { /* Unknown eligibility/capacity must never become a positive or empty snapshot. */ }
+    }
+    return { user, identity, account, onboarding };
+}
+
+/** Loads private inventory once, in parallel with live display names. */
+async function loadManagedInventory(user: User | null, accessToken: string | null) {
+    const liveServers = loadLiveServers(user);
+    let listed: MyServerSummary[] = [];
+    let managedServersError = "";
+    if (user) {
+        if (!accessToken) {
+            managedServersError = "Your authenticated server session is unavailable. Please sign in again.";
+        } else {
+            try {
+                listed = await listAllMyServers(accessToken);
+            } catch (error) {
+                console.error("Managed server inventory failed to load", error);
+                managedServersError = "Managed servers could not be loaded right now.";
+            }
+        }
+    }
+    return {
+        user,
+        managedServers: uniqueServers([...listed.map(toDirectoryServer), ...await liveServers]),
+        managedServersError,
+        ownedIds: listed.filter(server => server.accessRole === "owner").map(server => server.serverId),
+    };
 }
 
 /** Loads public inventory independently, keeping failures inside its section. */

@@ -1,3 +1,4 @@
+import { parseReleaseMutation, parseReleaseStatus, type ReleaseMutation } from "../../../../supabase/functions/_shared/server-release-contract";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "../../../../supabase/functions/_shared/server-visibility-contract";
 import type {
     HostingPage,
@@ -166,6 +167,25 @@ export async function requestMyServerOperation(
     if (!hasExactKeys(result, ["exitCode"])) throw invalidResponse();
     if (result.exitCode !== 0) throw invalidResponse();
     return { exitCode: 0 };
+}
+
+export async function getMyServerUpdateStatus(accessToken: string, serverId: string) {
+    if (!RESOURCE_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid server ID.");
+    return parseReleaseStatus(await requestMyServersApi(accessToken, {
+        method: "GET", configureEndpoint(endpoint) {
+            endpoint.searchParams.set("resource", "update-status");
+            endpoint.searchParams.set("serverId", serverId);
+        },
+    }), serverId);
+}
+
+export async function requestMyServerRelease(accessToken: string, input: ReleaseMutation, requestId: string): Promise<MyServerUpdateResult> {
+    if (!REQUEST_ID.test(requestId)) throw new MyServersApiError("invalid_request", "Invalid request ID.");
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify(parseReleaseMutation(input)), requestId });
+    if (!isRecord(result) || !hasExactKeys(result, ["action", "jobId", "outcome"])
+        || !["enqueued", "existing"].includes(String(result.outcome)) || result.action !== "update"
+        || typeof result.jobId !== "string" || !RESOURCE_ID.test(result.jobId)) throw invalidResponse();
+    return result as MyServerUpdateResult;
 }
 
 export async function requestMyServerUpdate(

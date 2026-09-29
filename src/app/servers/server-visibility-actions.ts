@@ -5,7 +5,7 @@ import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { exactKeys, isRecord, parseVisibilityMutation, REQUEST_ID, type VisibilityMutation } from "../../../supabase/functions/_shared/server-visibility-contract";
 import { revalidatePath } from "next/cache";
 
-export async function setServerVisibility(value: unknown): Promise<{ ok: boolean; message: string }> {
+export async function setServerVisibility(value: unknown): Promise<{ ok: boolean; message: string; updatedAt?: string }> {
     let input: VisibilityMutation;
     let requestId: string;
     try {
@@ -24,11 +24,11 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
             return { ok: false, message: "Please sign in again before changing visibility." };
         }
         // The control plane rechecks current ownership; no actor or role is supplied by the browser.
-        await requestServerVisibility(sessionData.session.access_token, input, requestId);
+        const result = await requestServerVisibility(sessionData.session.access_token, input, requestId);
         revalidatePath("/servers");
         revalidatePath(`/servers/${input.serverId}`);
         // A replay acknowledges the original receipt, not necessarily the current preference.
-        return { ok: true, message: "Discovery preference update acknowledged. Refreshing the current setting." };
+        return { ok: true, updatedAt: result.updatedAt, message: "Discovery preference update acknowledged. Refreshing the current setting." };
     } catch (error) {
         const code = error instanceof MyServersApiError ? error.code : "visibility_update_failed";
         console.error("Server visibility update failed", { code });
