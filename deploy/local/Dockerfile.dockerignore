@@ -1,0 +1,21 @@
+# Paths are relative to the repository build context.
+.git
+**/node_modules
+.next
+out
+build
+coverage
+playwright-report
+test-results
+.lighthouseci
+.pi
+.pi-*
+.env*
+**/.env*
+**/.dev.vars*
+**/.wrangler
+.open-next
+*.tsbuildinfo
+**/*.pem
+**/*.key
+npm-debug.log*
