@@ -12,8 +12,8 @@ warned restart. No password or secret reference is returned; refresh current
 status after an uncertain response instead of automatically resubmitting.
 
 Deploy with the matching control-plane and Bot_UP retirement branches. Apply
-`202609280001_control_plane_website_accounts.sql` and
-`202609280002_account_owned_membership.sql` once during the coordinated migration
+`202609280002_control_plane_website_accounts.sql` and
+`202609280003_account_owned_membership.sql` once during the coordinated migration
 window, then deploy the matching control-plane/web adapter, membership Edge code
 and website before resuming hosting writes. Both repositories mirror the exact
 migration bytes. Bot_UP unregisters the old server command and stops hosting
@@ -31,3 +31,10 @@ Do not rewrite existing job hashes, provider tags, audit events or creation rece
 The forward migration introduces UUID principals, so rollback requires a coordinated
 state-aware plan; old numeric-only application code cannot safely read new records.
 These source changes and local tests do not perform or authorize production rollout.
+
+Apply the prerequisite `202609280001_control_plane_retired_tables.sql` through the
+control-plane retirement runbook before the account migrations. Its website mirror
+retains the exact merged SQL; the unmerged account migrations use versions 002 and
+003 to avoid colliding with that history. A rejected browser password action clears
+the input and explains that the outcome is unknown and status must be refreshed
+before trying again; it never retries automatically.

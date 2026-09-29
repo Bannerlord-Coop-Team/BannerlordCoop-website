@@ -48,6 +48,6 @@ WHERE EXISTS (SELECT 1 FROM control_plane.hosting_entitlements e WHERE e.discord
    OR EXISTS (SELECT 1 FROM control_plane.server_access a WHERE a.discord_user_id = principal_id);
 DROP INDEX control_plane.hosting_membership_owner_binding;
 INSERT INTO control_plane.schema_migrations(version, applied_at)
-VALUES ('089_managed_hosting_website_accounts.sql', '2026-09-28T00:01:00.000Z');
+VALUES ('090_managed_hosting_website_accounts.sql', '2026-09-28T00:01:00.000Z');
 
 COMMIT;

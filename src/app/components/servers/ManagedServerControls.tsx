@@ -118,9 +118,16 @@ export function ManagedServerControls({
                 event.preventDefault();
                 if (busy || !password) return;
                 if (operationState === "running" && !window.confirm("Change the password and restart the server after warning players?")) return;
+                setMessage("");
                 startTransition(async () => {
-                    const result = await setManagedServerPassword({ serverId, expectedUpdatedAt, password });
-                    setPassword(""); setMessage(result.message);
+                    try {
+                        const result = await setManagedServerPassword({ serverId, expectedUpdatedAt, password });
+                        setMessage(result.message);
+                    } catch {
+                        setMessage("The password change could not be confirmed. It may have applied. Refresh server status before trying again.");
+                    } finally {
+                        setPassword("");
+                    }
                 });
             }}>
                 <label className="text-xs">New game password<input className="mt-1 block border border-white/20 bg-surface px-2 py-1" type="password" autoComplete="new-password" required maxLength={128} value={password} onChange={event => setPassword(event.target.value)} disabled={busy} /></label>
