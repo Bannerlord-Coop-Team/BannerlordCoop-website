@@ -37,14 +37,15 @@ const consoleCommands = [
         .map(command => [command.usage, command.summary, [command.category, ...command.aliases, ...command.arguments.map(argument => argument.description)].join(" ")]) },
 ];
 
-export function ServerConsoleWorkspace({ children, onSelectCommand }: { children: ReactNode; onSelectCommand?: (command: string) => void }) {
+/** Presents console content and a picker restricted to the active transport's commands. */
+export function ServerConsoleWorkspace({ children, onSelectCommand, coopCommandsOnly = false }: { children: ReactNode; onSelectCommand?: (command: string) => void; coopCommandsOnly?: boolean }) {
     const [query, setQuery] = useState("");
     const [expanded, setExpanded] = useState(false);
     const id = useId();
     const available = !!onSelectCommand;
     const search = query.trim().toLowerCase();
     const groups = consoleCommands.map(({ group, commands }) => ({
-        group, commands: commands.filter(command => `${group} ${command.join(" ")}`.toLowerCase().includes(search)),
+        group, commands: commands.filter(command => (!coopCommandsOnly || command[0].startsWith("coop.")) && `${group} ${command.join(" ")}`.toLowerCase().includes(search)),
     })).filter(({ commands }) => commands.length > 0);
     return <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-5">{children}</div>
@@ -54,7 +55,7 @@ export function ServerConsoleWorkspace({ children, onSelectCommand }: { children
             <div id={`${id}-commands`} className={`${expanded && available ? "block" : "hidden"} p-5 lg:block`}>
                 <label htmlFor={`${id}-search`} className="sr-only">Search console commands</label>
                 <div className="relative"><Search className="absolute top-3 left-3 size-4 text-foreground-muted" aria-hidden="true" /><input id={`${id}-search`} type="search" value={query} onChange={event => setQuery(event.target.value)} disabled={!available} className="w-full rounded-md border border-white/15 bg-background py-2.5 pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40" placeholder="Search commands…" /></div>
-                <p className="mt-3 text-xs leading-5 text-foreground-muted">{available ? "Selecting a command replaces the input without sending. Edit any <arguments> before sending." : "Commands are unavailable until a writable live console is connected."}</p>
+                <p className="mt-3 text-xs leading-5 text-foreground-muted">{available ? "Selecting a command replaces the input without sending. Edit any <arguments> before sending." : coopCommandsOnly ? "Commands require owner or manager access to a running server with no command pending." : "Commands are unavailable until a writable live console is connected."}</p>
                 <p className="mt-2 text-xs leading-5 text-foreground-muted">Game commands and cheats depend on the installed build and game state. Client-only and DEBUG-only commands are excluded.</p>
                 <div className="mt-4 max-h-96 space-y-4 overflow-y-auto overscroll-contain pr-1">
                     {groups.map(({ group, commands }) => <section key={group}>

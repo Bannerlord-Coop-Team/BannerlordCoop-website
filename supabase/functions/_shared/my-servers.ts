@@ -1,3 +1,4 @@
+import { MAXIMUM_CONSOLE_RESPONSE_BYTES, parseConsoleSubmission, parseConsoleReference, parseConsoleReceipt, parseConsoleResult, parseConsoleAcknowledgement, type ConsoleSubmission, type ConsoleReference } from "./server-console-contract.ts";
 import { serverLogDownloadHeaders } from "./server-log-contract.ts";
 import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
@@ -23,6 +24,8 @@ export type MyServersHandlerOptions = {
 };
 
 type UpstreamRequest =
+    | { operation: "console-command"; input: ConsoleSubmission }
+    | { operation: "console-command-result" | "acknowledge-console-command"; input: ConsoleReference }
     | { operation: "server-files" | "my-server-latest-log"; input: { serverId: string } }
     | { operation: "file-transfer-status" | "download-save-export"; input: { serverId: string; transferRequestId: string } }
     | { operation: "file-transfer"; input: OwnerFileMutation }
@@ -89,7 +92,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // Durable mutations must retain the caller's UUID for exactly-once handling.
-            if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server") {
+            if (upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -171,7 +174,8 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         try {
             responseBody = await readBoundedText(
                 upstream,
-                upstreamRequest.operation === "download-save-export" ? MAXIMUM_WEB_FILE_RESPONSE_BYTES
+                upstreamRequest.operation === "console-command-result" ? MAXIMUM_CONSOLE_RESPONSE_BYTES
+                    : upstreamRequest.operation === "download-save-export" ? MAXIMUM_WEB_FILE_RESPONSE_BYTES
                     : upstreamRequest.operation === "my-servers" || upstreamRequest.operation === "server-backups"
                     ? MAXIMUM_LIST_RESPONSE_BYTES
                     : MAXIMUM_OPERATION_RESPONSE_BYTES,
@@ -188,6 +192,9 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     throw new Error("Expected a binary log response");
                 }
                 if (upstreamRequest.operation === "set-password" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["changed", "restartQueued"]) || envelope.result.changed !== true || typeof envelope.result.restartQueued !== "boolean")) throw new Error("Invalid password response");
+                if (upstreamRequest.operation === "console-command") parseConsoleReceipt(envelope.result);
+                if (upstreamRequest.operation === "console-command-result") parseConsoleResult(envelope.result);
+                if (upstreamRequest.operation === "acknowledge-console-command") parseConsoleAcknowledgement(envelope.result);
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
                 if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
                 if (upstreamRequest.operation === "download-save-export") parseOwnerFileDownload(envelope.result);
@@ -302,6 +309,11 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
     if (isFileTransfer) return { operation: "file-transfer", input: parseOwnerFileMutation(value) };
     if (!isRecord(value) || typeof value.action !== "string") {
         throw new Error("Invalid operation");
+    }
+    if (value.action === "console-command" || value.action === "console-command-result" || value.action === "acknowledge-console-command") {
+        const { action, ...input } = value;
+        if (action === "console-command") return { operation: action, input: parseConsoleSubmission(input) };
+        return { operation: action, input: parseConsoleReference(input) };
     }
     if (value.action === "set-server-visibility") {
         const parsed = parseVisibilityMutation(value);
