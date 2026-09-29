@@ -1,7 +1,8 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import { onboardingSummary, ONBOARDING_TEST_ID } from "../../../tests/onboarding-fixtures";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn(), publicList: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn(), publicList: vi.fn(), account: vi.fn(), displayNames: vi.fn() }));
+vi.mock("@/app/lib/hosting/website-account-status", () => ({ getWebsiteAccountStatus: mocks.account }));
 vi.mock("@/app/lib/hosting/public-servers", () => ({ listPublicServers: mocks.publicList }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
 vi.mock("@/app/lib/hosting/my-servers", () => ({ listAllMyServers: mocks.list, getServerOnboarding: mocks.onboarding }));
@@ -9,7 +10,7 @@ vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: () => <nav>Navigation
 vi.mock("@/app/components/servers/ServerOnboarding", () => ({ ServerOnboarding: ({ userId, summary }: { userId: string; summary: unknown }) => <div data-user={userId}>{summary ? "Trusted onboarding snapshot" : "Unavailable snapshot"}</div>, GamePasswordNotice: () => <p>Discord password controls</p> }));
 vi.mock("@/app/lib/console/servers", () => ({ listLiveConsoleServers: () => [{ id: "live-one", name: "Live campaign" }] }));
 vi.mock("@/app/lib/auth/access", () => ({ getLiveConsoleAccessLevel: () => "owner" }));
-vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: async () => new Map() }));
+vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: mocks.displayNames }));
 vi.mock("@/app/components/servers/AllServersDirectory", () => ({ AllServersDirectory: () => <div>Public directory</div> }));
 import ServersPage from "./page";
 /** Collects the completed streamed page for existing content regressions. */
@@ -19,7 +20,9 @@ async function renderPage() {
     return new Response(stream).text();
 }
 beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    mocks.account.mockResolvedValue(null);
+    mocks.displayNames.mockResolvedValue(new Map());
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "44444444-4444-4444-8444-444444444444", identities: [{ provider: "discord", identity_data: { sub: "123456789012345678" } }] } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt", user: { id: "44444444-4444-4444-8444-444444444444" } } } }) } });
     mocks.list.mockResolvedValue([{ serverId: ONBOARDING_TEST_ID, displayName: "Assigned campaign", operationState: "stopped", observedGameState: "stopped", accessRole: "owner" }]);
     mocks.onboarding.mockResolvedValue(onboardingSummary());
@@ -101,4 +104,60 @@ it.each(["managed", "public"])("streams %s inventory without waiting for the oth
         await stream.allReady;
         reader.releaseLock();
     }
+});
+
+
+it.each(["auth", "account", "onboarding", "displayNames"] as const)("streams the public directory while %s is pending", async (dependency) => {
+    const pending = Promise.withResolvers<unknown>();
+    // Hold a real dependency indefinitely: the public section must arrive without it.
+    mocks[dependency].mockReturnValueOnce(pending.promise);
+    const stream = await renderToReadableStream(await ServersPage());
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let html = "";
+    async function readUntil(text: string) {
+        while (!html.includes(text)) {
+            const next = await reader.read();
+            if (next.done) break;
+            html += decoder.decode(next.value, { stream: true });
+        }
+        expect(html).toContain(text);
+    }
+    try {
+        await readUntil("Public directory</div>");
+        expect(html).toContain("My Servers");
+        if (dependency === "auth") {
+            expect(mocks.list).not.toHaveBeenCalled();
+            expect(mocks.account).not.toHaveBeenCalled();
+            expect(mocks.onboarding).not.toHaveBeenCalled();
+            expect(mocks.displayNames).not.toHaveBeenCalled();
+        } else {
+            await vi.waitFor(() => expect(mocks.list).toHaveBeenCalledExactlyOnceWith("test-page-jwt"));
+            if (dependency !== "displayNames") {
+                await readUntil("Assigned campaign");
+                expect(html).not.toContain("Trusted onboarding snapshot");
+            }
+            if (dependency === "account") expect(mocks.onboarding).not.toHaveBeenCalled();
+        }
+        expect(mocks.publicList).toHaveBeenCalledTimes(1);
+    } finally {
+        // Exercise the existing failure fallbacks after proving independence.
+        if (dependency === "displayNames") pending.resolve(new Map());
+        else pending.reject(new Error("Dependency unavailable"));
+        await stream.allReady;
+        reader.releaseLock();
+    }
+});
+
+it("never forwards a session token belonging to another user", async () => {
+    mocks.auth.mockResolvedValue({ auth: {
+        getUser: async () => ({ data: { user: { id: "44444444-4444-4444-8444-444444444444" } } }),
+        getSession: async () => ({ data: { session: { access_token: "other-user-token", user: { id: ONBOARDING_TEST_ID } } } }),
+    } });
+    const html = await renderPage();
+    expect(html).toContain("Your authenticated server session is unavailable");
+    expect(html).toContain("Public directory");
+    expect(mocks.list).not.toHaveBeenCalled();
+    expect(mocks.account).not.toHaveBeenCalled();
+    expect(mocks.onboarding).not.toHaveBeenCalled();
 });
