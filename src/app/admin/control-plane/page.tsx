@@ -666,7 +666,7 @@ function HostResourcesCard({ name, resources }: { name: string; resources: Hosti
             {resources ? <dl className="mt-4 grid gap-x-5 sm:grid-cols-2">
                 <Definition label="Disk" value={`${formatStorageBytes(resources.diskUsedBytes)} used · ${formatStorageBytes(resources.diskFreeBytes)} free`} help={`Total filesystem capacity: ${formatStorageBytes(resources.diskTotalBytes)}.`} />
                 <Definition label="Memory" value={`${formatStorageBytes(resources.memoryUsedBytes)} / ${formatStorageBytes(resources.memoryTotalBytes)}`} help="Current host memory use and total physical memory." />
-                <Definition label="CPU load" value={`${resources.cpuPercent.toFixed(1)}%`} help="One-minute load average normalized by the host CPU count; this is a load estimate, not billing data." />
+                <Definition label="CPU utilization" value={`${resources.cpuPercent.toFixed(1)}%`} help="CPU time used across all host CPUs during a short sample. Excludes idle time, I/O waits and time taken by the hypervisor." />
                 <Definition label="Uptime" value={formatUptime(resources.uptimeSeconds)} help="Elapsed host uptime at the observation time." />
                 <Definition label="Observed" value={<LocalDateTime value={resources.observedAt} />} help="When the host supplied this bounded resource snapshot." />
             </dl> : <p className="mt-4 text-xs leading-5 text-foreground-muted">No current trusted resource observation is available. For a managed VPS this normally means its runner route is not active yet.</p>}
