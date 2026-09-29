@@ -7,7 +7,7 @@ import {
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { JobFailureAcknowledgeButton } from "@/app/components/admin/JobFailureAcknowledgeButton";
 import { JobFailuresAcknowledgeButton } from "@/app/components/admin/JobFailuresAcknowledgeButton";
-import { VpsHostInventory } from "@/app/components/admin/VpsHostInventory";
+import { VpsView } from "@/app/components/admin/VpsView";
 import { ControlPlaneLiveRefresh } from "@/app/components/admin/ControlPlaneLiveRefresh";
 import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
 import { hasAdminAccess } from "@/app/lib/auth/access";
@@ -37,7 +37,6 @@ import type {
     AuditEvent,
     Backup,
     GlobalControls,
-    HostingAdminHostResources,
     HostingAdminVpsInventory,
     HostingJob,
     HostingPage,
@@ -257,7 +256,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             } satisfies OperationsData;
         }
         case "vps":
-            return requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts" });
+            return requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts", input: { includeLiveData: false } });
         case "servers":
             return requestControlPlaneAdmin<HostingPage<ManagedServer>>({
                 accessToken: token,
@@ -326,34 +325,6 @@ function ViewTabs({ active }: { active: View }) {
     );
 }
 
-function VpsView({ inventory, accounts }: { inventory: HostingAdminVpsInventory; accounts: WebsiteAccountSummary[] }) {
-    const { controlPlaneHost, hosts } = inventory;
-    const ownerLabels = accountLabelMap(accounts);
-    const availableServiceNames = Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : [];
-    const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
-    const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
-    return (
-        <section className="mt-8">
-            <SectionHeading eyebrow="OVHcloud inventory" title="VPS hosts" count={hosts.length} />
-            <p className="mt-3 text-xs text-foreground-muted">
-                Capacity combines registered control-plane slots with live read-only OVH account billing data. {availableServiceNames.length} authenticated OVH {availableServiceNames.length === 1 ? "VPS is" : "VPS products are"} available to onboard.
-                {checkedAt && <> Provider data checked <LocalDateTime value={checkedAt} />.</>}
-            </p>
-            <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
-                <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased OVH VPS. The durable workflow verifies account ownership, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
-                <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
-            </div>
-            <div className="mt-6">
-                <HostResourcesCard name="Oracle control plane" resources={controlPlaneHost} />
-            </div>
-            <VpsHostInventory
-                hosts={hosts}
-                ownerLabels={ownerLabels}
-                runnerTargetSourceCommit={runnerTargetSourceCommit}
-            />
-        </section>
-    );
-}
 
 function OverviewView({ overview }: { overview: Overview }) {
     const { fleet, controls } = overview;
@@ -656,24 +627,6 @@ function RecordedRelease({ build, buildId }: { build: ReleaseBuild | null; build
     return <div><span>{releaseVersion(build)}</span><ReleaseMetadata build={build} /></div>;
 }
 
-function HostResourcesCard({ name, resources }: { name: string; resources: HostingAdminHostResources | null }) {
-    return (
-        <section className="border border-white/10 bg-surface p-5">
-            <div className="flex items-start justify-between gap-4">
-                <div><p className="font-label text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-gold">System resources</p><h3 className="mt-1 break-all font-display text-xl font-semibold text-foreground">{name}</h3></div>
-                <State value={resources ? "available" : "unavailable"} />
-            </div>
-            {resources ? <dl className="mt-4 grid gap-x-5 sm:grid-cols-2">
-                <Definition label="Disk" value={`${formatStorageBytes(resources.diskUsedBytes)} used · ${formatStorageBytes(resources.diskFreeBytes)} free`} help={`Total filesystem capacity: ${formatStorageBytes(resources.diskTotalBytes)}.`} />
-                <Definition label="Memory" value={`${formatStorageBytes(resources.memoryUsedBytes)} / ${formatStorageBytes(resources.memoryTotalBytes)}`} help="Current host memory use and total physical memory." />
-                <Definition label="CPU utilization" value={`${resources.cpuPercent.toFixed(1)}%`} help="CPU time used across all host CPUs during a short sample. Excludes idle time, I/O waits and time taken by the hypervisor." />
-                <Definition label="Uptime" value={formatUptime(resources.uptimeSeconds)} help="Elapsed host uptime at the observation time." />
-                <Definition label="Observed" value={<LocalDateTime value={resources.observedAt} />} help="When the host supplied this bounded resource snapshot." />
-            </dl> : <p className="mt-4 text-xs leading-5 text-foreground-muted">No current trusted resource observation is available. For a managed VPS this normally means its runner route is not active yet.</p>}
-        </section>
-    );
-}
-
 function Panel({ title, children, help }: { title: string; children: React.ReactNode; help?: string }) { return <section className="border border-white/10 bg-surface p-5"><h2 className={`font-display text-2xl font-semibold text-foreground ${help ? "cursor-help" : ""}`} title={help}>{title}</h2><dl className="mt-4 divide-y divide-white/10">{children}</dl></section>; }
 function Definition({ label, value, tone, help }: { label: string; value: React.ReactNode; tone?: "ok" | "warning"; help?: string }) { return <div className="flex items-start justify-between gap-4 py-3 text-xs"><dt className={`${help ? "cursor-help underline decoration-dotted underline-offset-4" : ""} text-foreground-muted`} title={help} aria-label={help ? `${label}: ${help}` : undefined}>{label}</dt><dd className={`max-w-[65%] break-words text-right font-medium ${tone === "ok" ? "text-emerald-300" : tone === "warning" ? "text-amber-300" : "text-foreground"}`}>{value}</dd></div>; }
 function Stat({ label, value, href, destination, help }: { label: string; value: number; href: string; destination: string; help: string }) { return <Link href={href} className="group bg-surface px-5 py-4 outline-none transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-gold" title={help} aria-label={`${label}: ${value}. ${help} Open ${destination}.`}><p className="font-display text-3xl font-semibold text-foreground">{value}</p><p className="mt-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-foreground-muted group-hover:text-gold">{label}</p></Link>; }
@@ -707,6 +660,4 @@ function parseJobState(value: string | undefined): "failed" | "active" | null { 
 function parseJobAction(value: string | undefined): string | null { return JOB_ACTION_FILTERS.includes(value as typeof JOB_ACTION_FILTERS[number]) ? value ?? null : null; }
 function parseCursor(value: string | undefined): string | null { const normalized = value?.trim() ?? ""; return normalized.length > 0 && normalized.length <= 4_096 ? normalized : null; }
 function formatBytes(value: number) { return value < 1_048_576 ? `${Math.round(value / 1024)} KiB` : `${(value / 1_048_576).toFixed(1)} MiB`; }
-function formatStorageBytes(value: number) { return value >= 1_073_741_824 ? `${(value / 1_073_741_824).toFixed(1)} GiB` : formatBytes(value); }
-function formatUptime(seconds: number) { const days = Math.floor(seconds / 86_400); const hours = Math.floor((seconds % 86_400) / 3_600); return days > 0 ? `${days}d ${hours}h` : `${hours}h`; }
 function shortId(value: string | null) { return value ? (value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value) : "—"; }

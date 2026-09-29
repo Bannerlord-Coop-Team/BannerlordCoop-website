@@ -150,3 +150,14 @@ Focused verification:
 npx tsx --test supabase/functions/control-plane-admin/index.test.ts
 npx eslint supabase/functions/_shared/control-plane-admin.ts supabase/functions/control-plane-admin/index.test.ts
 ```
+
+### VPS inventory loading
+
+The VPS tab first requests `vps-hosts` with `input: { includeLiveData: false }`.
+Registered hosts, capacity, and assignments render without live provider or runner
+reads. A browser request then loads the existing full inventory, preserving open
+host details while resource and billing fields show loading indicators. Failures
+remain visible with a retry button and leave the initial inventory usable.
+A superseded request cannot replace a newer page inventory. Legacy full responses
+without `liveDataIncluded` render directly. Deploy the companion backend's bounded
+inventory-read option before deploying this page; no Edge Function change is needed.
