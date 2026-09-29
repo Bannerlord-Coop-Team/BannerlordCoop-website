@@ -28,6 +28,7 @@ export async function requestControlPlaneAdmin<T>(options: {
     operation: string;
     input?: unknown;
     requestId?: string;
+    signal?: AbortSignal;
 }): Promise<T> {
     const { endpoint, publishableKey } = controlPlaneAdminEndpoint();
     const requestId = options.requestId ?? crypto.randomUUID();
@@ -48,7 +49,9 @@ export async function requestControlPlaneAdmin<T>(options: {
             },
             body,
             cache: "no-store",
-            signal: AbortSignal.timeout(CONTROL_PLANE_ADMIN_BROWSER_TIMEOUT_MILLISECONDS),
+            signal: options.signal
+                ? AbortSignal.any([options.signal, AbortSignal.timeout(CONTROL_PLANE_ADMIN_BROWSER_TIMEOUT_MILLISECONDS)])
+                : AbortSignal.timeout(CONTROL_PLANE_ADMIN_BROWSER_TIMEOUT_MILLISECONDS),
         });
     } catch {
         throw new ControlPlaneAdminError(

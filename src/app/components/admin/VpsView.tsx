@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { LocalDateTime } from "./LocalDateTime";
 import { VpsHostInventory } from "./VpsHostInventory";
@@ -16,22 +16,48 @@ export function VpsView({ inventory: initialInventory, accounts }: { inventory: 
     const current = refresh?.initial === initialInventory ? refresh : undefined;
     const inventory = current?.result ?? initialInventory;
     const pending = initialInventory.liveDataIncluded === false && current === undefined;
+    const refreshReadings = useCallback(() => setAttempt(value => value + 1), []);
     useEffect(() => {
-        if (initialInventory.liveDataIncluded !== false) return;
         let cancelled = false;
+        let inFlight = false;
+        let timer: ReturnType<typeof setTimeout>;
+        const controller = new AbortController();
         async function load() {
+            if (cancelled || inFlight || document.visibilityState === "hidden") return;
+            clearTimeout(timer);
+            inFlight = true;
             try {
                 const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+                if (cancelled) return;
                 if (!session?.access_token) throw new Error("Authentication is required.");
-                const result = await requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: session.access_token, operation: "vps-hosts" });
+                const result = await requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: session.access_token, operation: "vps-hosts", signal: controller.signal });
                 if (result.liveDataIncluded !== true) throw new Error("Live VPS data is unavailable.");
                 if (!cancelled) setRefresh({ initial: initialInventory, result });
             } catch (error) {
-                if (!cancelled) setRefresh({ initial: initialInventory, error: error instanceof Error ? error.message : "Live VPS data could not be loaded." });
+                if (!cancelled) setRefresh(previous => ({
+                    initial: initialInventory,
+                    result: previous?.initial === initialInventory ? previous.result
+                        : initialInventory.liveDataIncluded !== false ? initialInventory : undefined,
+                    error: error instanceof Error ? error.message : "Live VPS data could not be loaded.",
+                }));
+            } finally {
+                inFlight = false;
+                if (!cancelled) timer = setTimeout(() => void load(), 5_000);
             }
         }
-        void load();
-        return () => { cancelled = true; };
+        function visibilityChanged() {
+            clearTimeout(timer);
+            if (document.visibilityState !== "hidden") void load();
+        }
+        if (initialInventory.liveDataIncluded === false || attempt > 0) void load();
+        else timer = setTimeout(() => void load(), 5_000);
+        document.addEventListener("visibilitychange", visibilityChanged);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+            controller.abort();
+            document.removeEventListener("visibilitychange", visibilityChanged);
+        };
     }, [initialInventory, attempt]);
     const { controlPlaneHost, hosts } = inventory;
     const ownerLabels = new Map(accounts.map(account => [account.accountId, account.label]));
@@ -46,7 +72,7 @@ export function VpsView({ inventory: initialInventory, accounts }: { inventory: 
                 {checkedAt && <> Provider data checked <LocalDateTime value={checkedAt} />.</>}
             </p>
             {pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading live resource and billing readings…</p>}
-            {current?.error && <p role="alert" className="mt-3 text-xs text-red-200">{current.error} Registered inventory remains visible. <button type="button" className="underline" onClick={() => { setRefresh(undefined); setAttempt(value => value + 1); }}>Retry live readings</button></p>}
+            {current?.error && <p role="alert" className="mt-3 text-xs text-red-200">{current.error} {current.result ? "Showing the last readings; retrying automatically." : "Registered inventory remains visible; retrying automatically."} <button type="button" className="underline" onClick={refreshReadings}>Retry live readings</button></p>}
             <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
                 <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased OVH VPS. The durable workflow verifies account ownership, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
                 <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
@@ -57,6 +83,7 @@ export function VpsView({ inventory: initialInventory, accounts }: { inventory: 
             <VpsHostInventory
                 hosts={hosts}
                 liveDataPending={pending}
+                onRefresh={refreshReadings}
                 ownerLabels={Object.fromEntries(ownerLabels)}
                 runnerTargetSourceCommit={runnerTargetSourceCommit}
             />

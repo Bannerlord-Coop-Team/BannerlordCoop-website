@@ -12,6 +12,7 @@ type RunnerUpdate = NonNullable<HostingAdminVpsHost["runnerUpdate"]>;
 
 export function RunnerOnboardingStatus({
     compact = false,
+    onRefresh,
     serviceName,
     runningServers,
     targetSourceCommit,
@@ -19,6 +20,7 @@ export function RunnerOnboardingStatus({
     update,
 }: {
     compact?: boolean;
+    onRefresh?: () => void;
     serviceName: string;
     runningServers: number;
     targetSourceCommit: string | null;
@@ -26,6 +28,7 @@ export function RunnerOnboardingStatus({
     update: RunnerUpdate | null;
 }) {
     const router = useRouter();
+    const refresh = onRefresh ?? router.refresh;
     const [submitting, setSubmitting] = useState(false);
     const [requestError, setRequestError] = useState("");
     const onboardingPending = onboarding !== null && isPending(onboarding.state);
@@ -36,10 +39,10 @@ export function RunnerOnboardingStatus({
         && onboarding.sourceCommit === targetSourceCommit;
 
     useEffect(() => {
-        if (!pending) return;
+        if (!pending || onRefresh) return;
         const interval = window.setInterval(() => router.refresh(), 4_000);
         return () => window.clearInterval(interval);
-    }, [pending, router]);
+    }, [pending, router, onRefresh]);
 
     async function requestUpdate() {
         if (!window.confirm(`Update every managed-runner slot on ${serviceName}? Every assigned game must already be stopped; the workflow then quiesces and restores only the runner services.`)) {
@@ -59,7 +62,7 @@ export function RunnerOnboardingStatus({
                     reason: "Deploy the current reviewed managed-runner release through the transactional fleet workflow.",
                 },
             });
-            router.refresh();
+            refresh();
         } catch (error) {
             setRequestError(error instanceof Error ? error.message : "Runner update could not be requested.");
         } finally {
@@ -79,7 +82,7 @@ export function RunnerOnboardingStatus({
                 operation: "onboard-vps-host",
                 input: { serviceName, mode: onboarding === null ? "enroll" : "retry" },
             });
-            router.refresh();
+            refresh();
         } catch (error) {
             setRequestError(error instanceof Error ? error.message : "Runner onboarding could not be requested.");
         } finally {

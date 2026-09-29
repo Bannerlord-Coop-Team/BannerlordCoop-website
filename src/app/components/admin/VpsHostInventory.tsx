@@ -20,6 +20,7 @@ type DiskPressure = {
 
 type VpsHostInventoryProps = {
     liveDataPending?: boolean;
+    onRefresh?: () => void;
     hosts: HostingAdminVpsHost[];
     ownerLabels: Record<string, string>;
     runnerTargetSourceCommit: string | null;
@@ -33,6 +34,7 @@ const SLOT_LABEL = "before:mb-2 before:block before:text-[0.58rem] before:upperc
 export function VpsHostInventory({
     hosts,
     liveDataPending = false,
+    onRefresh,
     ownerLabels,
     runnerTargetSourceCommit,
 }: VpsHostInventoryProps) {
@@ -79,6 +81,7 @@ export function VpsHostInventory({
                                     <div role="cell" data-label="Billing" className={SUMMARY_LABEL}><p className="text-xs font-semibold text-foreground">{liveDataPending ? "Loading…" : formatVpsCost(host.cost)}</p></div>
                                     <div role="cell" data-label="Runner" className={SUMMARY_LABEL}>{liveDataPending ? <StateBadge value="loading" /> : <RunnerOnboardingStatus
                                         compact
+                                        onRefresh={onRefresh}
                                         serviceName={host.name}
                                         runningServers={host.runningServers}
                                         targetSourceCommit={runnerTargetSourceCommit}
