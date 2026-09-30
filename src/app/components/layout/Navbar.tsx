@@ -6,21 +6,24 @@ import { hasAdminAccess } from "@/app/lib/auth/access";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { Server, Swords, TerminalSquare } from "lucide-react";
 import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
 import {DownloadModal} from "@/app/components/home/modulesection/DownloadModal.tsx";
 
 const navigationLinkClassName = "inline-flex min-h-10 items-center px-2 font-label text-sm font-semibold uppercase leading-none tracking-[0.16em] text-foreground-muted transition-colors duration-300 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
-export async function Navbar() {
+/** A page may share its own verified viewer; never retain it across renders. */
+export async function Navbar({ viewer }: { viewer?: Promise<{ user: User | null }> } = {}) {
     let isAuthenticated = false;
     let isAdmin = false;
     let accountName = "Your account";
 
     try {
-        const supabase = await getSupabaseServerClient();
-        const { data } = await supabase.auth.getUser();
-        isAuthenticated = data.user !== null;
-        if (data.user) accountName = accountDisplayName(data.user);
-        isAdmin = data.user ? hasAdminAccess(data.user) : false;
+        const { user } = viewer
+            ? await viewer
+            : (await (await getSupabaseServerClient()).auth.getUser()).data;
+        isAuthenticated = user !== null;
+        if (user) accountName = accountDisplayName(user);
+        isAdmin = user ? hasAdminAccess(user) : false;
     } catch {}
 
     return (

@@ -1,12 +1,12 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import { onboardingSummary, ONBOARDING_TEST_ID } from "../../../tests/onboarding-fixtures";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn(), publicList: vi.fn(), account: vi.fn(), displayNames: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn(), publicList: vi.fn(), account: vi.fn(), displayNames: vi.fn(), navbar: vi.fn() }));
 vi.mock("@/app/lib/hosting/website-account-status", () => ({ getWebsiteAccountStatus: mocks.account }));
 vi.mock("@/app/lib/hosting/public-servers", () => ({ listPublicServers: mocks.publicList }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
 vi.mock("@/app/lib/hosting/my-servers", () => ({ listAllMyServers: mocks.list, getServerOnboarding: mocks.onboarding }));
-vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: () => <nav>Navigation</nav> }));
+vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: (props: unknown) => { mocks.navbar(props); return <nav>Navigation</nav>; } }));
 vi.mock("@/app/components/servers/ServerOnboarding", () => ({ ServerOnboarding: ({ userId, summary }: { userId: string; summary: unknown }) => <div data-user={userId}>{summary ? "Trusted onboarding snapshot" : "Unavailable snapshot"}</div>, GamePasswordNotice: () => <p>Discord password controls</p> }));
 vi.mock("@/app/lib/console/servers", () => ({ listLiveConsoleServers: () => [{ id: "live-one", name: "Live campaign" }] }));
 vi.mock("@/app/lib/auth/access", () => ({ getLiveConsoleAccessLevel: () => "owner" }));
@@ -34,6 +34,24 @@ it("real servers page keeps mixed managed/live inventory and trusted onboarding 
     expect(html).toContain("Assigned campaign"); expect(html).toContain("Live campaign"); expect(html).toContain("Public directory");
     expect(html).toContain(`/servers/${ONBOARDING_TEST_ID}`); expect(html).toContain("Offline");
     expect(mocks.onboarding).toHaveBeenCalledWith("test-page-jwt"); expect(mocks.list).toHaveBeenCalledWith("test-page-jwt");
+});
+it("shares the verified viewer and client within one render, then reads the next session afresh", async () => {
+    await renderPage();
+    const first = await mocks.navbar.mock.calls[0][0].viewer;
+    expect(mocks.auth).toHaveBeenCalledTimes(1);
+    const client = await mocks.auth.mock.results[0].value;
+    expect(mocks.account).toHaveBeenCalledWith(first.user.id, "test-page-jwt", client);
+    expect(Object.keys(first)).toEqual(["user"]);
+
+    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: null } }), getSession: async () => ({ data: { session: null } }) } });
+    const html = await renderPage();
+    const second = await mocks.navbar.mock.calls[1][0].viewer;
+    expect(mocks.auth).toHaveBeenCalledTimes(2);
+    expect(second.user).toBeNull();
+    expect(Object.keys(second)).toEqual(["user"]);
+    expect(mocks.account).toHaveBeenCalledTimes(1);
+    expect(html).toContain("Sign in to view");
+    expect(html).not.toContain("Assigned campaign");
 });
 it("public directory failure does not hide private inventory or fall back to placeholder listings", async () => {
     mocks.publicList.mockRejectedValue(new Error("public endpoint unavailable"));

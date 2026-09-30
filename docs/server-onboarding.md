@@ -2,6 +2,15 @@
 
 Real `/servers` onboarding adapts the approved gold/dark modal design (`f4eeb2d`) onto the current directory. It does not replace the page with the development mock or use browser database writes. Membership is verified server-side under the explicit policy in [membership onboarding](membership-onboarding.md). Existing live-console and managed-server inventory/credentials/controls are unchanged.
 
+The directory starts public inventory independently and streams navigation,
+private inventory and hosting status in separate sections. Each render verifies
+one user/session pair and shares that render's client with the account-status
+reader and its verified user with navigation. There is no cross-render user or
+session cache. Account-status and onboarding endpoints still authenticate the
+explicit token and validate current session context; user/session mismatches
+never dispatch private requests. Account synchronization precedes allocation
+reads, without delaying either directory section.
+
 ## Authority and public contract
 
 The backend requires active, unused allocation under `max(administrativeBase, qualifyingPatreonOne) + administrativeBonus`. Membership is disabled until the reviewed configuration/rollout gates in the membership document pass. Roles (including Admin, Standard and Server Owner) and historical role grants do not authorize this feature. The authenticated backend derives the guild and verified linked Discord identity; website-supplied page identity only prevents dispatch after an account switch.

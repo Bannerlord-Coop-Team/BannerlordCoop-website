@@ -23,7 +23,7 @@ import {
     Server,
     ShieldCheck,
 } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -39,12 +39,12 @@ export default function ServersPage() {
     const publicInventory = loadPublicInventory();
     const viewer = loadViewer();
     const managedInventory = viewer.then(({ user, accessToken }) => loadManagedInventory(user, accessToken));
-    const hostingStatus = viewer.then(({ user, accessToken }) => loadHostingStatus(user, accessToken));
+    const hostingStatus = viewer.then(({ user, accessToken, client }) => loadHostingStatus(user, accessToken, client));
 
     return (
         <>
             <Suspense fallback={<div role="status" aria-label="Loading navigation" className="h-16 border-b border-white/10 bg-background" />}>
-                <Navbar />
+                <Navbar viewer={viewer.then(({ user }) => ({ user }))} />
             </Suspense>
             <main className="min-h-svh bg-background">
                 <div className="site-container py-10 sm:py-14">
@@ -155,12 +155,13 @@ export default function ServersPage() {
 async function loadViewer() {
     let user: User | null = null;
     let accessToken: string | null = null;
+    let client: SupabaseClient | null = null;
 
     try {
-        const supabase = await getSupabaseServerClient();
+        client = await getSupabaseServerClient();
         const [{ data: userData }, { data: sessionData }] = await Promise.all([
-            supabase.auth.getUser(),
-            supabase.auth.getSession(),
+            client.auth.getUser(),
+            client.auth.getSession(),
         ]);
         user = userData.user;
         accessToken = user && sessionData.session?.user.id === user.id ? sessionData.session.access_token : null;
@@ -168,7 +169,7 @@ async function loadViewer() {
         // Keep the public server directory available when auth is not configured.
     }
 
-    return { user, accessToken };
+    return { user, accessToken, client };
 }
 
 /** Resolve names only for live servers the verified user can manage. */
@@ -196,13 +197,13 @@ async function loadLiveServers(user: User | null) {
 }
 
 /** Keep account synchronization before allocation reads, outside either directory's path. */
-async function loadHostingStatus(user: User | null, accessToken: string | null) {
+async function loadHostingStatus(user: User | null, accessToken: string | null, client: SupabaseClient | null) {
     // Resolve authoritative identities before any allocation fetch. No metadata/email fallback.
     const identity = identityStep(user);
     let account: AccountStatus | null = null;
     if (user && accessToken) {
         try {
-            account = await getWebsiteAccountStatus(user.id, accessToken);
+            account = await getWebsiteAccountStatus(user.id, accessToken, client ?? undefined);
         } catch { /* Independent CP grants must remain usable during membership outages. */ }
     }
     let onboarding: OnboardingSummary | null = null;
