@@ -1,5 +1,4 @@
 import { verifyWebsiteSessionContext } from "./session-context.ts";
-const RELEASE_CACHE_TTL_MILLISECONDS = 5 * 60_000;
 
 const MAXIMUM_REQUEST_BYTES = 64 * 1024;
 const MAXIMUM_AUTH_RESPONSE_BYTES = 512 * 1024;
@@ -15,12 +14,11 @@ export type ControlPlaneAdminHandlerOptions = {
     supabasePublishableKey: string;
     controlPlaneAdminUrl: string;
     fetchImplementation?: typeof fetch;
-    now?: () => number;
     authTimeoutMilliseconds?: number;
     upstreamTimeoutMilliseconds?: number;
 };
 
-/** Authenticates admin requests and proxies operations, caching only successful release-list pages. */
+/** Authenticates every request and forwards reads to the authoritative control plane. */
 export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandlerOptions) {
     const allowedOrigins = new Set(options.allowedOrigins.map(validateOrigin));
     if (allowedOrigins.size === 0 || allowedOrigins.size !== options.allowedOrigins.length) {
@@ -32,9 +30,6 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
         throw new Error("Supabase publishable key is invalid");
     }
     const fetchImplementation = options.fetchImplementation ?? fetch;
-    const now = options.now ?? Date.now;
-    // At most one page per channel per function instance; never store tokens or user data.
-    const releasePages = new Map<string, { key: string; expiresAt: number; result: Record<string, unknown> }>();
     const authTimeoutMilliseconds = boundedTimeout(
         options.authTimeoutMilliseconds ?? 10_000,
         MAXIMUM_AUTH_TIMEOUT_MILLISECONDS,
@@ -103,17 +98,6 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             return envelopeError(403, requestId, "forbidden", "Administrator access is required.", false, cors);
         }
 
-        const releaseRequest = cacheableReleaseRequest(raw);
-        if (releaseRequest !== null) {
-            const cached = releasePages.get(releaseRequest.channel);
-            if (cached !== undefined && cached.expiresAt <= now()) releasePages.delete(releaseRequest.channel);
-            if (cached !== undefined && cached.key === releaseRequest.key && cached.expiresAt > now()) {
-                return Response.json({ version: 1, requestId, ok: true, result: cached.result }, {
-                    headers: { ...cors, "cache-control": "no-store" },
-                });
-            }
-        }
-
         let upstream: Response;
         try {
             upstream = await fetchImplementation(upstreamEndpoint, {
@@ -136,16 +120,7 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             return envelopeError(502, requestId, "invalid_response", "The control plane returned an invalid response.", true, cors);
         }
         try {
-            const envelope: unknown = JSON.parse(upstreamBody);
-            if (releaseRequest !== null && upstream.status === 200 && isRecord(envelope)
-                && envelope.version === 1 && envelope.requestId === requestId && envelope.ok === true
-                && isRecord(envelope.result) && Array.isArray(envelope.result.items)
-                && envelope.result.items.length <= releaseRequest.limit
-                && (envelope.result.nextCursor === null || typeof envelope.result.nextCursor === "string")) {
-                releasePages.set(releaseRequest.channel, {
-                    key: releaseRequest.key, expiresAt: now() + RELEASE_CACHE_TTL_MILLISECONDS, result: envelope.result,
-                });
-            }
+            JSON.parse(upstreamBody);
         } catch {
             return envelopeError(502, requestId, "invalid_response", "The control plane returned an invalid response.", true, cors);
         }
@@ -154,19 +129,6 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             headers: { ...cors, "cache-control": "no-store", "content-type": "application/json" },
         });
     };
-}
-
-/** Restricts caching to canonical, bounded build-list requests; everything else reaches the control plane. */
-function cacheableReleaseRequest(raw: string) {
-    const request = JSON.parse(raw) as Record<string, unknown>;
-    if (request.operation !== "builds" || !isRecord(request.input)
-        || Object.keys(request).some((key) => !["version", "requestId", "operation", "input"].includes(key))) return null;
-    const { channel, cursor, limit } = request.input;
-    if ((channel !== "stable" && channel !== "nightly")
-        || (cursor !== null && (typeof cursor !== "string" || cursor.length > 128))
-        || typeof limit !== "number" || !Number.isInteger(limit) || limit < 1 || limit > 100
-        || Object.keys(request.input).some((key) => !["channel", "cursor", "limit"].includes(key))) return null;
-    return { channel, limit, key: JSON.stringify([cursor, limit]) };
 }
 
 function validateOrigin(raw: string): string {
