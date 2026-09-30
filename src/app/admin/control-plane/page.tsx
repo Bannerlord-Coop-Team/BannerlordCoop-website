@@ -98,10 +98,6 @@ type PageProps = {
 };
 
 export default async function ControlPlaneAdminPage({ searchParams }: PageProps) {
-    const { user, accessToken } = await getSupabaseServerViewer();
-    if (!user || !accessToken) redirect("/login?next=/admin/control-plane");
-    if (!hasAdminAccess(user)) redirect("/");
-
     const params = await searchParams;
     const view = parseView(first(params.view));
     const query = (first(params.q) ?? "").trim().slice(0, 100);
@@ -110,7 +106,28 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
     const jobAction = parseJobAction(first(params.action));
     const unacknowledgedOnly = first(params.alert) === "unacknowledged";
     const jobCursor = parseCursor(first(params.cursor));
-    const token = accessToken;
+    const controller = new AbortController();
+    const { read } = await loadAuthenticatedView();
+    async function loadAuthenticatedView() {
+        try {
+            const { user, accessToken, read } = await getSupabaseServerViewer({
+                onReadOnlySession: token => {
+                    // This closed switch performs reads through the independently authorized API.
+                    // Settle failures immediately: validation can reject before the read completes.
+                    return Promise.allSettled([
+                        loadView(token, view, query, serverId, jobState, jobAction, unacknowledgedOnly, jobCursor, controller.signal),
+                    ]).then(([result]) => result);
+                },
+            });
+            if (!user || !accessToken) redirect("/login?next=/admin/control-plane");
+            if (!hasAdminAccess(user)) redirect("/");
+            if (!read) throw new Error("Authenticated control plane read was not started.");
+            return { read };
+        } catch (error) {
+            controller.abort();
+            throw error;
+        }
+    }
 
     return (
         <main className="min-h-svh bg-background">
@@ -151,7 +168,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
                     fallback={<ControlPlaneViewSkeleton view={view} />}
                 >
                     <ControlPlaneViewContent
-                        token={token}
+                        read={read}
                         view={view}
                         query={query}
                         serverId={serverId}
@@ -167,7 +184,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
 }
 
 async function ControlPlaneViewContent({
-    token,
+    read,
     view,
     query,
     serverId,
@@ -176,7 +193,7 @@ async function ControlPlaneViewContent({
     unacknowledgedOnly,
     jobCursor,
 }: {
-    token: string;
+    read: Promise<PromiseSettledResult<unknown>>;
     view: View;
     query: string;
     serverId: string;
@@ -191,7 +208,10 @@ async function ControlPlaneViewContent({
     try {
         const needsAccounts = view === "vps" || view === "servers" || view === "server" || view === "operations";
         const [viewResult, usersResult] = await Promise.allSettled([
-            loadView(token, view, query, serverId, jobState, jobAction, unacknowledgedOnly, jobCursor),
+            read.then(result => {
+                if (result.status === "rejected") throw result.reason;
+                return result.value;
+            }),
             needsAccounts ? listWebsiteAccounts() : Promise.resolve({ users: [], truncated: false }),
         ]);
         if (viewResult.status === "rejected") throw viewResult.reason;
@@ -229,22 +249,22 @@ async function ControlPlaneViewContent({
 }
 
 /** Loads the authenticated data needed by the selected administration view. */
-async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null) {
+async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null, signal: AbortSignal) {
     switch (view) {
         case "overview":
-            return requestControlPlaneAdmin<OverviewSummary>({ accessToken: token, operation: "overview", input: { compact: true } });
+            return requestControlPlaneAdmin<OverviewSummary>({ accessToken: token, signal, operation: "overview", input: { compact: true } });
         case "operations": {
             const [overview, inventory, selectedDashboard, releases] = await Promise.all([
-                requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" }),
-                requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts", input: { includeLiveData: false, includeProviderInventory: true } }),
+                requestControlPlaneAdmin<Overview>({ accessToken: token, signal, operation: "overview" }),
+                requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, operation: "vps-hosts", input: { includeLiveData: false, includeProviderInventory: true } }),
                 serverId
                     ? requestControlPlaneAdmin<ServerDashboardResult>({
-                        accessToken: token,
+                        accessToken: token, signal,
                         operation: "server-dashboard",
                         input: { serverId },
                     })
                     : Promise.resolve(null),
-                loadReleaseCatalog(token),
+                loadReleaseCatalog(token, signal),
             ]);
             return {
                 overview: { ...overview, stableBuilds: releases.stable, nightlyBuilds: releases.nightly },
@@ -253,23 +273,23 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             } satisfies OperationsData;
         }
         case "vps":
-            return requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts", input: { includeLiveData: false } });
+            return requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, operation: "vps-hosts", input: { includeLiveData: false } });
         case "servers":
             return requestControlPlaneAdmin<HostingPage<ManagedServer>>({
-                accessToken: token,
+                accessToken: token, signal,
                 operation: "servers",
                 input: { filter: query ? { query } : {}, cursor: null, limit: 100 },
             });
         case "server":
             if (!serverId) throw new ControlPlaneAdminError("server_required", "Select a server first.");
             return requestControlPlaneAdmin<ServerDashboardResult>({
-                accessToken: token,
+                accessToken: token, signal,
                 operation: "server-dashboard",
                 input: { serverId },
             });
         case "jobs":
             return requestControlPlaneAdmin<HostingPage<HostingJob>>({
-                accessToken: token,
+                accessToken: token, signal,
                 operation: "jobs",
                 input: {
                     filter: jobState === "failed"
@@ -280,18 +300,18 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 },
             });
         case "releases":
-            return loadReleaseCatalog(token);
+            return loadReleaseCatalog(token, signal);
         case "audit":
-            return requestControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, operation: "audit", input: { cursor: null, limit: 100 } });
+            return requestControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, signal, operation: "audit", input: { cursor: null, limit: 100 } });
     }
 }
 
 /** Fetches the full bounded GHCR catalog rather than the overview's 20-version summaries. */
-async function loadReleaseCatalog(token: string) {
+async function loadReleaseCatalog(token: string, signal: AbortSignal) {
     // Discovery considers at most 100 candidate versions, so 100 per channel covers the catalog.
     const [stable, nightly] = await Promise.all([
-        requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, operation: "builds", input: { channel: "stable", cursor: null, limit: 100 } }),
-        requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, operation: "builds", input: { channel: "nightly", cursor: null, limit: 100 } }),
+        requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, signal, operation: "builds", input: { channel: "stable", cursor: null, limit: 100 } }),
+        requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, signal, operation: "builds", input: { channel: "nightly", cursor: null, limit: 100 } }),
     ]);
     return { stable, nightly };
 }

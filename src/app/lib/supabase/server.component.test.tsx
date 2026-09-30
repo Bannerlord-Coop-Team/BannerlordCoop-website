@@ -96,3 +96,31 @@ it("overlaps actual SDK HTTP calls even while the user endpoint is stalled", asy
     } finally { response.resolve(Response.json(user)); }
     expect((await result).accessToken).toBe(jwt);
 });
+
+
+it("starts the independently authorized read with the refreshed token while verification is pending", async () => {
+    const gate = Promise.withResolvers<unknown>();
+    client.auth.getUser.mockReturnValue(gate.promise);
+    const start = vi.fn();
+    const pending = getSupabaseServerViewer({ onReadOnlySession: start });
+    await vi.waitFor(() => expect(start).toHaveBeenCalledExactlyOnceWith("verified-token"));
+    gate.resolve({ data: { user }, error: null });
+    await pending;
+    client.auth.getSession.mockResolvedValueOnce({ data: { session: null }, error: null });
+    await getSupabaseServerViewer({ onReadOnlySession: start });
+    expect(start).toHaveBeenCalledTimes(1);
+});
+
+it("does not start early reads before impersonation resolution or after it fails", async () => {
+    mocks.cookie.mockImplementation(name => name === IMPERSONATION_COOKIE ? { value: "signed-selection" } : undefined);
+    const gate = Promise.withResolvers<void>(); mocks.resolve.mockReturnValue(gate.promise);
+    const start = vi.fn();
+    const pending = getSupabaseServerViewer({ onReadOnlySession: start });
+    await vi.waitFor(() => expect(mocks.resolve).toHaveBeenCalled());
+    expect(start).not.toHaveBeenCalled();
+    gate.resolve(); await pending;
+    expect(start).toHaveBeenCalledTimes(1);
+    mocks.resolve.mockRejectedValueOnce(new Error("expired"));
+    await expect(getSupabaseServerViewer({ onReadOnlySession: start })).rejects.toThrow("redirect:/admin?error=Impersonation");
+    expect(start).toHaveBeenCalledTimes(1);
+});
