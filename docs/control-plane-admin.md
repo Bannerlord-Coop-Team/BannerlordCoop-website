@@ -4,7 +4,20 @@
 
 For server-rendered pane reads, the page starts its closed read operation as soon as
 it has a refreshed session token, overlapping the website's fresh viewer validation.
-The Edge Function and Oracle adapter still independently authorize that request.
+The seven server-rendered reads (`overview`, `vps-hosts`, `servers`,
+`server-dashboard`, `jobs`, `audit`, `builds`) use a server-only helper to call
+`https://control-plane.bannerlordcoop.com/v1/admin/control-plane` directly.
+Each sends the current Bearer token and `x-control-plane-protected-admin: 1`.
+Oracle freshly verifies the Supabase user and durable session context and requires
+the protected `Admin` role, regardless of bootstrap email admission. The reader
+requires the exact response acknowledgment, HTTP success and a successful
+correlated envelope before returning data. It never falls back to the relay.
+An older backend or backend rollback therefore fails closed; deploy the companion
+ControlPlane #265 adapter before this website change. Website rollback to Edge
+reads remains compatible. Browser reads and all mutations retain the Edge route.
+The fixed direct route omits cookies/API keys, disables caching, refuses redirects
+without following them, bounds requests to 64KiB and streamed responses to 8MiB
+and 8192 chunks, and keeps caller cancellation plus the 90-second read deadline.
 The page withholds all content until fresh user/session identity and administrator
 access checks succeed, and cancels pending reads on rejection. Service-key account
 lookups start only after those checks. Impersonation actor/target validation finishes

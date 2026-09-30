@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), request: vi.fn(), accounts: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: mocks.auth }));
 vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts }));
-vi.mock("@/app/lib/control-plane/client", async (original) => ({ ...await original<object>(), requestControlPlaneAdmin: mocks.request }));
+vi.mock("@/app/lib/control-plane/server-read", () => ({ readControlPlaneAdmin: mocks.request }));
 import ControlPlaneAdminPage from "./page";
 
 beforeEach(() => {

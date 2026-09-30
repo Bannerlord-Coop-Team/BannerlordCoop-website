@@ -11,7 +11,8 @@ import { VpsView } from "@/app/components/admin/VpsView";
 import { ControlPlaneLiveRefresh } from "@/app/components/admin/ControlPlaneLiveRefresh";
 import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
 import { hasAdminAccess } from "@/app/lib/auth/access";
-import { ControlPlaneAdminError, requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
+import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
+import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
 import {
     auditActionExplanation,
     destructiveExplanation,
@@ -252,13 +253,13 @@ async function ControlPlaneViewContent({
 async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null, signal: AbortSignal) {
     switch (view) {
         case "overview":
-            return requestControlPlaneAdmin<OverviewSummary>({ accessToken: token, signal, operation: "overview", input: { compact: true } });
+            return readControlPlaneAdmin<OverviewSummary>({ accessToken: token, signal, operation: "overview", input: { compact: true } });
         case "operations": {
             const [overview, inventory, selectedDashboard, releases] = await Promise.all([
-                requestControlPlaneAdmin<Overview>({ accessToken: token, signal, operation: "overview" }),
-                requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, operation: "vps-hosts", input: { includeLiveData: false, includeProviderInventory: true } }),
+                readControlPlaneAdmin<Overview>({ accessToken: token, signal, operation: "overview" }),
+                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, operation: "vps-hosts", input: { includeLiveData: false, includeProviderInventory: true } }),
                 serverId
-                    ? requestControlPlaneAdmin<ServerDashboardResult>({
+                    ? readControlPlaneAdmin<ServerDashboardResult>({
                         accessToken: token, signal,
                         operation: "server-dashboard",
                         input: { serverId },
@@ -273,22 +274,22 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             } satisfies OperationsData;
         }
         case "vps":
-            return requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, operation: "vps-hosts", input: { includeLiveData: false } });
+            return readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, operation: "vps-hosts", input: { includeLiveData: false } });
         case "servers":
-            return requestControlPlaneAdmin<HostingPage<ManagedServer>>({
+            return readControlPlaneAdmin<HostingPage<ManagedServer>>({
                 accessToken: token, signal,
                 operation: "servers",
                 input: { filter: query ? { query } : {}, cursor: null, limit: 100 },
             });
         case "server":
             if (!serverId) throw new ControlPlaneAdminError("server_required", "Select a server first.");
-            return requestControlPlaneAdmin<ServerDashboardResult>({
+            return readControlPlaneAdmin<ServerDashboardResult>({
                 accessToken: token, signal,
                 operation: "server-dashboard",
                 input: { serverId },
             });
         case "jobs":
-            return requestControlPlaneAdmin<HostingPage<HostingJob>>({
+            return readControlPlaneAdmin<HostingPage<HostingJob>>({
                 accessToken: token, signal,
                 operation: "jobs",
                 input: {
@@ -302,7 +303,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         case "releases":
             return loadReleaseCatalog(token, signal);
         case "audit":
-            return requestControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, signal, operation: "audit", input: { cursor: null, limit: 100 } });
+            return readControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, signal, operation: "audit", input: { cursor: null, limit: 100 } });
     }
 }
 
@@ -310,8 +311,8 @@ async function loadView(token: string, view: View, query: string, serverId: stri
 async function loadReleaseCatalog(token: string, signal: AbortSignal) {
     // Discovery considers at most 100 candidate versions, so 100 per channel covers the catalog.
     const [stable, nightly] = await Promise.all([
-        requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, signal, operation: "builds", input: { channel: "stable", cursor: null, limit: 100 } }),
-        requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, signal, operation: "builds", input: { channel: "nightly", cursor: null, limit: 100 } }),
+        readControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, signal, operation: "builds", input: { channel: "stable", cursor: null, limit: 100 } }),
+        readControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, signal, operation: "builds", input: { channel: "nightly", cursor: null, limit: 100 } }),
     ]);
     return { stable, nightly };
 }
