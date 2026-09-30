@@ -9,7 +9,7 @@ import { CONTROL_PLANE_ADMIN_MAXIMUM_RESPONSE_BYTES } from "./client";
 
 const REQUEST_ID = "11111111-1111-4111-8111-111111111111";
 const TOKEN = "access-token-with-enough-characters";
-const operations = ["overview", "vps-hosts", "servers", "server-dashboard", "jobs", "audit", "builds"] as const;
+const operations = ["overview", "vps-hosts", "servers", "server-dashboard", "jobs", "audit", "release-catalog"] as const;
 const options = { accessToken: TOKEN, operation: "overview" as const, requestId: REQUEST_ID };
 const headers = { "content-type": "application/json", "x-control-plane-protected-admin": "1" };
 const envelope = (result: unknown) => ({ version: 1, requestId: REQUEST_ID, ok: true, result });
@@ -39,7 +39,7 @@ it.each(operations)("directly reads fresh %s through the fixed constrained serve
 
 it("rejects unknown operations, mutations, bad tokens and oversized requests without transport", async () => {
     const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
-    for (const operation of ["delete-server", "import-latest-stable", "set-global-controls", "unknown"]) {
+    for (const operation of ["delete-server", "import-latest-stable", "set-global-controls", "builds", "unknown"]) {
         await expect(readControlPlaneAdmin({ ...options, operation: operation as never })).rejects.toMatchObject({ code: "invalid_request" });
     }
     for (const accessToken of ["short", "x".repeat(8193)]) {

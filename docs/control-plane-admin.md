@@ -5,7 +5,7 @@
 For server-rendered pane reads, the page starts its closed read operation as soon as
 it has a refreshed session token, overlapping the website's fresh viewer validation.
 The seven server-rendered reads (`overview`, `vps-hosts`, `servers`,
-`server-dashboard`, `jobs`, `audit`, `builds`) use a server-only helper to call
+`server-dashboard`, `jobs`, `audit`, `release-catalog`) use a server-only helper to call
 `https://control-plane.bannerlordcoop.com/v1/admin/control-plane` directly.
 Each sends the current Bearer token and `x-control-plane-protected-admin: 1`.
 Oracle freshly verifies the Supabase user and durable session context and requires
@@ -23,6 +23,16 @@ access checks succeed, and cancels pending reads on rejection. Service-key accou
 lookups start only after those checks. Impersonation actor/target validation finishes
 before any early read starts. No mutation uses this path and no response or permission
 is cached across requests.
+
+Releases and release choices in Operations request one `release-catalog` result
+with separate Stable/Nightly pages, rather than authenticate two `builds` reads.
+Both pages use one freshly verified and mapped registry observation, retaining
+independent null cursors, current-first ordering and limit100 per channel. GHCR
+discovery has a global100-version bound; aliases mark matching versions without
+adding rows, so these pages cover the full current catalog. Errors remain visible.
+Deploy the companion ControlPlane #266 operation before switching this website;
+older backends reject it without a fallback. Browser `builds` reads and all
+mutations retain their existing Edge contract.
 
 The page provides:
 

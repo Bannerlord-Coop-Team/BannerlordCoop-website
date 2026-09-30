@@ -399,7 +399,4 @@ test("release selectors load the same full catalog as the Releases view", async 
     const operations = source.slice(source.indexOf('case "operations":'), source.indexOf('case "vps":'));
     assert.match(operations, /loadReleaseCatalog\(token, signal\)/u);
     assert.match(operations, /stableBuilds: releases.stable, nightlyBuilds: releases.nightly/u);
-    const catalog = source.slice(source.indexOf("async function loadReleaseCatalog"), source.indexOf("function ViewTabs"));
-    assert.match(catalog, /channel: "stable", cursor: null, limit: 100/u);
-    assert.match(catalog, /channel: "nightly", cursor: null, limit: 100/u);
 });

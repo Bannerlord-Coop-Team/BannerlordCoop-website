@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({ auth: vi.fn(), request: vi.fn(), accounts: vi.
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: mocks.auth }));
 vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts }));
 vi.mock("@/app/lib/control-plane/server-read", () => ({ readControlPlaneAdmin: mocks.request }));
+vi.mock("@/app/components/admin/RefreshReleaseCatalog", () => ({ RefreshReleaseCatalog: () => null }));
 import ControlPlaneAdminPage from "./page";
 
 beforeEach(() => {
@@ -32,6 +33,28 @@ it("renders Overview from its compact current response without fetching account 
     expect(html).toContain("Recent jobs");
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "overview", input: { compact: true }, signal: expect.any(AbortSignal) }]]);
+    expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
+it("renders both complete release groups from one catalog request without account lookups", async () => {
+    const build = { buildId: "stable-v0.1.10", channel: "stable", version: "v0.1.10", sourceRevision: "registry-observed",
+        supportedGameVersion: "v1.4.8", validationState: "validated", publishedAt: "2026-09-30T00:00:00.000Z",
+        updatedAt: "2026-09-30T00:00:00.000Z", currentChannel: true,
+        registryMetadata: { versionTag: "v0.1.10", clientRevision: "a".repeat(40), serverRevision: "b".repeat(40) } };
+    mocks.request.mockResolvedValue({
+        stable: { items: [build], nextCursor: null },
+        nightly: { items: [{ ...build, buildId: "nightly-v0.1.11", channel: "nightly", version: "v0.1.11",
+            requiredClientModVersion: "v0.1.11", registryMetadata: { ...build.registryMetadata, versionTag: "v0.1.11-nightly" } }], nextCursor: null },
+    });
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "releases" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    expect(html).toContain("v0.1.10"); expect(html).toContain("v0.1.11");
+    expect(html.replaceAll("<!-- -->", "")).toContain("Current Public");
+    expect(html.replaceAll("<!-- -->", "")).toContain("Current Nightly");
+    expect(html).not.toContain("The control plane view could not be loaded");
+    expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "release-catalog",
+        input: { stableCursor: null, nightlyCursor: null, limit: 100 }, signal: expect.any(AbortSignal) }]]);
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
@@ -82,7 +105,7 @@ it.each(["overview", "servers", "server", "vps", "jobs", "releases", "audit", "o
     await expect(ControlPlaneAdminPage({ searchParams: Promise.resolve({ view, serverId: "test-server" }) })).rejects.toThrow("session context unavailable");
     expect(mocks.request.mock.calls.length).toBeGreaterThan(0);
     for (const [request] of mocks.request.mock.calls) {
-        expect(["overview", "servers", "server-dashboard", "vps-hosts", "jobs", "builds", "audit"]).toContain(request.operation);
+        expect(["overview", "servers", "server-dashboard", "vps-hosts", "jobs", "release-catalog", "audit"]).toContain(request.operation);
         expect(request.signal.aborted).toBe(true);
         expect(request.accessToken).toBe("test-admin-token");
     }
