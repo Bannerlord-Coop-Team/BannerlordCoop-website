@@ -200,3 +200,7 @@ upstream request and complete bounded response. These are measured per request;
 no tokens, identities, request inputs, upstream timing text, or internal URLs are
 included. Denied gateway requests do not expose stage timings. This diagnostic
 header does not cache data or change authorization, forwarding, or deadlines.
+
+## Applied administrator job index history
+
+`supabase/migrations/20260930142800_control_plane_admin_job_index.sql` is an exact Git-byte mirror of ControlPlane commit `142cd4bed948a6c354d2e7f1ed1bec63755a3ba0` (PR255). Its SHA-256 is `2eb71c8b41be2db7ca610964cbbccee99b9f5b5842c6e0debb9368d36c8220d0`. The shared production project already records version `20260930142800`; this mirror restores the website migration inventory expected by its Supabase integration. Do not replay, edit, or repair this applied migration history. It does not introduce a new database change. The original membership release inventory remains a frozen snapshot; this later mirror is verified separately.
