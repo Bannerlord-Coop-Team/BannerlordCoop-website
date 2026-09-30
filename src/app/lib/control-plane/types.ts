@@ -56,6 +56,8 @@ export type MyServerBackupSummary = {
     restoreState: string;
     restoredAt: string | null;
     canRestore: boolean;
+    // Optional while older control-plane releases still return only canRestore.
+    restoreUnavailableReason?: "expired" | "restore_in_progress" | "installed_build_unknown" | "backup_build_unknown" | "build_mismatch" | null;
 };
 
 export type MyServerBackupJob = {

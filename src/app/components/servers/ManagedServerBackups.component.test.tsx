@@ -217,10 +217,10 @@ describe("ManagedServerBackups bounded polling", () => {
 
 it.each(["available", "restored", "failed"])("does not misdescribe an expired %s row as a build mismatch", async (restoreState) => {
     await render(null, [{ ...backup, restoreState, canRestore: false,
-        retentionExpiresAt: "2026-09-02T14:00:00.000Z" }]);
+        retentionExpiresAt: "2026-09-02T14:00:00.000Z", restoreUnavailableReason: "expired" }]);
     expect(button("Restore save").disabled).toBe(true);
-    expect(button("Restore save").title).toBe("This backup is currently unavailable for save-only restore.");
-    expect(container.textContent).toContain("This backup is currently unavailable for save-only restore.");
+    expect(button("Restore save").title).toBe("This backup has expired and can no longer be restored.");
+    expect(container.textContent).toContain("This backup has expired and can no longer be restored.");
     expect(container.textContent).not.toContain("requires a backup from the currently installed");
 });
 
@@ -415,4 +415,16 @@ describe("ManagedServerBackups stale authenticated page recovery", () => {
         expect(result).toMatchObject({ ok: false, retrySameRequest: true });
         expect(request).not.toHaveBeenCalled();
     });
+});
+
+it.each([
+    ["build_mismatch", "different game/mod build"],
+    ["installed_build_unknown", "installed game/mod version has not been confirmed"],
+    ["backup_build_unknown", "no recorded game/mod version"],
+    ["restore_in_progress", "already part of a restore operation"],
+] as const)("explains %s beside the disabled restore and in its tooltip", async (restoreUnavailableReason, message) => {
+    await render(null, [{ ...backup, canRestore: false, restoreUnavailableReason }]);
+    expect(button("Restore save").disabled).toBe(true);
+    expect(button("Restore save").title).toContain(message);
+    expect(container.textContent).toContain(message);
 });

@@ -1,3 +1,4 @@
+import { verifyWebsiteSessionContext } from "./session-context.ts";
 import { checkDatabaseContention, DatabaseContention } from "./database-contention.ts";
 import { boundedJson, optionalDiscord, exact, record, UUID } from "./membership.ts";
 // Closed retry contract: never expose PostgREST/provider errors to the browser.
@@ -48,6 +49,7 @@ export function membershipStore(config: StoreConfig) {
         async user(authorization: string) {
             const user = await request("/auth/v1/user", { headers: { Authorization: authorization } });
             if (!record(user) || typeof user.id !== "string" || !UUID.test(user.id)) throw new Error("Unauthorized");
+            await verifyWebsiteSessionContext({ supabaseUrl: config.supabaseUrl, key: config.serviceRoleKey, authorization, userId: user.id, action: "membership", fetch: requestFetch });
             return { accountId: user.id, discordUserId: optionalDiscord(user) };
         },
         async binding(accountId: string) {
