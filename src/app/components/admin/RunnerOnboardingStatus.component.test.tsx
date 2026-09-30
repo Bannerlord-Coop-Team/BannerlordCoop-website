@@ -58,3 +58,30 @@ function actionButton(text: string) {
     expect(button, text).toBeDefined();
     return button!;
 }
+
+
+it("uses the parent live refresh after a mutation and leaves polling to it", async () => {
+    vi.useFakeTimers();
+    const refresh = vi.fn();
+    mocks.session.mockResolvedValue({ data: { session: { access_token: "test-token" } } });
+    mocks.request.mockResolvedValue({});
+    try {
+        await act(async () => root.render(<RunnerOnboardingStatus
+            serviceName="host-a" runningServers={0} targetSourceCommit="new-source"
+            onboarding={null} update={null} onRefresh={refresh}
+        />));
+        await act(async () => actionButton("Onboard runner").click());
+        expect(refresh).toHaveBeenCalledTimes(1);
+        expect(mocks.refresh).not.toHaveBeenCalled();
+        await act(async () => root.render(<RunnerOnboardingStatus
+            serviceName="host-a" runningServers={0} targetSourceCommit="new-source"
+            onboarding={{ state: "running", progressStage: "runner-installing", errorCode: null, sourceCommit: null, updatedAt: "2026-09-10T18:00:00.000Z" }}
+            update={null} onRefresh={refresh}
+        />));
+        await act(async () => vi.advanceTimersByTimeAsync(15_000));
+        expect(mocks.refresh).not.toHaveBeenCalled();
+        expect(refresh).toHaveBeenCalledTimes(1);
+    } finally {
+        vi.useRealTimers();
+    }
+});

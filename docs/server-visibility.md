@@ -2,9 +2,9 @@
 
 ## Current backend compatibility
 
-The website implements the public directory page at `/servers` and the anonymous `public-servers` Edge proxy, which expects the control-plane public directory API described below. Settings and the header describe Public as allowing discovery with the server's game address; Private excludes the server from the directory. Visibility does not grant management access or change game connection permissions.
+The website implements the public directory page at `/servers` and the anonymous `public-servers` Edge proxy. The page's server-side directory read uses the existing control-plane public API directly at the fixed reviewed `https://control-plane.bannerlordcoop.com/v1/public/control-plane` endpoint. Browser and other Edge consumers retain the proxy. Settings and the header describe Public as allowing discovery with the server's game address; Private excludes the server from the directory. Visibility does not grant management access or change game connection permissions.
 
-This website integration does not establish backend support or deployment availability. CP #144 supplies visibility persistence and mutation. The companion backend change for [CP #196](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/issues/196) adds the anonymous listing route and migration 088 for ownership consent. Confirm that this backend and its migration are deployed before rollout; a missing backend route is an integration gap, not a temporary outage. If configuration, the Edge function, or the upstream directory is unavailable, `/servers` reports that the directory could not be loaded right now. It never substitutes private inventory or demo servers. Check the deployed route and its dependencies when diagnosing an outage; the Settings copy is not a deployment health indicator.
+This website integration does not establish backend support or deployment availability. CP #144 supplies visibility persistence and mutation. The companion backend change for [CP #196](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/issues/196) adds the anonymous listing route and migration 088 for ownership consent. Confirm that this backend and its migration are deployed before rollout; a missing backend route is an integration gap, not a temporary outage. If the upstream directory is unavailable, `/servers` reports that the directory could not be loaded right now. It never substitutes private inventory or demo servers. The server-side anonymous read does not depend on Supabase configuration or Edge availability. Check the deployed route and its dependencies when diagnosing an outage; the Settings copy is not a deployment health indicator.
 
 ## Public-directory contract and backend requirements
 
@@ -20,11 +20,20 @@ This website integration does not establish backend support or deployment availa
 
 ## Minimal boundaries
 
+The `/servers` shell and anonymous directory start immediately. Authentication, live-server display names, and account/hosting status cannot hold up the public listing. Once authentication resolves, My Servers loads alongside account status and live display names; it does not wait for membership or allocation checks. Account synchronization still completes before the hosting allocation read, and onboarding uses the same private inventory request as My Servers. Navigation and each section stream through their own loading boundary. No responses or credentials are cached by this page orchestration.
+
 The control plane owns visibility persistence, authorization, and public projection. The website never fetches an administrative inventory to filter it into public data. Missing visibility is private; missing endpoints disable Join. Public reads use a dedicated read-only endpoint, with a bounded allowlisted response and no caching. Private inventory retains its current authentication boundary.
 
 Owner-facing visibility updates use the authenticated user API and optimistic concurrency. Only the current owner may change visibility; manager, support, and administrator rows remain read-only in this user API. The merged CP #143 authenticated summary exposes stored connection fields using its existing durable owner/shared-access checks; the website consumes that authorized response without inventing a different access policy. CP #144 preserves that policy. The older #107 owner/manager-only endpoint restriction is not assumed or enforced by the website; any change needs explicit backend policy agreement. UI hiding is only presentation, not authorization.
 
 Public data is limited to the server identity/name, friendly region, observed game state, and game endpoint. No owner identities, infrastructure identifiers, agent ports, credentials, or invented player counts are published. Public pages must not fall back to sample or private server data on failure.
+
+The server-side request sends only the closed `public-servers` envelope, with no
+authorization, cookie or API key. It retains the shared deadline, bounded paging,
+strict public response parser, correlation, `no-store` and rejected redirects.
+The control plane still listens on loopback behind its existing TLS proxy and
+keeps its global public request limits. Direct browser reads must continue using
+the Edge proxy because it owns their CORS behavior.
 
 ```mermaid
 classDiagram
@@ -56,7 +65,8 @@ classDiagram
 ```mermaid
 flowchart LR
     Visitor --> Website[Website public directory]
-    Website --> PublicEdge[Read-only public Edge proxy]
+    Website --> PublicCP[CP public directory endpoint]
+    PublicClient[Other public clients] --> PublicEdge[Read-only public Edge proxy]
     PublicEdge --> PublicCP[CP public directory endpoint]
     Owner --> Settings[Visibility setting / server actions]
     Settings --> PrivateEdge[Authenticated my-servers Edge proxy]
@@ -78,5 +88,7 @@ Visibility persistence and mutation use the authenticated API. The website publi
 ## Verification and rollout
 
 Required tests cover private-by-default persistence, unauthorized update rejection, private endpoint non-disclosure, public-to-private removal, strict public response projection, no-store responses, missing-field rollout, clipboard failures, and optimistic-concurrency failures. Public information already delivered to a browser cannot be recalled; no-store prevents intentional shared caching but is not a revocation mechanism for previously learned addresses.
+
+Run `npx vitest run src/app/servers/onboarding-page.component.test.tsx` for directory streaming regressions. These hold authentication, account status, allocation, and display-name dependencies pending independently and require the public listing to arrive; account/allocation delays must also leave My Servers usable. They verify one inventory request and reject mismatched user/session tokens. This proves request independence, not a production latency target; measure when the actual lists become visible as well as total navigation time after deployment.
 
 Verify the deployed website, Edge function, and control-plane routes separately before claiming live availability. Migration files, if required, are reviewed source changes only. Production deployment and live SQL are not part of this copy correction.

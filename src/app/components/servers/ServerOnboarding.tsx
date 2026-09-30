@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { submitServerOnboarding } from "@/app/servers/onboarding-actions";
 import { clearOnboardingIntent, onboardingIntentKey, readOnboardingIntent, storeOnboardingIntent } from "@/app/servers/onboarding-intent";
-import { normalizeOnboardingName, ONBOARDING_REGION_LABELS, type OnboardingIntent, type OnboardingRegion, type OnboardingResult, type OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { normalizeOnboardingName, ONBOARDING_REGION_LABELS, type OnboardingReleaseChannel, type OnboardingIntent, type OnboardingRegion, type OnboardingResult, type OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 const primaryButton = `inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-gold px-5 py-3 font-label text-sm font-semibold uppercase tracking-[0.1em] text-background transition-colors hover:bg-[#c3b07b] disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`;
@@ -94,13 +94,13 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
             }
         }
     }
-    function createCandidate(displayName: string, region: OnboardingRegion, available: boolean) {
+    function createCandidate(displayName: string, region: OnboardingRegion, releaseChannel: OnboardingReleaseChannel) {
         if (!canOffer || busy || intentRef.current !== null || inFlight.current) return;
         const entry = summary?.regions.find((entry) => entry.region === region);
-        if (!entry || entry.available !== available || (!available && entry.request !== null)) return;
+        if (!entry?.available) return;
         try {
             const requestId = crypto.randomUUID();
-            void dispatch(available ? { action: "create-server", displayName, region, requestId } : { action: "request-region", region, requestId });
+            void dispatch({ action: "create-server", displayName, region, releaseChannel, requestId });
         } catch { setStorageError(true); }
     }
     const recovery = <>
@@ -132,11 +132,6 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
         </div>}
         {!open && recovery}
         {!open && result && <div className="mt-5 border border-gold/30 bg-surface p-5"><OnboardingReceipt result={result} /></div>}
-        {summary?.regions.some((entry) => entry.request !== null) && <section aria-label="Your outstanding region requests" className="mt-5 border border-white/10 bg-surface p-5 text-sm">
-            <h3 className="font-semibold">Your outstanding region requests</h3>
-            <ul className="mt-2 space-y-1">{summary.regions.filter((entry) => entry.request !== null).map((entry) => <li key={entry.region}>{entry.label} — request saved (outstanding)</li>)}</ul>
-            <p className="mt-3 text-foreground-muted">Private requests do not consume quota or reserve a server. No email, ETA or automatic capacity is promised. Requests remain outstanding if capacity arrives or you create a server.</p>
-        </section>}
         {open && <SetupDialog summary={summary} canOffer={canOffer} disabled={busy || intent !== null} pending={pending} result={result} recovery={recovery}
             onSubmit={createCandidate} onDismiss={() => setOpen(false)} onRefresh={() => router.refresh()} fallbackFocus={() => fallbackRef.current?.focus()} />}
     </div>;
@@ -147,9 +142,9 @@ function OnboardingReceipt({ result }: { result: OnboardingResult }) {
         <h3 className="font-display text-2xl font-semibold">{result.action === "create-server" ? "Server assigned" : "Region request confirmed"}</h3>
         {result.action === "create-server" ? <>
             <p className="mt-3 break-words text-sm leading-6">{result.displayName} was assigned in {ONBOARDING_REGION_LABELS[result.region]}. It was stopped at creation; this receipt is not live status. Check My Servers or manage the server for its current state.</p>
-            <p className="mt-3 text-sm text-foreground-muted">Public release · maintenance 03:00–04:00 America/Chicago. Setup does not start the server. Its first Start uses the bundled default save; no import is required.</p>
+            <p className="mt-3 text-sm text-foreground-muted">{result.releaseChannel === "nightly" ? "Nightly Release" : "Public Release"} · maintenance 03:00–04:00 America/Chicago. Setup does not start the server. Its first Start uses the bundled default save; no import is required.</p>
             <Link href={`/servers/${encodeURIComponent(result.serverId)}`} className={`${primaryButton} mt-5`}>Manage server <ArrowRight aria-hidden="true" className="size-4" /></Link>
-        </> : <p className="mt-3 text-sm leading-6">Your private request for {ONBOARDING_REGION_LABELS[result.request.region]} is saved and outstanding (including an existing request). No server or capacity was reserved and no quota was consumed. No email, ETA or automatic allocation is promised.</p>}
+        </> : <p className="mt-3 text-sm leading-6">Your earlier request for {ONBOARDING_REGION_LABELS[result.request.region]} was recorded, but no server was created or reserved. Choose an available region in server setup, or check back later.</p>}
     </div>;
 }
 const CONTINENTS: { label: string; regions: OnboardingRegion[] }[] = [
@@ -162,7 +157,7 @@ const CONTINENTS: { label: string; regions: OnboardingRegion[] }[] = [
 
 function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, onSubmit, onDismiss, onRefresh, fallbackFocus }: {
     summary: OnboardingSummary | null; canOffer: boolean; disabled: boolean; pending: boolean; result: OnboardingResult | null; recovery: ReactNode;
-    onSubmit: (name: string, region: OnboardingRegion, available: boolean) => void; onDismiss: () => void; onRefresh: () => void; fallbackFocus: () => void;
+    onSubmit: (name: string, region: OnboardingRegion, releaseChannel: OnboardingReleaseChannel) => void; onDismiss: () => void; onRefresh: () => void; fallbackFocus: () => void;
 }) {
     const dialogRef = useRef<HTMLDialogElement>(null);
     const nameRef = useRef<HTMLInputElement>(null);
@@ -170,6 +165,7 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
     const closeRef = useRef<HTMLButtonElement>(null);
     const fallback = useRef(fallbackFocus);
     const [name, setName] = useState("");
+    const [releaseChannel, setReleaseChannel] = useState<OnboardingReleaseChannel>("stable");
     const [selected, setSelected] = useState<OnboardingRegion>("us-west");
     const [error, setError] = useState("");
     const continent = CONTINENTS.findIndex((continent) => continent.regions.includes(selected));
@@ -196,16 +192,16 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
     }, [result, pending]);
     function submit(event: FormEvent) {
         event.preventDefault();
-        if (!canOffer || disabled || !entry || (!entry.available && entry.request !== null)) return;
+        if (!canOffer || disabled || !entry?.available) return;
         const normalized = normalizeOnboardingName(name);
-        if (entry.available && normalized === null) {
+        if (normalized === null) {
             setError("Use 3–48 characters: letters or numbers at both ends; letters, numbers, spaces, periods, apostrophes and hyphens inside.");
             nameRef.current?.focus();
             return;
         }
         setError("");
-        if (normalized !== null) setName(normalized);
-        onSubmit(normalized ?? "", entry.region, entry.available);
+        setName(normalized);
+        onSubmit(normalized, entry.region, releaseChannel);
     }
     return <dialog ref={dialogRef} aria-labelledby="server-setup-title" aria-describedby="server-setup-description"
         onCancel={(event) => { event.preventDefault(); onDismiss(); }}
@@ -220,14 +216,21 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
         <div className="border-t-2 border-gold p-5 sm:p-8">
             <div className="flex items-start justify-between gap-3"><div><p className={labelStyle}>Your next campaign</p><h2 id="server-setup-title" className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Set up your server</h2></div>
                 <button ref={closeRef} type="button" aria-label="Close server setup" onClick={onDismiss} className={`${secondaryButton} size-11 shrink-0 px-0`}><X aria-hidden="true" className="size-5" /></button></div>
-            <p id="server-setup-description" className="mt-3 text-sm leading-6 text-foreground-muted">Create assigns a real stopped server using one granted slot. Full regions can be privately requested without consuming quota.</p>
+            <p id="server-setup-description" className="mt-3 text-sm leading-6 text-foreground-muted">Choose an available region to create a stopped server using one server allowance. If your preferred region is full, choose another region or check back later.</p>
             {result ? <div ref={resultRef} tabIndex={-1} className="mt-6 outline-none"><OnboardingReceipt result={result} /><button type="button" onClick={onDismiss} className={`${secondaryButton} mt-5`}>Done</button></div> : <form noValidate onSubmit={submit} className="mt-6">
                 <fieldset disabled={disabled || !canOffer}>
                     <legend className="sr-only">Server details</legend>
-                    <label htmlFor="onboarding-server-name" className="text-sm font-medium">Server name{entry && !entry.available ? " (not sent for region requests)" : ""}</label>
+                    <label htmlFor="onboarding-server-name" className="text-sm font-medium">Server name</label>
                     <input ref={nameRef} id="onboarding-server-name" value={name} onChange={(event) => { setName(event.target.value); setError(""); }} autoComplete="off" placeholder="e.g. The Calradia Company" aria-invalid={!!error} aria-describedby={`onboarding-name-hint${error ? " onboarding-name-error" : ""}`} className={`mt-2 block min-h-12 w-full rounded-sm border border-white/20 bg-background px-3 py-2 text-base ${focusRing}`} />
                     <p id="onboarding-name-hint" className="mt-2 text-xs leading-5 text-foreground-muted">3–48 characters. Letters or numbers at both ends. Spaces and supported punctuation inside. Whitespace is normalized.</p>
                     {error && <p id="onboarding-name-error" role="alert" className="mt-2 text-sm text-red-200">{error}</p>}
+                    <fieldset className="mt-6">
+                        <legend className="text-sm font-medium">Release</legend>
+                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">{(["stable", "nightly"] as const).map((channel) => <label key={channel} className={`flex cursor-pointer items-start gap-2 rounded-sm border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${releaseChannel === channel ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
+                            <input type="radio" name="release-channel" value={channel} checked={releaseChannel === channel} onChange={() => setReleaseChannel(channel)} className="mt-1 size-3.5 shrink-0 accent-gold" />
+                            <span className="text-sm font-medium">{channel === "stable" ? "Public Release" : "Nightly Release"}</span>
+                        </label>)}</div>
+                    </fieldset>
                     <fieldset className="mt-6"><legend className="text-sm font-medium">Server region</legend>
                         <div role="tablist" aria-label="Continent" className="mt-3 flex flex-wrap gap-2">
                             {CONTINENTS.map((item, index) => <button key={item.label} type="button" role="tab"
@@ -248,18 +251,18 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
                         </div>
                         <div role="tabpanel" id="continent-regions" aria-labelledby={`continent-tab-${continent}`} className="mt-3 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">{summary?.regions.filter((region) => CONTINENTS[continent].regions.includes(region.region)).map((region) => <label key={region.region} className={`relative flex cursor-pointer items-start gap-2 rounded-sm border p-3 transition-colors hover:border-gold/60 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${selected === region.region ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
                             <input type="radio" name="region" value={region.region} checked={selected === region.region} onChange={() => setSelected(region.region)} className="mt-1 size-3.5 shrink-0 accent-gold" />
-                            <span className="min-w-0"><span className="block text-sm font-medium">{region.label}</span><span className={`mt-2 block text-xs ${region.available ? "text-emerald-200" : "text-amber-200"}`}>{region.available ? "Available" : "Full"}{region.request ? " · Requested" : ""}</span></span>
+                            <span className="min-w-0"><span className="block text-sm font-medium">{region.label}</span><span className={`mt-2 block text-xs ${region.available ? "text-emerald-200" : "text-amber-200"}`}>{region.available ? "Available" : "Full"}</span></span>
                         </label>)}</div>
                     </fieldset>
                 </fieldset>
                 {!canOffer && <p role="status" className="mt-4 text-sm text-gold">Availability changed or could not be confirmed. Refresh before choosing again.</p>}
-                {entry && !entry.available && <p className="mt-4 text-sm text-foreground-muted">{entry.request ? "Your request for this region is already saved and outstanding." : "Request this full region, or choose an available one. A request does not reserve capacity, consume quota or promise email, an ETA or automatic allocation."}</p>}
-                <p role="status" className="mt-4 text-sm text-gold">{pending ? "Submitting… Closing does not cancel this request." : "Capacity is advisory until the backend accepts the request."}</p>
+                {entry && !entry.available && <p role="status" className="mt-4 text-sm text-gold">{entry.label} is full—choose another region or check back later.</p>}
+                {pending && <p role="status" className="mt-4 text-sm text-gold">Submitting… Closing does not cancel this request.</p>}
                 {recovery}
                 <div className="mt-5 flex flex-col-reverse gap-3 border-t border-white/10 pt-5 sm:flex-row sm:flex-wrap sm:justify-end">
                     <button type="button" onClick={onDismiss} className={secondaryButton}>{pending ? "Close (request continues)" : "Close"}</button>
                     <button type="button" onClick={onRefresh} className={secondaryButton}>Refresh availability</button>
-                    <button type="submit" disabled={disabled || !canOffer || !entry || (!entry.available && entry.request !== null)} className={primaryButton}>{pending ? "Submitting…" : entry?.available ? "Create server" : entry?.request ? "Region already requested" : "Request region"}</button>
+                    <button type="submit" disabled={disabled || !canOffer || !entry?.available} className={primaryButton}>{pending ? "Submitting…" : "Create server"}</button>
                 </div>
             </form>}
         </div>

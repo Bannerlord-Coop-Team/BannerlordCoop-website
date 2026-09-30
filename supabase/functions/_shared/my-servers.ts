@@ -1,4 +1,5 @@
 import { MAXIMUM_CONSOLE_RESPONSE_BYTES, parseConsoleSubmission, parseConsoleReference, parseConsoleReceipt, parseConsoleResult, parseConsoleAcknowledgement, type ConsoleSubmission, type ConsoleReference } from "./server-console-contract.ts";
+import { parseReleaseMutation, parseReleaseStatus, type ReleaseMutation } from "./server-release-contract.ts";
 import { serverLogDownloadHeaders } from "./server-log-contract.ts";
 import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
@@ -26,12 +27,14 @@ export type MyServersHandlerOptions = {
 type UpstreamRequest =
     | { operation: "console-command"; input: ConsoleSubmission }
     | { operation: "console-command-result" | "acknowledge-console-command"; input: ConsoleReference }
+    | { operation: "set-release-channel"; input: Omit<ReleaseMutation, "action"> }
+    | { operation: "server-update-status"; input: { serverId: string } }
     | { operation: "server-files" | "my-server-latest-log"; input: { serverId: string } }
     | { operation: "file-transfer-status" | "download-save-export"; input: { serverId: string; transferRequestId: string } }
     | { operation: "file-transfer"; input: OwnerFileMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
     | { operation: "server-onboarding"; input: Record<string, never> }
-    | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion } }
+    | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion; releaseChannel?: "stable" | "nightly" } }
     | { operation: "request-region"; input: { region: OnboardingRegion } }
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
@@ -41,6 +44,7 @@ type UpstreamRequest =
         operation: "server-operation";
         input: { serverId: string; action: string };
     }
+    | { operation: "set-password"; input: { serverId: string; expectedUpdatedAt: string; password: string } }
     | { operation: "create-backup"; input: { serverId: string; expectedUpdatedAt: string } }
     | {
         operation: "restore-backup";
@@ -91,7 +95,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // Durable mutations must retain the caller's UUID for exactly-once handling.
-            if (upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server") {
+            if (upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -193,6 +197,8 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "console-command") parseConsoleReceipt(envelope.result);
                 if (upstreamRequest.operation === "console-command-result") parseConsoleResult(envelope.result);
                 if (upstreamRequest.operation === "acknowledge-console-command") parseConsoleAcknowledgement(envelope.result);
+                if (upstreamRequest.operation === "set-password" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["changed", "restartQueued"]) || envelope.result.changed !== true || typeof envelope.result.restartQueued !== "boolean")) throw new Error("Invalid password response");
+                if (upstreamRequest.operation === "server-update-status") parseReleaseStatus(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
                 if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
                 if (upstreamRequest.operation === "download-save-export") parseOwnerFileDownload(envelope.result);
@@ -276,6 +282,11 @@ function listRequest(request: Request): UpstreamRequest {
         };
     }
 
+    if (resource === "update-status") {
+        assertQueryParameters(url, ["resource", "serverId"]);
+        return { operation: "server-update-status", input: { serverId: readServerId(url) } };
+    }
+
     if (resource === "backup-status") {
         assertQueryParameters(url, ["resource", "serverId"]);
         return {
@@ -313,6 +324,10 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
         if (action === "console-command") return { operation: action, input: parseConsoleSubmission(input) };
         return { operation: action, input: parseConsoleReference(input) };
     }
+    if (value.action === "set-release-channel") {
+        const parsed = parseReleaseMutation(value);
+        return { operation: "set-release-channel", input: { serverId: parsed.serverId, releaseChannel: parsed.releaseChannel, expectedUpdatedAt: parsed.expectedUpdatedAt } };
+    }
     if (value.action === "set-server-visibility") {
         const parsed = parseVisibilityMutation(value);
         return { operation: "set-server-visibility", input: {
@@ -322,7 +337,7 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
     if (value.action === "create-server" || value.action === "request-region") {
         const parsed = parseOnboardingMutation(value);
         return parsed.action === "create-server"
-            ? { operation: parsed.action, input: { displayName: parsed.displayName, region: parsed.region } }
+            ? { operation: parsed.action, input: { displayName: parsed.displayName, region: parsed.region, ...(parsed.releaseChannel !== undefined ? { releaseChannel: parsed.releaseChannel } : {}) } }
             : { operation: parsed.action, input: { region: parsed.region } };
     }
     if (typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)) {
@@ -339,6 +354,11 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
                 action: value.action,
             },
         };
+    }
+    if (value.action === "set-password") {
+        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "password", "serverId"]) || typeof value.password !== "string" || value.password.length < 1 || value.password.length > 128) throw new Error("Invalid password request");
+        assertExpectedUpdatedAt(value.expectedUpdatedAt);
+        return { operation: "set-password", input: { serverId: value.serverId as string, expectedUpdatedAt: value.expectedUpdatedAt as string, password: value.password } };
     }
     if (value.action === "create-backup") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {

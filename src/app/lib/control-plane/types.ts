@@ -1,6 +1,8 @@
 export type ManagedServer = {
     serverId: string;
     ownerDiscordUserId: string;
+    /** Administrator display identity; omitted by older control-plane releases. */
+    ownerAccountId?: string | null;
     displayName: string;
     provider: string;
     providerResourceId: string | null;
@@ -54,6 +56,8 @@ export type MyServerBackupSummary = {
     restoreState: string;
     restoredAt: string | null;
     canRestore: boolean;
+    // Optional while older control-plane releases still return only canRestore.
+    restoreUnavailableReason?: "expired" | "restore_in_progress" | "installed_build_unknown" | "backup_build_unknown" | "build_mismatch" | null;
 };
 
 export type MyServerBackupJob = {
@@ -164,6 +168,7 @@ export type HostingAdminVpsHost = {
         serverId: string;
         displayName: string;
         ownerDiscordUserId: string;
+        ownerAccountId?: string | null;
         operationState: string;
         resources?: HostingServerResources | null;
     }>;
@@ -195,6 +200,7 @@ export type HostingAdminVpsHost = {
 };
 
 export type HostingAdminVpsInventory = {
+    liveDataIncluded?: boolean;
     controlPlaneHost: HostingAdminHostResources | null;
     hosts: HostingAdminVpsHost[];
     availableServiceNames: string[];
@@ -266,6 +272,9 @@ export type Overview = {
     stableBuilds: HostingPage<ReleaseBuild>;
     nightlyBuilds: HostingPage<ReleaseBuild>;
 };
+
+/** Current data rendered by the Overview pane, without unused detail reads. */
+export type OverviewSummary = Pick<Overview, "fleet" | "controls" | "jobs">;
 
 export type ServerDashboardResult = {
     dashboard: {

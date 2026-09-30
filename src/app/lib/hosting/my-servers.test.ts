@@ -37,6 +37,42 @@ const SECOND_SERVER = {
     releaseChannel: "nightly" as const,
 };
 
+test("caller cancellation reaches an in-flight owner inventory request", async () => {
+    configureEnvironment();
+    const controller = new AbortController();
+    let requests = 0;
+    globalThis.fetch = async (_input, init) => {
+        requests += 1;
+        return new Promise((_resolve, reject) => {
+            init!.signal!.addEventListener("abort", () => reject(new DOMException("Cancelled", "AbortError")), { once: true });
+        });
+    };
+    try {
+        const pending = listAllMyServers(TOKEN, controller.signal);
+        controller.abort();
+        await assert.rejects(pending, (error: unknown) => error instanceof MyServersApiError && error.code === "server_api_unavailable");
+        assert.equal(requests, 1);
+    } finally { restoreEnvironment(); }
+});
+
+test("cancelled owner inventory never starts another page even if the completed fetch ignores cancellation", async () => {
+    configureEnvironment();
+    const controller = new AbortController();
+    let requests = 0;
+    globalThis.fetch = async (input, init) => {
+        requests += 1;
+        const request = new Request(input, init);
+        controller.abort();
+        assert.equal(init!.signal!.aborted, true);
+        return Response.json({ version: 1, requestId: request.headers.get("x-request-id"), ok: true,
+            result: { items: [FIRST_SERVER], nextCursor: "next-page" } });
+    };
+    try {
+        await assert.rejects(listAllMyServers(TOKEN, controller.signal), { name: "AbortError" });
+        assert.equal(requests, 1);
+    } finally { restoreEnvironment(); }
+});
+
 test("loads every owner-scoped managed-server page through the Edge Function", async () => {
     configureEnvironment();
     const requests: Request[] = [];
@@ -288,6 +324,10 @@ test("rejects private and malformed backup response data", async () => {
         { ...BACKUP, createdAt: "2026-09-02T16:45:07.479+02:00" },
         { ...BACKUP, restoreState: "usable" },
         { ...BACKUP, canRestore: "yes" },
+        { ...BACKUP, canRestore: false, restoreUnavailableReason: "private-error" },
+        { ...BACKUP, canRestore: false, restoreUnavailableReason: null },
+        { ...BACKUP, canRestore: true, restoreUnavailableReason: "build_mismatch" },
+        { ...BACKUP, canRestore: false, restoreUnavailableReason: 42 },
     ];
 
     try {
@@ -494,5 +534,22 @@ test("owner updates cross the Edge boundary as one stale-safe durable request", 
             operation: "update-server",
             input: { serverId: FIRST_SERVER.serverId, expectedUpdatedAt: "2026-09-20T12:00:00.000Z" },
         });
+    } finally { restoreEnvironment(); }
+});
+
+test("accepts allowlisted restore reasons and legacy backup responses", async () => {
+    configureEnvironment();
+    try {
+        for (const fields of [{}, { restoreUnavailableReason: null },
+            ...["expired", "restore_in_progress", "installed_build_unknown", "backup_build_unknown", "build_mismatch"]
+                .map((restoreUnavailableReason) => ({ canRestore: false, restoreUnavailableReason }))]) {
+            const item = { ...BACKUP, ...fields };
+            globalThis.fetch = async (input, init) => {
+                const request = new Request(input, init);
+                return Response.json({ version: 1, requestId: request.headers.get("x-request-id"), ok: true,
+                    result: { items: [item], nextCursor: null } });
+            };
+            assert.deepEqual(await listAllMyServerBackups(TOKEN, FIRST_SERVER.serverId), [item]);
+        }
     } finally { restoreEnvironment(); }
 });

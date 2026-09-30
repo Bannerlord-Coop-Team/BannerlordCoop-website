@@ -1,4 +1,4 @@
-import { ManagedServerConsole } from "@/app/components/servers/ManagedServerConsole";
+import { ManagedServerCommands } from "@/app/components/servers/ManagedServerCommands";
 import { releaseChannelLabel } from "@/app/lib/control-plane/presentation";
 import { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
 import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfigPanels";
@@ -14,6 +14,7 @@ import { LiveServerFileSetup } from "@/app/components/servers/LiveServerFileSetu
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
 import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
+import { ManagedServerConsole } from "@/app/components/servers/ManagedServerConsole";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import {
     getLiveConsoleAccessLevel,
@@ -190,11 +191,12 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
         <ServerWorkspacePanel section="Settings">
-            <ServerSettingsPanel name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
+            <ServerSettingsPanel releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
 }
 
+// Keeps managed controls and output in the console workspace without duplicating an existing live console.
 function ManagedServerSections({
     userId,
     accessToken,
@@ -209,8 +211,11 @@ function ManagedServerSections({
     return (
         <ManagedServerPollingProvider>
             <ServerWorkspacePanel section="Console">
-                {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : <ManagedServerConsole
-                    key={`${userId}:${server.serverId}`} server={server} userId={userId} controls={<ManagedServerLifecycleSection server={server} />} />}
+                {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : server.accessRole === "owner" || server.accessRole === "manager"
+                    ? <ManagedServerCommands key={`${userId}:${server.serverId}`} server={server} userId={userId} controls={<ManagedServerLifecycleSection server={server} />}>
+                        <ManagedServerConsole serverId={server.serverId} />
+                    </ManagedServerCommands>
+                    : <ServerConsoleWorkspace><UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} logDownload={{ serverId: server.serverId, userId }} /></ServerConsoleWorkspace>}
             </ServerWorkspacePanel>
             <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
                 <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
@@ -352,7 +357,7 @@ async function LiveServerManagementPage({
                 <ServerWorkspacePanel section="Save & config"><LiveServerFileSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>
             </>}
         <ServerWorkspacePanel section="Settings">
-            <ServerSettingsPanel name={server.name} renameServerId={canManageAssignments ? server.id : undefined} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} visibilityAccess={managedServer ? { serverId: managedServer.serverId, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} />
+            <ServerSettingsPanel releaseAccess={managedServer ? { serverId: managedServer.serverId, channel: managedServer.releaseChannel, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} name={server.name} renameServerId={canManageAssignments ? server.id : undefined} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} visibilityAccess={managedServer ? { serverId: managedServer.serverId, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} />
             {managedServer === null && <LiveServerVisibilitySetup reason={backupUnavailableReason} serverId={server.id} />}
             <section className="grid gap-3 sm:grid-cols-2" aria-label="Server information">
                 <ResourceCard icon={Server} label="Provider" value={server.provider} />

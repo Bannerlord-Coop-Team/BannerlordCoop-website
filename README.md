@@ -32,6 +32,12 @@ does not knowingly include code copied from another project without permission.
 - npm
 - A YouTube Data API v3 key for the media section
 
+## Managed read-only console
+
+Managed server owner/manager pages include an explicit Connect/Disconnect live-output panel. The browser connects only to the same-origin `/api/servers/[serverId]/console` route. That route revalidates the current Supabase user/session and forwards only the bearer token and validated server UUID to the fixed server-only `CONTROL_PLANE_CONSOLE_ORIGIN`; callers cannot select an upstream destination, actor, agent, process, or path.
+
+The response is private, unbuffered SSE with a five-minute maximum session and no automatic reconnect or history. The UI retains at most 128 KiB and 2,000 lines. Production enablement still requires verified OpenNext/Cloudflare streaming and disconnect behavior plus the reviewed Oracle Caddy route; local mocks do not establish those deployment properties.
+
 ## Local Development
 
 Install dependencies:

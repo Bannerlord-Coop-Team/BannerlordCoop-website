@@ -1,10 +1,11 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
+import * as serverActions from "@/app/servers/managed-server-actions";
 import { ManagedServerControls } from "./ManagedServerControls";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 
-const { request, requestUpdate, beginPolling } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), beginPolling: vi.fn() }));
+const { request, requestUpdate, requestPassword, beginPolling } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({
     getSupabaseServerClient: async () => ({ auth: {
@@ -16,13 +17,14 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
     ...await original<typeof import("@/app/lib/hosting/my-servers")>(),
     requestMyServerOperation: request,
     requestMyServerUpdate: requestUpdate,
+    requestMyServerPassword: requestPassword,
 }));
 vi.mock("./ManagedServerPollingProvider", () => ({
     useManagedServerPolling: () => ({ session: null, beginPolling, endPolling: vi.fn() }),
 }));
 
 it.each([
-    [null, "command exited successfully (code 0)"],
+    [null, "Server started and game readiness confirmed"],
     ["container_command_unavailable", "It may have executed"],
     ["container_command_failed", "exit code 125"],
 ])("shows the command result without polling or retrying: %s", async (code, message) => {
@@ -42,6 +44,14 @@ it.each([
         expect(beginPolling).not.toHaveBeenCalled();
         expect(request).toHaveBeenCalledExactlyOnceWith("token", { serverId, action: "start" });
     } finally { await act(async () => root.unmount()); }
+});
+
+it.each([undefined, "55555555-5555-4555-8555-555555555555"])("recognizes an accepted Start only with its durable operation ID: %s", async (operationId) => {
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, operationId));
+    const result = await serverActions.operateManagedServer({ serverId: "22222222-2222-4222-8222-222222222222", action: "start" });
+    expect(result.ok).toBe(operationId !== undefined);
+    expect(result.message).toContain(operationId === undefined ? "may have executed" : "Start request accepted");
+    expect(request).toHaveBeenCalledTimes(1);
 });
 
 it("warns that direct Stop/Restart can lose unsaved progress and respects cancellation", async () => {
@@ -86,5 +96,58 @@ it("confirms and queues an immediate update with the displayed server revision",
     } finally {
         await act(async () => root.unmount());
         confirm.mockRestore();
+    }
+});
+
+it("sets a private website password once and clears the input", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    requestPassword.mockReset().mockResolvedValue({ changed: true, restartQueued: false });
+    const container = document.createElement("div"); const root = createRoot(container);
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    try {
+        await act(async () => root.render(<ManagedServerControls serverId={serverId} displayName="Campaign" accessRole="owner" operationState="stopped" expectedUpdatedAt="2026-09-28T00:00:00.000Z" />));
+        const input = container.querySelector<HTMLInputElement>('input[type="password"]')!;
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Private-fixture-password");
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+        expect(requestPassword).toHaveBeenCalledExactlyOnceWith("token", { serverId, expectedUpdatedAt: "2026-09-28T00:00:00.000Z", password: "Private-fixture-password" }, expect.any(String));
+        expect(input.value).toBe("");
+        expect(container.textContent).toContain("Password changed");
+        expect(container.textContent).not.toContain("Private-fixture-password");
+    } finally { await act(async () => root.unmount()); }
+});
+
+it.each([false, true])("handles password delivery rejection or cancelled restart without retry: cancelled=%s", async (cancelled) => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const failure = "Private-fixture-password request response lost";
+    const action = vi.spyOn(serverActions, "setManagedServerPassword").mockRejectedValue(new Error(failure));
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const container = document.createElement("div"); const root = createRoot(container);
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    try {
+        await act(async () => root.render(<ManagedServerControls serverId={serverId} displayName="Campaign" accessRole="owner" operationState={cancelled ? "running" : "stopped"} expectedUpdatedAt="2026-09-28T00:00:00.000Z" />));
+        const input = container.querySelector<HTMLInputElement>('input[type="password"]')!;
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Private-fixture-password");
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+        if (cancelled) {
+            expect(confirm).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("restart the server"));
+            expect(action).not.toHaveBeenCalled();
+        } else {
+            expect(action).toHaveBeenCalledExactlyOnceWith({ serverId, expectedUpdatedAt: "2026-09-28T00:00:00.000Z", password: "Private-fixture-password" });
+            expect(input.value).toBe("");
+            expect(container.textContent).toContain("could not be confirmed. It may have applied. Refresh server status before trying again.");
+            expect(container.textContent).not.toContain(failure);
+            expect(container.textContent).not.toContain("Private-fixture-password");
+            expect(container.querySelector("form")).not.toBeNull();
+            expect(container.querySelector('button[type="submit"]')).not.toBeNull();
+        }
+    } finally {
+        await act(async () => root.unmount());
+        action.mockRestore(); confirm.mockRestore();
     }
 });

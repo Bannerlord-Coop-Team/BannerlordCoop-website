@@ -36,6 +36,8 @@ const consoleCommands = [
         .filter(command => command.side !== "client" && isPublishedCheat(command))
         .map(command => [command.usage, command.summary, [command.category, ...command.aliases, ...command.arguments.map(argument => argument.description)].join(" ")]) },
 ];
+// The right-panel coop.* commands, reused for managed console input suggestions.
+export const coopConsoleCommands = consoleCommands.flatMap(({ commands }) => commands).filter(([usage]) => usage.startsWith("coop."));
 
 /** Presents console content and a picker restricted to the active transport's commands. */
 export function ServerConsoleWorkspace({ children, onSelectCommand, coopCommandsOnly = false }: { children: ReactNode; onSelectCommand?: (command: string) => void; coopCommandsOnly?: boolean }) {

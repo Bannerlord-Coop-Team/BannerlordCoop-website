@@ -7,11 +7,12 @@ import {
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { JobFailureAcknowledgeButton } from "@/app/components/admin/JobFailureAcknowledgeButton";
 import { JobFailuresAcknowledgeButton } from "@/app/components/admin/JobFailuresAcknowledgeButton";
-import { VpsHostInventory } from "@/app/components/admin/VpsHostInventory";
+import { VpsView } from "@/app/components/admin/VpsView";
 import { ControlPlaneLiveRefresh } from "@/app/components/admin/ControlPlaneLiveRefresh";
 import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
 import { hasAdminAccess } from "@/app/lib/auth/access";
-import { ControlPlaneAdminError, requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
+import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
+import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
 import {
     auditActionExplanation,
     destructiveExplanation,
@@ -22,7 +23,7 @@ import {
 import {
     adminActionOptionValue,
     createServerRegionOptions,
-    formatDiscordOwner,
+    formatAccountOwner,
     installableBuilds,
     MAINTENANCE_TIME_ZONE,
     maintenanceSlotOptions,
@@ -37,19 +38,19 @@ import type {
     AuditEvent,
     Backup,
     GlobalControls,
-    HostingAdminHostResources,
     HostingAdminVpsInventory,
     HostingJob,
     HostingPage,
     ManagedServer,
     OperationsData,
     Overview,
+    OverviewSummary,
     ReleaseBuild,
     ServerDashboardResult,
 } from "@/app/lib/control-plane/types";
-import { getSupabaseServerClient } from "@/app/lib/supabase/server";
-import { listDiscordUsers } from "@/app/lib/supabase/users";
-import type { DiscordUserSummary } from "@/app/lib/supabase/discord-users";
+import { getSupabaseServerViewer } from "@/app/lib/supabase/server";
+import { listWebsiteAccounts } from "@/app/lib/supabase/users";
+import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import {
     Activity,
     ArrowLeft,
@@ -98,14 +99,6 @@ type PageProps = {
 };
 
 export default async function ControlPlaneAdminPage({ searchParams }: PageProps) {
-    const supabase = await getSupabaseServerClient();
-    const [{ data: userData }, { data: sessionData }] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase.auth.getSession(),
-    ]);
-    if (!userData.user || !sessionData.session?.access_token) redirect("/login?next=/admin/control-plane");
-    if (!hasAdminAccess(userData.user)) redirect("/");
-
     const params = await searchParams;
     const view = parseView(first(params.view));
     const query = (first(params.q) ?? "").trim().slice(0, 100);
@@ -114,7 +107,28 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
     const jobAction = parseJobAction(first(params.action));
     const unacknowledgedOnly = first(params.alert) === "unacknowledged";
     const jobCursor = parseCursor(first(params.cursor));
-    const token = sessionData.session.access_token;
+    const controller = new AbortController();
+    const { read } = await loadAuthenticatedView();
+    async function loadAuthenticatedView() {
+        try {
+            const { user, accessToken, read } = await getSupabaseServerViewer({
+                onReadOnlySession: token => {
+                    // This closed switch performs reads through the independently authorized API.
+                    // Settle failures immediately: validation can reject before the read completes.
+                    return Promise.allSettled([
+                        loadView(token, view, query, serverId, jobState, jobAction, unacknowledgedOnly, jobCursor, controller.signal),
+                    ]).then(([result]) => result);
+                },
+            });
+            if (!user || !accessToken) redirect("/login?next=/admin/control-plane");
+            if (!hasAdminAccess(user)) redirect("/");
+            if (!read) throw new Error("Authenticated control plane read was not started.");
+            return { read };
+        } catch (error) {
+            controller.abort();
+            throw error;
+        }
+    }
 
     return (
         <main className="min-h-svh bg-background">
@@ -155,7 +169,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
                     fallback={<ControlPlaneViewSkeleton view={view} />}
                 >
                     <ControlPlaneViewContent
-                        token={token}
+                        read={read}
                         view={view}
                         query={query}
                         serverId={serverId}
@@ -171,7 +185,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
 }
 
 async function ControlPlaneViewContent({
-    token,
+    read,
     view,
     query,
     serverId,
@@ -180,7 +194,7 @@ async function ControlPlaneViewContent({
     unacknowledgedOnly,
     jobCursor,
 }: {
-    token: string;
+    read: Promise<PromiseSettledResult<unknown>>;
     view: View;
     query: string;
     serverId: string;
@@ -190,20 +204,23 @@ async function ControlPlaneViewContent({
     jobCursor: string | null;
 }) {
     let data: unknown = null;
-    let discordUsers: DiscordUserSummary[] = [];
+    let accounts: WebsiteAccountSummary[] = [];
     let error = "";
     try {
-        const needsDiscordUsers = view === "vps" || view === "servers" || view === "server" || view === "operations";
+        const needsAccounts = view === "vps" || view === "servers" || view === "server" || view === "operations";
         const [viewResult, usersResult] = await Promise.allSettled([
-            loadView(token, view, query, serverId, jobState, jobAction, unacknowledgedOnly, jobCursor),
-            needsDiscordUsers ? listDiscordUsers() : Promise.resolve({ users: [], truncated: false }),
+            read.then(result => {
+                if (result.status === "rejected") throw result.reason;
+                return result.value;
+            }),
+            needsAccounts ? listWebsiteAccounts() : Promise.resolve({ users: [], truncated: false }),
         ]);
         if (viewResult.status === "rejected") throw viewResult.reason;
         data = viewResult.value;
         if (usersResult.status === "fulfilled") {
-            discordUsers = usersResult.value.users;
+            accounts = usersResult.value.users;
         } else {
-            console.error("Discord user directory failed to load", usersResult.reason);
+            console.error("Account directory failed to load", usersResult.reason);
         }
     } catch (cause) {
         console.error("Control plane admin view failed to load", cause);
@@ -220,35 +237,35 @@ async function ControlPlaneViewContent({
                     <p className="mt-1 text-xs text-red-200/70">No direct database or provider fallback was attempted.</p>
                 </div>
             )}
-            {!error && view === "overview" && <OverviewView overview={data as Overview} />}
-            {!error && view === "vps" && <VpsView inventory={data as HostingAdminVpsInventory} discordUsers={discordUsers} />}
-            {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} discordUsers={discordUsers} />}
-            {!error && view === "server" && <ServerView result={data as ServerDashboardResult} discordUsers={discordUsers} />}
+            {!error && view === "overview" && <OverviewView overview={data as OverviewSummary} />}
+            {!error && view === "vps" && <VpsView inventory={data as HostingAdminVpsInventory} accounts={accounts} />}
+            {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} accounts={accounts} />}
+            {!error && view === "server" && <ServerView result={data as ServerDashboardResult} accounts={accounts} />}
             {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} state={jobState} action={jobAction} unacknowledgedOnly={unacknowledgedOnly} cursor={jobCursor} serverId={serverId} />}
             {!error && view === "releases" && <ReleasesView data={data as { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }} />}
             {!error && view === "audit" && <AuditView page={data as HostingPage<AuditEvent>} />}
-            {!error && view === "operations" && <OperationsView data={data as OperationsData} discordUsers={discordUsers} />}
+            {!error && view === "operations" && <OperationsView data={data as OperationsData} accounts={accounts} />}
         </>
     );
 }
 
 /** Loads the authenticated data needed by the selected administration view. */
-async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null) {
+async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null, signal: AbortSignal) {
     switch (view) {
         case "overview":
-            return requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" });
+            return readControlPlaneAdmin<OverviewSummary>({ accessToken: token, signal, operation: "overview", input: { compact: true } });
         case "operations": {
             const [overview, inventory, selectedDashboard, releases] = await Promise.all([
-                requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" }),
-                requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts" }),
+                readControlPlaneAdmin<Overview>({ accessToken: token, signal, operation: "overview" }),
+                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, operation: "vps-hosts", input: { includeLiveData: false, includeProviderInventory: true } }),
                 serverId
-                    ? requestControlPlaneAdmin<ServerDashboardResult>({
-                        accessToken: token,
+                    ? readControlPlaneAdmin<ServerDashboardResult>({
+                        accessToken: token, signal,
                         operation: "server-dashboard",
                         input: { serverId },
                     })
                     : Promise.resolve(null),
-                loadReleaseCatalog(token),
+                loadReleaseCatalog(token, signal),
             ]);
             return {
                 overview: { ...overview, stableBuilds: releases.stable, nightlyBuilds: releases.nightly },
@@ -257,23 +274,23 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             } satisfies OperationsData;
         }
         case "vps":
-            return requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, operation: "vps-hosts" });
+            return readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, operation: "vps-hosts", input: { includeLiveData: false } });
         case "servers":
-            return requestControlPlaneAdmin<HostingPage<ManagedServer>>({
-                accessToken: token,
+            return readControlPlaneAdmin<HostingPage<ManagedServer>>({
+                accessToken: token, signal,
                 operation: "servers",
                 input: { filter: query ? { query } : {}, cursor: null, limit: 100 },
             });
         case "server":
             if (!serverId) throw new ControlPlaneAdminError("server_required", "Select a server first.");
-            return requestControlPlaneAdmin<ServerDashboardResult>({
-                accessToken: token,
+            return readControlPlaneAdmin<ServerDashboardResult>({
+                accessToken: token, signal,
                 operation: "server-dashboard",
                 input: { serverId },
             });
         case "jobs":
-            return requestControlPlaneAdmin<HostingPage<HostingJob>>({
-                accessToken: token,
+            return readControlPlaneAdmin<HostingPage<HostingJob>>({
+                accessToken: token, signal,
                 operation: "jobs",
                 input: {
                     filter: jobState === "failed"
@@ -284,18 +301,18 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 },
             });
         case "releases":
-            return loadReleaseCatalog(token);
+            return loadReleaseCatalog(token, signal);
         case "audit":
-            return requestControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, operation: "audit", input: { cursor: null, limit: 100 } });
+            return readControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, signal, operation: "audit", input: { cursor: null, limit: 100 } });
     }
 }
 
 /** Fetches the full bounded GHCR catalog rather than the overview's 20-version summaries. */
-async function loadReleaseCatalog(token: string) {
+async function loadReleaseCatalog(token: string, signal: AbortSignal) {
     // Discovery considers at most 100 candidate versions, so 100 per channel covers the catalog.
     const [stable, nightly] = await Promise.all([
-        requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, operation: "builds", input: { channel: "stable", cursor: null, limit: 100 } }),
-        requestControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, operation: "builds", input: { channel: "nightly", cursor: null, limit: 100 } }),
+        readControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, signal, operation: "builds", input: { channel: "stable", cursor: null, limit: 100 } }),
+        readControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, signal, operation: "builds", input: { channel: "nightly", cursor: null, limit: 100 } }),
     ]);
     return { stable, nightly };
 }
@@ -326,36 +343,8 @@ function ViewTabs({ active }: { active: View }) {
     );
 }
 
-function VpsView({ inventory, discordUsers }: { inventory: HostingAdminVpsInventory; discordUsers: DiscordUserSummary[] }) {
-    const { controlPlaneHost, hosts } = inventory;
-    const ownerLabels = discordOwnerLabelMap(discordUsers);
-    const availableServiceNames = Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : [];
-    const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
-    const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
-    return (
-        <section className="mt-8">
-            <SectionHeading eyebrow="OVHcloud inventory" title="VPS hosts" count={hosts.length} />
-            <p className="mt-3 text-xs text-foreground-muted">
-                Capacity combines registered control-plane slots with live read-only OVH account billing data. {availableServiceNames.length} authenticated OVH {availableServiceNames.length === 1 ? "VPS is" : "VPS products are"} available to onboard.
-                {checkedAt && <> Provider data checked <LocalDateTime value={checkedAt} />.</>}
-            </p>
-            <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
-                <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased OVH VPS. The durable workflow verifies account ownership, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
-                <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
-            </div>
-            <div className="mt-6">
-                <HostResourcesCard name="Oracle control plane" resources={controlPlaneHost} />
-            </div>
-            <VpsHostInventory
-                hosts={hosts}
-                ownerLabels={Object.fromEntries(ownerLabels)}
-                runnerTargetSourceCommit={runnerTargetSourceCommit}
-            />
-        </section>
-    );
-}
 
-function OverviewView({ overview }: { overview: Overview }) {
+function OverviewView({ overview }: { overview: OverviewSummary }) {
     const { fleet, controls } = overview;
     const stats = [
         { label: "Running", value: fleet.running, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("running") },
@@ -382,7 +371,7 @@ function OverviewView({ overview }: { overview: Overview }) {
             <section className="grid gap-6 lg:grid-cols-2">
                 <Panel title="Fleet capacity and reconciliation" help="Physical VPS capacity, assigned game-server slots, and the latest comparison between desired state and provider/runner evidence.">
                     <Definition label="Managed VPS" value={String(fleet.managedVpsCount)} help="Runner-onboarded VPS hosts plus legacy registered hosts that still own a managed slot." />
-                    <Definition label="Managed Bannerlord server instances" value={String(fleet.usedQuota)} help="Slots currently assigned to Discord owners as managed Bannerlord servers." />
+                    <Definition label="Managed Bannerlord server instances" value={String(fleet.usedQuota)} help="Slots currently assigned to website accounts as managed Bannerlord servers." />
                     <Definition label="Total slots" value={String(fleet.totalSlots)} help="Declared game-server capacity across managed VPS inventory. Capacity is one slot per two vCPUs." />
                     <Definition label="Available slots" value={String(fleet.availableSlots)} help="Prepared, healthy runner slots that are ready to be assigned to a managed server." />
                     <Definition label="Orphan candidates" value={String(fleet.provider.orphanCandidateCount)} help="Provider resources that appear to belong to this fleet but do not currently match durable control-plane ownership." />
@@ -401,8 +390,8 @@ function OverviewView({ overview }: { overview: Overview }) {
     );
 }
 
-function ServersView({ page, query, discordUsers }: { page: HostingPage<ManagedServer>; query: string; discordUsers: DiscordUserSummary[] }) {
-    const usernames = discordUsernameMap(discordUsers);
+function ServersView({ page, query, accounts }: { page: HostingPage<ManagedServer>; query: string; accounts: WebsiteAccountSummary[] }) {
+    const ownerLabels = accountLabelMap(accounts);
     return (
         <section className="mt-8">
             <form method="get" className="flex max-w-xl gap-2">
@@ -420,7 +409,7 @@ function ServersView({ page, query, discordUsers }: { page: HostingPage<ManagedS
                             label={`Open Lifecycle operation for ${server.displayName}`}
                         >
                             <td className="p-4"><p className="font-semibold text-gold group-hover:underline">{server.displayName}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.serverId}</p></td>
-                            <td className="p-4 text-xs text-foreground-muted"><p className="font-semibold text-foreground">{formatDiscordUsername(usernames.get(server.ownerDiscordUserId))}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.ownerDiscordUserId}</p></td>
+                            <td className="p-4 text-xs text-foreground-muted"><p className="font-semibold text-foreground">{formatAccountOwner(server, ownerLabels)}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.ownerAccountId ?? server.ownerDiscordUserId}</p></td>
                             <td className="p-4"><State value={server.operationState} /></td>
                             <td className="p-4"><RuntimeObservation server={server} /></td>
                             <td className="p-4 text-xs text-foreground-muted">{releaseChannelLabel(server.releaseChannel)}<br />{shortId(server.installedBuildId)}</td>
@@ -435,12 +424,12 @@ function ServersView({ page, query, discordUsers }: { page: HostingPage<ManagedS
     );
 }
 
-function ServerView({ result, discordUsers }: { result: ServerDashboardResult; discordUsers: DiscordUserSummary[] }) {
+function ServerView({ result, accounts }: { result: ServerDashboardResult; accounts: WebsiteAccountSummary[] }) {
     const { server } = result.dashboard;
     const pinnedBuild = [result.dashboard.installedBuild, result.dashboard.desiredBuild]
         .find(build => build?.buildId === server.pinnedBuildId) ?? null;
     const activeJob = result.dashboard.activeJob;
-    const username = discordUsernameMap(discordUsers).get(server.ownerDiscordUserId);
+    const ownerLabels = accountLabelMap(accounts);
     return (
         <div className="mt-8 space-y-8">
             <ControlPlaneLiveRefresh active={activeJob !== null} label="Refreshing server progress automatically" />
@@ -461,7 +450,7 @@ function ServerView({ result, discordUsers }: { result: ServerDashboardResult; d
                 </section>
             )}
             <section className="grid gap-6 lg:grid-cols-3">
-                <Panel title="Ownership"><Definition label="Discord owner" value={formatDiscordOwner(username, server.ownerDiscordUserId)} /><Definition label="Region" value={server.friendlyRegion} /><Definition label="Provider" value={server.provider} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
+                <Panel title="Ownership"><Definition label="Owner account" value={formatAccountOwner(server, ownerLabels)} /><Definition label="Region" value={server.friendlyRegion} /><Definition label="Provider" value={server.provider} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
                 <Panel title="Desired / observed"><Definition label="Desired" value={server.desiredState} /><Definition label="VM" value={server.observedVmState} /><Definition label="Game" value={server.observedGameState} /><Definition label="Agent" value={result.dashboard.runtime?.agentHealthy ? "Healthy" : "Unavailable"} tone={result.dashboard.runtime?.agentHealthy ? "ok" : "warning"} /></Panel>
                 <Panel title="Composition"><Definition label="Channel" value={releaseChannelLabel(server.releaseChannel)} /><Definition label="Installed version" value={<RecordedRelease build={result.dashboard.installedBuild} buildId={server.installedBuildId} />} /><Definition label="Desired version" value={<RecordedRelease build={result.dashboard.desiredBuild} buildId={server.desiredBuildId} />} /><Definition label="Update policy" value={server.pinnedBuildId ? "Pinned version" : `Follow ${releaseChannelLabel(server.releaseChannel)} channel`} />{server.pinnedBuildId && <Definition label="Pinned version" value={<RecordedRelease build={pinnedBuild} buildId={server.pinnedBuildId} />} />}<Definition label="Save" value={result.dashboard.activeSave?.displayName ?? "Default bootstrap pending"} /></Panel>
             </section>
@@ -546,7 +535,7 @@ function AuditView({ page }: { page: HostingPage<AuditEvent> }) { return <sectio
 function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> } }) {
     return <div className="mt-8 space-y-8">
         <section className="flex flex-wrap items-center justify-between gap-4">
-            <p className="max-w-3xl text-sm leading-6 text-foreground-muted">Available versions come from GHCR images with verified release labels. Reload uses the current catalog, which may be cached for up to five minutes. It does not install a version or move a channel alias. Historical installed versions remain visible on the server detail page.</p>
+            <p className="max-w-3xl text-sm leading-6 text-foreground-muted">Available versions come from GHCR images with verified release labels. Reload verifies the current catalog. It does not install a version or move a channel alias. Historical installed versions remain visible on the server detail page.</p>
             <RefreshReleaseCatalog />
         </section>
         <div className="grid gap-8 xl:grid-cols-2">{(["stable", "nightly"] as const).map(channel => <section key={channel}>
@@ -556,7 +545,7 @@ function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nig
     </div>;
 }
 
-function OperationsView({ data, discordUsers }: { data: OperationsData; discordUsers: DiscordUserSummary[] }) {
+function OperationsView({ data, accounts }: { data: OperationsData; accounts: WebsiteAccountSummary[] }) {
     const { overview, inventory, selectedServer } = data;
     const listedServers = selectedServer !== null
         && !overview.servers.items.some((server) => server.serverId === selectedServer.serverId)
@@ -569,13 +558,11 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
         : serverOptions.find((option) => option.value === selectedServer.serverId);
     const jobOptions: AdminActionOption[] = overview.jobs.items.map((job) => ({ label: `${job.action} · ${job.state} · ${shortId(job.jobId)}`, value: job.jobId, updatedAt: job.updatedAt }));
     const buildOptions = installableBuilds([...overview.stableBuilds.items, ...overview.nightlyBuilds.items]).map((build) => ({ label: `Pinned version: ${releaseVersion(build)} · ${releaseChannelLabel(build.channel)}${build.currentChannel ? " (current)" : ""}`, value: build.buildId, releaseChannel: build.channel }));
-    const discordUserOptions: AdminActionOption[] = discordUsers.flatMap((user) => user.username
-        ? [{ label: user.username, value: user.discordUserId }]
-        : []);
+    const accountOptions: AdminActionOption[] = accounts.map(user => ({ label: user.label, value: user.accountId }));
     const availableVpsOptions: AdminActionOption[] = (Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : []).map((serviceName) => ({ label: serviceName, value: serviceName }));
     const createRegionOptions: AdminActionOption[] = createServerRegionOptions(inventory.hosts);
     const maintenanceOptions: AdminActionOption[] = maintenanceSlotOptions();
-    const discordUserField = (name: string, label: string): AdminActionField => ({ name, label, kind: "discord-user", required: true, options: discordUserOptions, help: "Enter the account's unique Discord username or its numeric Discord user ID. The username must belong to a user who has signed into this website with Discord." });
+    const accountField = (name: string, label: string): AdminActionField => ({ name, label, kind: "account", required: true, options: accountOptions, help: "Choose a website account by its email or account ID." });
     const reasonField: AdminActionField = { name: "reason", label: "Reason", kind: "textarea", placeholder: "Optional context for this action", help: "Optional context stored in the immutable administrative audit event. When blank, the control plane records a fixed portal-action reason." };
     const serverField: AdminActionField = { name: "serverId", label: "Server", kind: "server", required: true, options: serverOptions, defaultValue: selectedServerOption === undefined ? "" : adminActionOptionValue("server", selectedServerOption), help: "The selected row carries its current update generation so a stale action fails safely." };
     const plainServerField: AdminActionField = { name: "serverId", label: "Server", kind: "select", required: true, options: serverPlainOptions, defaultValue: selectedServerOption?.value ?? "" };
@@ -584,7 +571,7 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
             { name: "serviceName", label: "Available OVH VPS", kind: "select", required: true, options: availableVpsOptions, defaultValue: availableVpsOptions.length === 1 ? availableVpsOptions[0]!.value : "", help: "Only unregistered VPS products discovered in the authenticated OVH account are shown. Select the saved bannerlord-fleet-operator key when installing the VPS; no SSH key, IP address, vCPU count, region, or audit reason is entered here." },
         ] },
         { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity in stopped state. New servers use Public by default; choose Nightly later with Change release settings if needed. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from an explicit administrator grant. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
-            discordUserField("ownerDiscordUserId", "Owner Discord username or ID"),
+            accountField("ownerDiscordUserId", "Owner account"),
             { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: createRegionOptions, help: "Only regions with a prepared, currently available slot on a registered VPS are shown. The control plane revalidates capacity when you submit; no VPS is purchased automatically." },
             { name: "maintenanceSlot", label: "Maintenance slot", kind: "select", required: true, options: maintenanceOptions, help: `All maintenance windows use ${MAINTENANCE_TIME_ZONE} (Central Time and its daylight-saving changes).` },
         ] },
@@ -605,14 +592,13 @@ function OperationsView({ data, discordUsers }: { data: OperationsData; discordU
         { group: "Server lifecycle", operation: "extend-deletion", title: "Extend pending deletion", description: "Move a pending deletion deadline forward by a bounded number of hours.", fields: [serverField, { name: "extensionHours", label: "Extension hours", kind: "number", required: true, minimum: 1, maximum: 8760 }, reasonField] },
         { group: "Server lifecycle", operation: "cancel-deletion", title: "Cancel pending deletion", description: "Cancel the pending deletion if current entitlement permits it.", fields: [serverField, reasonField] },
         { group: "Server lifecycle", operation: "execute-deletion", title: "Execute pending deletion", description: "Queue the final deletion path now.", destructive: true, fields: [serverField, reasonField] },
-        { group: "Ownership and capacity", operation: "set-bonus-quota", title: "Set bonus quota", description: "Replace an owner’s administrative bonus server quota.", fields: [discordUserField("targetDiscordUserId", "Discord username or ID"), { name: "bonusQuota", label: "Bonus quota", kind: "number", required: true, minimum: 0, maximum: 100 }, reasonField] },
-        { group: "Ownership and capacity", operation: "transfer-owner", title: "Transfer ownership", description: "Transfer a server or queue the required replacement workflow.", destructive: true, fields: [serverField, discordUserField("recipientDiscordUserId", "Recipient Discord username or ID"), { name: "recipientRoleIds", label: "Recipient role IDs", valueType: "csv", placeholder: "Comma separated" }, reasonField] },
-        { group: "Ownership and capacity", operation: "set-manager", title: "Set manager", description: "Grant or revoke manager access for one Discord user.", fields: [plainServerField, discordUserField("managerDiscordUserId", "Manager Discord username or ID"), { name: "enabled", label: "Grant access (unchecked revokes)", kind: "checkbox", defaultValue: true }, reasonField] },
+        { group: "Ownership and capacity", operation: "set-bonus-quota", title: "Set bonus quota", description: "Replace an owner’s administrative bonus server quota.", fields: [accountField("targetDiscordUserId", "Account"), { name: "bonusQuota", label: "Bonus quota", kind: "number", required: true, minimum: 0, maximum: 100 }, reasonField] },
+        { group: "Ownership and capacity", operation: "transfer-owner", title: "Transfer ownership", description: "Transfer a server or queue the required replacement workflow.", destructive: true, fields: [serverField, accountField("recipientDiscordUserId", "Recipient account"), reasonField] },
+        { group: "Ownership and capacity", operation: "set-manager", title: "Set manager", description: "Grant or revoke manager access for one website account.", fields: [plainServerField, accountField("managerDiscordUserId", "Manager account"), { name: "enabled", label: "Grant access (unchecked revokes)", kind: "checkbox", defaultValue: true }, reasonField] },
         { group: "Jobs", operation: "retry-job", title: "Retry job", description: "Move an eligible failed/retry-wait job back to the durable queue.", fields: [{ name: "jobId", label: "Job", kind: "job", required: true, options: jobOptions }, reasonField] },
         { group: "Jobs", operation: "cancel-job", title: "Cancel job", description: "Request cancellation at the next safe checkpoint.", destructive: true, fields: [{ name: "jobId", label: "Job", kind: "job", required: true, options: jobOptions }, reasonField] },
         { group: "Jobs", operation: "diagnostics", title: "Open diagnostics result", description: "Read the sanitized result of a completed diagnostics job.", fields: [{ name: "jobId", label: "Diagnostics job UUID", required: true }] },
-        { group: "Maintenance and communication", operation: "batch-maintenance", title: "Batch maintenance", description: "Queue updates for a bounded fleet snapshot, optionally limited to one channel.", fields: [{ name: "releaseChannel", label: "Channel", kind: "select", valueType: "nullable", options: ["stable", "nightly"].map((value) => ({ label: releaseChannelLabel(value), value })) }, reasonField] },
-        { group: "Maintenance and communication", operation: "announce-owners", title: "Announce to owners", description: "Queue a durable private notification campaign for entitled owners.", fields: [{ name: "message", label: "Message", kind: "textarea", required: true }, reasonField] },
+        { group: "Maintenance", operation: "batch-maintenance", title: "Batch maintenance", description: "Queue updates for a bounded fleet snapshot, optionally limited to one channel.", fields: [{ name: "releaseChannel", label: "Channel", kind: "select", valueType: "nullable", options: ["stable", "nightly"].map((value) => ({ label: releaseChannelLabel(value), value })) }, reasonField] },
     ];
     const groups = [...new Set(cards.map((card) => card.group))];
     return <div className="mt-8 space-y-12">{groups.map((group) => {
@@ -659,24 +645,6 @@ function RecordedRelease({ build, buildId }: { build: ReleaseBuild | null; build
     return <div><span>{releaseVersion(build)}</span><ReleaseMetadata build={build} /></div>;
 }
 
-function HostResourcesCard({ name, resources }: { name: string; resources: HostingAdminHostResources | null }) {
-    return (
-        <section className="border border-white/10 bg-surface p-5">
-            <div className="flex items-start justify-between gap-4">
-                <div><p className="font-label text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-gold">System resources</p><h3 className="mt-1 break-all font-display text-xl font-semibold text-foreground">{name}</h3></div>
-                <State value={resources ? "available" : "unavailable"} />
-            </div>
-            {resources ? <dl className="mt-4 grid gap-x-5 sm:grid-cols-2">
-                <Definition label="Disk" value={`${formatStorageBytes(resources.diskUsedBytes)} used · ${formatStorageBytes(resources.diskFreeBytes)} free`} help={`Total filesystem capacity: ${formatStorageBytes(resources.diskTotalBytes)}.`} />
-                <Definition label="Memory" value={`${formatStorageBytes(resources.memoryUsedBytes)} / ${formatStorageBytes(resources.memoryTotalBytes)}`} help="Current host memory use and total physical memory." />
-                <Definition label="CPU load" value={`${resources.cpuPercent.toFixed(1)}%`} help="One-minute load average normalized by the host CPU count; this is a load estimate, not billing data." />
-                <Definition label="Uptime" value={formatUptime(resources.uptimeSeconds)} help="Elapsed host uptime at the observation time." />
-                <Definition label="Observed" value={<LocalDateTime value={resources.observedAt} />} help="When the host supplied this bounded resource snapshot." />
-            </dl> : <p className="mt-4 text-xs leading-5 text-foreground-muted">No current trusted resource observation is available. For a managed VPS this normally means its runner route is not active yet.</p>}
-        </section>
-    );
-}
-
 function Panel({ title, children, help }: { title: string; children: React.ReactNode; help?: string }) { return <section className="border border-white/10 bg-surface p-5"><h2 className={`font-display text-2xl font-semibold text-foreground ${help ? "cursor-help" : ""}`} title={help}>{title}</h2><dl className="mt-4 divide-y divide-white/10">{children}</dl></section>; }
 function Definition({ label, value, tone, help }: { label: string; value: React.ReactNode; tone?: "ok" | "warning"; help?: string }) { return <div className="flex items-start justify-between gap-4 py-3 text-xs"><dt className={`${help ? "cursor-help underline decoration-dotted underline-offset-4" : ""} text-foreground-muted`} title={help} aria-label={help ? `${label}: ${help}` : undefined}>{label}</dt><dd className={`max-w-[65%] break-words text-right font-medium ${tone === "ok" ? "text-emerald-300" : tone === "warning" ? "text-amber-300" : "text-foreground"}`}>{value}</dd></div>; }
 function Stat({ label, value, href, destination, help }: { label: string; value: number; href: string; destination: string; help: string }) { return <Link href={href} className="group bg-surface px-5 py-4 outline-none transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-gold" title={help} aria-label={`${label}: ${value}. ${help} Open ${destination}.`}><p className="font-display text-3xl font-semibold text-foreground">{value}</p><p className="mt-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-foreground-muted group-hover:text-gold">{label}</p></Link>; }
@@ -703,15 +671,11 @@ function controlRows(controls: GlobalControls) { return [
 ]; }
 function chunk<T>(items: readonly T[], size: number): T[][] { const rows: T[][] = []; for (let index = 0; index < items.length; index += size) rows.push(items.slice(index, index + size)); return rows; }
 function enumOptions(values: readonly string[]): AdminActionOption[] { return values.map((value) => ({ label: value, value })); }
-function discordUsernameMap(users: readonly DiscordUserSummary[]) { return new Map(users.flatMap((user) => user.username ? [[user.discordUserId, user.username] as const] : [])); }
-function discordOwnerLabelMap(users: readonly DiscordUserSummary[]) { return new Map(users.map((user) => [user.discordUserId, user.username ?? user.email ?? user.discordUserId])); }
-function formatDiscordUsername(username: string | undefined) { return username ? `@${username}` : "Username unavailable"; }
+function accountLabelMap(users: readonly WebsiteAccountSummary[]) { return Object.fromEntries(users.map(user => [user.accountId, user.label])); }
 function first(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
 function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations"].includes(value ?? "") ? value as View : "overview"; }
 function parseJobState(value: string | undefined): "failed" | "active" | null { return value === "failed" || value === "active" ? value : null; }
 function parseJobAction(value: string | undefined): string | null { return JOB_ACTION_FILTERS.includes(value as typeof JOB_ACTION_FILTERS[number]) ? value ?? null : null; }
 function parseCursor(value: string | undefined): string | null { const normalized = value?.trim() ?? ""; return normalized.length > 0 && normalized.length <= 4_096 ? normalized : null; }
 function formatBytes(value: number) { return value < 1_048_576 ? `${Math.round(value / 1024)} KiB` : `${(value / 1_048_576).toFixed(1)} MiB`; }
-function formatStorageBytes(value: number) { return value >= 1_073_741_824 ? `${(value / 1_073_741_824).toFixed(1)} GiB` : formatBytes(value); }
-function formatUptime(seconds: number) { const days = Math.floor(seconds / 86_400); const hours = Math.floor((seconds % 86_400) / 3_600); return days > 0 ? `${days}d ${hours}h` : `${hours}h`; }
 function shortId(value: string | null) { return value ? (value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value) : "—"; }

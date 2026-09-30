@@ -169,6 +169,7 @@ test("edge-owned link commit with recovery table actually absent", async t => {
             let authDiscord: string | null = null;
             const fetcher: typeof fetch = async (input, init) => {
                 const path = new URL(String(input)).pathname;
+                if (path === "/rest/v1/rpc/website_session_context") return Response.json({ impersonationId: null });
                 if (path === "/auth/v1/user") return Response.json({ id: current, identities: authDiscord ? [{ provider: "discord", identity_data: { provider_id: authDiscord } }] : [] });
                 const name = path.replace("/rest/v1/rpc/", "");
                 assert.ok(["membership_complete", "membership_unlink", "membership_status", "membership_discord_begin", "membership_discord_check", "membership_discord_confirm"].includes(name));
@@ -198,6 +199,27 @@ test("edge-owned link commit with recovery table actually absent", async t => {
             assert.equal((await account(request({ operation: "discord-confirm", token: started.token }))).status, 503);
             current = owner;
             assert.equal((await (await account(request({ operation: "discord-confirm", token: started.token }))).json()).confirmed, true);
+        });
+        await t.test("account-owned membership preserves positive evidence across Discord unlink and relink", async () => {
+            const id = await fresh(), attempt = await stage(id, "9988");
+            await rpc("membership_complete", [id, null, attempt.hash]);
+            await query("update public.membership_heads set discord_user_id='123456789012345678', evidence=evidence || $2::jsonb where account_id=$1", [id, JSON.stringify({ verification: "qualifying", verifiedAt: new Date().toISOString(), policyVersion: "patreon-paid-usd20-v1" })]);
+            const before = await rpc("membership_fence", [id, discord, false]);
+            const receipts = (await query("select * from public.membership_completion_receipts where account_id=$1", [id])).rows;
+            await db.exec(await readFile("supabase/migrations/202609280003_account_owned_membership.sql", "utf8"));
+            for (const optionalIdentity of [null, differentDiscord, null]) {
+                const current = await rpc("membership_fence", [id, optionalIdentity, false]);
+                assert.equal(current.linkGeneration, before.linkGeneration);
+                assert.equal(current.verification, "qualifying");
+                assert.equal(current.linkState, "linked");
+                assert.equal(current.patreonUserId, "9988");
+                assert.equal(current.discordUserId, optionalIdentity);
+            }
+            assert.deepEqual((await query("select * from public.membership_completion_receipts where account_id=$1", [id])).rows, receipts);
+            const deleted = await rpc("membership_fence", [id, null, true]);
+            assert.equal(deleted.linkState, "account_deleted");
+            assert.equal(deleted.verification, "unverified");
+            await assert.rejects(rpc("membership_fence", [id, null, false]), /cannot be resurrected/);
         });
     } finally { await db.close(); }
 });

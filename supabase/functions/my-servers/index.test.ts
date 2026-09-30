@@ -371,3 +371,24 @@ test("direct commands preserve admission failures and do not retry transport los
     assert.equal((await response.json()).error.code, "control_plane_unavailable");
     assert.equal(calls, 1);
 });
+
+test("website password controls preserve actor, generation and request ID without returning secrets", async () => {
+    const input = { action: "set-password", serverId: "22222222-2222-4222-8222-222222222222", expectedUpdatedAt: "2026-09-28T00:00:00.000Z", password: "Private-fixture-password" };
+    const upstream: unknown[] = [];
+    let leak = false;
+    const handler = createHandler(async (_url, init) => {
+        upstream.push(JSON.parse(String(init?.body)));
+        return successEnvelope({ changed: true, restartQueued: false, ...(leak ? { password: input.password } : {}) });
+    });
+    const response = await handler(operationRequest(input));
+    assert.equal(response.status, 200);
+    assert.ok(!(await response.text()).includes(input.password));
+    const expectedInput = { serverId: input.serverId, expectedUpdatedAt: input.expectedUpdatedAt, password: input.password };
+    assert.deepEqual(upstream, [{ version: 1, requestId: REQUEST_ID, operation: "set-password", input: expectedInput }]);
+    for (const invalid of [{ ...input, ownerDiscordUserId: "123456789012345678" }, { ...input, password: "" }, { ...input, expectedUpdatedAt: "yesterday" }]) assert.equal((await handler(operationRequest(invalid))).status, 400);
+    assert.equal(upstream.length, 1);
+    leak = true;
+    const rejected = await handler(operationRequest(input));
+    assert.equal(rejected.status, 502);
+    assert.ok(!(await rejected.text()).includes(input.password));
+});

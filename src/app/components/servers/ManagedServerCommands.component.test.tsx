@@ -1,7 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import { ManagedServerConsole } from "./ManagedServerConsole";
+import { ManagedServerCommands } from "./ManagedServerCommands";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 
 const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn(), router: { refresh: vi.fn() } }));
@@ -31,7 +31,7 @@ async function select() {
 }
 /** Mounts the console with its lifecycle controls as provided by the page. */
 async function mount(overrides: Partial<MyServerSummary> = {}) {
-    await act(async () => root.render(<ManagedServerConsole server={{ ...server, ...overrides }} userId="owner-id" controls={<p>Lifecycle controls</p>} />));
+    await act(async () => root.render(<ManagedServerCommands server={{ ...server, ...overrides }} userId="owner-id" controls={<p>Lifecycle controls</p>} />));
 }
 
 it("offers only coop cheats and selecting one never sends it; cancellation is respected", async () => {
@@ -45,6 +45,13 @@ it("offers only coop cheats and selecting one never sends it; cancellation is re
     vi.mocked(window.confirm).mockReturnValue(false);
     await act(async () => button("Send").click());
     expect(mocks.submit).not.toHaveBeenCalled();
+});
+
+it("suggests the right panel's coop commands while typing", async () => {
+    await mount();
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!;
+    const suggestions = [...input.list!.querySelectorAll("option")].map(option => option.value);
+    expect(suggestions).toEqual([...container.querySelectorAll("aside code")].map(node => node.textContent));
 });
 
 it("retries uncertain delivery with the exact original UUID and payload", async () => {

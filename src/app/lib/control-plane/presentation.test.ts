@@ -7,7 +7,7 @@ import {
     applyControlPlaneOperationDefaults,
     createServerRegionOptions,
     fieldRequirementLabel,
-    formatDiscordOwner,
+    formatAccountOwner,
     installableBuilds,
     releaseChannelLabel,
     releaseVersion,
@@ -125,15 +125,16 @@ test("operation fields explicitly identify required and optional inputs", () => 
     assert.equal(fieldRequirementLabel(false), "Optional");
 });
 
-test("server ownership combines the Discord username and durable user id", () => {
-    assert.equal(
-        formatDiscordOwner("shot_up", "763278507085922325"),
-        "shot_up (763278507085922325)",
-    );
-    assert.equal(
-        formatDiscordOwner(undefined, "763278507085922325"),
-        "Username unavailable (763278507085922325)",
-    );
+test("server ownership resolves the durable website account and has explicit fallbacks", () => {
+    const accountId = "44444444-4444-4444-8444-444444444444";
+    const legacyId = "763278507085922325";
+    const labels = { [accountId]: "owner@example.com", [legacyId]: "wrong@example.com" };
+    assert.equal(formatAccountOwner({ ownerDiscordUserId: legacyId, ownerAccountId: accountId }, labels), "owner@example.com");
+    assert.equal(formatAccountOwner({ ownerDiscordUserId: accountId, ownerAccountId: accountId }, labels), "owner@example.com");
+    assert.equal(formatAccountOwner({ ownerDiscordUserId: accountId }, labels), "owner@example.com");
+    assert.equal(formatAccountOwner({ ownerDiscordUserId: legacyId, ownerAccountId: null }, labels), `Legacy owner (${legacyId})`);
+    assert.equal(formatAccountOwner({ ownerDiscordUserId: legacyId }, labels), `Legacy owner (${legacyId})`);
+    assert.equal(formatAccountOwner({ ownerDiscordUserId: legacyId, ownerAccountId: accountId }, {}), `Account unavailable (${accountId})`);
 });
 
 test("the VPS view presents slot occupants and resources with their owning host", async () => {
@@ -146,10 +147,12 @@ test("the VPS view presents slot occupants and resources with their owning host"
         "utf8",
     );
 
-    assert.match(pageSource, /needsDiscordUsers = view === "vps"/u);
-    assert.match(pageSource, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\} \/>/u);
-    assert.match(pageSource, /<VpsHostInventory/u);
-    assert.match(inventorySource, /formatDiscordOwner\(ownerLabels\[slot\.ownerDiscordUserId\], slot\.ownerDiscordUserId\)/u);
+    assert.match(pageSource, /needsAccounts = view === "vps"/u);
+    const vpsSource = await readFile(new URL("../../components/admin/VpsView.tsx", import.meta.url), "utf8");
+    assert.match(vpsSource, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\}/u);
+    assert.match(vpsSource, /<VpsHostInventory/u);
+    assert.match(inventorySource, /formatAccountOwner\(slot, ownerLabels\)/u);
+
     assert.match(inventorySource, /view=server&serverId=\$\{encodeURIComponent\(slot\.serverId\)\}/u);
     assert.match(inventorySource, /usedPercent >= 90 \? "critical" : usedPercent >= 80 \? "warning"/u);
 });
@@ -267,13 +270,26 @@ function build(buildId: string, validationState: string, sourceRevision: string)
 // Protect registry-only selection while retaining honest historical version display.
 test("only verified registry versions are selectable; historical versions are not fabricated", () => {
     const historical = { ...build("ghcr-stable-35b1b6ebeb038a5a69f4ef8a2a84031c3726702452e38874fd4b2f339de92203", "validated", "registry-observed"), version: "stable-35b1b6ebeb03" };
-    const registry = { ...build("transport-key", "validated", "a".repeat(40)), requiredClientModVersion: "v0.1.5",
+    const registry = { ...build("transport-key", "validated", "a".repeat(40)), channel: "stable" as const, requiredClientModVersion: "v0.1.5",
         registryMetadata: { versionTag: "v0.1.5-client12345678-serverabcdefgh", clientRevision: "a".repeat(40), serverRevision: "b".repeat(40) }, currentChannel: true };
     assert.deepEqual(installableBuilds([historical, registry, { ...registry, validationState: "revoked" }]), [registry]);
     assert.equal(releaseVersion(registry), registry.registryMetadata.versionTag);
     assert.equal(releaseVersion(historical), "stable-35b1b6ebeb03");
     assert.equal(releaseChannelLabel("stable"), "Public");
     assert.equal(releaseChannelLabel("nightly"), "Nightly");
+});
+
+test("nightly names use the client version label with one v prefix", () => {
+    const nightly = {
+        ...build("immutable-build-id", "validated", "a".repeat(40)),
+        registryMetadata: { versionTag: "nightly-serverhash-clienthash-digest", clientRevision: "a".repeat(40), serverRevision: "b".repeat(40) },
+    };
+
+    assert.equal(releaseVersion({ ...nightly, requiredClientModVersion: "v0.1.6" }), "v0.1.6");
+    assert.equal(releaseVersion({ ...nightly, requiredClientModVersion: "0.1.6" }), "v0.1.6");
+    assert.equal(releaseVersion(nightly), nightly.registryMetadata.versionTag);
+    assert.equal(releaseVersion({ ...nightly, requiredClientModVersion: "" }), nightly.registryMetadata.versionTag);
+    assert.equal(releaseVersion(build("historical-nightly", "validated", "a".repeat(40))), "historical-nightly");
 });
 
 test("overview statistic cards fill the final row evenly", () => {
@@ -381,7 +397,7 @@ test("Builds refreshes GHCR discovery and displays exact release labels", async 
 test("release selectors load the same full catalog as the Releases view", async () => {
     const source = await readFile(new URL("../../admin/control-plane/page.tsx", import.meta.url), "utf8");
     const operations = source.slice(source.indexOf('case "operations":'), source.indexOf('case "vps":'));
-    assert.match(operations, /loadReleaseCatalog\(token\)/u);
+    assert.match(operations, /loadReleaseCatalog\(token, signal\)/u);
     assert.match(operations, /stableBuilds: releases.stable, nightlyBuilds: releases.nightly/u);
     const catalog = source.slice(source.indexOf("async function loadReleaseCatalog"), source.indexOf("function ViewTabs"));
     assert.match(catalog, /channel: "stable", cursor: null, limit: 100/u);

@@ -4,6 +4,7 @@ import {
     MyServersApiError,
     requestMyServerOperation,
     requestMyServerUpdate,
+    requestMyServerPassword,
     type MyServerOperation,
 } from "@/app/lib/hosting/my-servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -50,6 +51,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             await requestMyServerOperation(accessToken, parsed);
         }
         revalidatePath("/servers");
+        if (parsed.action === "start") return { ok: true, message: "Server started and game readiness confirmed." };
         return { ok: true, message: `${operationLabel(parsed.action)} command exited successfully (code 0). This does not confirm game readiness.` };
     } catch (error) {
         revalidatePath("/servers");
@@ -59,6 +61,10 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         }
         if (code === "container_command_failed" && error instanceof MyServersApiError) {
             return { ok: false, message: error.message };
+        }
+        if (parsed.action === "start" && code === "operation_timeout"
+            && error instanceof MyServersApiError && error.operationId !== undefined) {
+            return { ok: true, message: "Start request accepted. The game has not confirmed readiness yet. Refresh server status before sending another command." };
         }
         if (parsed.action === "update-now") {
             if (code === "stale_interaction") {
@@ -113,4 +119,18 @@ function hasExactKeys(value: Record<string, unknown>, expected: readonly string[
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export async function setManagedServerPassword(input: { serverId: string; expectedUpdatedAt: string; password: string }): Promise<ManagedServerActionResult> {
+    if (!input || !SERVER_ID.test(input.serverId) || typeof input.password !== "string" || input.password.length < 1 || input.password.length > 128 || typeof input.expectedUpdatedAt !== "string") return { ok: false, message: "Enter a password of 1–128 characters." };
+    try {
+        const supabase = await getSupabaseServerClient();
+        const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
+        if (!user || !session) return { ok: false, message: "Sign in again to change the password." };
+        const result = await requestMyServerPassword(session.access_token, input, crypto.randomUUID());
+        revalidatePath(`/servers/${input.serverId}`);
+        return { ok: true, message: result.restartQueued ? "Password changed. A restart is queued with a player warning." : "Password changed. Use it when joining your server." };
+    } catch {
+        return { ok: false, message: "The change could not be confirmed. Refresh server status before trying again." };
+    }
 }

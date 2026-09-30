@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ImpersonationBanner } from "@/app/components/admin/ImpersonationBanner";
 import { Barlow_Condensed, Cormorant_Garamond, Inter } from "next/font/google";
 import "./globals.css";
 
@@ -64,7 +65,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${inter.variable} ${cormorantGaramond.variable} ${barlowCondensed.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col"><ImpersonationBanner />{children}</body>
     </html>
   );
 }

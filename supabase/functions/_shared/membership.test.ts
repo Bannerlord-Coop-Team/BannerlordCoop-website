@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { currentDiscord, parsePolicy, POLICY_VERSION, parseSnapshot, validUntil, type Policy } from "./membership.ts";
-import { verifyPatreonMembership, PATREON_IDENTITY_URL } from "./patreon-membership.ts";
+import { verifyPatreonMembership, verifyPatreonAllocation, PATREON_IDENTITY_URL } from "./patreon-membership.ts";
 import { createWebsiteAccountHandler } from "./website-account.ts";
 import { createPatreonHandler } from "./patreon.ts";
 import { createControlPlaneMembershipHandler } from "./control-plane-membership.ts";
@@ -60,7 +60,7 @@ test("authoritative Discord identities never fall back to metadata or merge conf
     assert.equal(currentDiscord({ identities: [], user_metadata: { provider_id: "123456789012345678" } }), null);
     assert.throws(() => currentDiscord({ user_metadata: { provider_id: "123456789012345678" } }));
     assert.throws(() => currentDiscord({ identities: [{ provider: "discord", identity_data: { sub: "123456789012345678", id: "999456789012345678" } }] }));
-    assert.equal(identityStep(null), "signed_out"); assert.equal(identityStep({ identities: [] }), "needs_discord");
+    assert.equal(identityStep(null), "signed_out"); assert.equal(identityStep({ id: accountId, identities: [] }), null);
 });
 test("strict CP endpoint authenticates dedicated token and always fences exact authoritative Auth; outage cannot return positive", async () => {
     const calls: string[] = []; let outage = false; let deleted = false;
@@ -121,9 +121,9 @@ test("CP claim/ack retries typed contention with the same durable identities", a
 });
 test("website identity first, independent grant bypasses outage/configuration and expiry is exact", () => {
     const allocation = onboardingSummary();
-    assert.equal(composeOnboarding(accountId, "needs_discord", null, allocation).status, "needs_discord");
+    assert.equal(composeOnboarding(accountId, "identity_repair", null, allocation).status, "identity_repair");
     assert.equal(composeOnboarding(accountId, null, null, allocation).status, "eligible");
-    const status = parseAccountStatus({ version: 1, accountId, hasDiscord: true, configured: true, verificationPending: false, membership: { linked: true, verification: "qualifying", sync: "applied", verifiedAt: now, validUntil: "2026-09-08T12:00:00.000Z", retryAt: null, refreshMode: "oauth_reauthorization" } }, accountId);
+    const status = parseAccountStatus({ version: 1, accountId, hasDiscord: false, configured: true, verificationPending: false, membership: { linked: true, verification: "qualifying", sync: "applied", verifiedAt: now, validUntil: "2026-09-08T12:00:00.000Z", retryAt: null, refreshMode: "oauth_reauthorization" } }, accountId);
     allocation.sources.administrativeBase = 0; allocation.sources.membershipAllowance = 1;
     assert.equal(composeOnboarding(accountId, null, status, allocation, [], Date.parse(status.membership.validUntil!)-1).status, "eligible");
     assert.equal(composeOnboarding(accountId, null, status, allocation, [], Date.parse(status.membership.validUntil!)).status, "verification_expired");
@@ -168,7 +168,7 @@ test("applied qualifying membership with denied allocation offers support or dis
     const allocation = onboardingSummary(); allocation.sources.administrativeBase = 0;
     allocation.eligibility = { eligible: false, reason: "no_grant", granted: 0, used: 0, remaining: 0 };
     allocation.membership.enabled = true;
-    const account = parseAccountStatus({ version: 1, accountId, hasDiscord: true, configured: true, verificationPending: false, membership: { linked: true, verification: "qualifying", sync: "applied", verifiedAt: now, validUntil: "2026-09-08T12:00:00.000Z", retryAt: null, refreshMode: "oauth_reauthorization" } }, accountId);
+    const account = parseAccountStatus({ version: 1, accountId, hasDiscord: false, configured: true, verificationPending: false, membership: { linked: true, verification: "qualifying", sync: "applied", verifiedAt: now, validUntil: "2026-09-08T12:00:00.000Z", retryAt: null, refreshMode: "oauth_reauthorization" } }, accountId);
     assert.equal(composeOnboarding(accountId, null, account, allocation, [], Date.parse(now)).status, "review_required");
     allocation.membership.enabled = false;
     assert.equal(composeOnboarding(accountId, null, account, allocation, [], Date.parse(now)).status, "configuration_blocked");
@@ -179,7 +179,7 @@ test("applied qualifying membership with denied allocation offers support or dis
 test("authenticated mutation throttles return exact bounded retry contracts without raw database errors", async () => {
     const config = { supabaseUrl: "https://project.supabase.co", serviceRoleKey: "synthetic", policy,
         clientId: "synthetic", clientSecret: "synthetic", redirectUri: "https://project.supabase.co/functions/v1/patreon-callback", siteUrl: "https://website.example",
-        fetch: async (input: string | URL | Request) => new URL(String(input)).pathname === "/auth/v1/user"
+        fetch: async (input: string | URL | Request) => new URL(String(input)).pathname === "/rest/v1/rpc/website_session_context" ? Response.json({ impersonationId: null }) : new URL(String(input)).pathname === "/auth/v1/user"
             ? Response.json({ id: accountId, identities: [] }) : new Response("private sql message credential", { status: 429 }),
     };
     const account = createWebsiteAccountHandler(config);
@@ -196,7 +196,7 @@ test("participating database contention maps exact SQLSTATE to closed503 at real
     for (const code of ["55P03", "40P01", "23505"]) {
         const config = { supabaseUrl: "https://project.supabase.co", serviceRoleKey: "synthetic", policy,
             clientId: "synthetic", clientSecret: "synthetic", redirectUri: "https://project.supabase.co/functions/v1/patreon-callback", siteUrl: "https://website.example",
-            fetch: async (input: string | URL | Request) => new URL(String(input)).pathname === "/auth/v1/user"
+            fetch: async (input: string | URL | Request) => new URL(String(input)).pathname === "/rest/v1/rpc/website_session_context" ? Response.json({ impersonationId: null }) : new URL(String(input)).pathname === "/auth/v1/user"
                 ? Response.json({ id: accountId, identities: [] }) : Response.json({ code, message: "private database data", details: "private" }, { status: 500 }),
         };
         for(const [handler,body] of [[createWebsiteAccountHandler(config),{operation:"discord-confirm",token:"a".repeat(64)}],[createWebsiteAccountHandler(config),{operation:"unlink"}],[createPatreonHandler(config,"complete"),{token:"a".repeat(64)}]] as const) {
@@ -221,4 +221,30 @@ test("$50 allocation policy checks provider amounts and versions for OAuth and w
     }
     body.included[2].attributes.amount_cents = 2000;
     assert.equal((await verifyPatreonMembership(body, fifty, now)).evidence.verification, "review_required");
+});
+
+
+test("confirmed former membership with no remaining benefits emits loss, never cancellation or ambiguity alone", async () => {
+    const fifty: Policy = { ...policy, minimumCents: 5000, policyVersion: "patreon-paid-usd50-v1" };
+    const body = identity();
+    body.included[2].attributes.amount_cents = 5000;
+    body.included[0].attributes.patron_status = "former_patron";
+    const read = () => verifyPatreonAllocation({ data: body.included[0], included: body.included.slice(1) }, fifty, now);
+    assert.equal((await read()).paidAccessEndedAt, undefined); // Paid benefits remain after cancellation.
+    body.included[0].attributes.currently_entitled_amount_cents = 0;
+    assert.ok(body.included[0].relationships?.currently_entitled_tiers);
+    body.included[0].relationships.currently_entitled_tiers.data = [];
+    const ended = await read();
+    assert.equal(ended.verification, "nonqualifying"); assert.equal(ended.paidAccessEndedAt, now);
+    assert.equal(ended.paidThroughAt, null); // No invented billing period.
+    assert.equal((await verifyPatreonMembership(body, fifty, now)).evidence.paidAccessEndedAt, undefined);
+    assert.deepEqual(parseSnapshot({ version: 1, accountId, discordUserId: "123456789012345678",
+        patreonUserId: "1", linkGeneration: "1", revision: "1", linkState: "linked", ...ended }).paidAccessEndedAt, now);
+    for (const status of ["active_patron", "declined_patron", "unsupported"]) {
+        body.included[0].attributes.patron_status = status;
+        assert.equal((await read()).paidAccessEndedAt, undefined);
+    }
+    body.included[0].attributes.patron_status = "former_patron";
+    const incomplete = { data: body.included[0], included: body.included.slice(1), links: { next: "https://untrusted.invalid" } };
+    assert.equal((await verifyPatreonAllocation(incomplete, fifty, now)).paidAccessEndedAt, undefined);
 });

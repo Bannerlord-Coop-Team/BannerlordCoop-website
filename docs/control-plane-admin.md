@@ -2,6 +2,28 @@
 
 `/admin/control-plane` is the website presentation layer for managed-hosting administration. Supabase `Admin` access protects the page, and the browser sends typed requests to the `control-plane-admin` Supabase Edge Function. The function accepts only configured website origins, reauthenticates the current access token, requires the protected `Admin` role, then forwards the unchanged request envelope to the Oracle web-admin adapter. The adapter independently revalidates the token and uses the control plane's typed Unix-socket contract.
 
+For server-rendered pane reads, the page starts its closed read operation as soon as
+it has a refreshed session token, overlapping the website's fresh viewer validation.
+The seven server-rendered reads (`overview`, `vps-hosts`, `servers`,
+`server-dashboard`, `jobs`, `audit`, `builds`) use a server-only helper to call
+`https://control-plane.bannerlordcoop.com/v1/admin/control-plane` directly.
+Each sends the current Bearer token and `x-control-plane-protected-admin: 1`.
+Oracle freshly verifies the Supabase user and durable session context and requires
+the protected `Admin` role, regardless of bootstrap email admission. The reader
+requires the exact response acknowledgment, HTTP success and a successful
+correlated envelope before returning data. It never falls back to the relay.
+An older backend or backend rollback therefore fails closed; deploy the companion
+ControlPlane #265 adapter before this website change. Website rollback to Edge
+reads remains compatible. Browser reads and all mutations retain the Edge route.
+The fixed direct route omits cookies/API keys, disables caching, refuses redirects
+without following them, bounds requests to 64KiB and streamed responses to 8MiB
+and 8192 chunks, and keeps caller cancellation plus the 90-second read deadline.
+The page withholds all content until fresh user/session identity and administrator
+access checks succeed, and cancels pending reads on rejection. Service-key account
+lookups start only after those checks. Impersonation actor/target validation finishes
+before any early read starts. No mutation uses this path and no response or permission
+is cached across requests.
+
 The page provides:
 
 - clickable fleet health summaries, exact registered-VPS/managed-server/slot capacity, reconciliation, and global controls;
@@ -47,10 +69,13 @@ read-only. The control plane rechecks durable permission immediately before disp
 
 The Edge Function maps these actions to fixed `POST /api/v1/start`, `/api/v1/stop`,
 and `/api/v1/restart` routes with only `{serverId}` and the caller's bearer token.
-These commands operate on an existing container. They do not provision, queue a
-job, verify saves, warn players, or wait for game readiness. Stop/Restart require
-UI confirmation warning of unsaved progress loss. A container removed by the old
-safe Stop cannot be recreated by direct Start. Stop never powers off the VPS;
+Start uses the durable managed lifecycle to recreate a missing container with
+the selected save and configuration, and confirms success only after readiness.
+If the response deadline expires with a durable operation ID, the website shows
+that Start was accepted and asks the owner to refresh status; it does not claim
+the game is ready or submit another request. Stop/Restart operate directly on
+the existing container and require UI confirmation warning of unsaved progress
+loss. Stop never powers off the VPS;
 Restart never becomes a VM reboot.
 
 The Edge retains the website's correlated version-1 envelope: success contains
@@ -58,8 +83,10 @@ The Edge retains the website's correlated version-1 envelope: success contains
 `container_command_failed` and the actual exit code in the bounded error message.
 No stdout/stderr is forwarded. Transport failure means an unknown outcome, not
 proof of non-execution. Each HTTP request is a new command; there is no automatic
-retry, lifecycle polling, or operation ID. The page is revalidated once after a
-response, without claiming readiness. Existing backup polling/interlocks remain.
+retry or lifecycle polling. Start timeout errors retain the durable operation
+ID. The page is revalidated once after a response. Only successful lifecycle
+Start claims readiness; direct Stop/Restart success reports the exit code.
+Existing backup polling/interlocks remain.
 
 Before enabling these controls, commission compatible ControlPlane #156 agent,
 controller **and persistent process owner**, allow the three exact direct paths
@@ -119,30 +146,21 @@ exact HTTPS proxy allowlist. Merging the backend PR alone does not deploy the
 website's Edge Function or expose the loopback route through the proxy.
 
 
-## Release-list Edge cache
+## Fresh release reads and Operations inventory
 
-The existing `control-plane-admin` Edge Function caches successful `builds`
-responses in memory for five minutes per function instance. The browser keeps
-using the same authenticated version-1 API; no new endpoint, secret, database
-table, Redis service, or GHCR credential is required in Supabase. The control
-plane still owns GHCR access and label/integrity validation.
+Every authenticated release-list request reaches the control plane. There is no
+five-minute Edge response cache, so removed or replaced registry tags appear on
+the next read and upstream failures cannot return a preceding catalog. The service
+reuses only digest-verified immutable image metadata while revalidating tag
+membership and manifest bytes. Requests retain current authentication, session
+revocation checks, request IDs, origin restrictions, and `Cache-Control: no-store`.
+Deploy the `control-plane-admin` Edge Function separately after merging this change.
 
-Authentication and the protected Admin role are checked on **every** request,
-including cache hits. Only release-list pages are cached, with at most one page
-per Public/Nightly channel. Cursor and page size must match; requesting another
-page replaces that channel's cached page. Responses use the current request ID
-and origin and retain `Cache-Control: no-store` for browser/proxy caches. Tokens,
-account records, lifecycle operations and upstream errors are never cached.
-Expired pages are not served after an upstream failure. Instances do not share
-cache state; cold starts and concurrent misses may query the control plane again.
-
-Deploy this change only through a separately authorized Edge Function rollout,
-coordinated with control-plane PR #198's on-demand `RegistryReleaseApi`. That
-backend removes the local cache and background release refresh loop: direct
-Builds requests and lifecycle selections query GHCR, while the Edge endpoint
-caches presentation responses only. Health probes and ordinary Start/Stop/Restart
-remain independent of release discovery. Do not deploy this cache in front of an
-older caching backend; the two lifetimes would compound.
+Operations requests registered VPS capacity and authenticated provider inventory
+with `includeLiveData: false, includeProviderInventory: true`. It does not wait
+for CPU/memory samples or the runner target revision, which its forms do not use.
+This requires the control-plane version supporting the provider-inventory option
+before the website rollout. The VPS pane's live readings remain unchanged.
 
 Focused verification:
 
@@ -150,3 +168,52 @@ Focused verification:
 npx tsx --test supabase/functions/control-plane-admin/index.test.ts
 npx eslint supabase/functions/_shared/control-plane-admin.ts supabase/functions/control-plane-admin/index.test.ts
 ```
+
+### VPS inventory loading
+
+The VPS tab first requests `vps-hosts` with `input: { includeLiveData: false }`.
+Registered hosts, capacity, and assignments render without live provider or runner
+reads. A browser request then loads the existing full inventory, preserving open
+host details while resource and billing fields show loading indicators. Failures
+remain visible with a retry button and leave the initial inventory usable.
+While visible, the tab polls the existing authenticated API five seconds after
+completion of each request, replacing readings in place without clearing the
+previous snapshot or expanded details. Runner progress shares this refresh loop
+instead of refreshing the entire page. Failed refreshes label retained readings
+as the last readings and retry automatically; a successful response with missing
+telemetry shows unavailable rather than retaining an older measurement. Hidden
+tabs pause polling and refresh on return. Leaving the tab cancels its request.
+This is background polling, not a server-push stream.
+A superseded request cannot replace a newer page inventory. Legacy full responses
+without `liveDataIncluded` render directly. Deploy the companion backend's bounded
+inventory-read option before deploying this page; no Edge Function change is needed.
+
+
+## Fresh gateway authentication
+
+The admin gateway fetches the current Supabase user and durable website session
+context concurrently. It forwards only after both validate, the context matches
+the verified identity and has not expired, and the current user has the Admin
+role. Each request makes fresh checks; no authentication or response cache is
+used. Either check failing aborts its sibling. A successful context RPC can record
+an authentication attempt even if the concurrent user lookup fails; this is not
+successful authorization. Membership and Patreon retain their existing verified
+identity calls to the shared session verifier.
+
+The read-only control-plane and Servers pages obtain a fresh viewer after normal
+session refresh. User verification and the session-context RPC run concurrently
+with the same explicit access token; this also avoids serializing the RPC behind
+the auth SDK's session lock. Neither result is cached across requests. Existing
+impersonation validation completes before this viewer is returned. Server actions
+continue using their existing authorization path.
+
+Authenticated admin gateway responses include numeric `Server-Timing` durations:
+`edge_auth` covers both fresh authorization reads and `control_plane` covers the
+upstream request and complete bounded response. These are measured per request;
+no tokens, identities, request inputs, upstream timing text, or internal URLs are
+included. Denied gateway requests do not expose stage timings. This diagnostic
+header does not cache data or change authorization, forwarding, or deadlines.
+
+## Applied administrator job index history
+
+`supabase/migrations/20260930142800_control_plane_admin_job_index.sql` is an exact Git-byte mirror of ControlPlane commit `142cd4bed948a6c354d2e7f1ed1bec63755a3ba0` (PR255). Its SHA-256 is `2eb71c8b41be2db7ca610964cbbccee99b9f5b5842c6e0debb9368d36c8220d0`. The shared production project already records version `20260930142800`; this mirror restores the website migration inventory expected by its Supabase integration. Do not replay, edit, or repair this applied migration history. It does not introduce a new database change. The original membership release inventory remains a frozen snapshot; this later mirror is verified separately.

@@ -6,8 +6,9 @@ export const ONBOARDING_REGION_LABELS: Record<OnboardingRegion, string> = {
     "united-kingdom": "United Kingdom", poland: "Poland",
 };
 export const ONBOARDING_UNAVAILABLE_REASONS = ["provider_cannot_assign", "required_approval_missing", "pilot_only", "provisioning_paused", "validated_build_unavailable"] as const;
+export type OnboardingReleaseChannel = "stable" | "nightly";
 export type OnboardingMutation =
-    | { action: "create-server"; displayName: string; region: OnboardingRegion }
+    | { action: "create-server"; displayName: string; releaseChannel?: OnboardingReleaseChannel; region: OnboardingRegion }
     | { action: "request-region"; region: OnboardingRegion };
 export type OnboardingIntent = OnboardingMutation & { requestId: string };
 export type RegionRequest = { requestId: string; region: OnboardingRegion; status: "outstanding"; createdAt: string };
@@ -20,7 +21,7 @@ export type OnboardingSummary = {
     regions: { region: OnboardingRegion; label: string; available: boolean; request: RegionRequest | null }[];
 };
 export type OnboardingResult =
-    | { action: "create-server"; serverId: string; displayName: string; region: OnboardingRegion; state: "stopped"; createdAt: string; passwordManagement: "discord-owner-controls" }
+    | { action: "create-server"; serverId: string; displayName: string; releaseChannel?: OnboardingReleaseChannel; region: OnboardingRegion; state: "stopped"; createdAt: string; passwordManagement: "website-owner-controls" | "discord-owner-controls" }
     | { action: "request-region"; request: RegionRequest };
 
 export function isOnboardingUuid(value: unknown): value is string {
@@ -36,9 +37,11 @@ export function parseOnboardingMutation(value: unknown): OnboardingMutation {
     if (value.action === "request-region" && keys(value, ["action", "region"])) {
         return { action: value.action, region: value.region };
     }
-    if (value.action === "create-server" && keys(value, ["action", "displayName", "region"])) {
+    if (value.action === "create-server" && keys(value, ["action", "displayName", "region", ...(Object.hasOwn(value, "releaseChannel") ? ["releaseChannel"] : [])])) {
         const displayName = normalizeOnboardingName(value.displayName);
-        if (displayName !== null) return { action: value.action, displayName, region: value.region };
+        if (Object.hasOwn(value, "releaseChannel") && value.releaseChannel !== "stable" && value.releaseChannel !== "nightly") throw invalid();
+        if (displayName !== null) return { action: value.action, displayName, region: value.region,
+            ...(value.releaseChannel !== undefined ? { releaseChannel: value.releaseChannel as OnboardingReleaseChannel } : {}) };
     }
     throw invalid();
 }
@@ -80,13 +83,16 @@ export function parseOnboardingResult(value: unknown, expected: OnboardingMutati
         return { action: value.action, request };
     }
     if (value.action === "create-server" && expected.action === "create-server"
-        && keys(value, ["action", "serverId", "displayName", "region", "state", "createdAt", "passwordManagement"])
+        && keys(value, ["action", "serverId", "displayName", "region", "state", "createdAt", "passwordManagement", ...(Object.hasOwn(value, "releaseChannel") ? ["releaseChannel"] : [])])
+        && (!Object.hasOwn(value, "releaseChannel") || value.releaseChannel === "stable" || value.releaseChannel === "nightly")
+        && (value.releaseChannel ?? "stable") === (expected.releaseChannel ?? "stable")
         && isOnboardingUuid(value.serverId) && value.displayName === expected.displayName
         && normalizeOnboardingName(value.displayName) === value.displayName
         && value.region === expected.region && value.state === "stopped" && timestamp(value.createdAt)
-        && value.passwordManagement === "discord-owner-controls") {
+        && (value.passwordManagement === "website-owner-controls" || value.passwordManagement === "discord-owner-controls")) {
         return { action: value.action, serverId: value.serverId, displayName: expected.displayName, region: expected.region,
-            state: value.state, createdAt: value.createdAt, passwordManagement: value.passwordManagement };
+            state: value.state, createdAt: value.createdAt, passwordManagement: value.passwordManagement,
+            ...(value.releaseChannel !== undefined ? { releaseChannel: value.releaseChannel as OnboardingReleaseChannel } : {}) };
     }
     throw invalid();
 }

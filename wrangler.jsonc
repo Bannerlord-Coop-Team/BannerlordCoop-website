@@ -2,6 +2,9 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "bannerlordcoop-website",
   "keep_vars": true,
+  "vars": {
+    "ADMIN_IMPERSONATION_ENABLED": "true"
+  },
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-08-31",
   "compatibility_flags": [

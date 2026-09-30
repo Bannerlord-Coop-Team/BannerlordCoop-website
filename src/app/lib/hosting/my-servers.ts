@@ -1,3 +1,4 @@
+import { parseReleaseMutation, parseReleaseStatus, type ReleaseMutation } from "../../../../supabase/functions/_shared/server-release-contract";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "../../../../supabase/functions/_shared/server-visibility-contract";
 import type {
     HostingPage,
@@ -74,13 +75,14 @@ export class MyServersApiError extends Error {
     }
 }
 
-export async function listAllMyServers(accessToken: string): Promise<MyServerSummary[]> {
+export async function listAllMyServers(accessToken: string, signal?: AbortSignal): Promise<MyServerSummary[]> {
     const servers: MyServerSummary[] = [];
     const seenIds = new Set<string>();
     let cursor: string | null = null;
 
     for (let pageIndex = 0; pageIndex < MAXIMUM_PAGES; pageIndex += 1) {
-        const result = parseServerPage(await requestMyServers(accessToken, cursor));
+        signal?.throwIfAborted();
+        const result = parseServerPage(await requestMyServers(accessToken, cursor, signal));
         for (const server of result.items) {
             if (seenIds.has(server.serverId)) {
                 throw invalidResponse("The server API returned a duplicate server.");
@@ -168,6 +170,25 @@ export async function requestMyServerOperation(
     return { exitCode: 0 };
 }
 
+export async function getMyServerUpdateStatus(accessToken: string, serverId: string) {
+    if (!RESOURCE_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid server ID.");
+    return parseReleaseStatus(await requestMyServersApi(accessToken, {
+        method: "GET", configureEndpoint(endpoint) {
+            endpoint.searchParams.set("resource", "update-status");
+            endpoint.searchParams.set("serverId", serverId);
+        },
+    }), serverId);
+}
+
+export async function requestMyServerRelease(accessToken: string, input: ReleaseMutation, requestId: string): Promise<MyServerUpdateResult> {
+    if (!REQUEST_ID.test(requestId)) throw new MyServersApiError("invalid_request", "Invalid request ID.");
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify(parseReleaseMutation(input)), requestId });
+    if (!isRecord(result) || !hasExactKeys(result, ["action", "jobId", "outcome"])
+        || !["enqueued", "existing"].includes(String(result.outcome)) || result.action !== "update"
+        || typeof result.jobId !== "string" || !RESOURCE_ID.test(result.jobId)) throw invalidResponse();
+    return result as MyServerUpdateResult;
+}
+
 export async function requestMyServerUpdate(
     accessToken: string,
     input: { serverId: string; expectedUpdatedAt: string },
@@ -244,9 +265,10 @@ export async function requestServerOnboarding(accessToken: string, intent: Onboa
     try { return parseOnboardingResult(result, input); } catch { throw invalidResponse(); }
 }
 
-async function requestMyServers(accessToken: string, cursor: string | null): Promise<unknown> {
+async function requestMyServers(accessToken: string, cursor: string | null, signal?: AbortSignal): Promise<unknown> {
     return requestMyServersApi(accessToken, {
         method: "GET",
+        signal,
         configureEndpoint(endpoint) {
             endpoint.searchParams.set("limit", "100");
             if (cursor !== null) endpoint.searchParams.set("cursor", cursor);
@@ -277,6 +299,7 @@ export async function requestMyServersApi(
         body?: string;
         requestId?: string;
         maximumResponseBytes?: number;
+        signal?: AbortSignal;
         configureEndpoint?: (endpoint: URL) => void;
     },
 ): Promise<unknown> {
@@ -297,7 +320,9 @@ export async function requestMyServersApi(
             },
             ...(request.body === undefined ? {} : { body: request.body }),
             cache: "no-store",
-            signal: AbortSignal.timeout(30_000),
+            signal: request.signal
+                ? AbortSignal.any([request.signal, AbortSignal.timeout(30_000)])
+                : AbortSignal.timeout(30_000),
         });
     } catch {
         throw new MyServersApiError(
@@ -396,6 +421,7 @@ function parseBackup(value: unknown): MyServerBackupSummary {
             "canRestore",
             "createdAt",
             "restoreState",
+            ...("restoreUnavailableReason" in value ? ["restoreUnavailableReason"] : []),
             "restoredAt",
             "retentionExpiresAt",
         ])
@@ -412,6 +438,12 @@ function parseBackup(value: unknown): MyServerBackupSummary {
         || typeof value.restoreState !== "string"
         || !BACKUP_RESTORE_STATES.has(value.restoreState)
         || typeof value.canRestore !== "boolean"
+        || ("restoreUnavailableReason" in value && (
+            value.canRestore
+                ? value.restoreUnavailableReason !== null
+                : typeof value.restoreUnavailableReason !== "string"
+                    || !["expired", "restore_in_progress", "installed_build_unknown", "backup_build_unknown", "build_mismatch"].includes(value.restoreUnavailableReason)
+        ))
     ) throw invalidResponse();
     return value as MyServerBackupSummary;
 }
@@ -498,4 +530,10 @@ function hasExactKeys(value: Record<string, unknown>, expected: readonly string[
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export async function requestMyServerPassword(accessToken: string, input: { serverId: string; expectedUpdatedAt: string; password: string }, requestId: string) {
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify({ action: "set-password", ...input }), requestId });
+    if (!isRecord(result) || !hasExactKeys(result, ["changed", "restartQueued"]) || result.changed !== true || typeof result.restartQueued !== "boolean") throw invalidResponse();
+    return { changed: true, restartQueued: result.restartQueued };
 }

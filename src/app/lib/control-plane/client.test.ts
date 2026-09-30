@@ -43,3 +43,28 @@ function restoreEnvironment(name: string, value: string | undefined) {
     if (value === undefined) delete process.env[name];
     else process.env[name] = value;
 }
+
+
+test("cancels an in-flight admin request when its caller leaves", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project.supabase.co";
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "publishable-key-with-enough-characters";
+    const controller = new AbortController();
+    let signal: AbortSignal | null | undefined;
+    globalThis.fetch = async (_input, init) => {
+        signal = init?.signal;
+        return new Promise<Response>((_resolve, reject) => {
+            signal!.addEventListener("abort", () => reject(signal!.reason), { once: true });
+        });
+    };
+    try {
+        const request = requestControlPlaneAdmin({ accessToken: "test-token", operation: "vps-hosts", signal: controller.signal });
+        const rejected = assert.rejects(request, { message: "The control plane could not be reached." });
+        controller.abort();
+        await rejected;
+        assert.equal(signal?.aborted, true);
+    } finally {
+        globalThis.fetch = ORIGINAL_FETCH;
+        restoreEnvironment("NEXT_PUBLIC_SUPABASE_URL", ORIGINAL_URL);
+        restoreEnvironment("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", ORIGINAL_KEY);
+    }
+});
