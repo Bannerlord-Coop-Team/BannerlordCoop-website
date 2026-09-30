@@ -37,6 +37,42 @@ const SECOND_SERVER = {
     releaseChannel: "nightly" as const,
 };
 
+test("caller cancellation reaches an in-flight owner inventory request", async () => {
+    configureEnvironment();
+    const controller = new AbortController();
+    let requests = 0;
+    globalThis.fetch = async (_input, init) => {
+        requests += 1;
+        return new Promise((_resolve, reject) => {
+            init!.signal!.addEventListener("abort", () => reject(new DOMException("Cancelled", "AbortError")), { once: true });
+        });
+    };
+    try {
+        const pending = listAllMyServers(TOKEN, controller.signal);
+        controller.abort();
+        await assert.rejects(pending, (error: unknown) => error instanceof MyServersApiError && error.code === "server_api_unavailable");
+        assert.equal(requests, 1);
+    } finally { restoreEnvironment(); }
+});
+
+test("cancelled owner inventory never starts another page even if the completed fetch ignores cancellation", async () => {
+    configureEnvironment();
+    const controller = new AbortController();
+    let requests = 0;
+    globalThis.fetch = async (input, init) => {
+        requests += 1;
+        const request = new Request(input, init);
+        controller.abort();
+        assert.equal(init!.signal!.aborted, true);
+        return Response.json({ version: 1, requestId: request.headers.get("x-request-id"), ok: true,
+            result: { items: [FIRST_SERVER], nextCursor: "next-page" } });
+    };
+    try {
+        await assert.rejects(listAllMyServers(TOKEN, controller.signal), { name: "AbortError" });
+        assert.equal(requests, 1);
+    } finally { restoreEnvironment(); }
+});
+
 test("loads every owner-scoped managed-server page through the Edge Function", async () => {
     configureEnvironment();
     const requests: Request[] = [];

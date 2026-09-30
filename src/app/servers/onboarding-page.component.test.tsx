@@ -4,7 +4,13 @@ import { onboardingSummary, ONBOARDING_TEST_ID } from "../../../tests/onboarding
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn(), publicList: vi.fn(), account: vi.fn(), displayNames: vi.fn(), navbar: vi.fn() }));
 vi.mock("@/app/lib/hosting/website-account-status", () => ({ getWebsiteAccountStatus: mocks.account }));
 vi.mock("@/app/lib/hosting/public-servers", () => ({ listPublicServers: mocks.publicList }));
-vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: async () => { const client = await mocks.auth(); const [{ data: { user } }, { data: { session } }] = await Promise.all([client.auth.getUser(), client.auth.getSession()]); return { client, user, accessToken: user && session?.user.id === user.id ? session.access_token : null }; } }));
+vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: async (options?: { onReadOnlySession?: (token: string) => unknown }) => {
+    const client = await mocks.auth();
+    const { data: { session } } = await client.auth.getSession();
+    const read = session ? options?.onReadOnlySession?.(session.access_token) : undefined;
+    const { data: { user } } = await client.auth.getUser();
+    return { client, user, read, accessToken: user && session?.user.id === user.id ? session.access_token : null };
+} }));
 vi.mock("@/app/lib/hosting/my-servers", () => ({ listAllMyServers: mocks.list, getServerOnboarding: mocks.onboarding }));
 vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: (props: unknown) => { mocks.navbar(props); return <nav>Navigation</nav>; } }));
 vi.mock("@/app/components/servers/ServerOnboarding", () => ({ ServerOnboarding: ({ userId, summary }: { userId: string; summary: unknown }) => <div data-user={userId}>{summary ? "Trusted onboarding snapshot" : "Unavailable snapshot"}</div>, GamePasswordNotice: () => <p>Discord password controls</p> }));
@@ -33,7 +39,7 @@ it("real servers page keeps mixed managed/live inventory and trusted onboarding 
     expect(html).toContain("Trusted onboarding snapshot"); expect(html).toContain('data-user="44444444-4444-4444-8444-444444444444"');
     expect(html).toContain("Assigned campaign"); expect(html).toContain("Live campaign"); expect(html).toContain("Public directory");
     expect(html).toContain(`/servers/${ONBOARDING_TEST_ID}`); expect(html).toContain("Offline");
-    expect(mocks.onboarding).toHaveBeenCalledWith("test-page-jwt"); expect(mocks.list).toHaveBeenCalledWith("test-page-jwt");
+    expect(mocks.onboarding).toHaveBeenCalledWith("test-page-jwt"); expect(mocks.list).toHaveBeenCalledWith("test-page-jwt", expect.any(AbortSignal));
 });
 it("shares the verified viewer and client within one render, then reads the next session afresh", async () => {
     await renderPage();
@@ -150,7 +156,7 @@ it.each(["auth", "account", "onboarding", "displayNames"] as const)("streams the
             expect(mocks.onboarding).not.toHaveBeenCalled();
             expect(mocks.displayNames).not.toHaveBeenCalled();
         } else {
-            await vi.waitFor(() => expect(mocks.list).toHaveBeenCalledExactlyOnceWith("test-page-jwt"));
+            await vi.waitFor(() => expect(mocks.list).toHaveBeenCalledExactlyOnceWith("test-page-jwt", expect.any(AbortSignal)));
             if (dependency !== "displayNames") {
                 await readUntil("Assigned campaign");
                 expect(html).not.toContain("Trusted onboarding snapshot");
@@ -167,7 +173,7 @@ it.each(["auth", "account", "onboarding", "displayNames"] as const)("streams the
     }
 });
 
-it("never forwards a session token belonging to another user", async () => {
+it("discards the independently authorized read if the fresh viewer differs from the session", async () => {
     mocks.auth.mockResolvedValue({ auth: {
         getUser: async () => ({ data: { user: { id: "44444444-4444-4444-8444-444444444444" } } }),
         getSession: async () => ({ data: { session: { access_token: "other-user-token", user: { id: ONBOARDING_TEST_ID } } } }),
@@ -175,7 +181,62 @@ it("never forwards a session token belonging to another user", async () => {
     const html = await renderPage();
     expect(html).toContain("Your authenticated server session is unavailable");
     expect(html).toContain("Public directory");
-    expect(mocks.list).not.toHaveBeenCalled();
+    expect(mocks.list).toHaveBeenCalledExactlyOnceWith("other-user-token", expect.any(AbortSignal));
+    expect(mocks.list.mock.calls[0][1].aborted).toBe(true);
+    expect(html).not.toContain("Assigned campaign");
+    expect(mocks.account).not.toHaveBeenCalled();
+    expect(mocks.onboarding).not.toHaveBeenCalled();
+});
+
+it("starts owner inventory during viewer verification but streams it only after matching verification", async () => {
+    const client = await mocks.auth();
+    const verified = await client.auth.getUser();
+    const gate = Promise.withResolvers<typeof verified>();
+    client.auth.getUser = () => gate.promise;
+    const stream = await renderToReadableStream(ServersPage());
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let html = "";
+    try {
+        while (!html.includes("Public directory</div>")) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            html += decoder.decode(chunk.value, { stream: true });
+        }
+        expect(html).toContain("Public directory</div>");
+        expect(mocks.list).toHaveBeenCalledExactlyOnceWith("test-page-jwt", expect.any(AbortSignal));
+        expect(html).not.toContain("Assigned campaign");
+        expect(mocks.account).not.toHaveBeenCalled();
+        expect(mocks.onboarding).not.toHaveBeenCalled();
+        gate.resolve(verified);
+        while (!html.includes("Assigned campaign")) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            html += decoder.decode(chunk.value, { stream: true });
+        }
+        expect(html).toContain("Assigned campaign");
+        expect(mocks.list).toHaveBeenCalledTimes(1);
+    } finally {
+        gate.resolve(verified);
+        await stream.allReady;
+        reader.releaseLock();
+    }
+});
+
+it.each(["revoked", "unavailable"])("cancels an early private read when viewer verification is %s", async (failure) => {
+    const client = await mocks.auth();
+    client.auth.getUser = async () => {
+        if (failure === "unavailable") throw new Error("Viewer unavailable");
+        return { data: { user: null } };
+    };
+    mocks.list.mockImplementation((_token: string, signal: AbortSignal) => new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new Error("Cancelled read")), { once: true });
+    }));
+    const html = await renderPage();
+    expect(mocks.list).toHaveBeenCalledTimes(1);
+    expect(mocks.list.mock.calls[0][1].aborted).toBe(true);
+    expect(html).not.toContain("Assigned campaign");
+    expect(html).toContain("Sign in to view");
     expect(mocks.account).not.toHaveBeenCalled();
     expect(mocks.onboarding).not.toHaveBeenCalled();
 });

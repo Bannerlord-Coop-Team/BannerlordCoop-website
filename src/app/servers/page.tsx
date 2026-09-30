@@ -38,7 +38,7 @@ export const metadata: Metadata = {
 export default function ServersPage() {
     const publicInventory = loadPublicInventory();
     const viewer = loadViewer();
-    const managedInventory = viewer.then(({ user, accessToken }) => loadManagedInventory(user, accessToken));
+    const managedInventory = viewer.then(({ user, accessToken, inventory }) => loadManagedInventory(user, accessToken, inventory));
     const hostingStatus = viewer.then(({ user, accessToken, client }) => loadHostingStatus(user, accessToken, client));
 
     return (
@@ -156,14 +156,24 @@ async function loadViewer() {
     let user: User | null = null;
     let accessToken: string | null = null;
     let client: SupabaseClient | null = null;
+    let inventory: Promise<PromiseSettledResult<MyServerSummary[]>> | undefined;
+    const controller = new AbortController();
 
     try {
-        ({ client, user, accessToken } = await getSupabaseServerViewer());
+        ({ client, user, accessToken, read: inventory } = await getSupabaseServerViewer({
+            // The owner API checks its own current authority. Never render this
+            // read before the viewer also verifies the matching user/session.
+            onReadOnlySession: token => Promise.allSettled([
+                listAllMyServers(token, controller.signal),
+            ]).then(([result]) => result),
+        }));
+        if (!user || !accessToken) controller.abort();
     } catch {
+        controller.abort();
         // Keep the public server directory available when auth is not configured.
     }
 
-    return { user, accessToken, client };
+    return { user, accessToken, client, inventory };
 }
 
 /** Resolve names only for live servers the verified user can manage. */
@@ -209,7 +219,8 @@ async function loadHostingStatus(user: User | null, accessToken: string | null, 
 }
 
 /** Loads private inventory once, in parallel with live display names. */
-async function loadManagedInventory(user: User | null, accessToken: string | null) {
+async function loadManagedInventory(user: User | null, accessToken: string | null,
+    inventory: Promise<PromiseSettledResult<MyServerSummary[]>> | undefined) {
     const liveServers = loadLiveServers(user);
     let listed: MyServerSummary[] = [];
     let managedServersError = "";
@@ -218,7 +229,10 @@ async function loadManagedInventory(user: User | null, accessToken: string | nul
             managedServersError = "Your authenticated server session is unavailable. Please sign in again.";
         } else {
             try {
-                listed = await listAllMyServers(accessToken);
+                if (!inventory) throw new Error("Authenticated inventory read was not started.");
+                const result = await inventory;
+                if (result.status === "rejected") throw result.reason;
+                listed = result.value;
             } catch (error) {
                 console.error("Managed server inventory failed to load", error);
                 managedServersError = "Managed servers could not be loaded right now.";

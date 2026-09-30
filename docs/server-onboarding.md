@@ -6,10 +6,13 @@ The directory starts public inventory independently and streams navigation,
 private inventory and hosting status in separate sections. Each render verifies
 one user/session pair and shares that render's client with the account-status
 reader and its verified user with navigation. There is no cross-render user or
-session cache. Account-status and onboarding endpoints still authenticate the
-explicit token and validate current session context; user/session mismatches
-never dispatch private requests. Account synchronization precedes allocation
-reads, without delaying either directory section.
+session cache. The owner inventory read uses the refreshed session token while
+fresh viewer checks run; its API independently authenticates that token and current
+authority. The page releases inventory only after matching user/session
+verification. Rejected or mismatched viewers cancel the read and any later pages.
+Account-status and onboarding requests still follow viewer verification,
+authenticate the explicit token and validate current session context. Account
+synchronization precedes allocation reads, without delaying either directory.
 
 ## Authority and public contract
 
