@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const code = request.nextUrl.searchParams.get("code");
     if (token && /^[a-f0-9]{64}$/u.test(token) && code && code.length <= 4096 && !request.nextUrl.searchParams.has("error")) {
         try {
-            const supabase = await getSupabaseServerClient();
+            const supabase = await getSupabaseServerClient({ impersonation: "deny" });
             const { data: { user } } = await supabase.auth.getUser();
             const { data: { session } } = await supabase.auth.getSession();
             if (!user || !session || user.id !== session.user.id) throw new Error("Session changed");

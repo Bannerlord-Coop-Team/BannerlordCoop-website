@@ -14,7 +14,7 @@ async function contention(error: unknown): Promise<boolean> {
     try { const value = await boundedJson(error.context.clone(),4096); return record(value) && Object.keys(value).length===1 && value.error === "membership_retry"; } catch { return false; }
 }
 async function authenticated() {
-    const supabase = await getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient({ impersonation: "deny" });
     const { data: { user } } = await supabase.auth.getUser();
     const { data: { session } } = await supabase.auth.getSession();
     if (!user || !session || session.user.id !== user.id) throw new Error("Sign in again");

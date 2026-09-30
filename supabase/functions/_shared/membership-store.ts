@@ -48,7 +48,7 @@ export function membershipStore(config: StoreConfig) {
         async user(authorization: string) {
             const user = await request("/auth/v1/user", { headers: { Authorization: authorization } });
             if (!record(user) || typeof user.id !== "string" || !UUID.test(user.id)) throw new Error("Unauthorized");
-            return { accountId: user.id, discordUserId: optionalDiscord(user) };
+            return { accountId: user.id, discordUserId: optionalDiscord(user), administrator: record(user.app_metadata) && user.app_metadata.role === "Admin" };
         },
         async binding(accountId: string) {
             if (!UUID.test(accountId)) throw new Error("Invalid account");
@@ -58,6 +58,6 @@ export function membershipStore(config: StoreConfig) {
             if (!record(response) || response.id !== accountId) throw new Error("Auth account mismatch");
             return { discordUserId: optionalDiscord(response), deleted: false };
         },
-        rpc(name: "membership_fence" | "membership_begin" | "membership_complete" | "membership_unlink" | "membership_changes" | "membership_claim" | "membership_ack" | "membership_ack_claim" | "membership_status" | "membership_discord_begin" | "membership_discord_confirm" | "membership_discord_check", body: Record<string, unknown>) { return request(`/rest/v1/rpc/${name}`, { method: "POST", body: JSON.stringify(body) }); },
+        rpc(name: "membership_fence" | "membership_begin" | "membership_complete" | "membership_unlink" | "membership_changes" | "membership_claim" | "membership_ack" | "membership_ack_claim" | "membership_status" | "membership_preview_status" | "membership_discord_begin" | "membership_discord_confirm" | "membership_discord_check", body: Record<string, unknown>) { return request(`/rest/v1/rpc/${name}`, { method: "POST", body: JSON.stringify(body) }); },
     };
 }

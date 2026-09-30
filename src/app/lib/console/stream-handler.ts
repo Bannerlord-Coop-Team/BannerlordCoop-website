@@ -30,6 +30,7 @@ async function handleConsoleStream(
         supabase.auth.getSession(),
     ]);
     const session = sessionData.session;
+    if (session?.access_token.startsWith("view-as:")) return new Response("Console streaming is unavailable during read-only impersonation.", { status: 403 });
     if (userError || sessionError || !userData.user || !session || session.user.id !== userData.user.id) {
         return new Response("Authentication is required.", { status: 401 });
     }

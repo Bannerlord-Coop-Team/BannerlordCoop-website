@@ -7,8 +7,8 @@ import { MAXIMUM_WEB_SAVE_BYTES, MAXIMUM_WEB_CONFIG_BYTES, parseOwnerFileMutatio
 import { readConfigurationFile } from "../../../supabase/functions/_shared/configuration-file-import";
 import { revalidatePath } from "next/cache";
 
-async function currentToken(expectedUserId: string) {
-    const supabase = await getSupabaseServerClient();
+async function currentToken(expectedUserId: string, mutation = false) {
+    const supabase = await getSupabaseServerClient(mutation ? { impersonation: "deny" } : {});
     const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
     if (!user || user.id !== expectedUserId || !session) throw new Error("Authentication changed");
     return session.access_token;
@@ -34,7 +34,7 @@ function failure(error: unknown, notSubmitted = false) {
 export async function submitManagedServerFile(form: FormData, expectedUserId: string) {
     let submissionStarted = false;
     try {
-        const token = await currentToken(expectedUserId);
+        const token = await currentToken(expectedUserId, true);
         const requestId = form.get("requestId");
         requireUuid(requestId);
         const common = { serverId: form.get("serverId"), expectedUpdatedAt: form.get("expectedUpdatedAt"), action: form.get("action") };

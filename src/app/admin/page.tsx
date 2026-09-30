@@ -1,4 +1,5 @@
 import { RoleEditor } from "@/app/components/admin/RoleEditor";
+import { startImpersonation } from "./impersonation-actions";
 import { getMemberRole, hasAdminAccess, isBootstrapAdmin } from "@/app/lib/auth/access";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
@@ -11,6 +12,8 @@ import { ArrowLeft, CloudCog, Search, ShieldCheck, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { IMPERSONATION_COOKIE } from "@/app/lib/auth/impersonation-cookie";
 
 export const metadata: Metadata = {
     title: "Member Administration",
@@ -61,12 +64,13 @@ function formatDate(value: string | undefined) {
 }
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
-    const sessionClient = await getSupabaseServerClient();
+    const sessionClient = await getSupabaseServerClient({ impersonation: "actor" });
     const { data: sessionData } = await sessionClient.auth.getUser();
     const currentUser = sessionData.user;
 
     if (!currentUser) redirect("/login?next=/admin");
     if (!hasAdminAccess(currentUser)) redirect("/");
+    const previewActive = (await cookies()).has(IMPERSONATION_COOKIE);
 
     const params = await searchParams;
     const query = (firstValue(params.q) ?? "").trim().slice(0, 100);
@@ -96,6 +100,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             const searchable = [
                 memberName(member),
                 member.email,
+                member.id,
                 member.app_metadata.provider,
                 getMemberRole(member),
             ]
@@ -142,7 +147,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             Member Administration
                         </h1>
                         <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground-muted">
-                            Search registered members and manage their access roles.
+                            Search registered members, view the website as a member, and manage their access roles.
                             Role changes take effect the next time Supabase refreshes the member session.
                         </p>
                     </div>
@@ -173,7 +178,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         type="search"
                         name="q"
                         defaultValue={query}
-                        placeholder="Search by name, email, provider, or role"
+                        placeholder="Search by name, email, ID, provider, or role"
                         className="min-h-12 w-full rounded-sm border border-white/15 bg-surface py-3 pr-28 pl-11 text-sm text-foreground outline-none hover:border-white/25 focus:border-gold focus:ring-1 focus:ring-gold/30"
                     />
                     <button
@@ -182,6 +187,13 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     >
                         Search
                     </button>
+                </form>
+
+                <form action={startImpersonation} className="mt-4 flex max-w-xl flex-wrap items-end gap-3">
+                    <label className="min-w-56 flex-1 text-sm text-foreground-muted">Or view a user by account ID
+                        <input name="userId" required maxLength={36} placeholder="User UUID" className="mt-2 min-h-10 w-full rounded-sm border border-white/15 bg-surface px-3 text-foreground focus:outline-gold" />
+                    </label>
+                    <button type="submit" className="min-h-10 rounded-sm border border-gold/40 px-4 text-sm text-gold focus-visible:outline-gold">View as user</button>
                 </form>
 
                 {(errorMessage || loadError) && (
@@ -210,6 +222,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                     <th scope="col" className="px-5 py-4">Joined</th>
                                     <th scope="col" className="px-5 py-4">Last active</th>
                                     <th scope="col" className="px-5 py-4 text-right">Role</th>
+                                    <th scope="col" className="px-5 py-4">User view</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/[0.07]">
@@ -245,10 +258,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                             <td className="px-5 py-4">
                                                 <RoleEditor
                                                     currentRole={role}
-                                                    disabled={roleLocked}
+                                                    disabled={roleLocked || previewActive}
                                                     query={query}
                                                     userId={member.id}
                                                 />
+                                            </td>
+                                            <td className="px-5 py-4">
+                                                <form action={startImpersonation}>
+                                                    <input type="hidden" name="userId" value={member.id} />
+                                                    <button type="submit" disabled={member.id === currentUser.id} aria-label={`View as ${memberName(member)}`} className="min-h-10 whitespace-nowrap rounded-sm border border-gold/40 px-3 text-sm text-gold hover:bg-gold/10 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold">View as user</button>
+                                                </form>
                                             </td>
                                         </tr>
                                     );

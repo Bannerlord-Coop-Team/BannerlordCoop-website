@@ -20,7 +20,7 @@ export async function manageServerBackup(input: unknown, expectedPageUserId: unk
 
     let accessToken: string | null = null;
     try {
-        const supabase = await getSupabaseServerClient();
+        const supabase = await getSupabaseServerClient({ impersonation: "deny" });
         const [{ data: userData }, { data: sessionData }] = await Promise.all([
             supabase.auth.getUser(),
             supabase.auth.getSession(),

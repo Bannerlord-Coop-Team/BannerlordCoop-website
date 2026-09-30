@@ -18,7 +18,7 @@ export async function renameLiveServer(formData: FormData) {
     if (!name.ok) return name;
 
     try {
-        const supabase = await getSupabaseServerClient();
+        const supabase = await getSupabaseServerClient({ impersonation: "deny" });
         const { data } = await supabase.auth.getUser();
         const user = data.user;
         if (!user) {
