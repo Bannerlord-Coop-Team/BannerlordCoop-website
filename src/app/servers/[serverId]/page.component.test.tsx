@@ -1,5 +1,6 @@
 import { act, Children, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import type { ManagedServerConsole } from "@/app/components/servers/ManagedServerConsole";
+import type { ManagedServerCommands } from "@/app/components/servers/ManagedServerCommands";
 import type { ServerWorkspacePanel } from "@/app/components/servers/ServerManagementWorkspace";
 import type { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
 import type { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
@@ -132,6 +133,7 @@ function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): 
 function findServerElement(node: ReactNode, name: "ServerSettingsPanel"): Promise<ReactElement<ComponentProps<typeof ServerSettingsPanel>> | null>;
 function findServerElement(node: ReactNode, name: "ServerWorkspacePanel"): Promise<ReactElement<ComponentProps<typeof ServerWorkspacePanel>> | null>;
 function findServerElement(node: ReactNode, name: "ManagedServerConsole"): Promise<ReactElement<ComponentProps<typeof ManagedServerConsole>> | null>;
+function findServerElement(node: ReactNode, name: "ManagedServerCommands"): Promise<ReactElement<ComponentProps<typeof ManagedServerCommands>> | null>;
 function findServerElement(node: ReactNode, name: string): Promise<ReactElement | null>;
 async function findServerElement(node: ReactNode, name: string): Promise<ReactElement | null> {
     for (const child of Children.toArray(node)) {
@@ -356,12 +358,16 @@ it.each(["owner", "manager", "support", "admin"])("preserves managed console acc
     const tree = await page(managedId);
     const workspace = await findServerElement(tree, "ServerWorkspacePanel");
     expect(workspace?.props.section).toBe("Console");
-    const consolePanel = await findServerElement(workspace, "ManagedServerConsole");
-    expect(consolePanel?.props.serverId).toBe(accessRole === "owner" || accessRole === "manager" ? managedId : undefined);
+    const operator = accessRole === "owner" || accessRole === "manager";
+    const commands = await findServerElement(workspace, "ManagedServerCommands");
+    expect(commands?.props.server.serverId).toBe(operator ? managedId : undefined);
+    const consolePanel = await findServerElement(commands?.props.children, "ManagedServerConsole");
+    expect(consolePanel?.props.serverId).toBe(operator ? managedId : undefined);
 });
 
 it("does not duplicate the existing live console with managed output", async () => {
     const tree = await page();
     expect(await findServerElement(tree, "LiveServerConsole")).not.toBeNull();
     expect(await findServerElement(tree, "ManagedServerConsole")).toBeNull();
+    expect(await findServerElement(tree, "ManagedServerCommands")).toBeNull();
 });

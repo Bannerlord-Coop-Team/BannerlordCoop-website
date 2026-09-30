@@ -54,6 +54,11 @@ it("suggests the right panel's coop commands while typing", async () => {
     expect(suggestions).toEqual([...container.querySelectorAll("aside code")].map(node => node.textContent));
 });
 
+it("renders the page's live output alongside the command form", async () => {
+    await act(async () => root.render(<ManagedServerCommands server={server} userId="owner-id" controls={<p>Lifecycle controls</p>}><p>Live output</p></ManagedServerCommands>));
+    expect(container.textContent).toContain("Live output");
+});
+
 it("retries uncertain delivery with the exact original UUID and payload", async () => {
     mocks.submit.mockRejectedValueOnce(new Error("network"));
     await mount(); await select();
