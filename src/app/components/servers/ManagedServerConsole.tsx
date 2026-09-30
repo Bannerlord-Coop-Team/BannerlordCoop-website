@@ -8,6 +8,7 @@ const MAXIMUM_SSE_FRAME_BYTES = 16 * 1_024;
 
 type ConsoleState = "disconnected" | "connecting" | "connected" | "expired" | "truncated" | "unavailable";
 
+/** Streams bounded current-run output inside the managed game console card. */
 export function ManagedServerConsole({ serverId }: { serverId: string }) {
     const [state, setState] = useState<ConsoleState>("disconnected");
     const [text, setText] = useState("");
@@ -63,9 +64,8 @@ export function ManagedServerConsole({ serverId }: { serverId: string }) {
     };
 
     return (
-        <section className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="managed-console-heading">
+        <div className="p-5">
             <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">Live output</p>
-            <h2 id="managed-console-heading" className="mt-2 font-display text-2xl font-semibold text-foreground sm:text-3xl">Game console</h2>
             <p className="mt-2 text-sm leading-6 text-foreground-muted">Read-only current-run output. Nothing is saved, and sessions expire after five minutes.</p>
             <div className="mt-4 flex items-center gap-3">
                 <button type="button" onClick={() => void connect()} disabled={active.current !== null} className="rounded-sm bg-gold px-4 py-2 font-label text-xs font-semibold uppercase tracking-[0.12em] text-black disabled:opacity-50">Connect</button>
@@ -73,7 +73,7 @@ export function ManagedServerConsole({ serverId }: { serverId: string }) {
                 <span role="status" className="text-xs text-foreground-muted">{state}</span>
             </div>
             <pre aria-label="Live game console output" className="mt-4 h-72 overflow-auto whitespace-pre-wrap break-words rounded-sm border border-white/10 bg-black/50 p-3 font-mono text-xs text-foreground">{text || "No live output."}</pre>
-        </section>
+        </div>
     );
 }
 
