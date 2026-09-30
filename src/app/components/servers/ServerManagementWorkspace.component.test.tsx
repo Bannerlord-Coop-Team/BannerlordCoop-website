@@ -4,15 +4,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "./ServerManagementWorkspace";
 
-const settingsMocks = vi.hoisted(() => ({ rename: vi.fn(), visibility: vi.fn(), refresh: vi.fn(), release: vi.fn(), releaseStatus: vi.fn() }));
+const settingsMocks = vi.hoisted(() => ({ visibility: vi.fn(), refresh: vi.fn(), release: vi.fn(), releaseStatus: vi.fn() }));
 vi.mock("next/navigation", () => { const router = { refresh: settingsMocks.refresh }; return { useRouter: () => router }; });
-vi.mock("@/app/servers/name-actions", () => ({ renameLiveServer: settingsMocks.rename }));
 vi.mock("@/app/servers/server-visibility-actions", () => ({ setServerVisibility: settingsMocks.visibility }));
 vi.mock("@/app/servers/server-release-actions", () => ({ changeServerRelease: settingsMocks.release, readServerReleaseStatus: settingsMocks.releaseStatus }));
 let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
-    settingsMocks.rename.mockReset(); settingsMocks.visibility.mockReset(); settingsMocks.refresh.mockReset();
+    settingsMocks.visibility.mockReset(); settingsMocks.refresh.mockReset();
     settingsMocks.release.mockReset(); settingsMocks.releaseStatus.mockReset();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     window.history.replaceState(null, "", "/servers/test");
@@ -69,7 +68,7 @@ it("opens access feedback and hash targets in Settings and disables unsupported 
     expect([...container.querySelectorAll("button")].find(b => b.textContent === "Public")?.disabled).toBe(true);
     expect([...container.querySelectorAll("button")].find(b => b.textContent === "Copy join address")?.disabled).toBe(true);
     await act(async () => click("Console"));
-    await act(async () => { window.location.hash = "server-access"; window.dispatchEvent(new HashChangeEvent("hashchange")); });
+    await act(async () => { window.location.hash = "server-visibility"; window.dispatchEvent(new HashChangeEvent("hashchange")); });
     expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Settings");
 });
 
@@ -103,56 +102,40 @@ it("shows authoritative settings without enabling unsupported save controls", as
 });
 
 const visibilityAccess = { serverId: "managed-server", expectedUpdatedAt: "2026-09-13T00:00:00.000Z", canEdit: true };
-async function renameDraft(value: string) {
-    const input = container.querySelector<HTMLInputElement>("#settings-server-name")!;
-    await act(async () => {
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-}
 async function saveSettings() {
     await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 }
-it("discards local settings drafts without calling either server action", async () => {
-    await act(async () => root.render(<ServerSettingsPanel name="Campaign" visibility="private" renameServerId="live-server" visibilityAccess={visibilityAccess} />));
-    await renameDraft("New campaign");
+it("discards local settings drafts without calling the managed server action", async () => {
+    await act(async () => root.render(<ServerSettingsPanel name="Campaign" visibility="private" visibilityAccess={visibilityAccess} />));
     await act(async () => container.querySelector<HTMLInputElement>('input[value="public"]')!.click());
     await act(async () => click("Discard"));
     expect(container.querySelector<HTMLInputElement>("#settings-server-name")!.value).toBe("Campaign");
     expect(container.querySelector<HTMLInputElement>('input[value="private"]')!.checked).toBe(true);
-    expect(settingsMocks.rename).not.toHaveBeenCalled();
     expect(settingsMocks.visibility).not.toHaveBeenCalled();
 });
-it("confirms publishing before saving, retains partial failures and retries the same visibility request", async () => {
+it("confirms publishing before saving, retains unconfirmed failures and retries the same visibility request", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    settingsMocks.rename.mockResolvedValue({ ok: true, displayName: "New campaign" });
     settingsMocks.visibility.mockRejectedValueOnce(new Error("Disconnected")).mockResolvedValueOnce({ ok: true, message: "Update acknowledged" });
-    await act(async () => root.render(<ServerSettingsPanel name="Campaign" visibility="private" renameServerId="live-server" visibilityAccess={visibilityAccess} />));
-    await renameDraft("New campaign");
+    await act(async () => root.render(<ServerSettingsPanel name="Campaign" visibility="private" visibilityAccess={visibilityAccess} />));
     await act(async () => container.querySelector<HTMLInputElement>('input[value="public"]')!.click());
     await saveSettings();
-    expect(settingsMocks.rename).not.toHaveBeenCalled();
+    expect(settingsMocks.visibility).not.toHaveBeenCalled();
     confirm.mockReturnValue(true);
     await saveSettings();
-    expect(settingsMocks.rename.mock.calls[0][0].get("displayName")).toBe("New campaign");
-    expect(settingsMocks.rename.mock.calls[0][0].get("serverId")).toBe("live-server");
     const first = settingsMocks.visibility.mock.calls[0][0];
     expect(first).toEqual(expect.objectContaining({ serverId: "managed-server", visibility: "public", expectedUpdatedAt: visibilityAccess.expectedUpdatedAt, requestId: expect.any(String) }));
-    expect(container.textContent).toContain("Server name saved.");
     expect(container.textContent).toContain("could not be confirmed");
     await saveSettings();
-    expect(settingsMocks.rename).toHaveBeenCalledOnce();
     expect(settingsMocks.visibility.mock.calls[1][0]).toEqual(first);
     expect(settingsMocks.refresh).toHaveBeenCalled();
 });
-it("saves a managed owner's visibility without attempting unsupported renaming", async () => {
+it("saves a managed owner's visibility while keeping the recorded name read-only", async () => {
     settingsMocks.visibility.mockResolvedValue({ ok: true, message: "Update acknowledged" });
     await act(async () => root.render(<ServerSettingsPanel name="Campaign" visibility="public" visibilityAccess={visibilityAccess} />));
     expect(container.querySelector<HTMLInputElement>("#settings-server-name")!.disabled).toBe(true);
     await act(async () => container.querySelector<HTMLInputElement>('input[value="private"]')!.click());
     await saveSettings();
     expect(settingsMocks.visibility).toHaveBeenCalledWith(expect.objectContaining({ visibility: "private" }));
-    expect(settingsMocks.rename).not.toHaveBeenCalled();
     await act(async () => root.render(<ServerSettingsPanel name="Campaign" visibility="private" visibilityAccess={{ ...visibilityAccess, expectedUpdatedAt: "2026-09-14T00:00:00.000Z" }} />));
     expect(container.textContent).toContain("No pending changes");
 });

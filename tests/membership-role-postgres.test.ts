@@ -172,13 +172,13 @@ test("membership role locking: actual PostgreSQL combined call graph", { skip: !
                 console.log("FUNCTION_BUDGET_RESTORED",JSON.stringify({caller:before,effective:budget,elapsed}));
             }}finally{await db.query("set lock_timeout='1700ms';drop trigger z_fixture_budget on public.patreon_oauth_states;drop function public.z_fixture_budget();drop table public.fixture_budget");}
         });
-        await t.test("link scan generations, independent manual Standard and console assignment preservation",async()=>{
+        await t.test("link scan generations, independent manual Standard and unrelated metadata preservation",async()=>{
             const lease=await setup();
-            await rpc("set_live_console_assignment",[a,"old",null,true]); await rpc("set_member_role",[a,"Standard Server"]);
-            await rpc("set_live_console_assignment",[a,"old",null,false]); await rpc("set_live_console_assignment",[a,"new",null,true]);
+            await rpc("set_member_role",[a,"Standard Server"]);
+            await db.query("update auth.users set raw_app_meta_data=raw_app_meta_data || '{\"preferences\":[\"new\"]}'::jsonb where id=$1",[a]);
             await role("complete",{token:lease.token,memberId:member,generation:1,userId:"123",eligible:false});
             const metadata=(await db.query("select raw_app_meta_data m from auth.users where id=$1",[a])).rows[0].m;
-            assert.equal(metadata.role,"Standard Server"); assert.deepEqual(metadata.live_console_operator_server_ids,["new"]); assert.equal(metadata.unrelated,true);
+            assert.equal(metadata.role,"Standard Server"); assert.deepEqual(metadata.preferences,["new"]); assert.equal(metadata.unrelated,true);
             await db.query("delete from public.patreon_accounts where user_id=$1",[a]);
             assert.deepEqual(await role("discovered",{token:lease.token,scanGeneration:lease.scanGeneration,memberIds:[],cursor:""}),{discovered:true});
             for(const roleName of ["anon","authenticated"]) { await db.query(`set role ${roleName}`); try { await assert.rejects(rpc("set_member_role",[a,"Admin"]),{code:"42501"}); } finally {await db.query("reset role");} }

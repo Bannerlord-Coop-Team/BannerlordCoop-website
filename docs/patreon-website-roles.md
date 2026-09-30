@@ -35,11 +35,7 @@ OAuth tokens are still discarded.
   again. A later cancellation preserves that manual grant. Manually setting
   `User` while membership is eligible is not a permanent exclusion: the next
   successful refresh can grant Standard Server again.
-- Console owner/operator edits use `set_live_console_assignment`, a separate
-  service-role-only RPC that locks the Auth row and changes only the requested
-  server assignment in current metadata. These edits never send a cached role
-  or grant marker back to Auth, so a console save cannot restore a revoked
-  Patreon grant or erase a newer grant. Deploy these writers before enabling sync.
+- The legacy console owner/operator writers have been removed. Historical console metadata and applied SQL migrations remain untouched; current managed-server permissions come from the control plane.
 - Changing/deleting an OAuth link immediately withdraws the old integration
   grant in the same database transaction. New links schedule verification;
   cached membership records do not transfer a grant to another account.

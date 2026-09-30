@@ -103,7 +103,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
     useEffect(() => {
         function followHash() {
             const target = window.location.hash;
-            if (target === "#server-access" || target === "#server-visibility") setSection("Settings");
+            if (target === "#server-visibility") setSection("Settings");
             if (target === "#server-backups") setSection("Backups");
             if (target === "#server-files") setSection("Save & config");
             if (target === "#server-lifecycle") setSection("Console");
