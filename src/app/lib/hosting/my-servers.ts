@@ -416,6 +416,7 @@ function parseBackup(value: unknown): MyServerBackupSummary {
             "canRestore",
             "createdAt",
             "restoreState",
+            ...("restoreUnavailableReason" in value ? ["restoreUnavailableReason"] : []),
             "restoredAt",
             "retentionExpiresAt",
         ])
@@ -432,6 +433,12 @@ function parseBackup(value: unknown): MyServerBackupSummary {
         || typeof value.restoreState !== "string"
         || !BACKUP_RESTORE_STATES.has(value.restoreState)
         || typeof value.canRestore !== "boolean"
+        || ("restoreUnavailableReason" in value && (
+            value.canRestore
+                ? value.restoreUnavailableReason !== null
+                : typeof value.restoreUnavailableReason !== "string"
+                    || !["expired", "restore_in_progress", "installed_build_unknown", "backup_build_unknown", "build_mismatch"].includes(value.restoreUnavailableReason)
+        ))
     ) throw invalidResponse();
     return value as MyServerBackupSummary;
 }

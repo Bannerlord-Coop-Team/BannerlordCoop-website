@@ -65,3 +65,16 @@ current ownership, save provenance and rollback target. After rollout, validate
 history and a backup on that exact resource with an authorized account, and denial
 with an unrelated account. Any live restore needs explicit authorization for the
 chosen server and backup and the existing restore safety gates.
+
+## Restore availability explanations
+
+The backup list displays the control plane's `restoreUnavailableReason` beside
+blocked restores and in the button tooltip: expired retention, a restore already
+in progress, an unconfirmed installed build, missing backup build information,
+or an exact build mismatch. Save-only restore never changes the installed build.
+No raw storage paths or internal error strings are exposed.
+
+Deploy this compatible website reader before the control-plane reason field:
+older website readers reject additional backup fields. This reader accepts old
+responses without the field, explicitly says the server supplied no reason, and
+keeps restore disabled. It does not guess a mismatch from `canRestore: false`.

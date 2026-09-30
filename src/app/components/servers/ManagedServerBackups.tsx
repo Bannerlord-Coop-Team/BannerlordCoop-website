@@ -326,7 +326,7 @@ function ManagedServerBackupsSession({
                                             Last restored <LocalDateTime value={backup.restoredAt} />
                                         </p>
                                     )}
-                                    {!backup.canRestore && ["available", "restored", "failed"].includes(backup.restoreState) && (
+                                    {restoreDisabledReason(backup) && (
                                         <p className="mt-1 text-xs text-foreground-dim">
                                             {restoreDisabledReason(backup)}
                                         </p>
