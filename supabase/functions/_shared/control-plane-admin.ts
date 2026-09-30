@@ -74,6 +74,7 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             return errorResponse(400, "invalid_request", "The request is invalid.", false, cors);
         }
 
+        const authenticationStarted = performance.now();
         let user: unknown;
         const authentication = new AbortController();
         const authSignal = AbortSignal.any([authentication.signal, AbortSignal.timeout(authTimeoutMilliseconds)]);
@@ -107,6 +108,8 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             return envelopeError(403, requestId, "forbidden", "Administrator access is required.", false, cors);
         }
 
+        const upstreamStarted = performance.now();
+        const authenticationMilliseconds = Math.round(upstreamStarted - authenticationStarted);
         let upstream: Response;
         try {
             upstream = await fetchImplementation(upstreamEndpoint, {
@@ -135,7 +138,10 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
         }
         return new Response(upstreamBody, {
             status: upstream.status,
-            headers: { ...cors, "cache-control": "no-store", "content-type": "application/json" },
+            headers: {
+                ...cors, "cache-control": "no-store", "content-type": "application/json",
+                "server-timing": `edge_auth;dur=${authenticationMilliseconds}, control_plane;dur=${Math.round(performance.now() - upstreamStarted)}`,
+            },
         });
     };
 }

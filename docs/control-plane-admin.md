@@ -184,3 +184,10 @@ with the same explicit access token; this also avoids serializing the RPC behind
 the auth SDK's session lock. Neither result is cached across requests. Existing
 impersonation validation completes before this viewer is returned. Server actions
 continue using their existing authorization path.
+
+Authenticated admin gateway responses include numeric `Server-Timing` durations:
+`edge_auth` covers both fresh authorization reads and `control_plane` covers the
+upstream request and complete bounded response. These are measured per request;
+no tokens, identities, request inputs, upstream timing text, or internal URLs are
+included. Denied gateway requests do not expose stage timings. This diagnostic
+header does not cache data or change authorization, forwarding, or deadlines.
