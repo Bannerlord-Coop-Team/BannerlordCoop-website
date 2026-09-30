@@ -43,6 +43,7 @@ import type {
     ManagedServer,
     OperationsData,
     Overview,
+    OverviewSummary,
     ReleaseBuild,
     ServerDashboardResult,
 } from "@/app/lib/control-plane/types";
@@ -219,7 +220,7 @@ async function ControlPlaneViewContent({
                     <p className="mt-1 text-xs text-red-200/70">No direct database or provider fallback was attempted.</p>
                 </div>
             )}
-            {!error && view === "overview" && <OverviewView overview={data as Overview} />}
+            {!error && view === "overview" && <OverviewView overview={data as OverviewSummary} />}
             {!error && view === "vps" && <VpsView inventory={data as HostingAdminVpsInventory} accounts={accounts} />}
             {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} accounts={accounts} />}
             {!error && view === "server" && <ServerView result={data as ServerDashboardResult} accounts={accounts} />}
@@ -235,7 +236,7 @@ async function ControlPlaneViewContent({
 async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null) {
     switch (view) {
         case "overview":
-            return requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" });
+            return requestControlPlaneAdmin<OverviewSummary>({ accessToken: token, operation: "overview", input: { compact: true } });
         case "operations": {
             const [overview, inventory, selectedDashboard, releases] = await Promise.all([
                 requestControlPlaneAdmin<Overview>({ accessToken: token, operation: "overview" }),
@@ -326,7 +327,7 @@ function ViewTabs({ active }: { active: View }) {
 }
 
 
-function OverviewView({ overview }: { overview: Overview }) {
+function OverviewView({ overview }: { overview: OverviewSummary }) {
     const { fleet, controls } = overview;
     const stats = [
         { label: "Running", value: fleet.running, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("running") },
