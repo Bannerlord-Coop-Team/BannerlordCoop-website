@@ -38,8 +38,8 @@ import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import {
     getMyServerBackupStatus,
     listAllMyServerBackups,
-    listAllMyServers,
 } from "@/app/lib/hosting/my-servers";
+import { listAllMyServers } from "@/app/lib/hosting/my-servers-server";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";

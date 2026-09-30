@@ -35,12 +35,12 @@ vi.mock("@/app/lib/auth/access", () => ({
 }));
 vi.mock("@/app/lib/hosting/my-servers", async (importOriginal) => ({
     ...await importOriginal<typeof import("@/app/lib/hosting/my-servers")>(),
-    listAllMyServers: mocks.managedServers,
     listAllMyServerBackups: mocks.backups,
     getMyServerBackupStatus: mocks.backupStatus,
     requestMyServerBackupOperation: mocks.requestBackup,
     requestServerVisibility: mocks.requestVisibility,
 }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.managedServers }));
 vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: mocks.displayNames }));
 vi.mock("@/app/lib/hosting/servers", () => ({ getServerForRole: mocks.preview }));
 

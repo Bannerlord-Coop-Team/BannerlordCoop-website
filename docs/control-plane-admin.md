@@ -72,6 +72,15 @@ npx supabase functions deploy my-servers --project-ref <project-ref>
 
 The `my-servers` function accepts authenticated GET inventory requests and
 strict POST direct commands `{action: "start" | "stop" | "restart-game", serverId}`.
+The server-rendered directory and detail pages read inventory directly from the
+fixed `https://control-plane.bannerlordcoop.com/v1/user/control-plane` endpoint,
+using only the current bearer and closed `my-servers` operation. Oracle freshly
+verifies the user, session context and durable owner/grant access on every page;
+the website's existing viewer gates still apply. These reads omit cookies and
+API keys, refuse redirects, disable caching, and retain correlated owner envelopes,
+ten-page/100-item pagination and streamed 8MiB/8192-chunk response bounds. Caller
+cancellation and a 30-second overall deadline cover fetch and response bodies.
+Browser reads, onboarding, console commands and mutations retain the Edge route.
 **My Servers** links each accessible server to `/servers/[serverId]`. The route
 derives access from the authenticated inventory, never from the URL. Only current
 durable owner/manager access can operate; support and server-level admin remain

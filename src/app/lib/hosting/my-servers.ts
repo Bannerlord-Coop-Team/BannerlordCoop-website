@@ -75,14 +75,18 @@ export class MyServersApiError extends Error {
     }
 }
 
-export async function listAllMyServers(accessToken: string, signal?: AbortSignal): Promise<MyServerSummary[]> {
+export async function listAllMyServers(
+    accessToken: string,
+    signal?: AbortSignal,
+    readPage = requestMyServers,
+): Promise<MyServerSummary[]> {
     const servers: MyServerSummary[] = [];
     const seenIds = new Set<string>();
     let cursor: string | null = null;
 
     for (let pageIndex = 0; pageIndex < MAXIMUM_PAGES; pageIndex += 1) {
         signal?.throwIfAborted();
-        const result = parseServerPage(await requestMyServers(accessToken, cursor, signal));
+        const result = parseServerPage(await readPage(accessToken, cursor, signal));
         for (const server of result.items) {
             if (seenIds.has(server.serverId)) {
                 throw invalidResponse("The server API returned a duplicate server.");
@@ -332,7 +336,16 @@ export async function requestMyServersApi(
         );
     }
 
-    const text = await readBoundedText(response, request.maximumResponseBytes ?? MAXIMUM_RESPONSE_BYTES);
+    return readMyServersResponse(response, requestId, { maximumBytes: request.maximumResponseBytes });
+}
+
+/** Shares the owner envelope contract between Edge and direct server-rendered reads. */
+export async function readMyServersResponse(
+    response: Response,
+    requestId: string,
+    options: { maximumBytes?: number; signal?: AbortSignal } = {},
+): Promise<unknown> {
+    const text = await readBoundedText(response, options.maximumBytes ?? MAXIMUM_RESPONSE_BYTES, options.signal);
     let envelope: unknown;
     try {
         envelope = JSON.parse(text);
@@ -389,8 +402,9 @@ export function myServersEndpoint() {
 }
 
 function parseServerPage(value: unknown): HostingPage<MyServerSummary> {
-    if (!isRecord(value) || !Array.isArray(value.items)) throw invalidResponse();
-    if (value.nextCursor !== null && typeof value.nextCursor !== "string") throw invalidResponse();
+    if (!isRecord(value) || !Array.isArray(value.items) || value.items.length > 100) throw invalidResponse();
+    if (value.nextCursor !== null && (typeof value.nextCursor !== "string"
+        || value.nextCursor.length < 1 || value.nextCursor.length > 2_048)) throw invalidResponse();
     return {
         items: value.items as MyServerSummary[],
         nextCursor: value.nextCursor as string | null,
@@ -494,29 +508,42 @@ function isTimestamp(value: unknown): value is string {
         && Number.isFinite(Date.parse(value));
 }
 
-async function readBoundedText(response: Response, maximumBytes: number) {
+async function readBoundedText(response: Response, maximumBytes: number, signal?: AbortSignal) {
     const declaredLength = response.headers.get("content-length");
     if (declaredLength !== null && Number(declaredLength) > maximumBytes) {
+        void response.body?.cancel().catch(() => undefined);
         throw new MyServersApiError("response_too_large", "The server API response was too large.");
     }
     if (!response.body) return "";
     const reader = response.body.getReader();
+    const cancel = () => { void reader.cancel().catch(() => undefined); };
+    signal?.addEventListener("abort", cancel, { once: true });
     const decoder = new TextDecoder("utf-8", { fatal: true });
     let size = 0;
+    let chunks = 0;
     let text = "";
     try {
+        signal?.throwIfAborted();
         for (;;) {
             const chunk = await reader.read();
+            signal?.throwIfAborted();
             if (chunk.done) break;
             size += chunk.value.byteLength;
-            if (size > maximumBytes) {
-                await reader.cancel();
+            if (size > maximumBytes || ++chunks > 8_192) {
                 throw new MyServersApiError("response_too_large", "The server API response was too large.");
             }
             text += decoder.decode(chunk.value, { stream: true });
         }
         return text + decoder.decode();
-    } finally { reader.releaseLock(); }
+    } catch (error) {
+        if (error instanceof MyServersApiError) throw error;
+        throw new MyServersApiError(signal?.aborted ? "server_api_unavailable" : "invalid_response",
+            "The managed-server API response could not be read.", true);
+    } finally {
+        signal?.removeEventListener("abort", cancel);
+        cancel();
+        reader.releaseLock();
+    }
 }
 
 function invalidResponse(message = "The managed-server API returned an invalid response.") {
