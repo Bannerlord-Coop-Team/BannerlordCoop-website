@@ -307,14 +307,12 @@ async function loadView(token: string, view: View, query: string, serverId: stri
     }
 }
 
-/** Fetches the full bounded GHCR catalog rather than the overview's 20-version summaries. */
+/** Reads both complete channel pages from one fresh authorized catalog observation. */
 async function loadReleaseCatalog(token: string, signal: AbortSignal) {
-    // Discovery considers at most 100 candidate versions, so 100 per channel covers the catalog.
-    const [stable, nightly] = await Promise.all([
-        readControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, signal, operation: "builds", input: { channel: "stable", cursor: null, limit: 100 } }),
-        readControlPlaneAdmin<HostingPage<ReleaseBuild>>({ accessToken: token, signal, operation: "builds", input: { channel: "nightly", cursor: null, limit: 100 } }),
-    ]);
-    return { stable, nightly };
+    // Discovery considers at most 100 versions globally; aliases only mark matching versions.
+    return readControlPlaneAdmin<{ stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }>({
+        accessToken: token, signal, operation: "release-catalog", input: { stableCursor: null, nightlyCursor: null, limit: 100 },
+    });
 }
 
 function ViewTabs({ active }: { active: View }) {
