@@ -36,3 +36,21 @@ test("clears a failed in-flight request so an explicit retry can proceed", async
     assert.deepEqual(await reader(accountId, "token-a"), status);
     assert.equal(calls, 2);
 });
+
+test("reuses a render's client while sending its explicit token and reading fresh account status", async () => {
+    const calls: unknown[] = [];
+    const reader = createWebsiteAccountStatusReader(async () => { throw new Error("duplicate client"); });
+    let current = status;
+    const client = { functions: { invoke: async (name: string, input: unknown) => {
+        calls.push({ name, input });
+        return { data: current, error: null };
+    } } };
+    assert.deepEqual(await reader(accountId, "render-token", client), status);
+    current = { ...status, hasDiscord: false };
+    assert.deepEqual(await reader(accountId, "render-token", client), current);
+    assert.deepEqual(calls, Array.from({ length: 2 }, () => ({ name: "website-account", input: {
+        headers: { Authorization: "Bearer render-token" }, body: { operation: "status" },
+    } })));
+    current = { ...status, accountId: "bbbbbbbb-1111-4111-8111-111111111111" };
+    await assert.rejects(reader(accountId, "render-token", client));
+});
