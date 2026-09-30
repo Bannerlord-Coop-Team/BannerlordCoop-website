@@ -273,6 +273,9 @@ export type Overview = {
     nightlyBuilds: HostingPage<ReleaseBuild>;
 };
 
+/** Current data rendered by the Overview pane, without unused detail reads. */
+export type OverviewSummary = Pick<Overview, "fleet" | "controls" | "jobs">;
+
 export type ServerDashboardResult = {
     dashboard: {
         server: ManagedServer;
