@@ -1,3 +1,4 @@
+import { ManagedServerCommands } from "@/app/components/servers/ManagedServerCommands";
 import { releaseChannelLabel } from "@/app/lib/control-plane/presentation";
 import { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
 import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfigPanels";
@@ -13,7 +14,6 @@ import { LiveServerFileSetup } from "@/app/components/servers/LiveServerFileSetu
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
 import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
-import { DownloadServerLogButton } from "@/app/components/servers/DownloadServerLogButton";
 import { ManagedServerConsole } from "@/app/components/servers/ManagedServerConsole";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import {
@@ -211,13 +211,11 @@ function ManagedServerSections({
     return (
         <ManagedServerPollingProvider>
             <ServerWorkspacePanel section="Console">
-                {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : <ServerConsoleWorkspace>
-                    {server.accessRole === "owner" || server.accessRole === "manager" ? <>
-                        <ManagedServerLifecycleSection server={server} />
+                {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : server.accessRole === "owner" || server.accessRole === "manager"
+                    ? <ManagedServerCommands key={`${userId}:${server.serverId}`} server={server} userId={userId} controls={<ManagedServerLifecycleSection server={server} />}>
                         <ManagedServerConsole serverId={server.serverId} />
-                        <DownloadServerLogButton serverId={server.serverId} userId={userId} className="inline-flex items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-sm" />
-                    </> : <UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} logDownload={{ serverId: server.serverId, userId }} />}
-                </ServerConsoleWorkspace>}
+                    </ManagedServerCommands>
+                    : <ServerConsoleWorkspace><UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} logDownload={{ serverId: server.serverId, userId }} /></ServerConsoleWorkspace>}
             </ServerWorkspacePanel>
             <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
                 <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
