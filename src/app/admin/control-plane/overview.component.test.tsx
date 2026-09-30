@@ -1,17 +1,14 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), request: vi.fn(), accounts: vi.fn() }));
-vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
+vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: mocks.auth }));
 vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts }));
 vi.mock("@/app/lib/control-plane/client", async (original) => ({ ...await original<object>(), requestControlPlaneAdmin: mocks.request }));
 import ControlPlaneAdminPage from "./page";
 
 beforeEach(() => {
     vi.resetAllMocks();
-    mocks.auth.mockResolvedValue({ auth: {
-        getUser: async () => ({ data: { user: { id: "admin", app_metadata: { role: "Admin" } } } }),
-        getSession: async () => ({ data: { session: { access_token: "test-admin-token" } } }),
-    } });
+    mocks.auth.mockResolvedValue({ user: { id: "admin", app_metadata: { role: "Admin" } }, accessToken: "test-admin-token" });
     mocks.request.mockResolvedValue({
         fleet: { running: 5, stopped: 0, suspended: 0, provisioning: 0, failedOrDegraded: 0,
             activeJobs: 0, agentUnhealthyOrUnknown: 0, pendingDeletion: 0, backupFailures: 0,
