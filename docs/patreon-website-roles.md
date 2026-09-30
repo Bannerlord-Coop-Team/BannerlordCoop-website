@@ -153,8 +153,7 @@ access tokens and are not sufficient for unattended membership refresh.
    must be present before the function starts. The first authenticated RPC pins
    campaign and tier durably; changing them requires an explicit migration.
 4. Deploy the website administrator change (which clears grant ownership on a
-   manual edit) and the atomic console assignment writers before enabling role
-   sync. Deploy `patreon-roles` using its
+   manual edit) before enabling role sync. Deploy `patreon-roles` using its
    `verify_jwt = false` configuration; its signature/scheduler authentication
    replaces gateway JWT checks. Register `members:create`, `members:update`,
    `members:delete`, `members:pledge:create`, `members:pledge:update` and
@@ -225,9 +224,9 @@ removing outstanding grants requires checking each current ownership marker.
 `npm test` includes handler tests and PGlite integration tests applying the actual
 account-linking migration before the new migrations. Coverage includes signature
 verification, entitlement decisions, private-state permissions, upgrades with
-existing links, manual grants, console edits after revocation and before/after
-new grants, console RPC permissions and rollback, duplicate delivery, lease
-recovery, pagination, relinking and stale-response rejection. Event tests include
+existing links, membership grants and revocations, manual role preservation,
+administrator edits clearing grant ownership, duplicate delivery, lease recovery,
+pagination, relinking and stale-response rejection. Event tests include
 link-to-grant without a cron tick, signed event wakeups, transactional rollback,
 coalescing, priority, rolling request limits, continuation after an in-flight event,
 unknown-link discovery, idle recovery, and private dispatcher permissions. PGlite
