@@ -270,13 +270,26 @@ function build(buildId: string, validationState: string, sourceRevision: string)
 // Protect registry-only selection while retaining honest historical version display.
 test("only verified registry versions are selectable; historical versions are not fabricated", () => {
     const historical = { ...build("ghcr-stable-35b1b6ebeb038a5a69f4ef8a2a84031c3726702452e38874fd4b2f339de92203", "validated", "registry-observed"), version: "stable-35b1b6ebeb03" };
-    const registry = { ...build("transport-key", "validated", "a".repeat(40)), requiredClientModVersion: "v0.1.5",
+    const registry = { ...build("transport-key", "validated", "a".repeat(40)), channel: "stable" as const, requiredClientModVersion: "v0.1.5",
         registryMetadata: { versionTag: "v0.1.5-client12345678-serverabcdefgh", clientRevision: "a".repeat(40), serverRevision: "b".repeat(40) }, currentChannel: true };
     assert.deepEqual(installableBuilds([historical, registry, { ...registry, validationState: "revoked" }]), [registry]);
     assert.equal(releaseVersion(registry), registry.registryMetadata.versionTag);
     assert.equal(releaseVersion(historical), "stable-35b1b6ebeb03");
     assert.equal(releaseChannelLabel("stable"), "Public");
     assert.equal(releaseChannelLabel("nightly"), "Nightly");
+});
+
+test("nightly names use the client version label with one v prefix", () => {
+    const nightly = {
+        ...build("immutable-build-id", "validated", "a".repeat(40)),
+        registryMetadata: { versionTag: "nightly-serverhash-clienthash-digest", clientRevision: "a".repeat(40), serverRevision: "b".repeat(40) },
+    };
+
+    assert.equal(releaseVersion({ ...nightly, requiredClientModVersion: "v0.1.6" }), "v0.1.6");
+    assert.equal(releaseVersion({ ...nightly, requiredClientModVersion: "0.1.6" }), "v0.1.6");
+    assert.equal(releaseVersion(nightly), nightly.registryMetadata.versionTag);
+    assert.equal(releaseVersion({ ...nightly, requiredClientModVersion: "" }), nightly.registryMetadata.versionTag);
+    assert.equal(releaseVersion(build("historical-nightly", "validated", "a".repeat(40))), "historical-nightly");
 });
 
 test("overview statistic cards fill the final row evenly", () => {
