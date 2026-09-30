@@ -97,6 +97,8 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     if (accessToken === null) redirect(`/login?next=/servers/${encodeURIComponent(serverId)}`);
 
     const liveServer = getLiveConsoleServer(serverId);
+    if (!liveServer && serverId === "bannerlord-live-15-204-120-17") redirect("/servers");
+
     const liveAccessLevel = liveServer ? getLiveConsoleAccessLevel(user, liveServer.id) : null;
     if (liveServer && !liveAccessLevel) redirect("/servers");
 

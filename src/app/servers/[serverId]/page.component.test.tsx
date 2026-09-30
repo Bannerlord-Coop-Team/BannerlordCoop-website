@@ -13,7 +13,7 @@ import ServerPage from "./page";
 const mocks = vi.hoisted(() => ({
     getUser: vi.fn(), getSession: vi.fn(), liveServer: vi.fn(),
     liveAccess: vi.fn(), managedServers: vi.fn(), displayNames: vi.fn(),
-    preview: vi.fn(),
+    preview: vi.fn(), hostedAccess: vi.fn(),
     backups: vi.fn(), backupStatus: vi.fn(), files: vi.fn(), requestBackup: vi.fn(), requestVisibility: vi.fn(), refresh: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
@@ -30,7 +30,7 @@ vi.mock("@/app/lib/supabase/server", () => ({
 }));
 vi.mock("@/app/lib/console/servers", () => ({ getLiveConsoleServer: mocks.liveServer, getConsoleGatewayUrl: () => null }));
 vi.mock("@/app/lib/auth/access", () => ({
-    getLiveConsoleAccessLevel: mocks.liveAccess, getMemberRole: () => "Admin", hasHostedServerAccess: () => true,
+    getLiveConsoleAccessLevel: mocks.liveAccess, getMemberRole: () => "Admin", hasHostedServerAccess: mocks.hostedAccess,
 }));
 vi.mock("@/app/lib/hosting/my-servers", async (importOriginal) => ({
     ...await importOriginal<typeof import("@/app/lib/hosting/my-servers")>(),
@@ -57,6 +57,7 @@ beforeEach(() => {
     mocks.getUser.mockResolvedValue({ data: { user: { id: "user" } } });
     mocks.getSession.mockResolvedValue({ data: { session: { access_token: "token" } } });
     mocks.liveServer.mockReturnValue(liveServer);
+    mocks.hostedAccess.mockReturnValue(true);
     mocks.liveAccess.mockReturnValue("operator");
     mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole: "manager" }]);
     mocks.displayNames.mockResolvedValue(new Map());
@@ -130,10 +131,27 @@ it("preserves managed-only pages without requiring live authorization", async ()
     expect(mocks.liveAccess).not.toHaveBeenCalled();
 });
 
-it("returns an unconfigured legacy bookmark to discovery without selecting another managed server", async () => {
+it.each([true, false])("returns an unconfigured legacy bookmark to discovery with hosted access %s", async hostedAccess => {
     mocks.liveServer.mockReturnValue(null);
+    mocks.hostedAccess.mockReturnValue(hostedAccess);
     await expect(page("bannerlord-live-15-204-120-17")).rejects.toThrow("redirect:/servers");
     expect(mocks.liveAccess).not.toHaveBeenCalled();
+    expect(mocks.managedServers).not.toHaveBeenCalled();
+});
+
+it("preserves live authorization and WSS when the retired slug is explicitly catalogued", async () => {
+    const serverId = "bannerlord-live-15-204-120-17";
+    mocks.liveServer.mockReturnValue({ ...liveServer, id: serverId, managedServerId: undefined });
+    mocks.hostedAccess.mockReturnValue(false);
+    mocks.liveAccess.mockReturnValue(null);
+    await expect(page(serverId)).rejects.toThrow("redirect:/servers");
+    expect(mocks.managedServers).not.toHaveBeenCalled();
+
+    mocks.liveAccess.mockReturnValue("operator");
+    mocks.managedServers.mockResolvedValue([]);
+    const tree = await page(serverId);
+    expect((await findServerElement(tree, "LiveServerConsole"))?.props.serverId).toBe(serverId);
+    expect(await findServerElement(tree, "ManagedServerConsole")).toBeNull();
 });
 
 // Resolve the page's server components, leaving client components for React to render.
