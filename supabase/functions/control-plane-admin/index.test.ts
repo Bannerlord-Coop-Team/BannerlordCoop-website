@@ -102,15 +102,14 @@ test("accepts authenticated server-side calls without emitting CORS", async () =
     assert.equal(response.headers.get("access-control-allow-origin"), null);
 });
 
-/** Creates an isolated Edge handler with injected network and clock. */
-function createHandler(fetchImplementation: typeof fetch, now?: () => number) {
+/** Creates an isolated Edge handler with injected network. */
+function createHandler(fetchImplementation: typeof fetch) {
     return createControlPlaneAdminHandler({
         allowedOrigins: [ORIGIN, "https://bannerlordcoop.netlify.app"],
         supabaseUrl: "https://project.supabase.co",
         supabasePublishableKey: "publishable-key-with-enough-characters",
         controlPlaneAdminUrl: "https://control-plane.example.test",
         fetchImplementation: (input, init) => String(input).endsWith("/rpc/website_session_context") ? Promise.resolve(Response.json({ impersonationId: null })) : fetchImplementation(input, init),
-        now,
     });
 }
 
@@ -153,29 +152,26 @@ function releaseResponse(init?: RequestInit) {
         result: { items: [{ buildId: "v0.1.5", channel: request.input.channel }], nextCursor: null } });
 }
 
-test("caches release pages for five minutes while reauthenticating and correlating each request", async () => {
-    let now = 0;
+test("reads changed releases immediately while reauthenticating and correlating each request", async () => {
     let authCalls = 0;
     let upstreamCalls = 0;
     const handler = createHandler(async (input, init) => {
         if (String(input).endsWith("/auth/v1/user")) { authCalls++; return Response.json(ADMIN); }
         upstreamCalls++;
-        return releaseResponse(init);
-    }, () => now);
+        return Response.json({ version: 1, requestId: JSON.parse(String(init?.body)).requestId, ok: true, result: { items: [{ buildId: `v0.1.${upstreamCalls}` }], nextCursor: null } });
+    });
     await handler(releaseRequest());
-    now = 299_999;
     const requestId = "33333333-3333-4333-8333-333333333333";
-    const cached = await handler(releaseRequest(requestId));
-    assert.equal((await cached.json()).requestId, requestId);
-    assert.equal(cached.headers.get("cache-control"), "no-store");
-    assert.equal(upstreamCalls, 1);
-    assert.equal(authCalls, 2);
-    now = 300_000;
-    await handler(releaseRequest());
+    const current = await handler(releaseRequest(requestId));
+    assert.deepEqual(await current.json(), { version: 1, requestId, ok: true, result: { items: [{ buildId: "v0.1.2" }], nextCursor: null } });
+    assert.equal(current.headers.get("cache-control"), "no-store");
     assert.equal(upstreamCalls, 2);
+    assert.equal(authCalls, 2);
+    await handler(releaseRequest());
+    assert.equal(upstreamCalls, 3);
 });
 
-test("never serves a warm release cache after authentication or admin access is lost", async () => {
+test("never serves releases after authentication or admin access is lost", async () => {
     let role = "Admin";
     let upstreamCalls = 0;
     const handler = createHandler(async (input, init) => {
@@ -192,7 +188,7 @@ test("never serves a warm release cache after authentication or admin access is 
     assert.equal(upstreamCalls, 1);
 });
 
-test("isolates channel, cursor and page size and bounds the cache to one page per channel", async () => {
+test("forwards every channel, cursor and page size to the current catalog", async () => {
     let upstreamCalls = 0;
     const handler = createHandler(async (input, init) => {
         if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
@@ -202,15 +198,14 @@ test("isolates channel, cursor and page size and bounds the cache to one page pe
     await handler(releaseRequest());
     await handler(releaseRequest(REQUEST_ID, "nightly"));
     await handler(releaseRequest());
-    assert.equal(upstreamCalls, 2);
+    assert.equal(upstreamCalls, 3);
     await handler(releaseRequest(REQUEST_ID, "stable", "v0.1.5"));
     await handler(releaseRequest(REQUEST_ID, "stable", "v0.1.5", 20));
     await handler(releaseRequest());
-    assert.equal(upstreamCalls, 5);
+    assert.equal(upstreamCalls, 6);
 });
 
-test("does not serve expired releases or cache failed upstream requests", async () => {
-    let now = 0;
+test("does not fall back to the preceding catalog after an upstream failure", async () => {
     let unavailable = false;
     let upstreamCalls = 0;
     const handler = createHandler(async (input, init) => {
@@ -218,9 +213,8 @@ test("does not serve expired releases or cache failed upstream requests", async 
         upstreamCalls++;
         if (unavailable) throw new Error("private upstream failure");
         return releaseResponse(init);
-    }, () => now);
+    });
     await handler(releaseRequest());
-    now = 300_000;
     unavailable = true;
     assert.equal((await handler(releaseRequest())).status, 502);
     assert.equal((await handler(releaseRequest())).status, 502);
