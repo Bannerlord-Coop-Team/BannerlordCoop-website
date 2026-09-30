@@ -270,7 +270,7 @@ function build(buildId: string, validationState: string, sourceRevision: string)
 // Protect registry-only selection while retaining honest historical version display.
 test("only verified registry versions are selectable; historical versions are not fabricated", () => {
     const historical = { ...build("ghcr-stable-35b1b6ebeb038a5a69f4ef8a2a84031c3726702452e38874fd4b2f339de92203", "validated", "registry-observed"), version: "stable-35b1b6ebeb03" };
-    const registry = { ...build("transport-key", "validated", "a".repeat(40)), channel: "stable", requiredClientModVersion: "v0.1.5",
+    const registry = { ...build("transport-key", "validated", "a".repeat(40)), channel: "stable" as const, requiredClientModVersion: "v0.1.5",
         registryMetadata: { versionTag: "v0.1.5-client12345678-serverabcdefgh", clientRevision: "a".repeat(40), serverRevision: "b".repeat(40) }, currentChannel: true };
     assert.deepEqual(installableBuilds([historical, registry, { ...registry, validationState: "revoked" }]), [registry]);
     assert.equal(releaseVersion(registry), registry.registryMetadata.versionTag);
