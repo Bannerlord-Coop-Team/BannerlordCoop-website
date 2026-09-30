@@ -10,8 +10,7 @@ import {
 import { getLiveConsoleAccessLevel } from "@/app/lib/auth/access";
 import { listLiveConsoleServers } from "@/app/lib/console/servers";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
-import { getServerOnboarding } from "@/app/lib/hosting/my-servers";
-import { listAllMyServers } from "@/app/lib/hosting/my-servers-server";
+import { getServerOnboarding, listAllMyServers } from "@/app/lib/hosting/my-servers-server";
 import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
 import { ServerOnboarding } from "@/app/components/servers/ServerOnboarding";
 import type { OnboardingSummary } from "../../../supabase/functions/_shared/server-onboarding-contract";

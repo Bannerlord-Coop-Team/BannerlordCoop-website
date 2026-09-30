@@ -11,8 +11,7 @@ vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: async (op
     const { data: { user } } = await client.auth.getUser();
     return { client, user, read, accessToken: user && session?.user.id === user.id ? session.access_token : null };
 } }));
-vi.mock("@/app/lib/hosting/my-servers", () => ({ getServerOnboarding: mocks.onboarding }));
-vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.list }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.list, getServerOnboarding: mocks.onboarding }));
 vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: (props: unknown) => { mocks.navbar(props); return <nav>Navigation</nav>; } }));
 vi.mock("@/app/components/servers/ServerOnboarding", () => ({ ServerOnboarding: ({ userId, summary }: { userId: string; summary: unknown }) => <div data-user={userId}>{summary ? "Trusted onboarding snapshot" : "Unavailable snapshot"}</div>, GamePasswordNotice: () => <p>Discord password controls</p> }));
 vi.mock("@/app/lib/console/servers", () => ({ listLiveConsoleServers: () => [{ id: "live-one", name: "Live campaign" }] }));

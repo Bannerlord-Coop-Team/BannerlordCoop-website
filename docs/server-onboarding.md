@@ -13,6 +13,11 @@ verification. Rejected or mismatched viewers cancel the read and any later pages
 Account-status and onboarding requests still follow viewer verification,
 authenticate the explicit token and validate current session context. Account
 synchronization precedes allocation reads, without delaying either directory.
+The server-rendered onboarding summary uses the existing fixed Oracle user API
+directly, removing the Edge relay for this closed read only. It uses the same
+strict summary parser with a 64 KiB streamed response limit, a 30-second deadline,
+no response cache and no redirect following. Browser reads and all mutations
+retain their existing Edge route; failed summary reads remain unavailable.
 
 ## Authority and public contract
 
