@@ -2,6 +2,15 @@
 
 `/admin/control-plane` is the website presentation layer for managed-hosting administration. Supabase `Admin` access protects the page, and the browser sends typed requests to the `control-plane-admin` Supabase Edge Function. The function accepts only configured website origins, reauthenticates the current access token, requires the protected `Admin` role, then forwards the unchanged request envelope to the Oracle web-admin adapter. The adapter independently revalidates the token and uses the control plane's typed Unix-socket contract.
 
+For server-rendered pane reads, the page starts its closed read operation as soon as
+it has a refreshed session token, overlapping the website's fresh viewer validation.
+The Edge Function and Oracle adapter still independently authorize that request.
+The page withholds all content until fresh user/session identity and administrator
+access checks succeed, and cancels pending reads on rejection. Service-key account
+lookups start only after those checks. Impersonation actor/target validation finishes
+before any early read starts. No mutation uses this path and no response or permission
+is cached across requests.
+
 The page provides:
 
 - clickable fleet health summaries, exact registered-VPS/managed-server/slot capacity, reconciliation, and global controls;

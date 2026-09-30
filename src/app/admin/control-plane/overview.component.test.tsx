@@ -8,7 +8,10 @@ import ControlPlaneAdminPage from "./page";
 
 beforeEach(() => {
     vi.resetAllMocks();
-    mocks.auth.mockResolvedValue({ user: { id: "admin", app_metadata: { role: "Admin" } }, accessToken: "test-admin-token" });
+    mocks.auth.mockImplementation(async options => {
+        const read = options.onReadOnlySession("test-admin-token");
+        return { read, user: { id: "admin", app_metadata: { role: "Admin" } }, accessToken: "test-admin-token" };
+    });
     mocks.request.mockResolvedValue({
         fleet: { running: 5, stopped: 0, suspended: 0, provisioning: 0, failedOrDegraded: 0,
             activeJobs: 0, agentUnhealthyOrUnknown: 0, pendingDeletion: 0, backupFailures: 0,
@@ -28,6 +31,70 @@ it("renders Overview from its compact current response without fetching account 
     expect(html).toContain("Current control reason");
     expect(html).toContain("Recent jobs");
     expect(html).not.toContain("The control plane view could not be loaded");
-    expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "overview", input: { compact: true } }]]);
+    expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "overview", input: { compact: true }, signal: expect.any(AbortSignal) }]]);
     expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
+
+it("starts the read before viewer verification completes but withholds the entire page and account directory", async () => {
+    const gate = Promise.withResolvers<void>();
+    mocks.auth.mockImplementation(async options => {
+        const read = options.onReadOnlySession("test-admin-token");
+        await gate.promise;
+        return { read, user: { id: "admin", app_metadata: { role: "Admin" } }, accessToken: "test-admin-token" };
+    });
+    let rendered = false;
+    const page = ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "servers" }) });
+    void page.then(() => { rendered = true; });
+    await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(1));
+    expect(rendered).toBe(false);
+    expect(mocks.accounts).not.toHaveBeenCalled();
+    gate.resolve();
+    await page;
+    // Account lookup is in the authenticated streaming content, never the speculative read.
+    expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
+it.each(["revoked", "member", "mismatched"])("aborts and does not render early data for a %s viewer", async kind => {
+    mocks.auth.mockImplementation(async options => {
+        const read = options.onReadOnlySession("test-admin-token");
+        if (kind === "revoked") throw new Error("revoked");
+        return { read, user: { id: "admin", app_metadata: { role: kind === "member" ? "Member" : "Admin" } }, accessToken: kind === "mismatched" ? null : "test-admin-token" };
+    });
+    await expect(ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "servers" }) })).rejects.toThrow();
+    expect(mocks.request.mock.calls[0][0].signal.aborted).toBe(true);
+    expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
+it("consumes early read failures and preserves the ordinary error UI after authentication", async () => {
+    mocks.request.mockRejectedValue(new Error("endpoint unavailable"));
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "overview" }) }));
+    await stream.allReady;
+    expect(await new Response(stream).text()).toContain("The control plane view could not be loaded.");
+});
+
+
+it.each(["overview", "servers", "server", "vps", "jobs", "releases", "audit", "operations"])("cancels every %s request on failed viewer validation and starts only read operations", async view => {
+    mocks.auth.mockImplementation(async options => {
+        options.onReadOnlySession("test-admin-token");
+        throw new Error("session context unavailable");
+    });
+    await expect(ControlPlaneAdminPage({ searchParams: Promise.resolve({ view, serverId: "test-server" }) })).rejects.toThrow("session context unavailable");
+    expect(mocks.request.mock.calls.length).toBeGreaterThan(0);
+    for (const [request] of mocks.request.mock.calls) {
+        expect(["overview", "servers", "server-dashboard", "vps-hosts", "jobs", "builds", "audit"]).toContain(request.operation);
+        expect(request.signal.aborted).toBe(true);
+        expect(request.accessToken).toBe("test-admin-token");
+    }
+    expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
+
+it("releases the authenticated shell while the early read is still pending", async () => {
+    const pendingRead = Promise.withResolvers<unknown>();
+    mocks.request.mockReturnValue(pendingRead.promise);
+    const page = await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "servers" }) });
+    expect(page).toBeDefined();
+    expect(mocks.accounts).not.toHaveBeenCalled();
+    pendingRead.resolve({ items: [], nextCursor: null });
 });
