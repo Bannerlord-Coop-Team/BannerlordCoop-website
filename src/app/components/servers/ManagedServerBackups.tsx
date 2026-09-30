@@ -271,9 +271,6 @@ function ManagedServerBackupsSession({
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="max-w-2xl text-xs leading-5 text-foreground-muted">
-                    Backups are retained off-host. Restoring replaces current campaign progress and never changes the installed game or mod version.
-                </p>
                 {canManage ? (
                     <button
                         type="button"
