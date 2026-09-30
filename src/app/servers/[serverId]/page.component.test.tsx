@@ -106,10 +106,13 @@ it.each(["missing", "support", "admin"])("keeps mapped logs unavailable for %s m
     expect(result.props.managedServer).toEqual(accessRole === "missing" ? null : { serverId: managedId, accessRole });
 });
 
-it("preserves same-ID downloads when no explicit mapping exists", async () => {
+it("uses managed downloads and console for a same-ID assignment without an explicit mapping", async () => {
     mocks.liveServer.mockReturnValue({ ...liveServer, managedServerId: undefined });
     mocks.managedServers.mockResolvedValue([{ serverId: liveId, accessRole: "owner" }]);
-    expect((await page()).props.logDownload).toEqual({ serverId: liveId, userId: "user" });
+    const tree = await page();
+    expect(tree.props.logDownload).toEqual({ serverId: liveId, userId: "user" });
+    expect((await findServerElement(tree, "ManagedServerConsole"))?.props.serverId).toBe(liveId);
+    expect(await findServerElement(tree, "LiveServerConsole")).toBeNull();
 });
 
 it("keeps live access but no download when the managed lookup is unavailable", async () => {
@@ -124,6 +127,12 @@ it("preserves managed-only pages without requiring live authorization", async ()
     mocks.liveServer.mockReturnValue(null);
     const result = await page(managedId);
     expect(result.props.server.serverId).toBe(managedId);
+    expect(mocks.liveAccess).not.toHaveBeenCalled();
+});
+
+it("returns an unconfigured legacy bookmark to discovery without selecting another managed server", async () => {
+    mocks.liveServer.mockReturnValue(null);
+    await expect(page("bannerlord-live-15-204-120-17")).rejects.toThrow("redirect:/servers");
     expect(mocks.liveAccess).not.toHaveBeenCalled();
 });
 
@@ -347,7 +356,8 @@ it("updates the mapped identity through both controls and waits for authoritativ
     }
 });
 
-// Console merge matrix: managed owners/managers get output; read-only roles and existing live consoles do not.
+// Console matrix: authorized managed identities select SSE for owners/managers; read-only roles cannot connect.
+// Standalone catalog entries without a matching managed identity retain their external WebSocket console.
 it.each(["owner", "manager", "support", "admin"])("preserves managed console access for %s in the workspace", async (accessRole) => {
     mocks.liveServer.mockReturnValue(null);
     mocks.managedServers.mockResolvedValue([{
@@ -360,8 +370,23 @@ it.each(["owner", "manager", "support", "admin"])("preserves managed console acc
     expect(consolePanel?.props.serverId).toBe(accessRole === "owner" || accessRole === "manager" ? managedId : undefined);
 });
 
-it("does not duplicate the existing live console with managed output", async () => {
+it.each(["owner", "manager", "support", "admin"])("uses mapped managed %s authority instead of the legacy WebSocket console", async accessRole => {
+    mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole }]);
     const tree = await page();
-    expect(await findServerElement(tree, "LiveServerConsole")).not.toBeNull();
-    expect(await findServerElement(tree, "ManagedServerConsole")).toBeNull();
+    expect(await findServerElement(tree, "LiveServerConsole")).toBeNull();
+    const consolePanel = await findServerElement(tree, "ManagedServerConsole");
+    expect(consolePanel?.props.serverId).toBe(accessRole === "owner" || accessRole === "manager" ? managedId : undefined);
+});
+
+it.each(["unlinked", "missing", "lookup-failed"])("preserves the external console when the managed identity is %s", async reason => {
+    mocks.managedServers.mockResolvedValue([{ serverId: "unrelated", accessRole: "owner" }]);
+    if (reason === "unlinked") mocks.liveServer.mockReturnValue({ ...liveServer, managedServerId: undefined });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+        if (reason === "lookup-failed") mocks.managedServers.mockRejectedValue(new Error("Unavailable"));
+        const tree = await page();
+        const consolePanel = await findServerElement(tree, "LiveServerConsole");
+        expect(consolePanel?.props.serverId).toBe(liveId);
+        expect(await findServerElement(tree, "ManagedServerConsole")).toBeNull();
+    } finally { error.mockRestore(); }
 });

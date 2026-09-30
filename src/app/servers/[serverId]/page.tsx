@@ -196,28 +196,26 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
     </ServerManagementWorkspace>;
 }
 
-// Keeps managed controls and output in the console workspace without duplicating an existing live console.
+// Renders managed controls and output using the authorized control-plane server identity.
 function ManagedServerSections({
     userId,
     accessToken,
     server,
-    hasLiveConsole = false,
 }: {
     userId: string;
     accessToken: string;
     server: MyServerSummary;
-    hasLiveConsole?: boolean;
 }) {
     return (
         <ManagedServerPollingProvider>
             <ServerWorkspacePanel section="Console">
-                {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : <ServerConsoleWorkspace>
+                <ServerConsoleWorkspace>
                     {server.accessRole === "owner" || server.accessRole === "manager" ? <>
                         <ManagedServerLifecycleSection server={server} />
                         <ManagedServerConsole serverId={server.serverId} />
                         <DownloadServerLogButton serverId={server.serverId} userId={userId} className="inline-flex items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-sm" />
                     </> : <UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} logDownload={{ serverId: server.serverId, userId }} />}
-                </ServerConsoleWorkspace>}
+                </ServerConsoleWorkspace>
             </ServerWorkspacePanel>
             <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
                 <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
@@ -285,7 +283,7 @@ function ManagedServerBackupsSkeleton() {
     );
 }
 
-// Renders authorized live controls with independently authorized managed log downloads.
+// Renders a catalogued server with its authorized managed console, or a standalone external gateway.
 async function LiveServerManagementPage({
     userId,
     accessError,
@@ -346,15 +344,17 @@ async function LiveServerManagementPage({
             : <a href="#server-visibility" className="ml-auto inline-flex min-h-10 items-center rounded-md border border-white/15 px-3 text-sm text-gold underline focus-visible:outline-2 focus-visible:outline-gold">Set up visibility</a>}
         summary={<>{server.provider} · {accessLabels[accessLevel]} · Live dedicated server</>}
         initialSection={accessError || accessUpdated ? "Settings" : "Console"}
-        notice="Protected production access. Controls and commands affect the live Bannerlord process immediately. The gateway revalidates your server access."
+        notice={managedServer !== null
+            ? "Protected production access. Managed controls affect the live Bannerlord process. Console output is read-only and the control plane revalidates your managed-server access."
+            : "Protected production access. Controls and commands affect the live Bannerlord process immediately. The gateway revalidates your server access."}
     >
-        <ServerWorkspacePanel section="Console">
-            <LiveServerConsole gatewayUrl={getConsoleGatewayUrl()} serverId={server.id} logDownload={logDownload} />
-            {!logDownload && <p className="text-sm text-foreground-muted">Log downloads require a linked managed server and owner or manager access. Ask an administrator to check onboarding, the server mapping, and your managed-server access.</p>}
-        </ServerWorkspacePanel>
         {managedServer !== null
-            ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
+            ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} />
             : <>
+                <ServerWorkspacePanel section="Console">
+                    <LiveServerConsole gatewayUrl={getConsoleGatewayUrl()} serverId={server.id} logDownload={logDownload} />
+                    {!logDownload && <p className="text-sm text-foreground-muted">Log downloads require a linked managed server and owner or manager access. Ask an administrator to check onboarding, the server mapping, and your managed-server access.</p>}
+                </ServerWorkspacePanel>
                 <ServerWorkspacePanel section="Backups"><LiveServerBackupSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>
                 <ServerWorkspacePanel section="Save & config"><LiveServerFileSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>
             </>}

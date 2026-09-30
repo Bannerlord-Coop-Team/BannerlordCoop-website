@@ -141,7 +141,9 @@ See [website server onboarding](docs/server-onboarding.md) for the strict contra
 
 ### Live server console
 
-Configured live Bannerlord containers hosted at `15.204.120.17` appear under **My Servers** on `/servers`. Administrators see every configured server and can assign each one owner account. Owners can add and remove operator accounts; owners and operators receive the same protected Start, Stop, Restart, Update, log-stream, and stdin controls for their assigned server. Administrators and owners can also edit a server's globally persisted display name from its manage page after the `server_settings` migration is applied. These servers are not IONOS resources.
+Managed servers appear under **My Servers** from the authenticated control-plane inventory, using their registered server UUIDs. No external server is listed by default, and the old `bannerlord-live-15-204-120-17` slug is not automatically associated with a managed server. A catalog entry with an authorized `managedServerId` uses the existing managed console: read-only HTTP/SSE output for managed owners/managers, not the standalone WebSocket command console. The managed SSE endpoint must be commissioned separately; selecting the UI does not deploy it.
+
+Explicitly configured external Bannerlord containers appear alongside managed servers when `CONSOLE_SERVER_CATALOG` is set. Standalone external entries retain their WebSocket console. Administrators see every configured server and can assign each one owner account. Owners can add and remove operator accounts; owners and operators receive the same protected Start, Stop, Restart, Update, log-stream, and stdin controls for their assigned server. Administrators and owners can also edit a server's globally persisted display name from its manage page after the `server_settings` migration is applied. These servers are not IONOS resources.
 
 Update pulls the configured image, treats an unchanged digest as a no-op, and otherwise recreates only the allowlisted game container after validating its deployment specification. The old container is retained until the replacement passes the configured readiness marker; failed readiness triggers verified automatic rollback.
 
@@ -173,7 +175,7 @@ Comma-separated bootstrap administrator emails. These users always have admin ac
 
 ### `CONSOLE_GATEWAY_URL`
 
-Server-only WSS browser endpoint for the external live console, including `/v1/browser`. Production values must use `wss://`; only localhost development may use `ws://`. `CONSOLE_SERVER_CATALOG` optionally supplies the live multi-server catalog. Administrators see the complete catalog; owners and operators see only assigned entries. Node-agent credentials and per-server Docker resource allowlists are configured separately under `services/` and must never use a `NEXT_PUBLIC_` variable.
+Server-only WSS browser endpoint for the external live console, including `/v1/browser`. Production values must use `wss://`; only localhost development may use `ws://`. `CONSOLE_SERVER_CATALOG` explicitly supplies the external multi-server catalog; when unset, no external entries are listed. Administrators see the complete catalog; owners and operators see only assigned entries. Node-agent credentials and per-server Docker resource allowlists are configured separately under `services/` and must never use a `NEXT_PUBLIC_` variable.
 
 ### `YOUTUBE_API_KEY`
 

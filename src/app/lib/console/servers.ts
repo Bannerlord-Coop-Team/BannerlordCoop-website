@@ -1,35 +1,20 @@
 import "server-only";
 
-import {
-    parseConsoleServerCatalog,
-    type LiveConsoleServer,
-} from "@/app/lib/console/catalog";
+import { parseConsoleServerCatalog } from "@/app/lib/console/catalog";
 
 export type { LiveConsoleServer } from "@/app/lib/console/catalog";
 
-export const LIVE_CONSOLE_SERVER_ID = "bannerlord-live-15-204-120-17";
-
-const DEFAULT_LIVE_CONSOLE_SERVERS: readonly LiveConsoleServer[] = [
-    {
-        id: LIVE_CONSOLE_SERVER_ID,
-        name: "Bannerlord Live Server",
-        address: "15.204.120.17",
-        nodeId: "vps-15-204-120-17",
-        provider: "External VPS",
-    },
-];
-
+// Lists explicitly configured external servers; managed servers come from authorized inventory.
 export function listLiveConsoleServers() {
-    return parseConsoleServerCatalog(
-        process.env.CONSOLE_SERVER_CATALOG,
-        DEFAULT_LIVE_CONSOLE_SERVERS,
-    );
+    return parseConsoleServerCatalog(process.env.CONSOLE_SERVER_CATALOG, []);
 }
 
+// Resolves only an operator-configured external server, never an inferred managed alias.
 export function getLiveConsoleServer(serverId: string) {
     return listLiveConsoleServers().find((server) => server.id === serverId) ?? null;
 }
 
+// Reads a secure external gateway URL, allowing insecure WebSockets only for local development.
 export function getConsoleGatewayUrl() {
     const value = process.env.CONSOLE_GATEWAY_URL?.trim();
     if (!value) return null;
