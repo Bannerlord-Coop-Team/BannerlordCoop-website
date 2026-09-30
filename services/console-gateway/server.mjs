@@ -1,3 +1,4 @@
+import { sessionContext } from "./session-context.mjs";
 import { createClient } from "@supabase/supabase-js";
 import { getConsoleServerAccess } from "./access.mjs";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
@@ -133,7 +134,12 @@ const serverNodes = new Map(Object.entries(
 const supabase = createClient(
     required("SUPABASE_URL"),
     required("SUPABASE_PUBLISHABLE_KEY"),
-    { auth: { autoRefreshToken: false, persistSession: false } },
+    {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.any([
+            AbortSignal.timeout(authenticationTimeoutMs), ...(init?.signal ? [init.signal] : []),
+        ]) }) },
+    },
 );
 
 const nodeConnections = new Map();
@@ -154,6 +160,7 @@ function closeOperatorSession(sessionId, reason, closeBrowser = false) {
         activeServerSessions.delete(session.serverId);
     }
     clearTimeout(session.expiry);
+    clearInterval(session.authorityTimer);
 
     const node = nodeConnections.get(session.nodeId)?.socket;
     send(node, { type: "close", sessionId });
@@ -168,6 +175,28 @@ function closeOperatorSession(sessionId, reason, closeBrowser = false) {
         userId: session.userId,
         reason,
     });
+}
+
+async function verifyOperatorAuthority(sessionId, action) {
+    const session = operatorSessions.get(sessionId);
+    if (!session) return false;
+    if (!session.impersonation) return true;
+    // Coalesce overlapping heartbeat/input checks; a stalled Auth request must
+    // not accumulate another request for every received console message.
+    if (!session.authorityCheck) session.authorityCheck = (async () => {
+        try {
+            const user = await supabase.auth.getUser(session.accessToken);
+            if (user.error || user.data.user?.id !== session.userId || !getConsoleServerAccess(user.data.user, session.serverId, bootstrapAdminEmails)) throw new Error("Access changed");
+            const context = await sessionContext({ url: required("SUPABASE_URL"), key: required("SUPABASE_PUBLISHABLE_KEY"), token: session.accessToken, userId: session.userId, action });
+            if (context?.impersonationId !== session.impersonation.impersonationId) throw new Error("Session changed");
+            return operatorSessions.get(sessionId) === session;
+        } catch {
+            closeOperatorSession(sessionId, "Impersonation ended or access changed.", true);
+            return false;
+        }
+    })();
+    try { return await session.authorityCheck; }
+    finally { session.authorityCheck = null; }
 }
 
 function closeNodeSessions(nodeId, reason) {
@@ -474,10 +503,15 @@ browserServer.on("connection", (socket, request) => {
             concurrentAuthentications += 1;
             let userData = { user: null };
             let authenticationError = null;
+            let impersonation = null;
             try {
                 const result = await supabase.auth.getUser(message.accessToken);
                 userData = result.data;
                 authenticationError = result.error;
+                if (!result.error && result.data.user) impersonation = await sessionContext({
+                    url: required("SUPABASE_URL"), key: required("SUPABASE_PUBLISHABLE_KEY"), token: message.accessToken,
+                    userId: result.data.user.id, action: "console.open",
+                });
             } catch (error) {
                 authenticationError = error;
             } finally {
@@ -516,11 +550,14 @@ browserServer.on("connection", (socket, request) => {
             clearTimeout(authenticationTimeout);
             const activeOperation = activeServerOperations.get(message.serverId);
             sessionId = randomUUID();
+            const expiresInMs = impersonation ? Math.min(sessionMaxMs, Date.parse(impersonation.expiresAt) - Date.now()) : sessionMaxMs;
             const expiry = setTimeout(() => {
                 closeOperatorSession(sessionId, "The maximum console session time was reached.", true);
-            }, sessionMaxMs);
+            }, expiresInMs);
             operatorSessions.set(sessionId, {
                 accessLevel,
+                impersonation,
+                accessToken: impersonation ? message.accessToken : null,
                 browser: socket,
                 consoleAttached: false,
                 consoleInputEnabled: false,
@@ -534,9 +571,12 @@ browserServer.on("connection", (socket, request) => {
                 serverId: message.serverId,
                 userId: user.id,
             });
+            if (impersonation) operatorSessions.get(sessionId).authorityTimer = setInterval(() => {
+                void verifyOperatorAuthority(sessionId, "console.heartbeat").catch(() => undefined);
+            }, 5000);
             activeServerSessions.set(message.serverId, sessionId);
 
-            send(socket, { type: "ready", expiresInMs: sessionMaxMs });
+            send(socket, { type: "ready", expiresInMs });
             if (activeOperation) {
                 send(socket, {
                     type: "operationPending",
@@ -556,6 +596,7 @@ browserServer.on("connection", (socket, request) => {
                 serverId: message.serverId,
                 userId: user.id,
                 accessLevel,
+                impersonatorId: impersonation?.actorId ?? null,
             });
             return;
         }
@@ -567,6 +608,7 @@ browserServer.on("connection", (socket, request) => {
         ) {
             const session = operatorSessions.get(sessionId);
             if (!session) return;
+            if (!await verifyOperatorAuthority(sessionId, "console.operation")) return;
             const existingOperation = activeServerOperations.get(session.serverId);
             if (existingOperation) {
                 send(socket, {
@@ -634,6 +676,7 @@ browserServer.on("connection", (socket, request) => {
         ) {
             const session = operatorSessions.get(sessionId);
             if (!session) return;
+            if (!await verifyOperatorAuthority(sessionId, "console.input")) return;
             if (!session.inputEnabled) {
                 send(socket, {
                     type: "error",

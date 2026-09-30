@@ -1,3 +1,4 @@
+import { verifyWebsiteSessionContext } from "./session-context.ts";
 import { DatabaseContention, databaseContentionResponse, checkDatabaseContention } from "./database-contention.ts";
 import { boundedJson, optionalDiscord, exact, record, type Policy } from "./membership.ts";
 import { membershipStore, MembershipRateLimit, membershipRateLimitResponse } from "./membership-store.ts";
@@ -116,6 +117,7 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
                 if (!auth.ok) return response("Unauthorized", 401);
                 const user = await boundedJson(auth);
                 if (!record(user) || typeof user.id !== "string" || !user.id) return response("Unauthorized", 401);
+                await verifyWebsiteSessionContext({ supabaseUrl: config.supabaseUrl, key: config.serviceRoleKey, authorization, userId: user.id, action: `patreon.${mode}`, fetch: requestFetch });
                 if (mode === "complete") {
                     const body = await boundedJson(new Response(request.body, { headers: request.headers }), 4096);
                     if (!record(body) || !exact(body, ["token"]) || typeof body.token !== "string" || !tokenPattern.test(body.token)) return response("Invalid completion token", 400);

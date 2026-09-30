@@ -1,3 +1,4 @@
+import { bindLinkedImpersonationSession } from "@/app/lib/auth/impersonation";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabase/admin";
 import { currentDiscord, sha256 } from "../../../../../supabase/functions/_shared/membership";
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
             const admin = getSupabaseAdminClient();
             const { error } = await supabase.auth.exchangeCodeForSession(code);
             const returned = await supabase.auth.getUser();
+            if (!error) await bindLinkedImpersonationSession(supabase, session.access_token);
             const discord = returned.data.user ? currentDiscord(returned.data.user) : null;
             if (!error && returned.data.user?.id === user.id && discord !== null) {
                 const current = await supabase.auth.getSession();
