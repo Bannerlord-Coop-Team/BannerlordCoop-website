@@ -28,8 +28,11 @@ export function installableBuilds(builds: readonly ReleaseBuild[]) {
     return builds.filter((build) => build.validationState === "validated" && build.registryMetadata);
 }
 
-/** Uses the registry version tag for selection and preserves recorded historical versions. */
+/** Displays nightly client versions while preserving registry and historical fallbacks. */
 export function releaseVersion(build: ReleaseBuild) {
+    if (build.channel === "nightly" && build.requiredClientModVersion) {
+        return `v${build.requiredClientModVersion.replace(/^v/, "")}`;
+    }
     return build.registryMetadata?.versionTag ?? build.version;
 }
 

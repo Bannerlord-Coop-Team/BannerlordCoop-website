@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { setServerVisibility } from "@/app/servers/server-visibility-actions";
 import { changeServerRelease, readServerReleaseStatus } from "@/app/servers/server-release-actions";
 import type { ReleaseChannel, ReleaseStatus } from "../../../../supabase/functions/_shared/server-release-contract";
-import { Globe2, LockKeyhole } from "lucide-react";
+import { CircleAlert, Globe2, LockKeyhole } from "lucide-react";
 
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-40";
 
@@ -146,9 +146,14 @@ export function ServerSettingsPanel({ name, visibility, visibilityAccess, releas
                 <p className="mt-3 text-xs leading-5 text-foreground-muted">{visibility ? canChangeVisibility ? "Choose a preference, then save settings." : "Only the server owner can change visibility." : "Directory visibility is unavailable for this server."}</p>
             </fieldset>
         </div>
-        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-b-lg border-t border-white/10 bg-surface px-5 py-4">
-            <div className="min-w-0 basis-full text-sm text-foreground-muted sm:flex-1"><p>{dirty ? "Unsaved changes" : "No pending changes"}</p><p role="status" className="mt-2">{message}</p></div>
-            {dirty && <div className="ml-auto flex gap-2"><button type="button" disabled={pending} className={button} onClick={() => { setVisibilityState({ source: visibility, draft: visibility }); setChannelState({ source: releaseAccess?.channel, draft: releaseAccess?.channel }); setMessage(""); }}>Discard</button><button type="submit" disabled={pending || updateBusy} className={`${button} !border-gold/50 !bg-gold/15 !text-gold`}>{pending ? "Saving…" : "Save settings"}</button></div>}
+        <div className={`sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-b-lg border-t bg-surface px-5 py-4 ${dirty ? "border-gold/60 bg-linear-to-r from-gold/15 to-gold/5" : "border-white/10"}`}>
+            <div className="min-w-0 basis-full text-sm sm:flex-1">
+                <div role="status" aria-atomic="true">
+                    {dirty ? <><p className="flex items-center gap-2 font-semibold text-gold"><CircleAlert className="size-5 shrink-0" aria-hidden="true" />Unsaved changes</p><p className="mt-1 text-foreground">Save settings to apply your changes.</p></> : <p className="text-foreground-muted">No pending changes</p>}
+                </div>
+                <p role="status" className={message ? "mt-2 text-foreground" : ""}>{message}</p>
+            </div>
+            {dirty && <div className="ml-auto flex gap-2"><button type="button" disabled={pending} className={button} onClick={() => { setVisibilityState({ source: visibility, draft: visibility }); setChannelState({ source: releaseAccess?.channel, draft: releaseAccess?.channel }); setMessage(""); }}>Discard</button><button type="submit" disabled={pending || updateBusy} className={`${button} !border-gold !bg-gold !font-semibold !text-background hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold`}>{pending ? "Saving…" : "Save settings"}</button></div>}
         </div>
         </form>
     </section>;
