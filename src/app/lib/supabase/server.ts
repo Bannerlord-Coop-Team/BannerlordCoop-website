@@ -44,3 +44,29 @@ export async function getSupabaseServerClient(options: { impersonation?: "actor"
     }
     return client;
 }
+
+/** Fresh read-only viewer; never retained across requests or used in place of mutation authorization. */
+export async function getSupabaseServerViewer() {
+    const impersonating = Boolean((await cookies()).get(IMPERSONATION_COOKIE));
+    // Preserve the full actor/target validation and redirect path for impersonation.
+    const client = impersonating ? await getSupabaseServerClient() : await createSupabaseServerClient();
+    const { data: { session }, error: sessionError } = await client.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!session) return { client, user: null, accessToken: null };
+
+    const [{ data: { user }, error }] = await Promise.all([
+        // An explicit token avoids holding the SDK session lock while fetching the user.
+        client.auth.getUser(session.access_token),
+        (async () => {
+            if (impersonating) return;
+            const { data, error } = await client.rpc("website_session_context", {
+                p_action: "website.session", p_request_id: crypto.randomUUID(),
+            }).setHeader("Authorization", `Bearer ${session.access_token}`);
+            if (error || data?.impersonationId !== null) throw new Error("Session context unavailable.");
+        })(),
+    ]);
+    return {
+        client, user: error ? null : user,
+        accessToken: !error && user && session.user.id === user.id ? session.access_token : null,
+    };
+}

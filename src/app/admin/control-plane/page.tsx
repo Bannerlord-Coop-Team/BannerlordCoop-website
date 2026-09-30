@@ -47,7 +47,7 @@ import type {
     ReleaseBuild,
     ServerDashboardResult,
 } from "@/app/lib/control-plane/types";
-import { getSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getSupabaseServerViewer } from "@/app/lib/supabase/server";
 import { listWebsiteAccounts } from "@/app/lib/supabase/users";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import {
@@ -98,13 +98,9 @@ type PageProps = {
 };
 
 export default async function ControlPlaneAdminPage({ searchParams }: PageProps) {
-    const supabase = await getSupabaseServerClient();
-    const [{ data: userData }, { data: sessionData }] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase.auth.getSession(),
-    ]);
-    if (!userData.user || !sessionData.session?.access_token) redirect("/login?next=/admin/control-plane");
-    if (!hasAdminAccess(userData.user)) redirect("/");
+    const { user, accessToken } = await getSupabaseServerViewer();
+    if (!user || !accessToken) redirect("/login?next=/admin/control-plane");
+    if (!hasAdminAccess(user)) redirect("/");
 
     const params = await searchParams;
     const view = parseView(first(params.view));
@@ -114,7 +110,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
     const jobAction = parseJobAction(first(params.action));
     const unacknowledgedOnly = first(params.alert) === "unacknowledged";
     const jobCursor = parseCursor(first(params.cursor));
-    const token = sessionData.session.access_token;
+    const token = accessToken;
 
     return (
         <main className="min-h-svh bg-background">

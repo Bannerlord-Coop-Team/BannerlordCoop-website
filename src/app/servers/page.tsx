@@ -17,7 +17,7 @@ import type { OnboardingSummary } from "../../../supabase/functions/_shared/serv
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { listPublicServers } from "@/app/lib/hosting/public-servers";
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
-import { getSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getSupabaseServerViewer } from "@/app/lib/supabase/server";
 import {
     LoaderCircle,
     Server,
@@ -158,13 +158,7 @@ async function loadViewer() {
     let client: SupabaseClient | null = null;
 
     try {
-        client = await getSupabaseServerClient();
-        const [{ data: userData }, { data: sessionData }] = await Promise.all([
-            client.auth.getUser(),
-            client.auth.getSession(),
-        ]);
-        user = userData.user;
-        accessToken = user && sessionData.session?.user.id === user.id ? sessionData.session.access_token : null;
+        ({ client, user, accessToken } = await getSupabaseServerViewer());
     } catch {
         // Keep the public server directory available when auth is not configured.
     }

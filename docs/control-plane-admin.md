@@ -177,3 +177,10 @@ used. Either check failing aborts its sibling. A successful context RPC can reco
 an authentication attempt even if the concurrent user lookup fails; this is not
 successful authorization. Membership and Patreon retain their existing verified
 identity calls to the shared session verifier.
+
+The read-only control-plane and Servers pages obtain a fresh viewer after normal
+session refresh. User verification and the session-context RPC run concurrently
+with the same explicit access token; this also avoids serializing the RPC behind
+the auth SDK's session lock. Neither result is cached across requests. Existing
+impersonation validation completes before this viewer is returned. Server actions
+continue using their existing authorization path.
