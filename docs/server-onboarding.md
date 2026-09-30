@@ -1,6 +1,6 @@
 # Website server onboarding
 
-Real `/servers` onboarding adapts the approved gold/dark modal design (`f4eeb2d`) onto the current directory. It does not replace the page with the development mock or use browser database writes. Membership is verified server-side under the explicit policy in [membership onboarding](membership-onboarding.md). Existing live-console and managed-server inventory/credentials/controls are unchanged.
+Real `/servers` onboarding adapts the approved gold/dark modal design (`f4eeb2d`) onto the current directory. It does not replace the page with the development mock or use browser database writes. Membership is verified server-side under the explicit policy in [membership onboarding](membership-onboarding.md). The directory and management routes use authenticated managed-server inventory; external WebSocket server discovery is retired.
 
 ## Authority and public contract
 
@@ -109,7 +109,7 @@ Tests distinguish:
 
 - **Real in-process facade → real strict Edge → synthetic upstream**, including UUID, JWT forwarding, complete DTO validation and HTTP errors. This is not a real backend or Supabase JWT verification test.
 - Mounted **real UI and real server actions**, with auth/facade dependencies mocked, covering create/full-region blocking/legacy request recovery/validation/eligibility, uncertain exact retries/reload, account mismatch, storage failure, terminal/transitional inventory and late response safety.
-- Real page composition with mocked external dependencies preserves mixed live-console/managed inventory, public placeholder labeling and unavailable onboarding behavior.
+- Real page composition with mocked external dependencies preserves managed inventory, the independent public directory and unavailable onboarding behavior.
 - **Mock-only browser integration**: native desktop/mobile dialog, Tab/Escape/restore, create stopped inventory, full-region guidance and hidden historical requests after reload, capacity race, uncertain retry after reload/consumed quota/account mismatch/switch. No end-to-end production TLS, JWT, Discord linkage, Supabase persistence, backend assignment or game start is proved by these browser checks.
 
 Known baseline full lint failures are only `src/app/cheats/CheatsDirectory.tsx:229` and `src/app/cheats/CheatsView.tsx:40` (`react-hooks/set-state-in-effect`), verified byte-identical to base `84530ab`. Focused changed-file lint passes. Ordinary Windows tests skip the existing Linux installer subprocess test; no skip predicate was changed.

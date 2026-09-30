@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { renameLiveServer } from "@/app/servers/name-actions";
 import { setServerVisibility } from "@/app/servers/server-visibility-actions";
 import { changeServerRelease, readServerReleaseStatus } from "@/app/servers/server-release-actions";
 import type { ReleaseChannel, ReleaseStatus } from "../../../../supabase/functions/_shared/server-release-contract";
@@ -13,13 +12,13 @@ const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-m
 type Visibility = "private" | "public";
 type VisibilityAccess = { serverId: string; expectedUpdatedAt: string; canEdit: boolean };
 
-export function ServerSettingsPanel({ name, visibility, renameServerId, visibilityAccess, releaseAccess }: {
+// Displays the recorded server name and saves authorized managed visibility and release changes.
+export function ServerSettingsPanel({ name, visibility, visibilityAccess, releaseAccess }: {
     releaseAccess?: VisibilityAccess & { channel: ReleaseChannel };
-    name: string; visibility?: Visibility; renameServerId?: string; visibilityAccess?: VisibilityAccess;
+    name: string; visibility?: Visibility; visibilityAccess?: VisibilityAccess;
 }) {
     const router = useRouter();
     const [pending, startTransition] = useTransition();
-    const [nameState, setNameState] = useState({ source: name, saved: name, draft: name });
     const [visibilityState, setVisibilityState] = useState({ source: visibility, draft: visibility });
     const [channelState, setChannelState] = useState({ source: releaseAccess?.channel, draft: releaseAccess?.channel });
     const [releaseStatus, setReleaseStatus] = useState<ReleaseStatus | null>(null);
@@ -34,6 +33,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
         let cancelled = false;
         let timer: ReturnType<typeof setTimeout>;
         const deadline = Date.now() + 15 * 60_000;
+        // Refreshes durable managed release progress until terminal completion or the polling deadline.
         async function poll() {
             const status = await readServerReleaseStatus(releaseServerId!).catch(() => null);
             if (cancelled) return;
@@ -56,34 +56,23 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
     const [message, setMessage] = useState("");
     const request = useRef<{ serverId: string; visibility: Visibility; expectedUpdatedAt: string; requestId: string } | null>(null);
     // Refreshes from either header control update that field without discarding the other draft.
-    if (nameState.source !== name) setNameState({ source: name, saved: name, draft: name });
     if (visibilityState.source !== visibility) setVisibilityState({ source: visibility, draft: visibility });
     if (channelState.source !== releaseAccess?.channel) setChannelState({ source: releaseAccess?.channel, draft: releaseAccess?.channel });
     const channelDirty = releaseAccess?.canEdit === true && channelState.draft !== releaseAccess.channel;
-    const canRename = !!renameServerId;
     const canChangeVisibility = visibilityAccess?.canEdit === true && visibility !== undefined;
-    const nameDirty = canRename && nameState.draft.trim() !== nameState.saved;
     const visibilityDirty = canChangeVisibility && visibilityState.draft !== visibility;
-    const dirty = nameDirty || visibilityDirty || channelDirty;
+    const dirty = visibilityDirty || channelDirty;
 
+    // Saves managed settings with their existing generation and durable request identities.
     function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (pending || updateBusy || !dirty || (nameDirty && !nameState.draft.trim())) return;
+        if (pending || updateBusy || !dirty) return;
         if (visibilityDirty && visibilityState.draft === "public" && !window.confirm("Make this server discoverable in the public directory with its game address? Visibility does not grant management access or change game connection permissions.")) return;
         setMessage("");
         startTransition(async () => {
             const messages: string[] = [];
             let expectedUpdatedAt = releaseAccess?.expectedUpdatedAt;
             try {
-                if (nameDirty && renameServerId) {
-                    const form = new FormData();
-                    form.set("serverId", renameServerId);
-                    form.set("displayName", nameState.draft.trim());
-                    const result = await renameLiveServer(form);
-                    if (!result.ok) { setMessage(result.error); return; }
-                    setNameState(current => ({ ...current, saved: result.displayName, draft: result.displayName }));
-                    messages.push("Server name saved.");
-                }
                 if (visibilityDirty && visibilityAccess && visibilityState.draft) {
                     if (!request.current || request.current.serverId !== visibilityAccess.serverId || request.current.visibility !== visibilityState.draft || request.current.expectedUpdatedAt !== visibilityAccess.expectedUpdatedAt) {
                         request.current = { serverId: visibilityAccess.serverId, visibility: visibilityState.draft, expectedUpdatedAt: visibilityAccess.expectedUpdatedAt, requestId: crypto.randomUUID() };
@@ -129,8 +118,8 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
         <div className="max-w-3xl space-y-5 p-5">
             <div>
                 <label htmlFor="settings-server-name" className="text-sm font-medium">Server name</label>
-                <input id="settings-server-name" disabled={!canRename || pending} required maxLength={80} value={nameState.draft} onChange={event => { setNameState(current => ({ ...current, draft: event.target.value })); setMessage(""); }} className="mt-2 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50" />
-                <p className="mt-2 text-xs leading-5 text-foreground-muted">{canRename ? "The server display name." : "Renaming is unavailable for this server or your access level."}</p>
+                <input id="settings-server-name" disabled value={name} className="mt-2 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50" />
+                <p className="mt-2 text-xs leading-5 text-foreground-muted">Renaming is unavailable for this server.</p>
             </div>
             {releaseAccess && <div>
                 <label htmlFor="settings-release-channel" className="text-sm font-medium">Release channel</label>
@@ -164,7 +153,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
                 </div>
                 <p role="status" className={message ? "mt-2 text-foreground" : ""}>{message}</p>
             </div>
-            {dirty && <div className="ml-auto flex gap-2"><button type="button" disabled={pending} className={button} onClick={() => { setNameState(current => ({ ...current, draft: current.saved })); setVisibilityState({ source: visibility, draft: visibility }); setChannelState({ source: releaseAccess?.channel, draft: releaseAccess?.channel }); setMessage(""); }}>Discard</button><button type="submit" disabled={pending || updateBusy || (nameDirty && !nameState.draft.trim())} className={`${button} !border-gold !bg-gold !font-semibold !text-background hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold`}>{pending ? "Saving…" : "Save settings"}</button></div>}
+            {dirty && <div className="ml-auto flex gap-2"><button type="button" disabled={pending} className={button} onClick={() => { setVisibilityState({ source: visibility, draft: visibility }); setChannelState({ source: releaseAccess?.channel, draft: releaseAccess?.channel }); setMessage(""); }}>Discard</button><button type="submit" disabled={pending || updateBusy} className={`${button} !border-gold !bg-gold !font-semibold !text-background hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold`}>{pending ? "Saving…" : "Save settings"}</button></div>}
         </div>
         </form>
     </section>;

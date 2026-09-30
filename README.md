@@ -99,7 +99,7 @@ The OAuth providers also require their Supabase callback URL (shown in the provi
 
 ### Supabase database migrations
 
-Apply the SQL files in `supabase/migrations/` to the Supabase project in filename order. For a new project, open **SQL Editor** in the Supabase dashboard and run `202608240001_create_server_settings.sql`. This creates the RLS-protected global display-name overrides used by live server management. Browser roles receive no direct table privileges; the website accesses it only with `SUPABASE_SECRET_KEY` after reauthenticating and authorizing each rename.
+Apply reviewed SQL migrations in their coordinated rollout order. Applied migration history remains immutable, including historical external-console tables and RPCs. The website no longer reads or writes those legacy objects; this source removal does not drop production data or rewrite Auth metadata.
 
 ### Member administration
 
@@ -135,17 +135,19 @@ The placeholder design is documented in `docs/server-hosting-design.md`.
 
 ### Managed-server onboarding
 
-The current `/servers` page loads authenticated managed assignments from the control plane alongside the existing live-console list. New setup uses **unused explicitly granted quota**, not membership or role claims. Available regions create an assigned stopped server; full regions accept private durable requests through the existing authenticated `my-servers` Edge Function. The public directory remains labeled placeholder data.
+The current `/servers` page loads authenticated managed assignments from the control plane using registered server UUIDs. New setup uses **unused explicitly granted quota**, not membership or role claims. Available regions create an assigned stopped server; full regions accept private durable requests through the existing authenticated `my-servers` Edge Function. The public directory loads the anonymous `public-servers` endpoint independently of private inventory.
 
 See [website server onboarding](docs/server-onboarding.md) for the strict contract, exact-request recovery, Discord password controls, mock-only screenshots/tests and required **schema → backend → my-servers Edge → UI** rollout order. Nothing in this implementation deploys those layers automatically.
 
-### Live server console
+### Managed server console
 
-Configured live Bannerlord containers hosted at `15.204.120.17` appear under **My Servers** on `/servers`. Administrators see every configured server and can assign each one owner account. Owners can add and remove operator accounts; owners and operators receive the same protected Start, Stop, Restart, Update, log-stream, and stdin controls for their assigned server. Administrators and owners can also edit a server's globally persisted display name from its manage page after the `server_settings` migration is applied. These servers are not IONOS resources.
+**My Servers** uses authenticated control-plane assignments only. Manage a server using its registered `/servers/<UUID>` route. Unknown and retired server IDs return signed-in visitors to `/servers`; no static alias, IP address or display name is used to associate a legacy server with a managed record.
 
-Update pulls the configured image, treats an unchanged digest as a no-op, and otherwise recreates only the allowlisted game container after validating its deployment specification. The old container is retained until the replacement passes the configured readiness marker; failed readiness triggers verified automatic rollback.
+Owners and managers use the existing read-only HTTP/SSE console plus managed lifecycle controls and log downloads. Support and administrator assignments remain read-only and do not connect to console streaming. Managed backup, save/configuration transfer, visibility and release settings retain their existing authorization boundaries. Server names are displayed from the control-plane record; renaming is not supported.
 
-The browser authenticates over WSS to `services/console-gateway`, which validates the current Supabase administrator role or server-specific owner/operator assignment and bridges to one persistent outbound WSS connection from `services/bannerlord-node-agent` on the VPS. Assignments are protected Supabase Auth `app_metadata` maintained only through server actions using `SUPABASE_SECRET_KEY`. One agent can manage multiple server-specific container, volume, and UDP-port allowlists. Node credentials remain server-only. Deployment and security boundaries are documented in `docs/live-server-console-design.md`.
+The legacy external WebSocket console, catalog, owner/operator assignment actions, rename actions, gateway, Docker node agent, deployment recipes and `/servers/live/<id>` redirect route have been removed. This source change does not stop an existing deployment, erase historical account metadata, or commission the managed SSE endpoint. Command submission is separate work (PR #185), not part of this removal.
+
+Configure `CONTROL_PLANE_CONSOLE_ORIGIN` with the fixed HTTPS control-plane origin. Its `/v1/user/console-stream` adapter and production proxy route must be commissioned separately before streaming is available.
 
 ## Environment Variables
 
@@ -159,7 +161,7 @@ Supabase publishable key. Despite being browser-visible, row-level security and 
 
 ### `SUPABASE_SECRET_KEY`
 
-Server-only Supabase secret key used by protected member-role and live-server assignment actions to list users and update `app_metadata`. Never expose or commit it.
+Server-only Supabase secret key used by protected member-role administration to list users and update member roles. Never expose or commit it.
 
 ### `SUPABASE_ADMIN_EMAILS`
 
@@ -171,9 +173,9 @@ Comma-separated bootstrap administrator emails. These users always have admin ac
 
 `IONOS_TOKEN_ID` and `IONOS_CLOUD_API_TOKEN` are server-only provider credentials. `IONOS_LOCATION` and `IONOS_IMAGE_ALIAS` configure provisioning defaults when management and creation are explicitly enabled.
 
-### `CONSOLE_GATEWAY_URL`
+### `CONTROL_PLANE_CONSOLE_ORIGIN`
 
-Server-only WSS browser endpoint for the external live console, including `/v1/browser`. Production values must use `wss://`; only localhost development may use `ws://`. `CONSOLE_SERVER_CATALOG` optionally supplies the live multi-server catalog. Administrators see the complete catalog; owners and operators see only assigned entries. Node-agent credentials and per-server Docker resource allowlists are configured separately under `services/` and must never use a `NEXT_PUBLIC_` variable.
+Server-only bare HTTPS origin for the managed read-only console proxy, for example `https://control-plane.example.com`. The website reauthenticates the user/session and forwards only the requested registered server ID to `/v1/user/console-stream`. The retired `CONSOLE_GATEWAY_URL` and `CONSOLE_SERVER_CATALOG` variables are no longer read and can be removed from deployment settings separately.
 
 ### `YOUTUBE_API_KEY`
 

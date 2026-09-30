@@ -107,7 +107,7 @@ A provider-backed IONOS adapter and management UI are retained for possible futu
 - Provider mutations reauthenticate the Supabase user and restrict billable actions to Admins.
 - Provider identifiers and website ownership markers are validated before requests can address resources.
 
-The separately hosted live Bannerlord console is not part of the placeholder repository or dormant IONOS adapter. Its architecture is documented in `docs/live-server-console-design.md`.
+The external WebSocket server console and its gateway/node-agent deployment have been removed. Current authenticated management uses registered control-plane servers; the placeholder repository and dormant IONOS adapter remain separate.
 
 ## Acceptance checks
 

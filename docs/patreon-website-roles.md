@@ -35,11 +35,7 @@ OAuth tokens are still discarded.
   again. A later cancellation preserves that manual grant. Manually setting
   `User` while membership is eligible is not a permanent exclusion: the next
   successful refresh can grant Standard Server again.
-- Console owner/operator edits use `set_live_console_assignment`, a separate
-  service-role-only RPC that locks the Auth row and changes only the requested
-  server assignment in current metadata. These edits never send a cached role
-  or grant marker back to Auth, so a console save cannot restore a revoked
-  Patreon grant or erase a newer grant. Deploy these writers before enabling sync.
+- The legacy console owner/operator writers have been removed. Historical console metadata and applied SQL migrations remain untouched; current managed-server permissions come from the control plane.
 - Changing/deleting an OAuth link immediately withdraws the old integration
   grant in the same database transaction. New links schedule verification;
   cached membership records do not transfer a grant to another account.
@@ -157,8 +153,7 @@ access tokens and are not sufficient for unattended membership refresh.
    must be present before the function starts. The first authenticated RPC pins
    campaign and tier durably; changing them requires an explicit migration.
 4. Deploy the website administrator change (which clears grant ownership on a
-   manual edit) and the atomic console assignment writers before enabling role
-   sync. Deploy `patreon-roles` using its
+   manual edit) before enabling role sync. Deploy `patreon-roles` using its
    `verify_jwt = false` configuration; its signature/scheduler authentication
    replaces gateway JWT checks. Register `members:create`, `members:update`,
    `members:delete`, `members:pledge:create`, `members:pledge:update` and
@@ -229,9 +224,9 @@ removing outstanding grants requires checking each current ownership marker.
 `npm test` includes handler tests and PGlite integration tests applying the actual
 account-linking migration before the new migrations. Coverage includes signature
 verification, entitlement decisions, private-state permissions, upgrades with
-existing links, manual grants, console edits after revocation and before/after
-new grants, console RPC permissions and rollback, duplicate delivery, lease
-recovery, pagination, relinking and stale-response rejection. Event tests include
+existing links, membership grants and revocations, manual role preservation,
+administrator edits clearing grant ownership, duplicate delivery, lease recovery,
+pagination, relinking and stale-response rejection. Event tests include
 link-to-grant without a cron tick, signed event wakeups, transactional rollback,
 coalescing, priority, rolling request limits, continuation after an in-flight event,
 unknown-link discovery, idle recovery, and private dispatcher permissions. PGlite

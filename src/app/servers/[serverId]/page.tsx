@@ -1,38 +1,16 @@
 import { releaseChannelLabel } from "@/app/lib/control-plane/presentation";
 import { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
 import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfigPanels";
-import { EditableServerName } from "@/app/components/servers/EditableServerName";
 import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "@/app/components/servers/ServerManagementWorkspace";
 import { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
-import { LiveServerVisibilitySetup } from "@/app/components/servers/LiveServerVisibilitySetup";
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
-import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
-import { LiveServerConsole } from "@/app/components/servers/LiveServerConsole";
-import { LiveServerBackupSetup, type LiveServerBackupUnavailableReason } from "@/app/components/servers/LiveServerBackupSetup";
-import { LiveServerFileSetup } from "@/app/components/servers/LiveServerFileSetup";
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
 import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
 import { DownloadServerLogButton } from "@/app/components/servers/DownloadServerLogButton";
 import { ManagedServerConsole } from "@/app/components/servers/ManagedServerConsole";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
-import {
-    getLiveConsoleAccessLevel,
-    getMemberRole,
-    hasHostedServerAccess,
-} from "@/app/lib/auth/access";
-import {
-    getLiveConsoleMember,
-    getOperatedLiveConsoleServerIds,
-    getOwnedLiveConsoleServerIds,
-    type LiveConsoleAccessLevel,
-    type LiveConsoleMember,
-} from "@/app/lib/console/access";
-import {
-    getConsoleGatewayUrl,
-    getLiveConsoleServer,
-    type LiveConsoleServer,
-} from "@/app/lib/console/servers";
+import { getMemberRole, hasHostedServerAccess } from "@/app/lib/auth/access";
 import { hasServerFleetAccess } from "@/app/lib/auth/roles";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import {
@@ -40,10 +18,8 @@ import {
     listAllMyServerBackups,
     listAllMyServers,
 } from "@/app/lib/hosting/my-servers";
-import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
-import { listSupabaseUsers } from "@/app/lib/supabase/users";
 import { CloudCog, Container, Database, HardDrive, MemoryStick, Server } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -51,16 +27,6 @@ import { Suspense } from "react";
 
 type ServerPageProps = {
     params: Promise<{ serverId: string }>;
-    searchParams: Promise<{
-        accessError?: string | string[];
-        accessUpdated?: string | string[];
-    }>;
-};
-
-const accessLabels: Record<LiveConsoleAccessLevel, string> = {
-    admin: "Administrator",
-    owner: "Owner",
-    operator: "Operator",
 };
 
 const managedAccessLabels: Record<MyServerSummary["accessRole"], string> = {
@@ -70,10 +36,6 @@ const managedAccessLabels: Record<MyServerSummary["accessRole"], string> = {
     support: "Read-only support",
 };
 
-function firstValue(value: string | string[] | undefined) {
-    return Array.isArray(value) ? value[0] : value;
-}
-
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
@@ -82,8 +44,8 @@ export const metadata: Metadata = {
 };
 
 // Authorizes the requested server before resolving its available management capabilities.
-export default async function ServerPage({ params, searchParams }: ServerPageProps) {
-    const [{ serverId }, query] = await Promise.all([params, searchParams]);
+export default async function ServerPage({ params }: ServerPageProps) {
+    const { serverId } = await params;
     const supabase = await getSupabaseServerClient();
     const [{ data: userData }, { data: sessionData }] = await Promise.all([
         supabase.auth.getUser(),
@@ -96,47 +58,19 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     const accessToken = sessionData.session?.access_token ?? null;
     if (accessToken === null) redirect(`/login?next=/servers/${encodeURIComponent(serverId)}`);
 
-    const liveServer = getLiveConsoleServer(serverId);
-    const liveAccessLevel = liveServer ? getLiveConsoleAccessLevel(user, liveServer.id) : null;
-    if (liveServer && !liveAccessLevel) redirect("/servers");
-
     let managedServer: MyServerSummary | null = null;
-    let managedLookupFailed = false;
     try {
-        const managedServerId = liveServer?.managedServerId ?? serverId;
         managedServer = (await listAllMyServers(accessToken))
-            .find((server) => server.serverId === managedServerId) ?? null;
+            .find((server) => server.serverId === serverId) ?? null;
     } catch (error) {
-        managedLookupFailed = true;
         console.error("Managed server detail failed to load", error);
-    }
-
-    if (liveServer && liveAccessLevel) {
-        const displayNames = await getServerDisplayNames([liveServer.id]);
-        return (
-            <LiveServerManagementPage
-                accessError={firstValue(query.accessError)}
-                accessLevel={liveAccessLevel}
-                accessToken={accessToken}
-                accessUpdated={firstValue(query.accessUpdated)}
-                userId={user.id}
-                managedServer={managedServer}
-                backupUnavailableReason={managedLookupFailed ? "lookup-failed" : liveServer.managedServerId ? "access-required" : "mapping-required"}
-                logDownload={managedServer && (managedServer.accessRole === "owner" || managedServer.accessRole === "manager")
-                    ? { serverId: managedServer.serverId, userId: user.id } : undefined}
-                server={{
-                    ...liveServer,
-                    name: displayNames.get(liveServer.id) ?? liveServer.name,
-                }}
-            />
-        );
     }
 
     if (managedServer !== null) {
         return <ManagedServerManagementPage userId={user.id} accessToken={accessToken} server={managedServer} />;
     }
 
-    if (!hasHostedServerAccess(user)) redirect("/");
+    if (!hasHostedServerAccess(user)) redirect("/servers");
 
     const role = getMemberRole(user);
     const server = getServerForRole(serverId, role);
@@ -166,6 +100,7 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     </ServerManagementWorkspace>;
 }
 
+// Keeps fictional preview file and backup controls non-operational.
 function UnavailableFileWorkspaces() {
     return <>
         <ServerWorkspacePanel section="Backups"><UnavailableServerPanel title="Backups" actions={["Create backup", "Restore backup"]} /></ServerWorkspacePanel>
@@ -175,6 +110,7 @@ function UnavailableFileWorkspaces() {
     </>;
 }
 
+// Presents the authenticated managed server and its authorized settings.
 function ManagedServerManagementPage({ userId, accessToken, server }: {
     userId: string; accessToken: string; server: MyServerSummary;
 }) {
@@ -196,28 +132,26 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
     </ServerManagementWorkspace>;
 }
 
-// Keeps managed controls and output in the console workspace without duplicating an existing live console.
+// Renders managed controls and output using the authorized control-plane server identity.
 function ManagedServerSections({
     userId,
     accessToken,
     server,
-    hasLiveConsole = false,
 }: {
     userId: string;
     accessToken: string;
     server: MyServerSummary;
-    hasLiveConsole?: boolean;
 }) {
     return (
         <ManagedServerPollingProvider>
             <ServerWorkspacePanel section="Console">
-                {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : <ServerConsoleWorkspace>
+                <ServerConsoleWorkspace>
                     {server.accessRole === "owner" || server.accessRole === "manager" ? <>
                         <ManagedServerLifecycleSection server={server} />
                         <ManagedServerConsole serverId={server.serverId} />
                         <DownloadServerLogButton serverId={server.serverId} userId={userId} className="inline-flex items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-sm" />
                     </> : <UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} logDownload={{ serverId: server.serverId, userId }} />}
-                </ServerConsoleWorkspace>}
+                </ServerConsoleWorkspace>
             </ServerWorkspacePanel>
             <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
                 <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
@@ -226,6 +160,7 @@ function ManagedServerSections({
     );
 }
 
+// Connects lifecycle controls to the authorized managed server.
 function ManagedServerLifecycleSection({ server }: { server: MyServerSummary }) {
     return (
         <section id="server-lifecycle" aria-label="Server controls">
@@ -240,6 +175,7 @@ function ManagedServerLifecycleSection({ server }: { server: MyServerSummary }) 
     );
 }
 
+// Loads managed backup and file data only for owners and managers.
 async function ManagedServerBackupsSection({
     userId,
     accessToken,
@@ -275,6 +211,7 @@ async function ManagedServerBackupsSection({
         backups={backups} status={status} loadError={loadError} />;
 }
 
+// Displays pending managed backup and file content.
 function ManagedServerBackupsSkeleton() {
     return (
         <section className="rounded-lg border border-white/10 bg-surface p-5 sm:p-6" aria-busy="true" aria-label="Loading saves, configs and backups">
@@ -285,120 +222,7 @@ function ManagedServerBackupsSkeleton() {
     );
 }
 
-// Renders authorized live controls with independently authorized managed log downloads.
-async function LiveServerManagementPage({
-    userId,
-    accessError,
-    accessLevel,
-    accessToken,
-    accessUpdated,
-    managedServer,
-    backupUnavailableReason,
-    logDownload,
-    server,
-}: {
-    userId: string;
-    accessError?: string;
-    accessLevel: LiveConsoleAccessLevel;
-    accessToken: string;
-    accessUpdated?: string;
-    managedServer: MyServerSummary | null;
-    backupUnavailableReason: LiveServerBackupUnavailableReason;
-    logDownload?: { serverId: string; userId: string };
-    server: LiveConsoleServer;
-}) {
-    const canManageAssignments = accessLevel === "admin" || accessLevel === "owner";
-    let assignmentLoadError = "";
-    let assignmentWarning = "";
-    let operators: LiveConsoleMember[] = [];
-    let owner: LiveConsoleMember | null = null;
-
-    if (canManageAssignments) {
-        try {
-            const result = await listSupabaseUsers();
-            if (result.truncated) {
-                assignmentLoadError = "The member directory is too large to manage assignments safely.";
-            } else {
-                const owners = result.users.filter((member) =>
-                    getOwnedLiveConsoleServerIds(member.app_metadata).includes(server.id),
-                );
-                const operatorUsers = result.users.filter((member) =>
-                    getOperatedLiveConsoleServerIds(member.app_metadata).includes(server.id),
-                );
-
-                owner = owners[0] ? getLiveConsoleMember(owners[0]) : null;
-                operators = operatorUsers.map(getLiveConsoleMember);
-                if (owners.length > 1) {
-                    assignmentWarning = "Multiple owner assignments were found. Reassign the owner to repair access.";
-                }
-            }
-        } catch (error) {
-            console.error("Live server assignments failed to load", error);
-            assignmentLoadError = "Owner and operator assignments could not be loaded.";
-        }
-    }
-
-    return <ServerManagementWorkspace
-        name={<EditableServerName key={server.name} canEdit={canManageAssignments} initialName={server.name} serverId={server.id} />}
-        address={server.address}
-        visibility={managedServer !== null
-            ? <ServerVisibilitySetting serverId={managedServer.serverId} visibility={managedServer.visibility} accessRole={managedServer.accessRole} expectedUpdatedAt={managedServer.updatedAt} />
-            : <a href="#server-visibility" className="ml-auto inline-flex min-h-10 items-center rounded-md border border-white/15 px-3 text-sm text-gold underline focus-visible:outline-2 focus-visible:outline-gold">Set up visibility</a>}
-        summary={<>{server.provider} · {accessLabels[accessLevel]} · Live dedicated server</>}
-        initialSection={accessError || accessUpdated ? "Settings" : "Console"}
-        notice="Protected production access. Controls and commands affect the live Bannerlord process immediately. The gateway revalidates your server access."
-    >
-        <ServerWorkspacePanel section="Console">
-            <LiveServerConsole gatewayUrl={getConsoleGatewayUrl()} serverId={server.id} logDownload={logDownload} />
-            {!logDownload && <p className="text-sm text-foreground-muted">Log downloads require a linked managed server and owner or manager access. Ask an administrator to check onboarding, the server mapping, and your managed-server access.</p>}
-        </ServerWorkspacePanel>
-        {managedServer !== null
-            ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
-            : <>
-                <ServerWorkspacePanel section="Backups"><LiveServerBackupSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>
-                <ServerWorkspacePanel section="Save & config"><LiveServerFileSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>
-            </>}
-        <ServerWorkspacePanel section="Settings">
-            <ServerSettingsPanel releaseAccess={managedServer ? { serverId: managedServer.serverId, channel: managedServer.releaseChannel, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} name={server.name} renameServerId={canManageAssignments ? server.id : undefined} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} visibilityAccess={managedServer ? { serverId: managedServer.serverId, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} />
-            {managedServer === null && <LiveServerVisibilitySetup reason={backupUnavailableReason} serverId={server.id} />}
-            <section className="grid gap-3 sm:grid-cols-2" aria-label="Server information">
-                <ResourceCard icon={Server} label="Provider" value={server.provider} />
-                <ResourceCard icon={Container} label="Node" value={server.nodeId} />
-            </section>
-            {canManageAssignments && (
-                    <section id="server-access" className="rounded-lg border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-access-heading">
-                        <h2 id="server-access-heading" className="text-base font-semibold text-foreground">
-                            Server access
-                        </h2>
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
-                            Administrators assign the owner. Administrators and the owner can grant operator access to this server.
-                        </p>
-
-                        {accessError && (
-                            <p role="alert" className="mt-4 border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
-                                {accessError}
-                            </p>
-                        )}
-                        {accessUpdated && !accessError && (
-                            <p role="status" className="mt-4 border-l-2 border-emerald-500 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-                                {accessUpdated}
-                            </p>
-                        )}
-
-                        <LiveServerAccessManager
-                            canAssignOwner={accessLevel === "admin"}
-                            loadError={assignmentLoadError || undefined}
-                            operators={operators}
-                            owner={owner}
-                            serverId={server.id}
-                            warning={assignmentWarning || undefined}
-                        />
-                    </section>
-                )}
-        </ServerWorkspacePanel>
-    </ServerManagementWorkspace>;
-}
-
+// Formats control-plane state identifiers for display.
 function formatManagedValue(value: string) {
     return value
         .split("-")
@@ -406,6 +230,7 @@ function formatManagedValue(value: string) {
         .join(" ");
 }
 
+// Displays one server resource or state value.
 function ResourceCard({
     icon: Icon,
     label,

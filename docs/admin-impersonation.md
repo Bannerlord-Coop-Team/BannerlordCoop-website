@@ -60,9 +60,8 @@ native sessions to the exact original admin session. `website_session_context`
 checks that grant on authenticated application requests, including the admin's
 current role, deletion/ban status, session existence, grant expiry and explicit
 end. Ordinary sessions return a null context. Nested grants from delegated
-sessions are denied. The website, membership/Patreon Edge boundaries, control
-plane authenticator and legacy console gateway fail closed when the check is
-unavailable. The console rechecks before writes and every five seconds; existing
+sessions are denied. The website, membership/Patreon Edge boundaries and control
+plane authenticator fail closed when the check is unavailable. Existing
 control-plane read-only streams retain their ordinary bounded lifetime.
 
 Starting, ending and authenticated use are recorded in
@@ -88,10 +87,15 @@ must use the same guard, including when they accept browser bearer tokens.
    Supabase migration process. This new migration is required before deploying
    consumers because ordinary authenticated requests also call the context RPC.
 2. Deploy the paired ControlPlane authentication change, the `website-account`,
-   `patreon-start`, `patreon-complete`, `patreon-callback` and `control-plane-admin` Edge Functions, and the legacy
-   console gateway. Use their existing reviewed release processes.
-3. The website can be released with impersonation disabled while a gateway is
-   still under development. Enable `ADMIN_IMPERSONATION_ENABLED=true` only
+   `patreon-start`, `patreon-complete`, `patreon-callback` and `control-plane-admin`
+   Edge Functions. Use their existing reviewed release processes. The legacy
+   console gateway source and tests have been retired; this does not shut down
+   any deployed service. Any still-active historical accepting service must
+   retain or separately commission its session-context guard before enabling
+   impersonation issuance.
+3. The website can be released with impersonation disabled while an active
+   accepting boundary's guard is still under development. Enable
+   `ADMIN_IMPERSONATION_ENABLED=true` only
    after every active accepting boundary has the guard. Use the existing
    Supabase publishable key and server secret. Require authoritative Admin
    metadata for operators.
@@ -112,10 +116,9 @@ the actual migration and checks grants, session mapping, audits and denied acces
 `node tests/impersonation-browser.mjs` runs the real Next/React pages and server
 actions against disposable Auth/data transports: inventory isolation, an account
 mutation, direct switching, Exit and expired-session recovery. It is local browser
-evidence, not live Supabase/OAuth or production deployment evidence. The console
-gateway test runs its real process and WebSockets with a disposable Auth endpoint
-and node agent: input, a completed lifecycle operation, write-time rejection and
-idle heartbeat closure after the grant ends.
+evidence, not live Supabase/OAuth or production deployment evidence. Retired
+legacy console gateway tests are no longer registered in `npm test`; these
+checks do not attest guards on any still-active historical service.
 
 The ControlPlane API QA suite exercises the real HTTP and Unix-socket path with
 synthetic Auth responses: target-owner mutation, other-owner refusal, ordinary

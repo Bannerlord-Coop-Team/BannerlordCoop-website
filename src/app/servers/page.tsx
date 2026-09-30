@@ -7,14 +7,11 @@ import {
     ServerDirectoryTable,
     type ManagedServerDirectoryEntry,
 } from "@/app/components/servers/ServerDirectoryTable";
-import { getLiveConsoleAccessLevel } from "@/app/lib/auth/access";
-import { listLiveConsoleServers } from "@/app/lib/console/servers";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { getServerOnboarding, listAllMyServers } from "@/app/lib/hosting/my-servers";
 import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
 import { ServerOnboarding } from "@/app/components/servers/ServerOnboarding";
 import type { OnboardingSummary } from "../../../supabase/functions/_shared/server-onboarding-contract";
-import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { listPublicServers } from "@/app/lib/hosting/public-servers";
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -171,30 +168,6 @@ async function loadViewer() {
     return { user, accessToken };
 }
 
-/** Resolve names only for live servers the verified user can manage. */
-async function loadLiveServers(user: User | null) {
-    const accessibleLiveServers = user
-        ? listLiveConsoleServers().filter((server) =>
-            getLiveConsoleAccessLevel(user, server.id),
-        )
-        : [];
-    const liveServerDisplayNames = await getServerDisplayNames(
-        accessibleLiveServers.map((server) => server.id),
-    );
-    const liveServers: ManagedServerDirectoryEntry[] = accessibleLiveServers.map(
-        (server) => ({
-            id: server.id,
-            name: liveServerDisplayNames.get(server.id) ?? server.name,
-            status: "Unknown",
-            connectionType: "Direct",
-            joinUrl: `bannerlordcoop://join/${server.id}`,
-            players: null,
-            manageUrl: `/servers/${encodeURIComponent(server.id)}`,
-        }),
-    );
-    return liveServers;
-}
-
 /** Keep account synchronization before allocation reads, outside either directory's path. */
 async function loadHostingStatus(user: User | null, accessToken: string | null) {
     // Resolve authoritative identities before any allocation fetch. No metadata/email fallback.
@@ -213,9 +186,8 @@ async function loadHostingStatus(user: User | null, accessToken: string | null) 
     return { user, identity, account, onboarding };
 }
 
-/** Loads private inventory once, in parallel with live display names. */
+/** Loads authenticated managed inventory once for all private directory sections. */
 async function loadManagedInventory(user: User | null, accessToken: string | null) {
-    const liveServers = loadLiveServers(user);
     let listed: MyServerSummary[] = [];
     let managedServersError = "";
     if (user) {
@@ -232,7 +204,7 @@ async function loadManagedInventory(user: User | null, accessToken: string | nul
     }
     return {
         user,
-        managedServers: uniqueServers([...listed.map(toDirectoryServer), ...await liveServers]),
+        managedServers: listed.map(toDirectoryServer),
         managedServersError,
         ownedIds: listed.filter(server => server.accessRole === "owner").map(server => server.serverId),
     };
@@ -281,22 +253,6 @@ function toDirectoryServer(server: MyServerSummary): ManagedServerDirectoryEntry
         players: null,
         manageUrl: `/servers/${encodeURIComponent(server.serverId)}`,
     };
-}
-
-/** Merges live and managed entries without duplicating server identities. */
-function uniqueServers(servers: readonly ManagedServerDirectoryEntry[]) {
-    const unique = new Map<string, ManagedServerDirectoryEntry>();
-    for (const server of servers) {
-        const existing = unique.get(server.id);
-        unique.set(server.id, existing === undefined
-            ? server
-            : {
-                ...server,
-                ...existing,
-                manageUrl: server.manageUrl ?? existing.manageUrl,
-            });
-    }
-    return [...unique.values()];
 }
 
 /** Displays one public-directory total. */
