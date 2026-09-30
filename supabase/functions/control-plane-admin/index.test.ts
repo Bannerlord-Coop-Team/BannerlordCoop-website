@@ -103,13 +103,13 @@ test("accepts authenticated server-side calls without emitting CORS", async () =
 });
 
 /** Creates an isolated Edge handler with injected network. */
-function createHandler(fetchImplementation: typeof fetch) {
+function createHandler(fetchImplementation: typeof fetch, defaultContext = true) {
     return createControlPlaneAdminHandler({
         allowedOrigins: [ORIGIN, "https://bannerlordcoop.netlify.app"],
         supabaseUrl: "https://project.supabase.co",
         supabasePublishableKey: "publishable-key-with-enough-characters",
         controlPlaneAdminUrl: "https://control-plane.example.test",
-        fetchImplementation: (input, init) => String(input).endsWith("/rpc/website_session_context") ? Promise.resolve(Response.json({ impersonationId: null })) : fetchImplementation(input, init),
+        fetchImplementation: (input, init) => defaultContext && String(input).endsWith("/rpc/website_session_context") ? Promise.resolve(Response.json({ impersonationId: null })) : fetchImplementation(input, init),
     });
 }
 
@@ -257,4 +257,118 @@ test("does not cache lifecycle operations or requests with unknown release field
         await handler(adminRequest(raw));
     }
     assert.equal(upstreamCalls, 4);
+});
+
+
+test("starts user and context together, but never forwards until both validate", async () => {
+    let finishUser!: (response: Response) => void;
+    let finishContext!: (response: Response) => void;
+    const calls: string[] = [];
+    const handler = createHandler(async (input, init) => {
+        const url = String(input);
+        calls.push(url);
+        if (url.endsWith("/auth/v1/user")) return new Promise(resolve => { finishUser = resolve; });
+        if (url.endsWith("/rpc/website_session_context")) return new Promise(resolve => { finishContext = resolve; });
+        return releaseResponse(init);
+    }, false);
+    const pending = handler(releaseRequest());
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(calls.length, 2);
+    assert.ok(calls[0].endsWith("/auth/v1/user"));
+    assert.ok(calls[1].endsWith("/rpc/website_session_context"));
+    finishUser(Response.json(ADMIN));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(calls.length, 2);
+    finishContext(Response.json({ impersonationId: null }));
+    assert.equal((await pending).status, 200);
+    assert.equal(calls.length, 3);
+});
+
+for (const failure of ["user", "context"] as const) {
+    test(`cancels a late ignored-abort response after ${failure} rejects and never forwards`, async () => {
+        let finish!: (response: Response) => void;
+        let signal: AbortSignal | undefined;
+        let upstream = 0;
+        const handler = createHandler(async (input, init) => {
+            const url = String(input);
+            if (url.includes("control-plane.example.test")) { upstream++; return releaseResponse(init); }
+            if (url.endsWith("/user") === (failure === "user")) return new Response(null, { status: 401 });
+            signal = init?.signal ?? undefined;
+            return new Promise(resolve => { finish = resolve; });
+        }, false);
+        assert.equal((await handler(releaseRequest())).status, 401);
+        assert.equal(signal?.aborted, true);
+        let cancelled = false;
+        finish(new Response(new ReadableStream({ cancel() { cancelled = true; } })));
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(cancelled, true);
+        assert.equal(upstream, 0);
+    });
+}
+
+test("context rejection cancels and releases an in-progress user body", async () => {
+    let cancelled = false;
+    const response = new Response(new ReadableStream({ cancel() { cancelled = true; } }));
+    const handler = createHandler(async input => String(input).endsWith("/user")
+        ? response : new Response(null, { status: 403 }), false);
+    assert.equal((await handler(releaseRequest())).status, 401);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(cancelled, true);
+    assert.equal(response.body?.locked, false);
+});
+
+for (const context of [
+    {},
+    { impersonationId: REQUEST_ID, actorId: REQUEST_ID, targetId: REQUEST_ID, expiresAt: "2099-01-01T00:00:00Z" },
+    { impersonationId: REQUEST_ID, actorId: REQUEST_ID, targetId: ADMIN.id, expiresAt: "2000-01-01T00:00:00Z" },
+]) {
+    test(`rejects invalid, cross-user, or expired context before forwarding: ${JSON.stringify(context)}`, async () => {
+        let upstream = 0;
+        const handler = createHandler(async (input, init) => {
+            const url = String(input);
+            if (url.endsWith("/user")) return Response.json(ADMIN);
+            if (url.endsWith("/rpc/website_session_context")) return Response.json(context);
+            upstream++;
+            return releaseResponse(init);
+        }, false);
+        assert.equal((await handler(releaseRequest())).status, 401);
+        assert.equal(upstream, 0);
+    });
+}
+
+test("reads session revocation freshly after a successful request", async () => {
+    let active = true;
+    let upstream = 0;
+    const handler = createHandler(async (input, init) => {
+        const url = String(input);
+        if (url.endsWith("/user")) return Response.json(ADMIN);
+        if (url.endsWith("/rpc/website_session_context")) return active ? Response.json({ impersonationId: null }) : new Response(null, { status: 403 });
+        upstream++;
+        return releaseResponse(init);
+    }, false);
+    assert.equal((await handler(releaseRequest())).status, 200);
+    active = false;
+    assert.equal((await handler(releaseRequest())).status, 401);
+    assert.equal(upstream, 1);
+});
+
+
+test("a completed context is not expired by its fetch timer while the verified user is pending", async () => {
+    const originalTimeout = AbortSignal.timeout;
+    const contextDeadline = new AbortController();
+    const authDeadline = new AbortController();
+    let finishUser!: (response: Response) => void;
+    AbortSignal.timeout = milliseconds => milliseconds === 4_000 ? contextDeadline.signal : authDeadline.signal;
+    try {
+        const handler = createHandler(async (input, init) => {
+            if (String(input).endsWith("/user")) return new Promise(resolve => { finishUser = resolve; });
+            if (String(input).endsWith("/rpc/website_session_context")) return Response.json({ impersonationId: null });
+            return releaseResponse(init);
+        }, false);
+        const pending = handler(releaseRequest());
+        await new Promise(resolve => setImmediate(resolve));
+        contextDeadline.abort();
+        finishUser(Response.json(ADMIN));
+        assert.equal((await pending).status, 200);
+    } finally { AbortSignal.timeout = originalTimeout; }
 });

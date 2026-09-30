@@ -75,24 +75,33 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
         }
 
         let user: unknown;
+        const authentication = new AbortController();
+        const authSignal = AbortSignal.any([authentication.signal, AbortSignal.timeout(authTimeoutMilliseconds)]);
         try {
-            const authResponse = await fetchImplementation(userEndpoint, {
-                method: "GET",
-                redirect: "error",
-                headers: {
-                    apikey: options.supabasePublishableKey,
-                    authorization: `Bearer ${token}`,
-                },
-                signal: AbortSignal.timeout(authTimeoutMilliseconds),
-            });
-            if (!authResponse.ok) {
-                return envelopeError(401, requestId, "unauthenticated", "Authentication is required.", false, cors);
-            }
-            user = JSON.parse(await readBoundedText(authResponse, MAXIMUM_AUTH_RESPONSE_BYTES));
-            if (!isRecord(user) || typeof user.id !== "string") throw new Error("Invalid identity");
-            await verifyWebsiteSessionContext({ supabaseUrl: options.supabaseUrl, key: options.supabasePublishableKey, authorization: `Bearer ${token}`, userId: user.id, action: "control-plane-admin", requestId, fetch: fetchImplementation });
+            const userRead = (async () => {
+                const authResponse = await fetchImplementation(userEndpoint, {
+                    method: "GET", redirect: "error",
+                    headers: { apikey: options.supabasePublishableKey, authorization: `Bearer ${token}` },
+                    signal: authSignal,
+                });
+                if (authSignal.aborted || !authResponse.ok) {
+                    void authResponse.body?.cancel().catch(() => undefined);
+                    throw new Error("Invalid identity");
+                }
+                const value: unknown = JSON.parse(await readBoundedText(authResponse, MAXIMUM_AUTH_RESPONSE_BYTES, authSignal));
+                if (!isRecord(value) || typeof value.id !== "string") throw new Error("Invalid identity");
+                return { ...value, id: value.id };
+            })();
+            [user] = await Promise.all([
+                userRead,
+                verifyWebsiteSessionContext({ supabaseUrl: options.supabaseUrl, key: options.supabasePublishableKey,
+                    authorization: `Bearer ${token}`, userId: userRead.then(value => value.id), action: "control-plane-admin",
+                    requestId, fetch: fetchImplementation, signal: authSignal }),
+            ]);
         } catch {
             return envelopeError(401, requestId, "unauthenticated", "Authentication is required.", false, cors);
+        } finally {
+            authentication.abort();
         }
         if (!isRecord(user) || !isRecord(user.app_metadata) || user.app_metadata.role !== "Admin") {
             return envelopeError(403, requestId, "forbidden", "Administrator access is required.", false, cors);
@@ -199,22 +208,31 @@ function envelopeError(
     );
 }
 
-async function readBoundedText(response: Request | Response, maximumBytes: number) {
+async function readBoundedText(response: Request | Response, maximumBytes: number, signal?: AbortSignal) {
     const declaredLength = response.headers.get("content-length");
     if (declaredLength !== null && Number(declaredLength) > maximumBytes) throw new ResponseTooLargeError();
     if (response.body === null) return "";
+    signal?.throwIfAborted();
     const reader = response.body.getReader();
+    const cancel = () => { void reader.cancel().catch(() => undefined); };
+    signal?.addEventListener("abort", cancel, { once: true });
     const chunks: Uint8Array[] = [];
     let total = 0;
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        total += value.byteLength;
-        if (total > maximumBytes) {
-            await reader.cancel();
-            throw new ResponseTooLargeError();
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            signal?.throwIfAborted();
+            if (done) break;
+            total += value.byteLength;
+            if (total > maximumBytes) {
+                await reader.cancel();
+                throw new ResponseTooLargeError();
+            }
+            chunks.push(value);
         }
-        chunks.push(value);
+    } finally {
+        signal?.removeEventListener("abort", cancel);
+        reader.releaseLock();
     }
     const bytes = new Uint8Array(total);
     let offset = 0;
