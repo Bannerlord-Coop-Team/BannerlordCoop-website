@@ -2,21 +2,18 @@ import { exactKeys, isRecord, parsePublicServerPage, readPublicResponse, type Pu
 
 /** Anonymous only: never forward a session or fall back to administrative inventory. */
 export async function listPublicServers(fetcher: typeof fetch = fetch): Promise<PublicServerSummary[]> {
-    const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-    const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
-    if (!rawUrl || !key) throw new Error("Public directory is not configured");
-    const endpoint = new URL(rawUrl);
-    if (endpoint.protocol !== "https:" || endpoint.pathname !== "/" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) throw new Error("Invalid public directory origin");
-    endpoint.pathname = "/functions/v1/public-servers";
-    endpoint.searchParams.set("limit", "100");
+    const endpoint = "https://control-plane.bannerlordcoop.com/v1/public/control-plane";
     const items: PublicServerSummary[] = [];
     const ids = new Set<string>();
     const cursors = new Set<string>();
     const signal = AbortSignal.timeout(20_000);
+    let cursor: string | null = null;
     for (let page = 0; page < 10; page++) {
         const requestId = crypto.randomUUID();
         const response = await fetcher(endpoint, {
-            headers: { apikey: key, "x-request-id": requestId, accept: "application/json" },
+            method: "POST", credentials: "omit",
+            headers: { "content-type": "application/json", "x-request-id": requestId, accept: "application/json" },
+            body: JSON.stringify({ version: 1, requestId, operation: "public-servers", input: { cursor, limit: 100 } }),
             // workerd supports manual redirects; the non-OK check below rejects every 3xx.
             cache: "no-store", redirect: "manual", signal,
         });
@@ -33,7 +30,7 @@ export async function listPublicServers(fetcher: typeof fetch = fetch): Promise<
         if (result.nextCursor === null) return items;
         if (cursors.has(result.nextCursor)) throw new Error("Repeated public directory cursor");
         cursors.add(result.nextCursor);
-        endpoint.searchParams.set("cursor", result.nextCursor);
+        cursor = result.nextCursor;
     }
     throw new Error("Public directory exceeded page limit");
 }
