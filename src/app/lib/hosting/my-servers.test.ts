@@ -288,6 +288,10 @@ test("rejects private and malformed backup response data", async () => {
         { ...BACKUP, createdAt: "2026-09-02T16:45:07.479+02:00" },
         { ...BACKUP, restoreState: "usable" },
         { ...BACKUP, canRestore: "yes" },
+        { ...BACKUP, canRestore: false, restoreUnavailableReason: "private-error" },
+        { ...BACKUP, canRestore: false, restoreUnavailableReason: null },
+        { ...BACKUP, canRestore: true, restoreUnavailableReason: "build_mismatch" },
+        { ...BACKUP, canRestore: false, restoreUnavailableReason: 42 },
     ];
 
     try {
@@ -494,5 +498,22 @@ test("owner updates cross the Edge boundary as one stale-safe durable request", 
             operation: "update-server",
             input: { serverId: FIRST_SERVER.serverId, expectedUpdatedAt: "2026-09-20T12:00:00.000Z" },
         });
+    } finally { restoreEnvironment(); }
+});
+
+test("accepts allowlisted restore reasons and legacy backup responses", async () => {
+    configureEnvironment();
+    try {
+        for (const fields of [{}, { restoreUnavailableReason: null },
+            ...["expired", "restore_in_progress", "installed_build_unknown", "backup_build_unknown", "build_mismatch"]
+                .map((restoreUnavailableReason) => ({ canRestore: false, restoreUnavailableReason }))]) {
+            const item = { ...BACKUP, ...fields };
+            globalThis.fetch = async (input, init) => {
+                const request = new Request(input, init);
+                return Response.json({ version: 1, requestId: request.headers.get("x-request-id"), ok: true,
+                    result: { items: [item], nextCursor: null } });
+            };
+            assert.deepEqual(await listAllMyServerBackups(TOKEN, FIRST_SERVER.serverId), [item]);
+        }
     } finally { restoreEnvironment(); }
 });
