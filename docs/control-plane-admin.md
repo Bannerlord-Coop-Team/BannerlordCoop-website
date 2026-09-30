@@ -80,7 +80,9 @@ the website's existing viewer gates still apply. These reads omit cookies and
 API keys, refuse redirects, disable caching, and retain correlated owner envelopes,
 ten-page/100-item pagination and streamed 8MiB/8192-chunk response bounds. Caller
 cancellation and a 30-second overall deadline cover fetch and response bodies.
-Browser reads, onboarding, console commands and mutations retain the Edge route.
+The server-rendered onboarding summary also reads the closed `server-onboarding`
+operation directly after account synchronization, with its strict DTO and 64 KiB
+response bound. Browser reads, console commands and mutations retain the Edge route.
 **My Servers** links each accessible server to `/servers/[serverId]`. The route
 derives access from the authenticated inventory, never from the URL. Only current
 durable owner/manager access can operate; support and server-level admin remain
