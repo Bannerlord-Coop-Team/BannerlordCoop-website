@@ -6,6 +6,9 @@ only an input and Send button below live output, inside the same card.
 
 | Path | Expected behavior | Coverage |
 | --- | --- | --- |
+| Disconnected → connecting → connected → disconnected | One button displays the current state and toggles the stream; no separate status indicator | Component; browser screenshot |
+| Disconnect while connecting | Pending connection is cancelled and cannot overwrite the disconnected state | Component |
+| Unavailable or expired stream | Button shows the terminal state and can reconnect | Component |
 | Idle managed console | Live output precedes the form in one card; no empty result panel | Component |
 | Supported command prefix at end of focused input | Ghost stops at next `.`; successive Tabs accept one segment without submitting or inserting argument placeholders | Component |
 | Unknown prefix, complete command, arguments, or caret/selection away from end | No completion; Tab keeps normal navigation | Component |
