@@ -1,7 +1,8 @@
 # Administrator user impersonation
 
-Starting impersonation is disabled by default. With
-`ADMIN_IMPERSONATION_ENABLED` unset or any value other than `true`, Member
+The website's `wrangler.jsonc` enables impersonation with
+`ADMIN_IMPERSONATION_ENABLED=true`. With the setting unset or any value other
+than `true`, Member
 Administration hides the impersonation controls and the server action refuses
 issuance before creating a grant or native login. Normal account and server
 operations continue to work. Exit remains available for any existing session.
