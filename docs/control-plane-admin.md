@@ -165,3 +165,15 @@ This is background polling, not a server-push stream.
 A superseded request cannot replace a newer page inventory. Legacy full responses
 without `liveDataIncluded` render directly. Deploy the companion backend's bounded
 inventory-read option before deploying this page; no Edge Function change is needed.
+
+
+## Fresh gateway authentication
+
+The admin gateway fetches the current Supabase user and durable website session
+context concurrently. It forwards only after both validate, the context matches
+the verified identity and has not expired, and the current user has the Admin
+role. Each request makes fresh checks; no authentication or response cache is
+used. Either check failing aborts its sibling. A successful context RPC can record
+an authentication attempt even if the concurrent user lookup fails; this is not
+successful authorization. Membership and Patreon retain their existing verified
+identity calls to the shared session verifier.
