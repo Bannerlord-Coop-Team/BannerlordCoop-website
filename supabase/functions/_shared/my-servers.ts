@@ -87,7 +87,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         let upstreamRequest: UpstreamRequest;
         try {
             upstreamRequest = request.method === "GET"
-                ? parseMyServersReadRequest(request)
+                ? listRequest(request)
                 : request.method === "POST"
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
@@ -229,7 +229,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
     };
 }
 
-export function parseMyServersReadRequest(request: Request): UpstreamRequest {
+function listRequest(request: Request): UpstreamRequest {
     if (request.body !== null) throw new Error("GET requests cannot contain a body");
     const url = new URL(request.url);
     const resourceValues = url.searchParams.getAll("resource");

@@ -24,6 +24,7 @@ function fixture() {
         fetch: async (input, init) => {
             const url = new URL(String(input));
             const headers = new Headers(init?.headers);
+            if (url.pathname === "/rest/v1/rpc/website_session_context") return Response.json({ impersonationId: null });
             if (url.pathname === "/auth/v1/user") {
                 const auth = headers.get("Authorization");
                 return auth === "Bearer user-a" || auth === "Bearer user-b"
@@ -166,6 +167,7 @@ test("member UUID survives OAuth evidence storage, completion, private snapshot 
     assert.equal(snapshot.memberId, memberId);
     const handler = createWebsiteAccountHandler({ ...f.config, policy: f.config.policy ?? null, fetch: async input => {
         const path = new URL(String(input)).pathname;
+        if (path === "/rest/v1/rpc/website_session_context") return Response.json({ impersonationId: null });
         if (path === "/auth/v1/user") return Response.json({ id: accountId, identities: [] });
         assert.equal(path, "/rest/v1/rpc/membership_status");
         return Response.json({ snapshot, pending: false, verificationPending: false });

@@ -1,3 +1,4 @@
+import { bindLinkedImpersonationSession } from "@/app/lib/auth/impersonation";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabase/admin";
 import { currentDiscord, sha256 } from "../../../../../supabase/functions/_shared/membership";
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
     const code = request.nextUrl.searchParams.get("code");
     if (token && /^[a-f0-9]{64}$/u.test(token) && code && code.length <= 4096 && !request.nextUrl.searchParams.has("error")) {
         try {
-            const supabase = await getSupabaseServerClient({ impersonation: "deny" });
+            const supabase = await getSupabaseServerClient();
             const { data: { user } } = await supabase.auth.getUser();
             const { data: { session } } = await supabase.auth.getSession();
             if (!user || !session || user.id !== session.user.id) throw new Error("Session changed");
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
             const admin = getSupabaseAdminClient();
             const { error } = await supabase.auth.exchangeCodeForSession(code);
             const returned = await supabase.auth.getUser();
+            if (!error) await bindLinkedImpersonationSession(supabase, session.access_token);
             const discord = returned.data.user ? currentDiscord(returned.data.user) : null;
             if (!error && returned.data.user?.id === user.id && discord !== null) {
                 const current = await supabase.auth.getSession();

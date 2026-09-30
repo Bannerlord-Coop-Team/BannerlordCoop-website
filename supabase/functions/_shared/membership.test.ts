@@ -179,7 +179,7 @@ test("applied qualifying membership with denied allocation offers support or dis
 test("authenticated mutation throttles return exact bounded retry contracts without raw database errors", async () => {
     const config = { supabaseUrl: "https://project.supabase.co", serviceRoleKey: "synthetic", policy,
         clientId: "synthetic", clientSecret: "synthetic", redirectUri: "https://project.supabase.co/functions/v1/patreon-callback", siteUrl: "https://website.example",
-        fetch: async (input: string | URL | Request) => new URL(String(input)).pathname === "/auth/v1/user"
+        fetch: async (input: string | URL | Request) => new URL(String(input)).pathname === "/rest/v1/rpc/website_session_context" ? Response.json({ impersonationId: null }) : new URL(String(input)).pathname === "/auth/v1/user"
             ? Response.json({ id: accountId, identities: [] }) : new Response("private sql message credential", { status: 429 }),
     };
     const account = createWebsiteAccountHandler(config);
@@ -196,7 +196,7 @@ test("participating database contention maps exact SQLSTATE to closed503 at real
     for (const code of ["55P03", "40P01", "23505"]) {
         const config = { supabaseUrl: "https://project.supabase.co", serviceRoleKey: "synthetic", policy,
             clientId: "synthetic", clientSecret: "synthetic", redirectUri: "https://project.supabase.co/functions/v1/patreon-callback", siteUrl: "https://website.example",
-            fetch: async (input: string | URL | Request) => new URL(String(input)).pathname === "/auth/v1/user"
+            fetch: async (input: string | URL | Request) => new URL(String(input)).pathname === "/rest/v1/rpc/website_session_context" ? Response.json({ impersonationId: null }) : new URL(String(input)).pathname === "/auth/v1/user"
                 ? Response.json({ id: accountId, identities: [] }) : Response.json({ code, message: "private database data", details: "private" }, { status: 500 }),
         };
         for(const [handler,body] of [[createWebsiteAccountHandler(config),{operation:"discord-confirm",token:"a".repeat(64)}],[createWebsiteAccountHandler(config),{operation:"unlink"}],[createPatreonHandler(config,"complete"),{token:"a".repeat(64)}]] as const) {

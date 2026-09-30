@@ -302,11 +302,6 @@ export async function requestMyServersApi(
 ): Promise<unknown> {
     const { endpoint, publishableKey } = myServersEndpoint();
     request.configureEndpoint?.(endpoint);
-    if (accessToken.startsWith("view-as:")) {
-        if (request.method !== "GET" || request.body !== undefined) throw new MyServersApiError("read_only", "Impersonation is read-only. Exit impersonation before making changes.");
-        const { readImpersonatedServers } = await import("@/app/admin/impersonation-actions");
-        return readImpersonatedServers(accessToken, endpoint.searchParams.toString());
-    }
     const requestId = request.requestId ?? crypto.randomUUID();
 
     let response: Response;

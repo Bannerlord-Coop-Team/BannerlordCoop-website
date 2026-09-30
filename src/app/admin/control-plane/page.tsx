@@ -47,8 +47,6 @@ import type {
     ServerDashboardResult,
 } from "@/app/lib/control-plane/types";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
-import { cookies } from "next/headers";
-import { IMPERSONATION_COOKIE } from "@/app/lib/auth/impersonation-cookie";
 import { listWebsiteAccounts } from "@/app/lib/supabase/users";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import {
@@ -99,7 +97,6 @@ type PageProps = {
 };
 
 export default async function ControlPlaneAdminPage({ searchParams }: PageProps) {
-    if ((await cookies()).has(IMPERSONATION_COOKIE)) redirect("/admin?error=Exit+impersonation+before+opening+Control+Plane+administration.");
     const supabase = await getSupabaseServerClient();
     const [{ data: userData }, { data: sessionData }] = await Promise.all([
         supabase.auth.getUser(),

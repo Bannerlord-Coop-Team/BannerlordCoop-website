@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test access.test.mjs"
+    "test": "node --test access.test.mjs session-context.test.mjs impersonation.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

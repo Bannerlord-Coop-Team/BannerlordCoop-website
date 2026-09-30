@@ -17,7 +17,7 @@ function serversUrl(key: "ionosError" | "ionosSuccess", value: string) {
 }
 
 async function requireAdmin() {
-    const sessionClient = await getSupabaseServerClient({ impersonation: "deny" });
+    const sessionClient = await getSupabaseServerClient();
     const { data } = await sessionClient.auth.getUser();
 
     if (!data.user) redirect("/login?next=/servers");

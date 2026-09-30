@@ -6,8 +6,8 @@ import { exactKeys, isRecord, REQUEST_ID } from "../../../supabase/functions/_sh
 import { parseReleaseMutation, type ReleaseStatus } from "../../../supabase/functions/_shared/server-release-contract";
 import { revalidatePath } from "next/cache";
 
-async function accessToken(mutation = false) {
-    const supabase = await getSupabaseServerClient(mutation ? { impersonation: "deny" } : {});
+async function accessToken() {
+    const supabase = await getSupabaseServerClient();
     const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
     if (!user || !session || session.user.id !== user.id) throw new Error("Sign in again");
     return session.access_token;
@@ -19,7 +19,7 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
             || typeof value.requestId !== "string" || !REQUEST_ID.test(value.requestId)) throw new Error("Invalid request");
         const input = parseReleaseMutation({ action: "set-release-channel", serverId: value.serverId,
             releaseChannel: value.releaseChannel, expectedUpdatedAt: value.expectedUpdatedAt });
-        const result = await requestMyServerRelease(await accessToken(true), input, value.requestId);
+        const result = await requestMyServerRelease(await accessToken(), input, value.requestId);
         revalidatePath(`/servers/${input.serverId}`);
         return { ok: true, jobId: result.jobId, message: "Release change queued. The server will stop, back up its campaign, install the selected release, and start again." };
     } catch (error) {

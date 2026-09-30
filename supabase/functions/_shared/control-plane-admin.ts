@@ -1,3 +1,4 @@
+import { verifyWebsiteSessionContext } from "./session-context.ts";
 const RELEASE_CACHE_TTL_MILLISECONDS = 5 * 60_000;
 
 const MAXIMUM_REQUEST_BYTES = 64 * 1024;
@@ -93,6 +94,8 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
                 return envelopeError(401, requestId, "unauthenticated", "Authentication is required.", false, cors);
             }
             user = JSON.parse(await readBoundedText(authResponse, MAXIMUM_AUTH_RESPONSE_BYTES));
+            if (!isRecord(user) || typeof user.id !== "string") throw new Error("Invalid identity");
+            await verifyWebsiteSessionContext({ supabaseUrl: options.supabaseUrl, key: options.supabasePublishableKey, authorization: `Bearer ${token}`, userId: user.id, action: "control-plane-admin", requestId, fetch: fetchImplementation });
         } catch {
             return envelopeError(401, requestId, "unauthenticated", "Authentication is required.", false, cors);
         }

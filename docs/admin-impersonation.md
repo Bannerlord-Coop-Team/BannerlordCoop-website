@@ -1,69 +1,108 @@
-# View the website as a user
+# Administrator user impersonation
 
 Open **Member Administration**, search by name, email, account ID, provider or
-role, and select **View as user**. A direct account-ID form also supports users
-outside the bounded member list. The website opens Servers with that user's
-identity, roles, durable server access and account/membership status. Navigate
-normally to Account or a server's management tabs. **Choose another user**
-returns to the administrator's member picker; **Exit impersonation** restores
-the original admin view without signing either person out.
+role, and select **Impersonate user**. A direct account-ID form supports members
+outside the bounded list. The website opens Servers with the selected user's
+actual identity, membership, server access and permissions. Account changes,
+server configuration, lifecycle operations, transfers, downloads and console
+operations use the existing user controls and change real state.
 
-This mode is read-only. Inputs remain visible as they would be for the user,
-but server actions reject account/provider links, role/access changes and server
-mutations. Console connections and save/log downloads are unavailable. The
-banner identifies both the selected account and real administrator. Member
-Administration remains the real administrator's user picker, not a target-user
-privilege escalation path. Control Plane administration requires exiting first.
+The banner identifies the selected user and original administrator. **Choose
+another user** returns to the original administrator's member picker. **Exit
+impersonation** ends this delegated session and restores the original admin
+login. Signing out during impersonation also exits. A session lasts at most 30
+minutes; expiry retains the banner and Exit instead of silently granting admin
+access. Selection affects the website's shared browser cookies, so it applies
+across tabs for that browser profile.
 
-The HttpOnly, Secure, SameSite=Lax `__Host-view-as-user` cookie is signed with a
-purpose-separated HMAC using the existing server-only `SUPABASE_SECRET_KEY`.
-It contains IDs and a deadline, never tokens. The selection is bound to the
-verified administrator ID and Auth session ID, and lasts 30 minutes. Its marker
-is retained until explicit exit or browser-session end so expiry fails closed
-instead of silently restoring administrator authority. Missing/deleted targets,
-revoked admin access, changed login, key rotation and tampering also fail closed.
-Exit remains available during failures. Starting or changing the selection
-invalidates the website layout; stale read markers cannot select another user.
+## Authentication and authority
 
-The real admin session is reverified with Auth for every preview request. Target
-metadata and identities are fetched through Auth's admin API; display metadata
-never establishes legacy ownership. Client components receive only a selection
-marker, not either user's login token. The control plane's audited `view-as-user`
-operation strips administrator roles before executing the same owner reads used
-by ordinary users. It preserves owner/manager/support distinctions and records
-the real admin and target under `hosting.website_user_previewed`.
+Only an authenticated account with current Auth `app_metadata.role=Admin` can
+start impersonation. The server creates a separate native Supabase Auth login
+for the selected account using `auth.admin.generateLink` and `verifyOtp`; no
+email is sent and no customer password is needed. The service-role client never
+adopts the target session. The native email/Discord website accounts must have
+an Auth email; disabled/deleted accounts or failed native Auth issuance are
+refused. This flow does not create an email for phone-only or anonymous accounts.
+Native Auth may update sign-in/confirmation metadata as for a normal login.
 
-Account status uses the admin-only `website-account` `preview-status` operation
-and service-only `membership_preview_status` RPC. It reads membership evidence
-without creating bindings, fencing identity drift, consuming provider authority
-or queueing synchronization. If stored identity/link evidence is stale, that
-part of the UI reports unavailable; an ordinary account login must reconcile
-it. Preview never invents successful synchronization.
+The normal auth cookies hold the target session, so existing browser SDK calls,
+Next actions, Edge Functions and the control plane operate with target
+permissions. Impersonating an ordinary user does not grant that user the
+administrator's privileges. An impersonated administrator retains that target's
+own admin permissions. Provider OAuth still requires the provider's normal
+consent/login. Linking Discord can issue another native session; it is bound to
+the same impersonation without extending expiry; the prior session is retired.
+A failed binding signs the
+new login out locally.
+
+The original login is retained separately in Secure, HttpOnly, SameSite=Lax
+`__Host-impersonation-admin` cookies. The signed `__Host-view-as-user` marker
+contains only grant, actor, target, native session IDs and timestamps. It uses a
+purpose-separated HMAC with the existing server-only `SUPABASE_SECRET_KEY`.
+The cookies persist until Exit, including after browser restart; the durable
+grant expires after 30 minutes regardless of cookie retention. Exit can recover
+a damaged marker using the independently verified admin backup. If the original
+login is no longer valid, Exit returns to sign-in.
+
+`website_impersonations` and `website_impersonation_sessions` bind the target's
+native sessions to the exact original admin session. `website_session_context`
+checks that grant on authenticated application requests, including the admin's
+current role, deletion/ban status, session existence, grant expiry and explicit
+end. Ordinary sessions return a null context. Nested grants from delegated
+sessions are denied. The website, membership/Patreon Edge boundaries, control
+plane authenticator and legacy console gateway fail closed when the check is
+unavailable. The console rechecks before writes and every five seconds; existing
+control-plane read-only streams retain their ordinary bounded lifetime.
+
+Starting, ending and authenticated use are recorded in
+`website_impersonation_events`, related to the real actor and target. Existing
+domain audit records still identify the effective user and record operation
+outcomes. Session-context events attest authorization, not successful completion
+of an operation. Keep these session mappings and events as audit/revocation
+history; deleting them would turn an old native token into an unmarked session.
+Direct table access and grant-management RPCs are denied to browser roles.
+
+Exit ends the durable grant and requests native **local** sign-out of only the
+issued session. Transient revocation errors retain Exit for an explicit retry.
+It does not request sign-out of the customer's other sessions. Native Auth
+must allow concurrent sessions; a project configured for one session per user
+can invalidate the customer's existing login when a new one is issued. Supabase access
+JWTs retain their native cryptographic lifetime; application session-context
+checks enforce earlier expiry/end. New authenticated application entrypoints
+must use the same guard, including when they accept browser bearer tokens.
 
 ## Deployment order
 
-1. Release the ControlPlane `view-as-user` operation through its normal reviewed
-   deployment. This application change needs no ControlPlane schema migration.
-2. Apply `202609300001_website_user_preview.sql` using the website's reviewed
-   Supabase migration process, then deploy the updated `website-account` Edge
-   Function. Preserve existing migration history; do not replay mirrored SQL.
-3. Release the website. It uses the existing Supabase configuration and server
-   secret. Administrators need the authoritative Auth `app_metadata.role=Admin`
-   used by the existing Edge administrator boundary. No target credentials or
-   new signing secret are needed.
+1. Apply `202609300001_website_impersonation.sql` using the reviewed website
+   Supabase migration process. This new migration is required before deploying
+   consumers because ordinary authenticated requests also call the context RPC.
+2. Deploy the paired ControlPlane authentication change, the `website-account`,
+   `patreon-start`, `patreon-complete`, `patreon-callback` and `control-plane-admin` Edge Functions, and the legacy
+   console gateway. Use their existing reviewed release processes.
+3. Release the website UI/actions last. Use the existing Supabase publishable
+   key and server secret. Require authoritative Admin metadata for operators.
 
-These are separate production operations. Local tests and pull requests do not
-apply the migration or deploy any service. Starting a preview fails visibly if
-the control plane does not support the operation; unavailable membership preview
-does not fall back to a writable status request.
+Do not enable issuance until every accepting boundary has the guard. No
+ControlPlane schema migration is needed. Migration, Edge, gateway and application
+releases are separate production operations; the PRs and local verification do
+not deploy them. Rollback disables issuance first and retains the SQL ledger and
+all accepting guards until issued native sessions are no longer usable.
 
 ## Verification
 
-`npm test` includes session/mutation-boundary tests and an embedded PostgreSQL
-migration test. The latter checks real SQL execution, preservation of account and
-outbox rows, stale-evidence refusal and denied anonymous/authenticated execution.
-`node tests/impersonation-browser.mjs` exercises the real Next/React page and
-action flow against disposable authentication/data fixtures. It proves local
-browser behavior, not a production login or deployment. ControlPlane's explicit
-API QA suite covers real HTTP and Unix-socket owner/manager isolation, audit
-records, unknown-target isolation, mutation refusal and unchanged account bindings.
+`npm test` covers session selection, a real server-action write using the target
+token, account mutation at the Edge boundary, OAuth registration, expiry,
+revocation, damaged-marker recovery and local Exit. Embedded PostgreSQL executes
+the actual migration and checks grants, session mapping, audits and denied access.
+`node tests/impersonation-browser.mjs` runs the real Next/React pages and server
+actions against disposable Auth/data transports: inventory isolation, an account
+mutation, direct switching, Exit and expired-session recovery. It is local browser
+evidence, not live Supabase/OAuth or production deployment evidence. The console
+gateway test runs its real process and WebSockets with a disposable Auth endpoint
+and node agent: input, a completed lifecycle operation, write-time rejection and
+idle heartbeat closure after the grant ends.
+
+The ControlPlane API QA suite exercises the real HTTP and Unix-socket path with
+synthetic Auth responses: target-owner mutation, other-owner refusal, ordinary
+user admin refusal, optimistic concurrency, idempotency and ended-session refusal.

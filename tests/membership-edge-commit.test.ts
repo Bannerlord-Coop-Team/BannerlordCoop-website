@@ -169,6 +169,7 @@ test("edge-owned link commit with recovery table actually absent", async t => {
             let authDiscord: string | null = null;
             const fetcher: typeof fetch = async (input, init) => {
                 const path = new URL(String(input)).pathname;
+                if (path === "/rest/v1/rpc/website_session_context") return Response.json({ impersonationId: null });
                 if (path === "/auth/v1/user") return Response.json({ id: current, identities: authDiscord ? [{ provider: "discord", identity_data: { provider_id: authDiscord } }] : [] });
                 const name = path.replace("/rest/v1/rpc/", "");
                 assert.ok(["membership_complete", "membership_unlink", "membership_status", "membership_discord_begin", "membership_discord_check", "membership_discord_confirm"].includes(name));

@@ -39,7 +39,7 @@ function accountEmail(formData: FormData) {
 }
 
 async function currentUser() {
-    const sessionClient = await getSupabaseServerClient({ impersonation: "deny" });
+    const sessionClient = await getSupabaseServerClient();
     const { data } = await sessionClient.auth.getUser();
     return data.user;
 }

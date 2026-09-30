@@ -23,7 +23,7 @@ export async function updateMemberRole(formData: FormData) {
         redirect(adminUrl("error", "Invalid role update request.", query));
     }
 
-    const sessionClient = await getSupabaseServerClient({ impersonation: "deny" });
+    const sessionClient = await getSupabaseServerClient();
     const { data: sessionData } = await sessionClient.auth.getUser();
     const currentUser = sessionData.user;
 

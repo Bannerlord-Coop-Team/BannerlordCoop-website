@@ -1,8 +1,8 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { User } from "@supabase/supabase-js";
+import type { User, Session } from "@supabase/supabase-js";
 
-const mocks = vi.hoisted(() => ({ jar: new Map<string, string>(), raw: vi.fn(), admin: vi.fn(), upstream: vi.fn(), invoke: vi.fn(), target: vi.fn() }));
+const mocks = vi.hoisted(() => ({ jar: new Map<string, string>(), raw: vi.fn(), admin: vi.fn(), transient: vi.fn(), password: vi.fn(), revoke: vi.fn(), rpc: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => ({
     get: (name: string) => mocks.jar.has(name) ? { name, value: mocks.jar.get(name) } : undefined,
     getAll: () => [...mocks.jar].map(([name, value]) => ({ name, value })), has: (name: string) => mocks.jar.has(name),
@@ -12,101 +12,160 @@ vi.mock("next/headers", () => ({ cookies: async () => ({
     },
 }) }));
 vi.mock("@supabase/ssr", () => ({ createServerClient: mocks.raw }));
+vi.mock("@supabase/supabase-js", () => ({ createClient: mocks.transient }));
 vi.mock("@/app/lib/supabase/admin", () => ({ getSupabaseAdminClient: mocks.admin }));
-vi.mock("@/app/lib/control-plane/client", () => ({ requestControlPlaneAdmin: mocks.upstream }));
+vi.mock("@/app/lib/hosting/my-servers", async importOriginal => ({ ...await importOriginal<object>(), requestMyServerPassword: mocks.password }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: (url: string) => { throw new Error(`redirect:${url}`); } }));
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
-import { IMPERSONATION_COOKIE, IMPERSONATION_SECONDS, signImpersonation, verifyImpersonation } from "@/app/lib/auth/impersonation-cookie";
-import { legacyDiscordIdentity } from "@/app/lib/auth/impersonation";
-import { startImpersonation, stopImpersonation, readImpersonatedServers } from "./impersonation-actions";
-import { updateMemberRole } from "./actions";
+import { ADMIN_COOKIE_PREFIX, IMPERSONATION_COOKIE, IMPERSONATION_SECONDS, signImpersonation, verifyImpersonation } from "@/app/lib/auth/impersonation-cookie";
+import { bindLinkedImpersonationSession } from "@/app/lib/auth/impersonation";
+import { startImpersonation, stopImpersonation } from "./impersonation-actions";
+import { setManagedServerPassword } from "@/app/servers/managed-server-actions";
 import { ImpersonationBanner } from "@/app/components/admin/ImpersonationBanner";
 
-const actorId = "11111111-1111-4111-8111-111111111111";
-const targetId = "22222222-2222-4222-8222-222222222222";
-const sessionId = "33333333-3333-4333-8333-333333333333";
-const selectionId = "44444444-4444-4444-8444-444444444444";
+const actorId = "11111111-1111-4111-8111-111111111111", targetId = "22222222-2222-4222-8222-222222222222";
+const actorSessionId = "33333333-3333-4333-8333-333333333333", targetSessionId = "44444444-4444-4444-8444-444444444444";
 const secret = "isolated-impersonation-fixture-key";
-const token = `header.${Buffer.from(JSON.stringify({ session_id: sessionId })).toString("base64url")}.fixture`;
-let actor: User;
-let target: User;
-let raw: { auth: { getUser: ReturnType<typeof vi.fn>; getSession: ReturnType<typeof vi.fn>; signOut: ReturnType<typeof vi.fn> }; functions: { invoke: typeof mocks.invoke } };
-function selection() { const issuedAt = Date.now(); return { id: selectionId, actorId, actorSessionId: sessionId, targetId, issuedAt, expiresAt: issuedAt + IMPERSONATION_SECONDS * 1000 }; }
-function select() { mocks.jar.set(IMPERSONATION_COOKIE, signImpersonation(selection(), secret)); }
+const token = (id: string) => `header.${Buffer.from(JSON.stringify({ session_id: id })).toString("base64url")}.fixture`;
+let actor: User, target: User, primary: Session | null, backup: Session | null, issued: Session;
+let active: boolean, selectionId: string;
+function session(user: User, id: string): Session { return { user, access_token: token(id), refresh_token: `refresh-${id}`, expires_in: 3600, token_type: "bearer" }; }
+async function start() { const form = new FormData(); form.set("userId", targetId); await expect(startImpersonation(form)).rejects.toThrow("redirect:/servers"); }
 beforeEach(() => {
-    vi.clearAllMocks(); mocks.jar.clear();
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://fixture.invalid"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "isolated-publishable-fixture-key");
-    vi.stubEnv("SUPABASE_SECRET_KEY", secret); vi.stubEnv("SUPABASE_ADMIN_EMAILS", "");
+    vi.clearAllMocks(); mocks.jar.clear(); active = false;
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://fixture.invalid"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "isolated-publishable-fixture-key"); vi.stubEnv("SUPABASE_SECRET_KEY", secret);
     actor = { id: actorId, app_metadata: { role: "Admin" }, user_metadata: { name: "Admin fixture" }, email: "admin@example.invalid", identities: [] } as unknown as User;
     target = { id: targetId, app_metadata: { role: "User" }, user_metadata: { name: "Member fixture" }, email: "member@example.invalid", identities: [] } as unknown as User;
-    raw = { auth: { getUser: vi.fn(async () => ({ data: { user: actor }, error: null })), getSession: vi.fn(async () => ({ data: { session: { user: actor, access_token: token, refresh_token: "private-admin-refresh" } }, error: null })), signOut: vi.fn() }, functions: { invoke: mocks.invoke } };
-    mocks.raw.mockReturnValue(raw); mocks.target.mockImplementation(async () => ({ data: { user: target }, error: null }));
-    mocks.admin.mockReturnValue({ auth: { admin: { getUserById: mocks.target } } });
-    mocks.upstream.mockResolvedValue({ items: [], nextCursor: null }); mocks.invoke.mockResolvedValue({ data: {}, error: null });
+    primary = session(actor, actorSessionId); backup = null; issued = session(target, targetSessionId);
+    mocks.raw.mockImplementation((_url, _key, options) => {
+        const saved = options.cookieOptions?.name === ADMIN_COOKIE_PREFIX;
+        const current = () => saved ? backup : primary;
+        return { auth: {
+            getUser: async () => ({ data: { user: current()?.user ?? null }, error: null }),
+            getSession: async () => ({ data: { session: current() }, error: null }),
+            setSession: async (value: Session) => { if (saved) { expect(options.cookieOptions).toMatchObject({ httpOnly: true, secure: true }); backup = value; } else primary = value; return { data: { session: value }, error: null }; },
+            signOut: async (options: unknown) => { expect(options).toEqual({ scope: "local" }); primary = null; return { error: null }; },
+        }, rpc: async () => current()?.user.id === actorId ? { data: { impersonationId: null }, error: null }
+            : { data: active ? { impersonationId: selectionId, actorId, targetId } : null, error: active ? null : new Error("ended") } };
+    });
+    mocks.rpc.mockImplementation(async (name, input) => { if (name === "website_impersonation_begin") { selectionId = input.p_id; active = true; } if (name === "website_impersonation_end") active = false; return { error: null }; });
+    mocks.revoke.mockResolvedValue({ error: null });
+    mocks.admin.mockReturnValue({ rpc: mocks.rpc, auth: { admin: { getUserById: async () => ({ data: { user: target }, error: null }),
+        generateLink: async () => ({ data: { user: target, properties: { hashed_token: "server-only-otp" } }, error: null }), signOut: mocks.revoke } } });
+    mocks.transient.mockReturnValue({ auth: { verifyOtp: async () => ({ data: { user: issued.user, session: issued }, error: null }) } });
+    mocks.password.mockResolvedValue({ changed: true, restartQueued: false });
 });
 
-it("starts with audited real admin authority, exposes only the target view and harmless marker, and exits without signing anyone out", async () => {
-    const form = new FormData(); form.set("userId", targetId);
-    await expect(startImpersonation(form)).rejects.toThrow("redirect:/servers");
-    expect(mocks.upstream).toHaveBeenCalledWith(expect.objectContaining({ accessToken: token, operation: "view-as-user", input: expect.objectContaining({ accountId: targetId }) }));
+it("opens a real target session, performs a server write as the target, and restores the saved admin without global sign-out", async () => {
+    await start();
     const client = await getSupabaseServerClient();
     expect((await client.auth.getUser()).data.user).toBe(target);
-    const session = (await client.auth.getSession()).data.session!;
-    expect(session.access_token).toMatch(/^view-as:/); expect(session.refresh_token).toBe("");
-    expect(JSON.stringify(session)).not.toContain(token); expect(JSON.stringify(session)).not.toContain("private-admin-refresh");
-    expect(() => client.auth.updateUser({ data: { name: "changed" } })).toThrow("read-only");
-    await expect(getSupabaseServerClient({ impersonation: "deny" })).rejects.toThrow("read-only");
-    await expect(stopImpersonation()).rejects.toThrow("redirect:/admin");
-    expect(mocks.jar.has(IMPERSONATION_COOKIE)).toBe(false); expect(raw.auth.signOut).not.toHaveBeenCalled();
-    expect((await (await getSupabaseServerClient()).auth.getUser()).data.user).toBe(actor);
-});
-
-it("fails closed for tampering, expiration, changed login, removed admin access, and deleted target", async () => {
-    const valid = signImpersonation(selection(), secret);
-    expect(() => verifyImpersonation(`${valid}x`, secret, actorId, sessionId)).toThrow();
-    expect(() => verifyImpersonation(valid, secret, actorId, targetId)).toThrow();
-    expect(() => verifyImpersonation(valid, secret, actorId, sessionId, Date.now() + 31 * 60_000)).toThrow();
-    mocks.jar.set(IMPERSONATION_COOKIE, "");
-    await expect(getSupabaseServerClient()).rejects.toThrow("redirect:/admin?error=Impersonation");
-    await expect(getSupabaseServerClient({ impersonation: "deny" })).rejects.toThrow("read-only");
-    select(); actor.app_metadata.role = "User";
-    await expect(getSupabaseServerClient()).rejects.toThrow("redirect:/admin?error=Impersonation");
-    actor.app_metadata.role = "Admin"; mocks.target.mockResolvedValue({ data: { user: null }, error: null });
-    await expect(getSupabaseServerClient()).rejects.toThrow("redirect:/admin?error=Impersonation");
+    expect((await client.auth.getSession()).data.session?.access_token).toBe(issued.access_token);
+    expect(backup?.user.id).toBe(actorId);
+    const result = await setManagedServerPassword({ serverId: targetId, expectedUpdatedAt: "2026-09-01T00:00:00.000Z", password: "fixture-only-password" });
+    expect(result.ok).toBe(true);
+    expect(mocks.password.mock.calls[0][0]).toBe(issued.access_token);
     const banner = renderToStaticMarkup(await ImpersonationBanner());
-    expect(banner).toContain("Exit impersonation"); expect(banner).toContain("expired or unavailable");
+    expect(banner).toContain("Impersonating Member fixture"); expect(banner).toContain("Actions change this user");
     await expect(stopImpersonation()).rejects.toThrow("redirect:/admin");
+    expect(primary?.user.id).toBe(actorId); expect(active).toBe(false); expect(mocks.jar.has(IMPERSONATION_COOKIE)).toBe(false);
+    expect(mocks.revoke).toHaveBeenCalledWith(issued.access_token, "local");
+    expect(mocks.revoke.mock.calls.every(call => call[1] === "local")).toBe(true);
 });
 
-it("rechecks actor and target for each read, rejects old selections, and never accepts download or mutation intent", async () => {
-    select();
-    await readImpersonatedServers(`view-as:${selectionId}`, "resource=backups&serverId=" + targetId);
-    expect(mocks.upstream).toHaveBeenLastCalledWith(expect.objectContaining({ accessToken: token, operation: "view-as-user",
-        input: expect.objectContaining({ accountId: targetId, request: expect.objectContaining({ operation: "server-backups" }) }) }));
-    for (const query of ["operation=stop", "resource=download-server-log&serverId=" + targetId, "resource=files&serverId=../bad", "resource=onboarding&resource=files"]) {
-        await expect(readImpersonatedServers(`view-as:${selectionId}`, query)).rejects.toThrow();
-    }
-    await expect(readImpersonatedServers(`view-as:${targetId}`, "")).rejects.toThrow("selected user changed");
+it("rejects expired selection and revoked administrator authority while keeping Exit functional", async () => {
+    await start();
+    const selection = verifyImpersonation(mocks.jar.get(IMPERSONATION_COOKIE)!, secret);
+    const issuedAt = Date.now() - 31 * 60_000;
+    mocks.jar.set(IMPERSONATION_COOKIE, signImpersonation({ ...selection, issuedAt, expiresAt: issuedAt + IMPERSONATION_SECONDS * 1000 }, secret));
+    await expect(getSupabaseServerClient()).rejects.toThrow("redirect:/admin?error=Impersonation");
+    expect(renderToStaticMarkup(await ImpersonationBanner())).toContain("Exit impersonation");
     actor.app_metadata.role = "User";
-    await expect(readImpersonatedServers(`view-as:${selectionId}`, "")).rejects.toThrow("administrator");
-    expect(mocks.upstream).toHaveBeenCalledTimes(1);
+    await expect(stopImpersonation()).rejects.toThrow("redirect:/admin");
+    expect(primary?.user.id).toBe(actorId);
 });
 
-it("keeps account status read-only and rejects privileged role writes even while viewing another admin", async () => {
-    select(); target.app_metadata.role = "Admin";
-    const client = await getSupabaseServerClient();
-    await client.functions.invoke("website-account", { body: { operation: "status" } });
-    expect(mocks.invoke).toHaveBeenCalledWith("website-account", { headers: { Authorization: `Bearer ${token}` }, body: { operation: "preview-status", accountId: targetId } });
-    await expect(client.functions.invoke("website-account", { body: { operation: "unlink" } })).rejects.toThrow("read-only");
-    const form = new FormData(); form.set("userId", actorId); form.set("role", "User");
-    await expect(updateMemberRole(form)).rejects.toThrow("read-only");
-    expect(renderToStaticMarkup(await ImpersonationBanner())).toContain("Viewing as Member fixture");
+it("rejects ordinary users before minting a target session", async () => {
+    actor.app_metadata.role = "User";
+    const form = new FormData(); form.set("userId", targetId);
+    await expect(startImpersonation(form)).rejects.toThrow("could+not+start");
+    expect(mocks.transient).not.toHaveBeenCalled(); expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(primary?.user.id).toBe(actorId);
 });
 
-it("does not use mutable metadata or ambiguous Discord identities to select legacy ownership", () => {
-    target.user_metadata.provider_id = "123456789012345678";
-    expect(legacyDiscordIdentity(target)).toBeNull();
-    target.identities = [{ provider: "discord", id: "123456789012345678", user_id: targetId, identity_id: targetId, identity_data: { sub: "999456789012345678" } }];
-    expect(legacyDiscordIdentity(target)).toBeNull();
+it("closes a failed issuance and never adopts a session for a different account", async () => {
+    issued = session(actor, targetSessionId);
+    const form = new FormData(); form.set("userId", targetId);
+    await expect(startImpersonation(form)).rejects.toThrow("could+not+start");
+    expect(primary?.user.id).toBe(actorId); expect(active).toBe(false);
+    expect(mocks.jar.has(IMPERSONATION_COOKIE)).toBe(false);
+    expect(mocks.revoke).toHaveBeenCalledWith(issued.access_token, "local");
+});
+
+it("binds the same user's OAuth-linked session and preserves the original admin and expiry", async () => {
+    await start();
+    const before = verifyImpersonation(mocks.jar.get(IMPERSONATION_COOKIE)!, secret);
+    primary = session(target, "55555555-5555-4555-8555-555555555555");
+    const raw = mocks.raw("", "", {});
+    await bindLinkedImpersonationSession(raw, issued.access_token);
+    const after = verifyImpersonation(mocks.jar.get(IMPERSONATION_COOKIE)!, secret);
+    expect(after).toEqual({ ...before, targetSessionId: "55555555-5555-4555-8555-555555555555" });
+    expect(backup?.user.id).toBe(actorId);
+    expect(mocks.rpc).toHaveBeenLastCalledWith("website_impersonation_bind", expect.objectContaining({ p_actor_id: actorId, p_target_session_id: after.targetSessionId }));
+});
+
+it("fails closed after durable termination even if the native access token remains valid", async () => {
+    await start(); active = false;
+    await expect(getSupabaseServerClient()).rejects.toThrow("redirect:/admin?error=Impersonation");
+    expect(() => verifyImpersonation(mocks.jar.get(IMPERSONATION_COOKIE)! + "x", secret)).toThrow();
+});
+
+
+it("recovers a damaged selection cookie using the independently verified admin backup", async () => {
+    await start();
+    mocks.jar.set(IMPERSONATION_COOKIE, "damaged-cookie");
+    await expect(stopImpersonation()).rejects.toThrow("redirect:/admin");
+    expect(primary?.user.id).toBe(actorId);
+    expect(mocks.rpc).toHaveBeenLastCalledWith("website_impersonation_end", expect.objectContaining({ p_id: null, p_actor_id: actorId, p_actor_session_id: actorSessionId }));
+    expect(mocks.jar.has(IMPERSONATION_COOKIE)).toBe(false);
+});
+
+it("removing the selection cannot turn a delegated session into an ordinary user login", async () => {
+    await start();
+    mocks.jar.delete(IMPERSONATION_COOKIE);
+    await expect(getSupabaseServerClient()).rejects.toThrow("Session context unavailable");
+    await expect(getSupabaseServerClient({ impersonation: "actor" })).rejects.toThrow("Session context unavailable");
+});
+
+it("removes an OAuth login that could not be registered", async () => {
+    await start();
+    primary = session(target, "55555555-5555-4555-8555-555555555555");
+    mocks.rpc.mockResolvedValue({ error: new Error("registration failed") });
+    await expect(bindLinkedImpersonationSession(mocks.raw("", "", {}), issued.access_token)).rejects.toThrow("registration failed");
+    expect(primary).toBeNull();
+    expect(backup?.user.id).toBe(actorId);
+});
+
+
+it("retains Exit and the admin backup when native session revocation fails, then retries locally", async () => {
+    await start();
+    mocks.revoke.mockResolvedValueOnce({ error: { status: 503, name: "AuthApiError" } });
+    await expect(stopImpersonation()).rejects.toThrow("Retry Exit");
+    expect(mocks.jar.has(IMPERSONATION_COOKIE)).toBe(true);
+    expect(backup?.user.id).toBe(actorId);
+    expect(active).toBe(false);
+    await expect(stopImpersonation()).rejects.toThrow("redirect:/admin");
+    expect(primary?.user.id).toBe(actorId);
+});
+
+
+it("cannot use a delegated admin token as the original actor or restore it from a forged backup", async () => {
+    target.app_metadata.role = "Admin";
+    await start();
+    backup = issued;
+    mocks.jar.set(IMPERSONATION_COOKIE, "damaged-cookie");
+    await expect(getSupabaseServerClient({ impersonation: "actor" })).rejects.toThrow("Session context unavailable");
+    await expect(stopImpersonation()).rejects.toThrow("redirect:/login");
+    expect(primary).toBeNull();
 });

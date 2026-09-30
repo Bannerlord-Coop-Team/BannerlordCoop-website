@@ -16,7 +16,7 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
             visibility: value.visibility, expectedUpdatedAt: value.expectedUpdatedAt });
     } catch { return { ok: false, message: "The visibility update is invalid." }; }
     try {
-        const supabase = await getSupabaseServerClient({ impersonation: "deny" });
+        const supabase = await getSupabaseServerClient();
         const [{ data: userData }, { data: sessionData }] = await Promise.all([
             supabase.auth.getUser(), supabase.auth.getSession(),
         ]);

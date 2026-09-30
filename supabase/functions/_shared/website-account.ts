@@ -1,5 +1,5 @@
 import { DatabaseContention, databaseContentionResponse } from "./database-contention.ts";
-import { boundedJson, exact, HASH, UUID, parseSnapshot, randomToken, record, sha256, validUntil, type Policy } from "./membership.ts";
+import { boundedJson, exact, HASH, parseSnapshot, randomToken, record, sha256, validUntil, type Policy } from "./membership.ts";
 import { membershipStore, MembershipRateLimit, membershipRateLimitResponse, type StoreConfig } from "./membership-store.ts";
 export function createWebsiteAccountHandler(config: StoreConfig & { policy: Policy | null }) {
     const store = membershipStore(config);
@@ -11,21 +11,11 @@ export function createWebsiteAccountHandler(config: StoreConfig & { policy: Poli
             const user = await store.user(authorization);
             const body = await boundedJson(new Response(request.body, { headers: request.headers }), 4096);
             if (!record(body)) return response({ error: "invalid_request" }, 400);
-            if (body.operation === "status" && exact(body, ["operation"])
-                || body.operation === "preview-status" && exact(body, ["operation", "accountId"])) {
-                let subject = user;
-                if (body.operation === "preview-status") {
-                    if (!user.administrator) return response({ error: "forbidden" }, 403);
-                    if (typeof body.accountId !== "string" || !UUID.test(body.accountId)) return response({ error: "invalid_request" }, 400);
-                    const binding = await store.binding(body.accountId);
-                    if (binding.deleted) return response({ error: "not_found" }, 404);
-                    subject = { ...user, accountId: body.accountId, discordUserId: binding.discordUserId };
-                }
-                const value = await store.rpc(body.operation === "preview-status" ? "membership_preview_status" : "membership_status", { p_account_id: subject.accountId, p_discord_user_id: subject.discordUserId });
+            if (body.operation === "status" && exact(body, ["operation"])) {
+                const value = await store.rpc("membership_status", { p_account_id: user.accountId, p_discord_user_id: user.discordUserId });
                 if (!record(value) || typeof value.pending !== "boolean" || typeof value.verificationPending !== "boolean") throw new Error("Invalid status");
                 const s = parseSnapshot(value.snapshot);
-                if (s.accountId !== subject.accountId) throw new Error("Account status mismatch");
-                return response({ version: 1, accountId: subject.accountId, hasDiscord: subject.discordUserId !== null, configured: config.policy !== null, verificationPending: value.verificationPending, membership: { linked: s.patreonUserId !== null, verification: s.verification, sync: value.pending ? "pending" : s.revision === "0" ? "not_needed" : "applied", verifiedAt: s.verifiedAt, validUntil: validUntil(s), retryAt: null, refreshMode: "oauth_reauthorization" } });
+                return response({ version: 1, accountId: user.accountId, hasDiscord: user.discordUserId !== null, configured: config.policy !== null, verificationPending: value.verificationPending, membership: { linked: s.patreonUserId !== null, verification: s.verification, sync: value.pending ? "pending" : s.revision === "0" ? "not_needed" : "applied", verifiedAt: s.verifiedAt, validUntil: validUntil(s), retryAt: null, refreshMode: "oauth_reauthorization" } });
             }
             if (body.operation === "unlink" && exact(body, ["operation"])) {
                 await store.rpc("membership_unlink", { p_account_id: user.accountId, p_discord_user_id: user.discordUserId }); return response({ unlinked: true });

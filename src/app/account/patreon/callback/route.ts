@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const token = request.nextUrl.searchParams.get("token");
     try {
         if (!token || !/^[a-f0-9]{64}$/u.test(token)) throw new Error("Missing completion");
-        const supabase = await getSupabaseServerClient({ impersonation: "deny" });
+        const supabase = await getSupabaseServerClient();
         const { data: { user } } = await supabase.auth.getUser();
         const { data: { session } } = await supabase.auth.getSession();
         if (!user || !session || session.user.id !== user.id) throw new Error("Account changed");

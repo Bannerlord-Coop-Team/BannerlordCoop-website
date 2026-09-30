@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
     if (code) {
         try {
-            const supabase = await getSupabaseServerClient({ impersonation: "deny" });
+            const supabase = await getSupabaseServerClient();
             const { error } = await supabase.auth.exchangeCodeForSession(code);
 
             if (!error) {

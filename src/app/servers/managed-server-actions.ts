@@ -21,7 +21,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
 
     let accessToken: string | null = null;
     try {
-        const supabase = await getSupabaseServerClient({ impersonation: "deny" });
+        const supabase = await getSupabaseServerClient();
         const [{ data: userData }, { data: sessionData }] = await Promise.all([
             supabase.auth.getUser(),
             supabase.auth.getSession(),
@@ -124,7 +124,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function setManagedServerPassword(input: { serverId: string; expectedUpdatedAt: string; password: string }): Promise<ManagedServerActionResult> {
     if (!input || !SERVER_ID.test(input.serverId) || typeof input.password !== "string" || input.password.length < 1 || input.password.length > 128 || typeof input.expectedUpdatedAt !== "string") return { ok: false, message: "Enter a password of 1–128 characters." };
     try {
-        const supabase = await getSupabaseServerClient({ impersonation: "deny" });
+        const supabase = await getSupabaseServerClient();
         const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
         if (!user || !session) return { ok: false, message: "Sign in again to change the password." };
         const result = await requestMyServerPassword(session.access_token, input, crypto.randomUUID());

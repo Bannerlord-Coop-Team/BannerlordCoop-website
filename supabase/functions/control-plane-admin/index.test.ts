@@ -109,7 +109,7 @@ function createHandler(fetchImplementation: typeof fetch, now?: () => number) {
         supabaseUrl: "https://project.supabase.co",
         supabasePublishableKey: "publishable-key-with-enough-characters",
         controlPlaneAdminUrl: "https://control-plane.example.test",
-        fetchImplementation,
+        fetchImplementation: (input, init) => String(input).endsWith("/rpc/website_session_context") ? Promise.resolve(Response.json({ impersonationId: null })) : fetchImplementation(input, init),
         now,
     });
 }

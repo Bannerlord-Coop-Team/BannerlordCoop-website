@@ -16,7 +16,7 @@ export async function submitServerOnboarding(input: unknown, expectedPageUserId:
     }
     let accessToken: string | null;
     try {
-        const supabase = await getSupabaseServerClient({ impersonation: "deny" });
+        const supabase = await getSupabaseServerClient();
         const [{ data: userData }, { data: sessionData }] = await Promise.all([
             supabase.auth.getUser(), supabase.auth.getSession(),
         ]);
