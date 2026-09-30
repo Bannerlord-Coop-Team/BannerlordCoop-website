@@ -18,8 +18,9 @@ vi.mock("@/app/lib/console/servers", () => ({ getLiveConsoleServer: mocks.live, 
 vi.mock("@/app/lib/auth/access", () => ({ getLiveConsoleAccessLevel: mocks.access, getMemberRole: () => "Admin", hasHostedServerAccess: () => true }));
 vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
     ...await original<typeof import("@/app/lib/hosting/my-servers")>(),
-    listAllMyServers: mocks.servers, listAllMyServerBackups: async () => [], getMyServerBackupStatus: async () => null,
+    listAllMyServerBackups: async () => [], getMyServerBackupStatus: async () => null,
 }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.servers }));
 vi.mock("@/app/lib/hosting/server-files", () => ({ getMyServerFiles: mocks.files, submitMyServerFile: mocks.submit }));
 vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: async () => new Map() }));
 vi.mock("@/app/lib/hosting/servers", () => ({ getServerForRole: mocks.preview }));

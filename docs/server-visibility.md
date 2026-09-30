@@ -69,6 +69,8 @@ flowchart LR
     PublicClient[Other public clients] --> PublicEdge[Read-only public Edge proxy]
     PublicEdge --> PublicCP[CP public directory endpoint]
     Owner --> Settings[Visibility setting / server actions]
+    Owner --> PrivatePage[Server-rendered owner inventory]
+    PrivatePage --> PrivateCP[CP user API / authorization]
     Settings --> PrivateEdge[Authenticated my-servers Edge proxy]
     PrivateEdge --> PrivateCP[CP user API / authorization]
     PublicCP --> DB[(Server visibility)]
