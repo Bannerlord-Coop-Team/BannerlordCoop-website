@@ -62,6 +62,20 @@ test("reauthenticates a Discord Admin and forwards the closed envelope", async (
     assert.match(calls[1]?.body ?? "", new RegExp(REQUEST_ID, "u"));
 });
 
+test("reports only its measured authentication and complete upstream durations", async (context) => {
+    const times = [100, 127, 228];
+    context.mock.method(performance, "now", () => times.shift() ?? 228);
+    const handler = createHandler(async (input) => String(input).endsWith("/auth/v1/user")
+        ? Response.json(ADMIN)
+        : Response.json({ version: 1, requestId: REQUEST_ID, ok: true, result: {} }, {
+            headers: { "server-timing": "untrusted-secret;dur=1" },
+        }));
+    const response = await handler(adminRequest());
+    assert.equal(response.headers.get("server-timing"), "edge_auth;dur=27, control_plane;dur=101");
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.equal(response.headers.get("timing-allow-origin"), null);
+});
+
 test("rejects non-admin sessions before the upstream call", async () => {
     for (const user of [
         { ...ADMIN, app_metadata: { role: "User" } },
@@ -75,6 +89,7 @@ test("rejects non-admin sessions before the upstream call", async () => {
         });
         const response = await handler(adminRequest());
         assert.equal(response.status, 403);
+        assert.equal(response.headers.get("server-timing"), null);
         assert.equal(calls, 1);
     }
 });
