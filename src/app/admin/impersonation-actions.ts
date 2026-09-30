@@ -17,6 +17,7 @@ async function endSelection(selection: { id: string | null; actorId: string; act
     if (error) throw new Error("Impersonation could not be ended. Retry Exit.");
 }
 export async function startImpersonation(form: FormData) {
+    if (process.env.ADMIN_IMPERSONATION_ENABLED !== "true") redirect("/admin?error=User+impersonation+is+not+enabled.");
     const input = form.get("userId");
     const targetId = typeof input === "string" ? input.trim().toLowerCase() : "";
     if (!UUID.test(targetId)) redirect("/admin?error=Invalid+member");

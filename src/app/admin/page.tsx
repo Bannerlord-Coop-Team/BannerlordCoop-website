@@ -62,6 +62,7 @@ function formatDate(value: string | undefined) {
 }
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
+    const impersonationEnabled = process.env.ADMIN_IMPERSONATION_ENABLED === "true";
     const sessionClient = await getSupabaseServerClient({ impersonation: "actor" });
     const { data: sessionData } = await sessionClient.auth.getUser();
     const currentUser = sessionData.user;
@@ -147,7 +148,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             Member Administration
                         </h1>
                         <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground-muted">
-                            Search registered members, impersonate a member, and manage their access roles.
+                            {impersonationEnabled ? "Search registered members, impersonate a member, and manage their access roles." : "Search registered members and manage their access roles."}
                             Role changes take effect the next time Supabase refreshes the member session.
                         </p>
                     </div>
@@ -189,12 +190,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     </button>
                 </form>
 
-                <form action={startImpersonation} className="mt-4 flex max-w-xl flex-wrap items-end gap-3">
+                {impersonationEnabled && <form action={startImpersonation} className="mt-4 flex max-w-xl flex-wrap items-end gap-3">
                     <label className="min-w-56 flex-1 text-sm text-foreground-muted">Or impersonate a user by account ID
                         <input name="userId" required maxLength={36} placeholder="User UUID" className="mt-2 min-h-10 w-full rounded-sm border border-white/15 bg-surface px-3 text-foreground focus:outline-gold" />
                     </label>
                     <button type="submit" className="min-h-10 rounded-sm border border-gold/40 px-4 text-sm text-gold focus-visible:outline-gold">Impersonate user</button>
-                </form>
+                </form>}
 
                 {(errorMessage || loadError) && (
                     <p role="alert" className="mt-6 border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
@@ -222,7 +223,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                     <th scope="col" className="px-5 py-4">Joined</th>
                                     <th scope="col" className="px-5 py-4">Last active</th>
                                     <th scope="col" className="px-5 py-4 text-right">Role</th>
-                                    <th scope="col" className="px-5 py-4">Impersonation</th>
+                                    {impersonationEnabled && <th scope="col" className="px-5 py-4">Impersonation</th>}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/[0.07]">
@@ -264,12 +265,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                                     userId={member.id}
                                                 />
                                             </td>
-                                            <td className="px-5 py-4">
+                                            {impersonationEnabled && <td className="px-5 py-4">
                                                 <form action={startImpersonation}>
                                                     <input type="hidden" name="userId" value={member.id} />
                                                     <button type="submit" disabled={member.id === currentUser.id} aria-label={`Impersonate ${memberName(member)}`} className="min-h-10 whitespace-nowrap rounded-sm border border-gold/40 px-3 text-sm text-gold hover:bg-gold/10 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold">Impersonate user</button>
                                                 </form>
-                                            </td>
+                                            </td>}
                                         </tr>
                                     );
                                 })}

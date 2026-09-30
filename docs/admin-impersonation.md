@@ -1,5 +1,14 @@
 # Administrator user impersonation
 
+Starting impersonation is disabled by default. With
+`ADMIN_IMPERSONATION_ENABLED` unset or any value other than `true`, Member
+Administration hides the impersonation controls and the server action refuses
+issuance before creating a grant or native login. Normal account and server
+operations continue to work. Exit remains available for any existing session.
+
+After the deployment prerequisites below are verified, set the server-only
+`ADMIN_IMPERSONATION_ENABLED=true` to enable the feature.
+
 Open **Member Administration**, search by name, email, account ID, provider or
 role, and select **Impersonate user**. A direct account-ID form supports members
 outside the bounded list. The website opens Servers with the selected user's
@@ -80,13 +89,17 @@ must use the same guard, including when they accept browser bearer tokens.
 2. Deploy the paired ControlPlane authentication change, the `website-account`,
    `patreon-start`, `patreon-complete`, `patreon-callback` and `control-plane-admin` Edge Functions, and the legacy
    console gateway. Use their existing reviewed release processes.
-3. Release the website UI/actions last. Use the existing Supabase publishable
-   key and server secret. Require authoritative Admin metadata for operators.
+3. The website can be released with impersonation disabled while a gateway is
+   still under development. Enable `ADMIN_IMPERSONATION_ENABLED=true` only
+   after every active accepting boundary has the guard. Use the existing
+   Supabase publishable key and server secret. Require authoritative Admin
+   metadata for operators.
 
 Do not enable issuance until every accepting boundary has the guard. No
 ControlPlane schema migration is needed. Migration, Edge, gateway and application
 releases are separate production operations; the PRs and local verification do
-not deploy them. Rollback disables issuance first and retains the SQL ledger and
+not deploy them. Rollback removes or disables `ADMIN_IMPERSONATION_ENABLED`
+first and retains the SQL ledger and
 all accepting guards until issued native sessions are no longer usable.
 
 ## Verification

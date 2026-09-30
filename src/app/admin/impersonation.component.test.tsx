@@ -34,6 +34,7 @@ function session(user: User, id: string): Session { return { user, access_token:
 async function start() { const form = new FormData(); form.set("userId", targetId); await expect(startImpersonation(form)).rejects.toThrow("redirect:/servers"); }
 beforeEach(() => {
     vi.clearAllMocks(); mocks.jar.clear(); active = false;
+    vi.stubEnv("ADMIN_IMPERSONATION_ENABLED", "true");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://fixture.invalid"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "isolated-publishable-fixture-key"); vi.stubEnv("SUPABASE_SECRET_KEY", secret);
     actor = { id: actorId, app_metadata: { role: "Admin" }, user_metadata: { name: "Admin fixture" }, email: "admin@example.invalid", identities: [] } as unknown as User;
     target = { id: targetId, app_metadata: { role: "User" }, user_metadata: { name: "Member fixture" }, email: "member@example.invalid", identities: [] } as unknown as User;
@@ -57,6 +58,15 @@ beforeEach(() => {
     mocks.password.mockResolvedValue({ changed: true, restartQueued: false });
 });
 
+it.each([undefined, "false", "TRUE", "1"])("refuses issuance before using Auth when the release switch is %s", async (value) => {
+    vi.stubEnv("ADMIN_IMPERSONATION_ENABLED", value);
+    const form = new FormData(); form.set("userId", targetId);
+    await expect(startImpersonation(form)).rejects.toThrow("User+impersonation+is+not+enabled");
+    expect(mocks.raw).not.toHaveBeenCalled(); expect(mocks.admin).not.toHaveBeenCalled();
+    expect(mocks.transient).not.toHaveBeenCalled(); expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(primary?.user.id).toBe(actorId); expect(mocks.jar.size).toBe(0);
+});
+
 it("opens a real target session, performs a server write as the target, and restores the saved admin without global sign-out", async () => {
     await start();
     const client = await getSupabaseServerClient();
@@ -68,6 +78,7 @@ it("opens a real target session, performs a server write as the target, and rest
     expect(mocks.password.mock.calls[0][0]).toBe(issued.access_token);
     const banner = renderToStaticMarkup(await ImpersonationBanner());
     expect(banner).toContain("Impersonating Member fixture"); expect(banner).toContain("Actions change this user");
+    vi.stubEnv("ADMIN_IMPERSONATION_ENABLED", "false");
     await expect(stopImpersonation()).rejects.toThrow("redirect:/admin");
     expect(primary?.user.id).toBe(actorId); expect(active).toBe(false); expect(mocks.jar.has(IMPERSONATION_COOKIE)).toBe(false);
     expect(mocks.revoke).toHaveBeenCalledWith(issued.access_token, "local");
