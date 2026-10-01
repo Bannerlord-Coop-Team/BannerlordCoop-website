@@ -4,8 +4,7 @@ import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { ManagedServerCommands } from "./ManagedServerCommands";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 
-const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn(), router: { refresh: vi.fn() } }));
-vi.mock("next/navigation", () => ({ useRouter: () => mocks.router }));
+const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn() }));
 vi.mock("@/app/servers/managed-server-console-actions", () => ({ submitManagedConsoleCommand: mocks.submit, checkManagedConsoleCommand: mocks.check, acknowledgeManagedConsoleCommand: mocks.ack }));
 vi.mock("./DownloadServerLogButton", () => ({ DownloadServerLogButton: () => <span>Download logs</span> }));
 const server: MyServerSummary = { serverId: "22222222-2222-4222-8222-222222222222", displayName: "Campaign", accessRole: "owner", operationState: "running", observedGameState: "running", friendlyRegion: "germany", releaseChannel: "stable", updatedAt: "2026-09-20T12:00:00.000Z" };
@@ -148,26 +147,22 @@ it("retries uncertain delivery with the exact original UUID and payload", async 
     expect(window.confirm).not.toHaveBeenCalled();
 });
 
-it("polls the same request and unlocks the next command without result or acknowledgement UI", async () => {
-    mocks.check.mockResolvedValue({ ok: true, result: { status: "succeeded", output: "API result is not a second output panel", outputTruncated: false, outputWithheld: false, completedAt: server.updatedAt } });
+it("immediately unlocks after acceptance and permits another command without result polling", async () => {
     await mount(); await select();
     await act(async () => button("Send").click());
-    expect(button("Running…").disabled).toBe(true);
-    await act(async () => container.querySelector("form")!.requestSubmit());
-    expect(mocks.submit).toHaveBeenCalledOnce();
-    await act(async () => vi.advanceTimersByTimeAsync(3000));
-    expect(mocks.check).toHaveBeenCalledWith({ serverId: server.serverId, jobId, commandRequestId: mocks.submit.mock.calls[0][1] }, "owner-id");
-    expect(container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!.disabled).toBe(false);
-    expect(container.querySelector('[aria-label="Command result"]')).toBeNull();
-    expect(container.textContent).not.toContain("API result is not a second output panel");
-    expect(container.textContent).not.toContain("Command finished");
-    expect(button("Acknowledge result")).toBeUndefined();
-    expect(button("New command")).toBeUndefined();
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!;
+    expect(input.value).toBe("");
+    expect(input.disabled).toBe(false);
+    expect(button("Running…")).toBeUndefined();
+    expect(button("Check result")).toBeUndefined();
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(mocks.check).not.toHaveBeenCalled();
     expect(mocks.ack).not.toHaveBeenCalled();
     await select();
     await act(async () => button("Send").click());
     expect(mocks.submit).toHaveBeenCalledTimes(2);
     expect(mocks.submit.mock.calls[1][1]).not.toBe(mocks.submit.mock.calls[0][1]);
+    expect(input.disabled).toBe(false);
 });
 
 it("reports invalid input inside the console without adding footer messages", async () => {
@@ -180,13 +175,14 @@ it("reports invalid input inside the console without adding footer messages", as
     expect(input.form!.nextElementSibling!.nextElementSibling).toBeNull();
 });
 
-it("reports a failed job in the console and unlocks the composer", async () => {
-    mocks.check.mockResolvedValue({ ok: true, result: { status: "failed", errorCode: "command_failed" } });
-    await mount(); await select();
+it("reports a rejected submission in the console and leaves its draft editable", async () => {
+    mocks.submit.mockResolvedValueOnce({ ok: false, notSubmitted: true, message: "The command was not sent." });
+    await mount();
+    const input = await typeDraft("coop.help");
     await act(async () => button("Send").click());
-    await act(async () => vi.advanceTimersByTimeAsync(3000));
-    expect(container.querySelector('pre [role="alert"]')!.textContent).toBe("Command failed: command_failed");
-    expect(container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!.disabled).toBe(false);
+    expect(container.querySelector('pre [role="alert"]')!.textContent).toBe("The command was not sent.");
+    expect(input.value).toBe("coop.help");
+    expect(input.disabled).toBe(false);
 });
 
 it.each([{ accessRole: "support" as const }, { operationState: "stopped" as const }, { observedGameState: "unknown" as const }])("disables commands for a read-only or non-running server: %o", async (state) => {
@@ -196,17 +192,15 @@ it.each([{ accessRole: "support" as const }, { operationState: "stopped" as cons
     expect(mocks.submit).not.toHaveBeenCalled();
 });
 
-it("stops automatic polling after a minute and manually checks the same job without resubmitting", async () => {
+it("blocks duplicate submissions only until the enqueue request responds", async () => {
+    let accept!: (value: unknown) => void;
+    mocks.submit.mockReturnValueOnce(new Promise(resolve => { accept = resolve; }));
     await mount(); await select();
     await act(async () => button("Send").click());
-    await act(async () => vi.advanceTimersByTimeAsync(60_000));
-    expect(button("Check result").disabled).toBe(false);
-    const callsAtTimeout = mocks.check.mock.calls.length;
-    const originalReference = mocks.check.mock.calls[0];
-    await act(async () => vi.advanceTimersByTimeAsync(30_000));
-    expect(mocks.check).toHaveBeenCalledTimes(callsAtTimeout);
-    await act(async () => button("Check result").click());
-    await act(async () => vi.advanceTimersByTimeAsync(3_000));
-    expect(mocks.check.mock.calls.at(-1)).toEqual(originalReference);
-    expect(mocks.submit).toHaveBeenCalledTimes(1);
+    expect(button("Sending…").disabled).toBe(true);
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(mocks.submit).toHaveBeenCalledOnce();
+    await act(async () => accept({ ok: true, result: { outcome: "enqueued", jobId } }));
+    expect(container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!.disabled).toBe(false);
+    expect(mocks.check).not.toHaveBeenCalled();
 });

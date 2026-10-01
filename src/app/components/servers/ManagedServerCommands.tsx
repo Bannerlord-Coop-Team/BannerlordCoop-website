@@ -1,14 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Terminal } from "lucide-react";
-import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { ServerConsoleWorkspace, coopConsoleCommands } from "./ServerManagementWorkspace";
 import { ManagedServerConsole } from "./ManagedServerConsole";
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
-import { submitManagedConsoleCommand, checkManagedConsoleCommand } from "@/app/servers/managed-server-console-actions";
-import { MAXIMUM_CONSOLE_COMMAND_LENGTH, parseConsoleSubmission, type ConsoleSubmission, type ConsoleReference } from "../../../../supabase/functions/_shared/server-console-contract";
+import { submitManagedConsoleCommand } from "@/app/servers/managed-server-console-actions";
+import { MAXIMUM_CONSOLE_COMMAND_LENGTH, parseConsoleSubmission, type ConsoleSubmission } from "../../../../supabase/functions/_shared/server-console-contract";
 
 const button = "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-gold/40 bg-gold/10 px-4 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
 const commandNames = coopConsoleCommands.map(([usage]) => usage.split(/\s/u, 1)[0]);
@@ -24,9 +23,8 @@ function completeCommand(draft: string) {
 
 type Submission = { requestId: string; input: ConsoleSubmission };
 
-/** Runs request-bound game commands on managed servers below the live output in one console card. */
+/** Submits commands without waiting for execution; results arrive through live stdout. */
 export function ManagedServerCommands({ server, userId, controls }: { server: MyServerSummary; userId: string; controls: ReactNode }) {
-    const router = useRouter();
     const id = useId();
     const inputRef = useRef<HTMLInputElement>(null);
     const inFlight = useRef(false);
@@ -35,53 +33,12 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
     const [focused, setFocused] = useState(false);
     const [scrollLeft, setScrollLeft] = useState(0);
     const [submission, setSubmission] = useState<Submission | null>(null);
-    const [job, setJob] = useState<ConsoleReference | null>(null);
     const [busy, setBusy] = useState(false);
-    const [polling, setPolling] = useState(false);
     const [error, setError] = useState("");
     const canOperate = server.accessRole === "owner" || server.accessRole === "manager";
     const ready = canOperate && server.operationState === "running" && server.observedGameState === "running";
     const canCompose = ready && !busy && !submission;
     const completion = canCompose && focused && atEnd ? completeCommand(draft) : "";
-
-    useEffect(() => {
-        if (!job || !polling) return;
-        let cancelled = false;
-        let timer: ReturnType<typeof setTimeout>;
-        const deadline = Date.now() + 60_000;
-        /** Polls serially, stopping on errors, completion or a bounded observation window. */
-        async function poll() {
-            try {
-                const response = await checkManagedConsoleCommand(job!, userId);
-                if (cancelled) return;
-                if (!response.ok) {
-                    setError(response.message);
-                    setPolling(false);
-                    return;
-                }
-                if (response.result.status !== "pending") {
-                    router.refresh();
-                    setPolling(false);
-                    setJob(null);
-                    setSubmission(null);
-                    setError(response.result.status === "failed" ? `Command failed: ${response.result.errorCode}` : response.result.status === "cancelled" ? "Command cancelled." : "");
-                    return;
-                }
-                if (Date.now() >= deadline) {
-                    setPolling(false);
-                    setError("Still pending. Check again or watch for the private Discord completion notification. Do not submit a duplicate command.");
-                    return;
-                }
-                timer = setTimeout(poll, 3_000);
-            } catch {
-                if (cancelled) return;
-                setPolling(false);
-                setError("Result could not be checked. Check again; do not submit a duplicate command.");
-            }
-        }
-        timer = setTimeout(poll, 3_000);
-        return () => { cancelled = true; clearTimeout(timer); };
-    }, [job, polling, userId, router]);
 
     /** Inserts a supported cheat template without sending it to the server. */
     function selectCommand(command: string) {
@@ -99,12 +56,7 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
     /** Retains the original payload and UUID whenever delivery cannot be confirmed. */
     async function send(event: FormEvent) {
         event.preventDefault();
-        if (inFlight.current || polling || !canOperate) return;
-        if (job) {
-            setError("");
-            setPolling(true);
-            return;
-        }
+        if (inFlight.current || !canOperate) return;
         if (!submission && !ready) return;
         let request = submission;
         if (!request) {
@@ -127,8 +79,7 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
                 setError(response.message);
                 return;
             }
-            setJob({ serverId: server.serverId, jobId: response.result.jobId, commandRequestId: request.requestId });
-            setPolling(true);
+            setSubmission(null);
             setDraft("");
         } catch {
             setError("Delivery could not be confirmed. Use Retry send to check the same request; do not submit it as a new command.");
@@ -169,7 +120,7 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
                         />
                         {completion && <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-md border border-transparent px-3 py-2.5 font-mono text-sm whitespace-pre"><div style={{ transform: `translateX(-${scrollLeft}px)` }}><span className="invisible">{draft}</span><span className="text-foreground-muted">{completion}</span></div></div>}
                     </div>
-                    <button type="submit" className={button} disabled={busy || polling || !canOperate || (!submission && (!ready || !draft.trim()))}>{busy ? "Sending…" : job ? polling ? "Running…" : "Check result" : submission ? "Retry send" : "Send"}</button>
+                    <button type="submit" className={button} disabled={busy || !canOperate || (!submission && (!ready || !draft.trim()))}>{busy ? "Sending…" : submission ? "Retry send" : "Send"}</button>
                 </form>
                 <p id={`${id}-shortcuts`} className="text-xs text-foreground-muted"><kbd className="font-mono">Enter</kbd> to send</p>
             </div>

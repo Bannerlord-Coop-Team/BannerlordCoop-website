@@ -101,7 +101,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
 }) {
     const [section, setSection] = useState<Section>(initialSection);
     const [showAddress, setShowAddress] = useState(false);
-    const [feedback, setFeedback] = useState("");
+    const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
     useEffect(() => {
         function followHash() {
             const target = window.location.hash;
@@ -132,13 +132,12 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
                         <div className="flex flex-wrap items-center gap-2 text-sm">
                             <span id="server-address" className="font-mono text-foreground-muted" aria-live="polite">{address ? (showAddress ? address : "IP hidden") : "Not assigned"}</span>
                             <button disabled={!address} className={button} aria-controls="server-address" aria-expanded={showAddress} aria-label={showAddress ? "Hide server IP and port" : "Show server IP and port"} title={showAddress ? "Hide server IP and port" : "Show server IP and port"} onClick={() => setShowAddress(!showAddress)}>{showAddress ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}</button>
-                            <button disabled={!address} className={button} onClick={async () => {
+                            <button disabled={!address} className={button} aria-live="polite" title={copyState === "failed" ? "Could not copy. Reveal the IP to copy it manually, or click to retry." : "Copy server IP and port"} onClick={async () => {
                                 if (!address) return;
-                                try { await navigator.clipboard.writeText(address); setFeedback("Join address copied."); }
-                                catch { setFeedback("Could not copy. Show the address to copy it manually."); }
-                            }}><Copy className="size-4" aria-hidden="true" />Copy join address</button>
+                                try { await navigator.clipboard.writeText(address); setCopyState("copied"); }
+                                catch { setCopyState("failed"); }
+                            }}><Copy className="size-4" aria-hidden="true" />{copyState === "copied" ? "Copied!" : copyState === "failed" ? "Copy failed" : "Copy IP"}</button>
                         </div>
-                        {feedback && <p role="status" className="mt-2 text-sm text-foreground-muted">{feedback}</p>}
                     </div>
                 </div>
                 {status && <div className="mt-4">{status}</div>}

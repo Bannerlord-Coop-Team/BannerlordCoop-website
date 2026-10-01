@@ -11,7 +11,7 @@
 ## Reorganization
 
 Keep this scoped to the server workspace, not a site redesign. Preserve permissions,
-lifecycle confirmations, auto-connect, command delivery/retry identity, and polling.
+lifecycle confirmations, auto-connect, and command delivery/retry identity.
 Command submissions do not require confirmation; their results are highlighted in the
 console without a separate result/acknowledgement workflow. No new inline status
 messages, backend behavior, or automatic retries.
@@ -56,13 +56,15 @@ pending state while using the same action and polling boundary as before.
 | Path | Expected behavior |
 | --- | --- |
 | Reveal/hide join address | Eye/eye-off control has an accessible Show/Hide label and toggles address visibility without changing Copy behavior |
+| Copy IP succeeds | Copy the full IP:port; change the button to “Copied!” without helper text below |
+| Copy IP fails | Show “Copy failed” on the button with retry/manual-copy guidance in its tooltip, never a success label |
 | Desktop/mobile console | Full-width output and command row; no horizontal overflow or password form in Console |
 | Browse/search/select a command | Reference starts collapsed, search filters commands, selection closes it and focuses the unsent draft |
 | Keyboard entry | Enter sends without a popup; Tab accepts the visible dot-delimited completion |
 | Navigate Console → Settings → Console | Password appears only in Settings; command draft and live stream remain mounted |
 | Owner password change | Existing restart confirmation, pending guard, action payload, input clearing, and failure feedback preserved |
 | Non-owner Settings | No password control |
-| Command pending/result | Request-bound retry/polling remains functional through the input-row button; output appears only in the console |
+| Command submission | Unlock on enqueue acceptance without polling for execution; preserve same-request retries for uncertain delivery; results arrive in stdout |
 
 Use targeted component/page tests plus desktop and mobile browser screenshots with
 explicit sample data. Existing action/transport tests remain authoritative for backend behavior.
