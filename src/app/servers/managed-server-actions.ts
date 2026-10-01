@@ -7,13 +7,14 @@ import {
     requestMyServerPassword,
     type MyServerOperation,
 } from "@/app/lib/hosting/my-servers";
+import { getMyServerStartStatus } from "@/app/lib/hosting/my-servers-server";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const OPERATIONS = new Set<MyServerOperation>(["start", "stop", "restart-game"]);
 
-export type ManagedServerActionResult = { ok: boolean; message: string };
+export type ManagedServerActionResult = { ok: boolean; message: string; operationId?: string };
 
 export async function operateManagedServer(input: unknown): Promise<ManagedServerActionResult> {
     const parsed = parseOperation(input);
@@ -64,7 +65,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         }
         if (parsed.action === "start" && code === "operation_timeout"
             && error instanceof MyServersApiError && error.operationId !== undefined) {
-            return { ok: true, message: "Start request accepted. The game has not confirmed readiness yet. Refresh server status before sending another command." };
+            return { ok: true, operationId: error.operationId, message: "Start accepted. Following your server’s progress…" };
         }
         if (parsed.action === "update-now") {
             if (code === "stale_interaction") {
@@ -132,5 +133,23 @@ export async function setManagedServerPassword(input: { serverId: string; expect
         return { ok: true, message: result.restartQueued ? "Password changed. A restart is queued with a player warning." : "Password changed. Use it when joining your server." };
     } catch {
         return { ok: false, message: "The change could not be confirmed. Refresh server status before trying again." };
+    }
+}
+
+/** Reauthenticates each progress read; the control plane checks current server access. */
+export async function readManagedServerStartStatus(serverId: string, jobId: string) {
+    if (typeof serverId !== "string" || typeof jobId !== "string" || !SERVER_ID.test(serverId) || !SERVER_ID.test(jobId)) {
+        return { ok: false as const, retryable: false, message: "The Start reference is invalid." };
+    }
+    try {
+        const supabase = await getSupabaseServerClient();
+        const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
+        if (!user || !session) return { ok: false as const, retryable: false, message: "Sign in again to follow server progress." };
+        return { ok: true as const, status: await getMyServerStartStatus(session.access_token, serverId, jobId) };
+    } catch (error) {
+        if (error instanceof MyServersApiError && ["forbidden", "server_not_found", "unauthenticated"].includes(error.code)) {
+            return { ok: false as const, retryable: false, message: "Your server access could not be confirmed. Sign in again to resume progress updates." };
+        }
+        return { ok: false as const, retryable: true, message: "Reconnecting to server progress… Your Start request is still being tracked." };
     }
 }

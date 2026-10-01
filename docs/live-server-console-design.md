@@ -350,3 +350,14 @@ channel request; a visibility failure stops the remaining save and is shown.
 
 Rollout requires the control-plane API first, then the `my-servers` edge function
 and website. No new database migration or Discord notification type is required.
+
+## Managed Start progress
+
+Managed Start controls immediately show a phase checklist, then follow the exact
+accepted operation ID through preparation (including any safety backup or release
+installation), campaign loading, and readiness checks. Authenticated server actions
+read `server-start-status` directly through the owner API; no new Edge route is
+required. Status reads recheck owner/manager access and never resubmit Start.
+Only confirmed success shows Ready to join. Transient read failures reconnect;
+after fifteen minutes the UI offers Resume progress updates for the same job.
+Deploy the control-plane status read before deploying this website change.

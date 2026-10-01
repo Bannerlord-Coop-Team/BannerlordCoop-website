@@ -4,7 +4,7 @@ import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getServerOnboarding, listAllMyServers } from "./my-servers-server";
+import { getMyServerStartStatus, getServerOnboarding, listAllMyServers } from "./my-servers-server";
 import { onboardingSummary } from "../../../../tests/onboarding-fixtures";
 
 const TOKEN = "access-token-with-enough-characters";
@@ -214,4 +214,32 @@ it("uses the closed owner read in native workerd with fresh pages and no redirec
             redirectStatus = status; const before = calls;
             expect(await (await runtime.dispatchFetch(`http://localhost${path}`)).json()).toEqual({ error: "invalid_response" }); expect(calls).toBe(before + 1); }
     } finally { await runtime.dispose(); }
+});
+
+const startJobId = "22222222-2222-4222-8222-222222222222";
+const startStatus = { serverId: server.serverId, jobId: startJobId, state: "running", phase: "starting", progress: "Loading your campaign" };
+it("reads only the exact accepted Start afresh and propagates access revocation", async () => {
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = input(init);
+        expect(request).toMatchObject({ operation: "server-start-status", input: { serverId: server.serverId, jobId: startJobId } });
+        expect(init).toMatchObject({ cache: "no-store", redirect: "manual", credentials: "omit" });
+        return accepted(request, startStatus);
+    });
+    vi.stubGlobal("fetch", fetch);
+    expect(await getMyServerStartStatus(TOKEN, server.serverId, startJobId)).toEqual(startStatus);
+    fetch.mockImplementation(async (_url: RequestInfo | URL, init?: RequestInit) => Response.json({ version: 1,
+        requestId: input(init).requestId, ok: false, error: { code: "forbidden", message: "Access removed", retryable: false } }, { status: 403 }));
+    await expect(getMyServerStartStatus(TOKEN, server.serverId, startJobId)).rejects.toMatchObject({ code: "forbidden" });
+    expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+    { ...startStatus, serverId: startJobId }, { ...startStatus, jobId: server.serverId },
+    { ...startStatus, phase: "ready" }, { ...startStatus, state: "succeeded" },
+    { ...startStatus, state: "unknown" }, { ...startStatus, phase: "unknown" },
+    { ...startStatus, progress: "Private\ntext" }, { ...startStatus, progress: "x".repeat(257) },
+    { ...startStatus, privateStage: "extra" },
+])("rejects malformed or mismatched Start status %j", async result => {
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
+    await expect(getMyServerStartStatus(TOKEN, server.serverId, startJobId)).rejects.toMatchObject({ code: "invalid_response" });
 });
