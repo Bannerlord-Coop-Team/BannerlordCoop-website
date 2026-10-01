@@ -20,13 +20,13 @@ function failure(error: unknown, notSubmitted = false) {
         server_not_found: "This server is unavailable or your access changed.",
         identity_unavailable: "Link your Discord account and sign in again before using commands.",
         operation_unavailable: "The server is not running. Refresh server status; if delivery was previously uncertain, check Discord before sending a new command.",
-        request_conflict: "The server changed or another command is active. Keep this request; check its outcome before sending a new command.",
+        request_conflict: "The server changed or another command is active. Check console output or Discord before resending.",
         invalid_request: "Enter one supported coop.* command with valid arguments.",
         rate_limited: "Too many requests. Wait before checking again.",
     };
     return { ok: false as const, notSubmitted, message: notSubmitted
         ? "The command was not sent. Check your command and sign-in session."
-        : messages[code] ?? "The outcome could not be confirmed. Retry only this same request or check Discord; do not resend as a new command." };
+        : messages[code] ?? "The outcome could not be confirmed. Check console output or Discord before resending." };
 }
 
 /** Validates and authenticates an enqueue while preserving the caller's durable request ID. */

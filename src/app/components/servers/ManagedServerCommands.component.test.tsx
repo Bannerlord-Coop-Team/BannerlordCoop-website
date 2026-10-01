@@ -135,34 +135,57 @@ it("places only the input and Send below live output in the same card while idle
     expect(form.querySelector("button")!.textContent).toBe("Send");
 });
 
-it("retries uncertain delivery with the exact original UUID and payload", async () => {
-    mocks.submit.mockRejectedValueOnce(new Error("network"));
-    await mount(); await select();
+it.each(["rejected", "uncertain", "network"])("reports a late %s failure without locking or replacing the next draft", async (failure) => {
+    let resolve!: (value: unknown) => void;
+    let reject!: (error: Error) => void;
+    mocks.submit.mockReturnValueOnce(new Promise((accept, fail) => { resolve = accept; reject = fail; }));
+    await mount();
+    const input = await typeDraft("coop.help");
     await act(async () => button("Send").click());
-    const original = mocks.submit.mock.calls[0];
-    expect(button("Retry send")).toBeDefined();
-    expect(container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!.disabled).toBe(true);
-    await act(async () => button("Retry send").click());
-    expect(mocks.submit.mock.calls[1]).toEqual(original);
-    expect(window.confirm).not.toHaveBeenCalled();
-});
-
-it("immediately unlocks after acceptance and permits another command without result polling", async () => {
-    await mount(); await select();
-    await act(async () => button("Send").click());
-    const input = container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!;
-    expect(input.value).toBe("");
+    await typeDraft("coop.debug.alley.abandon");
+    await act(async () => {
+        if (failure === "network") reject(new Error("network"));
+        else resolve({ ok: false, notSubmitted: failure === "rejected", message: "The command could not be sent." });
+    });
+    const error = container.querySelector('pre [role="alert"]')!.textContent;
+    expect(error).toContain("coop.help:");
+    expect(error).toContain(failure === "network" ? "Delivery could not be confirmed" : "The command could not be sent.");
+    expect(input.value).toBe("coop.debug.alley.abandon");
     expect(input.disabled).toBe(false);
-    expect(button("Running…")).toBeUndefined();
-    expect(button("Check result")).toBeUndefined();
-    await act(async () => vi.advanceTimersByTimeAsync(60_000));
-    expect(mocks.check).not.toHaveBeenCalled();
-    expect(mocks.ack).not.toHaveBeenCalled();
-    await select();
+    expect(button("Retry send")).toBeUndefined();
     await act(async () => button("Send").click());
     expect(mocks.submit).toHaveBeenCalledTimes(2);
     expect(mocks.submit.mock.calls[1][1]).not.toBe(mocks.submit.mock.calls[0][1]);
+});
+
+it("allows multiple pending submissions and preserves the new draft when responses arrive", async () => {
+    let acceptFirst!: (value: unknown) => void;
+    let acceptSecond!: (value: unknown) => void;
+    mocks.submit.mockReturnValueOnce(new Promise(resolve => { acceptFirst = resolve; }))
+        .mockReturnValueOnce(new Promise(resolve => { acceptSecond = resolve; }));
+    await mount();
+    const input = await typeDraft("coop.help");
+    await act(async () => button("Send").click());
+    expect(input.value).toBe("");
     expect(input.disabled).toBe(false);
+    expect(document.activeElement).toBe(input);
+    expect(button("Sending…")).toBeUndefined();
+    await typeDraft("coop.debug.alley.abandon");
+    await act(async () => input.form!.requestSubmit());
+    expect(mocks.submit).toHaveBeenCalledTimes(2);
+    expect(mocks.submit.mock.calls[0]).toEqual([expect.objectContaining({ command: "coop.help" }), expect.any(String), "owner-id"]);
+    expect(mocks.submit.mock.calls[1]).toEqual([expect.objectContaining({ command: "coop.debug.alley.abandon" }), expect.any(String), "owner-id"]);
+    expect(mocks.submit.mock.calls[1][1]).not.toBe(mocks.submit.mock.calls[0][1]);
+    expect(input.value).toBe("");
+    await typeDraft("coop.help next");
+    await act(async () => acceptSecond({ ok: true, result: { outcome: "enqueued", jobId } }));
+    expect(input.value).toBe("coop.help next");
+    await act(async () => acceptFirst({ ok: true, result: { outcome: "enqueued", jobId } }));
+    expect(input.value).toBe("coop.help next");
+    expect(input.disabled).toBe(false);
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(mocks.check).not.toHaveBeenCalled();
+    expect(mocks.ack).not.toHaveBeenCalled();
 });
 
 it("reports invalid input inside the console without adding footer messages", async () => {
@@ -175,32 +198,9 @@ it("reports invalid input inside the console without adding footer messages", as
     expect(input.form!.nextElementSibling!.nextElementSibling).toBeNull();
 });
 
-it("reports a rejected submission in the console and leaves its draft editable", async () => {
-    mocks.submit.mockResolvedValueOnce({ ok: false, notSubmitted: true, message: "The command was not sent." });
-    await mount();
-    const input = await typeDraft("coop.help");
-    await act(async () => button("Send").click());
-    expect(container.querySelector('pre [role="alert"]')!.textContent).toBe("The command was not sent.");
-    expect(input.value).toBe("coop.help");
-    expect(input.disabled).toBe(false);
-});
-
 it.each([{ accessRole: "support" as const }, { operationState: "stopped" as const }, { observedGameState: "unknown" as const }])("disables commands for a read-only or non-running server: %o", async (state) => {
     await mount(state);
     expect(button("Send").disabled).toBe(true);
     expect([...container.querySelectorAll<HTMLButtonElement>("aside li button")].every(button => button.disabled)).toBe(true);
     expect(mocks.submit).not.toHaveBeenCalled();
-});
-
-it("blocks duplicate submissions only until the enqueue request responds", async () => {
-    let accept!: (value: unknown) => void;
-    mocks.submit.mockReturnValueOnce(new Promise(resolve => { accept = resolve; }));
-    await mount(); await select();
-    await act(async () => button("Send").click());
-    expect(button("Sending…").disabled).toBe(true);
-    await act(async () => container.querySelector("form")!.requestSubmit());
-    expect(mocks.submit).toHaveBeenCalledOnce();
-    await act(async () => accept({ ok: true, result: { outcome: "enqueued", jobId } }));
-    expect(container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!.disabled).toBe(false);
-    expect(mocks.check).not.toHaveBeenCalled();
 });

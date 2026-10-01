@@ -18,21 +18,22 @@ not a second result panel. Tab completion remains available without a footer hin
 
 | Path | Expected behavior | Coverage |
 | --- | --- | --- |
-| Send or Enter | Submit once without confirmation; clear accepted input | Component; browser |
-| Submission awaiting acceptance | Block duplicate sends only while the submission request is in flight | Component |
-| Accepted command | Clear input and immediately allow the next command; no execution polling, acknowledgement, or completion UI | Component; browser |
-| Uncertain delivery | Keep original payload/UUID; the same input-row button retries that request | Component |
-| Invalid or rejected command | Report the error in the console, not beneath the input | Component |
+| Send or Enter | Dispatch without confirmation; clear and refocus input immediately, before any response | Component; browser |
+| Submission awaiting acceptance | Allow multiple commands while prior submission promises remain unresolved; each gets its own payload/UUID | Component; browser |
+| Late acceptance | Do not clear a newer draft; no execution polling, acknowledgement, or completion UI | Component |
+| Late rejection or uncertain delivery | Identify the failed command in the console without locking input or changing a newer draft; no retry workflow | Component |
+| Invalid draft | Keep the draft editable and report validation errors in the console without dispatching | Component |
 | Read-only or non-running server | Input and Send remain disabled | Component |
 | Supported prefix | Tab accepts one dot-delimited segment without submitting | Component; browser |
 | Unknown prefix, complete command, arguments, or selection away from end | Tab retains normal navigation | Component |
 | Shift+Tab | Preserve backward navigation | Component |
 
-Commands are fire-and-forget after enqueue acceptance. Request identity and
-authorization remain unchanged; uncertain delivery still retains the original
-request for a safe retry. Execution results arrive through live stdout, without
-website result polling or acknowledgement. Unacknowledged Discord completion/recovery
-delivery remains enabled. Backend result/acknowledgement APIs are unchanged.
+Commands are fire-and-forget from the composer: it never waits for submission
+acceptance or execution. Each dispatch retains authorization and a fresh request
+UUID, but there is no in-flight lock or request-retry UI. The existing authenticated
+server-action transport handles submissions; no browser-side execution queue is added.
+Late errors identify their command without modifying the current draft. Execution
+results arrive through live stdout. Backend APIs and Discord delivery are unchanged.
 
 ## Stream lifecycle
 

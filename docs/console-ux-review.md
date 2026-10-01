@@ -11,7 +11,7 @@
 ## Reorganization
 
 Keep this scoped to the server workspace, not a site redesign. Preserve permissions,
-lifecycle confirmations, auto-connect, and command delivery/retry identity.
+lifecycle confirmations, auto-connect, and authenticated command delivery.
 Command submissions do not require confirmation; their results are highlighted in the
 console without a separate result/acknowledgement workflow. No new inline status
 messages, backend behavior, or automatic retries.
@@ -64,7 +64,7 @@ pending state while using the same action and polling boundary as before.
 | Navigate Console → Settings → Console | Password appears only in Settings; command draft and live stream remain mounted |
 | Owner password change | Existing restart confirmation, pending guard, action payload, input clearing, and failure feedback preserved |
 | Non-owner Settings | No password control |
-| Command submission | Unlock on enqueue acceptance without polling for execution; preserve same-request retries for uncertain delivery; results arrive in stdout |
+| Command submission | Clear/refocus immediately without waiting for acceptance; permit multiple pending submissions; report late errors in the console without changing the current draft |
 
 Use targeted component/page tests plus desktop and mobile browser screenshots with
 explicit sample data. Existing action/transport tests remain authoritative for backend behavior.
