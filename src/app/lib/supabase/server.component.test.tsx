@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createServerClient } from "@supabase/ssr";
-import { getSupabaseServerViewer } from "./server";
+import { getSupabaseServerReadSession, getSupabaseServerViewer } from "./server";
 import { IMPERSONATION_COOKIE } from "../auth/impersonation-cookie";
 
 const mocks = vi.hoisted(() => ({ create: vi.fn(), cookie: vi.fn(), resolve: vi.fn() }));
@@ -123,4 +123,11 @@ it("does not start early reads before impersonation resolution or after it fails
     mocks.resolve.mockRejectedValueOnce(new Error("expired"));
     await expect(getSupabaseServerViewer({ onReadOnlySession: start })).rejects.toThrow("redirect:/admin?error=Impersonation");
     expect(start).toHaveBeenCalledTimes(1);
+});
+
+
+it("returns only a refreshed read session without treating cached role or identity as authority", async () => {
+    client.auth.getSession.mockResolvedValueOnce({ data: { session: { ...session, access_token: "refreshed-token" } }, error: null });
+    expect(await getSupabaseServerReadSession()).toMatchObject({ session: { access_token: "refreshed-token" } });
+    expect(client.auth.getUser).not.toHaveBeenCalled(); expect(client.rpc).not.toHaveBeenCalled();
 });

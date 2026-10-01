@@ -1,7 +1,7 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), tables: vi.fn() }));
-vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: mocks.auth }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), tables: vi.fn() }));
+vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerReadSession: mocks.session, getSupabaseServerViewer: mocks.auth }));
 vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts }));
 vi.mock("@/app/lib/control-plane/server-read", () => ({ readControlPlaneAdmin: mocks.request }));
 vi.mock("@/app/components/admin/RefreshReleaseCatalog", () => ({ RefreshReleaseCatalog: () => null }));
@@ -25,11 +25,11 @@ import ControlPlaneAdminPage from "./page";
 
 beforeEach(() => {
     vi.resetAllMocks();
-    mocks.auth.mockImplementation(async options => {
-        const read = options.onReadOnlySession("test-admin-token");
-        return { read, user: { id: "admin", app_metadata: { role: "Admin" } }, accessToken: "test-admin-token" };
-    });
-    mocks.request.mockResolvedValue({
+    mocks.session.mockResolvedValue({ session: { access_token: "test-admin-token", user: { id: "admin", app_metadata: { role: "Member" } } } });
+    mocks.auth.mockResolvedValue({ user: { id: "admin", app_metadata: { role: "Admin" } }, accessToken: "test-admin-token" });
+    mocks.request.mockImplementation(async request => {
+        request.onAuthenticated();
+        return {
         fleet: { running: 5, stopped: 0, suspended: 0, provisioning: 0, failedOrDegraded: 0,
             activeJobs: 0, agentUnhealthyOrUnknown: 0, pendingDeletion: 0, backupFailures: 0,
             managedVpsCount: 1, usedQuota: 5, totalSlots: 6, availableSlots: 1,
@@ -37,7 +37,7 @@ beforeEach(() => {
         controls: { provisioningPaused: false, startsPaused: false, backupsPaused: false, maintenancePaused: false,
             nightlyRolloutsPaused: false, reason: "Current control reason" },
         jobs: { items: [], nextCursor: null },
-    });
+    }; });
 });
 
 it("renders Overview from its compact current response without fetching account or server directories", async () => {
@@ -45,10 +45,11 @@ it("renders Overview from its compact current response without fetching account 
     await stream.allReady;
     const html = await new Response(stream).text();
     expect(html).toContain("Fleet capacity and reconciliation");
+    expect(mocks.auth).not.toHaveBeenCalled();
     expect(html).toContain("Current control reason");
     expect(html).toContain("Recent jobs");
     expect(html).not.toContain("The control plane view could not be loaded");
-    expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "overview", input: { compact: true }, signal: expect.any(AbortSignal) }]]);
+    expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "overview", input: { compact: true }, signal: expect.any(AbortSignal), expectedUserId: "admin", onAuthenticated: expect.any(Function) }]]);
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
@@ -70,7 +71,7 @@ it("renders both complete release groups from one catalog request without accoun
     expect(html.replaceAll("<!-- -->", "")).toContain("Current Nightly");
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "release-catalog",
-        input: { stableCursor: null, nightlyCursor: null, limit: 100 }, signal: expect.any(AbortSignal) }]]);
+        input: { stableCursor: null, nightlyCursor: null, limit: 100 }, signal: expect.any(AbortSignal), expectedUserId: "admin", onAuthenticated: expect.any(Function) }]]);
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
@@ -91,19 +92,19 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     expect(html).toContain('value="us-east"');
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual([[{
-        accessToken: "test-admin-token", operation: "vps-hosts", signal: expect.any(AbortSignal),
+        accessToken: "test-admin-token", operation: "vps-hosts", signal: expect.any(AbortSignal), expectedUserId: "admin", onAuthenticated: expect.any(Function),
         input: { includeLiveData: false, includeProviderInventory: "service-names" },
     }]]);
     expect(mocks.request).toHaveBeenCalledTimes(3);
 });
 
 
-it("starts the read before viewer verification completes but withholds the entire page and account directory", async () => {
+it("withholds the page and account directory until Oracle confirms fresh identity and authority", async () => {
     const gate = Promise.withResolvers<void>();
-    mocks.auth.mockImplementation(async options => {
-        const read = options.onReadOnlySession("test-admin-token");
+    mocks.request.mockImplementation(async request => {
         await gate.promise;
-        return { read, user: { id: "admin", app_metadata: { role: "Admin" } }, accessToken: "test-admin-token" };
+        request.onAuthenticated();
+        return { items: [], nextCursor: null };
     });
     let rendered = false;
     const page = ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "servers" }) });
@@ -111,17 +112,18 @@ it("starts the read before viewer verification completes but withholds the entir
     await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(1));
     expect(rendered).toBe(false);
     expect(mocks.accounts).not.toHaveBeenCalled();
+    expect(mocks.auth).not.toHaveBeenCalled();
     gate.resolve();
     await page;
-    // Account lookup is in the authenticated streaming content, never the speculative read.
     expect(mocks.accounts).not.toHaveBeenCalled();
+    expect(mocks.auth).not.toHaveBeenCalled();
 });
 
 it.each(["revoked", "member", "mismatched"])("aborts and does not render early data for a %s viewer", async kind => {
-    mocks.auth.mockImplementation(async options => {
-        const read = options.onReadOnlySession("test-admin-token");
+    mocks.request.mockRejectedValue(new Error("Oracle did not confirm authority"));
+    mocks.auth.mockImplementation(async () => {
         if (kind === "revoked") throw new Error("revoked");
-        return { read, user: { id: "admin", app_metadata: { role: kind === "member" ? "Member" : "Admin" } }, accessToken: kind === "mismatched" ? null : "test-admin-token" };
+        return { user: { id: "admin", app_metadata: { role: kind === "member" ? "Member" : "Admin" } }, accessToken: kind === "mismatched" ? null : "test-admin-token" };
     });
     await expect(ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "servers" }) })).rejects.toThrow();
     expect(mocks.request.mock.calls[0][0].signal.aborted).toBe(true);
@@ -137,10 +139,8 @@ it("consumes early read failures and preserves the ordinary error UI after authe
 
 
 it.each(["overview", "servers", "server", "vps", "jobs", "releases", "audit", "operations"])("cancels every %s request on failed viewer validation and starts only read operations", async view => {
-    mocks.auth.mockImplementation(async options => {
-        options.onReadOnlySession("test-admin-token");
-        throw new Error("session context unavailable");
-    });
+    mocks.request.mockRejectedValue(new Error("Oracle did not confirm authority"));
+    mocks.auth.mockRejectedValue(new Error("session context unavailable"));
     await expect(ControlPlaneAdminPage({ searchParams: Promise.resolve({ view, serverId: "test-server" }) })).rejects.toThrow("session context unavailable");
     expect(mocks.request.mock.calls.length).toBeGreaterThan(0);
     for (const [request] of mocks.request.mock.calls) {
@@ -155,11 +155,13 @@ it.each(["overview", "servers", "server", "vps", "jobs", "releases", "audit", "o
 
 it("releases the authenticated shell while the early read is still pending", async () => {
     const pendingRead = Promise.withResolvers<unknown>();
-    mocks.request.mockReturnValue(pendingRead.promise);
+    mocks.request.mockImplementation(request => { request.onAuthenticated(); return pendingRead.promise; });
     const page = await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "servers" }) });
     expect(page).toBeDefined();
     expect(mocks.accounts).not.toHaveBeenCalled();
     pendingRead.resolve({ items: [], nextCursor: null });
+    await Promise.resolve(); await Promise.resolve();
+    expect(mocks.auth).not.toHaveBeenCalled();
 });
 
 
@@ -198,4 +200,30 @@ it("projects only displayed audit fields while retaining reasons and shortened i
     expect(mocks.tables).toHaveBeenCalledExactlyOnceWith("audit", { events: [{ eventId: "event-fixture", actorType: "administrator", actorLabel: "44444444…444444",
         serverLabel: "—", action: "hosting.job.succeeded", reason: "Fresh audit reason", correlationLabel: "55555555…555555", occurredAt: "2026-09-30T00:00:00.000Z" }] });
     expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
+
+it("does not start reads before session refresh and impersonation validation, or after validation fails", async () => {
+    const session = Promise.withResolvers<unknown>();
+    mocks.session.mockReturnValue(session.promise);
+    const page = ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "overview" }) });
+    await Promise.resolve(); await Promise.resolve();
+    expect(mocks.request).not.toHaveBeenCalled();
+    session.reject(new Error("impersonation expired"));
+    await expect(page).rejects.toThrow("impersonation expired");
+    expect(mocks.request).not.toHaveBeenCalled(); expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
+it("does not let a late concurrent read override failed fresh fallback authentication", async () => {
+    const fallback = Promise.withResolvers<unknown>();
+    mocks.auth.mockReturnValue(fallback.promise);
+    const pending = Promise.withResolvers<unknown>();
+    mocks.request.mockImplementation(request => request.operation === "overview" ? Promise.reject(new Error("unavailable")) : pending.promise);
+    const page = ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) });
+    await vi.waitFor(() => expect(mocks.auth).toHaveBeenCalledOnce());
+    for (const [request] of mocks.request.mock.calls) request.onAuthenticated();
+    fallback.resolve({ user: null, accessToken: null });
+    await expect(page).rejects.toThrow();
+    expect(mocks.accounts).not.toHaveBeenCalled(); expect(mocks.tables).not.toHaveBeenCalled();
+    pending.resolve({});
 });

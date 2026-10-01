@@ -3,7 +3,8 @@
 `/admin/control-plane` is the website presentation layer for managed-hosting administration. Supabase `Admin` access protects the page, and the browser sends typed requests to the `control-plane-admin` Supabase Edge Function. The function accepts only configured website origins, reauthenticates the current access token, requires the protected `Admin` role, then forwards the unchanged request envelope to the Oracle web-admin adapter. The adapter independently revalidates the token and uses the control plane's typed Unix-socket contract.
 
 For server-rendered pane reads, the page starts its closed read operation as soon as
-it has a refreshed session token, overlapping the website's fresh viewer validation.
+it has a refreshed session token. Successful reads reuse Oracle's fresh authority
+instead of repeating the user and session-context calls in the website.
 The seven server-rendered reads (`overview`, `vps-hosts`, `servers`,
 `server-dashboard`, `jobs`, `audit`, `release-catalog`) use a server-only helper to call
 `https://control-plane.bannerlordcoop.com/v1/admin/control-plane` directly.
@@ -13,13 +14,24 @@ the protected `Admin` role, regardless of bootstrap email admission. The reader
 requires the exact response acknowledgment, HTTP success and a successful
 correlated envelope before returning data. It never falls back to the relay.
 An older backend or backend rollback therefore fails closed; deploy the companion
-ControlPlane #265 adapter before this website change. Website rollback to Edge
+[ControlPlane #270](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/pull/270) adapter before this website change. Website rollback to Edge
 reads remains compatible. Browser reads and all mutations retain the Edge route.
 The fixed direct route omits cookies/API keys, disables caching, refuses redirects
 without following them, bounds requests to 64KiB and streamed responses to 8MiB
 and 8192 chunks, and keeps caller cancellation plus the 90-second read deadline.
-The page withholds all content until fresh user/session identity and administrator
-access checks succeed, and cancels pending reads on rejection. Service-key account
+Oracle also returns `x-control-plane-authenticated-session` containing the freshly
+verified Supabase user UUID and current request UUID. Before releasing the page,
+the reader matches both identifiers to the refreshed session and the exact read,
+requires the protected-role acknowledgment and `Cache-Control: no-store`, and
+refuses redirects. Cached role claims never grant page access. Result data still
+requires complete bounded decoding and a successful correlated envelope. Missing,
+duplicate or mismatched attestations reject the read data. An unavailable, denied
+or older adapter retains the website's fresh user/context validation only to show
+the existing error UI; that path cannot release the rejected data. Deploy the
+companion identity-attestation adapter before this website change. Backend rollback
+fails closed for read data; website rollback remains compatible.
+The page withholds all content until fresh identity, session context and administrator
+access are confirmed, and cancels pending reads on rejection. Service-key account
 lookups start only after those checks. Impersonation actor/target validation finishes
 before any early read starts. No mutation uses this path and no response or permission
 is cached across requests.
@@ -231,8 +243,8 @@ an authentication attempt even if the concurrent user lookup fails; this is not
 successful authorization. Membership and Patreon retain their existing verified
 identity calls to the shared session verifier.
 
-The read-only control-plane and Servers pages obtain a fresh viewer after normal
-session refresh. User verification and the session-context RPC run concurrently
+The read-only Servers page and administrator read-error fallback obtain a fresh
+viewer after normal session refresh. User verification and the session-context RPC run concurrently
 with the same explicit access token; this also avoids serializing the RPC behind
 the auth SDK's session lock. Neither result is cached across requests. Existing
 impersonation validation completes before this viewer is returned. Server actions

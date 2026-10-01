@@ -37,6 +37,43 @@ it.each(operations)("directly reads fresh %s through the fixed constrained serve
     expect(fetch).toHaveBeenCalledTimes(2);
 });
 
+it("attests the matching fresh identity before a pending body without releasing unvalidated data", async () => {
+    const userId = "44444444-4444-4444-8444-444444444444";
+    const body = Promise.withResolvers<void>(), authenticated = vi.fn();
+    vi.stubGlobal("fetch", async () => new Response(new ReadableStream({ async start(controller) {
+        await body.promise;
+        controller.enqueue(new TextEncoder().encode(JSON.stringify(envelope({ revision: 1 })))); controller.close();
+    } }), { headers: { ...headers, "cache-control": "no-store", "x-control-plane-authenticated-session": `${userId}:${REQUEST_ID}` } }));
+    let completed = false;
+    const read = readControlPlaneAdmin({ ...options, expectedUserId: userId, onAuthenticated: authenticated });
+    void read.then(() => { completed = true; });
+    await vi.waitFor(() => expect(authenticated).toHaveBeenCalledOnce());
+    expect(completed).toBe(false);
+    body.resolve(); expect(await read).toEqual({ revision: 1 });
+});
+
+it.each([undefined, "wrong-user", "44444444-4444-4444-8444-444444444444:wrong-request", "44444444-4444-4444-8444-444444444444:11111111-1111-4111-8111-111111111111, duplicate"])("rejects absent or mismatched session attestations (%s)", async attestation => {
+    const authenticated = vi.fn(), cancel = vi.fn();
+    vi.stubGlobal("fetch", async () => new Response(new ReadableStream({ cancel }), { headers: { ...headers, "cache-control": "no-store",
+        ...(attestation === undefined ? {} : { "x-control-plane-authenticated-session": attestation }) } }));
+    await expect(readControlPlaneAdmin({ ...options, expectedUserId: "44444444-4444-4444-8444-444444444444", onAuthenticated: authenticated })).rejects.toMatchObject({ code: "invalid_response" });
+    expect(authenticated).not.toHaveBeenCalled(); expect(cancel).toHaveBeenCalledOnce();
+});
+
+it("rejects cacheable attestations and identity callbacks without an expected user", async () => {
+    const userId = "44444444-4444-4444-8444-444444444444", authenticated = vi.fn();
+    const fetch = vi.fn(async () => Response.json(envelope({}), { headers: { ...headers, "x-control-plane-authenticated-session": `${userId}:${REQUEST_ID}` } }));
+    vi.stubGlobal("fetch", fetch);
+    await expect(readControlPlaneAdmin({ ...options, onAuthenticated: authenticated })).rejects.toMatchObject({ code: "invalid_request" });
+    expect(fetch).not.toHaveBeenCalled();
+    for (const identity of [{ expectedUserId: "not-a-user-uuid" }, { expectedUserId: userId, requestId: "not-a-request-uuid" }]) {
+        await expect(readControlPlaneAdmin({ ...options, ...identity, onAuthenticated: authenticated })).rejects.toMatchObject({ code: "invalid_request" });
+    }
+    expect(fetch).not.toHaveBeenCalled();
+    await expect(readControlPlaneAdmin({ ...options, expectedUserId: userId, onAuthenticated: authenticated })).rejects.toMatchObject({ code: "invalid_response" });
+    expect(authenticated).not.toHaveBeenCalled();
+});
+
 it("rejects unknown operations, mutations, bad tokens and oversized requests without transport", async () => {
     const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
     for (const operation of ["delete-server", "import-latest-stable", "set-global-controls", "builds", "unknown"]) {
@@ -136,7 +173,7 @@ it("runs every direct read in native workerd and rejects all redirects without f
     const bundled = await build({
         stdin: { contents: `import { readControlPlaneAdmin } from "./server-read";
             export default { async fetch(request) {
-                try { return Response.json(await readControlPlaneAdmin({ accessToken: "${TOKEN}", operation: new URL(request.url).searchParams.get("operation") })); }
+                try { return Response.json(await readControlPlaneAdmin({ accessToken: "${TOKEN}", operation: new URL(request.url).searchParams.get("operation"), expectedUserId: "44444444-4444-4444-8444-444444444444" })); }
                 catch (error) { return Response.json({ error: error.code }, { status: 502 }); }
             } };`, resolveDir: dirname(fileURLToPath(import.meta.url)) },
         bundle: true, format: "esm", platform: "browser", write: false,
@@ -159,7 +196,7 @@ it("runs every direct read in native workerd and rejects all redirects without f
             if (redirectStatus) return new Response(null, { status: redirectStatus, headers: { location: "https://other.test/private" } });
             return Response.json({ version: 1, requestId: body.requestId, ok: true, result: {
                 operation: body.operation, revision: calls, rows: [{ name: "Current 👨‍👩‍👧‍👦" }],
-            } }, { headers });
+            } }, { headers: { ...headers, "cache-control": "no-store", "x-control-plane-authenticated-session": `44444444-4444-4444-8444-444444444444:${body.requestId}` } });
         },
     }] }));
     try {
@@ -177,4 +214,16 @@ it("runs every direct read in native workerd and rejects all redirects without f
             expect(calls).toBe(before + 1);
         }
     } finally { await runtime.dispose(); }
+});
+
+
+it("does not attest authority when the caller aborts as response headers arrive", async () => {
+    const controller = new AbortController(), authenticated = vi.fn(), cancel = vi.fn();
+    vi.stubGlobal("fetch", async () => {
+        controller.abort();
+        return new Response(new ReadableStream({ cancel }), { headers: { ...headers, "cache-control": "no-store",
+            "x-control-plane-authenticated-session": `44444444-4444-4444-8444-444444444444:${REQUEST_ID}` } });
+    });
+    await expect(readControlPlaneAdmin({ ...options, expectedUserId: "44444444-4444-4444-8444-444444444444", onAuthenticated: authenticated, signal: controller.signal })).rejects.toMatchObject({ code: "control_plane_unavailable" });
+    expect(authenticated).not.toHaveBeenCalled(); expect(cancel).toHaveBeenCalledOnce();
 });

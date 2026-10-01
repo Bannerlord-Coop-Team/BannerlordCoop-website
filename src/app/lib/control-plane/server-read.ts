@@ -15,9 +15,15 @@ export async function readControlPlaneAdmin<T>(options: {
     input?: unknown;
     requestId?: string;
     signal?: AbortSignal;
+    /** Bind fresh Oracle authority to this refreshed session, never to cached role claims. */
+    expectedUserId?: string;
+    onAuthenticated?: () => void;
 }): Promise<T> {
     const requestId = options.requestId ?? crypto.randomUUID();
-    if (!READ_OPERATIONS.includes(options.operation) || options.accessToken.length < 20 || options.accessToken.length > 8_192) {
+    if (!READ_OPERATIONS.includes(options.operation) || options.accessToken.length < 20 || options.accessToken.length > 8_192
+        || (options.expectedUserId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(options.expectedUserId))
+        || (options.expectedUserId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId))
+        || (options.onAuthenticated !== undefined && options.expectedUserId === undefined)) {
         throw new ControlPlaneAdminError("invalid_request", "The administrator read request is invalid.", false, requestId);
     }
     const body = JSON.stringify({ version: 1, requestId, operation: options.operation,
@@ -39,10 +45,24 @@ export async function readControlPlaneAdmin<T>(options: {
     } catch {
         throw new ControlPlaneAdminError("control_plane_unavailable", "The control plane could not be reached.", true, requestId);
     }
+    if (signal.aborted) {
+        void response.body?.cancel().catch(() => undefined);
+        throw new ControlPlaneAdminError("control_plane_unavailable", "The control plane read was cancelled.", true, requestId);
+    }
     if ((response.status >= 300 && response.status < 400)
         || (response.ok && response.headers.get("x-control-plane-protected-admin") !== "1")) {
         void response.body?.cancel().catch(() => undefined);
         throw new ControlPlaneAdminError("invalid_response", "The control plane did not confirm protected administrator access.", true, requestId);
+    }
+    if (response.ok && options.expectedUserId !== undefined) {
+        if (response.headers.get("x-control-plane-authenticated-session") !== `${options.expectedUserId}:${requestId}`
+            || !response.headers.get("cache-control")?.split(",").some(value => value.trim().toLowerCase() === "no-store")) {
+            void response.body?.cancel().catch(() => undefined);
+            throw new ControlPlaneAdminError("invalid_response", "The control plane did not confirm the current session identity.", true, requestId);
+        }
+        // The fixed-origin response proves fresh identity, context and protected role.
+        // The result still requires bounded decoding and matching envelope correlation.
+        options.onAuthenticated?.();
     }
     const result = decodeControlPlaneAdminResponse<T>(await readResponse(response, signal, requestId), requestId, response.ok);
     if (!response.ok) throw new ControlPlaneAdminError("invalid_response", "The control plane returned an invalid response.", true, requestId);
