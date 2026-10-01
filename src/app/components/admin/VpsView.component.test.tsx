@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { HostingAdminHostResources, HostingAdminVpsHost, HostingAdminVpsInventory } from "@/app/lib/control-plane/types";
 import { VpsView } from "./VpsView";
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), session: vi.fn() }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), resources: vi.fn(), billing: vi.fn(), session: vi.fn() }));
 vi.mock("@/app/lib/control-plane/client", () => ({ requestControlPlaneAdmin: mocks.request }));
 vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({ auth: { getSession: mocks.session } }) }));
 vi.mock("./RunnerOnboardingStatus", () => ({ RunnerOnboardingStatus: () => <span>Runner current</span> }));
@@ -13,6 +13,8 @@ let root: Root;
 beforeEach(() => {
     vi.resetAllMocks();
     vi.useFakeTimers();
+    mocks.request.mockImplementation(options => (options.input.includeLiveData ? mocks.resources : mocks.billing)(options));
+    mocks.billing.mockResolvedValue({ ...inventory(true), liveDataIncluded: false });
     mocks.session.mockResolvedValue({ data: { session: { access_token: "test-token" } } });
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     container = document.createElement("div");
@@ -35,7 +37,7 @@ function deferred() {
     return { promise, resolve, reject };
 }
 it("shows usable inventory before readings and preserves an expanded row when they arrive", async () => {
-    const read = deferred(); mocks.request.mockReturnValue(read.promise);
+    const read = deferred(); mocks.resources.mockReturnValue(read.promise);
     await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
     expect(container.textContent).toContain("host-a");
     expect(container.textContent).toContain("testserver");
@@ -47,21 +49,21 @@ it("shows usable inventory before readings and preserves an expanded row when th
     expect(container.textContent).not.toContain("Loading");
     expect(container.textContent).toContain("47.7%");
     expect(container.querySelector('button[aria-label="Collapse details for host-a"]')).not.toBeNull();
-    expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({ accessToken: "test-token", operation: "vps-hosts" }));
+    expect(mocks.resources).toHaveBeenCalledWith(expect.objectContaining({ accessToken: "test-token", operation: "vps-hosts" }));
 });
 it("keeps inventory on failure and retries live readings", async () => {
-    mocks.request.mockRejectedValueOnce(new Error("Provider unavailable")).mockResolvedValueOnce(inventory(true));
+    mocks.resources.mockRejectedValueOnce(new Error("Provider unavailable")).mockResolvedValueOnce(inventory(true));
     await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
     expect(container.textContent).toContain("host-a");
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Provider unavailable");
     await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent === "Retry live readings")!.click());
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(container.textContent).toContain("47.7%");
-    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(mocks.resources).toHaveBeenCalledTimes(2);
 });
 it("ignores an old result after the server supplies a new inventory", async () => {
     const old = deferred(); const current = deferred();
-    mocks.request.mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+    mocks.resources.mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
     await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
     await act(async () => root.render(<VpsView inventory={inventory(false, "host-b")} accounts={[]} />));
     await act(async () => old.resolve(inventory(true)));
@@ -72,20 +74,20 @@ it("ignores an old result after the server supplies a new inventory", async () =
 });
 it.each([true, undefined])("does not reload an already complete or legacy response (%s)", async (flag) => {
     await act(async () => root.render(<VpsView inventory={{ ...inventory(true), liveDataIncluded: flag }} accounts={[]} />));
-    expect(mocks.request).not.toHaveBeenCalled();
+    expect(mocks.resources).not.toHaveBeenCalled();
 });
 
 it("updates readings in place without overlapping slow requests or collapsing details", async () => {
     const next = deferred();
-    mocks.request.mockResolvedValueOnce(inventory(true)).mockReturnValueOnce(next.promise);
+    mocks.resources.mockResolvedValueOnce(inventory(true)).mockReturnValueOnce(next.promise);
     await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-a"]')!.click());
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
-    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(mocks.resources).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain("47.7%");
     expect(container.textContent).not.toContain("Loading");
     await act(async () => vi.advanceTimersByTimeAsync(30_000));
-    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(mocks.resources).toHaveBeenCalledTimes(2);
     const updated = inventory(true);
     updated.controlPlaneHost!.cpuPercent = 12.3;
     await act(async () => next.resolve(updated));
@@ -94,47 +96,116 @@ it("updates readings in place without overlapping slow requests or collapsing de
 });
 
 it("labels retained readings on failure and recovers automatically", async () => {
-    mocks.request.mockResolvedValueOnce(inventory(true))
+    mocks.resources.mockResolvedValueOnce(inventory(true))
         .mockRejectedValueOnce(new Error("Provider unavailable"))
         .mockResolvedValueOnce({ ...inventory(true), controlPlaneHost: null });
     await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
     expect(container.textContent).toContain("47.7%");
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Showing the last readings");
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Showing the last resource readings");
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(container.textContent).toContain("No current trusted resource observation");
 });
 
 it("pauses hidden tabs, resumes on return, and cancels requests on unmount", async () => {
-    mocks.request.mockResolvedValue(inventory(true));
+    mocks.resources.mockResolvedValue(inventory(true));
     await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
     const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
     await act(async () => document.dispatchEvent(new Event("visibilitychange")));
     await act(async () => vi.advanceTimersByTimeAsync(30_000));
-    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.resources).toHaveBeenCalledTimes(1);
     visibility.mockReturnValue("visible");
     const next = deferred();
-    mocks.request.mockReturnValueOnce(next.promise);
+    mocks.resources.mockReturnValueOnce(next.promise);
     await act(async () => document.dispatchEvent(new Event("visibilitychange")));
-    expect(mocks.request).toHaveBeenCalledTimes(2);
-    const signal = mocks.request.mock.calls[1][0].signal as AbortSignal;
+    expect(mocks.resources).toHaveBeenCalledTimes(2);
+    const signal = mocks.resources.mock.calls[1][0].signal as AbortSignal;
     await act(async () => root.render(null));
     expect(signal.aborted).toBe(true);
     await act(async () => next.resolve(inventory(true)));
     await act(async () => vi.advanceTimersByTimeAsync(30_000));
-    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(mocks.resources).toHaveBeenCalledTimes(2);
     visibility.mockRestore();
 });
 
 it("refreshes an initially complete snapshot after the interval", async () => {
     const updated = inventory(true);
     updated.controlPlaneHost!.cpuPercent = 12.3;
-    mocks.request.mockResolvedValue(updated);
+    mocks.resources.mockResolvedValue(updated);
     await act(async () => root.render(<VpsView inventory={inventory(true)} accounts={[]} />));
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
-    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.resources).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("12.3%");
+});
+
+it("shows resources and runner state while billing is pending, then merges only provider fields", async () => {
+    const billing = deferred();
+    mocks.billing.mockReturnValue(billing.promise);
+    const live = inventory(true);
+    live.hosts[0].runningServers = 2;
+    mocks.resources.mockResolvedValue(live);
+    await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
+    expect(container.textContent).toContain("47.7%");
+    expect(container.textContent).toContain("Runner current");
+    expect(container.textContent).toContain("Loading billing readings");
+    expect(container.querySelector('[data-label="Billing"]')?.textContent).toContain("Loading");
+    expect(container.querySelector('[data-label="Capacity"]')?.textContent).toContain("Running2");
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-a"]')!.click());
+    await act(async () => billing.resolve({ ...inventory(), hosts: inventory(true).hosts }));
+    expect(container.querySelector('[data-label="Billing"]')?.textContent).toContain("$12.32 / month");
+    expect(container.querySelector('[data-label="Capacity"]')?.textContent).toContain("Running2");
+    expect(container.textContent).toContain("47.7%");
+    expect(container.querySelector('button[aria-label="Collapse details for host-a"]')).not.toBeNull();
+    expect(mocks.resources).toHaveBeenCalledWith(expect.objectContaining({ input: { includeLiveData: true, includeProviderInventory: false } }));
+    expect(mocks.billing).toHaveBeenCalledWith(expect.objectContaining({ input: { includeLiveData: false, includeProviderInventory: true } }));
+});
+
+it("times out billing separately, continues telemetry, and recovers on a billing-only retry", async () => {
+    mocks.resources.mockResolvedValue(inventory(true));
+    mocks.billing.mockImplementationOnce(({ signal }: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }));
+    await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Billing readings timed out");
+    expect(container.querySelector('[data-label="Billing"]')?.textContent).toBe("Unavailable");
+    expect(container.textContent).toContain("47.7%");
+    expect(mocks.resources).toHaveBeenCalledTimes(4);
+    expect(mocks.billing).toHaveBeenCalledTimes(1);
+    await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent === "Retry billing")!.click());
+    expect(mocks.resources).toHaveBeenCalledTimes(4);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.querySelector('[data-label="Billing"]')?.textContent).toContain("$12.32");
+});
+
+it("retains and labels stale billing independently of successful telemetry refreshes", async () => {
+    mocks.resources.mockResolvedValue(inventory(true));
+    mocks.billing.mockResolvedValueOnce({ ...inventory(true), liveDataIncluded: false })
+        .mockRejectedValueOnce(new Error("Provider unavailable"));
+    await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Showing the last billing readings");
+    expect(container.querySelector('[data-label="Billing"]')?.textContent).toContain("$12.32");
+    expect(container.textContent).toContain("47.7%");
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
+it("ignores old billing after new inventory arrives and aborts billing on unmount", async () => {
+    const old = deferred();
+    mocks.resources.mockImplementation(async () => inventory(true, "host-b"));
+    mocks.billing.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ ...inventory(true, "host-b"), liveDataIncluded: false });
+    await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
+    const signal = mocks.billing.mock.calls[0][0].signal as AbortSignal;
+    await act(async () => root.render(<VpsView inventory={inventory(false, "host-b")} accounts={[]} />));
+    expect(signal.aborted).toBe(true);
+    await act(async () => old.resolve({ ...inventory(true), liveDataIncluded: false }));
+    expect(container.textContent).toContain("host-b");
+    expect(container.textContent).not.toContain("host-a");
+    const currentSignal = mocks.billing.mock.calls[1][0].signal as AbortSignal;
+    await act(async () => root.render(null));
+    expect(currentSignal.aborted).toBe(true);
 });
 
 function host(name: string, hostResources: HostingAdminHostResources, slotIndex: number, updating = false): HostingAdminVpsHost {
