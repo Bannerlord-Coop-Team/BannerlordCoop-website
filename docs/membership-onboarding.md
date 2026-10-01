@@ -204,6 +204,13 @@ Both must succeed, with any impersonation target matching the verified user,
 before membership reads or writes proceed. Account status still precedes
 the owner allocation read.
 
+The server directory also prepares these read-only checks and the authoritative
+configuration GET during viewer verification. Reconciliation waits for the fresh
+matching viewer, including its Discord binding; failed or discarded preparation
+cannot invoke the status RPC or legacy POST. Allocation still follows status
+reconciliation, and preparation is local to that render. Identical in-flight
+status requests still coalesce; completed status is never retained.
+
 `membership.ts` contains the exact private snapshot contract (all keys required,
 nullable semantics, decimal strings, provider ID bounds, UTC millisecond times).
 It matches CP `membership-contract.ts`. `server-onboarding-contract.ts` parses CP
