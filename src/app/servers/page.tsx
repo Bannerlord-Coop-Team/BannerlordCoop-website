@@ -11,7 +11,7 @@ import { getLiveConsoleAccessLevel } from "@/app/lib/auth/access";
 import { listLiveConsoleServers } from "@/app/lib/console/servers";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { getServerOnboarding, listAllMyServers } from "@/app/lib/hosting/my-servers-server";
-import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
+import { prepareWebsiteAccountStatusRequest } from "@/app/lib/hosting/website-account-status";
 import { ServerOnboarding } from "@/app/components/servers/ServerOnboarding";
 import type { OnboardingSummary } from "../../../supabase/functions/_shared/server-onboarding-contract";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
@@ -39,7 +39,7 @@ export default function ServersPage() {
     const publicInventory = loadPublicInventory();
     const viewer = loadViewer();
     const managedInventory = viewer.then(({ user, accessToken, inventory }) => loadManagedInventory(user, accessToken, inventory));
-    const hostingStatus = viewer.then(({ user, accessToken }) => loadHostingStatus(user, accessToken));
+    const hostingStatus = viewer.then(({ user, accessToken, accountRead }) => loadHostingStatus(user, accessToken, accountRead));
 
     return (
         <>
@@ -157,23 +157,28 @@ async function loadViewer() {
     let accessToken: string | null = null;
     let client: SupabaseClient | null = null;
     let inventory: Promise<PromiseSettledResult<MyServerSummary[]>> | undefined;
+    let accountRead: Promise<PromiseSettledResult<Awaited<ReturnType<typeof prepareWebsiteAccountStatusRequest>>>> | undefined;
     const controller = new AbortController();
 
     try {
-        ({ client, user, accessToken, read: inventory } = await getSupabaseServerViewer({
+        const viewer = await getSupabaseServerViewer({
             // The owner API checks its own current authority. Never render this
             // read before the viewer also verifies the matching user/session.
-            onReadOnlySession: token => Promise.allSettled([
-                listAllMyServers(token, controller.signal),
-            ]).then(([result]) => result),
-        }));
+            onReadOnlySession: token => ({
+                inventory: Promise.allSettled([listAllMyServers(token, controller.signal)]).then(([result]) => result),
+                account: Promise.allSettled([prepareWebsiteAccountStatusRequest(token)]).then(([result]) => result),
+            }),
+        });
+        ({ client, user, accessToken } = viewer);
+        inventory = viewer.read?.inventory;
+        accountRead = viewer.read?.account;
         if (!user || !accessToken) controller.abort();
     } catch {
         controller.abort();
         // Keep the public server directory available when auth is not configured.
     }
 
-    return { user, accessToken, client, inventory };
+    return { user, accessToken, client, inventory, accountRead };
 }
 
 /** Resolve names only for live servers the verified user can manage. */
@@ -201,13 +206,17 @@ async function loadLiveServers(user: User | null) {
 }
 
 /** Keep account synchronization before allocation reads, outside either directory's path. */
-async function loadHostingStatus(user: User | null, accessToken: string | null) {
+async function loadHostingStatus(user: User | null, accessToken: string | null,
+    accountRead: Promise<PromiseSettledResult<Awaited<ReturnType<typeof prepareWebsiteAccountStatusRequest>>>> | undefined) {
     // Resolve authoritative identities before any allocation fetch. No metadata/email fallback.
     const identity = identityStep(user);
     let account: AccountStatus | null = null;
     if (user && accessToken) {
         try {
-            account = await getWebsiteAccountStatus(user.id, accessToken);
+            if (!accountRead) throw new Error("Account read was not prepared.");
+            const prepared = await accountRead;
+            if (prepared.status === "rejected") throw prepared.reason;
+            account = await prepared.value(user);
         } catch { /* Independent CP grants must remain usable during membership outages. */ }
     }
     let onboarding: OnboardingSummary | null = null;

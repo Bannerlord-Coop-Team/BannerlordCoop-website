@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createWebsiteAccountStatusReader, readWebsiteAccountStatus } from "./website-account-status-core";
+import { createWebsiteAccountStatusReader, prepareWebsiteAccountStatus, readWebsiteAccountStatus } from "./website-account-status-core";
 import { DatabaseContention } from "../../../../supabase/functions/_shared/database-contention";
 import { MembershipRateLimit } from "../../../../supabase/functions/_shared/membership-store";
 
@@ -40,6 +40,34 @@ test("clears a failed in-flight request so an explicit retry can proceed", async
     assert.equal(calls, 2);
 });
 
+test("prepared and ordinary requests share only the same in-flight account status", async () => {
+    let ordinaryReads = 0, preparedReads = 0;
+    let release!: () => void;
+    let gate = new Promise<void>(resolve => { release = resolve; });
+    let started = Promise.withResolvers<void>();
+    const reader = createWebsiteAccountStatusReader(async () => { ordinaryReads++; started.resolve(); await gate; return status; });
+    const prepared = async () => { preparedReads++; started.resolve(); await gate; return status; };
+    const first = reader(accountId, token, prepared);
+    await started.promise; // The asynchronous token hash need not finish in one event-loop turn.
+    const second = reader(accountId, token);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(preparedReads, 1); assert.equal(ordinaryReads, 0);
+    release();
+    assert.deepEqual(await Promise.all([first, second]), [status, status]);
+    await reader(accountId, token);
+    assert.equal(ordinaryReads, 1);
+    gate = new Promise<void>(resolve => { release = resolve; });
+    started = Promise.withResolvers<void>();
+    const ordinary = reader(accountId, token);
+    await started.promise;
+    const overlap = reader(accountId, token, prepared);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(preparedReads, 1); assert.equal(ordinaryReads, 2);
+    release();
+    assert.deepEqual(await Promise.all([ordinary, overlap]), [status, status]);
+    assert.equal(preparedReads, 1); assert.equal(ordinaryReads, 2);
+});
+
 test("passes the explicit token, reads settled status afresh, and rejects account mismatches", async () => {
     const calls: string[] = [];
     let current = status;
@@ -60,6 +88,36 @@ const snapshot = { version: 1, accountId, discordUserId: discordId, patreonUserI
 const config = { supabaseUrl: "https://fixture.supabase.co", serviceRoleKey: "sb_secret_synthetic", publishableKey: "sb_publishable_synthetic" };
 const user = () => Response.json({ id: accountId, identities: [{ provider: "discord", identity_data: { sub: discordId } }] });
 const result = () => Response.json({ snapshot, pending: false, verificationPending: false });
+
+test("prepared account checks cannot reconcile until a matching freshly verified viewer consumes them", async () => {
+    for (const legacy of [false, true]) {
+        const starts: string[] = []; let writes = 0;
+        const prepare = () => prepareWebsiteAccountStatus(token, { ...config, fetch: async (input, init) => {
+            const path = new URL(String(input)).pathname; starts.push(path);
+            if (path === "/auth/v1/user") return user();
+            if (path === "/rest/v1/rpc/website_session_context") return Response.json({ impersonationId: null });
+            if (path === "/functions/v1/website-account" && init?.method !== "POST") {
+                return legacy ? Response.json({}, { status: 405 }) : Response.json({ version: 1, configured: true });
+            }
+            writes++;
+            assert.equal(path, legacy ? "/functions/v1/website-account" : "/rest/v1/rpc/membership_status");
+            return legacy ? Response.json(status) : result();
+        } });
+        const viewer = { id: accountId, identities: [{ provider: "discord", identity_data: { sub: discordId } }] };
+        const pending = await prepare();
+        assert.equal(starts.length, 3); assert.equal(writes, 0);
+        for (const mismatch of [{ ...viewer, id: "bbbbbbbb-1111-4111-8111-111111111111" },
+            { ...viewer, identities: [] }, { ...viewer, identities: [{ provider: "discord", identity_data: { sub: "999456789012345678" } }] }]) {
+            await assert.rejects(pending(mismatch, async () => { assert.fail("Mismatch cannot consume a coalesced result"); }), /identity changed/);
+            assert.equal(writes, 0);
+        }
+        assert.deepEqual(await pending(viewer), status);
+        assert.equal(writes, 1);
+        // Discarding prepared reads performs no reconciliation at all.
+        await prepare();
+        assert.equal(writes, 1);
+    }
+});
 
 test("native account status waits for fresh identity, session and configuration in every completion order", async () => {
     for (const last of ["user", "context", "flag"]) {

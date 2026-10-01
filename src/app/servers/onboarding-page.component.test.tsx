@@ -1,8 +1,8 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import { onboardingSummary, ONBOARDING_TEST_ID } from "../../../tests/onboarding-fixtures";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn(), publicList: vi.fn(), account: vi.fn(), displayNames: vi.fn(), navbar: vi.fn() }));
-vi.mock("@/app/lib/hosting/website-account-status", () => ({ getWebsiteAccountStatus: mocks.account }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn(), publicList: vi.fn(), prepareAccount: vi.fn(), account: vi.fn(), displayNames: vi.fn(), navbar: vi.fn() }));
+vi.mock("@/app/lib/hosting/website-account-status", () => ({ getWebsiteAccountStatus: mocks.account, prepareWebsiteAccountStatusRequest: mocks.prepareAccount }));
 vi.mock("@/app/lib/hosting/public-servers", () => ({ listPublicServers: mocks.publicList }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: async (options?: { onReadOnlySession?: (token: string) => unknown }) => {
     const client = await mocks.auth();
@@ -28,6 +28,7 @@ async function renderPage() {
 beforeEach(() => {
     vi.resetAllMocks();
     mocks.account.mockResolvedValue(null);
+    mocks.prepareAccount.mockImplementation(async (token: string) => (viewer: { id: string }) => mocks.account(viewer.id, token));
     mocks.displayNames.mockResolvedValue(new Map());
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "44444444-4444-4444-8444-444444444444", identities: [{ provider: "discord", identity_data: { sub: "123456789012345678" } }] } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt", user: { id: "44444444-4444-4444-8444-444444444444" } } } }) } });
     mocks.list.mockResolvedValue([{ serverId: ONBOARDING_TEST_ID, displayName: "Assigned campaign", operationState: "stopped", observedGameState: "stopped", accessRole: "owner" }]);
@@ -204,6 +205,7 @@ it("starts owner inventory during viewer verification but streams it only after 
         }
         expect(html).toContain("Public directory</div>");
         expect(mocks.list).toHaveBeenCalledExactlyOnceWith("test-page-jwt", expect.any(AbortSignal));
+        expect(mocks.prepareAccount).toHaveBeenCalledExactlyOnceWith("test-page-jwt");
         expect(html).not.toContain("Assigned campaign");
         expect(mocks.account).not.toHaveBeenCalled();
         expect(mocks.onboarding).not.toHaveBeenCalled();
