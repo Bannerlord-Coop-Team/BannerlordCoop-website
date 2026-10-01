@@ -1,4 +1,5 @@
 import type { HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
+import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE } from "../../../../supabase/functions/_shared/server-settings-contract";
 
 const SERVER_REGION_LABELS = {
     "us-west": "US-West",
@@ -9,9 +10,7 @@ const SERVER_REGION_LABELS = {
     poland: "Poland",
 } as const;
 
-const MAINTENANCE_SLOTS = ["03:00-04:00", "10:00-11:00", "18:00-19:00"] as const;
-
-export const MAINTENANCE_TIME_ZONE = "America/Chicago";
+export const MAINTENANCE_TIME_ZONE = HOSTING_TIME_ZONE;
 
 export type ControlPlaneOperationResultLink = {
     href: string;
@@ -77,7 +76,7 @@ export function createServerRegionOptions(
 }
 
 export function maintenanceSlotOptions() {
-    return MAINTENANCE_SLOTS.map((value) => ({
+    return HOSTING_MAINTENANCE_SLOTS.map((value) => ({
         value,
         label: `${value.replace("-", "–")} ${MAINTENANCE_TIME_ZONE}`,
     }));

@@ -372,6 +372,33 @@ test("direct commands preserve admission failures and do not retry transport los
     assert.equal(calls, 1);
 });
 
+test("hosting settings preserve generation and receipt identity while rejecting unsupported controls", async () => {
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    const mutation = { serverId, expectedUpdatedAt: "2026-10-01T00:00:00.000Z", patch: { displayName: "Renamed QA", maintenanceSlot: "18:00-19:00" } };
+    const input = { action: "save-server-settings", ...mutation };
+    const upstream: unknown[] = [];
+    let leak = false;
+    const handler = createHandler(async (_url, init) => {
+        upstream.push(JSON.parse(String(init?.body)));
+        return successEnvelope({ outcome: "updated", serverId, updatedAt: "2026-10-01T00:00:01.000Z", ...(leak ? { password: "withheld" } : {}) });
+    });
+    const response = await handler(operationRequest(input));
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).result.serverId, serverId);
+    assert.deepEqual(upstream, [{ version: 1, requestId: REQUEST_ID, operation: "save-server-settings", input: mutation }]);
+    for (const invalid of [{ ...input, actor: "owner" }, { ...input, patch: {} }, { ...input, patch: { releaseChannel: "nightly" } },
+        { ...input, patch: { configuration: {} } }, { ...input, patch: { timezone: "UTC" } }, { ...input, patch: { maintenanceSlot: "12:00-13:00" } }]) {
+        assert.equal((await handler(operationRequest(invalid))).status, 400);
+    }
+    const missingId = operationRequest(input); missingId.headers.delete("x-request-id");
+    assert.equal((await handler(missingId)).status, 400);
+    assert.equal(upstream.length, 1);
+    leak = true;
+    const rejected = await handler(operationRequest(input));
+    assert.equal(rejected.status, 502);
+    assert.ok(!(await rejected.text()).includes("withheld"));
+});
+
 test("website password controls preserve actor, generation and request ID without returning secrets", async () => {
     const input = { action: "set-password", serverId: "22222222-2222-4222-8222-222222222222", expectedUpdatedAt: "2026-09-28T00:00:00.000Z", password: "Private-fixture-password" };
     const upstream: unknown[] = [];

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { renameLiveServer } from "@/app/servers/name-actions";
 import { setServerVisibility } from "@/app/servers/server-visibility-actions";
 import { changeServerRelease, readServerReleaseStatus } from "@/app/servers/server-release-actions";
+import { saveServerSettings } from "@/app/servers/server-settings-actions";
+import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE, type MaintenanceSlot, type OwnerSettingsMutation } from "../../../../supabase/functions/_shared/server-settings-contract";
 import type { ReleaseChannel, ReleaseStatus } from "../../../../supabase/functions/_shared/server-release-contract";
 import { CircleAlert, Globe2, LockKeyhole } from "lucide-react";
 
@@ -13,7 +15,8 @@ const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-m
 type Visibility = "private" | "public";
 type VisibilityAccess = { serverId: string; expectedUpdatedAt: string; canEdit: boolean };
 
-export function ServerSettingsPanel({ name, visibility, renameServerId, visibilityAccess, releaseAccess }: {
+export function ServerSettingsPanel({ name, visibility, renameServerId, visibilityAccess, releaseAccess, settingsAccess }: {
+    settingsAccess?: VisibilityAccess & { maintenanceSlot?: string; timezone?: string };
     releaseAccess?: VisibilityAccess & { channel: ReleaseChannel };
     name: string; visibility?: Visibility; renameServerId?: string; visibilityAccess?: VisibilityAccess;
 }) {
@@ -22,6 +25,8 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
     const [nameState, setNameState] = useState({ source: name, saved: name, draft: name });
     const [visibilityState, setVisibilityState] = useState({ source: visibility, draft: visibility });
     const [channelState, setChannelState] = useState({ source: releaseAccess?.channel, draft: releaseAccess?.channel });
+    const [maintenanceState, setMaintenanceState] = useState({ source: settingsAccess?.maintenanceSlot, draft: settingsAccess?.maintenanceSlot });
+    const settingsRequest = useRef<(OwnerSettingsMutation & { requestId: string }) | null>(null);
     const [releaseStatus, setReleaseStatus] = useState<ReleaseStatus | null>(null);
     const [pollVersion, setPollVersion] = useState(0);
     const [progressError, setProgressError] = useState("");
@@ -59,12 +64,16 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
     if (nameState.source !== name) setNameState({ source: name, saved: name, draft: name });
     if (visibilityState.source !== visibility) setVisibilityState({ source: visibility, draft: visibility });
     if (channelState.source !== releaseAccess?.channel) setChannelState({ source: releaseAccess?.channel, draft: releaseAccess?.channel });
+    if (maintenanceState.source !== settingsAccess?.maintenanceSlot) setMaintenanceState({ source: settingsAccess?.maintenanceSlot, draft: settingsAccess?.maintenanceSlot });
     const channelDirty = releaseAccess?.canEdit === true && channelState.draft !== releaseAccess.channel;
-    const canRename = !!renameServerId;
+    const hasMaintenance = settingsAccess?.timezone === HOSTING_TIME_ZONE && HOSTING_MAINTENANCE_SLOTS.includes(settingsAccess.maintenanceSlot as MaintenanceSlot);
+    const canChangeSettings = settingsAccess?.canEdit === true && hasMaintenance;
+    const canRename = !!renameServerId || canChangeSettings;
     const canChangeVisibility = visibilityAccess?.canEdit === true && visibility !== undefined;
     const nameDirty = canRename && nameState.draft.trim() !== nameState.saved;
     const visibilityDirty = canChangeVisibility && visibilityState.draft !== visibility;
-    const dirty = nameDirty || visibilityDirty || channelDirty;
+    const maintenanceDirty = canChangeSettings && maintenanceState.draft !== settingsAccess?.maintenanceSlot;
+    const dirty = nameDirty || visibilityDirty || channelDirty || maintenanceDirty;
 
     function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -73,7 +82,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
         setMessage("");
         startTransition(async () => {
             const messages: string[] = [];
-            let expectedUpdatedAt = releaseAccess?.expectedUpdatedAt;
+            let expectedUpdatedAt = settingsAccess?.expectedUpdatedAt ?? visibilityAccess?.expectedUpdatedAt ?? releaseAccess?.expectedUpdatedAt;
             try {
                 if (nameDirty && renameServerId) {
                     const form = new FormData();
@@ -84,12 +93,29 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
                     setNameState(current => ({ ...current, saved: result.displayName, draft: result.displayName }));
                     messages.push("Server name saved.");
                 }
+                if (settingsAccess && canChangeSettings && ((nameDirty && !renameServerId) || maintenanceDirty)) {
+                    const patch = {
+                        ...(nameDirty && !renameServerId ? { displayName: nameState.draft.trim() } : {}),
+                        ...(maintenanceDirty ? { maintenanceSlot: maintenanceState.draft as MaintenanceSlot } : {}),
+                    };
+                    if (!settingsRequest.current || settingsRequest.current.serverId !== settingsAccess.serverId
+                        || JSON.stringify(settingsRequest.current.patch) !== JSON.stringify(patch)) {
+                        settingsRequest.current = { serverId: settingsAccess.serverId, expectedUpdatedAt: settingsAccess.expectedUpdatedAt, patch, requestId: crypto.randomUUID() };
+                    }
+                    const result = await saveServerSettings(settingsRequest.current);
+                    messages.push(result.message);
+                    if (result.rejected) settingsRequest.current = null;
+                    if (!result.ok || !result.updatedAt) { setMessage(messages.join(" ")); return; }
+                    settingsRequest.current = null;
+                    expectedUpdatedAt = result.updatedAt;
+                }
                 if (visibilityDirty && visibilityAccess && visibilityState.draft) {
-                    if (!request.current || request.current.serverId !== visibilityAccess.serverId || request.current.visibility !== visibilityState.draft || request.current.expectedUpdatedAt !== visibilityAccess.expectedUpdatedAt) {
-                        request.current = { serverId: visibilityAccess.serverId, visibility: visibilityState.draft, expectedUpdatedAt: visibilityAccess.expectedUpdatedAt, requestId: crypto.randomUUID() };
+                    if (!request.current || request.current.serverId !== visibilityAccess.serverId || request.current.visibility !== visibilityState.draft) {
+                        request.current = { serverId: visibilityAccess.serverId, visibility: visibilityState.draft, expectedUpdatedAt: expectedUpdatedAt ?? visibilityAccess.expectedUpdatedAt, requestId: crypto.randomUUID() };
                     }
                     const result = await setServerVisibility(request.current);
                     messages.push(result.message);
+                    if (result.rejected) request.current = null;
                     if (result.ok) { request.current = null; expectedUpdatedAt = result.updatedAt; }
                     else { setMessage(messages.join(" ")); return; }
                     // A receipt may be a replay. Only refreshed props establish the current visibility.
@@ -129,9 +155,21 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
         <div className="max-w-3xl space-y-5 p-5">
             <div>
                 <label htmlFor="settings-server-name" className="text-sm font-medium">Server name</label>
-                <input id="settings-server-name" disabled={!canRename || pending} required maxLength={80} value={nameState.draft} onChange={event => { setNameState(current => ({ ...current, draft: event.target.value })); setMessage(""); }} className="mt-2 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50" />
+                <input id="settings-server-name" disabled={!canRename || pending || updateBusy} required minLength={renameServerId ? undefined : 3} maxLength={renameServerId ? 80 : 48} value={nameState.draft} onChange={event => { setNameState(current => ({ ...current, draft: event.target.value })); setMessage(""); }} className="mt-2 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50" />
                 <p className="mt-2 text-xs leading-5 text-foreground-muted">{canRename ? "The server display name." : "Renaming is unavailable for this server or your access level."}</p>
             </div>
+            {settingsAccess && <div>
+                <label htmlFor="settings-maintenance-window" className="text-sm font-medium">Maintenance window</label>
+                <select id="settings-maintenance-window" aria-describedby="maintenance-window-help" value={hasMaintenance ? maintenanceState.draft : ""} disabled={!canChangeSettings || pending || updateBusy}
+                    onChange={event => { setMaintenanceState(current => ({ ...current, draft: event.target.value })); setMessage(""); }}
+                    className="mt-2 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm disabled:opacity-50">
+                    {!hasMaintenance && <option value="">Maintenance window unavailable</option>}
+                    {HOSTING_MAINTENANCE_SLOTS.map(slot => <option key={slot} value={slot}>{slot.replace("-", "–")} Central Time</option>)}
+                </select>
+                <p id="maintenance-window-help" className="mt-2 text-sm leading-6 text-foreground-muted">Daily automatic updates use Central Time ({HOSTING_TIME_ZONE}) and follow daylight-saving changes. Maintenance starts within the first 15 minutes of the selected window. Saving this preference does not restart the server.</p>
+                {!hasMaintenance && <p role="status" className="mt-2 text-sm text-foreground-muted">Maintenance settings could not be loaded. Refresh or contact hosting support.</p>}
+                {hasMaintenance && !settingsAccess.canEdit && <p className="mt-2 text-xs text-foreground-muted">Only the server owner can change hosting settings.</p>}
+            </div>}
             {releaseAccess && <div>
                 <label htmlFor="settings-release-channel" className="text-sm font-medium">Release channel</label>
                 <select id="settings-release-channel" aria-describedby="release-channel-help" value={channelState.draft} disabled={!releaseAccess.canEdit || pending || updateBusy}
@@ -139,7 +177,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
                     className="mt-2 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm disabled:opacity-50">
                     <option value="stable">Stable</option><option value="nightly">Nightly</option>
                 </select>
-                <p id="release-channel-help" className="mt-2 text-sm leading-6 text-foreground-muted">Saving a different channel stops the server, backs up the campaign, installs that release, and starts the server. Connected players will be disconnected. Nightly is experimental.</p>
+                <p id="release-channel-help" className="mt-2 text-sm leading-6 text-foreground-muted">Saving a different channel stops the server, backs up the campaign, installs that release, and starts the server. Connected players will be disconnected.</p>
                 <div role="status" aria-live="polite" className="mt-3 text-sm text-foreground-muted">
                     {releaseStatus?.job && <p>{releaseStatus.job.state === "succeeded" ? "Release update completed." : releaseStatus.job.state === "failed" ? "Release update failed. Check server status before retrying or contact hosting support." : releaseStatus.job.state === "cancelled" ? "Release update was cancelled." : releaseStatus.job.progress}</p>}
                     {progressError && <p>{progressError} <button type="button" className="underline" onClick={() => setPollVersion(value => value + 1)}>Check progress</button></p>}
@@ -164,7 +202,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
                 </div>
                 <p role="status" className={message ? "mt-2 text-foreground" : ""}>{message}</p>
             </div>
-            {dirty && <div className="ml-auto flex gap-2"><button type="button" disabled={pending} className={button} onClick={() => { setNameState(current => ({ ...current, draft: current.saved })); setVisibilityState({ source: visibility, draft: visibility }); setChannelState({ source: releaseAccess?.channel, draft: releaseAccess?.channel }); setMessage(""); }}>Discard</button><button type="submit" disabled={pending || updateBusy || (nameDirty && !nameState.draft.trim())} className={`${button} !border-gold !bg-gold !font-semibold !text-background hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold`}>{pending ? "Saving…" : "Save settings"}</button></div>}
+            {dirty && <div className="ml-auto flex gap-2"><button type="button" disabled={pending} className={button} onClick={() => { setNameState(current => ({ ...current, draft: current.saved })); setVisibilityState({ source: visibility, draft: visibility }); setChannelState({ source: releaseAccess?.channel, draft: releaseAccess?.channel }); setMaintenanceState({ source: settingsAccess?.maintenanceSlot, draft: settingsAccess?.maintenanceSlot }); setMessage(""); }}>Discard</button><button type="submit" disabled={pending || updateBusy || (nameDirty && !nameState.draft.trim())} className={`${button} !border-gold !bg-gold !font-semibold !text-background hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold`}>{pending ? "Saving…" : "Save settings"}</button></div>}
         </div>
         </form>
     </section>;

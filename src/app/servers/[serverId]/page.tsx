@@ -125,7 +125,7 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
                     ? { serverId: managedServer.serverId, userId: user.id } : undefined}
                 server={{
                     ...liveServer,
-                    name: displayNames.get(liveServer.id) ?? liveServer.name,
+                    name: managedServer?.displayName ?? displayNames.get(liveServer.id) ?? liveServer.name,
                 }}
             />
         );
@@ -189,7 +189,7 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
         <ServerWorkspacePanel section="Settings">
-            <ServerSettingsPanel releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
+            <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
 }
@@ -336,7 +336,7 @@ async function LiveServerManagementPage({
     }
 
     return <ServerManagementWorkspace
-        name={<EditableServerName key={server.name} canEdit={canManageAssignments} initialName={server.name} serverId={server.id} />}
+        name={<EditableServerName key={server.name} canEdit={canManageAssignments && managedServer === null} initialName={server.name} serverId={server.id} />}
         address={server.address}
         visibility={managedServer !== null
             ? <ServerVisibilitySetting serverId={managedServer.serverId} visibility={managedServer.visibility} accessRole={managedServer.accessRole} expectedUpdatedAt={managedServer.updatedAt} />
@@ -356,7 +356,7 @@ async function LiveServerManagementPage({
                 <ServerWorkspacePanel section="Save & config"><LiveServerFileSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>
             </>}
         <ServerWorkspacePanel section="Settings">
-            <ServerSettingsPanel releaseAccess={managedServer ? { serverId: managedServer.serverId, channel: managedServer.releaseChannel, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} name={server.name} renameServerId={canManageAssignments ? server.id : undefined} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} visibilityAccess={managedServer ? { serverId: managedServer.serverId, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} />
+            <ServerSettingsPanel settingsAccess={managedServer ? { serverId: managedServer.serverId, maintenanceSlot: managedServer.maintenanceSlot, timezone: managedServer.timezone, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} releaseAccess={managedServer ? { serverId: managedServer.serverId, channel: managedServer.releaseChannel, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} name={server.name} renameServerId={canManageAssignments && managedServer === null ? server.id : undefined} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} visibilityAccess={managedServer ? { serverId: managedServer.serverId, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} />
             {managedServer === null && <LiveServerVisibilitySetup reason={backupUnavailableReason} serverId={server.id} />}
             <section className="grid gap-3 sm:grid-cols-2" aria-label="Server information">
                 <ResourceCard icon={Server} label="Provider" value={server.provider} />

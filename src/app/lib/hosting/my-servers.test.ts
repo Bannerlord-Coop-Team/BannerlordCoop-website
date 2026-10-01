@@ -11,6 +11,7 @@ import {
     requestMyServerOperation,
     requestMyServerUpdate,
     requestServerVisibility,
+    requestMyServerSettings,
 } from "./my-servers";
 
 const ORIGINAL_FETCH = globalThis.fetch;
@@ -177,6 +178,28 @@ test("accepts CP #144 updated and replay receipts through the Edge and client", 
             });
             globalThis.fetch = async (url, init) => edge(new Request(url, init));
             assert.deepEqual(await requestServerVisibility(TOKEN, input, requestId), result);
+        }
+    } finally { restoreEnvironment(); }
+});
+
+test("saves hosting preferences through the Edge with the original generation and receipt ID", async () => {
+    configureEnvironment();
+    const requestId = "11111111-1111-4111-8111-111111111111";
+    const input = { serverId: FIRST_SERVER.serverId, expectedUpdatedAt: "2026-10-01T00:00:00.000Z",
+        patch: { displayName: "Updated name", maintenanceSlot: "10:00-11:00" as const } };
+    try {
+        for (const outcome of ["updated", "existing"] as const) {
+            const result = { outcome, serverId: input.serverId, updatedAt: "2026-10-01T00:00:01.000Z" };
+            const edge = createMyServersHandler({
+                allowedOrigins: ["https://bannerlordcoop.com"], controlPlaneUrl: "https://control-plane.example.test",
+                fetchImplementation: async (_url, init) => {
+                    assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${TOKEN}`);
+                    assert.deepEqual(JSON.parse(String(init?.body)), { version: 1, requestId, operation: "save-server-settings", input });
+                    return Response.json({ version: 1, requestId, ok: true, result });
+                },
+            });
+            globalThis.fetch = async (url, init) => edge(new Request(url, init));
+            assert.deepEqual(await requestMyServerSettings(TOKEN, input, requestId), result);
         }
     } finally { restoreEnvironment(); }
 });
