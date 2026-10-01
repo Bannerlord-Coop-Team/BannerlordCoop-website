@@ -8,9 +8,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerTransfers, readFileIntent } from "./ManagedServerTransfers";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
-const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), download: vi.fn(), config: vi.fn(), refresh: vi.fn() }));
+const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), download: vi.fn(), config: vi.fn(), refresh: vi.fn(), read: vi.fn(), save: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/app/servers/managed-server-file-actions", () => ({ submitManagedServerFile: mocks.submit, checkManagedServerFile: mocks.check, downloadManagedServerSave: mocks.download, exportManagedServerConfig: mocks.config }));
+vi.mock("@/app/servers/managed-server-config-actions", () => ({ readManagedServerConfig: mocks.read, saveManagedServerConfig: mocks.save }));
 const status: OwnerFileStatus = { serverId: "11111111-1111-4111-8111-111111111111", updatedAt: "2026-09-13T00:00:00.000Z", operationState: "stopped", observedGameState: "stopped", activeSave: { saveId: "22222222-2222-4222-8222-222222222222", displayName: "Campaign" }, managedConfig: DEFAULT_MANAGED_SERVER_CONFIGURATION };
 const job = { kind: "job", outcome: "enqueued", jobId: "33333333-3333-4333-8333-333333333333", action: "export-save", state: "queued" };
 const key = `managed-file-transfer:v1:owner:${status.serverId}`;
@@ -25,7 +26,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 async function render(current = status, owner = true, userId = "owner") {
-    await act(async () => root.render(<ManagedServerTransfers userId={userId} serverId={current.serverId} status={current} canImportConfig={owner} canExportSave={owner} />));
+    await act(async () => root.render(<ManagedServerTransfers userId={userId} serverId={current.serverId} status={current} canImportConfig={owner} canEditConfig={owner} canExportSave={owner} />));
     await act(async () => vi.advanceTimersByTimeAsync(0));
 }
 function button(label: string) { const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label); if (!found) throw Error(`Missing button ${label}`); return found; }
@@ -82,7 +83,7 @@ it("does not dispatch when pending intent cannot be persisted, or recover a diff
 });
 it("reviews native configuration changes and rejects unsupported fields before any submission", async () => {
     await render(); await click("Import config");
-    const choice = container.querySelector("select")!;
+    const choice = container.querySelector("dialog select")!;
     expect([...choice.options].map((option) => option.value)).toEqual(["server", "mod"]);
     const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     async function choose(config: unknown) {
@@ -125,7 +126,7 @@ it("guides individual imports, catches choosing the wrong file, and previews onl
     expect(container.textContent).toContain("Server password");
     expect(container.textContent).not.toContain("never-show-this");
     await click("Back");
-    const choice = container.querySelector("select")!;
+    const choice = container.querySelector("dialog select")!;
     await act(async () => { choice.value = "mod"; choice.dispatchEvent(new Event("change", { bubbles: true })); });
     await choose('{"modOptions":{"autoPauseEnabled":false}}');
     expect(container.textContent).toContain("Importing gameplay settings only");
@@ -137,7 +138,7 @@ it("guides individual imports, catches choosing the wrong file, and previews onl
 it.each(["mod", "server", "combined", undefined])("recovers the original config choice for a pending %s import", async (configPart) => {
     sessionStorage.setItem(key, JSON.stringify({ requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt, action: "import-config", fingerprints: ["a".repeat(64)], displayName: "", saveId: status.activeSave!.saveId, ...(configPart ? { configPart } : {}) }));
     await render(); await click("Retry same request");
-    const choice = container.querySelector("select");
+    const choice = container.querySelector("dialog select");
     if (configPart === undefined || configPart === "combined") {
         expect(choice).toBeNull();
         expect(container.textContent).toContain("Recovering an earlier import");
@@ -166,7 +167,7 @@ it("rejects invisible campaign names and allows corrected input after a local su
     vi.stubGlobal("crypto", { randomUUID, subtle: { digest: async () => new Uint8Array(32).buffer } });
     await render(); await click("Import save");
     async function enterName(name: string) {
-        const input = container.querySelector<HTMLInputElement>('input:not([type="file"])')!;
+        const input = container.querySelector<HTMLInputElement>('dialog input:not([type="file"])')!;
         await act(async () => {
             Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, name);
             input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -255,13 +256,29 @@ it("keeps config export failures retryable without downloading a file", async ()
     expect(sessionStorage.getItem(key)).toBeNull();
 });
 
-it("shows real configuration in the wireframe preview without enabling unsupported editing", async () => {
+it("edits the live configuration in the form by default while file transfers stay available", async () => {
+    mocks.read.mockImplementation(async (_serverId: string, part: string) => ({ ok: true, file: part === "server"
+        ? { configPart: "server", revision: "a".repeat(64), settings: { ...status.managedConfig.serverConfig, autosaveMinutes: 30 } }
+        : { configPart: "mod", revision: "b".repeat(64), settings: status.managedConfig.modConfig } }));
     await render();
-    const editor = container.querySelector<HTMLTextAreaElement>("#config-json")!;
-    expect(JSON.parse(editor.value)).toEqual(status.managedConfig);
-    expect(editor.disabled).toBe(true);
-    for (const label of ["JSON", "Form preview", "Discard", "Save config"]) expect(button(label).disabled).toBe(true);
+    expect(mocks.read).toHaveBeenCalledWith(status.serverId, "server", "owner");
+    expect(button("Form").getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector("#config-json")).toBeNull();
+    const autosave = container.querySelector<HTMLInputElement>("#config-serverConfig-autosaveMinutes")!;
+    expect(autosave.value).toBe("30");
+    expect(container.querySelector("fieldset")!.disabled).toBe(false);
+    for (const label of ["Discard", "Save config"]) expect(button(label).disabled).toBe(true);
+    await click("JSON");
+    expect(JSON.parse(container.querySelector<HTMLTextAreaElement>("#config-json")!.value)).toEqual({ serverConfig: { ...status.managedConfig.serverConfig, autosaveMinutes: 30 }, modConfig: status.managedConfig.modConfig });
     expect(button("Import config").disabled).toBe(false);
     expect(button("Export config").disabled).toBe(false);
     expect(container.querySelector("#campaign-save-heading")?.closest("section")?.textContent).toContain("Campaign");
+    // Managers see the stored configuration without live reads or editing.
+    mocks.read.mockClear();
+    await act(async () => root.unmount()); root = createRoot(container);
+    await render(status, false);
+    expect(mocks.read).not.toHaveBeenCalled();
+    expect(container.querySelector<HTMLInputElement>("#config-serverConfig-autosaveMinutes")!.value).toBe("5");
+    expect(container.querySelector("fieldset")!.disabled).toBe(true);
+    expect(button("Save config").disabled).toBe(true);
 });
