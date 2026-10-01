@@ -5,6 +5,9 @@ vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: mocks.aut
 vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts }));
 vi.mock("@/app/lib/control-plane/server-read", () => ({ readControlPlaneAdmin: mocks.request }));
 vi.mock("@/app/components/admin/RefreshReleaseCatalog", () => ({ RefreshReleaseCatalog: () => null }));
+vi.mock("next/navigation", async importOriginal => ({
+    ...await importOriginal<typeof import("next/navigation")>(), useRouter: () => ({ refresh: vi.fn() }),
+}));
 import ControlPlaneAdminPage from "./page";
 
 beforeEach(() => {
@@ -56,6 +59,29 @@ it("renders both complete release groups from one catalog request without accoun
     expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "release-catalog",
         input: { stableCursor: null, nightlyCursor: null, limit: 100 }, signal: expect.any(AbortSignal) }]]);
     expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
+it("renders Operations with fresh VPS choices and capacity without requesting unused billing", async () => {
+    mocks.accounts.mockResolvedValue({ users: [], truncated: false });
+    mocks.request.mockImplementation(async request => {
+        if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
+        if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
+        if (request.operation === "vps-hosts") return { availableServiceNames: ["vps-available.vps.ovh.us"],
+            hosts: [{ region: "us-east", availableServers: 1, totalSlots: 2 }] };
+        throw new Error("Unexpected read");
+    });
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    expect(html).toContain("Onboard existing OVH VPS");
+    expect(html).toContain("vps-available.vps.ovh.us");
+    expect(html).toContain('value="us-east"');
+    expect(html).not.toContain("The control plane view could not be loaded");
+    expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual([[{
+        accessToken: "test-admin-token", operation: "vps-hosts", signal: expect.any(AbortSignal),
+        input: { includeLiveData: false, includeProviderInventory: "service-names" },
+    }]]);
+    expect(mocks.request).toHaveBeenCalledTimes(3);
 });
 
 
