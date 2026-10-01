@@ -45,8 +45,7 @@ it("shares the verified viewer and client within one render, then reads the next
     await renderPage();
     const first = await mocks.navbar.mock.calls[0][0].viewer;
     expect(mocks.auth).toHaveBeenCalledTimes(1);
-    const client = await mocks.auth.mock.results[0].value;
-    expect(mocks.account).toHaveBeenCalledWith(first.user.id, "test-page-jwt", client);
+    expect(mocks.account).toHaveBeenCalledWith(first.user.id, "test-page-jwt");
     expect(Object.keys(first)).toEqual(["user"]);
 
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: null } }), getSession: async () => ({ data: { session: null } }) } });

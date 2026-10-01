@@ -17,6 +17,17 @@ function identity() {
         { type: "campaign", id: "10", attributes: { currency: "USD" } }, { type: "tier", id: "20", attributes: { amount_cents: 2000 }, relationships: { campaign: { data: { type: "campaign", id: "10" } } } },
     ] };
 }
+test("website-account GET exposes only the current configuration flag without identity or database reads", async () => {
+    for (const configured of [false, true]) {
+        const handler = createWebsiteAccountHandler({ supabaseUrl: "https://project.supabase.co", serviceRoleKey: "synthetic-service-key", policy: configured ? policy : null,
+            fetch: async () => { throw new Error("Unexpected private read"); } });
+        const response = await handler(new Request("https://project.supabase.co/functions/v1/website-account"));
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), { version: 1, configured });
+        assert.equal(response.headers.get("cache-control"), "no-store");
+        assert.equal((await handler(new Request("https://project.supabase.co/functions/v1/website-account", { method: "DELETE" }))).status, 405);
+    }
+});
 test("policy is bounded, closed and disabled without reviewed IDs", () => {
     assert.equal(parsePolicy(undefined), null); assert.deepEqual(parsePolicy(JSON.stringify(policy)), policy);
     for (const p of [{ ...policy, minimumCents: 100 }, { ...policy, qualifyingTierIds: ["20", "20"] }, { ...policy, campaignId: "marketing-name" }, { ...policy, secret: "no" }]) assert.throws(() => parsePolicy(JSON.stringify(p)));
