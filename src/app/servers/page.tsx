@@ -39,7 +39,7 @@ export default function ServersPage() {
     const publicInventory = loadPublicInventory();
     const viewer = loadViewer();
     const managedInventory = viewer.then(({ user, accessToken, inventory }) => loadManagedInventory(user, accessToken, inventory));
-    const hostingStatus = viewer.then(({ user, accessToken, client }) => loadHostingStatus(user, accessToken, client));
+    const hostingStatus = viewer.then(({ user, accessToken }) => loadHostingStatus(user, accessToken));
 
     return (
         <>
@@ -201,13 +201,13 @@ async function loadLiveServers(user: User | null) {
 }
 
 /** Keep account synchronization before allocation reads, outside either directory's path. */
-async function loadHostingStatus(user: User | null, accessToken: string | null, client: SupabaseClient | null) {
+async function loadHostingStatus(user: User | null, accessToken: string | null) {
     // Resolve authoritative identities before any allocation fetch. No metadata/email fallback.
     const identity = identityStep(user);
     let account: AccountStatus | null = null;
     if (user && accessToken) {
         try {
-            account = await getWebsiteAccountStatus(user.id, accessToken, client ?? undefined);
+            account = await getWebsiteAccountStatus(user.id, accessToken);
         } catch { /* Independent CP grants must remain usable during membership outages. */ }
     }
     let onboarding: OnboardingSummary | null = null;

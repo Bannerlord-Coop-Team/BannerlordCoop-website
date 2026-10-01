@@ -1,5 +1,20 @@
 # Source-owned account and membership onboarding
 
+Server-rendered account status uses the website's existing server-only Supabase
+account credential. Fresh Auth user and membership session-context checks overlap
+with a no-store `GET website-account`, which returns only `{version:1,configured}`
+from the Edge Function's current policy. Only after all three succeed does the
+server call the fixed `membership_status` RPC using those verified identities.
+The shared status projection checks snapshot identity and retains the same public
+DTO. Account synchronization still finishes before allocation is read. Only
+identical in-flight reads are coalesced; settled responses are never cached.
+
+The existing authenticated POST operations remain supported. During automatic
+Edge/website rollout, an older function's GET 405 uses its existing authenticated
+status POST; other failures cannot trigger that fallback. No schema, policy,
+credential or deployment configuration change is needed. New `sb_secret_` keys
+are sent only as `apikey`; legacy service-role JWTs keep their Bearer header.
+
 The edge-owned commit cutover below is pending; this change performs no deployment
 or remote schema mutation. Previously deployed Patreon JSON:API handling and safe
 callback diagnostics are retained unchanged.

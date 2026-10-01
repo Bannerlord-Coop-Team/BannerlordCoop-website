@@ -1,6 +1,8 @@
 import "server-only";
 
-import { getSupabaseServerClient } from "@/app/lib/supabase/server";
-import { createWebsiteAccountStatusReader } from "./website-account-status-core";
+import { createWebsiteAccountStatusReader, readWebsiteAccountStatus } from "./website-account-status-core";
 
-export const getWebsiteAccountStatus = createWebsiteAccountStatusReader(getSupabaseServerClient);
+export const getWebsiteAccountStatus = createWebsiteAccountStatusReader(token => readWebsiteAccountStatus(token, {
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!, publishableKey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    serviceRoleKey: process.env.SUPABASE_SECRET_KEY!,
+}));
