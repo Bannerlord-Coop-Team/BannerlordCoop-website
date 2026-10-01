@@ -9,7 +9,7 @@ const adminSession = "33333333-3333-4333-8333-333333333333", targetSession = "44
 const selection = "55555555-5555-4555-8555-555555555555", oauthSession = "66666666-6666-4666-8666-666666666666";
 
 test("full impersonation executes account mutations as the target and refuses revoked native sessions before writing", async () => {
-    for (const state of ["active", "ended", "expired"] as const) {
+    for (const state of ["active", "ended", "expired", "mismatched"] as const) {
         const writes: unknown[] = [];
         const handler = createWebsiteAccountHandler({ supabaseUrl: "https://fixture.invalid", serviceRoleKey: "local-fixture-only", policy: null,
             fetch: async (input, init) => {
@@ -17,7 +17,7 @@ test("full impersonation executes account mutations as the target and refuses re
                 if (path === "/auth/v1/user") return Response.json({ id: targetId, app_metadata: { role: "User" }, identities: [] });
                 if (path === "/rest/v1/rpc/website_session_context") {
                     assert.equal(new Headers(init?.headers).get("authorization"), "Bearer native-target-fixture");
-                    return state === "ended" ? Response.json({}, { status: 403 }) : Response.json({ impersonationId: selection, actorId: adminId, targetId, expiresAt: state === "expired" ? "2000-01-01T00:00:00Z" : "2099-01-01T00:00:00Z" });
+                    return state === "ended" ? Response.json({}, { status: 403 }) : Response.json({ impersonationId: selection, actorId: adminId, targetId: state === "mismatched" ? adminId : targetId, expiresAt: state === "expired" ? "2000-01-01T00:00:00Z" : "2099-01-01T00:00:00Z" });
                 }
                 assert.equal(path, "/rest/v1/rpc/membership_unlink"); writes.push(JSON.parse(String(init?.body)));
                 return Response.json({ unlinked: true });
@@ -25,6 +25,38 @@ test("full impersonation executes account mutations as the target and refuses re
         const response = await handler(new Request("https://fixture.invalid/account", { method: "POST", headers: { authorization: "Bearer native-target-fixture", "content-type": "application/json" }, body: JSON.stringify({ operation: "unlink" }) }));
         assert.equal(response.status, state === "active" ? 200 : 503);
         assert.deepEqual(writes, state === "active" ? [{ p_account_id: targetId, p_discord_user_id: null }] : []);
+    }
+});
+
+test("account actions overlap identity checks and wait for both completion orders", async () => {
+    for (const first of ["user", "context"] as const) {
+        let resolveUser!: (response: Response) => void, resolveContext!: (response: Response) => void;
+        const userRead = new Promise<Response>(resolve => { resolveUser = resolve; });
+        const contextRead = new Promise<Response>(resolve => { resolveContext = resolve; });
+        const started: string[] = [], writes: unknown[] = [];
+        const handler = createWebsiteAccountHandler({ supabaseUrl: "https://fixture.invalid", serviceRoleKey: "local-fixture-only", policy: null,
+            fetch: async (input, init) => {
+                const path = new URL(String(input)).pathname;
+                if (path === "/auth/v1/user") { started.push("user"); return userRead; }
+                if (path === "/rest/v1/rpc/website_session_context") { started.push("context"); return contextRead; }
+                assert.equal(path, "/rest/v1/rpc/membership_unlink");
+                writes.push(JSON.parse(String(init?.body)));
+                return Response.json({ unlinked: true });
+            } });
+        const pending = handler(new Request("https://fixture.invalid/account", { method: "POST", headers: { authorization: "Bearer native-target-fixture", "content-type": "application/json" }, body: JSON.stringify({ operation: "unlink" }) }));
+        const user = () => resolveUser(Response.json({ id: targetId, identities: [] }));
+        const context = () => resolveContext(Response.json({ impersonationId: selection, actorId: adminId, targetId, expiresAt: "2099-01-01T00:00:00Z" }));
+        try {
+            assert.deepEqual(started, ["user", "context"]);
+            (first === "user" ? user : context)();
+            await new Promise(resolve => setImmediate(resolve));
+            assert.deepEqual(writes, []);
+            (first === "user" ? context : user)();
+            assert.equal((await pending).status, 200);
+            assert.deepEqual(writes, [{ p_account_id: targetId, p_discord_user_id: null }]);
+        } finally {
+            user(); context(); await pending;
+        }
     }
 });
 

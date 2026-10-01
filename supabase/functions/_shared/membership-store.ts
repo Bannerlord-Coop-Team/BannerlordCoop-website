@@ -47,9 +47,14 @@ export function membershipStore(config: StoreConfig) {
     }
     return {
         async user(authorization: string) {
-            const user = await request("/auth/v1/user", { headers: { Authorization: authorization } });
-            if (!record(user) || typeof user.id !== "string" || !UUID.test(user.id)) throw new Error("Unauthorized");
-            await verifyWebsiteSessionContext({ supabaseUrl: config.supabaseUrl, key: config.serviceRoleKey, authorization, userId: user.id, action: "membership", fetch: requestFetch });
+            const userRead = request("/auth/v1/user", { headers: { Authorization: authorization } }).then(user => {
+                if (!record(user) || typeof user.id !== "string" || !UUID.test(user.id)) throw new Error("Unauthorized");
+                return { ...user, id: user.id };
+            });
+            const [user] = await Promise.all([
+                userRead,
+                verifyWebsiteSessionContext({ supabaseUrl: config.supabaseUrl, key: config.serviceRoleKey, authorization, userId: userRead.then(value => value.id), action: "membership", fetch: requestFetch }),
+            ]);
             return { accountId: user.id, discordUserId: optionalDiscord(user) };
         },
         async binding(accountId: string) {
