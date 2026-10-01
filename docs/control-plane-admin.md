@@ -24,6 +24,13 @@ lookups start only after those checks. Impersonation actor/target validation fin
 before any early read starts. No mutation uses this path and no response or permission
 is cached across requests.
 
+Jobs and Audit retain server-rendered table contents, but their table components
+receive only the displayed fields across the React client boundary. This avoids
+serializing each row's markup again into the navigation payload. Shortened display
+identifiers remain shortened in the props; failure acknowledgement keeps the exact
+job ID and current `updatedAt`. Reads, pagination, viewer validation and mutation
+requests retain the same paths and freshness requirements.
+
 Releases and release choices in Operations request one `release-catalog` result
 with separate Stable/Nightly pages, rather than authenticate two `builds` reads.
 Both pages use one freshly verified and mapped registry observation, retaining

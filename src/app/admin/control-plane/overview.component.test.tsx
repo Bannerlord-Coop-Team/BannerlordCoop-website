@@ -1,6 +1,6 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), request: vi.fn(), accounts: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), tables: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: mocks.auth }));
 vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts }));
 vi.mock("@/app/lib/control-plane/server-read", () => ({ readControlPlaneAdmin: mocks.request }));
@@ -8,6 +8,19 @@ vi.mock("@/app/components/admin/RefreshReleaseCatalog", () => ({ RefreshReleaseC
 vi.mock("next/navigation", async importOriginal => ({
     ...await importOriginal<typeof import("next/navigation")>(), useRouter: () => ({ refresh: vi.fn() }),
 }));
+vi.mock("@/app/components/admin/ControlPlaneReadTables", async importOriginal => {
+    const actual = await importOriginal<typeof import("@/app/components/admin/ControlPlaneReadTables")>();
+    return {
+        JobsReadTable: (props: Parameters<typeof actual.JobsReadTable>[0]) => {
+            mocks.tables("jobs", props);
+            return <actual.JobsReadTable {...props} />;
+        },
+        AuditReadTable: (props: Parameters<typeof actual.AuditReadTable>[0]) => {
+            mocks.tables("audit", props);
+            return <actual.AuditReadTable {...props} />;
+        },
+    };
+});
 import ControlPlaneAdminPage from "./page";
 
 beforeEach(() => {
@@ -136,6 +149,7 @@ it.each(["overview", "servers", "server", "vps", "jobs", "releases", "audit", "o
         expect(request.accessToken).toBe("test-admin-token");
     }
     expect(mocks.accounts).not.toHaveBeenCalled();
+    expect(mocks.tables).not.toHaveBeenCalled();
 });
 
 
@@ -146,4 +160,42 @@ it("releases the authenticated shell while the early read is still pending", asy
     expect(page).toBeDefined();
     expect(mocks.accounts).not.toHaveBeenCalled();
     pendingRead.resolve({ items: [], nextCursor: null });
+});
+
+
+it("projects only displayed job fields and preserves the fresh failed-attempt controls", async () => {
+    const updatedAt = "2026-09-30T00:00:00.000Z";
+    const job = { jobId: "job-fixture", action: "backup", state: "failed", serverId: "44444444-4444-4444-8444-444444444444",
+        progressStage: "failed", errorCode: "backup_failed", attemptCount: 2, maximumAttempts: 3, updatedAt,
+        failureAcknowledgedAt: null, failureAcknowledgedBy: "undisplayed-actor", authority: "undisplayed-authority",
+        createdAt: "undisplayed-created", runAt: "undisplayed-run", unknownFutureField: "never-cross-the-boundary" };
+    for (const acknowledged of [false, true]) {
+        mocks.request.mockResolvedValue({ items: [{ ...job, failureAcknowledgedAt: acknowledged ? updatedAt : null }], nextCursor: "next-page" });
+        const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "jobs", state: "failed" }) }));
+        await stream.allReady;
+        const html = await new Response(stream).text();
+        expect(html).toContain("backup_failed"); expect(html).toContain("Older jobs");
+        expect(html).toContain(acknowledged ? "Silenced" : "Acknowledge this exact failed attempt");
+        const props = mocks.tables.mock.calls.at(-1)?.[1];
+        expect(props.allowFailureAcknowledgement).toBe(true);
+        expect(props.jobs).toEqual([{ jobId: job.jobId, action: job.action, state: job.state, serverLabel: "44444444…444444",
+            progressStage: job.progressStage, errorCode: job.errorCode, attemptCount: 2, maximumAttempts: 3,
+            updatedAt, failureAcknowledgedAt: acknowledged ? updatedAt : null }]);
+        expect(JSON.stringify(props)).not.toContain("undisplayed");
+        expect(JSON.stringify(props)).not.toContain("never-cross-the-boundary");
+    }
+    expect(mocks.request).toHaveBeenCalledTimes(2); expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
+it("projects only displayed audit fields while retaining reasons and shortened identifiers", async () => {
+    mocks.request.mockResolvedValue({ items: [{ eventId: "event-fixture", actorType: "administrator", actorId: "44444444-4444-4444-8444-444444444444",
+        targetDiscordUserId: "undisplayed-target", targetServerId: null, action: "hosting.job.succeeded", reason: "Fresh audit reason",
+        correlationId: "55555555-5555-5555-8555-555555555555", occurredAt: "2026-09-30T00:00:00.000Z", unknownFutureField: "never-cross-the-boundary" }], nextCursor: null });
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "audit" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    expect(html).toContain("Fresh audit reason"); expect(html).toContain("44444444…444444");
+    expect(mocks.tables).toHaveBeenCalledExactlyOnceWith("audit", { events: [{ eventId: "event-fixture", actorType: "administrator", actorLabel: "44444444…444444",
+        serverLabel: "—", action: "hosting.job.succeeded", reason: "Fresh audit reason", correlationLabel: "55555555…555555", occurredAt: "2026-09-30T00:00:00.000Z" }] });
+    expect(mocks.accounts).not.toHaveBeenCalled();
 });
