@@ -83,3 +83,61 @@ it("reconnects after Strict Mode cleanup and aborts the active stream on unmount
     await act(async () => root.render(null));
     expect(fetchMock.mock.calls[1][1].signal.aborted).toBe(true);
 });
+
+const usageOutput = 'Usage: coop.debug.alley.abandon <settlement_id> <alley_index>\n\nParameters:\n- settlement_id (required): The settlement StringId.\n- alley_index (required): The zero-based alley index.\n\nNote: Wrap parameter values containing spaces in double quotes.';
+const commandRecord = { ev: "managed-command", id: "608721b5db6e6025f5af4261078e888c", ok: true, output: usageOutput };
+
+/** Wraps a stdout line in the existing SSE line envelope. */
+function stdoutFrame(line: string) {
+    return `event: line\ndata: ${JSON.stringify(line)}\n\n`;
+}
+
+it("highlights a complete managed-command frame with decoded newlines, hiding its envelope and ID", async () => {
+    let stream!: ReadableStreamDefaultController<Uint8Array>;
+    fetchMock.mockResolvedValue(new Response(new ReadableStream({ start(controller) { stream = controller; } })));
+    await renderConsole();
+    const frame = stdoutFrame(`@DS@${JSON.stringify(commandRecord)}`);
+    const middle = Math.floor(frame.length / 2);
+    await act(async () => stream.enqueue(new TextEncoder().encode(frame.slice(0, middle))));
+    expect(container.querySelector('[aria-label="Command output"]')).toBeNull();
+    await act(async () => stream.enqueue(new TextEncoder().encode(frame.slice(middle))));
+    const command = container.querySelector('[aria-label="Command output"]')!;
+    expect(command.textContent).toBe(`${usageOutput}\n`);
+    expect(command.className).toContain("border-gold/60");
+    expect(command.querySelector('.text-gold')!.textContent).toBe("coop.debug.alley.abandon");
+    expect(command.querySelector('.text-foreground-muted')!.textContent).toBe("<settlement_id>");
+    expect([...command.querySelectorAll('.font-semibold')].map(node => node.textContent)).toEqual(["Usage:", "Parameters:", "Note:"]);
+    expect(output()).not.toContain("@DS@");
+    expect(output()).not.toContain(commandRecord.id);
+    await act(async () => stream.close());
+});
+
+it("uses red styling for a failed command record without claiming success", async () => {
+    fetchMock.mockResolvedValue(new Response(stdoutFrame(`@DS@${JSON.stringify({ ...commandRecord, ok: false, output: "Command rejected." })}`)));
+    await renderConsole();
+    const command = container.querySelector('[aria-label="Command error"]')!;
+    expect(command.className).toContain("border-red-400/60");
+    expect(command.textContent).toBe("Command rejected.\n");
+    expect(container.querySelector('[aria-label="Command output"]')).toBeNull();
+});
+
+it.each([
+    "Ordinary stdout containing coop.debug.alley.abandon",
+    "@DS@{not-json}",
+    `@DS@${JSON.stringify({ ...commandRecord, ev: "another-event" })}`,
+    `@DS@${JSON.stringify({ ...commandRecord, ok: "true" })}`,
+    `@DS@${JSON.stringify({ ...commandRecord, output: null })}`,
+])("preserves unrecognized stdout as ordinary text: %s", async line => {
+    fetchMock.mockResolvedValue(new Response(stdoutFrame(line)));
+    await renderConsole();
+    expect(output()).toContain(`${line}\n`);
+    expect(container.querySelector('[role="group"]')).toBeNull();
+});
+
+it("renders HTML-looking command output as text rather than executable markup", async () => {
+    const text = '<img src=x onerror="alert(1)"><script>alert(1)</script>';
+    fetchMock.mockResolvedValue(new Response(stdoutFrame(`@DS@${JSON.stringify({ ...commandRecord, output: text })}`)));
+    await renderConsole();
+    expect(container.querySelector('[aria-label="Command output"]')!.textContent).toBe(`${text}\n`);
+    expect(container.querySelector("img, script")).toBeNull();
+});

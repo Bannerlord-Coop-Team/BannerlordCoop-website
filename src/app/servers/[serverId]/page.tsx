@@ -14,7 +14,6 @@ import { LiveServerFileSetup } from "@/app/components/servers/LiveServerFileSetu
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
 import { ManagedServerControls, ManagedServerPassword } from "@/app/components/servers/ManagedServerControls";
-import { ManagedServerConsole } from "@/app/components/servers/ManagedServerConsole";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import {
     getLiveConsoleAccessLevel,
@@ -211,9 +210,7 @@ function ManagedServerSections({
         <ManagedServerPollingProvider>
             <ServerWorkspacePanel section="Console">
                 {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : server.accessRole === "owner" || server.accessRole === "manager"
-                    ? <ManagedServerCommands key={`${userId}:${server.serverId}`} server={server} userId={userId} controls={<ManagedServerLifecycleSection server={server} />}>
-                        <ManagedServerConsole serverId={server.serverId} />
-                    </ManagedServerCommands>
+                    ? <ManagedServerCommands key={`${userId}:${server.serverId}`} server={server} userId={userId} controls={<ManagedServerLifecycleSection server={server} />} />
                     : <ServerConsoleWorkspace><UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} logDownload={{ serverId: server.serverId, userId }} /></ServerConsoleWorkspace>}
             </ServerWorkspacePanel>
             <ServerWorkspacePanel section="Settings">

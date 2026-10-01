@@ -361,8 +361,6 @@ it.each(["owner", "manager", "support", "admin"])("preserves managed console acc
     const operator = accessRole === "owner" || accessRole === "manager";
     const commands = await findServerElement(workspace, "ManagedServerCommands");
     expect(commands?.props.server.serverId).toBe(operator ? managedId : undefined);
-    const consolePanel = await findServerElement(commands?.props.children, "ManagedServerConsole");
-    expect(consolePanel?.props.serverId).toBe(operator ? managedId : undefined);
 });
 
 it("does not duplicate the existing live console with managed output", async () => {

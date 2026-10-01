@@ -11,8 +11,10 @@
 ## Reorganization
 
 Keep this scoped to the server workspace, not a site redesign. Preserve permissions,
-confirmation dialogs, auto-connect, command delivery/retry identity, polling, and
-result acknowledgement. No new inline status messages, backend behavior, or automatic retries.
+lifecycle confirmations, auto-connect, command delivery/retry identity, and polling.
+Command submissions do not require confirmation; their results are highlighted in the
+console without a separate result/acknowledgement workflow. No new inline status
+messages, backend behavior, or automatic retries.
 
 1. Compact server identity/address header with inline runtime metadata.
 2. One full-width console card: lifecycle/download toolbar, output, command input.
@@ -45,8 +47,8 @@ flowchart TD
     Output[Live output] --> Stream[Existing console stream API]
 ```
 
-The page composes the existing control/output components; the command composer
-continues to receive those as slots. Password settings own their separate draft and
+The page supplies lifecycle controls as a slot; the command composer owns the shared
+output/error display. Password settings own their separate draft and
 pending state while using the same action and polling boundary as before.
 
 ## Focused validation matrix
@@ -56,11 +58,11 @@ pending state while using the same action and polling boundary as before.
 | Reveal/hide join address | Eye/eye-off control has an accessible Show/Hide label and toggles address visibility without changing Copy behavior |
 | Desktop/mobile console | Full-width output and command row; no horizontal overflow or password form in Console |
 | Browse/search/select a command | Reference starts collapsed, search filters commands, selection closes it and focuses the unsent draft |
-| Keyboard entry | Enter sends through confirmation; Tab accepts the visible dot-delimited completion |
+| Keyboard entry | Enter sends without a popup; Tab accepts the visible dot-delimited completion |
 | Navigate Console → Settings → Console | Password appears only in Settings; command draft and live stream remain mounted |
 | Owner password change | Existing restart confirmation, pending guard, action payload, input clearing, and failure feedback preserved |
 | Non-owner Settings | No password control |
-| Command pending/result | Existing retry, polling, and acknowledgement controls remain functional |
+| Command pending/result | Request-bound retry/polling remains functional through the input-row button; output appears only in the console |
 
 Use targeted component/page tests plus desktop and mobile browser screenshots with
 explicit sample data. Existing action/transport tests remain authoritative for backend behavior.

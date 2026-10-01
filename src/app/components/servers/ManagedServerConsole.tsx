@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 const MAXIMUM_TEXT_CHARACTERS = 128 * 1_024;
 const MAXIMUM_LINES = 2_000;
@@ -17,8 +17,40 @@ const consoleStateMessages: Record<ConsoleState, string> = {
     unavailable: "Console output is unavailable. Reload the page to try again.",
 };
 
-/** Streams bounded current-run output inside the managed game console card. */
-export function ManagedServerConsole({ serverId }: { serverId: string }) {
+/** Recognizes only complete managed-command records; other stdout stays untouched. */
+function parseManagedCommand(line: string): { ok: boolean; output: string } | null {
+    if (!line.startsWith("@DS@")) return null;
+    try {
+        const event = JSON.parse(line.slice(4));
+        if (!event || event.ev !== "managed-command" || typeof event.id !== "string" || typeof event.ok !== "boolean" || typeof event.output !== "string") return null;
+        return { ok: event.ok, output: event.output };
+    } catch {
+        return null;
+    }
+}
+
+/** Highlights command syntax as React text, without interpreting output as HTML. */
+function highlightCommandOutput(output: string) {
+    return output.split(/(coop\.[A-Za-z\d_.-]+|<[^<>\r\n]+>|^(?:Usage|Parameters|Note):)/gmu).map((part, index) => {
+        if (index % 2 === 0) return part;
+        const className = part.startsWith("coop.") ? "text-gold" : part.startsWith("<") ? "text-foreground-muted" : "font-semibold text-foreground";
+        return <span key={index} className={className}>{part}</span>;
+    });
+}
+
+/** Renders stdout in order, replacing recognized command envelopes with styled output. */
+function ConsoleLines({ text }: { text: string }) {
+    const lines = text.split("\n");
+    return lines.map((line, index) => {
+        const command = parseManagedCommand(line);
+        const ending = index < lines.length - 1 ? "\n" : "";
+        if (!command) return <Fragment key={index}>{line}{ending}</Fragment>;
+        return <span key={index} role="group" aria-label={command.ok ? "Command output" : "Command error"} className={`my-2 block border-l-2 py-2 pr-3 pl-4 ${command.ok ? "border-gold/60 bg-gold/5" : "border-red-400/60 bg-red-400/5 text-red-200"}`}>{highlightCommandOutput(command.output)}{ending}</span>;
+    });
+}
+
+/** Streams bounded output and displays command delivery errors within the same console. */
+export function ManagedServerConsole({ serverId, commandError = "" }: { serverId: string; commandError?: string }) {
     const [state, setState] = useState<ConsoleState>("connecting");
     const [text, setText] = useState("");
     useEffect(() => {
@@ -71,7 +103,7 @@ export function ManagedServerConsole({ serverId }: { serverId: string }) {
     return (
         <div>
             <p id="console-stream-help" className="sr-only">Current-run output connects automatically. Nothing is saved, and sessions expire after five minutes.</p>
-            <pre aria-label="Live game console output" aria-describedby="console-stream-help" tabIndex={0} className="h-64 overflow-auto whitespace-pre-wrap break-words bg-background p-4 font-mono text-[13px] leading-6 text-foreground outline-gold sm:h-[min(44vh,28rem)] sm:min-h-64">{text || consoleStateMessages[state]}{text && state !== "connected" ? `\n${consoleStateMessages[state]}` : ""}</pre>
+            <pre aria-label="Live game console output" aria-describedby="console-stream-help" tabIndex={0} className="h-64 overflow-auto whitespace-pre-wrap break-words bg-background p-4 font-mono text-[13px] leading-6 text-foreground outline-gold sm:h-[min(44vh,28rem)] sm:min-h-64">{text ? <ConsoleLines text={text} /> : consoleStateMessages[state]}{text && state !== "connected" ? `\n${consoleStateMessages[state]}` : ""}{commandError && <span role="alert" className="mt-2 block text-red-200">{commandError}</span>}</pre>
         </div>
     );
 }
