@@ -25,7 +25,7 @@ import ControlPlaneAdminPage from "./page";
 
 beforeEach(() => {
     vi.resetAllMocks();
-    mocks.session.mockResolvedValue({ session: { access_token: "test-admin-token", user: { id: "admin", app_metadata: { role: "Member" } } } });
+    mocks.session.mockResolvedValue({ impersonating: false, session: { access_token: "test-admin-token", user: { id: "admin", app_metadata: { role: "Member" } } } });
     mocks.auth.mockResolvedValue({ user: { id: "admin", app_metadata: { role: "Admin" } }, accessToken: "test-admin-token" });
     mocks.request.mockImplementation(async request => {
         request.onAuthenticated();
@@ -49,7 +49,7 @@ it("renders Overview from its compact current response without fetching account 
     expect(html).toContain("Current control reason");
     expect(html).toContain("Recent jobs");
     expect(html).not.toContain("The control plane view could not be loaded");
-    expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "overview", input: { compact: true }, signal: expect.any(AbortSignal), expectedUserId: "admin", onAuthenticated: expect.any(Function) }]]);
+    expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "overview", input: { compact: true }, signal: expect.any(AbortSignal), expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function) }]]);
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
@@ -71,7 +71,7 @@ it("renders both complete release groups from one catalog request without accoun
     expect(html.replaceAll("<!-- -->", "")).toContain("Current Nightly");
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "release-catalog",
-        input: { stableCursor: null, nightlyCursor: null, limit: 100 }, signal: expect.any(AbortSignal), expectedUserId: "admin", onAuthenticated: expect.any(Function) }]]);
+        input: { stableCursor: null, nightlyCursor: null, limit: 100 }, signal: expect.any(AbortSignal), expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function) }]]);
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
@@ -92,7 +92,7 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     expect(html).toContain('value="us-east"');
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual([[{
-        accessToken: "test-admin-token", operation: "vps-hosts", signal: expect.any(AbortSignal), expectedUserId: "admin", onAuthenticated: expect.any(Function),
+        accessToken: "test-admin-token", operation: "vps-hosts", signal: expect.any(AbortSignal), expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function),
         input: { includeLiveData: false, includeProviderInventory: "service-names" },
     }]]);
     expect(mocks.request).toHaveBeenCalledTimes(3);
@@ -226,4 +226,14 @@ it("does not let a late concurrent read override failed fresh fallback authentic
     await expect(page).rejects.toThrow();
     expect(mocks.accounts).not.toHaveBeenCalled(); expect(mocks.tables).not.toHaveBeenCalled();
     pending.resolve({});
+});
+
+
+it("requests the ordinary-session guard unless impersonation was fully validated before the read", async () => {
+    await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "overview" }) });
+    expect(mocks.request.mock.calls.at(-1)?.[0].requireOrdinarySession).toBe(true);
+    mocks.session.mockResolvedValue({ impersonating: true, session: { access_token: "test-admin-token", user: { id: "admin" } } });
+    await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "overview" }) });
+    expect(mocks.request.mock.calls.at(-1)?.[0].requireOrdinarySession).toBe(false);
+    expect(mocks.auth).not.toHaveBeenCalled();
 });

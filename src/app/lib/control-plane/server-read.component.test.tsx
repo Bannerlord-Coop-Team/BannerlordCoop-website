@@ -43,7 +43,7 @@ it("attests the matching fresh identity before a pending body without releasing 
     vi.stubGlobal("fetch", async () => new Response(new ReadableStream({ async start(controller) {
         await body.promise;
         controller.enqueue(new TextEncoder().encode(JSON.stringify(envelope({ revision: 1 })))); controller.close();
-    } }), { headers: { ...headers, "cache-control": "no-store", "x-control-plane-authenticated-session": `${userId}:${REQUEST_ID}` } }));
+    } }), { headers: { ...headers, "cache-control": "no-store", "x-control-plane-authenticated-session": `${userId}:${REQUEST_ID}:validated` } }));
     let completed = false;
     const read = readControlPlaneAdmin({ ...options, expectedUserId: userId, onAuthenticated: authenticated });
     void read.then(() => { completed = true; });
@@ -62,7 +62,7 @@ it.each([undefined, "wrong-user", "44444444-4444-4444-8444-444444444444:wrong-re
 
 it("rejects cacheable attestations and identity callbacks without an expected user", async () => {
     const userId = "44444444-4444-4444-8444-444444444444", authenticated = vi.fn();
-    const fetch = vi.fn(async () => Response.json(envelope({}), { headers: { ...headers, "x-control-plane-authenticated-session": `${userId}:${REQUEST_ID}` } }));
+    const fetch = vi.fn(async () => Response.json(envelope({}), { headers: { ...headers, "x-control-plane-authenticated-session": `${userId}:${REQUEST_ID}:validated` } }));
     vi.stubGlobal("fetch", fetch);
     await expect(readControlPlaneAdmin({ ...options, onAuthenticated: authenticated })).rejects.toMatchObject({ code: "invalid_request" });
     expect(fetch).not.toHaveBeenCalled();
@@ -196,7 +196,7 @@ it("runs every direct read in native workerd and rejects all redirects without f
             if (redirectStatus) return new Response(null, { status: redirectStatus, headers: { location: "https://other.test/private" } });
             return Response.json({ version: 1, requestId: body.requestId, ok: true, result: {
                 operation: body.operation, revision: calls, rows: [{ name: "Current 👨‍👩‍👧‍👦" }],
-            } }, { headers: { ...headers, "cache-control": "no-store", "x-control-plane-authenticated-session": `44444444-4444-4444-8444-444444444444:${body.requestId}` } });
+            } }, { headers: { ...headers, "cache-control": "no-store", "x-control-plane-authenticated-session": `44444444-4444-4444-8444-444444444444:${body.requestId}:validated` } });
         },
     }] }));
     try {
@@ -222,8 +222,25 @@ it("does not attest authority when the caller aborts as response headers arrive"
     vi.stubGlobal("fetch", async () => {
         controller.abort();
         return new Response(new ReadableStream({ cancel }), { headers: { ...headers, "cache-control": "no-store",
-            "x-control-plane-authenticated-session": `44444444-4444-4444-8444-444444444444:${REQUEST_ID}` } });
+            "x-control-plane-authenticated-session": `44444444-4444-4444-8444-444444444444:${REQUEST_ID}:validated` } });
     });
     await expect(readControlPlaneAdmin({ ...options, expectedUserId: "44444444-4444-4444-8444-444444444444", onAuthenticated: authenticated, signal: controller.signal })).rejects.toMatchObject({ code: "control_plane_unavailable" });
     expect(authenticated).not.toHaveBeenCalled(); expect(cancel).toHaveBeenCalledOnce();
+});
+
+
+it("requires Oracle's ordinary-session constraint for a session without an impersonation marker", async () => {
+    const userId = "44444444-4444-4444-8444-444444444444", authenticated = vi.fn();
+    let constraint = "validated";
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => {
+        expect(new Headers(init?.headers).get("x-control-plane-ordinary-session")).toBe("1");
+        return Response.json(envelope({ revision: 1 }), { headers: { ...headers, "cache-control": "no-store",
+            "x-control-plane-authenticated-session": `${userId}:${REQUEST_ID}:${constraint}` } });
+    });
+    const request = { ...options, expectedUserId: userId, requireOrdinarySession: true, onAuthenticated: authenticated };
+    await expect(readControlPlaneAdmin(request)).rejects.toMatchObject({ code: "invalid_response" });
+    expect(authenticated).not.toHaveBeenCalled();
+    constraint = "ordinary";
+    expect(await readControlPlaneAdmin(request)).toEqual({ revision: 1 });
+    expect(authenticated).toHaveBeenCalledOnce();
 });

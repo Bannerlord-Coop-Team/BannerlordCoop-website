@@ -109,11 +109,11 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
     const { read } = await loadAuthenticatedView();
     async function loadAuthenticatedView() {
         try {
-            const { session } = await getSupabaseServerReadSession();
+            const { session, impersonating } = await getSupabaseServerReadSession();
             if (!session) redirect("/login?next=/admin/control-plane");
             const authority = Promise.withResolvers<void>();
             let authenticated = false, fallbackStarted = false;
-            const identity = { expectedUserId: session.user.id, onAuthenticated: () => {
+            const identity = { expectedUserId: session.user.id, requireOrdinarySession: !impersonating, onAuthenticated: () => {
                 if (fallbackStarted) return;
                 authenticated = true;
                 authority.resolve();
@@ -259,7 +259,7 @@ async function ControlPlaneViewContent({
     );
 }
 
-type ReadIdentity = { expectedUserId: string; onAuthenticated: () => void };
+type ReadIdentity = { expectedUserId: string; requireOrdinarySession: boolean; onAuthenticated: () => void };
 
 /** Loads the authenticated data needed by the selected administration view. */
 async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null, signal: AbortSignal, identity: ReadIdentity) {

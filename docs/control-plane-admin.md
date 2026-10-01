@@ -20,10 +20,15 @@ The fixed direct route omits cookies/API keys, disables caching, refuses redirec
 without following them, bounds requests to 64KiB and streamed responses to 8MiB
 and 8192 chunks, and keeps caller cancellation plus the 90-second read deadline.
 Oracle also returns `x-control-plane-authenticated-session` containing the freshly
-verified Supabase user UUID and current request UUID. Before releasing the page,
+verified Supabase user UUID, current request UUID and enforced session constraint. Before releasing the page,
 the reader matches both identifiers to the refreshed session and the exact read,
 requires the protected-role acknowledgment and `Cache-Control: no-store`, and
-refuses redirects. Cached role claims never grant page access. Result data still
+refuses redirects. Without an impersonation marker it sends
+`x-control-plane-ordinary-session: 1` and requires the `ordinary` response constraint;
+Oracle must freshly prove a null impersonation context. A native impersonation token
+with its website marker removed therefore remains rejected. With a fully validated
+marker, the response constraint is `validated` and the existing actor/target checks
+still finish before any read starts. Cached role claims never grant page access. Result data still
 requires complete bounded decoding and a successful correlated envelope. Missing,
 duplicate or mismatched attestations reject the read data. An unavailable, denied
 or older adapter retains the website's fresh user/context validation only to show
