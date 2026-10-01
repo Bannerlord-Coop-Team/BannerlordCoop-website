@@ -1,11 +1,14 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import * as serverActions from "@/app/servers/managed-server-actions";
 import { ManagedServerControls, ManagedServerPassword } from "./ManagedServerControls";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 
-const { request, requestUpdate, requestPassword, beginPolling } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn() }));
+const { request, requestUpdate, requestPassword, beginPolling, startStatus, router } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn(), startStatus: vi.fn(), router: { refresh: vi.fn() } }));
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerStartStatus: startStatus }));
+afterEach(() => vi.useRealTimers());
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({
     getSupabaseServerClient: async () => ({ auth: {
@@ -51,7 +54,7 @@ it.each([undefined, "55555555-5555-4555-8555-555555555555"])("recognizes an acce
     request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, operationId));
     const result = await serverActions.operateManagedServer({ serverId: "22222222-2222-4222-8222-222222222222", action: "start" });
     expect(result.ok).toBe(operationId !== undefined);
-    expect(result.message).toContain(operationId === undefined ? "may have executed" : "Start request accepted");
+    expect(result.message).toContain(operationId === undefined ? "may have executed" : "Start accepted");
     expect(request).toHaveBeenCalledTimes(1);
 });
 
@@ -161,5 +164,135 @@ it("does not expose password settings to a manager", async () => {
     try {
         await act(async () => root.render(<ManagedServerPassword serverId="22222222-2222-4222-8222-222222222222" accessRole="manager" operationState="running" expectedUpdatedAt="2026-09-28T00:00:00.000Z" />));
         expect(container.querySelector("form")).toBeNull();
+    } finally { await act(async () => root.unmount()); }
+});
+
+const progressServerId = "22222222-2222-4222-8222-222222222222";
+const progressJobId = "55555555-5555-4555-8555-555555555555";
+const progressProps = { serverId: progressServerId, displayName: "Campaign", accessRole: "owner" as const,
+    operationState: "stopped", expectedUpdatedAt: "2026-09-20T12:00:00.000Z" };
+function progress(phase: string, state = "running", label = phase) {
+    return { serverId: progressServerId, jobId: progressJobId, phase, state, progress: label };
+}
+
+it("follows the accepted Start through real phases and readiness without sending Start again", async () => {
+    vi.useFakeTimers();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockResolvedValueOnce(progress("preparing", "running", "Creating a safe restore point"))
+        .mockResolvedValueOnce(progress("starting", "running", "Loading your campaign"))
+        .mockResolvedValueOnce(progress("verifying", "running", "Checking readiness"))
+        .mockResolvedValue(progress("ready", "succeeded", "Server started and ready to join."));
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<ManagedServerControls {...progressProps} />));
+        await act(async () => container.querySelector("button")!.click());
+        expect(container.textContent).toContain("Creating a safe restore point");
+        expect(container.querySelectorAll("ol li")).toHaveLength(5);
+        expect(container.querySelector("button")!.disabled).toBe(true);
+        for (const [phase, label] of [["starting", "Loading your campaign"], ["verifying", "Checking readiness"], ["ready", "Your server is ready to join"]]) {
+            await act(async () => vi.advanceTimersByTimeAsync(2_000));
+            expect(container.textContent).toContain(label);
+            expect(container.querySelector('[aria-current="step"]')?.textContent).toContain(phase === "starting" ? "Launch game" : phase === "verifying" ? "Confirm readiness" : "Ready to join");
+        }
+        expect(startStatus).toHaveBeenCalledWith("token", progressServerId, progressJobId);
+        expect(request).toHaveBeenCalledTimes(1);
+        const calls = startStatus.mock.calls.length;
+        await act(async () => vi.advanceTimersByTimeAsync(10_000));
+        expect(startStatus).toHaveBeenCalledTimes(calls);
+        expect(router.refresh).toHaveBeenCalled();
+        expect(container.querySelectorAll("button")[0].disabled).toBe(true);
+        expect(container.querySelectorAll("button")[1].disabled).toBe(false);
+        await act(async () => root.render(<ManagedServerControls {...progressProps} operationState="stopped" expectedUpdatedAt="2026-09-20T12:01:00.000Z" />));
+        expect(container.querySelectorAll("button")[0].disabled).toBe(false);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it.each(["failed", "cancelled"])("stops following a %s Start without claiming readiness", async (state) => {
+    vi.useFakeTimers();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockResolvedValue(progress("starting", state));
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<ManagedServerControls {...progressProps} />));
+        await act(async () => container.querySelector("button")!.click());
+        expect(container.textContent).toContain(state === "failed" ? "Server could not start" : "Start cancelled");
+        expect(container.textContent).not.toContain("Your server is ready to join");
+        expect(container.querySelector(".animate-spin")).toBeNull();
+        await act(async () => vi.advanceTimersByTimeAsync(10_000));
+        expect(startStatus).toHaveBeenCalledTimes(1);
+        expect(request).toHaveBeenCalledTimes(1);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("reconnects progress reads, shows retry wait, and resumes the same job after the bounded watch", async () => {
+    vi.useFakeTimers();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockRejectedValueOnce(new Error("private transport details"))
+        .mockResolvedValue(progress("starting", "retry-wait", "Loading your campaign"));
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<ManagedServerControls {...progressProps} />));
+        await act(async () => container.querySelector("button")!.click());
+        expect(container.textContent).toContain("Reconnecting to server progress");
+        expect(container.textContent).not.toContain("private transport details");
+        vi.setSystemTime(Date.now() + 15 * 60_000);
+        await act(async () => vi.advanceTimersByTimeAsync(2_000));
+        expect(container.textContent).toContain("Waiting to retry safely");
+        expect(container.textContent).toContain("Automatic progress updates are paused");
+        startStatus.mockResolvedValue(progress("ready", "succeeded"));
+        const resume = [...container.querySelectorAll("button")].find(button => button.textContent === "Resume progress updates")!;
+        await act(async () => resume.click());
+        expect(container.textContent).toContain("Your server is ready to join");
+        expect(request).toHaveBeenCalledTimes(1);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("cleans up progress reads when the controls unmount", async () => {
+    vi.useFakeTimers();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockResolvedValue(progress("starting"));
+    const container = document.createElement("div"); const root = createRoot(container);
+    await act(async () => root.render(<ManagedServerControls {...progressProps} />));
+    await act(async () => container.querySelector("button")!.click());
+    await act(async () => root.unmount());
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(startStatus).toHaveBeenCalledTimes(1);
+});
+
+it("shows progress immediately while the Start response is still pending", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    let complete!: () => void;
+    request.mockReset().mockImplementation(() => new Promise<void>(resolve => { complete = resolve; }));
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<ManagedServerControls {...progressProps} />));
+        await act(async () => { container.querySelector("button")!.click(); });
+        expect(container.textContent).toContain("Starting your server");
+        expect(container.textContent).toContain("Sending your Start request");
+        expect(container.querySelector("button")!.disabled).toBe(true);
+        await act(async () => complete());
+        expect(container.textContent).toContain("Your server is ready to join");
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("pauses progress after access is revoked and keeps readiness unconfirmed", async () => {
+    vi.useFakeTimers();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockRejectedValue(new MyServersApiError("forbidden", "Private authority details"));
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<ManagedServerControls {...progressProps} />));
+        await act(async () => container.querySelector("button")!.click());
+        expect(container.textContent).toContain("Your server access could not be confirmed");
+        expect(container.textContent).toContain("Readiness has not been confirmed");
+        expect(container.textContent).not.toContain("Private authority details");
+        expect(container.querySelector(".animate-spin")).toBeNull();
+        await act(async () => vi.advanceTimersByTimeAsync(10_000));
+        expect(startStatus).toHaveBeenCalledTimes(1);
     } finally { await act(async () => root.unmount()); }
 });

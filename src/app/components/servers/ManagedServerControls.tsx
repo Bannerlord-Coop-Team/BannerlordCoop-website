@@ -1,9 +1,11 @@
 "use client";
 
 import { useManagedServerPolling } from "@/app/components/servers/ManagedServerPollingProvider";
-import { operateManagedServer, setManagedServerPassword } from "@/app/servers/managed-server-actions";
-import { Download, Play, RotateCw, Square } from "lucide-react";
-import { useState, useTransition, type FormEvent } from "react";
+import { operateManagedServer, readManagedServerStartStatus, setManagedServerPassword } from "@/app/servers/managed-server-actions";
+import { useRouter } from "next/navigation";
+import type { ManagedStartStatus } from "@/app/lib/hosting/my-servers-server";
+import { Check, Download, LoaderCircle, Play, RotateCw, Square } from "lucide-react";
+import { useEffect, useState, useTransition, type FormEvent } from "react";
 
 const TRANSITIONAL_STATES = new Set([
     "provisioning",
@@ -14,6 +16,8 @@ const TRANSITIONAL_STATES = new Set([
     "updating",
     "deleting",
 ]);
+
+type StartProgressStatus = Pick<ManagedStartStatus, "state" | "phase" | "progress">;
 
 type Operation = "start" | "stop" | "restart-game" | "update-now";
 
@@ -33,12 +37,52 @@ export function ManagedServerControls({
     operationState,
     expectedUpdatedAt,
 }: ManagedServerControlsProps) {
+    const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [pendingOperation, setPendingOperation] = useState<Operation | null>(null);
     const [message, setMessage] = useState("");
+    const [startRevision, setStartRevision] = useState(expectedUpdatedAt);
+    const [startJobId, setStartJobId] = useState<string | null>(null);
+    const [startStatus, setStartStatus] = useState<StartProgressStatus | null>(null);
+    const [progressPaused, setProgressPaused] = useState(false);
+    const [pollRun, setPollRun] = useState(0);
     const { session: pollingSession } = useManagedServerPolling();
     const canOperate = accessRole === "owner" || accessRole === "manager";
-    const stateIsTransitional = TRANSITIONAL_STATES.has(operationState);
+    const displayedState = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision ? "running" : operationState;
+    const stateIsTransitional = TRANSITIONAL_STATES.has(displayedState);
+
+    useEffect(() => {
+        if (startJobId === null) return;
+        let cancelled = false;
+        let timeout: ReturnType<typeof setTimeout>;
+        const deadline = Date.now() + 15 * 60_000;
+        async function poll() {
+            try {
+                const result = await readManagedServerStartStatus(serverId, startJobId!);
+                if (cancelled) return;
+                if (result.ok) {
+                    setStartStatus(result.status);
+                    setMessage("");
+                    if (["succeeded", "failed", "cancelled"].includes(result.status.state)) { router.refresh(); return; }
+                } else {
+                    setMessage(result.message);
+                    if (!result.retryable) { setProgressPaused(true); return; }
+                }
+            } catch {
+                if (cancelled) return;
+                setMessage("Reconnecting to server progress… Your Start request is still being tracked.");
+            }
+            if (Date.now() >= deadline) {
+                setProgressPaused(true);
+                return;
+            }
+            timeout = setTimeout(poll, 2_000);
+        }
+        void poll();
+        return () => { cancelled = true; clearTimeout(timeout); };
+    }, [serverId, startJobId, pollRun, router]);
+
+    const trackingStart = startJobId !== null && !["succeeded", "failed", "cancelled"].includes(startStatus?.state ?? "");
 
     if (!canOperate) {
         return (
@@ -48,10 +92,10 @@ export function ManagedServerControls({
         );
     }
 
-    const busy = isPending || stateIsTransitional || pollingSession !== null;
-    const canStart = ["stopped", "failed", "degraded"].includes(operationState);
-    const canStop = ["running", "starting", "failed", "degraded"].includes(operationState);
-    const canRestart = ["running", "degraded"].includes(operationState);
+    const busy = isPending || trackingStart || stateIsTransitional || pollingSession !== null;
+    const canStart = ["stopped", "failed", "degraded"].includes(displayedState);
+    const canStop = ["running", "starting", "failed", "degraded"].includes(displayedState);
+    const canRestart = ["running", "degraded"].includes(displayedState);
 
     /** Confirms disruptive operations and reports the existing action result. */
     function requestOperation(operation: Operation) {
@@ -65,7 +109,11 @@ export function ManagedServerControls({
             `Update ${displayName} now? A backup will be taken first. If the server is running, players will be disconnected while its selected release is installed.`,
         )) return;
 
-        setMessage("");
+        setMessage(operation === "start" ? "Sending your Start request…" : "");
+        setStartRevision(expectedUpdatedAt);
+        setStartJobId(null);
+        setStartStatus(null);
+        setProgressPaused(false);
         setPendingOperation(operation);
         startTransition(async () => {
             try {
@@ -75,6 +123,10 @@ export function ManagedServerControls({
                     ...(operation === "update-now" ? { expectedUpdatedAt } : {}),
                 });
                 setMessage(result.message);
+                if (operation === "start" && result.ok) {
+                    if (result.operationId) setStartJobId(result.operationId);
+                    else setStartStatus({ state: "succeeded", phase: "ready", progress: result.message });
+                }
             } catch {
                 setMessage("The command could not be confirmed. It may have executed. Refresh server status before sending another command.");
             } finally {
@@ -90,7 +142,7 @@ export function ManagedServerControls({
                     label="Start"
                     icon={Play}
                     disabled={busy || !canStart}
-                    pending={pendingOperation === "start"}
+                    pending={pendingOperation === "start" || trackingStart}
                     onClick={() => requestOperation("start")}
                 />
                 <ControlButton
@@ -115,6 +167,16 @@ export function ManagedServerControls({
                     onClick={() => requestOperation("update-now")}
                 />
             </div>
+            {(pendingOperation === "start" || startJobId !== null || startStatus !== null) && (
+                <StartProgress status={startStatus} paused={progressPaused} />
+            )}
+            {progressPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted">
+                <p>Automatic progress updates are paused. Readiness has not been confirmed.</p>
+                <button type="button" className="mt-2 min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold"
+                    onClick={() => { setProgressPaused(false); setPollRun(current => current + 1); }}>
+                    Resume progress updates
+                </button>
+            </div>}
             {message && (
                 <p
                     aria-live="polite"
@@ -125,6 +187,30 @@ export function ManagedServerControls({
             )}
         </div>
     );
+}
+
+function StartProgress({ status, paused }: { status: StartProgressStatus | null; paused: boolean }) {
+    const phases = ["queued", "preparing", "starting", "verifying", "ready"] as const;
+    const labels = ["Start requested", "Prepare server", "Launch game and load campaign", "Confirm readiness", "Ready to join"];
+    const current = phases.indexOf(status?.phase ?? "queued");
+    const failed = status?.state === "failed" || status?.state === "cancelled";
+    return <div className="w-full max-w-xl rounded-lg border border-gold/25 bg-gold/[0.04] p-4" role="status" aria-live="polite">
+        <p className="font-medium text-foreground">{failed ? status.state === "cancelled" ? "Start cancelled" : "Server could not start"
+            : status?.state === "succeeded" ? "Your server is ready to join" : "Starting your server…"}</p>
+        <ol className="mt-3 space-y-2 text-sm">
+            {phases.map((phase, index) => <li key={phase} aria-current={index === current ? "step" : undefined}
+                className={`flex items-center gap-2 ${index <= current ? "text-foreground" : "text-foreground-dim"}`}>
+                {index < current || (index === current && status?.state === "succeeded")
+                    ? <Check aria-hidden="true" className="size-4 text-gold" />
+                    : index === current && !failed && !paused ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-gold motion-reduce:animate-none" />
+                        : <span aria-hidden="true" className="size-4 rounded-full border border-white/20" />}
+                <span>{labels[index]}<span className="sr-only">{index < current ? " — completed" : index === current ? " — current phase" : " — waiting"}</span></span>
+            </li>)}
+        </ol>
+        <p className="mt-3 text-sm leading-6 text-foreground-muted">{failed ? "Readiness was not confirmed. Check server status or contact support before trying again."
+            : status?.state === "retry-wait" ? `Waiting to retry safely. ${status.progress}`
+                : status?.progress ?? "Waiting for the hosting service to accept your request."}</p>
+    </div>;
 }
 
 /** Owns the owner-only password form in Settings, preserving confirmation and pending guards. */

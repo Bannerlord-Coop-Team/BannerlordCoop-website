@@ -16,6 +16,32 @@ export async function getServerOnboarding(accessToken: string, callerSignal?: Ab
     catch { throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid response.", true); }
 }
 
+export type ManagedStartStatus = {
+    serverId: string;
+    jobId: string;
+    state: "queued" | "running" | "retry-wait" | "succeeded" | "failed" | "cancelled";
+    phase: "queued" | "preparing" | "starting" | "verifying" | "ready";
+    progress: string;
+};
+
+/** Reads one accepted Start without dispatching another operation. */
+export async function getMyServerStartStatus(accessToken: string, serverId: string, jobId: string): Promise<ManagedStartStatus> {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+    if (!uuid.test(serverId) || !uuid.test(jobId)) throw new MyServersApiError("invalid_request", "Invalid Start reference.");
+    const result = await readOwner(accessToken, { operation: "server-start-status", input: { serverId, jobId } },
+        ownerReadSignal(accessToken, AbortSignal.timeout(10_000)));
+    if (!result || typeof result !== "object" || Array.isArray(result)) throw new MyServersApiError("invalid_response", "Invalid Start status.");
+    const value = result as Record<string, unknown>;
+    if (Object.keys(value).length !== 5 || !["serverId", "jobId", "state", "phase", "progress"].every(key => Object.hasOwn(value, key))
+        || value.serverId !== serverId || value.jobId !== jobId
+        || !["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"].includes(value.state as string)
+        || !["queued", "preparing", "starting", "verifying", "ready"].includes(value.phase as string)
+        || (value.phase === "ready") !== (value.state === "succeeded")
+        || typeof value.progress !== "string" || value.progress.length < 1 || value.progress.length > 256
+        || /[\p{Cc}\p{Cf}]/u.test(value.progress)) throw new MyServersApiError("invalid_response", "Invalid Start status.");
+    return value as ManagedStartStatus;
+}
+
 function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
     if (accessToken.length < 20 || accessToken.length > 8_192) {
         throw new MyServersApiError("invalid_request", "The managed-server read request is invalid.");
@@ -27,7 +53,8 @@ function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
 
 async function readOwner(accessToken: string, request:
     | { operation: "my-servers"; input: { cursor: string | null; limit: 100 } }
-    | { operation: "server-onboarding"; input: Record<string, never> }, signal: AbortSignal) {
+    | { operation: "server-onboarding"; input: Record<string, never> }
+    | { operation: "server-start-status"; input: { serverId: string; jobId: string } }, signal: AbortSignal) {
     const requestId = crypto.randomUUID();
     let response: Response;
     try {
@@ -49,5 +76,5 @@ async function readOwner(accessToken: string, request:
         throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid response.", true);
     }
     return readMyServersResponse(response, requestId,
-        { signal, maximumBytes: request.operation === "server-onboarding" ? 65_536 : undefined });
+        { signal, maximumBytes: request.operation !== "my-servers" ? 65_536 : undefined });
 }
