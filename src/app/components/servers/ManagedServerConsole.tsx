@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 const MAXIMUM_TEXT_CHARACTERS = 128 * 1_024;
 const MAXIMUM_LINES = 2_000;
@@ -8,72 +8,71 @@ const MAXIMUM_SSE_FRAME_BYTES = 16 * 1_024;
 
 type ConsoleState = "disconnected" | "connecting" | "connected" | "expired" | "truncated" | "unavailable";
 
+const consoleStateMessages: Record<ConsoleState, string> = {
+    connecting: "Connecting to live output…",
+    connected: "No live output.",
+    disconnected: "Console disconnected. Reload the page to reconnect.",
+    expired: "Console session expired. Reload the page to reconnect.",
+    truncated: "Console output was truncated. Reload the page to reconnect.",
+    unavailable: "Console output is unavailable. Reload the page to try again.",
+};
+
+/** Streams bounded current-run output inside the managed game console card. */
 export function ManagedServerConsole({ serverId }: { serverId: string }) {
-    const [state, setState] = useState<ConsoleState>("disconnected");
+    const [state, setState] = useState<ConsoleState>("connecting");
     const [text, setText] = useState("");
-    const active = useRef<AbortController | null>(null);
-
-    const disconnect = () => {
-        active.current?.abort();
-        active.current = null;
-        setState("disconnected");
-    };
-    useEffect(() => () => active.current?.abort(), []);
-
-    const connect = async () => {
-        if (active.current !== null) return;
+    useEffect(() => {
         const controller = new AbortController();
-        active.current = controller;
-        setText("");
-        setState("connecting");
-        try {
-            const response = await fetch(`/api/servers/${encodeURIComponent(serverId)}/console`, {
-                headers: { accept: "text/event-stream" },
-                cache: "no-store",
-                signal: controller.signal,
-            });
-            if (!response.ok || response.body === null) throw new Error("unavailable");
-            setState("connected");
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder("utf-8", { fatal: true });
-            let pending = "";
-            for (;;) {
-                const next = await reader.read();
-                const decoded = decodeConsoleStreamChunk(pending, next.done ? undefined : next.value, decoder, next.done);
-                pending = decoded.pending;
-                for (const event of decoded.events) {
-                    if (event.type === "line") {
-                        setText((current) => boundedConsoleText(current, event.text));
-                    } else if (event.type === "truncated") {
-                        setState("truncated");
-                    } else if (event.type === "expired") {
-                        setState("expired");
-                    } else if (event.type === "ended") {
-                        setState("disconnected");
+
+        /** Streams current-run output until the server closes it or the component unmounts. */
+        async function connect() {
+            setText("");
+            setState("connecting");
+            try {
+                const response = await fetch(`/api/servers/${encodeURIComponent(serverId)}/console`, {
+                    headers: { accept: "text/event-stream" },
+                    cache: "no-store",
+                    signal: controller.signal,
+                });
+                if (controller.signal.aborted) return;
+                if (!response.ok || response.body === null) throw new Error("unavailable");
+                setState("connected");
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8", { fatal: true });
+                let pending = "";
+                for (;;) {
+                    const next = await reader.read();
+                    if (controller.signal.aborted) return;
+                    const decoded = decodeConsoleStreamChunk(pending, next.done ? undefined : next.value, decoder, next.done);
+                    pending = decoded.pending;
+                    for (const event of decoded.events) {
+                        if (event.type === "line") {
+                            setText((current) => boundedConsoleText(current, event.text));
+                        } else if (event.type === "truncated") {
+                            setState("truncated");
+                        } else if (event.type === "expired") {
+                            setState("expired");
+                        } else if (event.type === "ended") {
+                            setState("disconnected");
+                        }
                     }
+                    if (next.done) break;
                 }
-                if (next.done) break;
+                if (!controller.signal.aborted) setState((current) => current === "expired" || current === "truncated" ? current : "disconnected");
+            } catch {
+                if (!controller.signal.aborted) setState("unavailable");
             }
-            if (!controller.signal.aborted) setState((current) => current === "expired" || current === "truncated" ? current : "disconnected");
-        } catch {
-            if (!controller.signal.aborted) setState("unavailable");
-        } finally {
-            if (active.current === controller) active.current = null;
         }
-    };
+
+        void connect();
+        return () => controller.abort();
+    }, [serverId]);
 
     return (
-        <section className="mt-6 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="managed-console-heading">
-            <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">Live output</p>
-            <h2 id="managed-console-heading" className="mt-2 font-display text-2xl font-semibold text-foreground sm:text-3xl">Game console</h2>
-            <p className="mt-2 text-sm leading-6 text-foreground-muted">Read-only current-run output. Nothing is saved, and sessions expire after five minutes.</p>
-            <div className="mt-4 flex items-center gap-3">
-                <button type="button" onClick={() => void connect()} disabled={active.current !== null} className="rounded-sm bg-gold px-4 py-2 font-label text-xs font-semibold uppercase tracking-[0.12em] text-black disabled:opacity-50">Connect</button>
-                <button type="button" onClick={disconnect} disabled={active.current === null} className="rounded-sm border border-white/15 px-4 py-2 font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground disabled:opacity-50">Disconnect</button>
-                <span role="status" className="text-xs text-foreground-muted">{state}</span>
-            </div>
-            <pre aria-label="Live game console output" className="mt-4 h-72 overflow-auto whitespace-pre-wrap break-words rounded-sm border border-white/10 bg-black/50 p-3 font-mono text-xs text-foreground">{text || "No live output."}</pre>
-        </section>
+        <div>
+            <p id="console-stream-help" className="sr-only">Current-run output connects automatically. Nothing is saved, and sessions expire after five minutes.</p>
+            <pre aria-label="Live game console output" aria-describedby="console-stream-help" tabIndex={0} className="h-64 overflow-auto whitespace-pre-wrap break-words bg-background p-4 font-mono text-[13px] leading-6 text-foreground outline-gold sm:h-[min(44vh,28rem)] sm:min-h-64">{text || consoleStateMessages[state]}{text && state !== "connected" ? `\n${consoleStateMessages[state]}` : ""}</pre>
+        </div>
     );
 }
 

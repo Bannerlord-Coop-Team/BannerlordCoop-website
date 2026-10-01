@@ -57,8 +57,16 @@ it("hides the real address until revealed and copies it without navigation", asy
     expect(container.textContent).not.toContain("203.0.113.8");
     await act(async () => click("Copy join address"));
     expect(writeText).toHaveBeenCalledWith("203.0.113.8:7210");
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-controls="server-address"]')!.click());
+    const reveal = container.querySelector<HTMLButtonElement>('[aria-controls="server-address"]')!;
+    expect(reveal.getAttribute("aria-label")).toBe("Show server IP and port");
+    expect(reveal.textContent).toBe("");
+    expect(reveal.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    await act(async () => reveal.click());
     expect(container.querySelector("#server-address")?.textContent).toBe("203.0.113.8:7210");
+    expect(reveal.getAttribute("aria-label")).toBe("Hide server IP and port");
+    await act(async () => reveal.click());
+    expect(container.querySelector("#server-address")?.textContent).toBe("IP hidden");
+    expect(reveal.getAttribute("aria-expanded")).toBe("false");
 });
 
 it("opens access feedback and hash targets in Settings and disables unsupported actions", async () => {

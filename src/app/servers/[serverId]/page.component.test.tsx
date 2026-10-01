@@ -371,3 +371,18 @@ it("does not duplicate the existing live console with managed output", async () 
     expect(await findServerElement(tree, "ManagedServerConsole")).toBeNull();
     expect(await findServerElement(tree, "ManagedServerCommands")).toBeNull();
 });
+
+it("places managed password configuration in Settings rather than the Console workspace", async () => {
+    mocks.liveServer.mockReturnValue(null);
+    mocks.managedServers.mockResolvedValue([{
+        serverId: managedId, accessRole: "owner", observedGameState: "running", operationState: "running", friendlyRegion: "europe",
+    }]);
+    const tree = await page(managedId);
+    const sections = (await findServerElement(tree, "ManagedServerSections"))!;
+    const renderSections = sections.type as (props: unknown) => ReactElement<{ children: ReactNode }>;
+    const panels = Children.toArray(renderSections(sections.props).props.children);
+    const settings = panels.find(child => isValidElement<{ section?: string }>(child) && child.props.section === "Settings");
+    const consolePanel = panels.find(child => isValidElement<{ section?: string }>(child) && child.props.section === "Console");
+    expect(await findServerElement(settings, "ManagedServerPassword")).toMatchObject({ props: { serverId: managedId, accessRole: "owner" } });
+    expect(await findServerElement(consolePanel, "ManagedServerPassword")).toBeNull();
+});

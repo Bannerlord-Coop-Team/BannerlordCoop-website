@@ -1,23 +1,38 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Terminal } from "lucide-react";
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { ServerConsoleWorkspace, coopConsoleCommands } from "./ServerManagementWorkspace";
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { submitManagedConsoleCommand, checkManagedConsoleCommand, acknowledgeManagedConsoleCommand } from "@/app/servers/managed-server-console-actions";
 import { MAXIMUM_CONSOLE_COMMAND_LENGTH, parseConsoleSubmission, type ConsoleSubmission, type ConsoleReference, type ConsoleResult } from "../../../../supabase/functions/_shared/server-console-contract";
 
-const button = "min-h-10 rounded-md border border-gold/40 bg-gold/10 px-4 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
+const button = "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-gold/40 bg-gold/10 px-4 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
+const commandNames = coopConsoleCommands.map(([usage]) => usage.split(/\s/u, 1)[0]);
+
+/** Completes a command name only through its next namespace separator, never its arguments. */
+function completeCommand(draft: string) {
+    if (!draft || /\s/u.test(draft)) return "";
+    const match = commandNames.find(command => command.startsWith(draft));
+    if (!match || match === draft) return "";
+    const dot = match.indexOf(".", draft.length);
+    return match.slice(draft.length, dot < 0 ? match.length : dot + 1);
+}
+
 type Submission = { requestId: string; input: ConsoleSubmission };
 
-/** Runs request-bound game commands on managed servers beside the separately streamed live output. */
+/** Runs request-bound game commands on managed servers below the live output in one console card. */
 export function ManagedServerCommands({ server, userId, controls, children }: { server: MyServerSummary; userId: string; controls: ReactNode; children?: ReactNode }) {
     const router = useRouter();
     const id = useId();
     const inputRef = useRef<HTMLInputElement>(null);
     const inFlight = useRef(false);
     const [draft, setDraft] = useState("");
+    const [atEnd, setAtEnd] = useState(false);
+    const [focused, setFocused] = useState(false);
+    const [scrollLeft, setScrollLeft] = useState(0);
     const [submission, setSubmission] = useState<Submission | null>(null);
     const [job, setJob] = useState<ConsoleReference | null>(null);
     const [result, setResult] = useState<ConsoleResult | null>(null);
@@ -28,6 +43,7 @@ export function ManagedServerCommands({ server, userId, controls, children }: { 
     const canOperate = server.accessRole === "owner" || server.accessRole === "manager";
     const ready = canOperate && server.operationState === "running" && server.observedGameState === "running";
     const canCompose = ready && !busy && !submission;
+    const completion = canCompose && focused && atEnd ? completeCommand(draft) : "";
     const terminal = result !== null && result.status !== "pending";
 
     useEffect(() => {
@@ -72,6 +88,13 @@ export function ManagedServerCommands({ server, userId, controls, children }: { 
     function selectCommand(command: string) {
         setDraft(command);
         inputRef.current?.focus();
+    }
+
+    /** Accepts the visible ghost with Tab without sending or interrupting normal focus navigation. */
+    function completeWithTab(event: KeyboardEvent<HTMLInputElement>) {
+        if (event.key !== "Tab" || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey || event.nativeEvent.isComposing || !completion) return;
+        event.preventDefault();
+        setDraft(draft + completion);
     }
 
     /** Retains the original payload and UUID whenever delivery cannot be confirmed. */
@@ -139,31 +162,49 @@ export function ManagedServerCommands({ server, userId, controls, children }: { 
     }
 
     return <ServerConsoleWorkspace coopCommandsOnly onSelectCommand={canCompose ? selectCommand : undefined}>
-        <section className="min-w-0 rounded-lg border border-white/10 bg-surface">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
-                <h2 className="font-semibold">Game commands</h2>
-                <DownloadServerLogButton serverId={server.serverId} userId={userId} className={button} />
+        <section className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-surface" aria-labelledby={`${id}-heading`}>
+            <div className="flex flex-wrap items-center gap-3 border-b border-white/10 p-3 sm:px-4">
+                <h2 id={`${id}-heading`} className="mr-auto flex items-center gap-2 text-sm font-semibold"><Terminal className="size-4 text-gold" aria-hidden="true" />Game console</h2>
+                <div className="order-last basis-full sm:order-none sm:basis-auto">{controls}</div>
+                <DownloadServerLogButton serverId={server.serverId} userId={userId} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm text-foreground-muted hover:bg-white/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40" />
             </div>
-            <div className="border-b border-white/10 p-5">{controls}</div>
-            <div className="space-y-4 p-5">
-                <p className="text-sm text-foreground-muted">Run coop.* commands on this server. Cheats can permanently modify campaigns and saves. Review arguments and take a backup first. Each command shows its own result here; live output streams separately.</p>
+            {children}
+            <div className="space-y-3 border-t border-white/10 p-3 sm:p-4">
+                <form onSubmit={send} className="flex gap-2">
+                    <label htmlFor={id} className="sr-only">Game command</label>
+                    <div className="relative min-w-0 flex-1">
+                        <input
+                            ref={inputRef} id={id} value={draft}
+                            onChange={event => {
+                                const input = event.currentTarget;
+                                setDraft(input.value);
+                                setAtEnd(input.selectionStart === input.value.length && input.selectionEnd === input.value.length);
+                            }}
+                            onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+                            onSelect={event => {
+                                const input = event.currentTarget;
+                                setAtEnd(input.selectionStart === input.value.length && input.selectionEnd === input.value.length);
+                            }}
+                            onScroll={event => setScrollLeft(event.currentTarget.scrollLeft)} onKeyDown={completeWithTab}
+                            disabled={!canCompose} maxLength={MAXIMUM_CONSOLE_COMMAND_LENGTH}
+                            autoComplete="off" aria-autocomplete="inline" aria-describedby={`${id}-shortcuts`} spellCheck={false} placeholder="coop.…"
+                            className="min-h-11 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold disabled:opacity-40"
+                        />
+                        {completion && <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-md border border-transparent px-3 py-2.5 font-mono text-sm whitespace-pre"><div style={{ transform: `translateX(-${scrollLeft}px)` }}><span className="invisible">{draft}</span><span className="text-foreground-muted">{completion}</span></div></div>}
+                    </div>
+                    <button type="submit" className={button} disabled={!!job || busy || !canOperate || (!submission && (!ready || !draft.trim()))}>{busy ? "Sending…" : submission && !job ? "Retry same request" : "Send"}</button>
+                </form>
+                <p id={`${id}-shortcuts`} className="text-xs text-foreground-muted"><kbd className="font-mono">Enter</kbd> to send <span aria-hidden="true">·</span> <kbd className="font-mono">Tab</kbd> to complete</p>
                 {!ready && <p className="text-sm text-foreground-muted">Commands require owner or manager access and a running, healthy server.</p>}
-                <pre aria-label="Command result" tabIndex={0} className="max-h-96 min-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-4 font-mono text-sm">{result?.status === "succeeded" ? result.output : result?.status === "failed" ? `Command failed: ${result.errorCode}` : result?.status === "cancelled" ? "Command cancelled." : "No completed command result yet."}</pre>
+                {terminal && <pre aria-label="Command result" tabIndex={0} className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-4 font-mono text-sm">{result.status === "succeeded" ? result.output : result.status === "failed" ? `Command failed: ${result.errorCode}` : "Command cancelled."}</pre>}
                 {result?.status === "succeeded" && result.outputTruncated && <p className="text-sm text-foreground-muted">Output was truncated.</p>}
                 {result?.status === "succeeded" && result.outputWithheld && <p className="text-sm text-foreground-muted">Output was withheld because it may contain sensitive information.</p>}
-                <form onSubmit={send} className="flex flex-wrap gap-2">
-                    <label htmlFor={id} className="sr-only">Game command</label>
-                    <input ref={inputRef} id={id} value={draft} onChange={event => setDraft(event.target.value)} disabled={!canCompose} maxLength={MAXIMUM_CONSOLE_COMMAND_LENGTH} list={`${id}-suggestions`} autoComplete="off" placeholder="coop.…" className="min-w-0 flex-1 rounded border border-white/15 bg-background px-3 py-2 font-mono text-sm disabled:opacity-40" />
-                    <datalist id={`${id}-suggestions`}>{coopConsoleCommands.map(([usage, summary]) => <option key={usage} value={usage}>{summary}</option>)}</datalist>
-                    {!job && <button className={button} disabled={busy || !canOperate || (!submission && (!ready || !draft.trim()))}>{busy ? "Sending…" : submission ? "Retry same request" : "Send"}</button>}
-                </form>
                 {job && !terminal && <button className={button} disabled={polling} onClick={() => { setMessage("Checking command result…"); setPolling(true); }}>{polling ? "Waiting for result…" : "Check result"}</button>}
                 {terminal && !acknowledged && <button className={button} disabled={busy} onClick={acknowledge}>Acknowledge result</button>}
                 {acknowledged && <button className={button} onClick={newCommand}>New command</button>}
-                <p role="status" className="text-sm text-foreground-muted">{message}</p>
+                {message && <p role="status" className="text-sm text-foreground-muted">{message}</p>}
                 {submission && !terminal && <p className="text-xs text-foreground-muted">Keep this page open to check the same request. If you leave, check Discord before sending this command again.</p>}
             </div>
         </section>
-        {children}
     </ServerConsoleWorkspace>;
 }

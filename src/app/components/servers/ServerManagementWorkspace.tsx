@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useId, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, FileJson, Play, RotateCw, Search, Settings2, Square, Terminal } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, Eye, EyeOff, FileJson, Play, RotateCw, Search, Settings2, Square, Terminal } from "lucide-react";
 
 import commandsData from "@/app/cheats/commands.json";
 import { isPublishedCheat } from "@/app/cheats/debugOnly";
@@ -36,10 +36,10 @@ const consoleCommands = [
         .filter(command => command.side !== "client" && isPublishedCheat(command))
         .map(command => [command.usage, command.summary, [command.category, ...command.aliases, ...command.arguments.map(argument => argument.description)].join(" ")]) },
 ];
-// The right-panel coop.* commands, reused for managed console input suggestions.
+// Published coop.* commands shared by the reference and inline completion.
 export const coopConsoleCommands = consoleCommands.flatMap(({ commands }) => commands).filter(([usage]) => usage.startsWith("coop."));
 
-/** Presents console content and a picker restricted to the active transport's commands. */
+/** Keeps the console primary and exposes its supported command reference only on request. */
 export function ServerConsoleWorkspace({ children, onSelectCommand, coopCommandsOnly = false }: { children: ReactNode; onSelectCommand?: (command: string) => void; coopCommandsOnly?: boolean }) {
     const [query, setQuery] = useState("");
     const [expanded, setExpanded] = useState(false);
@@ -49,20 +49,18 @@ export function ServerConsoleWorkspace({ children, onSelectCommand, coopCommands
     const groups = consoleCommands.map(({ group, commands }) => ({
         group, commands: commands.filter(command => (!coopCommandsOnly || command[0].startsWith("coop.")) && `${group} ${command.join(" ")}`.toLowerCase().includes(search)),
     })).filter(({ commands }) => commands.length > 0);
-    return <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+    return <div className="space-y-3">
         <div className="min-w-0 space-y-5">{children}</div>
         <aside className="min-w-0 rounded-lg border border-white/10 bg-surface" aria-label="Console commands">
-            <div className="hidden border-b border-white/10 p-5 lg:block"><h2 className="text-base font-semibold">Commands</h2><p className="mt-1 text-sm text-foreground-muted">Insert, review, then send.</p></div>
-            <button type="button" disabled={!available} aria-expanded={expanded && available} aria-controls={`${id}-commands`} onClick={() => setExpanded(!expanded)} className="flex min-h-12 w-full items-center justify-between px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 lg:hidden">Browse commands <ChevronDown className="size-4" aria-hidden="true" /></button>
-            <div id={`${id}-commands`} className={`${expanded && available ? "block" : "hidden"} p-5 lg:block`}>
+            <button type="button" disabled={!available} aria-expanded={expanded && available} aria-controls={`${id}-commands`} onClick={() => setExpanded(!expanded)} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm font-medium text-foreground-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40">Browse commands <ChevronDown className={`size-4 transition-transform ${expanded && available ? "rotate-180" : ""}`} aria-hidden="true" /></button>
+            <div id={`${id}-commands`} hidden={!expanded || !available} className="border-t border-white/10 p-4">
                 <label htmlFor={`${id}-search`} className="sr-only">Search console commands</label>
                 <div className="relative"><Search className="absolute top-3 left-3 size-4 text-foreground-muted" aria-hidden="true" /><input id={`${id}-search`} type="search" value={query} onChange={event => setQuery(event.target.value)} disabled={!available} className="w-full rounded-md border border-white/15 bg-background py-2.5 pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40" placeholder="Search commands…" /></div>
-                <p className="mt-3 text-xs leading-5 text-foreground-muted">{available ? "Selecting a command replaces the input without sending. Edit any <arguments> before sending." : coopCommandsOnly ? "Commands require owner or manager access to a running server with no command pending." : "Commands are unavailable until a writable live console is connected."}</p>
-                <p className="mt-2 text-xs leading-5 text-foreground-muted">Game commands and cheats depend on the installed build and game state. Client-only and DEBUG-only commands are excluded.</p>
+                <p className="mt-3 text-xs leading-5 text-foreground-muted">Select to insert, then edit any &lt;arguments&gt; before sending. Available commands depend on the installed build.</p>
                 <div className="mt-4 max-h-96 space-y-4 overflow-y-auto overscroll-contain pr-1">
                     {groups.map(({ group, commands }) => <section key={group}>
                         <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-foreground-muted">{group}</h3>
-                        <ul className="divide-y divide-white/10">{commands.map(([command, description]) => <li key={command}><button type="button" disabled={!available} onClick={() => { onSelectCommand?.(command); setExpanded(false); }} className="flex w-full items-center justify-between gap-3 rounded px-1 py-3 text-left hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40"><span className="min-w-0"><code className="block break-words text-sm text-foreground [overflow-wrap:anywhere]">{command}</code><span className="mt-1 block text-[13px] leading-5 text-foreground-muted">{description}</span></span><ChevronRight className="size-4 shrink-0 text-foreground-muted" aria-hidden="true" /></button></li>)}</ul>
+                        <ul className="grid gap-x-6 divide-y divide-white/10 md:grid-cols-2">{commands.map(([command, description]) => <li key={command}><button type="button" disabled={!available} onClick={() => { onSelectCommand?.(command); setExpanded(false); }} className="flex w-full items-center justify-between gap-3 rounded px-1 py-3 text-left hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40"><span className="min-w-0"><code className="block break-words text-sm text-foreground [overflow-wrap:anywhere]">{command}</code><span className="mt-1 block text-[13px] leading-5 text-foreground-muted">{description}</span></span><ChevronRight className="size-4 shrink-0 text-foreground-muted" aria-hidden="true" /></button></li>)}</ul>
                     </section>)}
                     {groups.length === 0 && <p role="status" className="text-sm text-foreground-muted">No commands match your search.</p>}
                 </div>
@@ -96,6 +94,7 @@ export function UnavailableServerPanel({ title, actions }: { title: string; acti
     </section>;
 }
 
+/** Organizes server identity, join actions and persistent task panels in one workspace. */
 export function ServerManagementWorkspace({ name, address, summary, status, visibility, notice, initialSection = "Console", children }: {
     name: ReactNode; address?: string | null; summary: ReactNode; status?: ReactNode; visibility?: ReactNode; notice?: string;
     initialSection?: Section; children: ReactNode;
@@ -117,29 +116,34 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
     }, []);
 
     return <WorkspaceContext.Provider value={{ current: section, initial: initialSection }}><main className="min-h-svh bg-background">
-        <div className="site-container py-6 sm:py-10">
+        <div className="site-container py-5 sm:py-6">
             <Link href="/servers" className="inline-flex items-center gap-2 text-sm text-foreground-muted hover:text-gold"><ArrowLeft className="size-4" aria-hidden="true" />All servers</Link>
             {notice && <p className="my-5 rounded-md border border-white/10 bg-surface px-4 py-3 text-sm leading-6 text-foreground-muted">{notice}</p>}
-            <header className="mt-5 mb-5">
-                <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-foreground-muted" onClick={event => {
-                    // Reopening setup after switching tabs does not change an existing hash.
-                    if (event.target instanceof Element && event.target.closest('a[href="#server-visibility"]')) setSection("Settings");
-                }}>{summary}{visibility}</div>
-                {name}
-                <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-                    <span className="text-foreground-muted">Server IP:Port</span>
-                    <span id="server-address" className="font-mono" aria-live="polite">{address ? (showAddress ? address : "Hidden") : "Not assigned"}</span>
-                    <button disabled={!address} className={button} aria-controls="server-address" aria-expanded={showAddress} onClick={() => setShowAddress(!showAddress)}>{showAddress ? "Hide" : "Show"}<span className="sr-only"> server IP and port</span></button>
-                    <button disabled={!address} className={button} onClick={async () => {
-                        if (!address) return;
-                        try { await navigator.clipboard.writeText(address); setFeedback("Join address copied."); }
-                        catch { setFeedback("Could not copy. Show the address to copy it manually."); }
-                    }}><Copy className="size-4" aria-hidden="true" />Copy join address</button>
+            <header className="mt-4 mb-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                        {name}
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-foreground-muted" onClick={event => {
+                            // Reopening setup after switching tabs does not change an existing hash.
+                            if (event.target instanceof Element && event.target.closest('a[href="#server-visibility"]')) setSection("Settings");
+                        }}>{summary}{visibility}</div>
+                    </div>
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 text-sm">
+                            <span id="server-address" className="font-mono text-foreground-muted" aria-live="polite">{address ? (showAddress ? address : "IP hidden") : "Not assigned"}</span>
+                            <button disabled={!address} className={button} aria-controls="server-address" aria-expanded={showAddress} aria-label={showAddress ? "Hide server IP and port" : "Show server IP and port"} title={showAddress ? "Hide server IP and port" : "Show server IP and port"} onClick={() => setShowAddress(!showAddress)}>{showAddress ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}</button>
+                            <button disabled={!address} className={button} onClick={async () => {
+                                if (!address) return;
+                                try { await navigator.clipboard.writeText(address); setFeedback("Join address copied."); }
+                                catch { setFeedback("Could not copy. Show the address to copy it manually."); }
+                            }}><Copy className="size-4" aria-hidden="true" />Copy join address</button>
+                        </div>
+                        {feedback && <p role="status" className="mt-2 text-sm text-foreground-muted">{feedback}</p>}
+                    </div>
                 </div>
-                <p role="status" className="mt-2 text-sm text-foreground-muted">{feedback}</p>
-                {status && <div className="mt-5">{status}</div>}
+                {status && <div className="mt-4">{status}</div>}
             </header>
-            <nav aria-label="Server workspace" className="mb-5 grid grid-cols-4 border-b border-white/10 sm:flex sm:gap-1">
+            <nav aria-label="Server workspace" className="mb-4 grid grid-cols-4 border-b border-white/10 sm:flex sm:gap-1">
                 {sections.map(({ name: label, icon: Icon }) => <button key={label} aria-current={section === label ? "page" : undefined} onClick={() => setSection(label)} className={`inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 px-1 py-2 text-xs sm:min-h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm focus-visible:outline-2 focus-visible:outline-gold ${section === label ? "border-gold text-gold" : "border-transparent text-foreground-muted hover:text-foreground"}`}><Icon className="size-4" aria-hidden="true" />{label}</button>)}
             </nav>
             <div className="space-y-5">{children}</div>
