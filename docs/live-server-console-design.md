@@ -296,7 +296,8 @@ or a separately implemented authorized file-download integration.
 The live Server page lists the dedicated server's built-in stdin commands: `help`,
 `status`, `players`, `save`, `stop`, `say <text>`, and `kick <id|name>` (see
 `DedicatedServer.Core/Server/ServerConsole.cs` in DedicatedServer). Search matches
-command names, descriptions, and groups. Mobile users expand **Browse commands**.
+command names, descriptions, and groups. Expand **Browse commands** below the console
+on desktop or mobile; the reference stays collapsed until requested.
 Selecting a row replaces and focuses the console draft; it never sends a command.
 Review the draft and replace any argument placeholders before pressing Send or Enter.
 `stop` saves and shuts down the game server; it is not a host shutdown.

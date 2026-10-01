@@ -38,6 +38,8 @@ async function attach(inputEnabled = true) {
     });
 }
 async function search(value: string) {
+    const browse = button("Browse commands");
+    if (browse.getAttribute("aria-expanded") === "false") await act(async () => browse.click());
     const input = container.querySelector<HTMLInputElement>('input[type="search"]')!;
     await act(async () => {
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
@@ -67,13 +69,13 @@ it("searches names, groups and descriptions and inserts a focused draft without 
     await search("no-such-command");
     expect(container.textContent).toContain("No commands match your search.");
 });
-it("expands mobile browsing, closes after selection, and disables all picker controls on disconnect", async () => {
+it("expands command browsing, closes after selection, and disables all picker controls on disconnect", async () => {
     await attach();
     const browse = button("Browse commands");
     expect(browse.getAttribute("aria-expanded")).toBe("false");
     await act(async () => browse.click());
     expect(browse.getAttribute("aria-expanded")).toBe("true");
-    expect(document.getElementById(browse.getAttribute("aria-controls")!)!.className).toMatch(/^block /);
+    expect(document.getElementById(browse.getAttribute("aria-controls")!)!.hidden).toBe(false);
     await act(async () => button("players").click());
     expect(browse.getAttribute("aria-expanded")).toBe("false");
     expect(container.querySelector<HTMLInputElement>("#console-command")!.value).toBe("players");

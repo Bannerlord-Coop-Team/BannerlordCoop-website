@@ -13,7 +13,7 @@ import { LiveServerBackupSetup, type LiveServerBackupUnavailableReason } from "@
 import { LiveServerFileSetup } from "@/app/components/servers/LiveServerFileSetup";
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
-import { ManagedServerControls } from "@/app/components/servers/ManagedServerControls";
+import { ManagedServerControls, ManagedServerPassword } from "@/app/components/servers/ManagedServerControls";
 import { ManagedServerConsole } from "@/app/components/servers/ManagedServerConsole";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import {
@@ -44,7 +44,7 @@ import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { listSupabaseUsers } from "@/app/lib/supabase/users";
-import { CloudCog, Container, Database, HardDrive, MemoryStick, Server } from "lucide-react";
+import { Container, HardDrive, MemoryStick, Server } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -175,6 +175,7 @@ function UnavailableFileWorkspaces() {
     </>;
 }
 
+/** Composes the managed workspace with compact runtime metadata and task-specific panels. */
 function ManagedServerManagementPage({ userId, accessToken, server }: {
     userId: string; accessToken: string; server: MyServerSummary;
 }) {
@@ -182,12 +183,10 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.displayName}</h1>}
         address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
         visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} />}
-        summary={<>{formatManagedValue(server.observedGameState)} · {formatManagedValue(server.friendlyRegion)} · {managedAccessLabels[server.accessRole]}</>}
-        status={<section className="grid gap-3 sm:grid-cols-3" aria-label="Server status">
-            <ResourceCard icon={Container} label="Game state" value={formatManagedValue(server.observedGameState)} />
-            <ResourceCard icon={CloudCog} label="Lifecycle" value={formatManagedValue(server.operationState)} />
-            <ResourceCard icon={Database} label="Release channel" value={releaseChannelLabel(server.releaseChannel)} />
-        </section>}
+        summary={<>{formatManagedValue(server.friendlyRegion)} · {managedAccessLabels[server.accessRole]}</>}
+        status={<dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs" aria-label="Server status">
+            {[["Game state", formatManagedValue(server.observedGameState)], ["Lifecycle", formatManagedValue(server.operationState)], ["Release channel", releaseChannelLabel(server.releaseChannel)]].map(([label, value]) => <div key={label} className="flex items-center gap-2"><dt className="text-foreground-muted">{label}</dt><dd className="font-medium text-foreground">{value}</dd></div>)}
+        </dl>}
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
         <ServerWorkspacePanel section="Settings">
@@ -216,6 +215,9 @@ function ManagedServerSections({
                         <ManagedServerConsole serverId={server.serverId} />
                     </ManagedServerCommands>
                     : <ServerConsoleWorkspace><UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} logDownload={{ serverId: server.serverId, userId }} /></ServerConsoleWorkspace>}
+            </ServerWorkspacePanel>
+            <ServerWorkspacePanel section="Settings">
+                <ManagedServerPassword serverId={server.serverId} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} />
             </ServerWorkspacePanel>
             <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
                 <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />

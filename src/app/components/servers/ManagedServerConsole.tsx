@@ -69,10 +69,9 @@ export function ManagedServerConsole({ serverId }: { serverId: string }) {
     }, [serverId]);
 
     return (
-        <div className="p-5">
-            <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">Live output</p>
-            <p className="mt-2 text-sm leading-6 text-foreground-muted">Read-only current-run output. Nothing is saved, and sessions expire after five minutes.</p>
-            <pre aria-label="Live game console output" className="mt-4 h-72 overflow-auto whitespace-pre-wrap break-words rounded-sm border border-white/10 bg-black/50 p-3 font-mono text-xs text-foreground">{text || consoleStateMessages[state]}{text && state !== "connected" ? `\n${consoleStateMessages[state]}` : ""}</pre>
+        <div>
+            <p id="console-stream-help" className="sr-only">Current-run output connects automatically. Nothing is saved, and sessions expire after five minutes.</p>
+            <pre aria-label="Live game console output" aria-describedby="console-stream-help" tabIndex={0} className="h-64 overflow-auto whitespace-pre-wrap break-words bg-background p-4 font-mono text-[13px] leading-6 text-foreground outline-gold sm:h-[min(44vh,28rem)] sm:min-h-64">{text || consoleStateMessages[state]}{text && state !== "connected" ? `\n${consoleStateMessages[state]}` : ""}</pre>
         </div>
     );
 }

@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import * as serverActions from "@/app/servers/managed-server-actions";
-import { ManagedServerControls } from "./ManagedServerControls";
+import { ManagedServerControls, ManagedServerPassword } from "./ManagedServerControls";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 
 const { request, requestUpdate, requestPassword, beginPolling } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn() }));
@@ -41,6 +41,7 @@ it.each([
             accessRole="owner" operationState="stopped" expectedUpdatedAt="2026-09-20T12:00:00.000Z" />));
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain(message);
+        expect(container.querySelector('input[type="password"]')).toBeNull();
         expect(beginPolling).not.toHaveBeenCalled();
         expect(request).toHaveBeenCalledExactlyOnceWith("token", { serverId, action: "start" });
     } finally { await act(async () => root.unmount()); }
@@ -105,7 +106,7 @@ it("sets a private website password once and clears the input", async () => {
     const container = document.createElement("div"); const root = createRoot(container);
     const serverId = "22222222-2222-4222-8222-222222222222";
     try {
-        await act(async () => root.render(<ManagedServerControls serverId={serverId} displayName="Campaign" accessRole="owner" operationState="stopped" expectedUpdatedAt="2026-09-28T00:00:00.000Z" />));
+        await act(async () => root.render(<ManagedServerPassword serverId={serverId} accessRole="owner" operationState="stopped" expectedUpdatedAt="2026-09-28T00:00:00.000Z" />));
         const input = container.querySelector<HTMLInputElement>('input[type="password"]')!;
         await act(async () => {
             Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Private-fixture-password");
@@ -127,7 +128,7 @@ it.each([false, true])("handles password delivery rejection or cancelled restart
     const container = document.createElement("div"); const root = createRoot(container);
     const serverId = "22222222-2222-4222-8222-222222222222";
     try {
-        await act(async () => root.render(<ManagedServerControls serverId={serverId} displayName="Campaign" accessRole="owner" operationState={cancelled ? "running" : "stopped"} expectedUpdatedAt="2026-09-28T00:00:00.000Z" />));
+        await act(async () => root.render(<ManagedServerPassword serverId={serverId} accessRole="owner" operationState={cancelled ? "running" : "stopped"} expectedUpdatedAt="2026-09-28T00:00:00.000Z" />));
         const input = container.querySelector<HTMLInputElement>('input[type="password"]')!;
         await act(async () => {
             Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Private-fixture-password");
@@ -150,4 +151,15 @@ it.each([false, true])("handles password delivery rejection or cancelled restart
         await act(async () => root.unmount());
         action.mockRestore(); confirm.mockRestore();
     }
+});
+
+
+it("does not expose password settings to a manager", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+        await act(async () => root.render(<ManagedServerPassword serverId="22222222-2222-4222-8222-222222222222" accessRole="manager" operationState="running" expectedUpdatedAt="2026-09-28T00:00:00.000Z" />));
+        expect(container.querySelector("form")).toBeNull();
+    } finally { await act(async () => root.unmount()); }
 });

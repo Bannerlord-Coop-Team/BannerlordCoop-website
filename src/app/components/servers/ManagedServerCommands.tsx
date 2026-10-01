@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Terminal } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { ServerConsoleWorkspace, coopConsoleCommands } from "./ServerManagementWorkspace";
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
@@ -8,7 +9,7 @@ import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { submitManagedConsoleCommand, checkManagedConsoleCommand, acknowledgeManagedConsoleCommand } from "@/app/servers/managed-server-console-actions";
 import { MAXIMUM_CONSOLE_COMMAND_LENGTH, parseConsoleSubmission, type ConsoleSubmission, type ConsoleReference, type ConsoleResult } from "../../../../supabase/functions/_shared/server-console-contract";
 
-const button = "min-h-10 rounded-md border border-gold/40 bg-gold/10 px-4 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
+const button = "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-gold/40 bg-gold/10 px-4 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
 const commandNames = coopConsoleCommands.map(([usage]) => usage.split(/\s/u, 1)[0]);
 
 /** Completes a command name only through its next namespace separator, never its arguments. */
@@ -161,14 +162,14 @@ export function ManagedServerCommands({ server, userId, controls, children }: { 
     }
 
     return <ServerConsoleWorkspace coopCommandsOnly onSelectCommand={canCompose ? selectCommand : undefined}>
-        <section className="min-w-0 rounded-lg border border-white/10 bg-surface">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
-                <h2 className="font-semibold">Game console</h2>
-                <DownloadServerLogButton serverId={server.serverId} userId={userId} className={button} />
+        <section className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-surface" aria-labelledby={`${id}-heading`}>
+            <div className="flex flex-wrap items-center gap-3 border-b border-white/10 p-3 sm:px-4">
+                <h2 id={`${id}-heading`} className="mr-auto flex items-center gap-2 text-sm font-semibold"><Terminal className="size-4 text-gold" aria-hidden="true" />Game console</h2>
+                <div className="order-last basis-full sm:order-none sm:basis-auto">{controls}</div>
+                <DownloadServerLogButton serverId={server.serverId} userId={userId} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm text-foreground-muted hover:bg-white/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40" />
             </div>
-            <div className="border-b border-white/10 p-5">{controls}</div>
             {children}
-            <div className="space-y-4 border-t border-white/10 p-5">
+            <div className="space-y-3 border-t border-white/10 p-3 sm:p-4">
                 <form onSubmit={send} className="flex gap-2">
                     <label htmlFor={id} className="sr-only">Game command</label>
                     <div className="relative min-w-0 flex-1">
@@ -186,13 +187,14 @@ export function ManagedServerCommands({ server, userId, controls, children }: { 
                             }}
                             onScroll={event => setScrollLeft(event.currentTarget.scrollLeft)} onKeyDown={completeWithTab}
                             disabled={!canCompose} maxLength={MAXIMUM_CONSOLE_COMMAND_LENGTH}
-                            autoComplete="off" aria-autocomplete="inline" spellCheck={false} placeholder="coop.…"
-                            className="w-full rounded border border-white/15 bg-background px-3 py-2 font-mono text-sm disabled:opacity-40"
+                            autoComplete="off" aria-autocomplete="inline" aria-describedby={`${id}-shortcuts`} spellCheck={false} placeholder="coop.…"
+                            className="min-h-11 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold disabled:opacity-40"
                         />
-                        {completion && <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded border border-transparent px-3 py-2 font-mono text-sm whitespace-pre"><div style={{ transform: `translateX(-${scrollLeft}px)` }}><span className="invisible">{draft}</span><span className="text-foreground-muted">{completion}</span></div></div>}
+                        {completion && <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-md border border-transparent px-3 py-2.5 font-mono text-sm whitespace-pre"><div style={{ transform: `translateX(-${scrollLeft}px)` }}><span className="invisible">{draft}</span><span className="text-foreground-muted">{completion}</span></div></div>}
                     </div>
                     <button type="submit" className={button} disabled={!!job || busy || !canOperate || (!submission && (!ready || !draft.trim()))}>{busy ? "Sending…" : submission && !job ? "Retry same request" : "Send"}</button>
                 </form>
+                <p id={`${id}-shortcuts`} className="text-xs text-foreground-muted"><kbd className="font-mono">Enter</kbd> to send <span aria-hidden="true">·</span> <kbd className="font-mono">Tab</kbd> to complete</p>
                 {!ready && <p className="text-sm text-foreground-muted">Commands require owner or manager access and a running, healthy server.</p>}
                 {terminal && <pre aria-label="Command result" tabIndex={0} className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-4 font-mono text-sm">{result.status === "succeeded" ? result.output : result.status === "failed" ? `Command failed: ${result.errorCode}` : "Command cancelled."}</pre>}
                 {result?.status === "succeeded" && result.outputTruncated && <p className="text-sm text-foreground-muted">Output was truncated.</p>}

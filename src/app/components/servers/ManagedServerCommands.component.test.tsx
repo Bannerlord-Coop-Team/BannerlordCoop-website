@@ -25,9 +25,11 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 /** Finds a labelled action without coupling assertions to button order. */
-function button(label: string) { return [...container.querySelectorAll("button")].find(button => button.textContent === label)!; }
+function button(label: string) { return [...container.querySelectorAll("button")].find(button => button.textContent?.trim() === label)!; }
 /** Selects a published cheat through the real shared picker. */
 async function select() {
+    const browse = button("Browse commands");
+    if (browse.getAttribute("aria-expanded") === "false") await act(async () => browse.click());
     await act(async () => container.querySelector<HTMLButtonElement>("aside li button")!.click());
 }
 /** Mounts the console with its lifecycle controls as provided by the page. */
@@ -40,7 +42,11 @@ it("offers only coop cheats and selecting one never sends it; cancellation is re
     const commands = [...container.querySelectorAll("aside code")].map(node => node.textContent!);
     expect(commands.length).toBeGreaterThan(0);
     expect(commands.every(command => command.startsWith("coop."))).toBe(true);
+    const reference = document.getElementById(button("Browse commands").getAttribute("aria-controls")!)!;
+    expect(reference.hidden).toBe(true);
     await select();
+    expect(reference.hidden).toBe(true);
+    expect(document.activeElement).toBe(container.querySelector('input[placeholder="coop.…"]'));
     expect(container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!.value).toBe(commands[0]);
     expect(mocks.submit).not.toHaveBeenCalled();
     vi.mocked(window.confirm).mockReturnValue(false);
@@ -122,7 +128,7 @@ it("places only the input and Send below live output in the same card while idle
     expect(form.closest("section")).toBe(output.closest("section"));
     expect(output.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(container.querySelector('[aria-label="Command result"]')).toBeNull();
-    expect(form.parentElement!.children).toHaveLength(1);
+    expect(form.parentElement!.textContent).toContain("Enter to send · Tab to complete");
     expect(form.querySelectorAll("input")).toHaveLength(1);
     expect(form.querySelectorAll("button")).toHaveLength(1);
     expect(form.querySelector("button")!.textContent).toBe("Send");
