@@ -11,68 +11,32 @@ import type { HostingAdminHostResources, HostingAdminVpsInventory } from "@/app/
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
 export function VpsView({ inventory: initialInventory, accounts }: { inventory: HostingAdminVpsInventory; accounts: WebsiteAccountSummary[] }) {
-    const [refresh, setRefresh] = useState<{ initial: HostingAdminVpsInventory; result?: HostingAdminVpsInventory; error?: string }>();
-    const [attempt, setAttempt] = useState(0);
-    const current = refresh?.initial === initialInventory ? refresh : undefined;
-    const inventory = current?.result ?? initialInventory;
-    const pending = initialInventory.liveDataIncluded === false && current === undefined;
-    const refreshReadings = useCallback(() => setAttempt(value => value + 1), []);
-    useEffect(() => {
-        let cancelled = false;
-        let inFlight = false;
-        let timer: ReturnType<typeof setTimeout>;
-        const controller = new AbortController();
-        async function load() {
-            if (cancelled || inFlight || document.visibilityState === "hidden") return;
-            clearTimeout(timer);
-            inFlight = true;
-            try {
-                const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
-                if (cancelled) return;
-                if (!session?.access_token) throw new Error("Authentication is required.");
-                const result = await requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: session.access_token, operation: "vps-hosts", signal: controller.signal });
-                if (result.liveDataIncluded !== true) throw new Error("Live VPS data is unavailable.");
-                if (!cancelled) setRefresh({ initial: initialInventory, result });
-            } catch (error) {
-                if (!cancelled) setRefresh(previous => ({
-                    initial: initialInventory,
-                    result: previous?.initial === initialInventory ? previous.result
-                        : initialInventory.liveDataIncluded !== false ? initialInventory : undefined,
-                    error: error instanceof Error ? error.message : "Live VPS data could not be loaded.",
-                }));
-            } finally {
-                inFlight = false;
-                if (!cancelled) timer = setTimeout(() => void load(), 5_000);
-            }
-        }
-        function visibilityChanged() {
-            clearTimeout(timer);
-            if (document.visibilityState !== "hidden") void load();
-        }
-        if (initialInventory.liveDataIncluded === false || attempt > 0) void load();
-        else timer = setTimeout(() => void load(), 5_000);
-        document.addEventListener("visibilitychange", visibilityChanged);
-        return () => {
-            cancelled = true;
-            clearTimeout(timer);
-            controller.abort();
-            document.removeEventListener("visibilitychange", visibilityChanged);
-        };
-    }, [initialInventory, attempt]);
-    const { controlPlaneHost, hosts } = inventory;
+    const readings = useVpsReadings(initialInventory, "resources");
+    const billing = useVpsReadings(initialInventory, "billing");
+    const inventory = readings.result ?? initialInventory;
+    const pending = readings.pending;
+    const providerHosts = new Map(billing.result?.hosts.map(host => [host.name, host]));
+    const hosts = inventory.hosts.map(host => {
+        const provider = providerHosts.get(host.name);
+        return { ...host, cost: provider?.cost ?? null, expirationDate: provider?.expirationDate ?? null,
+            autoRenew: provider?.autoRenew ?? null, providerCheckedAt: provider?.providerCheckedAt ?? null };
+    });
+    const { controlPlaneHost } = inventory;
     const ownerLabels = new Map(accounts.map(account => [account.accountId, account.label]));
-    const availableServiceNames = Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : [];
+    const availableServiceNames = billing.result?.availableServiceNames ?? [];
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
     return (
         <section className="mt-8">
             <SectionHeading eyebrow="OVHcloud inventory" title="VPS hosts" count={hosts.length} />
             <p className="mt-3 text-xs text-foreground-muted">
-                Registered VPS capacity and server assignments. {inventory.liveDataIncluded !== false && <>{availableServiceNames.length} authenticated OVH {availableServiceNames.length === 1 ? "VPS is" : "VPS products are"} available to onboard.</>}
+                Registered VPS capacity and server assignments. {billing.result && <>{availableServiceNames.length} authenticated OVH {availableServiceNames.length === 1 ? "VPS is" : "VPS products are"} available to onboard.</>}
                 {checkedAt && <> Provider data checked <LocalDateTime value={checkedAt} />.</>}
             </p>
-            {pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading live resource and billing readings…</p>}
-            {current?.error && <p role="alert" className="mt-3 text-xs text-red-200">{current.error} {current.result ? "Showing the last readings; retrying automatically." : "Registered inventory remains visible; retrying automatically."} <button type="button" className="underline" onClick={refreshReadings}>Retry live readings</button></p>}
+            {pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading live resource readings…</p>}
+            {readings.error && <p role="alert" className="mt-3 text-xs text-red-200">{readings.error} {readings.result ? "Showing the last resource readings; retrying automatically." : "Registered inventory remains visible; retrying automatically."} <button type="button" className="underline" onClick={readings.refreshReadings}>Retry live readings</button></p>}
+            {billing.pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading billing readings…</p>}
+            {billing.error && <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {billing.error} {billing.result ? "Showing the last billing readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={billing.refreshReadings}>Retry billing</button></p>}
             <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
                 <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased OVH VPS. The durable workflow verifies account ownership, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
                 <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
@@ -83,12 +47,75 @@ export function VpsView({ inventory: initialInventory, accounts }: { inventory: 
             <VpsHostInventory
                 hosts={hosts}
                 liveDataPending={pending}
-                onRefresh={refreshReadings}
+                billingPending={billing.pending}
+                billingUnavailable={!!billing.error && !billing.result}
+                onRefresh={readings.refreshReadings}
                 ownerLabels={Object.fromEntries(ownerLabels)}
                 runnerTargetSourceCommit={runnerTargetSourceCommit}
             />
         </section>
     );
+}
+
+function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resources" | "billing") {
+    const [refresh, setRefresh] = useState<{ initial: HostingAdminVpsInventory; result?: HostingAdminVpsInventory; error?: string }>();
+    const [attempt, setAttempt] = useState(0);
+    const current = refresh?.initial === initialInventory ? refresh : undefined;
+    const pending = initialInventory.liveDataIncluded === false && current === undefined;
+    const refreshReadings = useCallback(() => setAttempt(value => value + 1), []);
+    useEffect(() => {
+        let cancelled = false;
+        let inFlight = false;
+        let timer: ReturnType<typeof setTimeout>;
+        const interval = kind === "billing" ? 60_000 : 5_000;
+        const controller = new AbortController();
+        async function load() {
+            if (cancelled || inFlight || document.visibilityState === "hidden") return;
+            clearTimeout(timer);
+            inFlight = true;
+            const requestController = new AbortController();
+            const deadline = kind === "billing"
+                ? setTimeout(() => requestController.abort(), 15_000) : undefined;
+            try {
+                const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+                if (cancelled) return;
+                if (!session?.access_token) throw new Error("Authentication is required.");
+                const result = await requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: session.access_token, operation: "vps-hosts",
+                    input: { includeLiveData: kind === "resources", includeProviderInventory: kind === "billing" },
+                    signal: AbortSignal.any([controller.signal, requestController.signal]) });
+                if (result.liveDataIncluded !== (kind === "resources")) throw new Error("Live VPS data is unavailable.");
+                if (!cancelled) setRefresh({ initial: initialInventory, result });
+            } catch (error) {
+                if (!cancelled) setRefresh(previous => ({
+                    initial: initialInventory,
+                    result: previous?.initial === initialInventory ? previous.result
+                        : initialInventory.liveDataIncluded !== false ? initialInventory : undefined,
+                    error: requestController.signal.aborted ? "Billing readings timed out."
+                        : error instanceof Error ? error.message : "VPS readings could not be loaded.",
+                }));
+            } finally {
+                clearTimeout(deadline);
+                inFlight = false;
+                if (!cancelled) timer = setTimeout(() => void load(), interval);
+            }
+        }
+        function visibilityChanged() {
+            clearTimeout(timer);
+            if (document.visibilityState !== "hidden") void load();
+        }
+        if (initialInventory.liveDataIncluded === false || attempt > 0) void load();
+        else timer = setTimeout(() => void load(), interval);
+        document.addEventListener("visibilitychange", visibilityChanged);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+            controller.abort();
+            document.removeEventListener("visibilitychange", visibilityChanged);
+        };
+    }, [initialInventory, attempt, kind]);
+    return { result: current?.result ?? (initialInventory.liveDataIncluded !== false ? initialInventory : undefined),
+        error: current?.error, pending, refreshReadings };
+
 }
 
 function HostResourcesCard({ name, resources, pending }: { name: string; resources: HostingAdminHostResources | null; pending: boolean }) {

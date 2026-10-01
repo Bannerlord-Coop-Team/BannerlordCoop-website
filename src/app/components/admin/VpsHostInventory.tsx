@@ -20,6 +20,8 @@ type DiskPressure = {
 
 type VpsHostInventoryProps = {
     liveDataPending?: boolean;
+    billingPending?: boolean;
+    billingUnavailable?: boolean;
     onRefresh?: () => void;
     hosts: HostingAdminVpsHost[];
     ownerLabels: Record<string, string>;
@@ -34,6 +36,8 @@ const SLOT_LABEL = "before:mb-2 before:block before:text-[0.58rem] before:upperc
 export function VpsHostInventory({
     hosts,
     liveDataPending = false,
+    billingPending = liveDataPending,
+    billingUnavailable = false,
     onRefresh,
     ownerLabels,
     runnerTargetSourceCommit,
@@ -78,7 +82,7 @@ export function VpsHostInventory({
                                     <div role="cell" data-label="Capacity" className={SUMMARY_LABEL}><CapacitySummary host={host} /></div>
                                     <div role="cell" data-label="Slots" className={SUMMARY_LABEL}><SlotSummary host={host} ownerLabels={ownerLabels} /></div>
                                     <div role="cell" data-label="System" className={SUMMARY_LABEL}><SystemSummary resources={host.resources} pending={liveDataPending} /></div>
-                                    <div role="cell" data-label="Billing" className={SUMMARY_LABEL}><p className="text-xs font-semibold text-foreground">{liveDataPending ? "Loading…" : formatVpsCost(host.cost)}</p></div>
+                                    <div role="cell" data-label="Billing" className={SUMMARY_LABEL}><p className="text-xs font-semibold text-foreground">{billingPending ? "Loading…" : billingUnavailable ? "Unavailable" : formatVpsCost(host.cost)}</p></div>
                                     <div role="cell" data-label="Runner" className={SUMMARY_LABEL}>{liveDataPending ? <StateBadge value="loading" /> : <RunnerOnboardingStatus
                                         compact
                                         onRefresh={onRefresh}

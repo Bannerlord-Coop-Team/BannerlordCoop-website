@@ -231,20 +231,25 @@ npx eslint supabase/functions/_shared/control-plane-admin.ts supabase/functions/
 
 The VPS tab first requests `vps-hosts` with `input: { includeLiveData: false }`.
 Registered hosts, capacity, and assignments render without live provider or runner
-reads. A browser request then loads the existing full inventory, preserving open
-host details while resource and billing fields show loading indicators. Failures
-remain visible with a retry button and leave the initial inventory usable.
-While visible, the tab polls the existing authenticated API five seconds after
-completion of each request, replacing readings in place without clearing the
-previous snapshot or expanded details. Runner progress shares this refresh loop
-instead of refreshing the entire page. Failed refreshes label retained readings
-as the last readings and retry automatically; a successful response with missing
-telemetry shows unavailable rather than retaining an older measurement. Hidden
-tabs pause polling and refresh on return. Leaving the tab cancels its request.
-This is background polling, not a server-push stream.
-A superseded request cannot replace a newer page inventory. Legacy full responses
-without `liveDataIncluded` render directly. Deploy the companion backend's bounded
-inventory-read option before deploying this page; no Edge Function change is needed.
+reads. Two independent browser requests then load telemetry/runner details with
+`{ includeLiveData: true, includeProviderInventory: false }` and provider billing
+with `{ includeLiveData: false, includeProviderInventory: true }`. Each has its own
+loading, error, retained-reading and retry state. A slow billing response cannot
+hold up resource readings or runner controls; a slow telemetry response cannot
+hold up billing. Provider fields merge by host name without replacing current
+capacity, assignments, runner state or telemetry.
+While visible, telemetry refreshes five seconds after each completed request;
+billing refreshes after 60 seconds and has a separate 15-second browser deadline.
+Each loop prevents overlapping requests. Failed refreshes label retained readings
+as old and retry automatically. A successful response with missing fields clears
+older measurements. Hidden tabs pause both loops and refresh on return. Leaving
+the tab cancels both requests; superseded responses cannot replace new inventory.
+Expanded host details remain open during either refresh.
+Legacy full responses without `liveDataIncluded` render directly. Deploy the
+backend that honors explicit provider exclusion before this website change.
+No Edge Function deployment is needed. This isolates the provider failure; it does
+not establish or repair the cause of the slow provider call.
+
 
 
 ## Fresh gateway authentication
