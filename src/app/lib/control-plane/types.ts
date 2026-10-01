@@ -208,7 +208,7 @@ export type HostingAdminVpsInventory = {
 };
 
 export type OperationsData = {
-    overview: Overview;
+    overview: Pick<Overview, "controls" | "servers" | "jobs" | "stableBuilds" | "nightlyBuilds">;
     inventory: HostingAdminVpsInventory;
     selectedServer: ManagedServer | null;
 };

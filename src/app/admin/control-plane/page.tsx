@@ -41,7 +41,6 @@ import type {
     HostingPage,
     ManagedServer,
     OperationsData,
-    Overview,
     OverviewSummary,
     ReleaseBuild,
     ServerDashboardResult,
@@ -268,7 +267,9 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             return readControlPlaneAdmin<OverviewSummary>({ accessToken: token, signal, ...identity, operation: "overview", input: { compact: true } });
         case "operations": {
             const [overview, inventory, selectedDashboard, releases] = await Promise.all([
-                readControlPlaneAdmin<Overview>({ accessToken: token, signal, ...identity, operation: "overview" }),
+                readControlPlaneAdmin<Omit<OperationsData["overview"], "stableBuilds" | "nightlyBuilds">>({
+                    accessToken: token, signal, ...identity, operation: "overview", input: { operations: true },
+                }),
                 readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false, includeProviderInventory: "service-names" } }),
                 serverId
                     ? readControlPlaneAdmin<ServerDashboardResult>({
