@@ -46,7 +46,7 @@ import type {
     ReleaseBuild,
     ServerDashboardResult,
 } from "@/app/lib/control-plane/types";
-import { getSupabaseServerViewer } from "@/app/lib/supabase/server";
+import { getSupabaseServerReadSession, getSupabaseServerViewer } from "@/app/lib/supabase/server";
 import { listWebsiteAccounts } from "@/app/lib/supabase/users";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import {
@@ -109,18 +109,30 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
     const { read } = await loadAuthenticatedView();
     async function loadAuthenticatedView() {
         try {
-            const { user, accessToken, read } = await getSupabaseServerViewer({
-                onReadOnlySession: token => {
-                    // This closed switch performs reads through the independently authorized API.
-                    // Settle failures immediately: validation can reject before the read completes.
-                    return Promise.allSettled([
-                        loadView(token, view, query, serverId, jobState, jobAction, unacknowledgedOnly, jobCursor, controller.signal),
-                    ]).then(([result]) => result);
-                },
-            });
-            if (!user || !accessToken) redirect("/login?next=/admin/control-plane");
-            if (!hasAdminAccess(user)) redirect("/");
-            if (!read) throw new Error("Authenticated control plane read was not started.");
+            const { session, impersonating } = await getSupabaseServerReadSession();
+            if (!session) redirect("/login?next=/admin/control-plane");
+            const authority = Promise.withResolvers<void>();
+            let authenticated = false, fallbackStarted = false;
+            const identity = { expectedUserId: session.user.id, requireOrdinarySession: !impersonating, onAuthenticated: () => {
+                if (fallbackStarted) return;
+                authenticated = true;
+                authority.resolve();
+            } };
+            const read = Promise.allSettled([
+                loadView(session.access_token, view, query, serverId, jobState, jobAction, unacknowledgedOnly, jobCursor, controller.signal, identity),
+            ]).then(([result]) => result);
+            await Promise.race([
+                authority.promise,
+                read.then(async () => {
+                    if (authenticated) return;
+                    // A denied/unavailable/old adapter cannot authorize the page. Fresh
+                    // website verification may only permit the existing read-error UI.
+                    fallbackStarted = true;
+                    const { user, accessToken } = await getSupabaseServerViewer();
+                    if (!user || !accessToken || user.id !== session.user.id) redirect("/login?next=/admin/control-plane");
+                    if (!hasAdminAccess(user)) redirect("/");
+                }),
+            ]);
             return { read };
         } catch (error) {
             controller.abort();
@@ -247,23 +259,25 @@ async function ControlPlaneViewContent({
     );
 }
 
+type ReadIdentity = { expectedUserId: string; requireOrdinarySession: boolean; onAuthenticated: () => void };
+
 /** Loads the authenticated data needed by the selected administration view. */
-async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null, signal: AbortSignal) {
+async function loadView(token: string, view: View, query: string, serverId: string, jobState: "failed" | "active" | null, jobAction: string | null, unacknowledgedOnly: boolean, jobCursor: string | null, signal: AbortSignal, identity: ReadIdentity) {
     switch (view) {
         case "overview":
-            return readControlPlaneAdmin<OverviewSummary>({ accessToken: token, signal, operation: "overview", input: { compact: true } });
+            return readControlPlaneAdmin<OverviewSummary>({ accessToken: token, signal, ...identity, operation: "overview", input: { compact: true } });
         case "operations": {
             const [overview, inventory, selectedDashboard, releases] = await Promise.all([
-                readControlPlaneAdmin<Overview>({ accessToken: token, signal, operation: "overview" }),
-                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, operation: "vps-hosts", input: { includeLiveData: false, includeProviderInventory: "service-names" } }),
+                readControlPlaneAdmin<Overview>({ accessToken: token, signal, ...identity, operation: "overview" }),
+                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false, includeProviderInventory: "service-names" } }),
                 serverId
                     ? readControlPlaneAdmin<ServerDashboardResult>({
-                        accessToken: token, signal,
+                        accessToken: token, signal, ...identity,
                         operation: "server-dashboard",
                         input: { serverId },
                     })
                     : Promise.resolve(null),
-                loadReleaseCatalog(token, signal),
+                loadReleaseCatalog(token, signal, identity),
             ]);
             return {
                 overview: { ...overview, stableBuilds: releases.stable, nightlyBuilds: releases.nightly },
@@ -272,23 +286,23 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             } satisfies OperationsData;
         }
         case "vps":
-            return readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, operation: "vps-hosts", input: { includeLiveData: false } });
+            return readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } });
         case "servers":
             return readControlPlaneAdmin<HostingPage<ManagedServer>>({
-                accessToken: token, signal,
+                accessToken: token, signal, ...identity,
                 operation: "servers",
                 input: { filter: query ? { query } : {}, cursor: null, limit: 100 },
             });
         case "server":
             if (!serverId) throw new ControlPlaneAdminError("server_required", "Select a server first.");
             return readControlPlaneAdmin<ServerDashboardResult>({
-                accessToken: token, signal,
+                accessToken: token, signal, ...identity,
                 operation: "server-dashboard",
                 input: { serverId },
             });
         case "jobs":
             return readControlPlaneAdmin<HostingPage<HostingJob>>({
-                accessToken: token, signal,
+                accessToken: token, signal, ...identity,
                 operation: "jobs",
                 input: {
                     filter: jobState === "failed"
@@ -299,17 +313,17 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 },
             });
         case "releases":
-            return loadReleaseCatalog(token, signal);
+            return loadReleaseCatalog(token, signal, identity);
         case "audit":
-            return readControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, signal, operation: "audit", input: { cursor: null, limit: 100 } });
+            return readControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, signal, ...identity, operation: "audit", input: { cursor: null, limit: 100 } });
     }
 }
 
 /** Reads both complete channel pages from one fresh authorized catalog observation. */
-async function loadReleaseCatalog(token: string, signal: AbortSignal) {
+async function loadReleaseCatalog(token: string, signal: AbortSignal, identity: ReadIdentity) {
     // Discovery considers at most 100 versions globally; aliases only mark matching versions.
     return readControlPlaneAdmin<{ stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }>({
-        accessToken: token, signal, operation: "release-catalog", input: { stableCursor: null, nightlyCursor: null, limit: 100 },
+        accessToken: token, signal, ...identity, operation: "release-catalog", input: { stableCursor: null, nightlyCursor: null, limit: 100 },
     });
 }
 
