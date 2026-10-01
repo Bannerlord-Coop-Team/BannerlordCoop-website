@@ -55,8 +55,11 @@ it("hides the real address until revealed and copies it without navigation", asy
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     await act(async () => root.render(<ServerManagementWorkspace name="Real server" address="203.0.113.8:7210" summary="Running" notice="Live controls">Content</ServerManagementWorkspace>));
     expect(container.textContent).not.toContain("203.0.113.8");
-    await act(async () => click("Copy join address"));
+    await act(async () => click("Copy IP"));
     expect(writeText).toHaveBeenCalledWith("203.0.113.8:7210");
+    expect([...container.querySelectorAll("button")].find(button => button.textContent === "Copied!")).toBeDefined();
+    expect(container.querySelector('header [role="status"]')).toBeNull();
+    expect(container.textContent).not.toContain("Join address copied.");
     const reveal = container.querySelector<HTMLButtonElement>('[aria-controls="server-address"]')!;
     expect(reveal.getAttribute("aria-label")).toBe("Show server IP and port");
     expect(reveal.textContent).toBe("");
@@ -69,13 +72,26 @@ it("hides the real address until revealed and copies it without navigation", asy
     expect(reveal.getAttribute("aria-expanded")).toBe("false");
 });
 
+it("reports clipboard failure on the Copy IP button and permits retry without helper text", async () => {
+    const writeText = vi.fn().mockRejectedValueOnce(new Error("Denied")).mockResolvedValueOnce(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    await act(async () => root.render(<ServerManagementWorkspace name="Server" address="203.0.113.8:7210" summary="Running">Content</ServerManagementWorkspace>));
+    await act(async () => click("Copy IP"));
+    const retry = [...container.querySelectorAll("button")].find(button => button.textContent === "Copy failed")!;
+    expect(retry.title).toContain("Reveal the IP");
+    expect(container.querySelector('header [role="status"]')).toBeNull();
+    await act(async () => retry.click());
+    expect(retry.textContent).toBe("Copied!");
+    expect(writeText).toHaveBeenCalledTimes(2);
+});
+
 it("opens access feedback and hash targets in Settings and disables unsupported actions", async () => {
     await act(async () => root.render(<ServerManagementWorkspace name="Server" summary="Unknown" notice="Unavailable" initialSection="Settings">
         <ServerWorkspacePanel section="Settings"><UnavailableServerPanel title="Visibility" actions={["Public"]} /></ServerWorkspacePanel>
     </ServerManagementWorkspace>));
     expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Settings");
     expect([...container.querySelectorAll("button")].find(b => b.textContent === "Public")?.disabled).toBe(true);
-    expect([...container.querySelectorAll("button")].find(b => b.textContent === "Copy join address")?.disabled).toBe(true);
+    expect([...container.querySelectorAll("button")].find(b => b.textContent === "Copy IP")?.disabled).toBe(true);
     await act(async () => click("Console"));
     await act(async () => { window.location.hash = "server-access"; window.dispatchEvent(new HashChangeEvent("hashchange")); });
     expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Settings");

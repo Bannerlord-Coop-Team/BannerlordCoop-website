@@ -19,20 +19,20 @@ not a second result panel. Tab completion remains available without a footer hin
 | Path | Expected behavior | Coverage |
 | --- | --- | --- |
 | Send or Enter | Submit once without confirmation; clear accepted input | Component; browser |
-| Pending job | Keep the composer locked until terminal result; poll the same job | Component |
-| Terminal job | Unlock the next command without acknowledgement/new-command UI or “Command finished” text | Component |
+| Submission awaiting acceptance | Block duplicate sends only while the submission request is in flight | Component |
+| Accepted command | Clear input and immediately allow the next command; no execution polling, acknowledgement, or completion UI | Component; browser |
 | Uncertain delivery | Keep original payload/UUID; the same input-row button retries that request | Component |
-| Poll timeout/failure | Report the error in the console; the input-row button checks the same job, never resubmits it | Component |
 | Invalid or rejected command | Report the error in the console, not beneath the input | Component |
 | Read-only or non-running server | Input and Send remain disabled | Component |
 | Supported prefix | Tab accepts one dot-delimited segment without submitting | Component; browser |
 | Unknown prefix, complete command, arguments, or selection away from end | Tab retains normal navigation | Component |
 | Shift+Tab | Preserve backward navigation | Component |
 
-Request identity, authorization and bounded polling remain unchanged. The website
-no longer offers result acknowledgement and does not silently acknowledge on the
-user's behalf; unacknowledged Discord completion/recovery delivery remains enabled.
-Backend result/acknowledgement APIs are unchanged.
+Commands are fire-and-forget after enqueue acceptance. Request identity and
+authorization remain unchanged; uncertain delivery still retains the original
+request for a safe retry. Execution results arrive through live stdout, without
+website result polling or acknowledgement. Unacknowledged Discord completion/recovery
+delivery remains enabled. Backend result/acknowledgement APIs are unchanged.
 
 ## Stream lifecycle
 
