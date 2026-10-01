@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useId, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, FileJson, Play, RotateCw, Search, Settings2, Square, Terminal } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, Eye, EyeOff, FileJson, Play, RotateCw, Search, Settings2, Square, Terminal } from "lucide-react";
 
 import commandsData from "@/app/cheats/commands.json";
 import { isPublishedCheat } from "@/app/cheats/debugOnly";
@@ -131,7 +131,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
                     <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2 text-sm">
                             <span id="server-address" className="font-mono text-foreground-muted" aria-live="polite">{address ? (showAddress ? address : "IP hidden") : "Not assigned"}</span>
-                            <button disabled={!address} className={button} aria-controls="server-address" aria-expanded={showAddress} onClick={() => setShowAddress(!showAddress)}>{showAddress ? "Hide" : "Show"}<span className="sr-only"> server IP and port</span></button>
+                            <button disabled={!address} className={button} aria-controls="server-address" aria-expanded={showAddress} aria-label={showAddress ? "Hide server IP and port" : "Show server IP and port"} title={showAddress ? "Hide server IP and port" : "Show server IP and port"} onClick={() => setShowAddress(!showAddress)}>{showAddress ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}</button>
                             <button disabled={!address} className={button} onClick={async () => {
                                 if (!address) return;
                                 try { await navigator.clipboard.writeText(address); setFeedback("Join address copied."); }

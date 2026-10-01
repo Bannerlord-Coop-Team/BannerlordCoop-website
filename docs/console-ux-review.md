@@ -53,6 +53,7 @@ pending state while using the same action and polling boundary as before.
 
 | Path | Expected behavior |
 | --- | --- |
+| Reveal/hide join address | Eye/eye-off control has an accessible Show/Hide label and toggles address visibility without changing Copy behavior |
 | Desktop/mobile console | Full-width output and command row; no horizontal overflow or password form in Console |
 | Browse/search/select a command | Reference starts collapsed, search filters commands, selection closes it and focuses the unsent draft |
 | Keyboard entry | Enter sends through confirmation; Tab accepts the visible dot-delimited completion |
