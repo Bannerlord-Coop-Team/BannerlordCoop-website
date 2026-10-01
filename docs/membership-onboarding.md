@@ -184,6 +184,11 @@ Every snapshot authoritatively looks up the exact account via Auth admin API;
 404 becomes a tombstone, outage fails closed, identities never fall back to metadata.
 Patreon is a website-owned binding, not a Supabase provider identity.
 
+Website account operations overlap fresh Auth-user and session-context checks.
+Both must succeed, with any impersonation target matching the verified user,
+before membership reads or writes proceed. Account status still precedes
+the owner allocation read.
+
 `membership.ts` contains the exact private snapshot contract (all keys required,
 nullable semantics, decimal strings, provider ID bounds, UTC millisecond times).
 It matches CP `membership-contract.ts`. `server-onboarding-contract.ts` parses CP
