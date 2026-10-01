@@ -294,6 +294,19 @@ it.each(["owner", "manager", "admin", "support"])("uses mapped managed %s author
     expect(await findServerElement(tree, "LiveServerVisibilitySetup")).toBeNull();
 });
 
+it.each([liveId, managedId])("supplies current maintenance preferences for managed identity on %s", async requestedId => {
+    mocks.liveAccess.mockReturnValue("owner");
+    if (requestedId === managedId) mocks.liveServer.mockReturnValue(null);
+    mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole: "owner", displayName: "Owned server",
+        friendlyRegion: "us-west", observedGameState: "stopped", operationState: "drifted", releaseChannel: "stable", visibility: "private",
+        maintenanceSlot: "18:00-19:00", timezone: "America/Chicago", updatedAt: "2026-10-01T00:00:00.000Z" }]);
+    const settings = await findServerElement(await page(requestedId), "ServerSettingsPanel");
+    expect(settings!.props.settingsAccess).toEqual({ serverId: managedId, expectedUpdatedAt: "2026-10-01T00:00:00.000Z",
+        maintenanceSlot: "18:00-19:00", timezone: "America/Chicago", canEdit: true });
+    expect(settings!.props.name).toBe("Owned server");
+    expect(settings!.props.renameServerId).toBeUndefined();
+});
+
 it("keeps preview visibility non-operational without live onboarding", async () => {
     mocks.liveServer.mockReturnValue(null);
     mocks.managedServers.mockResolvedValue([]);

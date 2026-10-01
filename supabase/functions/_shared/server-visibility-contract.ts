@@ -60,7 +60,7 @@ export function parsePublicServerPage(value: unknown): PublicServerPage {
     });
     return { items, nextCursor: value.nextCursor as string | null };
 }
-function timestamp(value: unknown): value is string {
+export function timestamp(value: unknown): value is string {
     return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)
         && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }

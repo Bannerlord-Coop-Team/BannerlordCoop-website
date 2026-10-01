@@ -1,4 +1,5 @@
 import { parseReleaseMutation, parseReleaseStatus, type ReleaseMutation } from "../../../../supabase/functions/_shared/server-release-contract";
+import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSettingsMutation } from "../../../../supabase/functions/_shared/server-settings-contract";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "../../../../supabase/functions/_shared/server-visibility-contract";
 import type {
     HostingPage,
@@ -150,6 +151,13 @@ export async function getMyServerBackupStatus(
             endpoint.searchParams.set("serverId", serverId);
         },
     }), serverId);
+}
+
+export async function requestMyServerSettings(accessToken: string, input: OwnerSettingsMutation, requestId: string) {
+    if (!REQUEST_ID.test(requestId)) throw new MyServersApiError("invalid_request", "Invalid settings request ID.");
+    const parsed = parseOwnerSettingsMutation(input);
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify({ action: "save-server-settings", ...parsed }), requestId });
+    try { return parseOwnerSettingsResult(result, parsed.serverId); } catch { throw invalidResponse(); }
 }
 
 export async function requestServerVisibility(accessToken: string, input: VisibilityMutation, requestId: string) {

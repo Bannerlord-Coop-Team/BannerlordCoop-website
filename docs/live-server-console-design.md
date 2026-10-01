@@ -318,6 +318,24 @@ For backup-specific onboarding, unavailable states and rollout verification, see
 [backups for live-console servers](live-server-backups.md).
 
 
+### Owner hosting settings
+
+Managed **Settings** includes the name, maintenance window, release channel,
+directory visibility and game password. Maintenance uses 03:00–04:00,
+10:00–11:00 or 18:00–19:00 in America/Chicago with daylight-saving changes.
+Name and maintenance edits wait for **Save settings** and never restart the game.
+Linked live-server pages use the managed name and the same owner settings operation.
+Process/gameplay configuration import stays in **Save & config**.
+
+The owner inventory supplies `maintenanceSlot` and `timezone`; missing or unknown
+values disable maintenance editing. `save-server-settings` forwards only a
+nonempty name/maintenance patch, the managed server ID, original request UUID
+and expected generation. Current ownership is rechecked by the control plane.
+Uncertain retries retain the same intent. Combined saves carry each completed
+settings/visibility generation into the next change and stop on failure.
+Deploy the control-plane support, then the `my-servers` Edge Function, then the
+website. This change requires no schema or runner update.
+
 ### Owner release channel settings
 
 Managed server Settings exposes Stable/Nightly to the current owner. Saving a

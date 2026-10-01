@@ -41,6 +41,9 @@ export type MyServerSummary = Pick<
     accessRole: "owner" | "manager" | "support" | "admin";
     // Missing visibility is treated as private during the control-plane rollout.
     visibility?: "private" | "public";
+    // Missing maintenance fields disable these settings until the control plane is updated.
+    maintenanceSlot?: string;
+    timezone?: string;
     // CP #143 supplies these stored fields through authenticated my-servers.
     // Optional for older deployments; independent of the visibility rollout.
     connectionIp?: string | null;

@@ -5,7 +5,7 @@ import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { exactKeys, isRecord, parseVisibilityMutation, REQUEST_ID, type VisibilityMutation } from "../../../supabase/functions/_shared/server-visibility-contract";
 import { revalidatePath } from "next/cache";
 
-export async function setServerVisibility(value: unknown): Promise<{ ok: boolean; message: string; updatedAt?: string }> {
+export async function setServerVisibility(value: unknown): Promise<{ ok: boolean; message: string; updatedAt?: string; rejected?: boolean }> {
     let input: VisibilityMutation;
     let requestId: string;
     try {
@@ -14,14 +14,14 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
         requestId = value.requestId;
         input = parseVisibilityMutation({ action: "set-server-visibility", serverId: value.serverId,
             visibility: value.visibility, expectedUpdatedAt: value.expectedUpdatedAt });
-    } catch { return { ok: false, message: "The visibility update is invalid." }; }
+    } catch { return { ok: false, rejected: true, message: "The visibility update is invalid." }; }
     try {
         const supabase = await getSupabaseServerClient();
         const [{ data: userData }, { data: sessionData }] = await Promise.all([
             supabase.auth.getUser(), supabase.auth.getSession(),
         ]);
         if (!userData.user || !sessionData.session || sessionData.session.user.id !== userData.user.id) {
-            return { ok: false, message: "Please sign in again before changing visibility." };
+            return { ok: false, rejected: true, message: "Please sign in again before changing visibility." };
         }
         // The control plane rechecks current ownership; no actor or role is supplied by the browser.
         const result = await requestServerVisibility(sessionData.session.access_token, input, requestId);
@@ -32,7 +32,7 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
     } catch (error) {
         const code = error instanceof MyServersApiError ? error.code : "visibility_update_failed";
         console.error("Server visibility update failed", { code });
-        if (code === "stale_interaction") return { ok: false, message: "The server changed. Refresh and try again." };
-        return { ok: false, message: "Visibility could not be updated. Only the current owner can change this setting. Refresh before trying again." };
+        if (code === "stale_interaction") return { ok: false, rejected: true, message: "The server changed. Refresh and try again." };
+        return { ok: false, rejected: ["server_not_found", "invalid_request", "request_conflict"].includes(code), message: "Visibility could not be updated. Only the current owner can change this setting. Refresh before trying again." };
     }
 }
