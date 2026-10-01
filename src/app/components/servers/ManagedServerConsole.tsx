@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const MAXIMUM_TEXT_CHARACTERS = 128 * 1_024;
 const MAXIMUM_LINES = 2_000;
@@ -20,10 +20,9 @@ export function ManagedServerConsole({ serverId }: { serverId: string }) {
         active.current = null;
         setState("disconnected");
     };
-    useEffect(() => () => active.current?.abort(), []);
 
     /** Opens the current-run output stream and reflects its progress in the toggle. */
-    const connect = async () => {
+    const connect = useCallback(async () => {
         if (active.current !== null) return;
         const controller = new AbortController();
         active.current = controller;
@@ -65,7 +64,18 @@ export function ManagedServerConsole({ serverId }: { serverId: string }) {
         } finally {
             if (active.current === controller) active.current = null;
         }
-    };
+    }, [serverId]);
+
+    // Connect on mount or a server change, and release the stream on cleanup.
+    useEffect(() => {
+        // Starting the external stream also synchronizes its visible connection state.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        void connect();
+        return () => {
+            active.current?.abort();
+            active.current = null;
+        };
+    }, [connect]);
 
     return (
         <div className="p-5">
