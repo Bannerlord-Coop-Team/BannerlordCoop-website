@@ -21,63 +21,56 @@ afterEach(async () => {
     vi.unstubAllGlobals();
 });
 
-/** Returns the console's single connection control. */
-function toggle() {
-    return container.querySelector("button")!;
+/** Reads the visible console output and any inline connection notice. */
+function output() {
+    return container.querySelector("pre")!.textContent;
 }
 
-/** Mounts or rerenders the same server without recreating its console. */
-async function renderConsole() {
-    await act(async () => root.render(<ManagedServerConsole serverId="preview" />));
+/** Mounts or rerenders a server's console. */
+async function renderConsole(serverId = "preview") {
+    await act(async () => root.render(<ManagedServerConsole serverId={serverId} />));
 }
 
-it("auto-connects once on load and preserves manual disconnect/reconnect across rerenders", async () => {
+it("auto-connects once on load without connection buttons or a separate indicator", async () => {
     let respond!: (response: Response) => void;
     let stream!: ReadableStreamDefaultController<Uint8Array>;
     fetchMock.mockReturnValue(new Promise<Response>(resolve => { respond = resolve; }));
     await renderConsole();
-    expect(container.querySelectorAll("button")).toHaveLength(1);
+    expect(container.querySelector("button")).toBeNull();
     expect(container.querySelector('[role="status"]')).toBeNull();
-    expect(toggle().textContent).toBe("connecting");
+    expect(output()).toContain("Connecting");
     expect(fetchMock).toHaveBeenCalledWith("/api/servers/preview/console", expect.objectContaining({ signal: expect.any(AbortSignal) }));
     await renderConsole();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await act(async () => respond(new Response(new ReadableStream({ start(controller) { stream = controller; } }))));
-    expect(toggle().textContent).toBe("connected");
-    await act(async () => toggle().click());
-    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
-    expect(toggle().textContent).toBe("disconnected");
+    await act(async () => stream.enqueue(new TextEncoder().encode('event: line\ndata: "Sample output"\n\n')));
+    expect(output()).toBe("Sample output\n");
     await act(async () => stream.close());
-    await renderConsole();
-    expect(toggle().textContent).toBe("disconnected");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    fetchMock.mockResolvedValueOnce(new Response(""));
-    await act(async () => toggle().click());
-    expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 
-it("cancels a connecting stream without letting its late response reset the status", async () => {
+it("aborts the old server connection and ignores its late response after switching servers", async () => {
     let respond!: (response: Response) => void;
-    fetchMock.mockReturnValue(new Promise<Response>(resolve => { respond = resolve; }));
+    fetchMock.mockReturnValueOnce(new Promise<Response>(resolve => { respond = resolve; }));
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 503 }));
     await renderConsole();
-    await act(async () => toggle().click());
+    await renderConsole("another-server");
     expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/servers/another-server/console");
     await act(async () => respond(new Response("")));
-    expect(toggle().textContent).toBe("disconnected");
+    expect(output()).toContain("unavailable");
 });
 
-it.each(["unavailable", "expired"])("shows %s on the same button and permits reconnecting", async state => {
+it.each(["unavailable", "expired"])("shows %s and reload guidance inside the output without auto-retrying", async state => {
     fetchMock.mockResolvedValueOnce(state === "unavailable"
         ? new Response(null, { status: 503 })
-        : new Response("event: expired\n\n"));
+        : new Response('event: line\ndata: "Last line"\n\nevent: expired\n\n'));
     await renderConsole();
-    expect(toggle().textContent).toBe(state);
+    expect(output()).toContain(state);
+    expect(output()).toContain("Reload the page");
+    if (state === "expired") expect(output()).toContain("Last line");
+    expect(container.querySelector("button")).toBeNull();
     await renderConsole();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    fetchMock.mockResolvedValueOnce(new Response(""));
-    await act(async () => toggle().click());
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(toggle().textContent).toBe("disconnected");
 });
 
 it("reconnects after Strict Mode cleanup and aborts the active stream on unmount", async () => {
@@ -86,7 +79,7 @@ it("reconnects after Strict Mode cleanup and aborts the active stream on unmount
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
     expect(fetchMock.mock.calls[1][1].signal.aborted).toBe(false);
-    expect(toggle().textContent).toBe("connecting");
+    expect(output()).toContain("Connecting");
     await act(async () => root.render(null));
     expect(fetchMock.mock.calls[1][1].signal.aborted).toBe(true);
 });

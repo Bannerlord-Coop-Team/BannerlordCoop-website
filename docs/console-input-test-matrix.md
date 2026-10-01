@@ -6,10 +6,10 @@ only an input and Send button below live output, inside the same card.
 
 | Path | Expected behavior | Coverage |
 | --- | --- | --- |
-| Page load → connecting → connected → manual disconnect/reconnect | Connect automatically once on mount; keep the status toggle and respect manual disconnection across rerenders | Component; browser screenshot |
+| Page load → connecting → connected | Connect automatically once on mount; no connection button or separate status indicator | Component; browser screenshot |
 | Strict Mode setup/cleanup or unmount | Abort the old stream and allow a fresh mount to connect | Component |
-| Disconnect while connecting | Pending connection is cancelled and cannot overwrite the disconnected state | Component |
-| Unavailable or expired stream | Button shows the terminal state and can reconnect manually; no automatic retry | Component |
+| Switch servers while connecting | Cancel the previous stream and ignore its late response | Component |
+| Unavailable or expired stream | Show a notice and reload guidance inside the output, retaining existing lines; no automatic retry | Component |
 | Idle managed console | Live output precedes the form in one card; no empty result panel | Component |
 | Supported command prefix at end of focused input | Ghost stops at next `.`; successive Tabs accept one segment without submitting or inserting argument placeholders | Component |
 | Unknown prefix, complete command, arguments, or caret/selection away from end | No completion; Tab keeps normal navigation | Component |

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 const MAXIMUM_TEXT_CHARACTERS = 128 * 1_024;
 const MAXIMUM_LINES = 2_000;
@@ -8,87 +8,71 @@ const MAXIMUM_SSE_FRAME_BYTES = 16 * 1_024;
 
 type ConsoleState = "disconnected" | "connecting" | "connected" | "expired" | "truncated" | "unavailable";
 
+const consoleStateMessages: Record<ConsoleState, string> = {
+    connecting: "Connecting to live output…",
+    connected: "No live output.",
+    disconnected: "Console disconnected. Reload the page to reconnect.",
+    expired: "Console session expired. Reload the page to reconnect.",
+    truncated: "Console output was truncated. Reload the page to reconnect.",
+    unavailable: "Console output is unavailable. Reload the page to try again.",
+};
+
 /** Streams bounded current-run output inside the managed game console card. */
 export function ManagedServerConsole({ serverId }: { serverId: string }) {
-    const [state, setState] = useState<ConsoleState>("disconnected");
+    const [state, setState] = useState<ConsoleState>("connecting");
     const [text, setText] = useState("");
-    const active = useRef<AbortController | null>(null);
-
-    /** Cancels the active stream and returns the toggle to its disconnected state. */
-    const disconnect = () => {
-        active.current?.abort();
-        active.current = null;
-        setState("disconnected");
-    };
-
-    /** Opens the current-run output stream and reflects its progress in the toggle. */
-    const connect = useCallback(async () => {
-        if (active.current !== null) return;
-        const controller = new AbortController();
-        active.current = controller;
-        setText("");
-        setState("connecting");
-        try {
-            const response = await fetch(`/api/servers/${encodeURIComponent(serverId)}/console`, {
-                headers: { accept: "text/event-stream" },
-                cache: "no-store",
-                signal: controller.signal,
-            });
-            if (controller.signal.aborted) return;
-            if (!response.ok || response.body === null) throw new Error("unavailable");
-            setState("connected");
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder("utf-8", { fatal: true });
-            let pending = "";
-            for (;;) {
-                const next = await reader.read();
-                if (controller.signal.aborted) return;
-                const decoded = decodeConsoleStreamChunk(pending, next.done ? undefined : next.value, decoder, next.done);
-                pending = decoded.pending;
-                for (const event of decoded.events) {
-                    if (event.type === "line") {
-                        setText((current) => boundedConsoleText(current, event.text));
-                    } else if (event.type === "truncated") {
-                        setState("truncated");
-                    } else if (event.type === "expired") {
-                        setState("expired");
-                    } else if (event.type === "ended") {
-                        setState("disconnected");
-                    }
-                }
-                if (next.done) break;
-            }
-            if (!controller.signal.aborted) setState((current) => current === "expired" || current === "truncated" ? current : "disconnected");
-        } catch {
-            if (!controller.signal.aborted) setState("unavailable");
-        } finally {
-            if (active.current === controller) active.current = null;
-        }
-    }, [serverId]);
-
-    // Connect on mount or a server change, and release the stream on cleanup.
     useEffect(() => {
-        // Starting the external stream also synchronizes its visible connection state.
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+        const controller = new AbortController();
+
+        /** Streams current-run output until the server closes it or the component unmounts. */
+        async function connect() {
+            setText("");
+            setState("connecting");
+            try {
+                const response = await fetch(`/api/servers/${encodeURIComponent(serverId)}/console`, {
+                    headers: { accept: "text/event-stream" },
+                    cache: "no-store",
+                    signal: controller.signal,
+                });
+                if (controller.signal.aborted) return;
+                if (!response.ok || response.body === null) throw new Error("unavailable");
+                setState("connected");
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8", { fatal: true });
+                let pending = "";
+                for (;;) {
+                    const next = await reader.read();
+                    if (controller.signal.aborted) return;
+                    const decoded = decodeConsoleStreamChunk(pending, next.done ? undefined : next.value, decoder, next.done);
+                    pending = decoded.pending;
+                    for (const event of decoded.events) {
+                        if (event.type === "line") {
+                            setText((current) => boundedConsoleText(current, event.text));
+                        } else if (event.type === "truncated") {
+                            setState("truncated");
+                        } else if (event.type === "expired") {
+                            setState("expired");
+                        } else if (event.type === "ended") {
+                            setState("disconnected");
+                        }
+                    }
+                    if (next.done) break;
+                }
+                if (!controller.signal.aborted) setState((current) => current === "expired" || current === "truncated" ? current : "disconnected");
+            } catch {
+                if (!controller.signal.aborted) setState("unavailable");
+            }
+        }
+
         void connect();
-        return () => {
-            active.current?.abort();
-            active.current = null;
-        };
-    }, [connect]);
+        return () => controller.abort();
+    }, [serverId]);
 
     return (
         <div className="p-5">
             <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">Live output</p>
             <p className="mt-2 text-sm leading-6 text-foreground-muted">Read-only current-run output. Nothing is saved, and sessions expire after five minutes.</p>
-            <button
-                type="button"
-                onClick={() => active.current ? disconnect() : void connect()}
-                title={state === "connecting" || state === "connected" ? "Disconnect from live output" : "Connect to live output"}
-                aria-live="polite"
-                className="mt-4 rounded-sm bg-gold px-4 py-2 font-label text-xs font-semibold uppercase tracking-[0.12em] text-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
-            >{state}</button>
-            <pre aria-label="Live game console output" className="mt-4 h-72 overflow-auto whitespace-pre-wrap break-words rounded-sm border border-white/10 bg-black/50 p-3 font-mono text-xs text-foreground">{text || "No live output."}</pre>
+            <pre aria-label="Live game console output" className="mt-4 h-72 overflow-auto whitespace-pre-wrap break-words rounded-sm border border-white/10 bg-black/50 p-3 font-mono text-xs text-foreground">{text || consoleStateMessages[state]}{text && state !== "connected" ? `\n${consoleStateMessages[state]}` : ""}</pre>
         </div>
     );
 }
