@@ -21,24 +21,18 @@ function completeCommand(draft: string) {
     return match.slice(draft.length, dot < 0 ? match.length : dot + 1);
 }
 
-type Submission = { requestId: string; input: ConsoleSubmission };
-
-/** Submits commands without waiting for execution; results arrive through live stdout. */
+/** Keeps command entry available while submissions run; results arrive through live stdout. */
 export function ManagedServerCommands({ server, userId, controls }: { server: MyServerSummary; userId: string; controls: ReactNode }) {
     const id = useId();
     const inputRef = useRef<HTMLInputElement>(null);
-    const inFlight = useRef(false);
     const [draft, setDraft] = useState("");
     const [atEnd, setAtEnd] = useState(false);
     const [focused, setFocused] = useState(false);
     const [scrollLeft, setScrollLeft] = useState(0);
-    const [submission, setSubmission] = useState<Submission | null>(null);
-    const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const canOperate = server.accessRole === "owner" || server.accessRole === "manager";
     const ready = canOperate && server.operationState === "running" && server.observedGameState === "running";
-    const canCompose = ready && !busy && !submission;
-    const completion = canCompose && focused && atEnd ? completeCommand(draft) : "";
+    const completion = ready && focused && atEnd ? completeCommand(draft) : "";
 
     /** Inserts a supported cheat template without sending it to the server. */
     function selectCommand(command: string) {
@@ -53,43 +47,29 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
         setDraft(draft + completion);
     }
 
-    /** Retains the original payload and UUID whenever delivery cannot be confirmed. */
+    /** Clears the composer before dispatch and reports failures without blocking subsequent commands. */
     async function send(event: FormEvent) {
         event.preventDefault();
-        if (inFlight.current || !canOperate) return;
-        if (!submission && !ready) return;
-        let request = submission;
-        if (!request) {
-            try {
-                const input = parseConsoleSubmission({ serverId: server.serverId, command: draft, expectedUpdatedAt: server.updatedAt });
-                request = { requestId: crypto.randomUUID(), input };
-            } catch {
-                setError("Enter one coop.* command (up to 4096 characters), without control characters or command separators.");
-                return;
-            }
-        }
-        inFlight.current = true;
-        setBusy(true);
-        setSubmission(request);
-        setError("");
+        if (!ready || !draft.trim()) return;
+        let input: ConsoleSubmission;
         try {
-            const response = await submitManagedConsoleCommand(request.input, request.requestId, userId);
-            if (!response.ok) {
-                if (response.notSubmitted) setSubmission(null);
-                setError(response.message);
-                return;
-            }
-            setSubmission(null);
-            setDraft("");
+            input = parseConsoleSubmission({ serverId: server.serverId, command: draft, expectedUpdatedAt: server.updatedAt });
         } catch {
-            setError("Delivery could not be confirmed. Use Retry send to check the same request; do not submit it as a new command.");
-        } finally {
-            inFlight.current = false;
-            setBusy(false);
+            setError("Enter one coop.* command (up to 4096 characters), without control characters or command separators.");
+            return;
+        }
+        setDraft("");
+        setError("");
+        inputRef.current?.focus();
+        try {
+            const response = await submitManagedConsoleCommand(input, crypto.randomUUID(), userId);
+            if (!response.ok) setError(`${input.command}: ${response.message}`);
+        } catch {
+            setError(`${input.command}: Delivery could not be confirmed. Check console output or Discord before resending.`);
         }
     }
 
-    return <ServerConsoleWorkspace coopCommandsOnly onSelectCommand={canCompose ? selectCommand : undefined}>
+    return <ServerConsoleWorkspace coopCommandsOnly onSelectCommand={ready ? selectCommand : undefined}>
         <section className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-surface" aria-labelledby={`${id}-heading`}>
             <div className="flex flex-wrap items-center gap-3 border-b border-white/10 p-3 sm:px-4">
                 <h2 id={`${id}-heading`} className="mr-auto flex items-center gap-2 text-sm font-semibold"><Terminal className="size-4 text-gold" aria-hidden="true" />Game console</h2>
@@ -114,13 +94,13 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
                                 setAtEnd(input.selectionStart === input.value.length && input.selectionEnd === input.value.length);
                             }}
                             onScroll={event => setScrollLeft(event.currentTarget.scrollLeft)} onKeyDown={completeWithTab}
-                            disabled={!canCompose} maxLength={MAXIMUM_CONSOLE_COMMAND_LENGTH} title={ready ? "Enter one coop.* command" : "Commands require owner or manager access and a running, healthy server."}
+                            disabled={!ready} maxLength={MAXIMUM_CONSOLE_COMMAND_LENGTH} title={ready ? "Enter one coop.* command" : "Commands require owner or manager access and a running, healthy server."}
                             autoComplete="off" aria-autocomplete="inline" aria-describedby={`${id}-shortcuts`} spellCheck={false} placeholder="coop.…"
                             className="min-h-11 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold disabled:opacity-40"
                         />
                         {completion && <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-md border border-transparent px-3 py-2.5 font-mono text-sm whitespace-pre"><div style={{ transform: `translateX(-${scrollLeft}px)` }}><span className="invisible">{draft}</span><span className="text-foreground-muted">{completion}</span></div></div>}
                     </div>
-                    <button type="submit" className={button} disabled={busy || !canOperate || (!submission && (!ready || !draft.trim()))}>{busy ? "Sending…" : submission ? "Retry send" : "Send"}</button>
+                    <button type="submit" className={button} disabled={!ready || !draft.trim()}>Send</button>
                 </form>
                 <p id={`${id}-shortcuts`} className="text-xs text-foreground-muted"><kbd className="font-mono">Enter</kbd> to send</p>
             </div>
