@@ -257,7 +257,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         case "operations": {
             const [overview, inventory, selectedDashboard, releases] = await Promise.all([
                 readControlPlaneAdmin<Overview>({ accessToken: token, signal, operation: "overview" }),
-                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, operation: "vps-hosts", input: { includeLiveData: false, includeProviderInventory: true } }),
+                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, operation: "vps-hosts", input: { includeLiveData: false, includeProviderInventory: "service-names" } }),
                 serverId
                     ? readControlPlaneAdmin<ServerDashboardResult>({
                         accessToken: token, signal,

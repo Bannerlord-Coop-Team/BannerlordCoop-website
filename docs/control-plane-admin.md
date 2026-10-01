@@ -178,10 +178,13 @@ revocation checks, request IDs, origin restrictions, and `Cache-Control: no-stor
 Deploy the `control-plane-admin` Edge Function separately after merging this change.
 
 Operations requests registered VPS capacity and authenticated provider inventory
-with `includeLiveData: false, includeProviderInventory: true`. It does not wait
-for CPU/memory samples or the runner target revision, which its forms do not use.
-This requires the control-plane version supporting the provider-inventory option
-before the website rollout. The VPS pane's live readings remain unchanged.
+with `includeLiveData: false, includeProviderInventory: "service-names"`. It reads
+fresh available VPS names without fetching unused per-host billing metadata,
+CPU/memory samples or the runner target revision. Registered-host membership and
+the available-service limit are still checked against the current provider list;
+failures remain visible. Deploy the control-plane version supporting this literal
+before the website rollout; older backends reject it without a fallback. The VPS
+pane's live readings and billing remain unchanged.
 
 Focused verification:
 
