@@ -1,23 +1,45 @@
 # Managed console input test matrix
 
-The managed console keeps its existing command confirmation, request identity,
-polling, result acknowledgement, and access restrictions. Its idle command UI is
-only an input and Send button below live output, inside the same card.
+The command UI is the input, its Send button, and “Enter to send.” Sending no longer
+opens a confirmation dialog. Command output belongs in the existing live console,
+not a second result panel. Tab completion remains available without a footer hint.
+
+## Command output
 
 | Path | Expected behavior | Coverage |
 | --- | --- | --- |
-| Page load → connecting → connected | Connect automatically once on mount; no connection button or separate status indicator | Component; browser screenshot |
-| Strict Mode setup/cleanup or unmount | Abort the old stream and allow a fresh mount to connect | Component |
-| Switch servers while connecting | Cancel the previous stream and ignore its late response | Component |
-| Unavailable or expired stream | Show a notice and reload guidance inside the output, retaining existing lines; no automatic retry | Component |
-| Idle managed console | Live output precedes the form in one card; no empty result panel | Component |
-| Supported command prefix at end of focused input | Ghost stops at next `.`; successive Tabs accept one segment without submitting or inserting argument placeholders | Component |
-| Unknown prefix, complete command, arguments, or caret/selection away from end | No completion; Tab keeps normal navigation | Component |
-| Shift+Tab | Leaves draft unchanged and keeps backward navigation | Component |
-| Send or native form submission (Enter) | Uses the same confirmed command action | Component; browser keyboard check |
-| Pending, uncertain, or completed request | Existing retry identity, polling, plaintext results and acknowledgement remain intact | Existing component tests |
-| Read-only or non-running server | Input and Send remain disabled | Existing component tests |
+| Valid `@DS@` managed-command stdout record | Hide envelope/ID, decode line breaks, highlight command names/placeholders/headings with a subtle gold treatment | Component; desktop/mobile screenshots |
+| Managed command with `ok: false` | Red command-output treatment, not a success message | Component; screenshot |
+| Ordinary stdout, another event, malformed JSON or wrong field types | Retain original text without command styling | Component |
+| HTML-looking command output | Render escaped text, never markup | Component |
+| Split SSE frame | Wait for the complete frame before displaying the highlighted record | Component |
 
-Autocomplete uses the existing published server-side `coop.*` catalog, not runtime
-command discovery. Arguments are entered manually or inserted through the existing
-command picker.
+## Input and delivery
+
+| Path | Expected behavior | Coverage |
+| --- | --- | --- |
+| Send or Enter | Submit once without confirmation; clear accepted input | Component; browser |
+| Pending job | Keep the composer locked until terminal result; poll the same job | Component |
+| Terminal job | Unlock the next command without acknowledgement/new-command UI or “Command finished” text | Component |
+| Uncertain delivery | Keep original payload/UUID; the same input-row button retries that request | Component |
+| Poll timeout/failure | Report the error in the console; the input-row button checks the same job, never resubmits it | Component |
+| Invalid or rejected command | Report the error in the console, not beneath the input | Component |
+| Read-only or non-running server | Input and Send remain disabled | Component |
+| Supported prefix | Tab accepts one dot-delimited segment without submitting | Component; browser |
+| Unknown prefix, complete command, arguments, or selection away from end | Tab retains normal navigation | Component |
+| Shift+Tab | Preserve backward navigation | Component |
+
+Request identity, authorization and bounded polling remain unchanged. The website
+no longer offers result acknowledgement and does not silently acknowledge on the
+user's behalf; unacknowledged Discord completion/recovery delivery remains enabled.
+Backend result/acknowledgement APIs are unchanged.
+
+## Stream lifecycle
+
+| Path | Expected behavior | Coverage |
+| --- | --- | --- |
+| Load | Auto-connect once; no connection button or separate indicator | Component; screenshot |
+| Strict Mode/unmount | Abort old stream and permit fresh setup | Component |
+| Server switch | Ignore the previous connection's late response | Component |
+| Unavailable/expired stream | Retain output and existing reload guidance; no automatic retry | Component |
+| Retained output | Keep existing memory, line and SSE-frame bounds | Existing stream tests |

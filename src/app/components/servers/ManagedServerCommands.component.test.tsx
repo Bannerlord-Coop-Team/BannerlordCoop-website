@@ -1,7 +1,6 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import { ManagedServerConsole } from "./ManagedServerConsole";
 import { ManagedServerCommands } from "./ManagedServerCommands";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 
@@ -16,13 +15,14 @@ let container: HTMLDivElement;
 beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.useFakeTimers(); vi.resetAllMocks();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
     mocks.submit.mockResolvedValue({ ok: true, result: { outcome: "enqueued", jobId } });
     mocks.check.mockResolvedValue({ ok: true, result: { status: "pending" } });
     mocks.ack.mockResolvedValue({ ok: true, result: { acknowledged: true } });
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 /** Finds a labelled action without coupling assertions to button order. */
 function button(label: string) { return [...container.querySelectorAll("button")].find(button => button.textContent?.trim() === label)!; }
@@ -37,7 +37,7 @@ async function mount(overrides: Partial<MyServerSummary> = {}) {
     await act(async () => root.render(<ManagedServerCommands server={{ ...server, ...overrides }} userId="owner-id" controls={<p>Lifecycle controls</p>} />));
 }
 
-it("offers only coop cheats and selecting one never sends it; cancellation is respected", async () => {
+it("offers only coop cheats, inserts without sending, and sends without a confirmation popup", async () => {
     await mount();
     const commands = [...container.querySelectorAll("aside code")].map(node => node.textContent!);
     expect(commands.length).toBeGreaterThan(0);
@@ -49,9 +49,10 @@ it("offers only coop cheats and selecting one never sends it; cancellation is re
     expect(document.activeElement).toBe(container.querySelector('input[placeholder="coop.…"]'));
     expect(container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!.value).toBe(commands[0]);
     expect(mocks.submit).not.toHaveBeenCalled();
-    vi.mocked(window.confirm).mockReturnValue(false);
     await act(async () => button("Send").click());
-    expect(mocks.submit).not.toHaveBeenCalled();
+    expect(mocks.submit).toHaveBeenCalledOnce();
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!.value).toBe("");
 });
 
 /** Types a draft and places the caret at its end, as a browser input event would. */
@@ -122,13 +123,14 @@ it("submits a typed command through the native form used by Enter", async () => 
 });
 
 it("places only the input and Send below live output in the same card while idle", async () => {
-    await act(async () => root.render(<ManagedServerCommands server={server} userId="owner-id" controls={<p>Lifecycle controls</p>}><ManagedServerConsole serverId={server.serverId} /></ManagedServerCommands>));
+    await mount();
     const output = container.querySelector('[aria-label="Live game console output"]')!;
     const form = container.querySelector("form")!;
     expect(form.closest("section")).toBe(output.closest("section"));
     expect(output.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(container.querySelector('[aria-label="Command result"]')).toBeNull();
-    expect(form.parentElement!.textContent).toContain("Enter to send · Tab to complete");
+    expect(form.nextElementSibling!.textContent).toBe("Enter to send");
+    expect(form.nextElementSibling!.nextElementSibling).toBeNull();
     expect(form.querySelectorAll("input")).toHaveLength(1);
     expect(form.querySelectorAll("button")).toHaveLength(1);
     expect(form.querySelector("button")!.textContent).toBe("Send");
@@ -139,30 +141,52 @@ it("retries uncertain delivery with the exact original UUID and payload", async 
     await mount(); await select();
     await act(async () => button("Send").click());
     const original = mocks.submit.mock.calls[0];
-    expect(button("Retry same request")).toBeDefined();
+    expect(button("Retry send")).toBeDefined();
     expect(container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!.disabled).toBe(true);
-    await act(async () => button("Retry same request").click());
+    await act(async () => button("Retry send").click());
     expect(mocks.submit.mock.calls[1]).toEqual(original);
-    expect(window.confirm).toHaveBeenCalledTimes(1);
+    expect(window.confirm).not.toHaveBeenCalled();
 });
 
-it("polls request-bound results, renders plaintext and retains terminal output if acknowledgement fails", async () => {
-    mocks.check.mockResolvedValue({ ok: true, result: { status: "succeeded", output: "<script>unsafe()</script>", outputTruncated: true, outputWithheld: false, completedAt: server.updatedAt } });
-    mocks.ack.mockResolvedValueOnce({ ok: false, message: "Offline" });
+it("polls the same request and unlocks the next command without result or acknowledgement UI", async () => {
+    mocks.check.mockResolvedValue({ ok: true, result: { status: "succeeded", output: "API result is not a second output panel", outputTruncated: false, outputWithheld: false, completedAt: server.updatedAt } });
     await mount(); await select();
     await act(async () => button("Send").click());
-    expect(mocks.check).not.toHaveBeenCalled();
+    expect(button("Running…").disabled).toBe(true);
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(mocks.submit).toHaveBeenCalledOnce();
     await act(async () => vi.advanceTimersByTimeAsync(3000));
     expect(mocks.check).toHaveBeenCalledWith({ serverId: server.serverId, jobId, commandRequestId: mocks.submit.mock.calls[0][1] }, "owner-id");
-    expect(container.querySelector("pre")!.textContent).toBe("<script>unsafe()</script>");
-    expect(container.querySelector("script")).toBeNull();
-    expect(container.textContent).toContain("Output was truncated");
+    expect(container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!.disabled).toBe(false);
+    expect(container.querySelector('[aria-label="Command result"]')).toBeNull();
+    expect(container.textContent).not.toContain("API result is not a second output panel");
+    expect(container.textContent).not.toContain("Command finished");
+    expect(button("Acknowledge result")).toBeUndefined();
+    expect(button("New command")).toBeUndefined();
     expect(mocks.ack).not.toHaveBeenCalled();
-    await act(async () => button("Acknowledge result").click());
-    expect(container.querySelector("pre")!.textContent).toBe("<script>unsafe()</script>");
-    expect(container.textContent).toContain("acknowledgement could not be confirmed");
-    await act(async () => vi.advanceTimersByTimeAsync(6000));
-    expect(mocks.check).toHaveBeenCalledTimes(1);
+    await select();
+    await act(async () => button("Send").click());
+    expect(mocks.submit).toHaveBeenCalledTimes(2);
+    expect(mocks.submit.mock.calls[1][1]).not.toBe(mocks.submit.mock.calls[0][1]);
+});
+
+it("reports invalid input inside the console without adding footer messages", async () => {
+    await mount();
+    const input = await typeDraft("not-a-coop-command");
+    await act(async () => input.form!.requestSubmit());
+    expect(mocks.submit).not.toHaveBeenCalled();
+    expect(container.querySelector('pre [role="alert"]')!.textContent).toContain("Enter one coop.* command");
+    expect(input.form!.nextElementSibling!.textContent).toBe("Enter to send");
+    expect(input.form!.nextElementSibling!.nextElementSibling).toBeNull();
+});
+
+it("reports a failed job in the console and unlocks the composer", async () => {
+    mocks.check.mockResolvedValue({ ok: true, result: { status: "failed", errorCode: "command_failed" } });
+    await mount(); await select();
+    await act(async () => button("Send").click());
+    await act(async () => vi.advanceTimersByTimeAsync(3000));
+    expect(container.querySelector('pre [role="alert"]')!.textContent).toBe("Command failed: command_failed");
+    expect(container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!.disabled).toBe(false);
 });
 
 it.each([{ accessRole: "support" as const }, { operationState: "stopped" as const }, { observedGameState: "unknown" as const }])("disables commands for a read-only or non-running server: %o", async (state) => {
