@@ -198,8 +198,9 @@ it("shared selector clears the override without directory URL writes restoring i
     const root = createRoot(container);
     try {
         await act(async () => root.render(await pageTree(Object.fromEntries(new URLSearchParams(window.location.search)), true)));
-        const apply = container.querySelector("[data-locale-selector] button") as HTMLButtonElement;
-        await act(async () => apply.click());
+        const trigger = container.querySelector("[data-locale-selector] > button") as HTMLButtonElement;
+        await act(async () => trigger.click());
+        await act(async () => container.querySelector<HTMLButtonElement>('[data-locale-selector] li button[lang="en"]')!.click());
         expect(request.set).toHaveBeenCalledWith("blcoop-locale", "en", { path: "/", sameSite: "lax", maxAge: 31536000 });
         expect(request.refresh).toHaveBeenCalledOnce();
         expect(new URLSearchParams(window.location.search).has("lang")).toBe(false);

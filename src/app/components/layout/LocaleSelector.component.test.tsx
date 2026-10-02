@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { LocalizationProvider } from "@/app/lib/localization/client";
 import { localeNavigationTarget } from "@/app/lib/localization/navigation";
 import common from "@/app/lib/localization/dictionaries/en/common.json";
-import type { Locale } from "@/app/lib/localization/types";
+import type { Locale, LocaleOption } from "@/app/lib/localization/types";
 
 const mocks = vi.hoisted(() => ({ replace: vi.fn(), refresh: vi.fn(), setLocale: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: mocks.replace, refresh: mocks.refresh }) }));
@@ -16,12 +16,31 @@ import { MobileNavigation } from "./MobileNavigation";
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 afterEach(() => { vi.resetAllMocks(); window.history.replaceState(null, "", "/"); });
 
+const twoLocales: LocaleOption[] = [{ locale: "en", name: "English" }, { locale: "ru", name: "Русский" }];
+
 /** Provides two enabled fixture locales without enabling unfinished production dictionaries. */
 function Selectors({ locale = "en" }: { locale?: Locale }) {
-    return <LocalizationProvider locale={locale} messages={{ common }} enabledLocales={[{ locale: "en", name: "English" }, { locale: "ru", name: "Русский" }]}>
+    return <LocalizationProvider locale={locale} messages={{ common }} enabledLocales={twoLocales}>
         <LocaleSelector variant="desktop" />
         <MobileNavigation isAdmin={false} isAuthenticated={false} />
     </LocalizationProvider>;
+}
+
+/** Renders one desktop selector with the given enabled options. */
+function DesktopSelector({ options = twoLocales }: { options?: LocaleOption[] }) {
+    return <LocalizationProvider locale="en" messages={{ common }} enabledLocales={options}><LocaleSelector variant="desktop" /></LocalizationProvider>;
+}
+
+/** Finds the trigger button of each rendered selector. */
+function triggers(container: Element) {
+    return [...container.querySelectorAll<HTMLButtonElement>("[data-locale-selector] > button")];
+}
+
+/** Opens a selector and chooses the option for the given locale. */
+async function choose(trigger: HTMLButtonElement, locale: Locale) {
+    await act(async () => trigger.click());
+    const options = document.getElementById(trigger.getAttribute("aria-controls")!)!;
+    await act(async () => options.querySelector<HTMLButtonElement>(`button[lang="${locale}"]`)!.click());
 }
 
 it("preserves authentication queries, filters, and anchors and clears stale Chinese cheats overrides", () => {
@@ -32,7 +51,7 @@ it("preserves authentication queries, filters, and anchors and clears stale Chin
     expect(localeNavigationTarget("https://bannerlordcoop.com/cheats?lang=zh&lang=cn#command", "en")).toBe("/cheats#command");
 });
 
-it("offers named native desktop/mobile selects, persists selection, and agrees after navigation/reload", async () => {
+it("offers named flagged desktop/mobile lists, persists selection, and agrees after navigation/reload", async () => {
     window.matchMedia = vi.fn().mockReturnValue({ addEventListener: vi.fn(), removeEventListener: vi.fn(), matches: false });
     const container = document.createElement("div");
     document.body.append(container);
@@ -41,34 +60,54 @@ it("offers named native desktop/mobile selects, persists selection, and agrees a
     window.history.replaceState(null, "", "/cheats?lang=zh-CN&search=gold#command");
     try {
         await act(async () => root.render(<Selectors />));
-        const menuButton = container.querySelector<HTMLButtonElement>('button[aria-controls="mobile-navigation"]')!;
-        menuButton.focus();
-        await act(async () => menuButton.click());
-        const selects = container.querySelectorAll("select");
-        expect(selects).toHaveLength(2);
-        expect(selects[0].id).not.toBe(selects[1].id);
-        for (const select of selects) {
-            expect(container.querySelector(`label[for="${select.id}"]`)?.textContent).toBe("Language");
-            expect([...select.options].map((option) => option.value)).toEqual(["en", "ru"]);
-            select.focus();
-            expect(document.activeElement).toBe(select);
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-controls="mobile-navigation"]')!.click());
+        const [desktop, mobile] = triggers(container);
+        expect(desktop.getAttribute("aria-controls")).not.toBe(mobile.getAttribute("aria-controls"));
+        for (const trigger of [desktop, mobile]) {
+            const [label, value] = trigger.getAttribute("aria-labelledby")!.split(" ").map((id) => document.getElementById(id)!.textContent);
+            expect([label, value]).toEqual(["Language", "English"]);
+            await act(async () => trigger.click());
+            expect(trigger.getAttribute("aria-expanded")).toBe("true");
+            const options = [...document.getElementById(trigger.getAttribute("aria-controls")!)!.querySelectorAll("button")];
+            expect(options.map((option) => option.lang)).toEqual(["en", "ru"]);
+            expect(options.every((option) => option.querySelector("svg"))).toBe(true);
+            expect(options[0].getAttribute("aria-current")).toBe("true");
+            await act(async () => trigger.click());
         }
-        // Native selects supply keyboard semantics; a change event models the browser's committed choice.
-        await act(async () => {
-            selects[1].value = "ru";
-            selects[1].dispatchEvent(new Event("change", { bubbles: true }));
-        });
+        await choose(mobile, "ru");
+        expect(mobile.getAttribute("aria-expanded")).toBe("false");
+        expect(document.activeElement).toBe(mobile);
         expect(mocks.setLocale).toHaveBeenCalledWith("ru");
         expect(mocks.replace).toHaveBeenCalledWith("/cheats?search=gold&lang=ru#command", { scroll: false });
         expect(mocks.refresh).toHaveBeenCalledOnce();
         await act(async () => root.render(<Selectors locale="ru" />));
-        expect([...container.querySelectorAll("select")].map((select) => select.value)).toEqual(["ru", "ru"]);
-        await act(async () => {
-            selects[0].value = "en";
-            mocks.setLocale.mockResolvedValue("en");
-            selects[0].dispatchEvent(new Event("change", { bubbles: true }));
-        });
+        expect(triggers(container).map((trigger) => trigger.textContent)).toEqual(["Русский", "Русский"]);
+        mocks.setLocale.mockResolvedValue("en");
+        await choose(desktop, "en");
         expect(mocks.replace).toHaveBeenLastCalledWith("/cheats?search=gold#command", { scroll: false });
+    } finally {
+        await act(async () => root.unmount());
+        container.remove();
+    }
+});
+
+it("closes the list on Escape without closing the mobile drawer", async () => {
+    window.matchMedia = vi.fn().mockReturnValue({ addEventListener: vi.fn(), removeEventListener: vi.fn(), matches: false });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+        await act(async () => root.render(<Selectors />));
+        const menuButton = container.querySelector<HTMLButtonElement>('button[aria-controls="mobile-navigation"]')!;
+        await act(async () => menuButton.click());
+        const mobile = triggers(container)[1];
+        await act(async () => mobile.click());
+        const option = document.getElementById(mobile.getAttribute("aria-controls")!)!.querySelector<HTMLButtonElement>('button[lang="ru"]')!;
+        option.focus();
+        await act(async () => option.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+        expect(mobile.getAttribute("aria-expanded")).toBe("false");
+        expect(document.activeElement).toBe(mobile);
+        expect(menuButton.getAttribute("aria-expanded")).toBe("true");
     } finally {
         await act(async () => root.unmount());
         container.remove();
@@ -77,38 +116,36 @@ it("offers named native desktop/mobile selects, persists selection, and agrees a
 
 it("can explicitly reapply English to a Chinese cheats link even when English is the only enabled option", async () => {
     const container = document.createElement("div");
+    document.body.append(container);
     const root = createRoot(container);
     window.history.replaceState(null, "", "/cheats?lang=zh-CN&search=gold#command");
     mocks.setLocale.mockResolvedValue("en");
     try {
-        await act(async () => root.render(<LocalizationProvider locale="en" messages={{ common }} enabledLocales={[{ locale: "en", name: "English" }]}><LocaleSelector variant="desktop" /></LocalizationProvider>));
-        expect(container.querySelector("select")?.value).toBe("en");
-        const apply = container.querySelector("button")!;
-        expect(apply.textContent).toBe(common["locale.apply"]);
-        await act(async () => apply.click());
+        await act(async () => root.render(<DesktopSelector options={[{ locale: "en", name: "English" }]} />));
+        await choose(triggers(container)[0], "en");
         expect(mocks.setLocale).toHaveBeenCalledWith("en");
         expect(mocks.replace).toHaveBeenCalledWith("/cheats?search=gold#command", { scroll: false });
-    } finally { await act(async () => root.unmount()); }
+    } finally { await act(async () => root.unmount()); container.remove(); }
 });
 
 it("refreshes the same route without dropping query/hash and reports persistence failures accessibly", async () => {
     const container = document.createElement("div");
+    document.body.append(container);
     const root = createRoot(container);
     window.history.replaceState(null, "", "/account?next=%2Fservers#details");
     mocks.setLocale.mockResolvedValue("ru");
     try {
-        await act(async () => root.render(<LocalizationProvider locale="en" messages={{ common }} enabledLocales={[{ locale: "en", name: "English" }, { locale: "ru", name: "Русский" }]}><LocaleSelector variant="desktop" /></LocalizationProvider>));
-        const select = container.querySelector("select")!;
-        await act(async () => { select.value = "ru"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+        await act(async () => root.render(<DesktopSelector />));
+        const trigger = triggers(container)[0];
+        await choose(trigger, "ru");
         expect(mocks.replace).not.toHaveBeenCalled();
         expect(mocks.refresh).toHaveBeenCalledOnce();
         expect(window.location.search + window.location.hash).toBe("?next=%2Fservers#details");
         mocks.setLocale.mockRejectedValue(new Error("unavailable"));
-        await act(async () => { select.value = "ru"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+        await choose(trigger, "ru");
         const alert = container.querySelector('[role="alert"]')!;
         expect(alert.textContent).toBe(common["locale.error"]);
-        expect(select.getAttribute("aria-describedby")).toBe(alert.id);
-        expect(select.disabled).toBe(false);
-        expect(select.value).toBe("en");
-    } finally { await act(async () => root.unmount()); }
+        expect(trigger.getAttribute("aria-describedby")).toBe(alert.id);
+        expect(trigger.textContent).toBe("English");
+    } finally { await act(async () => root.unmount()); container.remove(); }
 });
