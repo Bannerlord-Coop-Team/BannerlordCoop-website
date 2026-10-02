@@ -39,7 +39,8 @@ test("keeps bare cheats navigation and retains every explicit share locale", () 
     assert.equal(buildCheatsPath(parseCheatsQuery({ lang: "pt-PT" })), "/cheats?lang=pt-PT");
 });
 
-test("extracts every published display name, summary, category, and argument explanation with Chinese parity", () => {
+/** Keeps command names in source English while translating categories and explanatory prose. */
+test("preserves source command names and translates summaries, categories, and argument explanations", () => {
     assertDictionaryParity(en, zh, "legacy.zh-CN.cheats");
     for (const { name } of commandsData.categories) {
         const key = `category.${name.toLowerCase().replaceAll(" ", "_")}`;
@@ -48,10 +49,10 @@ test("extracts every published display name, summary, category, and argument exp
     }
     for (const command of commands) {
         const key = `command.${command.command}`;
-        assert.equal(english.t(`${key}.name`), command.name);
+        assert.equal(Object.hasOwn(en, `${key}.name`), false);
+        assert.equal(Object.hasOwn(zh, `${key}.name`), false);
         assert.equal(english.t(`${key}.summary`), command.summary);
         const original = chineseSource[command.command as keyof typeof chineseSource];
-        assert.equal(chinese.t(`${key}.name`), original.name);
         assert.equal(chinese.t(`${key}.summary`), original.summary);
         for (const argument of command.arguments) {
             assert.equal(english.t(`${key}.argument.${argument.name}`), argument.description);
