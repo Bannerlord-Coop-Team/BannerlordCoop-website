@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), download: vi.
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/app/servers/managed-server-file-actions", () => ({ submitManagedServerFile: mocks.submit, checkManagedServerFile: mocks.check, downloadManagedServerSave: mocks.download, exportManagedServerConfig: mocks.config }));
 vi.mock("@/app/servers/managed-server-config-actions", () => ({ readManagedServerConfig: mocks.read, saveManagedServerConfig: mocks.save }));
+vi.mock("@/app/servers/managed-server-campaign-actions", () => ({ listManagedServerCampaigns: async () => ({ ok: true, campaigns: { serverId: status.serverId, updatedAt: status.updatedAt, activeSaveId: status.activeSave!.saveId, items: [] } }), changeManagedServerCampaign: vi.fn() }));
 const status: OwnerFileStatus = { serverId: "11111111-1111-4111-8111-111111111111", updatedAt: "2026-09-13T00:00:00.000Z", operationState: "stopped", observedGameState: "stopped", activeSave: { saveId: "22222222-2222-4222-8222-222222222222", displayName: "Campaign" }, managedConfig: DEFAULT_MANAGED_SERVER_CONFIGURATION };
 const job = { kind: "job", outcome: "enqueued", jobId: "33333333-3333-4333-8333-333333333333", action: "export-save", state: "queued" };
 const key = `managed-file-transfer:v1:owner:${status.serverId}`;
