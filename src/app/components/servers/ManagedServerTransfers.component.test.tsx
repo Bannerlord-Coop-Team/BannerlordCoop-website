@@ -83,7 +83,7 @@ it("does not dispatch when pending intent cannot be persisted, or recover a diff
 });
 it("reviews native configuration changes and rejects unsupported fields before any submission", async () => {
     await render(); await click("Import config");
-    const choice = container.querySelector("dialog select")!;
+    const choice = container.querySelector<HTMLSelectElement>("dialog select")!;
     expect([...choice.options].map((option) => option.value)).toEqual(["server", "mod"]);
     const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     async function choose(config: unknown) {
@@ -126,7 +126,7 @@ it("guides individual imports, catches choosing the wrong file, and previews onl
     expect(container.textContent).toContain("Server password");
     expect(container.textContent).not.toContain("never-show-this");
     await click("Back");
-    const choice = container.querySelector("dialog select")!;
+    const choice = container.querySelector<HTMLSelectElement>("dialog select")!;
     await act(async () => { choice.value = "mod"; choice.dispatchEvent(new Event("change", { bubbles: true })); });
     await choose('{"modOptions":{"autoPauseEnabled":false}}');
     expect(container.textContent).toContain("Importing gameplay settings only");
@@ -138,7 +138,7 @@ it("guides individual imports, catches choosing the wrong file, and previews onl
 it.each(["mod", "server", "combined", undefined])("recovers the original config choice for a pending %s import", async (configPart) => {
     sessionStorage.setItem(key, JSON.stringify({ requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt, action: "import-config", fingerprints: ["a".repeat(64)], displayName: "", saveId: status.activeSave!.saveId, ...(configPart ? { configPart } : {}) }));
     await render(); await click("Retry same request");
-    const choice = container.querySelector("dialog select");
+    const choice = container.querySelector<HTMLSelectElement>("dialog select");
     if (configPart === undefined || configPart === "combined") {
         expect(choice).toBeNull();
         expect(container.textContent).toContain("Recovering an earlier import");
