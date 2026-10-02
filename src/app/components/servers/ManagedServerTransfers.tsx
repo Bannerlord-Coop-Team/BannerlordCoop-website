@@ -1,6 +1,7 @@
 "use client";
 
 import { ServerSaveConfigPanels, fileButtonClass } from "./ServerSaveConfigPanels";
+import { ManagedServerCampaigns } from "./ManagedServerCampaigns";
 import { strToU8, zipSync } from "fflate";
 import { Download, Upload, Info, X, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -43,13 +44,13 @@ function saveDownload(bytes: BlobPart, fileName: string) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
-type TransferProps = { userId: string; serverId: string; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean };
+type TransferProps = { userId: string; serverId: string; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean; canManageCampaigns?: boolean };
 
 export function ManagedServerTransfers(props: TransferProps) {
     return <TransferSession key={`${props.userId}:${props.serverId}`} {...props} />;
 }
 
-function TransferSession({ userId, serverId, status, canImportConfig, canEditConfig = false, canExportSave }: TransferProps) {
+function TransferSession({ userId, serverId, status, canImportConfig, canEditConfig = false, canExportSave, canManageCampaigns = false }: TransferProps) {
     const router = useRouter();
     const storageKey = `managed-file-transfer:v1:${userId}:${serverId}`;
     const [ready, setReady] = useState(false);
@@ -238,7 +239,8 @@ function TransferSession({ userId, serverId, status, canImportConfig, canEditCon
                 <button className={buttonClass} disabled={blocked || !canExportSave || !status?.activeSave || !["running", "stopped", "awaiting-save"].includes(status.operationState)} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />Export save</button>
                 <button className={buttonClass} disabled={blocked || !canTransferSave} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />Import save</button>
             </>}
-            saveNotice={<p className="mt-3 text-xs leading-5 text-foreground-muted">Only the server owner can export saves. Export downloads the current campaign’s latest completed save, even while the server is running. Stop the server before adding an imported campaign; your current campaign will stay selected.</p>}
+            saveNotice={<p className="mt-3 text-xs leading-5 text-foreground-muted">Only the server owner can export saves. Export downloads the current campaign’s latest completed save, even while the server is running. Stop the server before adding an imported campaign; it is added to the list below, where you can select it.</p>}
+            campaigns={canManageCampaigns ? <ManagedServerCampaigns userId={userId} serverId={serverId} status={status} /> : undefined}
             configActions={<>
                 <button className={buttonClass} disabled={blocked || !canImportConfig} onClick={() => openImport("import-config")}><Upload aria-hidden className="size-4" />Import config</button>
                 <button className={buttonClass} disabled={blocked} onClick={() => startTransition(async () => {

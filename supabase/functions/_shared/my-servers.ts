@@ -6,6 +6,7 @@ import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseO
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
 import { parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingRegion } from "./server-onboarding-contract.ts";
 import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, requireRunnerConfigurationPart, type RunnerConfigurationMutation, type RunnerConfigurationPart } from "./server-configuration-contract.ts";
+import { MAXIMUM_CAMPAIGN_LIMIT, parseCampaignMutation, parseCampaignPage, parseCampaignResetResult, parseCampaignSelection } from "./server-campaign-contract.ts";
 
 const MAXIMUM_URL_LENGTH = 4_096;
 const MAXIMUM_REQUEST_BYTES = 16 * 1_024;
@@ -43,6 +44,9 @@ type UpstreamRequest =
     | { operation: "request-region"; input: { region: OnboardingRegion } }
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
+    | { operation: "server-saves"; input: { serverId: string; cursor: string | null; limit: number } }
+    | { operation: "select-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string } }
+    | { operation: "reset-campaign"; input: { serverId: string; expectedUpdatedAt: string } }
     | { operation: "server-backup-status"; input: { serverId: string } }
     | { operation: "update-server"; input: { serverId: string; expectedUpdatedAt: string } }
     | {
@@ -100,7 +104,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // Durable mutations must retain the caller's UUID for exactly-once handling.
-            if (upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server") {
+            if (upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server" || upstreamRequest.operation === "select-save" || upstreamRequest.operation === "reset-campaign") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -223,6 +227,9 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
                 if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
                 if (upstreamRequest.operation === "download-save-export") parseOwnerFileDownload(envelope.result);
+                if (upstreamRequest.operation === "server-saves" && parseCampaignPage(envelope.result).serverId !== upstreamRequest.input.serverId) throw new Error("Campaign page belongs to another server");
+                if (upstreamRequest.operation === "select-save" && parseCampaignSelection(envelope.result).serverId !== upstreamRequest.input.serverId) throw new Error("Campaign selection belongs to another server");
+                if (upstreamRequest.operation === "reset-campaign") parseCampaignResetResult(envelope.result);
                 if ((upstreamRequest.operation === "configuration-file" || upstreamRequest.operation === "save-configuration-file")
                     && (!isRecord(envelope.result) || envelope.result.configPart !== upstreamRequest.input.configPart)) {
                     throw new Error("Configuration response belongs to another file");
@@ -313,6 +320,11 @@ function listRequest(request: Request): UpstreamRequest {
         };
     }
 
+    if (resource === "saves") {
+        assertQueryParameters(url, ["cursor", "limit", "resource", "serverId"]);
+        return { operation: "server-saves", input: { serverId: readServerId(url), ...readPageInput(url, MAXIMUM_CAMPAIGN_LIMIT) } };
+    }
+
     if (resource === "update-status") {
         assertQueryParameters(url, ["resource", "serverId"]);
         return { operation: "server-update-status", input: { serverId: readServerId(url) } };
@@ -399,6 +411,12 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "password", "serverId"]) || typeof value.password !== "string" || value.password.length < 1 || value.password.length > 128) throw new Error("Invalid password request");
         assertExpectedUpdatedAt(value.expectedUpdatedAt);
         return { operation: "set-password", input: { serverId: value.serverId as string, expectedUpdatedAt: value.expectedUpdatedAt as string, password: value.password } };
+    }
+    if (value.action === "select-save" || value.action === "reset-campaign") {
+        const parsed = parseCampaignMutation(value);
+        return parsed.action === "select-save"
+            ? { operation: "select-save", input: { serverId: parsed.serverId, saveId: parsed.saveId, expectedUpdatedAt: parsed.expectedUpdatedAt } }
+            : { operation: "reset-campaign", input: { serverId: parsed.serverId, expectedUpdatedAt: parsed.expectedUpdatedAt } };
     }
     if (value.action === "create-backup") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {

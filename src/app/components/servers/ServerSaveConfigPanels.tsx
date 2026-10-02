@@ -6,9 +6,9 @@ import type { ManagedServerConfiguration } from "../../../../supabase/functions/
 
 export { fileButtonClass } from "./server-file-styles";
 
-export function ServerSaveConfigPanels({ saveName, configuration, configAccess, saveActions, configActions, saveNotice, configNotice }: {
+export function ServerSaveConfigPanels({ saveName, configuration, configAccess, saveActions, configActions, saveNotice, configNotice, campaigns }: {
     saveName?: string; configuration?: ManagedServerConfiguration; configAccess?: ConfigAccess; saveActions?: ReactNode; configActions?: ReactNode;
-    saveNotice?: ReactNode; configNotice?: ReactNode;
+    saveNotice?: ReactNode; configNotice?: ReactNode; campaigns?: ReactNode;
 }) {
     return <div className="space-y-5">
         <section aria-labelledby="campaign-save-heading" className="rounded-lg border border-white/10 bg-surface p-5">
@@ -23,6 +23,7 @@ export function ServerSaveConfigPanels({ saveName, configuration, configAccess, 
                 </>}</div>
             </div>
             {saveNotice}
+            {campaigns}
         </section>
         <section aria-labelledby="configuration-heading" className="min-w-0 rounded-lg border border-white/10 bg-surface">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
