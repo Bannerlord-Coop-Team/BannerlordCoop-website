@@ -43,6 +43,7 @@ before(async () => {
     await db.exec(await readFile(new URL("../../migrations/20260919010000_actionable_patreon_retries.sql", import.meta.url), "utf8"));
     await db.exec(await readFile(new URL("../../migrations/202609220001_patreon_allocation_webhooks.sql", import.meta.url), "utf8"));
     await db.exec(await readFile(new URL("../../migrations/202609280006_membership_paid_access_end.sql", import.meta.url), "utf8"));
+    await db.exec(await readFile(new URL("../../migrations/202610020001_membership_allocation_usd20.sql", import.meta.url), "utf8"));
     assert.equal((await metadata()).role, "Standard Server");
     assert.equal((await db.query("select * from public.patreon_accounts")).rows.length, 1);
 });
@@ -447,6 +448,34 @@ test("signed event through the real worker and SQL RPC grants, retains paid-thro
     assert.equal((await metadata()).role, "User");
 });
 
+
+test("USD20 allocation policy pins and funds qualifying evidence while mismatched pairs and drift are refused", async () => {
+    await addUser(); await link(); await apply(false);
+    await db.query(`insert into public.membership_heads(account_id,discord_user_id,patreon_user_id,link_generation,revision,link_state)
+        values ($1,'123456789012345678','123',1,1,'linked') on conflict(account_id) do update
+        set discord_user_id=excluded.discord_user_id,patreon_user_id=excluded.patreon_user_id,
+            link_generation=1,revision=1,link_state='linked'`, [user]);
+    await db.query("update patreon_roles.sync_state set allocation_policy=null where singleton");
+    const usd20 = { campaignId: campaign, qualifyingTierIds: [tier], currency: "USD", minimumCents: 2000, policyVersion: "patreon-paid-usd20-v1" };
+    for (const invalid of [{ minimumCents: 5000 }, { policyVersion: "patreon-paid-usd50-v1" }, { minimumCents: 1000, policyVersion: "patreon-paid-usd10-v1" }]) {
+        await assert.rejects(rpc("acquire", { allocationPolicy: { ...usd20, ...invalid } }), /invalid_allocation_policy/);
+    }
+    await rpc("queue", { memberId: member });
+    const lease = await rpc("acquire", { allocationPolicy: usd20 });
+    assert.ok(lease);
+    assert.equal(lease.allocationPolicyVersion, "patreon-paid-usd20-v1");
+    const job = (lease.jobs as Job[]).find(job => job.memberId === member)!;
+    const fence = (job as Job & { allocationFence: unknown }).allocationFence;
+    const evidence = { verification: "qualifying", campaignId: campaign, memberId: member, tierIds: [tier],
+        verifiedAt: lease.allocationVerifiedAt, paidThroughAt: null, policyVersion: usd20.policyVersion, evidenceSha256: "b".repeat(64) };
+    const applied = await rpc("complete", { token: lease.token, ...job, userId: "123", eligible: true, allocationEvidence: evidence, allocationFence: fence });
+    assert.equal(applied?.applied, true);
+    await rpc("release", { token: lease.token });
+    assert.deepEqual((await db.query<{ evidence: unknown }>("select evidence from public.membership_heads where account_id=$1", [user])).rows[0].evidence, evidence);
+    // The pin now refuses the previous USD50 policy until a reviewed migration re-pins it.
+    await assert.rejects(rpc("acquire", { allocationPolicy: { ...usd20, minimumCents: 5000, policyVersion: "patreon-paid-usd50-v1" } }), /allocation_policy_mismatch/);
+    assert.ok(await rpc("acquire", { allocationPolicy: usd20 }));
+});
 
 test("allocation loss migration accepts bounded explicit evidence and rolls malformed completion back", async () => {
     await addUser(); await link(); await apply(false);
