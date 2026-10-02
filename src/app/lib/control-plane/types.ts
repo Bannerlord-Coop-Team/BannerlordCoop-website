@@ -99,6 +99,8 @@ export type HostingJob = {
 
 export type ReleaseBuild = {
     registryMetadata?: { versionTag: string; clientRevision: string; serverRevision: string };
+    container?: { manifestDigest: string } | null;
+    firstObservedAt?: string;
     currentChannel?: boolean;
     requiredClientModVersion?: string;
     buildId: string;

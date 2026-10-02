@@ -28,6 +28,7 @@ type ManagedServerControlsProps = {
     displayName: string;
     accessRole: "owner" | "manager" | "support" | "admin";
     operationState: string;
+    observedGameState: string;
     expectedUpdatedAt: string;
 };
 
@@ -37,6 +38,7 @@ export function ManagedServerControls({
     displayName,
     accessRole,
     operationState,
+    observedGameState,
     expectedUpdatedAt,
 }: ManagedServerControlsProps) {
     const { t } = useTranslations("managed-server");
@@ -49,10 +51,26 @@ export function ManagedServerControls({
     const [startStatus, setStartStatus] = useState<StartProgressStatus | null>(null);
     const [progressPaused, setProgressPaused] = useState(false);
     const [pollRun, setPollRun] = useState(0);
-    const { session: pollingSession } = useManagedServerPolling();
+    const [stopRevision, setStopRevision] = useState<string | null>(null);
+    const { session: pollingSession, timedOutSession, beginPolling, endPolling } = useManagedServerPolling();
     const canOperate = accessRole === "owner" || accessRole === "manager";
     const displayedState = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision ? "running" : operationState;
     const stateIsTransitional = TRANSITIONAL_STATES.has(displayedState);
+    const trackingStop = stopRevision !== null;
+    const stopCheckPaused = trackingStop && timedOutSession?.serverId === serverId
+        && timedOutSession.statusSource === "server" && timedOutSession.initialUpdatedAt === stopRevision;
+
+    useEffect(() => {
+        if (stopRevision === null || isPending) return;
+        // A completed command is not enough: require a newer, confirmed server observation.
+        if (operationState !== "stopped" || observedGameState !== "stopped" || expectedUpdatedAt <= stopRevision) return;
+        const timeout = setTimeout(() => {
+            setMessage(t("controls.serverStopped"));
+            setStopRevision(null);
+            endPolling(serverId);
+        }, 0);
+        return () => clearTimeout(timeout);
+    }, [serverId, stopRevision, operationState, observedGameState, expectedUpdatedAt, isPending, endPolling, t]);
 
     useEffect(() => {
         if (startJobId === null) return;
@@ -95,13 +113,14 @@ export function ManagedServerControls({
         );
     }
 
-    const busy = isPending || trackingStart || stateIsTransitional || pollingSession !== null;
+    const busy = isPending || trackingStart || trackingStop || stateIsTransitional || pollingSession !== null;
     const canStart = ["stopped", "failed", "degraded"].includes(displayedState);
     const canStop = ["running", "starting", "failed", "degraded"].includes(displayedState);
     const canRestart = ["running", "degraded"].includes(displayedState);
 
     /** Confirms disruptive operations and reports the existing action result. */
     function requestOperation(operation: Operation) {
+        if (busy) return;
         if (operation === "stop" && !window.confirm(
             t("controls.stopDisplaynamePlayersWillBeDisconnectedWithoutASaveFlush", { displayName: displayName }),
         )) return;
@@ -112,7 +131,7 @@ export function ManagedServerControls({
             t("controls.updateDisplaynameNowABackupWillBeTakenFirstIf", { displayName: displayName }),
         )) return;
 
-        setMessage(operation === "start" ? t("controls.sendingYourStartRequest") : "");
+        setMessage(operation === "start" ? t("controls.sendingYourStartRequest") : operation === "stop" ? t("controls.sendingYourStopRequest") : "");
         setStartRevision(expectedUpdatedAt);
         setStartJobId(null);
         setStartStatus(null);
@@ -126,12 +145,22 @@ export function ManagedServerControls({
                     ...(operation === "update-now" ? { expectedUpdatedAt } : {}),
                 });
                 setMessage(result.message);
+                if (operation === "stop" && result.checkStatus) {
+                    setStopRevision(expectedUpdatedAt);
+                    beginPolling(serverId, expectedUpdatedAt);
+                }
                 if (operation === "start" && result.ok) {
                     if (result.operationId) setStartJobId(result.operationId);
                     else setStartStatus({ state: "succeeded", phase: "ready", progress: result.message });
                 }
             } catch {
-                setMessage(t("controls.theCommandCouldNotBeConfirmedItMayHaveExecuted"));
+                if (operation === "stop") {
+                    setMessage(t("controls.checkingWhetherYourServerHasStopped"));
+                    setStopRevision(expectedUpdatedAt);
+                    beginPolling(serverId, expectedUpdatedAt);
+                } else {
+                    setMessage(t("controls.theCommandCouldNotBeConfirmedItMayHaveExecuted"));
+                }
             } finally {
                 setPendingOperation(null);
             }
@@ -152,7 +181,7 @@ export function ManagedServerControls({
                     label={t("controls.stop")}
                     icon={Square}
                     disabled={busy || !canStop}
-                    pending={pendingOperation === "stop"}
+                    pending={pendingOperation === "stop" || (trackingStop && !stopCheckPaused)}
                     onClick={() => requestOperation("stop")}
                 />
                 <ControlButton
@@ -179,7 +208,14 @@ export function ManagedServerControls({
                     onClick={() => { setProgressPaused(false); setPollRun(current => current + 1); }}>
                     {t("controls.resumeProgressUpdates")}</button>
             </div>}
-            {message && (
+            {stopCheckPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted" role="status">
+                <p>{t("controls.stopIsTakingLongerThanExpected")}</p>
+                <button type="button" className="mt-2 min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold"
+                    onClick={() => beginPolling(serverId, stopRevision!)}>
+                    {t("controls.checkStatusAgain")}
+                </button>
+            </div>}
+            {message && !stopCheckPaused && (
                 <p
                     aria-live="polite"
                     className="max-w-xl text-left text-xs leading-5 text-foreground-muted"
@@ -218,7 +254,7 @@ function StartProgress({ status, paused }: { status: StartProgressStatus | null;
 }
 
 /** Owns the owner-only password form in Settings, preserving confirmation and pending guards. */
-export function ManagedServerPassword({ serverId, accessRole, operationState, expectedUpdatedAt }: Omit<ManagedServerControlsProps, "displayName">) {
+export function ManagedServerPassword({ serverId, accessRole, operationState, expectedUpdatedAt }: Omit<ManagedServerControlsProps, "displayName" | "observedGameState">) {
     const { t } = useTranslations("managed-server");
     const [isPending, startTransition] = useTransition();
     const [password, setPassword] = useState("");
