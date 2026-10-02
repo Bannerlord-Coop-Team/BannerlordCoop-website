@@ -54,6 +54,18 @@ Both pages use one freshly verified and mapped registry observation, retaining
 independent null cursors, current-first ordering and limit100 per channel. GHCR
 discovery has a global100-version bound; aliases mark matching versions without
 adding rows, so these pages cover the full current catalog. Errors remain visible.
+The Releases view records each verified channel/image digest's first observation in
+`public.release_observations` after its authorized catalog read. The Releases page
+shows **First observed** from that immutable display timestamp, rather than the
+control plane's request observation time. Reloads, alias changes and website
+restarts retain it; a replacement image digest receives a new timestamp. These
+records never supply release availability, authorization or deployment selection.
+Apply `202610020003_release_first_observations.sql` before deploying this UI. The
+migration seeds the earliest retained observation from verified registry deployment
+records; the website does not read private control-plane tables at runtime. Dates
+discarded before this table existed cannot be reconstructed; other images receive
+their first retained date when next viewed in Releases. Browser roles have no table access,
+and the website service role may only select and insert these records.
 Deploy the companion ControlPlane #266 operation before switching this website;
 older backends reject it without a fallback. Browser `builds` reads and all
 mutations retain their existing Edge contract.
