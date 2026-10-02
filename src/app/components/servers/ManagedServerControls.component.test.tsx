@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
@@ -40,8 +42,8 @@ it.each([
     const container = document.createElement("div");
     const root = createRoot(container);
     try {
-        await act(async () => root.render(<ManagedServerControls serverId={serverId} displayName="Campaign"
-            accessRole="owner" operationState="stopped" expectedUpdatedAt="2026-09-20T12:00:00.000Z" />));
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls serverId={serverId} displayName="Campaign"
+            accessRole="owner" operationState="stopped" expectedUpdatedAt="2026-09-20T12:00:00.000Z" />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain(message);
         expect(container.querySelector('input[type="password"]')).toBeNull();
@@ -65,8 +67,8 @@ it("warns that direct Stop/Restart can lose unsaved progress and respects cancel
     const container = document.createElement("div");
     const root = createRoot(container);
     try {
-        await act(async () => root.render(<ManagedServerControls serverId="22222222-2222-4222-8222-222222222222"
-            displayName="Campaign" accessRole="owner" operationState="running" expectedUpdatedAt="2026-09-20T12:00:00.000Z" />));
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls serverId="22222222-2222-4222-8222-222222222222"
+            displayName="Campaign" accessRole="owner" operationState="running" expectedUpdatedAt="2026-09-20T12:00:00.000Z" />} </TestLocalization>));
         for (const index of [1, 2]) {
             await act(async () => container.querySelectorAll("button")[index].click());
             expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("Unsaved progress may be lost"));
@@ -87,9 +89,9 @@ it("confirms and queues an immediate update with the displayed server revision",
     const container = document.createElement("div");
     const root = createRoot(container);
     try {
-        await act(async () => root.render(<ManagedServerControls serverId="22222222-2222-4222-8222-222222222222"
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls serverId="22222222-2222-4222-8222-222222222222"
             displayName="Campaign" accessRole="owner" operationState="running"
-            expectedUpdatedAt="2026-09-20T12:00:00.000Z" />));
+            expectedUpdatedAt="2026-09-20T12:00:00.000Z" />} </TestLocalization>));
         await act(async () => container.querySelectorAll("button")[3].click());
         expect(confirm).toHaveBeenCalledWith(expect.stringContaining("backup will be taken first"));
         expect(requestUpdate).toHaveBeenCalledWith("token", {
@@ -109,7 +111,7 @@ it("sets a private website password once and clears the input", async () => {
     const container = document.createElement("div"); const root = createRoot(container);
     const serverId = "22222222-2222-4222-8222-222222222222";
     try {
-        await act(async () => root.render(<ManagedServerPassword serverId={serverId} accessRole="owner" operationState="stopped" expectedUpdatedAt="2026-09-28T00:00:00.000Z" />));
+        await act(async () => root.render(<TestLocalization>{<ManagedServerPassword serverId={serverId} accessRole="owner" operationState="stopped" expectedUpdatedAt="2026-09-28T00:00:00.000Z" />} </TestLocalization>));
         const input = container.querySelector<HTMLInputElement>('input[type="password"]')!;
         await act(async () => {
             Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Private-fixture-password");
@@ -131,7 +133,7 @@ it.each([false, true])("handles password delivery rejection or cancelled restart
     const container = document.createElement("div"); const root = createRoot(container);
     const serverId = "22222222-2222-4222-8222-222222222222";
     try {
-        await act(async () => root.render(<ManagedServerPassword serverId={serverId} accessRole="owner" operationState={cancelled ? "running" : "stopped"} expectedUpdatedAt="2026-09-28T00:00:00.000Z" />));
+        await act(async () => root.render(<TestLocalization>{<ManagedServerPassword serverId={serverId} accessRole="owner" operationState={cancelled ? "running" : "stopped"} expectedUpdatedAt="2026-09-28T00:00:00.000Z" />} </TestLocalization>));
         const input = container.querySelector<HTMLInputElement>('input[type="password"]')!;
         await act(async () => {
             Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Private-fixture-password");
@@ -162,7 +164,7 @@ it("does not expose password settings to a manager", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     try {
-        await act(async () => root.render(<ManagedServerPassword serverId="22222222-2222-4222-8222-222222222222" accessRole="manager" operationState="running" expectedUpdatedAt="2026-09-28T00:00:00.000Z" />));
+        await act(async () => root.render(<TestLocalization>{<ManagedServerPassword serverId="22222222-2222-4222-8222-222222222222" accessRole="manager" operationState="running" expectedUpdatedAt="2026-09-28T00:00:00.000Z" />} </TestLocalization>));
         expect(container.querySelector("form")).toBeNull();
     } finally { await act(async () => root.unmount()); }
 });
@@ -185,7 +187,7 @@ it("follows the accepted Start through real phases and readiness without sending
         .mockResolvedValue(progress("ready", "succeeded", "Server started and ready to join."));
     const container = document.createElement("div"); const root = createRoot(container);
     try {
-        await act(async () => root.render(<ManagedServerControls {...progressProps} />));
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls {...progressProps} />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain("Creating a safe restore point");
         expect(container.querySelectorAll("ol li")).toHaveLength(5);
@@ -203,7 +205,7 @@ it("follows the accepted Start through real phases and readiness without sending
         expect(router.refresh).toHaveBeenCalled();
         expect(container.querySelectorAll("button")[0].disabled).toBe(true);
         expect(container.querySelectorAll("button")[1].disabled).toBe(false);
-        await act(async () => root.render(<ManagedServerControls {...progressProps} operationState="stopped" expectedUpdatedAt="2026-09-20T12:01:00.000Z" />));
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls {...progressProps} operationState="stopped" expectedUpdatedAt="2026-09-20T12:01:00.000Z" />} </TestLocalization>));
         expect(container.querySelectorAll("button")[0].disabled).toBe(false);
     } finally { await act(async () => root.unmount()); }
 });
@@ -215,7 +217,7 @@ it.each(["failed", "cancelled"])("stops following a %s Start without claiming re
     startStatus.mockReset().mockResolvedValue(progress("starting", state));
     const container = document.createElement("div"); const root = createRoot(container);
     try {
-        await act(async () => root.render(<ManagedServerControls {...progressProps} />));
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls {...progressProps} />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain(state === "failed" ? "Server could not start" : "Start cancelled");
         expect(container.textContent).not.toContain("Your server is ready to join");
@@ -234,7 +236,7 @@ it("reconnects progress reads, shows retry wait, and resumes the same job after 
         .mockResolvedValue(progress("starting", "retry-wait", "Loading your campaign"));
     const container = document.createElement("div"); const root = createRoot(container);
     try {
-        await act(async () => root.render(<ManagedServerControls {...progressProps} />));
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls {...progressProps} />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain("Reconnecting to server progress");
         expect(container.textContent).not.toContain("private transport details");
@@ -256,7 +258,7 @@ it("cleans up progress reads when the controls unmount", async () => {
     request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
     startStatus.mockReset().mockResolvedValue(progress("starting"));
     const container = document.createElement("div"); const root = createRoot(container);
-    await act(async () => root.render(<ManagedServerControls {...progressProps} />));
+    await act(async () => root.render(<TestLocalization>{<ManagedServerControls {...progressProps} />} </TestLocalization>));
     await act(async () => container.querySelector("button")!.click());
     await act(async () => root.unmount());
     await vi.advanceTimersByTimeAsync(10_000);
@@ -269,7 +271,7 @@ it("shows progress immediately while the Start response is still pending", async
     request.mockReset().mockImplementation(() => new Promise<void>(resolve => { complete = resolve; }));
     const container = document.createElement("div"); const root = createRoot(container);
     try {
-        await act(async () => root.render(<ManagedServerControls {...progressProps} />));
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls {...progressProps} />} </TestLocalization>));
         await act(async () => { container.querySelector("button")!.click(); });
         expect(container.textContent).toContain("Starting your server");
         expect(container.textContent).toContain("Sending your Start request");
@@ -286,7 +288,7 @@ it("pauses progress after access is revoked and keeps readiness unconfirmed", as
     startStatus.mockReset().mockRejectedValue(new MyServersApiError("forbidden", "Private authority details"));
     const container = document.createElement("div"); const root = createRoot(container);
     try {
-        await act(async () => root.render(<ManagedServerControls {...progressProps} />));
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls {...progressProps} />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain("Your server access could not be confirmed");
         expect(container.textContent).toContain("Readiness has not been confirmed");
@@ -296,3 +298,10 @@ it("pauses progress after access is revoked and keeps readiness unconfirmed", as
         expect(startStatus).toHaveBeenCalledTimes(1);
     } finally { await act(async () => root.unmount()); }
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

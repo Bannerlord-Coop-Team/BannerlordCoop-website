@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -92,9 +94,9 @@ async function render(
     loadError?: string,
 ) {
     await act(async () => root.render(
-        <ManagedServerPollingProvider>
+        <TestLocalization>{<ManagedServerPollingProvider>
             <ManagedServerBackups userId={userId} server={currentServer} backups={backups} status={status} loadError={loadError} />
-        </ManagedServerPollingProvider>,
+        </ManagedServerPollingProvider>} </TestLocalization>,
     ));
     await advance(0);
 }
@@ -245,9 +247,9 @@ describe("ManagedServerBackups session recovery", () => {
         });
         await render();
         router.refresh.mockImplementationOnce(() => root.render(
-            removal === "managed-only redirect"
+            <TestLocalization>{removal === "managed-only redirect"
                 ? <p>Server directory after inventory failure</p>
-                : <ManagedServerPollingProvider><p>Live console without managed inventory</p></ManagedServerPollingProvider>,
+                : <ManagedServerPollingProvider><p>Live console without managed inventory</p></ManagedServerPollingProvider>} </TestLocalization>,
         ));
         await click("Restore save");
         const original = request.mock.calls[0];
@@ -269,9 +271,9 @@ describe("ManagedServerBackups session recovery", () => {
 
     it("gates mutations before rehydration", async () => {
         await act(async () => root.render(
-            <ManagedServerPollingProvider>
+            <TestLocalization>{<ManagedServerPollingProvider>
                 <ManagedServerBackups userId="user" server={server} backups={[backup]} status={null} />
-            </ManagedServerPollingProvider>,
+            </ManagedServerPollingProvider>} </TestLocalization>,
         ));
         expect(button("Create backup").disabled).toBe(true);
         expect(button("Restore save").disabled).toBe(true);
@@ -301,7 +303,7 @@ describe("ManagedServerBackups session recovery", () => {
         request.mockRejectedValueOnce(new Error("Accepted response lost"));
         await render();
         await click("Restore save");
-        await act(async () => root.render(null));
+        await act(async () => root.render(<TestLocalization>{null} </TestLocalization>));
         await render(null, [backup], access === "load-error" ? server : { ...server, accessRole: access as "support" | "admin" },
             "user", access === "load-error" ? "Backup access unavailable" : undefined);
         expect(button("Retry pending request").disabled).toBe(true);
@@ -333,7 +335,7 @@ describe("ManagedServerBackups session recovery", () => {
         await render();
         await click("Restore save");
         const stored = window.sessionStorage.getItem(intentKey);
-        await act(async () => root.render(null));
+        await act(async () => root.render(<TestLocalization>{null} </TestLocalization>));
         await render();
         request.mockRejectedValueOnce(new MyServersApiError("access_denied", "Access removed"));
         await click("Retry pending request");
@@ -346,7 +348,7 @@ describe("ManagedServerBackups session recovery", () => {
         await render();
         await click("Restore save");
         expect(window.sessionStorage.getItem(intentKey)).toBeNull();
-        await act(async () => root.render(null));
+        await act(async () => root.render(<TestLocalization>{null} </TestLocalization>));
         await render();
         expect(container.textContent).not.toContain("Retry pending request");
         expect(button("Restore save").disabled).toBe(false);
@@ -394,7 +396,7 @@ describe("ManagedServerBackups stale authenticated page recovery", () => {
         expect(window.sessionStorage.getItem(intentKey)).toBe(stored);
         expect(container.textContent).toContain("unconfirmed outcome");
 
-        await act(async () => root.render(null));
+        await act(async () => root.render(<TestLocalization>{null} </TestLocalization>));
         await render(null, [], { ...server, updatedAt: "2026-09-02T16:00:00.000Z" });
         request.mockResolvedValueOnce({ outcome: "existing", jobId: activeStatus.job!.jobId, action: "restore" });
         await click("Retry pending request");
@@ -428,3 +430,10 @@ it.each([
     expect(button("Restore save").title).toContain(message);
     expect(container.textContent).toContain(message);
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { beforeEach, expect, it, vi } from "vitest";
 import { readManagedServerConfig, saveManagedServerConfig } from "./managed-server-config-actions";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
@@ -47,3 +49,10 @@ it("maps conflicts to reload guidance and keeps unconfirmed failures retryable",
     mocks.read.mockRejectedValueOnce(new MyServersApiError("agent_target_unavailable", "No runner"));
     expect(await readManagedServerConfig(id, "mod", "owner")).toMatchObject({ ok: false, message: expect.stringContaining("no active runner") });
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -27,7 +29,7 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
 
 async function render(props: Parameters<typeof ManagedServerConfigEditor>[0] = { configuration: config, access }) {
-    await act(async () => root.render(<ManagedServerConfigEditor {...props} />));
+    await act(async () => root.render(<TestLocalization>{<ManagedServerConfigEditor {...props} />} </TestLocalization>));
     await act(async () => {});
 }
 function button(label: string) { const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label); if (!found) throw Error(`Missing button ${label}`); return found; }
@@ -137,3 +139,10 @@ it("shows the stored configuration read-only without access and reports a failed
     expect(button("Form").disabled).toBe(true);
     expect(button("JSON").disabled).toBe(true);
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

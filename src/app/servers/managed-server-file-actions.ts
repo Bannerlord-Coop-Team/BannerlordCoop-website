@@ -1,5 +1,7 @@
 "use server";
 
+import { getTranslations } from "@/app/lib/localization/server";
+
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { getMyServerFiles, getMyServerFileResult, submitMyServerFile, downloadMyServerSave } from "@/app/lib/hosting/server-files";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
@@ -7,6 +9,7 @@ import { MAXIMUM_WEB_SAVE_BYTES, MAXIMUM_WEB_CONFIG_BYTES, parseOwnerFileMutatio
 import { readConfigurationFile } from "../../../supabase/functions/_shared/configuration-file-import";
 import { revalidatePath } from "next/cache";
 
+// Binds the existing operation to the authenticated page account.
 async function currentToken(expectedUserId: string) {
     const supabase = await getSupabaseServerClient();
     const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
@@ -14,23 +17,26 @@ async function currentToken(expectedUserId: string) {
     return session.access_token;
 }
 
-function failure(error: unknown, notSubmitted = false) {
+// Localizes existing action-specific failure codes without exposing internal errors.
+async function failure(error: unknown, notSubmitted = false) {
+    const { t } = await getTranslations("managed-server");
     const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
     const messages: Record<string, string> = {
-        stale_interaction: "The server changed. Refresh before starting a new transfer.",
-        safe_stop_required: "Stop the server before adding an imported campaign. Export does not require stopping.",
-        server_not_found: "This server is unavailable or your access changed.",
-        invalid_request: "The file was rejected. Check the format and try again.",
-        request_conflict: "This request conflicts with another operation. Check its status before trying again.",
-        export_not_ready: "The save export is still being prepared.",
-        export_unavailable: "The export is unavailable. Check its status and try again.",
+        stale_interaction: t("action.file.theServerChangedRefreshBeforeStartingANewTransfer"),
+        safe_stop_required: t("action.file.stopTheServerBeforeAddingAnImportedCampaignExportDoes"),
+        server_not_found: t("action.file.thisServerIsUnavailableOrYourAccessChanged"),
+        invalid_request: t("action.file.theFileWasRejectedCheckTheFormatAndTryAgain"),
+        request_conflict: t("action.file.thisRequestConflictsWithAnotherOperationCheckItsStatusBefore"),
+        export_not_ready: t("action.file.theSaveExportIsStillBeingPrepared"),
+        export_unavailable: t("action.file.theExportIsUnavailableCheckItsStatusAndTryAgain"),
     };
     return { ok: false as const, notSubmitted,
         rejected: !notSubmitted && ["stale_interaction", "safe_stop_required", "operation_unavailable"].includes(code),
-        message: notSubmitted ? "The transfer was not sent. Check your files and campaign name, refresh the page, and try again."
-            : messages[code] ?? "The transfer outcome could not be confirmed. Check its status or retry the same request." };
+        message: notSubmitted ? t("action.file.theTransferWasNotSentCheckYourFilesAndCampaign")
+            : messages[code] ?? t("action.file.theTransferOutcomeCouldNotBeConfirmedCheckItsStatus") };
 }
 
+// Authenticates and validates transfers while preserving original file bytes.
 export async function submitManagedServerFile(form: FormData, expectedUserId: string) {
     let submissionStarted = false;
     try {
@@ -59,27 +65,30 @@ export async function submitManagedServerFile(form: FormData, expectedUserId: st
         const result = await submitMyServerFile(token, requestId, mutation);
         revalidatePath(`/servers/${String(common.serverId)}`);
         return { ok: true as const, result };
-    } catch (error) { return failure(error, !submissionStarted); }
+    } catch (error) { return await failure(error, !submissionStarted); }
 }
 
+// Reads the retained transfer under the existing authentication guard.
 export async function checkManagedServerFile(serverId: string, requestId: string, expectedUserId: string) {
     try {
         requireUuid(serverId); requireUuid(requestId);
         return { ok: true as const, result: await getMyServerFileResult(await currentToken(expectedUserId), serverId, requestId) };
-    } catch (error) { return failure(error); }
+    } catch (error) { return await failure(error); }
 }
 
+// Exports original configuration through the existing authorized operation.
 export async function exportManagedServerConfig(serverId: string, expectedUserId: string) {
     try {
         requireUuid(serverId);
         const files = await getMyServerFiles(await currentToken(expectedUserId), serverId);
         return { ok: true as const, managedConfig: files.managedConfig };
-    } catch (error) { return failure(error); }
+    } catch (error) { return await failure(error); }
 }
 
+// Fetches the original save download under the existing authentication guard.
 export async function downloadManagedServerSave(serverId: string, requestId: string, expectedUserId: string) {
     try {
         requireUuid(serverId); requireUuid(requestId);
         return { ok: true as const, download: await downloadMyServerSave(await currentToken(expectedUserId), serverId, requestId) };
-    } catch (error) { return failure(error); }
+    } catch (error) { return await failure(error); }
 }

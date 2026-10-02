@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { beforeEach, expect, it, vi } from "vitest";
 import { submitManagedConsoleCommand, checkManagedConsoleCommand, acknowledgeManagedConsoleCommand } from "./managed-server-console-actions";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
@@ -34,3 +36,10 @@ it("rejects a malformed command before dispatch", async () => {
     expect(await submitManagedConsoleCommand({ ...input, command: "coop.help; stop" }, requestId, "owner")).toMatchObject({ ok: false, notSubmitted: true });
     expect(mocks.submit).not.toHaveBeenCalled();
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

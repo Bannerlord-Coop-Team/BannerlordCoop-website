@@ -55,6 +55,7 @@ export type ServerLogDownloadMessages = {
     unavailable: string;
     incomplete: string;
     invalid: string;
+    endpoint?: Parameters<typeof myServersEndpoint>[0];
 };
 
 const defaultLogMessages: ServerLogDownloadMessages = {
@@ -67,7 +68,7 @@ const defaultLogMessages: ServerLogDownloadMessages = {
 
 // Downloads directly in the browser with injected diagnostics, retaining transport and byte validation.
 export async function downloadMyServerLog(accessToken: string, serverId: string, messages: ServerLogDownloadMessages = defaultLogMessages) {
-    const { endpoint, publishableKey } = myServersEndpoint();
+    const { endpoint, publishableKey } = myServersEndpoint(messages.endpoint);
     endpoint.searchParams.set("resource", "download-server-log");
     endpoint.searchParams.set("serverId", serverId);
     const response = await fetch(endpoint, {

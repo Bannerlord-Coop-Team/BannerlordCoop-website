@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,7 +25,7 @@ describe("copy server address", () => {
         const writeText = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
         vi.stubGlobal("navigator", { clipboard: { writeText } });
         const onCopied = vi.fn();
-        await act(async () => root.render(<CopyJoinButton address="203.0.113.10:7210" onCopied={onCopied} />));
+        await act(async () => root.render(<TestLocalization>{<CopyJoinButton address="203.0.113.10:7210" onCopied={onCopied} />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(writeText).toHaveBeenCalledWith("203.0.113.10:7210");
         expect(onCopied).not.toHaveBeenCalled();
@@ -38,7 +40,7 @@ describe("copy server address", () => {
             ? { clipboard: { writeText: vi.fn().mockRejectedValue(new Error("Denied")) } }
             : {});
         const onCopied = vi.fn();
-        await act(async () => root.render(<CopyJoinButton address="203.0.113.10:7210" onCopied={onCopied} />));
+        await act(async () => root.render(<TestLocalization>{<CopyJoinButton address="203.0.113.10:7210" onCopied={onCopied} />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(container.querySelector('[role="status"]')?.textContent).toContain("Copy manually: 203.0.113.10:7210");
         expect(onCopied).not.toHaveBeenCalled();
@@ -47,10 +49,17 @@ describe("copy server address", () => {
     it("does not copy missing or offline endpoints", async () => {
         const writeText = vi.fn();
         vi.stubGlobal("navigator", { clipboard: { writeText } });
-        await act(async () => root.render(<CopyJoinButton address={null} />));
+        await act(async () => root.render(<TestLocalization>{<CopyJoinButton address={null} />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
-        await act(async () => root.render(<CopyJoinButton address="203.0.113.10:7210" disabled />));
+        await act(async () => root.render(<TestLocalization>{<CopyJoinButton address="203.0.113.10:7210" disabled />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(writeText).not.toHaveBeenCalled();
     });
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

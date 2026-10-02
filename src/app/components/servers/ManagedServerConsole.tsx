@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
+
 import { Fragment, useEffect, useState } from "react";
 
 const MAXIMUM_TEXT_CHARACTERS = 128 * 1_024;
@@ -7,15 +9,6 @@ const MAXIMUM_LINES = 2_000;
 const MAXIMUM_SSE_FRAME_BYTES = 16 * 1_024;
 
 type ConsoleState = "disconnected" | "connecting" | "connected" | "expired" | "truncated" | "unavailable";
-
-const consoleStateMessages: Record<ConsoleState, string> = {
-    connecting: "Connecting to live output…",
-    connected: "No live output.",
-    disconnected: "Console disconnected. Reload the page to reconnect.",
-    expired: "Console session expired. Reload the page to reconnect.",
-    truncated: "Console output was truncated. Reload the page to reconnect.",
-    unavailable: "Console output is unavailable. Reload the page to try again.",
-};
 
 /** Recognizes only complete managed-command records; other stdout stays untouched. */
 function parseManagedCommand(line: string): { ok: boolean; output: string } | null {
@@ -40,17 +33,28 @@ function highlightCommandOutput(output: string) {
 
 /** Renders stdout in order, replacing recognized command envelopes with styled output. */
 function ConsoleLines({ text }: { text: string }) {
+    const { t } = useTranslations("managed-server");
     const lines = text.split("\n");
     return lines.map((line, index) => {
         const command = parseManagedCommand(line);
         const ending = index < lines.length - 1 ? "\n" : "";
         if (!command) return <Fragment key={index}>{line}{ending}</Fragment>;
-        return <span key={index} role="group" aria-label={command.ok ? "Command output" : "Command error"} className={`my-2 block border-l-2 py-2 pr-3 pl-4 ${command.ok ? "border-gold/60 bg-gold/5" : "border-red-400/60 bg-red-400/5 text-red-200"}`}>{highlightCommandOutput(command.output)}{ending}</span>;
+        return <span key={index} role="group" aria-label={command.ok ? t("console.commandOutput") : t("console.commandError")} className={`my-2 block border-l-2 py-2 pr-3 pl-4 ${command.ok ? "border-gold/60 bg-gold/5" : "border-red-400/60 bg-red-400/5 text-red-200"}`}>{highlightCommandOutput(command.output)}{ending}</span>;
     });
 }
 
 /** Streams bounded output and displays command delivery errors within the same console. */
 export function ManagedServerConsole({ serverId, commandError = "" }: { serverId: string; commandError?: string }) {
+    const { t } = useTranslations("managed-server");
+    const consoleStateMessages: Record<ConsoleState, string> = {
+        connecting: t("console.connectingToLiveOutput"),
+        connected: t("console.noLiveOutput"),
+        disconnected: t("console.consoleDisconnectedReloadThePageToReconnect"),
+        expired: t("console.consoleSessionExpiredReloadThePageToReconnect"),
+        truncated: t("console.consoleOutputWasTruncatedReloadThePageToReconnect"),
+        unavailable: t("console.consoleOutputIsUnavailableReloadThePageToTryAgain"),
+    };
+
     const [state, setState] = useState<ConsoleState>("connecting");
     const [text, setText] = useState("");
     useEffect(() => {
@@ -102,12 +106,13 @@ export function ManagedServerConsole({ serverId, commandError = "" }: { serverId
 
     return (
         <div>
-            <p id="console-stream-help" className="sr-only">Current-run output connects automatically. Nothing is saved, and sessions expire after five minutes.</p>
-            <pre aria-label="Live game console output" aria-describedby="console-stream-help" tabIndex={0} className="h-64 overflow-auto whitespace-pre-wrap break-words bg-background p-4 font-mono text-[13px] leading-6 text-foreground outline-gold sm:h-[min(44vh,28rem)] sm:min-h-64">{text ? <ConsoleLines text={text} /> : consoleStateMessages[state]}{text && state !== "connected" ? `\n${consoleStateMessages[state]}` : ""}{commandError && <span role="alert" className="mt-2 block text-red-200">{commandError}</span>}</pre>
+            <p id="console-stream-help" className="sr-only">{t("console.currentRunOutputConnectsAutomaticallyNothingIsSavedAndSessions")}</p>
+            <pre aria-label={t("console.liveGameConsoleOutput")} aria-describedby="console-stream-help" tabIndex={0} className="h-64 overflow-auto whitespace-pre-wrap break-words bg-background p-4 font-mono text-[13px] leading-6 text-foreground outline-gold sm:h-[min(44vh,28rem)] sm:min-h-64">{text ? <ConsoleLines text={text} /> : consoleStateMessages[state]}{text && state !== "connected" ? `\n${consoleStateMessages[state]}` : ""}{commandError && <span role="alert" className="mt-2 block text-red-200">{commandError}</span>}</pre>
         </div>
     );
 }
 
+// Bounds retained console output without modifying command syntax.
 export function boundedConsoleText(current: string, line: string): string {
     const combined = `${current}${line}\n`;
     const lines = combined.split("\n");
@@ -117,6 +122,7 @@ export function boundedConsoleText(current: string, line: string): string {
         : lineBounded;
 }
 
+// Decodes complete bounded console events while retaining partial frames.
 export function decodeConsoleStreamChunk(
     previous: string,
     chunk: Uint8Array | undefined,
@@ -138,6 +144,7 @@ export function decodeConsoleStreamChunk(
     return { pending, events };
 }
 
+// Parses the existing event contract without translating server output.
 export function parseConsoleEvent(frame: string): { type: "line"; text: string } | { type: "truncated" | "expired" | "ended" | "ignored" } {
     let type = "message";
     let data = "";

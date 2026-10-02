@@ -1,11 +1,15 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
+
 import { renameLiveServer } from "@/app/servers/name-actions";
 import { Check, LoaderCircle, Pencil, X } from "lucide-react";
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 
+// Presents rename form submission state.
 function SaveButton() {
+    const { t } = useTranslations("managed-server");
     const { pending } = useFormStatus();
 
     return (
@@ -19,11 +23,11 @@ function SaveButton() {
             ) : (
                 <Check aria-hidden="true" className="size-4" />
             )}
-            Save
-        </button>
+            {t("editableServerName.save")}</button>
     );
 }
 
+// Presents authorized server renaming while retaining actual user-provided names.
 export function EditableServerName({
     canEdit,
     initialName,
@@ -33,10 +37,12 @@ export function EditableServerName({
     initialName: string;
     serverId: string;
 }) {
+    const { t } = useTranslations("managed-server");
     const [displayName, setDisplayName] = useState(initialName);
     const [editing, setEditing] = useState(false);
     const [error, setError] = useState("");
 
+    // Submits the unchanged rename form and reports its result.
     async function saveName(formData: FormData) {
         setError("");
         const result = await renameLiveServer(formData);
@@ -65,8 +71,8 @@ export function EditableServerName({
                                 setError("");
                                 setEditing(true);
                             }}
-                            aria-label={`Edit ${displayName} server name`}
-                            title="Edit server name"
+                            aria-label={t("editableServerName.editDisplaynameServerName", { displayName: displayName })}
+                            title={t("editableServerName.editServerName")}
                             className="inline-flex size-10 shrink-0 items-center justify-center rounded-sm border border-white/15 bg-surface text-foreground-muted transition-colors hover:border-gold/40 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                         >
                             <Pencil aria-hidden="true" className="size-4" />
@@ -79,8 +85,7 @@ export function EditableServerName({
                 <form action={saveName} className="max-w-3xl">
                     <input type="hidden" name="serverId" value={serverId} />
                     <label htmlFor={`server-name-${serverId}`} className="sr-only">
-                        Server name
-                    </label>
+                        {t("editableServerName.serverName")}</label>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                         <input
                             id={`server-name-${serverId}`}
@@ -103,8 +108,7 @@ export function EditableServerName({
                                 className="inline-flex min-h-10 items-center justify-center gap-2 rounded-sm border border-white/15 bg-background px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground-muted transition-colors hover:border-white/25 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                             >
                                 <X aria-hidden="true" className="size-4" />
-                                Cancel
-                            </button>
+                                {t("editableServerName.cancel")}</button>
                         </div>
                     </div>
                 </form>

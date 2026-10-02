@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
@@ -33,7 +35,7 @@ async function select() {
 }
 /** Mounts the console with its lifecycle controls as provided by the page. */
 async function mount(overrides: Partial<MyServerSummary> = {}) {
-    await act(async () => root.render(<ManagedServerCommands server={{ ...server, ...overrides }} userId="owner-id" controls={<p>Lifecycle controls</p>} />));
+    await act(async () => root.render(<TestLocalization>{<ManagedServerCommands server={{ ...server, ...overrides }} userId="owner-id" controls={<p>Lifecycle controls</p>} />} </TestLocalization>));
 }
 
 it("offers only coop cheats, inserts without sending, and sends without a confirmation popup", async () => {
@@ -204,3 +206,10 @@ it.each([{ accessRole: "support" as const }, { operationState: "stopped" as cons
     expect([...container.querySelectorAll<HTMLButtonElement>("aside li button")].every(button => button.disabled)).toBe(true);
     expect(mocks.submit).not.toHaveBeenCalled();
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

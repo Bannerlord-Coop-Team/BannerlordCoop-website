@@ -36,9 +36,9 @@ export function releaseVersion(build: ReleaseBuild) {
 }
 
 /** Displays channel names without changing their transport values. */
-export function releaseChannelLabel(channel: string) {
-    if (channel === "stable") return "Public";
-    if (channel === "nightly") return "Nightly";
+export function releaseChannelLabel(channel: string, labels = { stable: "Public", nightly: "Nightly" }) {
+    if (channel === "stable") return labels.stable;
+    if (channel === "nightly") return labels.nightly;
     return channel;
 }
 

@@ -1,5 +1,7 @@
 "use server";
 
+import { getTranslations } from "@/app/lib/localization/server";
+
 import {
     MyServersApiError,
     requestMyServerOperation,
@@ -16,9 +18,11 @@ const OPERATIONS = new Set<MyServerOperation>(["start", "stop", "restart-game"])
 
 export type ManagedServerActionResult = { ok: boolean; message: string; operationId?: string };
 
+// Authenticates and submits lifecycle operations with localized result presentation.
 export async function operateManagedServer(input: unknown): Promise<ManagedServerActionResult> {
+    const { t } = await getTranslations("managed-server");
     const parsed = parseOperation(input);
-    if (parsed === null) return { ok: false, message: "The server operation is invalid." };
+    if (parsed === null) return { ok: false, message: t("action.actions.theServerOperationIsInvalid") };
 
     let accessToken: string | null = null;
     try {
@@ -28,14 +32,14 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             supabase.auth.getSession(),
         ]);
         if (userData.user === null) {
-            return { ok: false, message: "Please sign in again before controlling this server." };
+            return { ok: false, message: t("action.actions.pleaseSignInAgainBeforeControllingThisServer") };
         }
         accessToken = sessionData.session?.access_token ?? null;
     } catch {
-        return { ok: false, message: "Your authenticated server session is unavailable." };
+        return { ok: false, message: t("action.actions.yourAuthenticatedServerSessionIsUnavailable") };
     }
     if (accessToken === null) {
-        return { ok: false, message: "Please sign in again before controlling this server." };
+        return { ok: false, message: t("action.actions.pleaseSignInAgainBeforeControllingThisServer") };
     }
 
     try {
@@ -46,42 +50,43 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             }, crypto.randomUUID());
             revalidatePath("/servers");
             return { ok: true, message: update.outcome === "existing"
-                ? "An update is already queued for this server."
-                : "Update queued. A backup will be taken before the selected release is installed." };
+                ? t("action.actions.anUpdateIsAlreadyQueuedForThisServer")
+                : t("action.actions.updateQueuedABackupWillBeTakenBeforeTheSelected") };
         } else {
             await requestMyServerOperation(accessToken, parsed);
         }
         revalidatePath("/servers");
-        if (parsed.action === "start") return { ok: true, message: "Server started and game readiness confirmed." };
-        return { ok: true, message: `${operationLabel(parsed.action)} command exited successfully (code 0). This does not confirm game readiness.` };
+        if (parsed.action === "start") return { ok: true, message: t("action.actions.serverStartedAndGameReadinessConfirmed") };
+        return { ok: true, message: t("operation.operationCommandExitedSuccessfullyCode0ThisDoesNotConfirm", { operation: operationLabel(parsed.action, t) }) };
     } catch (error) {
         revalidatePath("/servers");
         const code = error instanceof MyServersApiError ? error.code : "operation_failed";
         if (code === "server_not_found") {
-            return { ok: false, message: "This server is unavailable or your access was removed." };
+            return { ok: false, message: t("action.actions.thisServerIsUnavailableOrYourAccessWasRemoved") };
         }
         if (code === "container_command_failed" && error instanceof MyServersApiError) {
             return { ok: false, message: error.message };
         }
         if (parsed.action === "start" && code === "operation_timeout"
             && error instanceof MyServersApiError && error.operationId !== undefined) {
-            return { ok: true, operationId: error.operationId, message: "Start accepted. Following your server’s progress…" };
+            return { ok: true, operationId: error.operationId, message: t("action.actions.startAcceptedFollowingYourServerSProgress") };
         }
         if (parsed.action === "update-now") {
             if (code === "stale_interaction") {
-                return { ok: false, message: "Server status changed. Refresh the page, then try Update now again." };
+                return { ok: false, message: t("action.actions.serverStatusChangedRefreshThePageThenTryUpdateNow") };
             }
             if (code === "no_update_available") {
-                return { ok: false, message: "This server already has its selected release." };
+                return { ok: false, message: t("action.actions.thisServerAlreadyHasItsSelectedRelease") };
             }
             if (code === "validated_build_unavailable") {
-                return { ok: false, message: "No validated release is currently available for this server." };
+                return { ok: false, message: t("action.actions.noValidatedReleaseIsCurrentlyAvailableForThisServer") };
             }
         }
-        return { ok: false, message: "The command could not be confirmed. It may have executed. Refresh server status before sending another command." };
+        return { ok: false, message: t("action.actions.theCommandCouldNotBeConfirmedItMayHaveExecuted") };
     }
 }
 
+// Validates the existing lifecycle request without changing accepted inputs.
 function parseOperation(value: unknown): {
     serverId: string;
     action: MyServerOperation;
@@ -105,51 +110,57 @@ function parseOperation(value: unknown): {
     };
 }
 
-function operationLabel(action: MyServerOperation) {
+// Resolves the localized label for an unchanged operation code.
+function operationLabel(action: MyServerOperation, t: (key: string) => string) {
     switch (action) {
-        case "start": return "Start";
-        case "stop": return "Stop";
-        case "restart-game": return "Restart";
+        case "start": return t("operation.start");
+        case "stop": return t("operation.stop");
+        case "restart-game": return t("operation.restart");
     }
 }
 
+// Checks the existing request shape without changing its accepted keys.
 function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]) {
     const keys = Object.keys(value).sort();
     return keys.length === expected.length && keys.every((key, index) => key === expected[index]);
 }
 
+// Recognizes plain request objects for existing validation.
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// Authenticates password changes and localizes the existing result.
 export async function setManagedServerPassword(input: { serverId: string; expectedUpdatedAt: string; password: string }): Promise<ManagedServerActionResult> {
-    if (!input || !SERVER_ID.test(input.serverId) || typeof input.password !== "string" || input.password.length < 1 || input.password.length > 128 || typeof input.expectedUpdatedAt !== "string") return { ok: false, message: "Enter a password of 1–128 characters." };
+    const { t } = await getTranslations("managed-server");
+    if (!input || !SERVER_ID.test(input.serverId) || typeof input.password !== "string" || input.password.length < 1 || input.password.length > 128 || typeof input.expectedUpdatedAt !== "string") return { ok: false, message: t("action.actions.enterAPasswordOf1128Characters") };
     try {
         const supabase = await getSupabaseServerClient();
         const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
-        if (!user || !session) return { ok: false, message: "Sign in again to change the password." };
+        if (!user || !session) return { ok: false, message: t("action.actions.signInAgainToChangeThePassword") };
         const result = await requestMyServerPassword(session.access_token, input, crypto.randomUUID());
         revalidatePath(`/servers/${input.serverId}`);
-        return { ok: true, message: result.restartQueued ? "Password changed. A restart is queued with a player warning." : "Password changed. Use it when joining your server." };
+        return { ok: true, message: result.restartQueued ? t("action.actions.passwordChangedARestartIsQueuedWithAPlayerWarning") : t("action.actions.passwordChangedUseItWhenJoiningYourServer") };
     } catch {
-        return { ok: false, message: "The change could not be confirmed. Refresh server status before trying again." };
+        return { ok: false, message: t("action.actions.theChangeCouldNotBeConfirmedRefreshServerStatusBefore") };
     }
 }
 
 /** Reauthenticates each progress read; the control plane checks current server access. */
 export async function readManagedServerStartStatus(serverId: string, jobId: string) {
+    const { t } = await getTranslations("managed-server");
     if (typeof serverId !== "string" || typeof jobId !== "string" || !SERVER_ID.test(serverId) || !SERVER_ID.test(jobId)) {
-        return { ok: false as const, retryable: false, message: "The Start reference is invalid." };
+        return { ok: false as const, retryable: false, message: t("action.actions.theStartReferenceIsInvalid") };
     }
     try {
         const supabase = await getSupabaseServerClient();
         const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
-        if (!user || !session) return { ok: false as const, retryable: false, message: "Sign in again to follow server progress." };
+        if (!user || !session) return { ok: false as const, retryable: false, message: t("action.actions.signInAgainToFollowServerProgress") };
         return { ok: true as const, status: await getMyServerStartStatus(session.access_token, serverId, jobId) };
     } catch (error) {
         if (error instanceof MyServersApiError && ["forbidden", "server_not_found", "unauthenticated"].includes(error.code)) {
-            return { ok: false as const, retryable: false, message: "Your server access could not be confirmed. Sign in again to resume progress updates." };
+            return { ok: false as const, retryable: false, message: t("action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain") };
         }
-        return { ok: false as const, retryable: true, message: "Reconnecting to server progress… Your Start request is still being tracked." };
+        return { ok: false as const, retryable: true, message: t("action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing") };
     }
 }

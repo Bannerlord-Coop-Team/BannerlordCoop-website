@@ -1,6 +1,9 @@
 "use client";
 
-import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
+import { useTranslations } from "@/app/lib/localization/client";
+import type { Translator } from "@/app/lib/localization/types";
+
+
 import {
     canManageServerBackups,
     canRequestServerBackupRestore,
@@ -49,11 +52,13 @@ type ManagedServerBackupsProps = {
     loadError?: string;
 };
 
+// Keys backup state to the current account and server.
 export function ManagedServerBackups(props: ManagedServerBackupsProps) {
     const intentKey = managedServerBackupIntentKey(props.userId, props.server.serverId);
     return <ManagedServerBackupsSession key={intentKey} {...props} intentKey={intentKey} />;
 }
 
+// Presents durable backup operations and localized restore confirmations.
 function ManagedServerBackupsSession({
     userId,
     intentKey,
@@ -62,6 +67,8 @@ function ManagedServerBackupsSession({
     status,
     loadError,
 }: ManagedServerBackupsProps & { intentKey: string }) {
+    const { t, number, date } = useTranslations("managed-server");
+    const restoreMessages = { expired: t("backupReason.expired"), inProgress: t("backupReason.inProgress"), installedBuildUnknown: t("backupReason.installedBuildUnknown"), backupBuildUnknown: t("backupReason.backupBuildUnknown"), buildMismatch: t("backupReason.buildMismatch"), unknown: t("backupReason.unknown") };
     const [intentReady, setIntentReady] = useState(false);
     const [storageError, setStorageError] = useState(false);
     const [isPending, startTransition] = useTransition();
@@ -151,6 +158,7 @@ function ManagedServerBackupsSession({
         || activeJob !== null
         || TRANSITIONAL_SERVER_STATES.has(currentServer.operationState);
 
+    // Persists the existing backup intent before dispatch or reconciliation.
     function rememberIntent(intent: ManagedServerBackupInput | null, resolved?: ManagedServerBackupInput) {
         try {
             if (intent !== null) {
@@ -167,6 +175,7 @@ function ManagedServerBackupsSession({
         }
     }
 
+    // Dispatches a retained backup request and reports its existing outcome.
     function submitIntent(intent: ManagedServerBackupInput, pendingId: string) {
         if (!canManage || loadError || !intentReady || storageError || isPending) return;
         // Persist before dispatch: the response or polling refresh can remove this component.
@@ -187,7 +196,7 @@ function ManagedServerBackupsSession({
                     rememberIntent(null, intent);
                 }
             } catch {
-                setMessage("The submission outcome could not be confirmed. Retry this request to reconcile it without creating a duplicate.");
+                setMessage(t("backups.theSubmissionOutcomeCouldNotBeConfirmedRetryThisRequest"));
                 beginPolling(server.serverId, intent.expectedUpdatedAt, undefined, "backup");
             } finally {
                 setPendingBackupId(null);
@@ -195,6 +204,7 @@ function ManagedServerBackupsSession({
         });
     }
 
+    // Creates a backup intent only when no request needs reconciliation.
     function submitCreateBackup() {
         if (retainedIntentRef.current !== null) return;
         const candidate: ManagedServerBackupInput = {
@@ -209,18 +219,19 @@ function ManagedServerBackupsSession({
         );
     }
 
+    // Confirms destructive save restoration before retaining its request.
     function submitRestore(backup: MyServerBackupSummary) {
         if (retainedIntentRef.current !== null) return;
-        const createdAt = new Date(backup.createdAt).toLocaleString();
+        const createdAt = date(backup.createdAt, { dateStyle: "medium", timeStyle: "short" });
         const wasRunning = currentServer.observedGameState === "running"
             || currentServer.operationState === "running";
         if (!window.confirm([
-            `Restore the save from ${createdAt}?`,
-            "Current campaign progress will be replaced. Hosting will first save and safely stop the game, verify it is stopped, and create a safety backup.",
+            t("backups.restoreTheSaveFromCreatedat", { createdAt: createdAt }),
+            t("backups.currentCampaignProgressWillBeReplacedHostingWillFirstSave"),
             wasRunning
-                ? "Connected players will be interrupted. The prior running state will be restored only after the selected save validates."
-                : "The server will remain stopped after the selected save validates.",
-            "The installed game and mod versions will not change.",
+                ? t("backups.connectedPlayersWillBeInterruptedThePriorRunningStateWill")
+                : t("backups.theServerWillRemainStoppedAfterTheSelectedSaveValidates"),
+            t("backups.theInstalledGameAndModVersionsWillNotChange"),
         ].join("\n\n"))) return;
 
         const candidate: ManagedServerBackupInput = {
@@ -236,6 +247,7 @@ function ManagedServerBackupsSession({
         );
     }
 
+    // Retries the exact retained backup request without creating a new identity.
     function retryPendingRequest() {
         const intent = retainedIntentRef.current;
         if (intent === null) return;
@@ -246,8 +258,7 @@ function ManagedServerBackupsSession({
         <div className="mt-5 space-y-4">
             {storageError && (
                 <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
-                    Backup request recovery storage is unavailable or invalid. Mutations are disabled. Restore session storage access and reload this page; do not clear pending request data.
-                </p>
+                    {t("backups.backupRequestRecoveryStorageIsUnavailableOrInvalidMutationsAre")}</p>
             )}
             {loadError && (
                 <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
@@ -259,14 +270,13 @@ function ManagedServerBackupsSession({
 
             {statusIsStale && (
                 <div className="flex flex-wrap items-center gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-xs text-foreground-muted">
-                    <p role="status">Automatic status updates paused after one minute. The operation may still be running.</p>
+                    <p role="status">{t("backups.automaticStatusUpdatesPausedAfterOneMinuteTheOperationMay")}</p>
                     <button
                         type="button"
                         onClick={() => beginPolling(server.serverId, currentServer.updatedAt, activeJob?.jobId, "backup")}
                         className="min-h-9 border border-gold/35 px-3 text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                     >
-                        Refresh status and resume updates
-                    </button>
+                        {t("backups.refreshStatusAndResumeUpdates")}</button>
                 </div>
             )}
 
@@ -283,21 +293,19 @@ function ManagedServerBackupsSession({
                         className="inline-flex min-h-10 items-center justify-center gap-2 border border-gold/35 bg-gold/[0.07] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
                     >
                         <Archive aria-hidden="true" className={`size-3.5 ${pendingBackupId === "create" ? "animate-pulse" : ""}`} />
-                        {pendingBackupId === "create" ? "Submitting…" : "Create backup"}
+                        {pendingBackupId === "create" ? t("backups.submitting") : t("backups.createBackup")}
                     </button>
                 ) : (
                     <span className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-foreground-dim">
-                        Read-only access
-                    </span>
+                        {t("backups.readOnlyAccess")}</span>
                 )}
             </div>
 
             {!loadError && (backups.length === 0 ? (
                 <div className="border border-dashed border-white/10 px-4 py-8 text-center text-sm text-foreground-muted">
-                    No retained backups are available yet.
-                </div>
+                    {t("backups.noRetainedBackupsAreAvailableYet")}</div>
             ) : (
-                <ul className="divide-y divide-white/10 border border-white/10" aria-label="Retained save backups">
+                <ul className="divide-y divide-white/10 border border-white/10" aria-label={t("backups.retainedSaveBackups")}>
                     {backups.map((backup) => {
                         const canRestore = canManage && canRequestServerBackupRestore(backup);
                         const isRestoring = pendingBackupId === backup.backupId;
@@ -306,26 +314,26 @@ function ManagedServerBackupsSession({
                                 <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
                                         <p className="font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
-                                            {formatBackupType(backup.backupType)}
+                                            {formatBackupType(backup.backupType, t)}
                                         </p>
                                         <BackupState state={backup.restoreState} />
                                     </div>
                                     <p className="mt-2 text-sm text-foreground-muted">
-                                        <LocalDateTime value={backup.createdAt} />
+                                        <time dateTime={backup.createdAt}>{date(backup.createdAt, { dateStyle: "medium", timeStyle: "short" })}</time>
                                         <span aria-hidden="true"> · </span>
-                                        {formatByteCount(backup.byteSize)}
+                                        {formatByteCount(backup.byteSize, number, t)}
                                     </p>
                                     <p className="mt-1 text-xs text-foreground-dim">
-                                        Retained until <LocalDateTime value={backup.retentionExpiresAt} />
+                                        {t("backups.retainedUntilDate", { date: date(backup.retentionExpiresAt, { dateStyle: "medium", timeStyle: "short" }) })}
                                     </p>
                                     {backup.restoredAt !== null && (
                                         <p className="mt-1 text-xs text-foreground-dim">
-                                            Last restored <LocalDateTime value={backup.restoredAt} />
+                                            {t("backups.lastRestoredDate", { date: date(backup.restoredAt, { dateStyle: "medium", timeStyle: "short" }) })}
                                         </p>
                                     )}
-                                    {restoreDisabledReason(backup) && (
+                                    {restoreDisabledReason(backup, restoreMessages) && (
                                         <p className="mt-1 text-xs text-foreground-dim">
-                                            {restoreDisabledReason(backup)}
+                                            {restoreDisabledReason(backup, restoreMessages)}
                                         </p>
                                     )}
                                 </div>
@@ -339,12 +347,12 @@ function ManagedServerBackupsSession({
                                         }
                                         onClick={() => submitRestore(backup)}
                                         title={retainedIntent !== null
-                                            ? "Reconcile the pending backup request first."
-                                            : restoreDisabledReason(backup)}
+                                            ? t("backups.reconcileThePendingBackupRequestFirst")
+                                            : restoreDisabledReason(backup, restoreMessages)}
                                         className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 border border-red-400/40 bg-red-500/[0.06] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-red-200 transition-colors hover:border-red-300/60 hover:bg-red-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
                                     >
                                         <RotateCcw aria-hidden="true" className={`size-3.5 ${isRestoring ? "animate-pulse" : ""}`} />
-                                        {isRestoring ? "Submitting…" : "Restore save"}
+                                        {isRestoring ? t("backups.submitting") : t("backups.restoreSave")}
                                     </button>
                                 )}
                             </li>
@@ -356,15 +364,14 @@ function ManagedServerBackupsSession({
             {retainedIntent !== null && (
                 <div className="flex max-w-2xl flex-wrap items-center justify-between gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-xs leading-5 text-foreground-muted">
                     <p role="status">
-                        This request has an unconfirmed outcome. Its exact request ID and inputs are retained so reconciliation cannot create another request.
-                    </p>
+                        {t("backups.thisRequestHasAnUnconfirmedOutcomeItsExactRequestId")}</p>
                     <button
                         type="button"
                         disabled={isPending || !intentReady || storageError || !canManage || Boolean(loadError)}
                         onClick={retryPendingRequest}
                         className="inline-flex min-h-9 items-center justify-center border border-gold/35 bg-gold/[0.07] px-3 font-label text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:border-white/10 disabled:text-foreground-dim"
                     >
-                        {isPending ? "Reconciling…" : "Retry pending request"}
+                        {isPending ? t("backups.reconciling") : t("backups.retryPendingRequest")}
                     </button>
                 </div>
             )}
@@ -378,14 +385,16 @@ function ManagedServerBackupsSession({
     );
 }
 
+// Presents durable backup progress without translating external job output.
 function BackupJobStatus({ job }: { job: MyServerBackupJob }) {
+    const { t } = useTranslations("managed-server");
     const active = ACTIVE_JOB_STATES.has(job.state);
     const failed = job.state === "failed" || job.state === "cancelled";
     const message = active
-        ? formatProgress(job)
+        ? formatProgress(job, t)
         : job.state === "succeeded"
-            ? job.action === "backup" ? "Backup completed." : "Save restore completed."
-            : job.action === "backup" ? "The backup did not complete." : "The save restore did not complete.";
+            ? job.action === "backup" ? t("backups.backupCompleted") : t("backups.saveRestoreCompleted")
+            : job.action === "backup" ? t("backups.theBackupDidNotComplete") : t("backups.theSaveRestoreDidNotComplete");
     return (
         <div
             role={failed ? "alert" : "status"}
@@ -397,7 +406,9 @@ function BackupJobStatus({ job }: { job: MyServerBackupJob }) {
     );
 }
 
+// Renders a localized backup state with its existing severity styling.
 function BackupState({ state }: { state: string }) {
+    const { t } = useTranslations("managed-server");
     const positive = state === "available" || state === "restored";
     const negative = state === "failed" || state === "expired";
     return (
@@ -408,27 +419,28 @@ function BackupState({ state }: { state: string }) {
                     ? "border-red-400/25 bg-red-500/10 text-red-200"
                     : "border-gold/25 bg-gold/[0.07] text-gold"
         }`}>
-            {formatBackupType(state)}
+            {formatBackupType(state, t)}
         </span>
     );
 }
 
-function formatProgress(job: MyServerBackupJob) {
-    if (job.state === "retry-wait") return `Waiting to retry safely. ${job.progress}`;
+// Adds localized retry context to unchanged external progress.
+function formatProgress(job: MyServerBackupJob, t: Translator["t"]) {
+    if (job.state === "retry-wait") return t("backups.waitingToRetrySafelyProgress", { progress: job.progress });
     return job.progress;
 }
 
-function formatBackupType(value: string) {
-    return value
-        .split(/[._-]/u)
-        .filter(Boolean)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" ");
+// Localizes known backup labels and preserves unknown external codes.
+function formatBackupType(value: string, t: Translator["t"]) {
+    const known = new Set(["manual", "automatic", "scheduled", "safety", "pre-update", "pre-restore", "available", "restored", "failed", "expired", "queued", "restoring"]);
+    if (known.has(value)) return t(`backupType.${value}`);
+    return value.split(/[._-]/u).filter(Boolean).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
-function formatByteCount(value: number) {
-    if (value < 1_024) return `${value} B`;
-    if (value < 1_048_576) return `${(value / 1_024).toFixed(1)} KB`;
-    if (value < 1_073_741_824) return `${(value / 1_048_576).toFixed(1)} MB`;
-    return `${(value / 1_073_741_824).toFixed(1)} GB`;
+// Formats retained backup size using the selected locale.
+function formatByteCount(value: number, number: Translator["number"], t: Translator["t"]) {
+    if (value < 1_024) return t("bytes.b", { value: number(value) });
+    if (value < 1_048_576) return t("bytes.kb", { value: number(value / 1_024, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) });
+    if (value < 1_073_741_824) return t("bytes.mb", { value: number(value / 1_048_576, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) });
+    return t("bytes.gb", { value: number(value / 1_073_741_824, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) });
 }

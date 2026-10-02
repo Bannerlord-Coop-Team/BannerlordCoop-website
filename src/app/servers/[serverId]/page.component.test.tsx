@@ -1,3 +1,4 @@
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act, Children, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import type { ManagedServerConsole } from "@/app/components/servers/ManagedServerConsole";
 import type { ManagedServerCommands } from "@/app/components/servers/ManagedServerCommands";
@@ -9,11 +10,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
-import ServerPage from "./page";
+import ServerPage, { generateMetadata } from "./page";
 import { createTranslator } from "@/app/lib/localization/translator";
 import messages from "@/app/lib/localization/dictionaries/en/managed-server.json";
 
 vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
     // Supplies deliberately distinct fallback labels through the real translator.
     getTranslations: async () => createTranslator("en", { ...messages, "member.missingName": "Missing member name", "member.missingEmail": "Missing member email" }),
 }));
@@ -55,9 +58,17 @@ const liveId = "live-server";
 const managedId = "abcdef12-1234-4123-8123-123456789abc";
 const liveServer = { id: liveId, name: "Live", address: "203.0.113.10", nodeId: "node", provider: "External VPS", managedServerId: managedId };
 
+// Verifies the unified page delivers each client namespace and localized metadata.
+it("composes managed, shared, live and cheats dictionaries without changing page access", async () => {
+    const result = await ServerPage({ params: Promise.resolve({ serverId: liveId }), searchParams: Promise.resolve({}) });
+    expect(result.props.locale).toBe("en");
+    expect(result.props.messages).toMatchObject(serverTestMessages);
+    expect(await generateMetadata()).toEqual({ title: "Manage Server", description: "Manage a Bannerlord Coop server." });
+});
+
 // Invoke the real server page with a fixed requested identity.
 function page(serverId = liveId) {
-    return ServerPage({ params: Promise.resolve({ serverId }), searchParams: Promise.resolve({}) });
+    return ServerPage({ params: Promise.resolve({ serverId }), searchParams: Promise.resolve({}) }).then(result => result.props.children);
 }
 
 beforeEach(() => {
@@ -184,7 +195,7 @@ it.each(["mapping-required", "access-required", "lookup-failed"] as const)("expl
         const tree = await page();
         const setup = await findServerElement(tree, "LiveServerBackupSetup");
         expect(setup?.props).toEqual({ reason, serverId: liveId });
-        const html = renderToStaticMarkup(setup);
+        const html = renderToStaticMarkup(<TestLocalization>{setup} </TestLocalization>);
         expect(html).toContain(reason === "lookup-failed" ? "Reload backup access" : "View managed servers and setup options");
         if (reason === "lookup-failed") {
             // A same-page fragment link would not reload; GET must request fresh access.
@@ -214,7 +225,7 @@ it.each(["admin", "support"])("does not load private backup data for mapped read
     mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole }]);
     const files = await findServerElement(await page(), "ManagedServerFiles");
     expect(files).not.toBeNull();
-    expect(renderToStaticMarkup(files)).toContain("require owner or manager access");
+    expect(renderToStaticMarkup(<TestLocalization>{files} </TestLocalization>)).toContain("require owner or manager access");
     expect(mocks.backups).not.toHaveBeenCalled();
     expect(mocks.backupStatus).not.toHaveBeenCalled();
     expect(mocks.files).not.toHaveBeenCalled();
@@ -255,7 +266,7 @@ it.each([
         expect(files?.type).toBe(ManagedServerFiles);
         expect(mocks.backups).toHaveBeenCalledExactlyOnceWith("token", managedId);
         expect(mocks.backupStatus).toHaveBeenCalledExactlyOnceWith("token", managedId);
-        await act(async () => root.render(<ManagedServerPollingProvider>{files}</ManagedServerPollingProvider>));
+        await act(async () => root.render(<TestLocalization>{<ManagedServerPollingProvider>{files}</ManagedServerPollingProvider>} </TestLocalization>));
         await act(async () => { await vi.advanceTimersByTimeAsync(0); });
         expect(container.textContent).toContain("Manual");
         const button = Array.from(container.querySelectorAll("button")).find(button => button.textContent === label)!;
@@ -283,10 +294,10 @@ it.each(["mapping-required", "access-required", "lookup-failed"] as const)("link
         if (reason === "lookup-failed") mocks.managedServers.mockRejectedValue(new Error("Unavailable"));
         const tree = await page();
         const workspace = await findServerElement(tree, "ServerManagementWorkspace");
-        expect(renderToStaticMarkup(workspace!.props.visibility)).toContain('href="#server-visibility"');
+        expect(renderToStaticMarkup(<TestLocalization>{workspace!.props.visibility} </TestLocalization>)).toContain('href="#server-visibility"');
         const setup = await findServerElement(tree, "LiveServerVisibilitySetup");
         expect(setup?.props).toEqual({ reason, serverId: liveId });
-        const html = renderToStaticMarkup(setup);
+        const html = renderToStaticMarkup(<TestLocalization>{setup} </TestLocalization>);
         expect(html).toContain('id="server-visibility"');
         if (reason === "lookup-failed") {
             expect(html).toContain(`action="/servers/${liveId}#server-visibility" method="get"`);
@@ -354,7 +365,7 @@ it("updates the mapped identity through both controls and waits for authoritativ
         const tree = await page();
         const workspace = await findServerElement(tree, "ServerManagementWorkspace");
         const settings = await findServerElement(tree, "ServerSettingsPanel");
-        await act(async () => root.render(<>{workspace!.props.visibility}{settings}</>));
+        await act(async () => root.render(<TestLocalization>{<>{workspace!.props.visibility}{settings}</>} </TestLocalization>));
     }
     try {
         await renderVisibility();

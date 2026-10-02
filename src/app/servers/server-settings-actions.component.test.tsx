@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { beforeEach, expect, it, vi } from "vitest";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import { saveServerSettings } from "./server-settings-actions";
@@ -40,3 +42,10 @@ it("rejects mismatched sessions and retains uncertain requests for safe retry", 
     mocks.save.mockRejectedValueOnce(new MyServersApiError("control_plane_unavailable", "Unknown outcome", true));
     expect(await saveServerSettings(input)).toMatchObject({ ok: false, rejected: false });
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

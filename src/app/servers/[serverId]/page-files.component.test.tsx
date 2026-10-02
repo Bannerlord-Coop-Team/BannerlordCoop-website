@@ -1,3 +1,4 @@
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act, Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -8,6 +9,8 @@ import { createTranslator } from "@/app/lib/localization/translator";
 import messages from "@/app/lib/localization/dictionaries/en/managed-server.json";
 
 vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
     // Keeps server presentation request-independent in the focused file-flow tests.
     getTranslations: async () => createTranslator("en", messages),
 }));
@@ -77,7 +80,7 @@ async function page() { return ServerPage({ params: Promise.resolve({ serverId: 
 async function render(name = "ManagedServerFiles") {
     const element = await find(await page(), name);
     expect(element).not.toBeNull();
-    await act(async () => root.render(<ManagedServerPollingProvider>{element}</ManagedServerPollingProvider>));
+    await act(async () => root.render(<TestLocalization>{<ManagedServerPollingProvider>{element}</ManagedServerPollingProvider>} </TestLocalization>));
     await act(async () => vi.advanceTimersByTimeAsync(0));
 }
 function button(label: string) {

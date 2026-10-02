@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
+
 import { Terminal } from "lucide-react";
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { ServerConsoleWorkspace, coopConsoleCommands } from "./ServerManagementWorkspace";
@@ -23,6 +25,7 @@ function completeCommand(draft: string) {
 
 /** Keeps command entry available while submissions run; results arrive through live stdout. */
 export function ManagedServerCommands({ server, userId, controls }: { server: MyServerSummary; userId: string; controls: ReactNode }) {
+    const { t, rich } = useTranslations("managed-server");
     const id = useId();
     const inputRef = useRef<HTMLInputElement>(null);
     const [draft, setDraft] = useState("");
@@ -55,7 +58,7 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
         try {
             input = parseConsoleSubmission({ serverId: server.serverId, command: draft, expectedUpdatedAt: server.updatedAt });
         } catch {
-            setError("Enter one coop.* command (up to 4096 characters), without control characters or command separators.");
+            setError(t("commands.enterOneCoopCommandUpTo4096CharactersWithoutControl"));
             return;
         }
         setDraft("");
@@ -65,21 +68,21 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
             const response = await submitManagedConsoleCommand(input, crypto.randomUUID(), userId);
             if (!response.ok) setError(`${input.command}: ${response.message}`);
         } catch {
-            setError(`${input.command}: Delivery could not be confirmed. Check console output or Discord before resending.`);
+            setError(t("commands.commandDeliveryCouldNotBeConfirmedCheckConsoleOutputOr", { command: input.command }));
         }
     }
 
     return <ServerConsoleWorkspace coopCommandsOnly onSelectCommand={ready ? selectCommand : undefined}>
         <section className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-surface" aria-labelledby={`${id}-heading`}>
             <div className="flex flex-wrap items-center gap-3 border-b border-white/10 p-3 sm:px-4">
-                <h2 id={`${id}-heading`} className="mr-auto flex items-center gap-2 text-sm font-semibold"><Terminal className="size-4 text-gold" aria-hidden="true" />Game console</h2>
+                <h2 id={`${id}-heading`} className="mr-auto flex items-center gap-2 text-sm font-semibold"><Terminal className="size-4 text-gold" aria-hidden="true" />{t("commands.gameConsole")}</h2>
                 <div className="order-last basis-full sm:order-none sm:basis-auto">{controls}</div>
                 <DownloadServerLogButton serverId={server.serverId} userId={userId} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm text-foreground-muted hover:bg-white/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40" />
             </div>
             <ManagedServerConsole serverId={server.serverId} commandError={error} />
             <div className="space-y-3 border-t border-white/10 p-3 sm:p-4">
                 <form onSubmit={send} className="flex gap-2">
-                    <label htmlFor={id} className="sr-only">Game command</label>
+                    <label htmlFor={id} className="sr-only">{t("commands.gameCommand")}</label>
                     <div className="relative min-w-0 flex-1">
                         <input
                             ref={inputRef} id={id} value={draft}
@@ -94,15 +97,15 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
                                 setAtEnd(input.selectionStart === input.value.length && input.selectionEnd === input.value.length);
                             }}
                             onScroll={event => setScrollLeft(event.currentTarget.scrollLeft)} onKeyDown={completeWithTab}
-                            disabled={!ready} maxLength={MAXIMUM_CONSOLE_COMMAND_LENGTH} title={ready ? "Enter one coop.* command" : "Commands require owner or manager access and a running, healthy server."}
+                            disabled={!ready} maxLength={MAXIMUM_CONSOLE_COMMAND_LENGTH} title={ready ? t("commands.enterOneCoopCommand") : t("commands.commandsRequireOwnerOrManagerAccessAndARunningHealthy")}
                             autoComplete="off" aria-autocomplete="inline" aria-describedby={`${id}-shortcuts`} spellCheck={false} placeholder="coop.…"
                             className="min-h-11 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold disabled:opacity-40"
                         />
                         {completion && <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-md border border-transparent px-3 py-2.5 font-mono text-sm whitespace-pre"><div style={{ transform: `translateX(-${scrollLeft}px)` }}><span className="invisible">{draft}</span><span className="text-foreground-muted">{completion}</span></div></div>}
                     </div>
-                    <button type="submit" className={button} disabled={!ready || !draft.trim()}>Send</button>
+                    <button type="submit" className={button} disabled={!ready || !draft.trim()}>{t("commands.send")}</button>
                 </form>
-                <p id={`${id}-shortcuts`} className="text-xs text-foreground-muted"><kbd className="font-mono">Enter</kbd> to send</p>
+                <p id={`${id}-shortcuts`} className="text-xs text-foreground-muted">{rich("commands.sendShortcut", { key: <kbd className="font-mono">{t("commands.enter")}</kbd> })}</p>
             </div>
         </section>
     </ServerConsoleWorkspace>;
