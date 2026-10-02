@@ -14,7 +14,7 @@ import { revalidatePath } from "next/cache";
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const OPERATIONS = new Set<MyServerOperation>(["start", "stop", "restart-game"]);
 
-export type ManagedServerActionResult = { ok: boolean; message: string; operationId?: string };
+export type ManagedServerActionResult = { ok: boolean; message: string; operationId?: string; checkStatus?: boolean };
 
 export async function operateManagedServer(input: unknown): Promise<ManagedServerActionResult> {
     const parsed = parseOperation(input);
@@ -53,6 +53,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         }
         revalidatePath("/servers");
         if (parsed.action === "start") return { ok: true, message: "Server started and game readiness confirmed." };
+        if (parsed.action === "stop") return { ok: true, checkStatus: true, message: "Checking whether your server has stopped…" };
         return { ok: true, message: `${operationLabel(parsed.action)} command exited successfully (code 0). This does not confirm game readiness.` };
     } catch (error) {
         revalidatePath("/servers");
@@ -78,6 +79,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
                 return { ok: false, message: "No validated release is currently available for this server." };
             }
         }
+        if (parsed.action === "stop") return { ok: false, checkStatus: true, message: "Checking whether your server has stopped…" };
         return { ok: false, message: "The command could not be confirmed. It may have executed. Refresh server status before sending another command." };
     }
 }
