@@ -4,6 +4,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ client: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.client }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
+vi.mock("./LocaleSelector", () => ({ LocaleSelector: () => null }));
 vi.mock("./ProfileDropdown", () => ({ ProfileDropdown: ({ accountName, isAdmin }: { accountName: string; isAdmin: boolean }) => <span>{accountName}{isAdmin ? " Admin controls" : ""}</span> }));
 vi.mock("./MobileNavigation", () => ({ MobileNavigation: () => null }));
 vi.mock("./CommunityDropdown", () => ({ CommunityDropdown: () => null }));

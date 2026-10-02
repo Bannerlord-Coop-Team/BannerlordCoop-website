@@ -1,3 +1,5 @@
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import common from "@/app/lib/localization/dictionaries/en/common.json";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it } from "vitest";
@@ -15,7 +17,7 @@ it("opens on mouse hover without changing touch click behavior", async () => {
     document.body.append(container);
     const root = createRoot(container);
     try {
-        await act(async () => root.render(<CommunityDropdown />));
+        await act(async () => root.render(<LocalizationProvider locale="en" messages={{ common }}><CommunityDropdown /></LocalizationProvider>));
         const dropdown = container.firstElementChild!;
         const trigger = container.querySelector("button")!;
 

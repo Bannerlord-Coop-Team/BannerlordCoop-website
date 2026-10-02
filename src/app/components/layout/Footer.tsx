@@ -1,29 +1,30 @@
+import { getTranslations } from "@/app/lib/localization/server";
 import { GitPullRequestArrow, Swords } from "lucide-react";
 import Link from "next/link";
 
 const navigationLinks = [
     {
-        label: "Features",
+        label: "footer.features",
         href: "/#features",
     },
     {
-        label: "Videos",
+        label: "footer.videos",
         href: "/#media",
     },
     {
-        label: "About",
+        label: "footer.about",
         href: "/#about",
     },
     {
-        label: "Download",
+        label: "download.trigger",
         href: "/#download",
     },
     {
-        label: "Cheats",
+        label: "nav.cheats",
         href: "/cheats",
     },
     {
-        label: "Changelog",
+        label: "nav.changelog",
         href: "/changelog",
     }
 ];
@@ -41,7 +42,9 @@ const communityLinks = [
     },
 ];
 
-export function Footer() {
+/** Renders shared translated footer prose while retaining brand names and external destinations. */
+export async function Footer() {
+    const { t, number } = await getTranslations("common");
     return (
         <footer className="border-t border-white/10 bg-background">
             <div className="site-container">
@@ -49,7 +52,7 @@ export function Footer() {
                     <div className="col-span-2 lg:col-span-6">
                         <Link
                             href="/"
-                            aria-label="Bannerlord Coop home"
+                            aria-label={t("nav.homeLabel")}
                             className="inline-flex max-w-full items-center gap-1 text-foreground transition-colors duration-300 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-background"
                         >
                             <span className="flex size-10 items-center justify-center text-gold">
@@ -66,17 +69,16 @@ export function Footer() {
                         </Link>
 
                         <p className="mt-5 max-w-md font-sans text-sm leading-6 text-foreground-muted">
-                            Play the Mount &amp; Blade II: Bannerlord campaign with
-                            friends in a shared multiplayer world.
+                            {t("metadata.description")}
                         </p>
                     </div>
 
                     <nav
                         className="lg:col-span-3"
-                        aria-label="Footer navigation"
+                        aria-label={t("footer.navigation")}
                     >
                         <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
-                            Explore
+                            {t("footer.explore")}
                         </p>
 
                         <ul className="mt-5 space-y-3">
@@ -86,7 +88,7 @@ export function Footer() {
                                         href={link.href}
                                         className="font-sans text-sm text-foreground-muted transition-colors duration-300 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-background"
                                     >
-                                        {link.label}
+                                        {t(link.label)}
                                     </Link>
                                 </li>
                             ))}
@@ -95,10 +97,10 @@ export function Footer() {
 
                     <nav
                         className="lg:col-span-3"
-                        aria-label="Community links"
+                        aria-label={t("footer.communityLinks")}
                     >
                         <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
-                            Community
+                            {t("nav.community")}
                         </p>
 
                         <ul className="mt-5 space-y-3">
@@ -128,13 +130,11 @@ export function Footer() {
 
                 <div className="flex flex-col gap-4 border-t border-white/10 py-6 sm:flex-row sm:items-center sm:justify-between">
                     <p className="font-sans text-xs leading-5 text-foreground-dim">
-                        © {new Date().getFullYear()} Bannerlord Coop. All rights
-                        reserved.
+                        {t("footer.copyright", { year: number(new Date().getUTCFullYear(), { useGrouping: false }) })}
                     </p>
 
                     <p className="max-w-xl font-sans text-xs leading-5 text-foreground-dim sm:text-right">
-                        An independent community project. Not affiliated with or
-                        endorsed by TaleWorlds Entertainment.
+                        {t("footer.disclaimer")}
                     </p>
                 </div>
             </div>

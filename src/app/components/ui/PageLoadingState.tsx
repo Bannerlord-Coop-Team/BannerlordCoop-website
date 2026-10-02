@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "@/app/lib/localization/client";
 import { LoadingSpinner } from "@/app/components/ui/LoadingSpinner";
 
 type PageLoadingStateProps = {
@@ -5,10 +8,13 @@ type PageLoadingStateProps = {
     fullScreen?: boolean;
 };
 
+/** Displays an accessible busy state with a localized default or caller-owned page label. */
 export function PageLoadingState({
-    label = "Loading page…",
+    label,
     fullScreen = false,
 }: PageLoadingStateProps) {
+    const { t } = useTranslations("common");
+    const resolvedLabel = label ?? t("loading.page");
     return (
         <main
             className={
@@ -17,7 +23,7 @@ export function PageLoadingState({
                     : "flex min-h-96 items-center justify-center px-5 text-foreground"
             }
             aria-busy="true"
-            aria-label={label}
+            aria-label={resolvedLabel}
         >
             <div className="flex flex-col items-center gap-4 text-center">
                 <span className="flex size-12 items-center justify-center rounded-full border border-gold/25 bg-gold/10 text-gold">
@@ -28,7 +34,7 @@ export function PageLoadingState({
                     aria-live="polite"
                     className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-foreground-muted"
                 >
-                    {label}
+                    {resolvedLabel}
                 </p>
             </div>
         </main>

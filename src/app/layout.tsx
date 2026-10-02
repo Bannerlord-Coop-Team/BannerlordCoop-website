@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import { getLocale, getMessages, getOpenGraphLocale, getTranslations } from "@/app/lib/localization/server";
+import { getEnabledLocales } from "@/app/lib/localization/registry";
 import { ImpersonationBanner } from "@/app/components/admin/ImpersonationBanner";
 import { Barlow_Condensed, Cormorant_Garamond, Inter } from "next/font/google";
 import "./globals.css";
@@ -24,7 +27,10 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 
-export const metadata: Metadata = {
+/** Resolves shared metadata from the same explicit locale cookie as the root document. */
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getTranslations("common");
+  return {
   metadataBase: new URL("https://bannerlordcoop.com"),
 
   title: {
@@ -32,14 +38,14 @@ export const metadata: Metadata = {
     template: "%s | Bannerlord Coop",
   },
 
-  description: "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
+  description: t("metadata.description"),
 
   openGraph: {
     type: "website",
-    locale: "en_US",
+    locale: await getOpenGraphLocale(),
     siteName: "Bannerlord Coop",
     title: "Bannerlord Coop",
-    description: "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
+    description: t("metadata.description"),
     images: [
       {
         url: "/images/banner.png",
@@ -53,19 +59,26 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Bannerlord Coop",
-    description: "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
+    description: t("metadata.description"),
     images: ["/images/banner.png"],
   }
-};
+  };
+}
 
-
-export default function RootLayout({ children }: LayoutProps<"/">) {
+/** Delivers only common messages globally; page providers own all page namespace payloads. */
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const locale = await getLocale();
+  const messages = await getMessages(["common"], locale);
   return (
     <html
-      lang="en"
+      lang={locale}
       className={`${inter.variable} ${cormorantGaramond.variable} ${barlowCondensed.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col"><ImpersonationBanner />{children}</body>
+      <body className="min-h-full flex flex-col">
+        <LocalizationProvider locale={locale} messages={messages} enabledLocales={getEnabledLocales()}>
+          <ImpersonationBanner />{children}
+        </LocalizationProvider>
+      </body>
     </html>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
 import { ChevronDown, CircleHelp, History } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
@@ -8,7 +9,9 @@ const triggerClassName = "inline-flex min-h-10 cursor-pointer items-center gap-1
 const itemClassName = "group/item flex items-center gap-3 rounded-sm px-4 py-3 font-label text-sm font-semibold uppercase tracking-[0.12em] text-foreground-muted transition-colors hover:bg-white/5 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
 const iconClassName = "size-4.5 shrink-0 transition-colors group-hover/item:text-gold";
 
+/** Presents localized community destinations with the existing pointer and keyboard behavior. */
 export function CommunityDropdown() {
+    const { t } = useTranslations("common");
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -58,7 +61,7 @@ export function CommunityDropdown() {
                 onClick={() => setIsOpen((open) => !open)}
                 className={triggerClassName}
             >
-                Community
+                {t("nav.community")}
                 <ChevronDown aria-hidden="true" className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
             </button>
 
@@ -84,11 +87,11 @@ export function CommunityDropdown() {
                         </a>
                         <Link href="/changelog" onClick={() => setIsOpen(false)} className={itemClassName}>
                             <History aria-hidden="true" className={iconClassName} />
-                            Changelog
+                            {t("nav.changelog")}
                         </Link>
                         <Link href="/support" onClick={() => setIsOpen(false)} className={itemClassName}>
                             <CircleHelp aria-hidden="true" className={iconClassName} />
-                            Support
+                            {t("nav.support")}
                         </Link>
                     </div>
                 </div>
