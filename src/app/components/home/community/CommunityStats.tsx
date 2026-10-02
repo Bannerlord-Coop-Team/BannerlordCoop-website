@@ -1,3 +1,4 @@
+import { getTranslations } from "@/app/lib/localization/server";
 import { Download, Server, Swords, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { StatCard } from "@/app/components/home/community/StatCard";
@@ -19,42 +20,44 @@ type Stat = {
     icon: LucideIcon;
 };
 
-export function CommunityStats({
+// Renders localized CommunityStats presentation while preserving source values.
+export async function CommunityStats({
     playersOnline,
     dedicatedServersCount,
     battlesFoughtTotal,
     totalDownloads,
 }: CommunityStatsProps) {
+    const { t } = await getTranslations("home");
     const stats: Stat[] = [
         {
-            label: "Players Online",
-            description: "Across all reporting servers",
+            label: t("stats.players"),
+            description: t("stats.playersDescription"),
             value: playersOnline,
-            status: playersOnline === null ? "Unavailable" : "Live",
+            status: playersOnline === null ? t("stats.unavailable") : t("stats.live"),
             isLive: playersOnline !== null,
             icon: Users,
         },
         {
-            label: "Dedicated Servers",
-            description: "Reporting to the network",
+            label: t("stats.servers"),
+            description: t("stats.serversDescription"),
             value: dedicatedServersCount,
-            status: dedicatedServersCount === null ? "Unavailable" : "Live",
+            status: dedicatedServersCount === null ? t("stats.unavailable") : t("stats.live"),
             isLive: dedicatedServersCount !== null,
             icon: Server,
         },
         {
-            label: "Battles Fought",
-            description: "Across all recorded battles",
+            label: t("stats.battles"),
+            description: t("stats.battlesDescription"),
             value: battlesFoughtTotal,
-            status: battlesFoughtTotal === null ? "Unavailable" : "Live",
+            status: battlesFoughtTotal === null ? t("stats.unavailable") : t("stats.live"),
             isLive: battlesFoughtTotal !== null,
             icon: Swords,
         },
         {
-            label: "Total Downloads",
-            description: "Across all platforms",
+            label: t("stats.downloads"),
+            description: t("stats.downloadsDescription"),
             value: totalDownloads,
-            status: totalDownloads === null ? "Unavailable" : "Live",
+            status: totalDownloads === null ? t("stats.unavailable") : t("stats.live"),
             isLive: totalDownloads !== null,
             icon: Download,
         },
@@ -65,13 +68,13 @@ export function CommunityStats({
             <div className="site-container relative">
                 <ScrollReveal className="max-w-3xl" amount={0.35}>
                     <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:text-sm sm:tracking-[0.24em]">
-                        Community Activity
+                        {t("stats.eyebrow")}
                     </p>
                     <h2 id="community-stats-heading" className="mt-4 font-display text-4xl font-semibold leading-[0.95] tracking-[-0.03em] text-foreground sm:text-5xl lg:text-6xl 2xl:text-7xl">
-                        Bannerlord Coop By The Numbers
+                        {t("stats.heading")}
                     </h2>
                     <p className="mt-5 max-w-2xl font-sans text-base leading-7 text-foreground-muted sm:text-lg">
-                        Current player, server, battle, and download activity from the Bannerlord Coop network.
+                        {t("stats.description")}
                     </p>
                 </ScrollReveal>
 

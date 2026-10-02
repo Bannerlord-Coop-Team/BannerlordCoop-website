@@ -1,3 +1,5 @@
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import { getLocale, getMessages, getTranslations, getOpenGraphLocale } from "@/app/lib/localization/server";
 import { Hero } from "@/app/components/home/Hero";
 import { CommunityStats } from "@/app/components/home/community/CommunityStats";
 import { CoopFeatures } from "@/app/components/home/features/CampaignFeatures";
@@ -10,37 +12,46 @@ import { Navbar } from "@/app/components/layout/Navbar";
 import { getNetworkStats } from "@/app/lib/network-stats";
 import type {Metadata} from "next";
 
-export const metadata: Metadata = {
-    alternates: {
-        canonical: "/",
-    },
+// Resolves homepage metadata from the explicit request locale.
+export async function generateMetadata(): Promise<Metadata> {
+    const { t } = await getTranslations("home");
+    return {
+        description: t("metadata.description"),
+        alternates: {
+            canonical: "/",
+        },
 
-    openGraph: {
-        type: "website",
-        url: "/",
-        title: "Bannerlord Coop",
-        description:
-            "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
-        images: [
-            {
-                url: "/images/banner.png",
-                width: 1200,
-                height: 630,
-                alt: "Bannerlord Coop",
-            },
-        ],
-    },
+        openGraph: {
+            type: "website",
+            locale: await getOpenGraphLocale(),
+            url: "/",
+            title: "Bannerlord Coop",
+            description:
+                t("metadata.description"),
+            images: [
+                {
+                    url: "/images/banner.png",
+                    width: 1200,
+                    height: 630,
+                    alt: "Bannerlord Coop",
+                },
+            ],
+        },
 
-    twitter: {
-        card: "summary_large_image",
-        title: "Bannerlord Coop",
-        description:
-            "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
-        images: ["/images/banner.png"],
-    },
-};
+        twitter: {
+            card: "summary_large_image",
+            title: "Bannerlord Coop",
+            description:
+                t("metadata.description"),
+            images: ["/images/banner.png"],
+        },
+    };
+}
 
+// Delivers home messages to interactive leaves alongside server-rendered sections.
 export default async function Home() {
+    const locale = await getLocale();
+    const messages = await getMessages(["home"], locale);
     const {
         playersOnline,
         dedicatedServersCount,
@@ -49,7 +60,7 @@ export default async function Home() {
     } = await getNetworkStats();
 
     return (
-        <>
+        <LocalizationProvider locale={locale} messages={messages}>
             <Navbar />
             <main>
                 <Hero />
@@ -66,6 +77,6 @@ export default async function Home() {
                 <DownloadSection />
             </main>
             <Footer />
-        </>
+        </LocalizationProvider>
     );
 }

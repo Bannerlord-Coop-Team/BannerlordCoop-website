@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
+
 import { ChevronLeft, ChevronRight, Play } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -10,12 +12,15 @@ type VideoCarouselProps = {
     videos: MediaVideo[];
 };
 
+// Renders localized VideoCarousel presentation while preserving source values.
 export function VideoCarousel({ videos }: VideoCarouselProps) {
+    const { t, number } = useTranslations("home");
     const carouselRef = useRef<HTMLDivElement>(null);
     const [activePage, setActivePage] = useState(0);
     const [pageCount, setPageCount] = useState(1);
     const isCarousel = videos.length > 2;
 
+    // Measures visible pages after scrolling or resizing.
     const updateCarouselState = useCallback(() => {
         const carousel = carouselRef.current;
 
@@ -50,6 +55,7 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
         return () => resizeObserver.disconnect();
     }, [isCarousel, updateCarouselState]);
 
+    // Scrolls to a bounded carousel page while honoring reduced motion.
     function goToPage(page: number) {
         const carousel = carouselRef.current;
 
@@ -79,7 +85,7 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
                         ? "grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col gap-4 overflow-x-auto overscroll-x-contain scrollbar-none lg:auto-cols-[calc((100%-1rem)/2)]"
                         : "grid gap-4 lg:grid-cols-2"
                 }
-                aria-label={isCarousel ? "Bannerlord Coop video carousel" : undefined}
+                aria-label={isCarousel ? t("carousel.label") : undefined}
             >
                 {videos.map((video) => (
                     <VideoCard
@@ -96,7 +102,7 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
                         className="font-label text-xs uppercase tracking-[0.16em] text-foreground-dim"
                         aria-live="polite"
                     >
-                        {activePage + 1} of {pageCount}
+                        {t("carousel.page", { page: number(activePage + 1), total: number(pageCount) })}
                     </p>
 
                     <div className="flex items-center gap-3 sm:gap-5">
@@ -111,7 +117,7 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
                                             ? "w-8 bg-gold"
                                             : "w-4 bg-white/20 hover:bg-white/40"
                                     }`}
-                                    aria-label={`Go to video page ${index + 1}`}
+                                    aria-label={t("carousel.goTo", { page: number(index + 1) })}
                                     aria-current={activePage === index ? "true" : undefined}
                                 />
                             ))}
@@ -123,7 +129,7 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
                                 onClick={() => goToPage(activePage - 1)}
                                 disabled={activePage === 0}
                                 className="flex size-10 items-center justify-center border border-white/15 text-foreground transition-colors duration-300 hover:border-gold/50 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-white/15 disabled:hover:text-foreground sm:size-11"
-                                aria-label="Previous video page"
+                                aria-label={t("carousel.previous")}
                             >
                                 <ChevronLeft aria-hidden="true" className="size-5" />
                             </button>
@@ -132,7 +138,7 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
                                 onClick={() => goToPage(activePage + 1)}
                                 disabled={activePage === pageCount - 1}
                                 className="flex size-10 items-center justify-center border border-white/15 text-foreground transition-colors duration-300 hover:border-gold/50 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-white/15 disabled:hover:text-foreground sm:size-11"
-                                aria-label="Next video page"
+                                aria-label={t("carousel.next")}
                             >
                                 <ChevronRight aria-hidden="true" className="size-5" />
                             </button>

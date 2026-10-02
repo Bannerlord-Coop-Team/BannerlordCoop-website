@@ -1,6 +1,6 @@
 import "server-only";
 import type { MediaVideo } from "@/app/components/utils/types/media.types";
-import { getYouTubeVideos } from "./youtube";
+import { getYouTubeVideos, type YouTubeLabels } from "./youtube";
 
 type HomepageVideoRow = {
     id: string;
@@ -14,7 +14,8 @@ type HomepageVideoRow = {
     duration: string | null;
 };
 
-export async function getHomepageVideos(): Promise<MediaVideo[]> {
+// Loads ordered homepage media, translating generated YouTube labels only.
+export async function getHomepageVideos(labels?: YouTubeLabels): Promise<MediaVideo[]> {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     if (!url || !key) return [];
@@ -35,6 +36,7 @@ export async function getHomepageVideos(): Promise<MediaVideo[]> {
         const rows = (await response.json()) as HomepageVideoRow[];
         const youtubeVideos = await getYouTubeVideos(
             rows.filter((row) => row.source === "youtube").map((row) => row.href),
+            labels,
         );
         const byHref = new Map(youtubeVideos.map((video) => [video.href, video]));
 

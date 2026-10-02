@@ -1,10 +1,13 @@
+import { getTranslations } from "@/app/lib/localization/server";
 import Link from "next/link";
 import { ScrollReveal } from "@/app/components/motion/ScrollReveal";
 import { DownloadModal } from "@/app/components/home/modulesection/DownloadModal";
 
 const DISCORD_URL = "https://discord.gg/bannerlordcoop";
 
-export function DownloadSection() {
+// Renders localized DownloadSection presentation while preserving source values.
+export async function DownloadSection() {
+    const { t } = await getTranslations("home");
     return (
         <section
             id="download"
@@ -27,23 +30,20 @@ export function DownloadSection() {
                     amount={0.3}
                 >
                     <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:text-sm sm:tracking-[0.24em]">
-                        Download Bannerlord Coop
+                        {t("download.eyebrow")}
                     </p>
 
                     <h2
                         id="final-cta-heading"
                         className="mt-4 font-display text-4xl font-semibold uppercase leading-[0.9] tracking-[-0.03em] text-foreground min-[380px]:text-5xl sm:text-6xl lg:text-7xl 2xl:text-8xl"
                     >
-                        Calradia Awaits
-                        <span className="block text-crimson">
-                            Bring Friends
-                        </span>
+                        {t("download.heading").split("\n").map((line, index, lines) => (
+                                <span key={index} className={index === lines.length - 1 ? "block text-crimson" : "block"}>{line}</span>
+                            ))}
                     </h2>
 
                     <p className="mx-auto mt-6 max-w-2xl font-sans text-base leading-7 text-foreground-muted sm:text-lg">
-                        Public releases are free for everyone. Supporter nightlies use
-                        live Discord verification and may be shared through up to 10
-                        sponsored accounts per supporter.
+                        {t("download.description")}
                     </p>
 
                     <div className="mt-9 flex flex-col items-stretch justify-center gap-4 sm:flex-row sm:items-center">
@@ -69,15 +69,15 @@ export function DownloadSection() {
                                     maskSize: "contain",
                                 }}
                             />
-                            Join Our Discord
+                            {t("download.discord")}
                         </Link>
                     </div>
 
                     <ul className="mt-6 flex flex-wrap justify-center gap-x-3 gap-y-2 font-label text-xs uppercase tracking-[0.12em] text-foreground-dim sm:tracking-[0.14em]">
                         {[
-                            "A Free Community Mod",
-                            "Windows & Linux",
-                            "Requires A Legal Copy Of Mount & Blade II: Bannerlord",
+                            t("download.free"),
+                            t("download.platforms"),
+                            t("download.requirement"),
                         ].map((item, index) => (
                             <li key={item} className="flex items-center gap-3">
                                 {index > 0 && (

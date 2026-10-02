@@ -1,3 +1,4 @@
+import { getTranslations } from "@/app/lib/localization/server";
 import { ServerCog, Shield, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ScrollReveal } from "@/app/components/motion/ScrollReveal";
@@ -8,28 +9,26 @@ type ProjectPrinciple = {
     icon: LucideIcon;
 };
 
-const principles: ProjectPrinciple[] = [
-    {
-        title: "The Goal",
-        description:
-            "Transform Bannerlord’s campaign into a shared experience without losing what makes it distinct. Each player keeps command of their own character, party, clan, troops, and resources.",
-        icon: Shield,
-    },
-    {
-        title: "The Work",
-        description:
-            "Synchronizing a persistent campaign takes careful engineering and constant refinement. Dedicated servers, Steam integration, testing, and stability improvements keep the shared world moving.",
-        icon: ServerCog,
-    },
-    {
-        title: "The Community",
-        description:
-            "A volunteer team builds the mod with help from its community. Playing, reporting reproducible bugs, creating content, sharing the project, and contributing code all move it forward.",
-        icon: Users,
-    },
-];
-
-export function AboutProject() {
+// Renders localized AboutProject presentation while preserving source values.
+export async function AboutProject() {
+    const { t } = await getTranslations("home");
+    const principles: ProjectPrinciple[] = [
+        {
+            title: t("principle.goal.title"),
+            description: t("principle.goal.description"),
+            icon: Shield,
+        },
+        {
+            title: t("principle.work.title"),
+            description: t("principle.work.description"),
+            icon: ServerCog,
+        },
+        {
+            title: t("principle.community.title"),
+            description: t("principle.community.description"),
+            icon: Users,
+        },
+    ];
     return (
         <section
             id="about"
@@ -42,20 +41,18 @@ export function AboutProject() {
                     amount={0.3}
                 >
                     <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:text-sm sm:tracking-[0.24em]">
-                        About The Project
+                        {t("about.eyebrow")}
                     </p>
 
                     <h2
                         id="about-project-heading"
                         className="mt-4 font-display text-4xl font-semibold uppercase leading-[0.92] tracking-[-0.03em] text-foreground min-[380px]:text-5xl sm:text-6xl lg:text-7xl 2xl:text-8xl"
                     >
-                        Built For Shared Campaigns
+                        {t("about.heading")}
                     </h2>
 
                     <p className="mt-6 max-w-2xl font-sans text-base leading-7 text-foreground-muted sm:text-lg">
-                        Bannerlord Coop turns the single-player campaign into a
-                        persistent multiplayer world where friends can travel,
-                        rule, trade, and fight across Calradia together.
+                        {t("about.description")}
                     </p>
                 </ScrollReveal>
 

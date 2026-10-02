@@ -1,3 +1,4 @@
+import { getTranslations } from "@/app/lib/localization/server";
 import { Clapperboard, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -14,9 +15,17 @@ const contentCreators: ContentCreator[] = [
     },
 ];
 
+// Presents localized media labels while preserving external video and creator content.
 export async function CommunityMedia() {
+    const { t } = await getTranslations("home");
     const [carouselVideos, creators] = await Promise.all([
-        getHomepageVideos(),
+        getHomepageVideos({
+            fallbackTitle: t("media.fallbackTitle"),
+            // Labels generated thumbnails without translating external video titles.
+            videoThumbnail: (title) => t("media.videoThumbnail", { title }),
+            // Labels fallback thumbnails when remote metadata cannot be retrieved.
+            fallbackThumbnail: (title) => t("media.fallbackThumbnail", { title }),
+        }),
         getYouTubeCreators(
             contentCreators.map((creator) => creator.channelId),
         ),
@@ -36,20 +45,20 @@ export async function CommunityMedia() {
             <div className="site-container relative">
                 <ScrollReveal className="max-w-4xl" amount={0.3}>
                     <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:text-sm sm:tracking-[0.24em]">
-                        Videos &amp; Community
+                        {t("media.eyebrow")}
                     </p>
 
                     <h2
                         id="community-media-heading"
                         className="mt-4 font-display text-4xl font-semibold uppercase leading-[0.92] tracking-[-0.03em] text-foreground min-[380px]:text-5xl sm:text-6xl lg:text-7xl 2xl:text-8xl"
                     >
-                        Bannerlord Coop
-                        <span className="block text-gold">In Action</span>
+                        {t("media.heading").split("\n").map((line, index, lines) => (
+                                <span key={index} className={index === lines.length - 1 ? "block text-gold" : "block"}>{line}</span>
+                            ))}
                     </h2>
 
                     <p className="mt-6 max-w-2xl font-sans text-base leading-7 text-foreground-muted sm:text-lg">
-                        Watch gameplay, development updates, and guides from the
-                        Bannerlord Coop team and community creators.
+                        {t("media.description")}
                     </p>
                 </ScrollReveal>
 
@@ -58,10 +67,10 @@ export async function CommunityMedia() {
                         <div className="flex items-end justify-between gap-6 border-b border-white/10 pb-5">
                             <div>
                                 <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
-                                    Featured Videos
+                                    {t("media.featured")}
                                 </p>
                                 <h3 className="mt-2 font-display text-3xl font-semibold uppercase text-foreground sm:text-4xl">
-                                    Latest Videos
+                                    {t("media.latest")}
                                 </h3>
                             </div>
 
@@ -80,10 +89,10 @@ export async function CommunityMedia() {
                     <div className="mt-14 sm:mt-16 lg:mt-20">
                         <div className="border-b border-white/10 pb-5">
                             <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
-                                Community
+                                {t("media.community")}
                             </p>
                             <h3 className="mt-2 font-display text-3xl font-semibold uppercase text-foreground sm:text-4xl">
-                                Featured Content Creators
+                                {t("media.creators")}
                             </h3>
                         </div>
 
@@ -105,7 +114,7 @@ export async function CommunityMedia() {
                                         {creator.avatar ? (
                                             <Image
                                                 src={creator.avatar}
-                                                alt={`${creator.name} YouTube channel avatar`}
+                                                alt={t("media.avatar", { name: creator.name })}
                                                 width={72}
                                                 height={72}
                                                 className="size-16 shrink-0 rounded-full border border-white/10 object-cover grayscale transition-[filter,border-color] duration-300 group-hover:border-gold/40 group-hover:grayscale-0 sm:size-18"

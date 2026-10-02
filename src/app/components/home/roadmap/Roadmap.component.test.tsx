@@ -1,9 +1,14 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getTranslations } from "@/app/lib/localization/server";
+import { createTranslator } from "@/app/lib/localization/translator";
+import home from "@/app/lib/localization/dictionaries/en/home.json";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Roadmap } from "./Roadmap";
 import { getRoadmap, type RoadmapItem } from "@/app/lib/roadmap";
 
 vi.mock("@/app/lib/roadmap", () => ({ getRoadmap: vi.fn() }));
+vi.mock("@/app/lib/localization/server", () => ({ getTranslations: vi.fn() }));
+beforeEach(() => { vi.mocked(getTranslations).mockResolvedValue(createTranslator("en", home)); });
 
 afterEach(() => {
     vi.resetAllMocks();
@@ -11,6 +16,7 @@ afterEach(() => {
     vi.unstubAllEnvs();
 });
 
+// Creates an unkeyed live row to protect source-content preservation.
 const item = (title: string, status: RoadmapItem["status"]): RoadmapItem => ({
     id: title, title, status, description: "",
 });
@@ -52,6 +58,35 @@ describe("Roadmap", () => {
         expect(groups[1].textContent).toContain("Player-to-player");
     });
 
+    // Matrix: explicit keys translate; identical unkeyed source text must not be matched or replaced.
+    it("renders mapped titles/descriptions and preserves unkeyed content in the same milestone", async () => {
+        vi.mocked(getTranslations).mockResolvedValue(createTranslator("ru", {
+            ...home,
+            "roadmap.milestone.v1-0.title": "V1.0 - Translated milestone",
+            "roadmap.item.trading.title": "Translated trading",
+            "roadmap.item.trading.description": "Translated description",
+            "roadmap.status.planned": "Translated planned",
+            "roadmap.progress": "{completed}/{total} done",
+        }));
+        vi.mocked(getRoadmap).mockResolvedValue([
+            { id: "mapped", title: "Original milestone", title_translation_key: "roadmap.milestone.v1-0.title", roadmap_items: [
+                { ...item("Trading", "planned"), id: "mapped-item", title_translation_key: "roadmap.item.trading.title", description: "Original description", description_translation_key: "roadmap.item.trading.description" },
+                { ...item("Trading", "planned"), description: "Source description" },
+            ] },
+            { id: "new", title: "New live milestone", roadmap_items: [] },
+        ]);
+        const root = document.createElement("div");
+        root.innerHTML = renderToStaticMarkup(await Roadmap());
+        expect(root.textContent).toContain("V1.0Translated milestone0/2 done");
+        expect([...root.querySelectorAll("h5")].map((node) => node.textContent?.trim())).toEqual(["Translated trading", "Trading"]);
+        expect(root.textContent).toContain("Translated description");
+        expect(root.textContent).toContain("Source description");
+        expect(root.textContent).toContain("New live milestone");
+        expect(root.querySelector('ul[aria-label="Translated planned"]')).not.toBeNull();
+        expect(root.textContent).not.toContain("Original description");
+        expect(root.textContent).toContain(home["roadmap.empty"]);
+    });
+
     it("omits the section when no roadmap is available", async () => {
         vi.mocked(getRoadmap).mockResolvedValue([]);
         expect(await Roadmap()).toBeNull();
@@ -62,11 +97,12 @@ it("loads ordered milestones and nested items using public credentials with a sh
     const { getRoadmap: load } = await vi.importActual<typeof import("@/app/lib/roadmap")>("@/app/lib/roadmap");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "public-test-key");
-    const rows = [{ id: "one", title: "v1.0", roadmap_items: [] }];
+    const rows = [{ id: "one", title: "v1.0", title_translation_key: "roadmap.milestone.v1-0.title", roadmap_items: [{ ...item("Trading", "planned"), title_translation_key: "roadmap.item.trading.title", description_translation_key: null }] }];
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => rows });
     vi.stubGlobal("fetch", fetchMock);
     expect(await load()).toEqual(rows);
     const [url, options] = fetchMock.mock.calls[0];
+    expect(new URL(url).searchParams.get("select")).toBe("id,title,title_translation_key,roadmap_items(id,title,title_translation_key,description,description_translation_key,status)");
     expect(new URL(url).searchParams.get("order")).toBe("sort_order.asc,id.asc");
     expect(new URL(url).searchParams.get("roadmap_items.order")).toBe("sort_order.asc,id.asc");
     expect(options).toEqual({ headers: { apikey: "public-test-key" }, next: { revalidate: 60 } });

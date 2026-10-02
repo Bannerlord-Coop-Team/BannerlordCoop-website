@@ -1,16 +1,19 @@
+import { getTranslations } from "@/app/lib/localization/server";
 import { Check, ChevronDown, Circle, CircleEllipsis, TriangleAlert } from "lucide-react";
 import { getRoadmap, type RoadmapItem } from "@/app/lib/roadmap";
 
 const statuses = {
-    completed: { label: "Completed", icon: Check, className: "text-emerald-300", cardClassName: "border-emerald-300/15 bg-linear-to-br from-emerald-300/15 via-surface-raised to-surface text-foreground/85" },
-    experimental: { label: "Experimental", icon: TriangleAlert, className: "text-amber-300", cardClassName: "border-amber-300/10 bg-linear-to-br from-amber-300/15 via-surface-raised to-surface text-foreground" },
-    in_progress: { label: "In Progress", icon: CircleEllipsis, className: "text-sky-300", cardClassName: "border-sky-300/15 bg-linear-to-br from-sky-300/15 via-surface-raised to-surface text-foreground" },
-    planned: { label: "Planned", icon: Circle, className: "text-foreground-muted", cardClassName: "border-white/10 bg-linear-to-br from-white/15 via-surface-raised to-surface text-foreground" },
+    completed: { labelKey: "roadmap.status.completed", icon: Check, className: "text-emerald-300", cardClassName: "border-emerald-300/15 bg-linear-to-br from-emerald-300/15 via-surface-raised to-surface text-foreground/85" },
+    experimental: { labelKey: "roadmap.status.experimental", icon: TriangleAlert, className: "text-amber-300", cardClassName: "border-amber-300/10 bg-linear-to-br from-amber-300/15 via-surface-raised to-surface text-foreground" },
+    in_progress: { labelKey: "roadmap.status.in_progress", icon: CircleEllipsis, className: "text-sky-300", cardClassName: "border-sky-300/15 bg-linear-to-br from-sky-300/15 via-surface-raised to-surface text-foreground" },
+    planned: { labelKey: "roadmap.status.planned", icon: Circle, className: "text-foreground-muted", cardClassName: "border-white/10 bg-linear-to-br from-white/15 via-surface-raised to-surface text-foreground" },
 };
 
 const statusOrder: RoadmapItem["status"][] = ["planned", "in_progress", "experimental", "completed"];
 
+// Presents keyed roadmap prose in the request locale and leaves unkeyed live content visible.
 export async function Roadmap() {
+    const { t, number } = await getTranslations("home");
     const milestones = await getRoadmap();
     if (milestones.length === 0) return null;
 
@@ -22,16 +25,18 @@ export async function Roadmap() {
         >
             <div className="site-container">
                 <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
-                    Development Roadmap
+                    {t("roadmap.eyebrow")}
                 </p>
                 <h2
                     id="roadmap-heading"
                     className="mt-4 font-display text-4xl font-semibold uppercase leading-[0.92] tracking-[-0.03em] text-foreground sm:text-6xl lg:text-7xl"
                 >
-                    The Road <span className="text-gold">Ahead</span>
+                    {t("roadmap.heading").split("\n").map((line, index, lines) => (
+                        <span key={index} className={index === lines.length - 1 ? "text-gold" : undefined}>{index > 0 && " "}{line}</span>
+                    ))}
                 </h2>
                 <p className="mt-6 max-w-2xl font-sans text-base leading-7 text-foreground-muted sm:text-lg">
-                    Explore what’s complete, what’s in development, and what’s planned for Bannerlord Coop.
+                    {t("roadmap.description")}
                 </p>
 
                 <div className="mt-10 space-y-5 sm:mt-12">
@@ -46,7 +51,8 @@ export async function Roadmap() {
                             3: "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3",
                             4: "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4",
                         }[populatedStatuses.length];
-                        const titleParts = milestone.title.match(/^(v\d+(?:\.\d+)*)\s*-\s*(.+)$/i);
+                        const title = milestone.title_translation_key ? t(milestone.title_translation_key) : milestone.title;
+                        const titleParts = title.match(/^(v\d+(?:\.\d+)*)\s*-\s*(.+)$/i);
 
                         return (
                             <details
@@ -62,10 +68,10 @@ export async function Roadmap() {
                                                     <span className="mb-2 block font-sans text-xs font-semibold uppercase tracking-wider text-gold">{titleParts[1]}</span>
                                                     {titleParts[2]}
                                                 </>
-                                            ) : milestone.title}
+                                            ) : title}
                                         </h3>
                                         <p className="mt-1 font-sans text-sm text-foreground-muted">
-                                            {completed} of {items.length} completed
+                                            {t("roadmap.progress", { count: completed, completed: number(completed), total: number(items.length) })}
                                         </p>
                                     </div>
                                     <ChevronDown aria-hidden="true" className="size-5 shrink-0 text-gold transition-transform group-open:rotate-180" />
@@ -80,10 +86,10 @@ export async function Roadmap() {
                                                 <div key={statusKey} className="min-w-0">
                                                     <h4 className={`mb-3 flex items-center gap-2 font-sans text-sm font-semibold ${status.className}`}>
                                                         <Icon aria-hidden="true" className="size-4 shrink-0" />
-                                                        {status.label} <span className="text-foreground-muted">&middot; {statusItems.length}</span>
+                                                        {t(status.labelKey)} <span className="text-foreground-muted">&middot; {number(statusItems.length)}</span>
                                                     </h4>
                                                     <ul
-                                                        aria-label={status.label}
+                                                        aria-label={t(status.labelKey)}
                                                         className={populatedStatuses.length === 1
                                                             ? "grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-3"
                                                             : "flex flex-col gap-3"}
@@ -91,18 +97,18 @@ export async function Roadmap() {
                                                         {statusItems.map((item) => (
                                                                 <li key={item.id} className={`min-w-0 rounded-lg border px-3 py-3 ${status.cardClassName}`}>
                                                                     <h5 className="wrap-break-word font-sans text-sm font-semibold leading-6">
-                                                                        {item.title}
+                                                                        {item.title_translation_key ? t(item.title_translation_key) : item.title}
                                                                     </h5>
-                                                                    {item.description && (
+                                                                    {(item.description_translation_key || item.description) && (
                                                                         <p className="mt-2 whitespace-pre-line wrap-break-word font-sans text-sm leading-6 text-foreground-muted">
-                                                                            {item.description}
+                                                                            {item.description_translation_key ? t(item.description_translation_key) : item.description}
                                                                         </p>
                                                                     )}
                                                                 </li>
                                                         ))}
                                                     </ul>
                                                     {statusKey === "experimental" && (
-                                                        <p className="mt-3 font-sans text-sm leading-5 text-foreground-muted">Implemented, but not yet reliable.</p>
+                                                        <p className="mt-3 font-sans text-sm leading-5 text-foreground-muted">{t("roadmap.experimental")}</p>
                                                     )}
                                                 </div>
                                             );
@@ -110,7 +116,7 @@ export async function Roadmap() {
                                     </div>
                                 ) : (
                                     <p className="border-t border-white/10 p-5 font-sans text-sm text-foreground-muted sm:p-6">
-                                        No features announced yet.
+                                        {t("roadmap.empty")}
                                     </p>
                                 )}
                             </details>
