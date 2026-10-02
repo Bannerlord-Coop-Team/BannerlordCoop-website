@@ -432,7 +432,7 @@ function formatProgress(job: MyServerBackupJob, t: Translator["t"]) {
 
 // Localizes known backup labels and preserves unknown external codes.
 function formatBackupType(value: string, t: Translator["t"]) {
-    const known = new Set(["manual", "automatic", "scheduled", "safety", "pre-update", "pre-restore", "available", "restored", "failed", "expired", "queued", "restoring"]);
+    const known = new Set(["manual", "daily", "weekly", "automatic", "scheduled", "safety", "pre-update", "pre-import", "pre-restore", "manual-deletion", "role-removal", "final-deletion", "available", "restored", "failed", "expired", "queued", "restoring"]);
     if (known.has(value)) return t(`backupType.${value}`);
     return value.split(/[._-]/u).filter(Boolean).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }

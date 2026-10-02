@@ -12,13 +12,16 @@ import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles"
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import ServerPage, { generateMetadata } from "./page";
 import { createTranslator } from "@/app/lib/localization/translator";
-import messages from "@/app/lib/localization/dictionaries/en/managed-server.json";
+import { LiveServerBackupSetup } from "@/app/components/servers/LiveServerBackupSetup";
+import { LiveServerVisibilitySetup } from "@/app/components/servers/LiveServerVisibilitySetup";
 
 vi.mock("@/app/lib/localization/server", () => ({
     getLocale: async () => "en",
     getMessages: async () => serverTestMessages,
-    // Supplies deliberately distinct fallback labels through the real translator.
-    getTranslations: async () => createTranslator("en", { ...messages, "member.missingName": "Missing member name", "member.missingEmail": "Missing member email" }),
+    // Selects the requested namespace while keeping deliberately distinct managed member labels.
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", namespace === "managed-server"
+        ? { ...serverTestMessages[namespace], "member.missingName": "Missing member name", "member.missingEmail": "Missing member email" }
+        : serverTestMessages[namespace]),
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -148,6 +151,8 @@ it("preserves managed-only pages without requiring live authorization", async ()
 });
 
 // Resolve the page's server components, leaving client components for React to render.
+function findServerElement(node: ReactNode, name: "LiveServerBackupSetup"): Promise<ReactElement<ComponentProps<typeof LiveServerBackupSetup>> | null>;
+function findServerElement(node: ReactNode, name: "LiveServerVisibilitySetup"): Promise<ReactElement<ComponentProps<typeof LiveServerVisibilitySetup>> | null>;
 function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
 function findServerElement(node: ReactNode, name: "ServerSettingsPanel"): Promise<ReactElement<ComponentProps<typeof ServerSettingsPanel>> | null>;
 function findServerElement(node: ReactNode, name: "ServerWorkspacePanel"): Promise<ReactElement<ComponentProps<typeof ServerWorkspacePanel>> | null>;
@@ -186,6 +191,7 @@ it("supplies localized missing identity labels while retaining real operator ide
     });
 });
 
+// Awaits real backup setup output before checking unavailable-access guidance and inert operations.
 it.each(["mapping-required", "access-required", "lookup-failed"] as const)("explains %s without exposing backup operations", async (reason) => {
     mocks.managedServers.mockResolvedValue([]);
     if (reason === "mapping-required") mocks.liveServer.mockReturnValue({ ...liveServer, managedServerId: undefined });
@@ -195,7 +201,7 @@ it.each(["mapping-required", "access-required", "lookup-failed"] as const)("expl
         const tree = await page();
         const setup = await findServerElement(tree, "LiveServerBackupSetup");
         expect(setup?.props).toEqual({ reason, serverId: liveId });
-        const html = renderToStaticMarkup(<TestLocalization>{setup} </TestLocalization>);
+        const html = renderToStaticMarkup(<TestLocalization>{await LiveServerBackupSetup(setup!.props)} </TestLocalization>);
         expect(html).toContain(reason === "lookup-failed" ? "Reload backup access" : "View managed servers and setup options");
         if (reason === "lookup-failed") {
             // A same-page fragment link would not reload; GET must request fresh access.
@@ -285,6 +291,7 @@ it.each([
     }
 });
 
+// Awaits real visibility setup output without changing mapped identity or authorization expectations.
 it.each(["mapping-required", "access-required", "lookup-failed"] as const)("links live visibility to actionable %s guidance without granting access", async reason => {
     // An unrelated owned server must never substitute for the configured identity.
     mocks.managedServers.mockResolvedValue([{ serverId: "unrelated", accessRole: "owner" }]);
@@ -297,7 +304,7 @@ it.each(["mapping-required", "access-required", "lookup-failed"] as const)("link
         expect(renderToStaticMarkup(<TestLocalization>{workspace!.props.visibility} </TestLocalization>)).toContain('href="#server-visibility"');
         const setup = await findServerElement(tree, "LiveServerVisibilitySetup");
         expect(setup?.props).toEqual({ reason, serverId: liveId });
-        const html = renderToStaticMarkup(<TestLocalization>{setup} </TestLocalization>);
+        const html = renderToStaticMarkup(<TestLocalization>{await LiveServerVisibilitySetup(setup!.props)} </TestLocalization>);
         expect(html).toContain('id="server-visibility"');
         if (reason === "lookup-failed") {
             expect(html).toContain(`action="/servers/${liveId}#server-visibility" method="get"`);

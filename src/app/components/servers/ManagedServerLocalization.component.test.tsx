@@ -50,15 +50,19 @@ it("reuses cheats translations in the command reference", () => {
     expect(html).not.toContain(command.summary);
 });
 
-// Formats backup sizes and dates using the provider locale rather than the browser default.
-it("formats backup dates and sizes in the selected locale", () => {
+// Matrix: every accepted backup type uses its translated label alongside locale-formatted dates and sizes.
+it.each(["daily", "weekly", "pre-update", "pre-import", "pre-restore", "manual-deletion", "role-removal", "final-deletion", "manual"])("localizes the %s backup label, dates and sizes", (backupType) => {
     const date = "2026-09-01T14:45:07.479Z";
-    const html = renderToStaticMarkup(<LocalizationProvider locale="es" messages={serverTestMessages}>
+    const label = `Tipo ${backupType}`;
+    const html = renderToStaticMarkup(<LocalizationProvider locale="es" messages={{ ...serverTestMessages, "managed-server": {
+        ...serverTestMessages["managed-server"], [`backupType.${backupType}`]: label,
+    } }}>
         <ManagedServerPollingProvider><ManagedServerBackups userId="user" status={null}
             server={{ serverId: "server", displayName: "Real campaign", friendlyRegion: "Europe", operationState: "stopped", observedGameState: "stopped", releaseChannel: "stable", updatedAt: date, accessRole: "owner" }}
-            backups={[{ backupId: "backup", backupType: "manual", byteSize: 1024, createdAt: date, retentionExpiresAt: date, restoreState: "available", restoredAt: null, canRestore: true }]} />
+            backups={[{ backupId: "backup", backupType, byteSize: 1024, createdAt: date, retentionExpiresAt: date, restoreState: "available", restoredAt: null, canRestore: true }]} />
         </ManagedServerPollingProvider>
     </LocalizationProvider>);
+    expect(html).toContain(label);
     expect(html).toContain("1,0 KB");
     expect(html).toContain(createTranslator("es", serverTestMessages["managed-server"]).date(date, { dateStyle: "medium", timeStyle: "short" }));
 });
