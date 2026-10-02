@@ -1,1 +1,9 @@
-{}
+{
+    "links.brandHome": "{brand} home",
+    "error.code": "Error {code}",
+    "heading": "No page to be displayed.",
+    "description": "The page you were looking for may have moved, been removed, or never existed. Return to familiar territory or continue to the server directory.",
+    "links.home": "Return home",
+    "links.servers": "Browse servers",
+    "footer.motto": "No banner rises without friends"
+}
