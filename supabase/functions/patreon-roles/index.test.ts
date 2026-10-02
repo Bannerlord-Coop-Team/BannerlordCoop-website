@@ -313,4 +313,8 @@ test("allocation workers refuse a pre-migration or mismatched lease before readi
     assert.equal(response.status, 503);
     assert.deepEqual(calls.map(call => call.operation), ["acquire", "release"]);
     assert.throws(() => createPatreonRoleHandler({ ...options, allocationPolicy: { ...allocationPolicy, campaignId: "999" } }));
+    // The reviewed USD20 pair funds allocations too; the pin and CP policy decide which one is live.
+    const usd20 = { ...allocationPolicy, minimumCents: 2000 as const, policyVersion: "patreon-paid-usd20-v1" as const };
+    assert.equal((await createPatreonRoleHandler({ ...options, allocationPolicy: usd20 })(sync())).status, 503);
+    assert.deepEqual(calls.map(call => call.operation), ["acquire", "release", "acquire", "release"]);
 });
