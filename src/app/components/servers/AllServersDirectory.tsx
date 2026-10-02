@@ -1,14 +1,17 @@
 "use client";
 
 import { ServerDirectoryTable, type ManagedServerDirectoryEntry } from "@/app/components/servers/ServerDirectoryTable";
+import { useTranslations } from "@/app/lib/localization/client";
 import { Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
+/** Filters public inventory while localizing only its presentation. */
 export function AllServersDirectory({
     servers,
 }: {
     servers: readonly ManagedServerDirectoryEntry[];
 }) {
+    const { t, number } = useTranslations("servers");
     const [search, setSearch] = useState("");
 
     const filteredServers = useMemo(() => {
@@ -19,17 +22,18 @@ export function AllServersDirectory({
 
             return (
                 server.name.toLowerCase().includes(query) ||
-                server.connectionType.toLowerCase().includes(query)
+                server.connectionType.toLowerCase().includes(query) ||
+                (server.connectionType === "Direct" && t("table.direct").toLowerCase().includes(query))
             );
         });
-    }, [search, servers]);
+    }, [search, servers, t]);
 
     return (
         <div>
             <div className="mb-4 flex flex-col gap-3 border border-white/10 bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="relative w-full sm:max-w-md">
                     <label htmlFor="server-search" className="sr-only">
-                        Search public servers
+                        {t("search.label")}
                     </label>
                     <Search
                         aria-hidden="true"
@@ -40,14 +44,14 @@ export function AllServersDirectory({
                         type="search"
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
-                        placeholder="Search servers"
+                        placeholder={t("search.placeholder")}
                         className="min-h-11 w-full border border-white/10 bg-background py-2 pl-10 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-foreground-dim focus:border-gold/50 focus:ring-1 focus:ring-gold/40"
                     />
                     {search && (
                         <button
                             type="button"
                             onClick={() => setSearch("")}
-                            aria-label="Clear server search"
+                            aria-label={t("search.clear")}
                             className="absolute right-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center text-foreground-dim transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                         >
                             <X aria-hidden="true" className="size-4" />
@@ -57,17 +61,17 @@ export function AllServersDirectory({
 
                 <div className="flex items-center justify-between gap-5 sm:justify-end">
                     <span className="font-label text-xs uppercase tracking-wide text-foreground-muted">
-                        Public servers only
+                        {t("search.publicOnly")}
                     </span>
                     <p className="whitespace-nowrap font-label text-xs font-semibold tabular-nums text-foreground-dim" aria-live="polite">
-                        {filteredServers.length} shown
+                        {t("search.shown", { count: filteredServers.length, countLabel: number(filteredServers.length) })}
                     </p>
                 </div>
             </div>
 
             <ServerDirectoryTable
                 servers={filteredServers}
-                emptyMessage="No servers match your filters."
+                emptyMessage={t("search.empty")}
             />
         </div>
     );

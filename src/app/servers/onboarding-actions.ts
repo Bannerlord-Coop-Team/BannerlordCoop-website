@@ -1,5 +1,6 @@
 "use server";
 
+import { getTranslations } from "@/app/lib/localization/server";
 import { MyServersApiError, requestServerOnboarding } from "@/app/lib/hosting/my-servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { parseOnboardingIntent, type OnboardingResult } from "../../../supabase/functions/_shared/server-onboarding-contract";
@@ -9,10 +10,12 @@ export type OnboardingActionResult =
     | { ok: true; result: OnboardingResult }
     | { ok: false; message: string; retrySameRequest: boolean };
 
+/** Authenticates and submits the retained exact request, localizing only outcome guidance. */
 export async function submitServerOnboarding(input: unknown, expectedPageUserId: unknown): Promise<OnboardingActionResult> {
+    const { t } = await getTranslations("servers");
     let intent;
     try { intent = parseOnboardingIntent(input); } catch {
-        return uncertain("The retained request is invalid. Do not submit a replacement until its outcome is reconciled.");
+        return uncertain(t("action.invalid"));
     }
     let accessToken: string | null;
     try {
@@ -23,13 +26,13 @@ export async function submitServerOnboarding(input: unknown, expectedPageUserId:
         // Only narrows dispatch. The current verified JWT and backend account binding
         // remain the sole source of authority, not this page-supplied account ID.
         if (!userData.user || typeof expectedPageUserId !== "string" || expectedPageUserId !== userData.user.id) {
-            return uncertain("Sign in with the account that submitted this request, then retry the pending request.");
+            return uncertain(t("action.accountMismatch"));
         }
         accessToken = sessionData.session?.access_token ?? null;
     } catch {
-        return uncertain("Your authenticated session is unavailable. Sign in again, then retry the pending request.");
+        return uncertain(t("action.sessionUnavailable"));
     }
-    if (!accessToken) return uncertain("Sign in again, then retry the pending request.");
+    if (!accessToken) return uncertain(t("action.signIn"));
     try {
         const result = await requestServerOnboarding(accessToken, intent);
         revalidatePath("/servers");
@@ -41,9 +44,10 @@ export async function submitServerOnboarding(input: unknown, expectedPageUserId:
         if (["capacity_unavailable", "capacity_available", "quota_exhausted", "provider_cannot_assign",
             "required_approval_missing", "pilot_only", "provisioning_paused", "validated_build_unavailable"].includes(code)) {
             revalidatePath("/servers");
-            return { ok: false, retrySameRequest: false, message: "No change was made by this request. Capacity or eligibility changed; refresh before choosing again." };
+            return { ok: false, retrySameRequest: false, message: t("action.noChange") };
         }
-        return uncertain("The submission outcome is unconfirmed. Wait if rate limited, then retry the same pending request to avoid duplicates.");
+        return uncertain(t("action.unconfirmed"));
     }
 }
+/** Retains ambiguous requests for safe exact replay. */
 function uncertain(message: string): OnboardingActionResult { return { ok: false, retrySameRequest: true, message }; }

@@ -1,3 +1,4 @@
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { onboardingCreated, ONBOARDING_TEST_ID } from "../../../tests/onboarding-fixtures";
 const mocks = vi.hoisted(() => ({ getUser: vi.fn(), getSession: vi.fn(), request: vi.fn(), revalidate: vi.fn() }));
@@ -41,4 +42,24 @@ describe("onboarding server action authentication and replay policy", () => {
         expect(await submitServerOnboarding(intent, "account-a")).toMatchObject({ ok: false, retrySameRequest: false });
         expect(mocks.revalidate).toHaveBeenCalledWith("/servers");
     });
+});
+
+it("localizes action guidance without changing terminal rejection or exact-retry policy", async () => {
+    const { localeDefinitions } = await import("@/app/lib/localization/registry");
+    const original = localeDefinitions.en.dictionaries.servers;
+    const { default: servers } = await import("@/app/lib/localization/dictionaries/en/servers.json");
+    localeDefinitions.en.dictionaries.servers = async () => ({ default: {
+        ...servers, "action.noChange": "Localized terminal outcome", "action.unconfirmed": "Localized uncertain outcome",
+        "action.accountMismatch": "Localized account mismatch", "action.invalid": "Localized invalid request",
+    } });
+    try {
+        expect(await submitServerOnboarding({}, "account-a")).toEqual({ ok: false, retrySameRequest: true, message: "Localized invalid request" });
+        expect(await submitServerOnboarding(intent, "account-b")).toEqual({ ok: false, retrySameRequest: true, message: "Localized account mismatch" });
+        expect(mocks.request).not.toHaveBeenCalled();
+        mocks.request.mockRejectedValueOnce(new MyServersApiError("quota_exhausted", "source transport error"));
+        expect(await submitServerOnboarding(intent, "account-a")).toEqual({ ok: false, retrySameRequest: false, message: "Localized terminal outcome" });
+        mocks.request.mockRejectedValueOnce(new Error("source transport error"));
+        expect(await submitServerOnboarding(intent, "account-a")).toEqual({ ok: false, retrySameRequest: true, message: "Localized uncertain outcome" });
+        expect(mocks.request).toHaveBeenLastCalledWith("current-verified-token", intent);
+    } finally { localeDefinitions.en.dictionaries.servers = original; }
 });

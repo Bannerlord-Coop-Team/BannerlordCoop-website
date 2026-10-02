@@ -1,3 +1,6 @@
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import servers from "@/app/lib/localization/dictionaries/en/servers.json";
+import serverCommon from "@/app/lib/localization/dictionaries/en/server-common.json";
 import { ServerDirectoryTable } from "@/app/components/servers/ServerDirectoryTable";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -14,7 +17,7 @@ const server = {
 
 test("does not advertise management without an explicit detail route", () => {
     const html = renderToStaticMarkup(
-        <ServerDirectoryTable servers={[server]} emptyMessage="No servers" />,
+        <LocalizationProvider locale="en" messages={{ servers, "server-common": serverCommon }}><ServerDirectoryTable servers={[server]} emptyMessage="No servers" /></LocalizationProvider>,
     );
 
     assert.doesNotMatch(html, />Manage</u);
@@ -23,10 +26,10 @@ test("does not advertise management without an explicit detail route", () => {
 
 test("renders an explicit management link without inline lifecycle controls", () => {
     const html = renderToStaticMarkup(
-        <ServerDirectoryTable
+        <LocalizationProvider locale="en" messages={{ servers, "server-common": serverCommon }}><ServerDirectoryTable
             servers={[{ ...server, manageUrl: `/servers/${server.id}` }]}
             emptyMessage="No servers"
-        />,
+        /></LocalizationProvider>,
     );
 
     assert.match(html, />Manage</u);
