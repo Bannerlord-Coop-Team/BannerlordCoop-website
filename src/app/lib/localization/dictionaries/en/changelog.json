@@ -1,1 +1,30 @@
-{}
+{
+  "metadata.title": "Changelog",
+  "metadata.description": "Read the latest Bannerlord Coop releases, improvements, and bug fixes.",
+  "hero.eyebrow": "Development updates",
+  "hero.title": "Bannerlord Coop Changelog",
+  "hero.description": "Here are all the latest versions, gameplay improvements, technical changes, and fixes published by the Bannerlord Coop development team.",
+  "links.githubReleases": "View releases on GitHub",
+  "links.fullRelease": "View full release",
+  "links.openGithubReleases": "Open GitHub releases",
+  "history.eyebrow": "Release history",
+  "history.title": "What changed?",
+  "history.description": "Release information is loaded directly from the project's public GitHub repository and refreshed every hour.",
+  "history.count": {
+    "one": "Showing {formattedCount} release",
+    "other": "Showing {formattedCount} releases"
+  },
+  "release.latest": "Latest release",
+  "release.label": "Release",
+  "release.prerelease": "Pre-release",
+  "release.published": "Published {date}",
+  "release.publishedUnknown": "Published on an unknown date",
+  "release.author": "By {author}",
+  "release.emptyNotes": "No release notes were provided for this version.",
+  "unavailable.eyebrow": "GitHub unavailable",
+  "unavailable.title": "The changelog could not be loaded.",
+  "unavailable.description": "GitHub may be temporarily unavailable or the API request may have reached its rate limit. You can still view the releases directly on GitHub.",
+  "empty.eyebrow": "No releases yet",
+  "empty.title": "The release history is currently empty.",
+  "empty.description": "Published GitHub releases will automatically appear here."
+}
