@@ -55,7 +55,7 @@ export function parseCheatsQuery(input: QueryInput): CheatsQuery {
     };
 }
 
-/** Builds canonical share paths without changing command syntax or filter identifiers. */
+/** Retains explicit share locales, including English, without changing command syntax or filters. */
 export function buildCheatsPath(query: CheatsQuery) {
     const params = new URLSearchParams();
     const search = query.q.trim();
@@ -65,7 +65,7 @@ export function buildCheatsPath(query: CheatsQuery) {
     if (query.type !== "all") params.set("type", query.type);
     if (query.side !== "all") params.set("side", query.side);
     if (query.cheat) params.set("cheat", query.cheat);
-    if (query.lang && query.lang !== "en") params.set("lang", query.lang);
+    if (query.lang) params.set("lang", query.lang);
 
     const qs = params.toString();
     return qs ? `/cheats?${qs}` : "/cheats";

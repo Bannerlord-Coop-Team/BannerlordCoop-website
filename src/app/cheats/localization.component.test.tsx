@@ -82,6 +82,7 @@ it("ignores the retired cheats cookie, disabled/invalid global choices, and inva
     expect(request.set).not.toHaveBeenCalled();
 });
 
+/** Exercises test-only locale activation for cookie content, explicit overrides, and metadata. */
 it("uses activated dictionaries for cookie and explicit links with no page-code changes", async () => {
     localeDefinitions.ru = { ...initialRu, enabled: true, dictionaries: { cheats: async () => ({ default: { ...english, "ui.title": "Команды", "ui.metadataTitle": "Команды" } }) } };
     request.cookie = "ru";
@@ -95,9 +96,52 @@ it("uses activated dictionaries for cookie and explicit links with no page-code 
     expect((await getCheatsLocalization("ru")).translator.t("ui.title")).toBe("Команды");
     const metadata = await generateMetadata({ searchParams: Promise.resolve({ lang: "ru" }) });
     expect(metadata.openGraph).toMatchObject({ locale: "ru_RU", title: "Команды" });
-    expect(metadata.alternates?.languages).toMatchObject({ en: "/cheats", "zh-CN": "/cheats?lang=zh-CN", ru: "/cheats?lang=ru" });
+    expect(metadata.alternates?.languages).toMatchObject({ en: "/cheats?lang=en", "zh-CN": "/cheats?lang=zh-CN", ru: "/cheats?lang=ru" });
     localeDefinitions["zh-CN"] = { ...initialZh, enabled: true, dictionaries: { cheats: async () => ({ default: { ...chinese, "ui.title": "Activated Chinese" } }) } };
     expect((await getCheatsLocalization("cn")).translator.t("ui.title")).toBe("Activated Chinese");
+});
+
+/** Copied English command/search links must override the recipient's non-English cookie. */
+it.each(["command", "search"] as const)("keeps copied English %s links English under a Russian cookie", async (kind) => {
+    localeDefinitions.ru = { ...initialRu, enabled: true, dictionaries: { cheats: async () => ({ default: english }) } };
+    request.cookie = "ru";
+    expect((await getCheatsLocalization(undefined)).locale).toBe("ru");
+    const params = { lang: "en", q: "gold", tab: "all", type: "gameplay", side: "server" };
+    window.history.replaceState(null, "", `/cheats?${new URLSearchParams(params)}`);
+    const clipboard = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: clipboard } });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+        await act(async () => root.render(await pageTree(params)));
+        expect(container.querySelector("main")?.lang).toBe("en");
+        expect(container.querySelector("[data-chrome-lang]")?.getAttribute("data-chrome-lang")).toBe("ru");
+        const scope = kind === "command" ? container.querySelector('[id="cheat-coop.debug.hero.set_gold"]')! : container;
+        const label = kind === "command" ? "Copy link" : "Copy search link";
+        const copy = [...scope.querySelectorAll("button")].find(button => button.textContent === label)!;
+        await act(async () => copy.click());
+        const shared = new URL(clipboard.mock.calls[0][0]);
+        expect(Object.fromEntries(shared.searchParams)).toEqual(kind === "command"
+            ? { cheat: "coop.debug.hero.set_gold", lang: "en" }
+            : params);
+        expect((await getCheatsLocalization(shared.searchParams.get("lang") ?? undefined)).locale).toBe("en");
+        expect(request.cookie).toBe("ru");
+    } finally { await act(async () => root.unmount()); }
+});
+
+/** English metadata destinations must resolve English without relying on the global cookie. */
+it("makes English canonical and alternate metadata explicit under a Russian cookie", async () => {
+    localeDefinitions.ru = { ...initialRu, enabled: true, dictionaries: { cheats: async () => ({ default: english }) } };
+    request.cookie = "ru";
+    const metadata = await generateMetadata({ searchParams: Promise.resolve({ lang: "en" }) });
+    expect(metadata.title).toBe(english["ui.metadataTitle"]);
+    expect(metadata.openGraph).toMatchObject({ locale: "en_US", url: "/cheats?lang=en" });
+    expect(metadata.alternates?.canonical).toBe("/cheats?lang=en");
+    expect(metadata.alternates?.languages?.en).toBe("/cheats?lang=en");
+    for (const path of [metadata.alternates?.canonical, metadata.alternates?.languages?.en]) {
+        const url = new URL(path as string, "https://example.com");
+        expect((await getCheatsLocalization(url.searchParams.get("lang") ?? undefined)).locale).toBe("en");
+    }
 });
 
 it("scopes Chinese content while chrome follows the cookie and hydrates without preference writes", async () => {

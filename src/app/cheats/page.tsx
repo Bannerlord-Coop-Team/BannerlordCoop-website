@@ -18,7 +18,7 @@ type CheatsPageProps = {
 /** Gives explicit cheats share links the same content language in metadata and the directory. */
 export async function generateMetadata({ searchParams }: CheatsPageProps): Promise<Metadata> {
     const { locale, translator: { t }, openGraphLocale } = await getCheatsLocalization((await searchParams).lang);
-    const canonical = locale === "en" ? "/cheats" : `/cheats?lang=${locale}`;
+    const canonical = `/cheats?lang=${locale}`;
 
     return {
         title: t("ui.metadataTitle"),
@@ -27,7 +27,7 @@ export async function generateMetadata({ searchParams }: CheatsPageProps): Promi
             canonical,
             languages: Object.fromEntries(
                 [...new Set([...getEnabledLocales().map((option) => option.locale), "zh-CN"])].map(
-                    (language) => [language, language === "en" ? "/cheats" : `/cheats?lang=${language}`],
+                    (language) => [language, `/cheats?lang=${language}`],
                 ),
             ),
         },

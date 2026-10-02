@@ -31,9 +31,10 @@ test("parses all existing Chinese aliases and distinguishes absent overrides fro
     assert.equal(parseCheatsLocale("invalid"), undefined);
 });
 
-test("keeps English cheats links clean and adds explicit locale for translated share links", () => {
+/** Distinguishes cookie-following navigation from explicit content-language links. */
+test("keeps bare cheats navigation and retains every explicit share locale", () => {
     assert.equal(buildCheatsPath(parseCheatsQuery({})), "/cheats");
-    assert.equal(buildCheatsPath(parseCheatsQuery({ lang: "en" })), "/cheats");
+    assert.equal(buildCheatsPath(parseCheatsQuery({ lang: "en" })), "/cheats?lang=en");
     assert.equal(buildCheatsPath(parseCheatsQuery({ lang: "zh-CN" })), "/cheats?lang=zh-CN");
     assert.equal(buildCheatsPath(parseCheatsQuery({ lang: "pt-PT" })), "/cheats?lang=pt-PT");
 });
@@ -100,12 +101,13 @@ test("catalog preserves PR3538 metadata, usage and localized argument coverage",
     assert.equal(english.t("ui.sideEither"), "Both");
 });
 
+/** Protects command identifiers, filters, and explicit locales through share URL round trips. */
 test("featured links round-trip canonical snake-case commands and preserve every filter", () => {
     for (const lang of ["en", "zh-CN", "ru", "es", "pt-BR", "pt-PT", "ja", "ko"] as const) {
         for (const cheat of featuredCommandNames) {
             const path = buildCheatsPath(parseCheatsQuery({ cheat, lang, q: "gold", tab: "Heroes", type: "inspect", side: "either" }));
             const query = parseCheatsQuery(Object.fromEntries(new URL(path, "https://example.com").searchParams));
-            assert.deepEqual(query, { cheat, lang: lang === "en" ? undefined : lang, q: "gold", tab: "Heroes", type: "inspect", side: "either" });
+            assert.deepEqual(query, { cheat, lang, q: "gold", tab: "Heroes", type: "inspect", side: "either" });
         }
     }
 });
