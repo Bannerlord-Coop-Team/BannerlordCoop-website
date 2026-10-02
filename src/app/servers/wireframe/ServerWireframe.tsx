@@ -40,10 +40,10 @@ const lifecycleButton = "!gap-1 !px-2 !text-xs sm:!gap-2 sm:!px-3 sm:!text-sm";
 const confirmation = "mt-4 rounded-md border border-amber-400/25 bg-amber-400/5 p-4";
 
 /** Announces localized demo feedback and exposes its dismiss control. */
-function Feedback({ message, onDismiss }: { message: string; onDismiss?: () => void }) {
+function Feedback({ message, params, onDismiss }: { message: string; params?: Record<string, string>; onDismiss?: () => void }) {
     const { t } = useTranslations("server-wireframe");
     return <div role="status">{message && <p className="mt-3 flex items-start gap-3 text-sm leading-6 text-foreground-muted">
-        <span className="min-w-0 break-words">{message}</span>
+        <span className="min-w-0 break-words">{t(message, params)}</span>
         {onDismiss && <button className="shrink-0 rounded p-1 hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold" aria-label={t("feedback.dismiss")} onClick={onDismiss}><X className="size-4" aria-hidden="true" /></button>}
     </p>}</div>;
 }
@@ -88,7 +88,7 @@ export default function ServerWireframe() {
     const [visibility, setVisibility] = useState("private");
     const [draftVisibility, setDraftVisibility] = useState(visibility);
     const [consoleNotice, setConsoleNotice] = useState("");
-    const [backupNotice, setBackupNotice] = useState("");
+    const [backupNotice, setBackupNotice] = useState<{ key: string; nameKey?: string } | null>(null);
     const [settingsNotice, setSettingsNotice] = useState("");
     const settingsName = useRef<HTMLInputElement>(null);
     const restoreButton = useRef<HTMLButtonElement | null>(null);
@@ -111,6 +111,7 @@ export default function ServerWireframe() {
     const [restoreId, setRestoreId] = useState<number | null>(null);
     const [config, setConfig] = useState(initialConfig);
     const [savedConfig, setSavedConfig] = useState(initialConfig);
+    // Store message identities so active feedback follows locale changes without resetting demo data.
     const [configError, setConfigError] = useState("");
     const [configNotice, setConfigNotice] = useState("");
     const [saveNotice, setSaveNotice] = useState("");
@@ -138,7 +139,7 @@ export default function ServerWireframe() {
         const result = action === "start" ? "started" : action === "stop" ? "stopped" : "restarted";
         setRunning(action !== "stop");
         setPendingLifecycle(null);
-        setLifecycleNotice(t(`lifecycle.${action}Notice`));
+        setLifecycleNotice(`lifecycle.${action}Notice`);
         setLogs((previous) => [...previous, `[DEMO] Server ${result} locally. No live server was changed.`]);
         requestAnimationFrame(() => (action === "stop" ? startButton : action === "start" ? stopButton : restartButton).current?.focus());
     }
@@ -182,7 +183,7 @@ export default function ServerWireframe() {
             setConfigError("");
             return true;
         } catch {
-            setConfigError(t("config.invalid"));
+            setConfigError("config.invalid");
             return false;
         }
     }
@@ -195,7 +196,7 @@ export default function ServerWireframe() {
         link.download = "wireframe-server.log";
         link.click();
         URL.revokeObjectURL(url);
-        setConsoleNotice(t("console.downloaded"));
+        setConsoleNotice("console.downloaded");
     }
 
     /** Exports the validated draft verbatim and announces completion. */
@@ -207,7 +208,7 @@ export default function ServerWireframe() {
         link.download = "wireframe-config.json";
         link.click();
         URL.revokeObjectURL(url);
-        setConfigNotice(t("config.exported"));
+        setConfigNotice("config.exported");
     }
 
     return <main className="min-h-svh bg-background pb-12">
@@ -239,7 +240,7 @@ export default function ServerWireframe() {
                         <div className="absolute right-0 z-10 mt-2 w-40 rounded-lg border border-white/15 bg-surface-raised p-1 shadow-xl">
                             <div role="group" aria-label={t("visibility.label")}>{["private", "public"].map((value) => <button key={value} className="flex min-h-10 w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-gold" aria-pressed={visibility === value} onClick={() => {
                                 setVisibility(value); setDraftVisibility(value); setSettingsNotice("");
-                                setHeaderNotice(t(`visibility.${value}Notice`));
+                                setHeaderNotice(`visibility.${value}Notice`);
                                 if (visibilityPicker.current) {
                                     visibilityPicker.current.open = false;
                                     visibilityPicker.current.querySelector("summary")?.focus();
@@ -260,7 +261,7 @@ export default function ServerWireframe() {
                             setName(inlineName.trim());
                             setDraftName(inlineName.trim());
                             setSettingsNotice("");
-                            setHeaderNotice(t("server.nameSaved"));
+                            setHeaderNotice("server.nameSaved");
                             finishNameEdit();
                         }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); finishNameEdit(); } }}>
                             <label htmlFor="inline-server-name" className="sr-only">{t("server.name")}</label>
@@ -278,16 +279,16 @@ export default function ServerWireframe() {
                     <button className={button} title={t("address.copyTitle")} onClick={async () => {
                         try {
                             await navigator.clipboard.writeText("203.0.113.42:7210");
-                            setHeaderNotice(t("address.copied"));
+                            setHeaderNotice("address.copied");
                         } catch {
-                            setHeaderNotice(t("address.copyFailed"));
+                            setHeaderNotice("address.copyFailed");
                         }
                     }}><Copy className="size-4" aria-hidden="true" />{t("address.copy")}</button>
                 </div>
                 <Feedback message={headerNotice} onDismiss={() => setHeaderNotice("")} />
             </header>
             <nav aria-label={t("workspace.label")} className="mb-5 grid grid-cols-4 border-b border-white/10 sm:flex sm:gap-1">
-                {sections.map(({ name: label, labelKey, icon: Icon }) => <button key={label} aria-current={section === label ? "page" : undefined} onClick={() => { setSection(label); setPendingLifecycle(null); setLifecycleNotice(""); setConsoleNotice(""); setBackupNotice(""); setSettingsNotice(""); setSaveNotice(""); setConfigNotice(""); }} className={`relative inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 px-1 py-2 text-xs leading-4 transition sm:min-h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm focus-visible:outline-2 focus-visible:outline-gold ${section === label ? "border-gold text-gold" : "border-transparent text-foreground-muted hover:text-foreground"}`}>
+                {sections.map(({ name: label, labelKey, icon: Icon }) => <button key={label} aria-current={section === label ? "page" : undefined} onClick={() => { setSection(label); setPendingLifecycle(null); setLifecycleNotice(""); setConsoleNotice(""); setBackupNotice(null); setSettingsNotice(""); setSaveNotice(""); setConfigNotice(""); }} className={`relative inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 px-1 py-2 text-xs leading-4 transition sm:min-h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm focus-visible:outline-2 focus-visible:outline-gold ${section === label ? "border-gold text-gold" : "border-transparent text-foreground-muted hover:text-foreground"}`}>
                     <Icon className="size-4" aria-hidden="true" />{t(labelKey)}{((label === "Save & config" && configDirty) || (label === "Settings" && settingsDirty)) && <span aria-label={t("draft.unsaved")} className="absolute right-2 top-2 size-1.5 rounded-full bg-gold sm:static" />}
                 </button>)}
             </nav>
@@ -359,20 +360,20 @@ export default function ServerWireframe() {
 
             {section === "Backups" && <Panel title={t("backups.title")} description={t("backups.description")} action={<button className={primary} onClick={() => {
                 setBackups((previous) => [{ id: Date.now(), nameKey: "backups.manualName", hour: null, size: 24.8, kind: "manual" }, ...previous]);
-                setBackupNotice(t("backups.created"));
+                setBackupNotice({ key: "backups.created" });
             }}><Database className="size-4" aria-hidden="true" />{t("backups.create")}</button>}>
                 <div className="border-b border-white/10 px-5 py-4">
                     <p className="text-sm text-foreground-muted">{t("backups.policy", { time: date(Date.UTC(2000, 0, 1, 6), { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }), days: number(7) })}</p>
-                    <Feedback message={backupNotice} />
+                    <Feedback message={backupNotice?.key ?? ""} params={backupNotice?.nameKey ? { name: t(backupNotice.nameKey) } : undefined} />
                 </div>
                 <ul className="divide-y divide-white/10 px-5">{backups.map((backup) => <li key={backup.id} className="py-5">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div><h3 className="text-sm font-medium">{t(backup.nameKey)}</h3><p className="mt-1 text-xs text-foreground-muted">{t("backups.details", { date: backup.hour === null ? t("backups.justNow") : t("backups.today", { time: date(Date.UTC(2000, 0, 1, backup.hour), { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }) }), size: number(backup.size, { style: "unit", unit: "megabyte", unitDisplay: "short" }), kind: t(`backups.${backup.kind}`) })}</p></div>
-                        <button className={button} aria-label={t("backups.restoreLabel", { name: t(backup.nameKey) })} onClick={(event) => { restoreButton.current = event.currentTarget; setBackupNotice(""); setRestoreId(backup.id); }}>{t("backups.restore")}</button>
+                        <button className={button} aria-label={t("backups.restoreLabel", { name: t(backup.nameKey) })} onClick={(event) => { restoreButton.current = event.currentTarget; setBackupNotice(null); setRestoreId(backup.id); }}>{t("backups.restore")}</button>
                     </div>
                     {restoreId === backup.id && <div className={confirmation}>
                         <h4 className="text-sm font-semibold">{t("backups.restoreTitle", { name: t(backup.nameKey) })}</h4><p className="mt-2 text-sm leading-6 text-foreground-muted">{t("backups.warning")}</p>
-                        <div className="mt-3 flex flex-wrap gap-2"><button className={button} onClick={() => { setRestoreId(null); restoreButton.current?.focus(); }}>{t("action.cancel")}</button><button className={destructive} onClick={() => { setRestoreId(null); setBackupNotice(t("backups.restored", { name: t(backup.nameKey) })); restoreButton.current?.focus(); }}>{t("backups.confirm")}</button></div>
+                        <div className="mt-3 flex flex-wrap gap-2"><button className={button} onClick={() => { setRestoreId(null); restoreButton.current?.focus(); }}>{t("action.cancel")}</button><button className={destructive} onClick={() => { setRestoreId(null); setBackupNotice({ key: "backups.restored", nameKey: backup.nameKey }); restoreButton.current?.focus(); }}>{t("backups.confirm")}</button></div>
                     </div>}
                 </li>)}</ul>
             </Panel>}
@@ -386,7 +387,7 @@ export default function ServerWireframe() {
                             <p className="mt-1 text-xs text-foreground-muted">{t("save.details", { size: number(24.8, { style: "unit", unit: "megabyte", unitDisplay: "short" }), minutes: number(2) })}</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            <button className={button} onClick={() => setSaveNotice(t("save.exportNotice"))}><Download className="size-4" aria-hidden="true" />{t("save.export")}</button>
+                            <button className={button} onClick={() => setSaveNotice("save.exportNotice")}><Download className="size-4" aria-hidden="true" />{t("save.export")}</button>
                             <button ref={saveImportButton} className={button} onClick={() => saveImport.current?.click()}><Upload className="size-4" aria-hidden="true" />{t("save.import")}</button>
                             <input ref={saveImport} id="save-import" type="file" hidden aria-label={t("save.importLabel")} onChange={(event) => {
                                 setSaveFile(event.target.files?.[0]?.name ?? "");
@@ -400,7 +401,7 @@ export default function ServerWireframe() {
                         <p className="mt-2 text-sm leading-6 text-foreground-muted">{t("save.warning")}</p>
                         <div className="mt-3 flex flex-wrap gap-2">
                             <button className={button} onClick={() => { setSaveFile(""); saveImportButton.current?.focus(); }}>{t("action.cancel")}</button>
-                            <button className={destructive} onClick={() => { setActiveSave(saveFile); setSaveFile(""); setSaveNotice(t("save.replaced")); saveImportButton.current?.focus(); }}>{t("save.replace")}</button>
+                            <button className={destructive} onClick={() => { setActiveSave(saveFile); setSaveFile(""); setSaveNotice("save.replaced"); saveImportButton.current?.focus(); }}>{t("save.replace")}</button>
                         </div>
                     </div>}
                     <Feedback message={saveNotice} />
@@ -425,15 +426,15 @@ export default function ServerWireframe() {
                                     setEditor("json");
                                     if (!validConfig(text)) return;
                                     setConfig(text);
-                                    setConfigNotice(t("config.imported"));
-                                } catch { setConfigNotice(""); setConfigError(t("config.readFailed")); }
+                                    setConfigNotice("config.imported");
+                                } catch { setConfigNotice(""); setConfigError("config.readFailed"); }
                             }} />
                         </div>
                         {editor === "json" ? <>
                             <label htmlFor="config-json" className="mb-2 block text-xs text-foreground-muted">config.json</label>
                             <textarea ref={jsonEditor} id="config-json" spellCheck={false} value={config} onChange={(event) => { setConfig(event.target.value); setConfigError(""); setConfigNotice(""); }} aria-invalid={!!configError} aria-describedby={configError ? "config-error config-help" : "config-help"} className={`${input} min-h-64 resize-y font-mono leading-7`} />
                             <p id="config-help" className="mt-3 text-xs leading-5 text-foreground-muted">{t("config.help")}</p>
-                            {configError && <p id="config-error" role="alert" className="mt-3 text-sm text-red-300">{configError}</p>}
+                            {configError && <p id="config-error" role="alert" className="mt-3 text-sm text-red-300">{t(configError)}</p>}
                         </> : <div className="rounded-md border border-white/10 bg-white/[0.02] p-5">
                             <span className="inline-flex rounded bg-white/5 px-2 py-1 text-xs text-foreground-muted">{t("config.notInteractive")}</span>
                             <p className="mt-3 text-sm leading-6 text-foreground-muted">{t("config.formHelp")}</p>
@@ -446,11 +447,11 @@ export default function ServerWireframe() {
                         </div>}
                     </div>
                     {editor === "json" && <SaveBar dirty={configDirty} message={configNotice}>
-                        <button className={button} onClick={() => { setConfig(savedConfig); setConfigError(""); setConfigNotice(t("draft.discarded")); jsonEditor.current?.focus(); }}>{t("action.discard")}</button>
+                        <button className={button} onClick={() => { setConfig(savedConfig); setConfigError(""); setConfigNotice("draft.discarded"); jsonEditor.current?.focus(); }}>{t("action.discard")}</button>
                         <button className={primary} onClick={() => {
                             if (!validConfig(config)) { jsonEditor.current?.focus(); return; }
                             setSavedConfig(config);
-                            setConfigNotice(t("config.saved"));
+                            setConfigNotice("config.saved");
                             jsonEditor.current?.focus({ preventScroll: true });
                         }}>{t("config.save")}</button>
                     </SaveBar>}
@@ -458,7 +459,7 @@ export default function ServerWireframe() {
             </div>}
 
             {section === "Settings" && <Panel title={t("settings.title")} description={t("draft.help")}>
-                <form onSubmit={(event) => { event.preventDefault(); if (!draftName.trim()) return; setName(draftName.trim()); setDraftName(draftName.trim()); setVisibility(draftVisibility); setSettingsNotice(t("settings.saved")); settingsName.current?.focus({ preventScroll: true }); }}>
+                <form onSubmit={(event) => { event.preventDefault(); if (!draftName.trim()) return; setName(draftName.trim()); setDraftName(draftName.trim()); setVisibility(draftVisibility); setSettingsNotice("settings.saved"); settingsName.current?.focus({ preventScroll: true }); }}>
                     <div className="max-w-3xl space-y-5 p-5">
                     <div><label htmlFor="server-name" className="text-sm font-medium">{t("server.name")}</label><input ref={settingsName} id="server-name" required maxLength={80} value={draftName} onChange={(event) => { setDraftName(event.target.value); setSettingsNotice(""); }} className={`${input} mt-2`} /><p className="mt-2 text-xs leading-5 text-foreground-muted">{t("settings.nameHelp")}</p></div>
                     <fieldset><legend className="text-sm font-medium">{t("visibility.label")}</legend><p className="mt-2 text-sm leading-6 text-foreground-muted">{t("visibility.help")}</p><div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -466,7 +467,7 @@ export default function ServerWireframe() {
                     </div></fieldset>
                     </div>
                     <SaveBar dirty={settingsDirty} message={settingsNotice}>
-                        <button type="button" className={button} onClick={() => { setDraftName(name); setDraftVisibility(visibility); setSettingsNotice(t("draft.discarded")); settingsName.current?.focus(); }}>{t("action.discard")}</button>
+                        <button type="button" className={button} onClick={() => { setDraftName(name); setDraftVisibility(visibility); setSettingsNotice("draft.discarded"); settingsName.current?.focus(); }}>{t("action.discard")}</button>
                         <button type="submit" disabled={!draftName.trim()} className={primary}>{t("settings.save")}</button>
                     </SaveBar>
                 </form>
