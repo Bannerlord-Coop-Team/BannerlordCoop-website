@@ -5,6 +5,26 @@ Existing backup polling, restore confirmations, and retained request recovery
 remain in `ManagedServerBackups`. Campaign and configuration transfers appear
 above them, with a responsive two-card layout and native import review dialogs.
 
+## Campaign selection and fresh campaigns
+
+The Campaign save card lists every campaign registered for the server through the
+control plane's `server-saves` owner operation (`my-servers` `GET ?resource=saves`),
+marks the selected one, and lets owners and managers switch with `select-save`
+(`POST { action: "select-save", serverId, saveId, expectedUpdatedAt }`). Imported
+campaigns appear in this list; selecting one makes the next Start load it.
+
+**New campaign** (`POST { action: "reset-campaign", serverId, expectedUpdatedAt }`)
+queues the control plane's `reset-campaign` job after an explicit confirmation
+dialog. The job purges every save in the runner slot, retires the campaign rows
+and seeds the packaged default campaign again, leaving the server stopped with
+the fresh campaign selected. Both changes require a stopped server with no other
+job running; the card explains that and disables the buttons otherwise. Each
+mutation carries a durable `x-request-id` so a retry after a lost response is
+replayed rather than queued twice. While a reset is pending the card polls the
+campaign list every five seconds and reports when the selection moved to the
+freshly seeded campaign. ControlPlane PR #297 and `docs/managed-hosting/web-admin.md`
+describe the operations; `server-campaign-contract.ts` mirrors their shapes.
+
 ## Inline configuration editing
 
 The Configuration card edits the runner's native `server-config.json` and
