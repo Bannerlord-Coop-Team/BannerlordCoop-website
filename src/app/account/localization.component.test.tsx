@@ -31,6 +31,11 @@ import AccountLoading from "./loading";
 
 afterEach(() => { vi.resetAllMocks(); mocks.pending = false; });
 
+/** Builds a complete authoritative account status for the presentation under test. */
+function accountStatus(hasDiscord: boolean, membership: AccountStatus["membership"] = EMPTY_MEMBERSHIP): AccountStatus {
+    return { version: 1, accountId: "account-id", hasDiscord, configured: true, verificationPending: false, membership };
+}
+
 /** Renders one account presentation snapshot with authoritative mocked status and unchanged names. */
 async function renderAccount(status: AccountStatus | null, params: { discord?: string; patreon?: string } = {}, named = true) {
     mocks.user.mockResolvedValue({ data: { user: { id: "account-id", user_metadata: named ? { full_name: "Actual Name" } : {}, identities: [
@@ -52,7 +57,7 @@ it("uses selected messages for metadata and accessible loading", async () => {
 });
 
 it.each([true, false])("localizes unlinked presentation and only the missing-name fallback (named=%s)", async named => {
-    const view = await renderAccount({ hasDiscord: false, membership: EMPTY_MEMBERSHIP }, {}, named);
+    const view = await renderAccount(accountStatus(false), {}, named);
     for (const key of ["heading", "intro", "connections.heading", "badge.unlinked", "discord.optional", "discord.connect", "patreon.benefits", "patreon.connect", "servers.heading", "servers.description", "servers.link"]) {
         expect(view.textContent).toContain(translated[key]);
     }
@@ -77,7 +82,7 @@ it.each([
     ["patreon", "error", "error.patreonAuthorization"], ["patreon", "confirm_error", "error.patreonAuthorization"],
     ["patreon", "cancelled", "error.patreonAuthorization"],
 ])("localizes %s=%s error presentation", async (provider, code, key) => {
-    const view = await renderAccount({ hasDiscord: false, membership: EMPTY_MEMBERSHIP }, { [provider]: code });
+    const view = await renderAccount(accountStatus(false), { [provider]: code });
     expect(view.querySelector('[role="alert"]')?.textContent).toBe(translated[key]);
     expect(view.textContent).toContain(translated["patreon.connect"]);
 });
@@ -88,7 +93,7 @@ it.each([
     ["nonqualifying", null, "pending", "membership.nonqualifying", "membership.syncPending"],
     ["review_required", null, "unavailable", "membership.reviewRequired", "membership.syncUnavailable"],
 ] as const)("localizes linked membership %s notices without translating actual Discord names", async (verification, validUntil, sync, verificationKey, syncKey) => {
-    const view = await renderAccount({ hasDiscord: true, membership: { ...EMPTY_MEMBERSHIP, linked: true, verification, validUntil, sync } });
+    const view = await renderAccount(accountStatus(true, { ...EMPTY_MEMBERSHIP, linked: true, verification, validUntil, sync }));
     for (const key of [verificationKey, syncKey, "membership.expiry", "badge.connected", "patreon.linked", "patreon.verify"]) {
         expect(view.textContent).toContain(translated[key]);
     }

@@ -252,7 +252,7 @@ test("localized config imports, saves and exports unchanged JSON while form prev
         assert.ok(demo.container.textContent?.includes(translated.t("config.saved")));
         assert.ok(demo.container.textContent?.includes(translated.t("draft.clean")));
         await demo.click("config.export");
-        assert.equal(download.mock.instances[0].download, "wireframe-config.json");
+        assert.equal((download.mock.contexts[0] as HTMLAnchorElement).download, "wireframe-config.json");
         assert.equal(blobs[0].type, "application/json");
         assert.equal(await readBlob(blobs[0]), payload);
         assert.ok(demo.container.textContent?.includes(translated.t("config.exported")));
