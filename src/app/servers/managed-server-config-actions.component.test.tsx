@@ -47,3 +47,18 @@ it("maps conflicts to reload guidance and keeps unconfirmed failures retryable",
     mocks.read.mockRejectedValueOnce(new MyServersApiError("agent_target_unavailable", "No runner"));
     expect(await readManagedServerConfig(id, "mod", "owner")).toMatchObject({ ok: false, message: expect.stringContaining("no active runner") });
 });
+it("explains runner-side failures surfaced by the control plane instead of blaming connectivity", async () => {
+    for (const [code, fragment, reload] of [
+        ["idempotency_conflict", "changed on the runner", true],
+        ["not_found", "no configuration file", false],
+        ["integrity_failed", "integrity check", false],
+        ["route_unavailable", "older version", false],
+        ["agent_transport_unavailable", "did not respond", false],
+        ["configuration_response_invalid", "does not understand", false],
+    ] as const) {
+        mocks.read.mockRejectedValueOnce(new MyServersApiError(code, "Runner failure"));
+        const result = await readManagedServerConfig(id, "server", "owner");
+        expect(result).toMatchObject({ ok: false, reload, message: expect.stringContaining(fragment) });
+        expect(result.ok || result.message).not.toContain("could not be reached");
+    }
+});
