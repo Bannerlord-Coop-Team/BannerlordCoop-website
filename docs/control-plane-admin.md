@@ -54,6 +54,18 @@ Both pages use one freshly verified and mapped registry observation, retaining
 independent null cursors, current-first ordering and limit100 per channel. GHCR
 discovery has a global100-version bound; aliases mark matching versions without
 adding rows, so these pages cover the full current catalog. Errors remain visible.
+The Releases view records each verified channel/image digest's first observation in
+`public.release_observations` after its authorized catalog read. The Releases page
+shows **First observed** from that immutable display timestamp, rather than the
+control plane's request observation time. Reloads, alias changes and website
+restarts retain it; a replacement image digest receives a new timestamp. These
+records never supply release availability, authorization or deployment selection.
+Apply `202610020003_release_first_observations.sql` before deploying this UI. The
+migration seeds the earliest retained observation from verified registry deployment
+records; the website does not read private control-plane tables at runtime. Dates
+discarded before this table existed cannot be reconstructed; other images receive
+their first retained date when next viewed in Releases. Browser roles have no table access,
+and the website service role may only select and insert these records.
 Deploy the companion ControlPlane #266 operation before switching this website;
 older backends reject it without a fallback. Browser `builds` reads and all
 mutations retain their existing Edge contract.
@@ -127,7 +139,7 @@ and `/api/v1/restart` routes with only `{serverId}` and the caller's bearer toke
 Start uses the durable managed lifecycle to recreate a missing container with
 the selected save and configuration, and confirms success only after readiness.
 If the response deadline expires with a durable operation ID, the website shows
-that Start was accepted and asks the owner to refresh status; it does not claim
+that Start was accepted and follows its progress; it does not claim
 the game is ready or submit another request. Stop/Restart operate directly on
 the existing container and require UI confirmation warning of unsaved progress
 loss. Stop never powers off the VPS;
@@ -137,11 +149,17 @@ The Edge retains the website's correlated version-1 envelope: success contains
 `result: {exitCode: 0}`; nonzero exit returns HTTP 409 with
 `container_command_failed` and the actual exit code in the bounded error message.
 No stdout/stderr is forwarded. Transport failure means an unknown outcome, not
-proof of non-execution. Each HTTP request is a new command; there is no automatic
-retry or lifecycle polling. Start timeout errors retain the durable operation
-ID. The page is revalidated once after a response. Only successful lifecycle
-Start claims readiness; direct Stop/Restart success reports the exit code.
-Existing backup polling/interlocks remain.
+proof of non-execution. Each HTTP request is a new command; commands are never
+automatically retried. Start timeout errors retain the durable operation ID.
+Stop immediately shows pending feedback. After a successful command or an
+uncertain response, the existing page poller refreshes authenticated server
+status every four seconds. Lifecycle controls stay disabled until a newer
+server revision confirms both the stopped lifecycle and observed game state.
+After sixty seconds without confirmation, polling pauses and **Check status
+again** resumes only the reads; it never sends another Stop. Explicit rejection
+or a nonzero exit remains an error. Only successful lifecycle Start claims
+readiness; direct Restart success reports the exit code. Existing backup
+polling/interlocks remain.
 
 Before enabling these controls, commission compatible ControlPlane #156 agent,
 controller **and persistent process owner**, allow the three exact direct paths
