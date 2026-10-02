@@ -1,0 +1,29 @@
+{
+  "metadata.title": "変更履歴",
+  "metadata.description": "Bannerlord Coop の最新リリース、改善点、不具合修正をご覧いただけます。",
+  "hero.eyebrow": "開発アップデート",
+  "hero.title": "Bannerlord Coop 変更履歴",
+  "hero.description": "Bannerlord Coop 開発チームが公開した最新バージョン、ゲームプレイの改善、技術的な変更、修正をすべてご紹介します。",
+  "links.githubReleases": "GitHub でリリースを見る",
+  "links.fullRelease": "リリースの詳細を見る",
+  "links.openGithubReleases": "GitHub のリリースを開く",
+  "history.eyebrow": "リリース履歴",
+  "history.title": "変更点",
+  "history.description": "リリース情報はプロジェクトの公開 GitHub リポジトリから直接読み込まれ、1時間ごとに更新されます。",
+  "history.count": {
+    "other": "{formattedCount}件のリリースを表示中"
+  },
+  "release.latest": "最新リリース",
+  "release.label": "リリース",
+  "release.prerelease": "プレリリース",
+  "release.published": "公開日：{date}",
+  "release.publishedUnknown": "公開日不明",
+  "release.author": "投稿者：{author}",
+  "release.emptyNotes": "このバージョンのリリースノートはありません。",
+  "unavailable.eyebrow": "GitHub にアクセスできません",
+  "unavailable.title": "変更履歴を読み込めませんでした。",
+  "unavailable.description": "GitHub が一時的に利用できないか、API リクエストの回数制限に達した可能性があります。GitHub でリリースを直接ご覧いただけます。",
+  "empty.eyebrow": "リリースはまだありません",
+  "empty.title": "現在、リリース履歴はありません。",
+  "empty.description": "GitHub で公開されたリリースは、ここに自動的に表示されます。"
+}
