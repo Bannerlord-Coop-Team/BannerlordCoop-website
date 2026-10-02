@@ -40,7 +40,7 @@ export async function Navbar({ viewer }: { viewer?: Promise<{ user: User | null 
                     </span>
                     </Link>
 
-                    <nav aria-label={t("nav.primary")} className="absolute left-1/2 hidden -translate-x-1/2 xl:block">
+                    <nav aria-label={t("nav.primary")} className="hidden xl:block">
                         <ul className="flex min-h-10 items-center gap-3 xl:gap-5">
                             <li className="flex items-center">
                                 <Link href="/" className={navigationLinkClassName}>
