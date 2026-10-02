@@ -3,12 +3,17 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CheatsDirectory, type CheatCommand } from "./CheatsDirectory";
 import data from "./commands.json";
-import { getCheatsMessages } from "./locales";
+import { LocalizationProvider } from "../lib/localization/client";
+import en from "../lib/localization/dictionaries/en/cheats.json";
+import zh from "./locales/zh-CN.json";
 import { parseCheatsQuery } from "./query";
 
-function render(q: string, lang = "en", side = "all") {
+/** Renders the real directory with its route-scoped dictionary for source/translated regressions. */
+function render(q: string, lang: "en" | "zh-CN" = "en", side = "all") {
     const query = parseCheatsQuery({ q, lang, side, tab: "all" });
-    return renderToStaticMarkup(<CheatsDirectory commands={data.commands as CheatCommand[]} initialQuery={query} locale={query.lang} messages={getCheatsMessages(query.lang)} />);
+    return renderToStaticMarkup(<LocalizationProvider locale={lang} messages={{ cheats: lang === "en" ? en : zh }}>
+        <CheatsDirectory commands={data.commands as CheatCommand[]} initialQuery={query} />
+    </LocalizationProvider>);
 }
 
 test("CheatsDirectory renders source descriptions and required/optional argument help", () => {
