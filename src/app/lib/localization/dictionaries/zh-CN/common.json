@@ -29,7 +29,6 @@
   "loading.page": "正在加载页面……",
   "loading.site": "正在加载 Bannerlord Coop……",
   "locale.label": "语言",
-  "locale.apply": "应用语言",
   "locale.saving": "正在保存语言设置……",
   "locale.error": "无法保存语言设置，请重试。",
   "download.trigger": "下载",
