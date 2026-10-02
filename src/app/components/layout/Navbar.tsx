@@ -14,7 +14,7 @@ import { LocaleSelector } from "./LocaleSelector";
 
 const navigationLinkClassName = "inline-flex min-h-10 items-center px-2 font-label text-sm font-semibold uppercase leading-none tracking-[0.16em] text-foreground-muted transition-colors duration-300 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
-/** A page may share its own verified viewer; never retain it across renders. */
+/** Renders localized navigation with unchanged viewer names; shared verified viewers are never retained across renders. */
 export async function Navbar({ viewer }: { viewer?: Promise<{ user: User | null }> } = {}) {
     const { t } = await getTranslations("common");
     let isAuthenticated = false;
@@ -26,7 +26,7 @@ export async function Navbar({ viewer }: { viewer?: Promise<{ user: User | null 
             ? await viewer
             : (await (await getSupabaseServerClient()).auth.getUser()).data;
         isAuthenticated = user !== null;
-        if (user) accountName = accountDisplayName(user);
+        if (user) accountName = accountDisplayName(user, t("account.defaultName"));
         isAdmin = user ? hasAdminAccess(user) : false;
     } catch {}
 
