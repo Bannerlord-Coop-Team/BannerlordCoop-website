@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
+
 import {
     addLiveConsoleOperator,
     assignLiveConsoleOwner,
@@ -36,12 +38,14 @@ function SubmitButton({
     );
 }
 
+/** Labels the owner/operator email input without changing submitted field names or IDs. */
 function AccountEmailField({ serverId, label }: { serverId: string; label: string }) {
+    const { t } = useTranslations("live-server");
     return (
         <>
             <input type="hidden" name="serverId" value={serverId} />
             <label htmlFor={`${label}-${serverId}`} className="sr-only">
-                {label} account email
+                {label === "operator" ? t("access.operatorEmail") : "owner account email"}
             </label>
             <input
                 id={`${label}-${serverId}`}
@@ -57,6 +61,7 @@ function AccountEmailField({ serverId, label }: { serverId: string; label: strin
     );
 }
 
+/** Presents live ownership and delegated operator access without modifying permission checks. */
 export function LiveServerAccessManager({
     canAssignOwner,
     loadError,
@@ -72,13 +77,14 @@ export function LiveServerAccessManager({
     serverId: string;
     warning?: string;
 }) {
+    const { t } = useTranslations("live-server");
     return (
         <div className="mt-5 grid gap-4 border-t border-white/10 pt-4 lg:grid-cols-2">
             <div className="rounded-sm border border-white/[0.08] bg-black/10 p-3.5">
                 <div className="flex items-center gap-2">
                     <UserCog aria-hidden="true" className="size-4 text-gold-muted" />
                     <h3 className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted">
-                        Owner account
+                        {t("access.owner")}
                     </h3>
                 </div>
                 {warning && (
@@ -108,7 +114,7 @@ export function LiveServerAccessManager({
                     </div>
                 ) : (
                     <p className="mt-3 text-xs leading-5 text-foreground-dim">
-                        No owner is assigned. Only administrators can manage this server.
+                        {t("access.noOwner")}
                     </p>
                 )}
 
@@ -131,7 +137,7 @@ export function LiveServerAccessManager({
                 <div className="flex items-center gap-2">
                     <Users aria-hidden="true" className="size-4 text-gold-muted" />
                     <h3 className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted">
-                        Operators
+                        {t("access.operators")}
                     </h3>
                 </div>
                 {loadError ? (
@@ -149,11 +155,11 @@ export function LiveServerAccessManager({
                                     <input type="hidden" name="operatorUserId" value={operator.id} />
                                     <button
                                         type="submit"
-                                        title={`Remove ${operator.displayName}`}
+                                        title={t("access.removeTitle", { name: operator.displayName })}
                                         className="inline-flex size-8 items-center justify-center rounded-sm border border-red-500/30 bg-red-500/10 text-red-200 transition-colors hover:bg-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
                                     >
                                         <UserMinus aria-hidden="true" className="size-3.5" />
-                                        <span className="sr-only">Remove {operator.displayName} as operator</span>
+                                        <span className="sr-only">{t("access.removeOperator", { name: operator.displayName })}</span>
                                     </button>
                                 </form>
                             </li>
@@ -161,14 +167,14 @@ export function LiveServerAccessManager({
                     </ul>
                 ) : (
                     <p className="mt-3 text-xs leading-5 text-foreground-dim">
-                        No operators are assigned.
+                        {t("access.noOperators")}
                     </p>
                 )}
 
                 {!loadError && !warning && owner && (
                     <form action={addLiveConsoleOperator} className="mt-3 flex flex-col gap-2 sm:flex-row">
                         <AccountEmailField serverId={serverId} label="operator" />
-                        <SubmitButton>Add operator</SubmitButton>
+                        <SubmitButton>{t("access.addOperator")}</SubmitButton>
                     </form>
                 )}
             </div>
