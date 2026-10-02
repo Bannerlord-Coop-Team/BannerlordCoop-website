@@ -45,7 +45,7 @@ export function ServerConsoleWorkspace({ children, onSelectCommand, coopCommands
         { group: t("managementWorkspace.players"), commands: [["say <text>", t("managementWorkspace.broadcastAMessageToAllPlayers")], ["kick <id|name>", t("managementWorkspace.disconnectAPlayerUsePlayersToFindTheirId")]] },
         { group: t("managementWorkspace.gameCommandsCheats"), commands: commandsData.commands
             .filter(command => command.side !== "client" && isPublishedCheat(command))
-            .map(command => [command.usage, cheats.t(`command.${command.command}.summary`), [cheats.t(`command.${command.command}.name`), cheats.t(`category.${command.category.toLowerCase().replaceAll(" ", "_")}`), ...command.aliases, ...command.arguments.map(argument => cheats.t(`command.${command.command}.argument.${argument.name}`))].join(" ")]) },
+            .map(command => [command.usage, cheats.t(`command.${command.command}.summary`), [command.name, cheats.t(`category.${command.category.toLowerCase().replaceAll(" ", "_")}`), ...command.aliases, ...command.arguments.map(argument => cheats.t(`command.${command.command}.argument.${argument.name}`))].join(" ")]) },
     ];
     const [query, setQuery] = useState("");
     const [expanded, setExpanded] = useState(false);
