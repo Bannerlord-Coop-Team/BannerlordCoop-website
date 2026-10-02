@@ -1,3 +1,4 @@
+import { getTranslations } from "@/app/lib/localization/server";
 import { ManagedServerCommands } from "@/app/components/servers/ManagedServerCommands";
 import { releaseChannelLabel } from "@/app/lib/control-plane/presentation";
 import { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
@@ -304,6 +305,8 @@ async function LiveServerManagementPage({
     logDownload?: { serverId: string; userId: string };
     server: LiveConsoleServer;
 }) {
+    const { t } = await getTranslations("managed-server");
+    const memberLabels = { missingName: t("member.missingName"), missingEmail: t("member.missingEmail") };
     const canManageAssignments = accessLevel === "admin" || accessLevel === "owner";
     let assignmentLoadError = "";
     let assignmentWarning = "";
@@ -323,8 +326,8 @@ async function LiveServerManagementPage({
                     getOperatedLiveConsoleServerIds(member.app_metadata).includes(server.id),
                 );
 
-                owner = owners[0] ? getLiveConsoleMember(owners[0]) : null;
-                operators = operatorUsers.map(getLiveConsoleMember);
+                owner = owners[0] ? getLiveConsoleMember(owners[0], memberLabels) : null;
+                operators = operatorUsers.map((member) => getLiveConsoleMember(member, memberLabels));
                 if (owners.length > 1) {
                     assignmentWarning = "Multiple owner assignments were found. Reassign the owner to repair access.";
                 }

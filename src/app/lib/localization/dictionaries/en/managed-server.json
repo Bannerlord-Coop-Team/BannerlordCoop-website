@@ -1,1 +1,11 @@
-{}
+{
+  "name.required": "Enter a server name.",
+  "name.singleLine": "Server names must use a single line of visible text.",
+  "name.tooLong": "Server names cannot exceed {maximum} characters.",
+  "name.invalidServer": "Choose a valid live server.",
+  "name.signIn": "Sign in again before renaming this server.",
+  "name.forbidden": "Only an administrator or the assigned owner can rename this server.",
+  "name.saveFailed": "The server name could not be saved. Verify the Supabase migration and try again.",
+  "member.missingName": "Unnamed member",
+  "member.missingEmail": "No email"
+}

@@ -10,11 +10,18 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import ServerPage from "./page";
+import { createTranslator } from "@/app/lib/localization/translator";
+import messages from "@/app/lib/localization/dictionaries/en/managed-server.json";
+
+vi.mock("@/app/lib/localization/server", () => ({
+    // Supplies deliberately distinct fallback labels through the real translator.
+    getTranslations: async () => createTranslator("en", { ...messages, "member.missingName": "Missing member name", "member.missingEmail": "Missing member email" }),
+}));
 
 const mocks = vi.hoisted(() => ({
     getUser: vi.fn(), getSession: vi.fn(), liveServer: vi.fn(),
     liveAccess: vi.fn(), managedServers: vi.fn(), displayNames: vi.fn(),
-    preview: vi.fn(),
+    preview: vi.fn(), users: vi.fn(),
     backups: vi.fn(), backupStatus: vi.fn(), files: vi.fn(), requestBackup: vi.fn(), requestVisibility: vi.fn(), refresh: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
@@ -23,7 +30,7 @@ vi.mock("next/navigation", () => ({
     useRouter: () => ({ refresh: mocks.refresh }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/app/lib/supabase/users", () => ({ listSupabaseUsers: async () => ({ users: [], truncated: false }) }));
+vi.mock("@/app/lib/supabase/users", () => ({ listSupabaseUsers: mocks.users }));
 vi.mock("@/app/lib/hosting/server-files", () => ({ getMyServerFiles: mocks.files }));
 vi.mock("@/app/components/servers/ManagedServerTransfers", () => ({ ManagedServerTransfers: () => null }));
 vi.mock("@/app/lib/supabase/server", () => ({
@@ -61,6 +68,7 @@ beforeEach(() => {
     mocks.liveAccess.mockReturnValue("operator");
     mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole: "manager" }]);
     mocks.displayNames.mockResolvedValue(new Map());
+    mocks.users.mockResolvedValue({ users: [], truncated: false });
 });
 
 it("redirects anonymous visitors to login", async () => {
@@ -152,6 +160,20 @@ async function findServerElement(node: ReactNode, name: string): Promise<ReactEl
     }
     return null;
 }
+
+// Exercises the unified page's member projection without altering assignment authority.
+it("supplies localized missing identity labels while retaining real operator identity", async () => {
+    mocks.liveAccess.mockReturnValue("owner");
+    mocks.users.mockResolvedValue({ truncated: false, users: [
+        { id: "owner", app_metadata: { live_console_owner_server_ids: [liveId] }, user_metadata: {} },
+        { id: "operator", email: "real@example.com", app_metadata: { live_console_operator_server_ids: [liveId] }, user_metadata: { full_name: "Real {name}" } },
+    ] });
+    const access = await findServerElement(await page(), "LiveServerAccessManager");
+    expect(access?.props).toMatchObject({
+        owner: { id: "owner", displayName: "Missing member name", email: "Missing member email" },
+        operators: [{ id: "operator", displayName: "Real {name}", email: "real@example.com" }],
+    });
+});
 
 it.each(["mapping-required", "access-required", "lookup-failed"] as const)("explains %s without exposing backup operations", async (reason) => {
     mocks.managedServers.mockResolvedValue([]);

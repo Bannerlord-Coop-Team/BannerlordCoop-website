@@ -4,6 +4,13 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 import ServerPage from "./page";
+import { createTranslator } from "@/app/lib/localization/translator";
+import messages from "@/app/lib/localization/dictionaries/en/managed-server.json";
+
+vi.mock("@/app/lib/localization/server", () => ({
+    // Keeps server presentation request-independent in the focused file-flow tests.
+    getTranslations: async () => createTranslator("en", messages),
+}));
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 
 const mocks = vi.hoisted(() => ({ live: vi.fn(), access: vi.fn(), servers: vi.fn(), files: vi.fn(), submit: vi.fn(), preview: vi.fn(), configFile: vi.fn() }));
