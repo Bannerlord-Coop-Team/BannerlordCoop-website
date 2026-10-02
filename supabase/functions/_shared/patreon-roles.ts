@@ -1,4 +1,4 @@
-import { ALLOCATION_POLICY_VERSION, parsePolicy, timestamp, type Policy } from "./membership.ts";
+import { ALLOCATION_POLICY_VERSION, POLICY_VERSION, parsePolicy, timestamp, type Policy } from "./membership.ts";
 import { verifyPatreonAllocation } from "./patreon-membership.ts";
 import { checkDatabaseContention, DatabaseContention } from "./database-contention.ts";
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -163,7 +163,8 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
         if (!secret || secret.length < 16 || secret.length > 4096) throw new Error("invalid_patreon_secret");
     }
     const allocationPolicy = options.allocationPolicy ? parsePolicy(JSON.stringify(options.allocationPolicy)) : null;
-    if (allocationPolicy && (allocationPolicy.campaignId !== options.campaignId || allocationPolicy.policyVersion !== ALLOCATION_POLICY_VERSION)) throw new Error("invalid_allocation_policy");
+    // Either reviewed paid policy may fund allocations; the database pin and CP policy must use the same one.
+    if (allocationPolicy && (allocationPolicy.campaignId !== options.campaignId || (allocationPolicy.policyVersion !== ALLOCATION_POLICY_VERSION && allocationPolicy.policyVersion !== POLICY_VERSION))) throw new Error("invalid_allocation_policy");
     const fetcher = options.fetchImplementation ?? fetch;
     const now = options.now ?? Date.now;
     async function patreon(path: string, params: Record<string, string>) {

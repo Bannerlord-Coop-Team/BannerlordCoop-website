@@ -25,19 +25,37 @@ async function currentToken(expectedUserId: string) {
 }
 
 // Revision or operation conflicts need a fresh read; everything else can be retried as-is.
-const RELOAD_CODES = new Set(["request_conflict", "configuration_unavailable", "security_check_failed"]);
+const RELOAD_CODES = new Set(["request_conflict", "configuration_unavailable", "security_check_failed", "idempotency_conflict"]);
 
 // Localizes existing action-specific failure codes without exposing internal errors.
 async function failure(error: unknown, notSubmitted = false): Promise<ManagedServerConfigResult> {
     const { t } = await getTranslations("managed-server");
     const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
+    const runnerUnavailable = t("action.config.runnerUnavailable");
+    const runnerRejected = t("action.config.runnerRejected");
     const messages: Record<string, string> = {
         server_not_found: t("action.config.thisServerIsUnavailableOrYourAccessChanged"),
         identity_unavailable: t("action.config.linkYourDiscordAccountBeforeChangingConfiguration"),
         request_conflict: t("action.config.theConfigurationChangedOrAnotherServerOperationIsInProgress"),
         configuration_unavailable: t("action.config.theServerRunnerCouldNotConfirmThisConfigurationReloadThe"),
+        idempotency_conflict: t("action.config.idempotencyConflict"),
         agent_target_unavailable: t("action.config.thisServerHasNoActiveRunnerRightNowSoIts"),
+        agent_target_invalid: t("action.config.agentTargetInvalid"),
         managed_agent_or_resolver_unavailable: t("action.config.theServerRunnerIsUnavailableRightNowTryAgainLater"),
+        agent_transport_unavailable: runnerUnavailable,
+        storage_unavailable: runnerUnavailable,
+        internal_error: runnerUnavailable,
+        agent_request_invalid: runnerRejected,
+        agent_correlation_invalid: runnerRejected,
+        agent_request_failed: runnerRejected,
+        request_rejected: runnerRejected,
+        route_unavailable: t("action.config.routeUnavailable"),
+        not_found: t("action.config.notFound"),
+        integrity_failed: t("action.config.integrityFailed"),
+        agent_response_invalid: t("action.config.agentResponseInvalid"),
+        configuration_response_invalid: t("action.config.configurationResponseInvalid"),
+        control_plane_failure: t("action.config.controlPlaneFailure"),
+        runtime_unavailable: t("action.config.runtimeUnavailable"),
         rate_limited: t("action.config.tooManyRequestsWereSentWaitAMomentAndTry"),
         control_plane_unavailable: t("action.config.theHostingServiceCouldNotBeReachedTryAgain"),
         server_api_unavailable: t("action.config.theHostingServiceCouldNotBeReachedTryAgain"),
