@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import Home, { generateMetadata } from "@/app/page";
 import { ActiveGroups } from "./community/ActiveGroups";
 import { VideoCarousel } from "./media/VideoCarousel";
+import { CommunityMedia } from "./media/CommunityMedia";
 import { LocalizationProvider } from "@/app/lib/localization/client";
 import { localeDefinitions } from "@/app/lib/localization/registry";
 import home from "@/app/lib/localization/dictionaries/en/home.json";
@@ -45,7 +46,7 @@ async function markup(node: ReactNode, dictionary: Dictionary = home, locale: "e
     return root;
 }
 
-// Matrix: default SSR/client delivery; activated-data SSR/metadata/accessibility; live values; client pagination.
+// Matrix: default/activated-data SSR; keyed/unkeyed editorial media; live values; client pagination.
 describe("home localization", () => {
     it("delivers home-only page messages with English SSR/client copy, formatted statistics and metadata", async () => {
         const page = await Home();
@@ -70,7 +71,7 @@ describe("home localization", () => {
             const page = await Home();
             const root = await markup(page, translated, "ru");
             expect(page.props.locale).toBe("ru");
-            const omitted = /^(roadmap\.|servers\.|carousel\.|metadata\.|media\.(fallbackTitle|videoThumbnail|fallbackThumbnail)$)/;
+            const omitted = /^(roadmap\.|servers\.|carousel\.|metadata\.|media\.(fallbackTitle|videoThumbnail|fallbackThumbnail|captainfracas-twitch\..*)$)/;
             for (const key of Object.keys(home).filter((key) => !omitted.test(key))) {
                 // Avatar and trailer accessibility messages are in attributes rather than text nodes.
                 expect(root.innerHTML).toContain(`Localized ${key}:`);
@@ -83,6 +84,51 @@ describe("home localization", () => {
             const labels = vi.mocked(getHomepageVideos).mock.calls.at(-1)?.[0];
             expect(labels?.fallbackTitle).toBe(translated["media.fallbackTitle"]);
             expect(labels?.videoThumbnail("Original title")).toContain("Original title");
+        } finally { localeDefinitions.ru = original; }
+    });
+
+    // Exercises editorial presentation with translated data and an identical but unkeyed custom row.
+    it("translates keyed Twitch editorial fields and preserves unkeyed media and external content", async () => {
+        const original = localeDefinitions.ru;
+        const translated = {
+            ...home,
+            "media.captainfracas-twitch.description": "Localized description with CaptainFRACAS",
+            "media.captainfracas-twitch.thumbnailAlt": "Localized alternative with CaptainFRACAS",
+            "media.captainfracas-twitch.category": "Localized category with CaptainFRACAS on Twitch",
+        };
+        localeDefinitions.ru = { ...original, enabled: true, dictionaries: { home: async () => ({ default: translated }) } };
+        request.value = "ru";
+        const source = {
+            id: "twitch-seed",
+            title: "Bannerlord Coop — L'empire contre-attaque!",
+            description: home["media.captainfracas-twitch.description"],
+            thumbnail: "https://example.com/source-thumbnail.jpg",
+            thumbnailAlt: home["media.captainfracas-twitch.thumbnailAlt"],
+            category: home["media.captainfracas-twitch.category"],
+            href: "https://www.twitch.tv/videos/2827818732?t=04h20m50s",
+            duration: "7:06:10",
+        };
+        vi.mocked(getHomepageVideos).mockResolvedValueOnce([
+            { ...source, description_translation_key: "media.captainfracas-twitch.description", thumbnail_alt_translation_key: "media.captainfracas-twitch.thumbnailAlt", category_translation_key: "media.captainfracas-twitch.category" },
+            { ...source, id: "unkeyed", href: "https://example.com/unkeyed", description_translation_key: null, thumbnail_alt_translation_key: null, category_translation_key: null },
+        ]);
+        try {
+            const root = await markup(await CommunityMedia(), translated, "ru");
+            const keyed = root.querySelector(`a[href="${source.href}"]`)!;
+            expect(keyed.textContent).toContain(translated["media.captainfracas-twitch.description"]);
+            expect(keyed.textContent).toContain(translated["media.captainfracas-twitch.category"]);
+            expect(keyed.querySelector("img")?.alt).toBe(translated["media.captainfracas-twitch.thumbnailAlt"]);
+            const unkeyed = root.querySelector('a[href="https://example.com/unkeyed"]')!;
+            expect(unkeyed.textContent).toContain(source.description);
+            expect(unkeyed.textContent).toContain(source.category);
+            expect(unkeyed.querySelector("img")?.alt).toBe(source.thumbnailAlt);
+            for (const card of [keyed, unkeyed]) {
+                expect(card.textContent).toContain(source.title);
+                expect(card.textContent).toContain(source.duration);
+                expect(decodeURIComponent(card.querySelector("img")!.src)).toContain(source.thumbnail);
+            }
+            expect(root.textContent).toContain("Source creator");
+            expect(root.querySelector('a[href="https://example.com/creator"]')).not.toBeNull();
         } finally { localeDefinitions.ru = original; }
     });
 

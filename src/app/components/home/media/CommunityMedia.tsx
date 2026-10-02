@@ -15,10 +15,10 @@ const contentCreators: ContentCreator[] = [
     },
 ];
 
-// Presents localized media labels while preserving external video and creator content.
+// Localizes media labels and explicitly keyed editorial fields, preserving external content.
 export async function CommunityMedia() {
     const { t } = await getTranslations("home");
-    const [carouselVideos, creators] = await Promise.all([
+    const [videos, creators] = await Promise.all([
         getHomepageVideos({
             fallbackTitle: t("media.fallbackTitle"),
             // Labels generated thumbnails without translating external video titles.
@@ -30,6 +30,13 @@ export async function CommunityMedia() {
             contentCreators.map((creator) => creator.channelId),
         ),
     ]);
+    // Resolve only assigned editorial keys; new and unmapped rows retain their source prose.
+    const carouselVideos = videos.map((video) => ({
+        ...video,
+        description: video.description_translation_key ? t(video.description_translation_key) : video.description,
+        thumbnailAlt: video.thumbnail_alt_translation_key ? t(video.thumbnail_alt_translation_key) : video.thumbnailAlt,
+        category: video.category_translation_key ? t(video.category_translation_key) : video.category,
+    }));
 
     return (
         <section

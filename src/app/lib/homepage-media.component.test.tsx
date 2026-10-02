@@ -13,7 +13,7 @@ const labels: YouTubeLabels = {
 
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
-// Matrix: API metadata, oEmbed metadata/missing title, failed oEmbed, and mixed custom media.
+// Matrix: API/oEmbed metadata and failures; keyed/unkeyed custom media retain source values and order.
 describe("homepage generated media labels", () => {
     it("preserves API titles/descriptions/categories, even a title identical to the default fallback", async () => {
         vi.stubEnv("YOUTUBE_API_KEY", "test-key");
@@ -50,23 +50,32 @@ describe("homepage generated media labels", () => {
         expect(localized.href).toBe(href);
     });
 
-    it("passes labels to YouTube while preserving custom media, source hrefs and database order", async () => {
+    // Checks key transport without translating source fields or changing the existing media request.
+    it.each([false, true])("preserves custom sources/order and passes explicit editorial keys (keyed: %s)", async (keyed) => {
+        const editorialKeys = {
+            description_translation_key: keyed ? "media.captainfracas-twitch.description" : null,
+            thumbnail_alt_translation_key: keyed ? "media.captainfracas-twitch.thumbnailAlt" : null,
+            category_translation_key: keyed ? "media.captainfracas-twitch.category" : null,
+        };
         vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
         vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "test-public");
         vi.stubEnv("YOUTUBE_API_KEY", "");
         const fetcher = vi.fn()
             .mockResolvedValueOnce({ ok: true, json: async () => [
-                { id: "custom", source: "custom", title: "Custom title", description: "Custom prose", thumbnail: "https://example.com/image", thumbnail_alt: "Custom alternative", category: "Custom category", duration: "1:05", href: "https://example.com/video" },
+                { id: "custom", source: "custom", title: "Custom title", description: "Custom prose", thumbnail: "https://example.com/image", thumbnail_alt: "Custom alternative", category: "Custom category", duration: "1:05", href: "https://example.com/video", ...editorialKeys },
                 { id: "youtube", source: "youtube", href: `${href}&t=10s` },
             ] })
             .mockResolvedValueOnce({ ok: false });
         vi.stubGlobal("fetch", fetcher);
         const videos = await getHomepageVideos(labels);
         expect(videos).toEqual([
-            { id: "custom", title: "Custom title", description: "Custom prose", thumbnail: "https://example.com/image", thumbnailAlt: "Custom alternative", category: "Custom category", duration: "1:05", href: "https://example.com/video" },
+            { id: "custom", title: "Custom title", description: "Custom prose", thumbnail: "https://example.com/image", thumbnailAlt: "Custom alternative", category: "Custom category", duration: "1:05", href: "https://example.com/video", ...editorialKeys },
             expect.objectContaining({ id: "youtube", title: "Localized fallback", href: `${href}&t=10s` }),
         ]);
-        expect(new URL(fetcher.mock.calls[0][0]).searchParams.get("order")).toBe("published_at.desc.nullslast,sort_order.asc,id.asc");
+        const query = new URL(fetcher.mock.calls[0][0]).searchParams;
+        expect(query.get("order")).toBe("published_at.desc.nullslast,sort_order.asc,id.asc");
+        expect(query.get("published")).toBe("eq.true");
+        expect(query.get("select")?.split(",")).toEqual(expect.arrayContaining(Object.keys(editorialKeys)));
         expect(fetcher.mock.calls[0][1]).toEqual({ headers: { apikey: "test-public" }, next: { revalidate: 60 } });
     });
 });
