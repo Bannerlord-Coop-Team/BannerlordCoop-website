@@ -100,8 +100,8 @@ Add `dictionaries/<locale>/<namespace>.json`; populate that locale's existing `l
 
 **Apply both additive migrations before deploying the new loaders**, through a separately authorized deployment process:
 
-1. `20260930150000_roadmap_translation_keys.sql`: nullable `title_translation_key` on milestones/items and `description_translation_key` on items. Maps all checked-in roadmap prose: 4 milestone titles, 39 item titles, 3 nonempty descriptions. Semantic keys are in home; no environment-specific UUID identities.
-2. `20260930160000_homepage_video_translation_keys.sql`: nullable `description_translation_key`, `thumbnail_alt_translation_key`, `category_translation_key` on homepage videos. Maps three unchanged website-authored editorial fields at the known Twitch seed URL; preserves the external French title, creator/platform names, URLs, thumbnail and duration.
+1. `20261002150000_roadmap_translation_keys.sql`: nullable `title_translation_key` on milestones/items and `description_translation_key` on items. Maps all checked-in roadmap prose: 4 milestone titles, 39 item titles, 3 nonempty descriptions. Semantic keys are in home; no environment-specific UUID identities.
+2. `20261002160000_homepage_video_translation_keys.sql`: nullable `description_translation_key`, `thumbnail_alt_translation_key`, `category_translation_key` on homepage videos. Maps three unchanged website-authored editorial fields at the known Twitch seed URL; preserves the external French title, creator/platform names, URLs, thumbnail and duration.
 
 Both migrations preserve original IDs, prose, relationships, statuses, ordering, publication values, RLS and access policies. Assignment guards leave edited/unmatched content unkeyed. Loaders carry explicit keys; rendering translates keyed fields, never matches English text at runtime. Unkeyed/new live rows remain visible as source prose, including identical unkeyed text. Invalid assigned keys fail under the strict dictionary contract. Migration tests use disposable in-memory PGlite only; **no production schema or data was accessed/applied**. Deploying code before schema can trigger the loaders' existing unavailable-data paths.
 

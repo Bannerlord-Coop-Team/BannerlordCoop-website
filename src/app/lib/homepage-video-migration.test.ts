@@ -26,7 +26,7 @@ for (const edited of [false, true]) {
             const before = (await db.query("select * from homepage_videos order by id")).rows;
             const policiesBefore = (await db.query("select * from pg_policies where tablename = 'homepage_videos'")).rows;
             const grantsBefore = (await db.query("select * from information_schema.role_table_grants where table_name = 'homepage_videos' order by grantee, privilege_type")).rows;
-            await db.exec(await readFile("supabase/migrations/20260930160000_homepage_video_translation_keys.sql", "utf8"));
+            await db.exec(await readFile("supabase/migrations/20261002160000_homepage_video_translation_keys.sql", "utf8"));
             const rows = (await db.query<Record<string, unknown>>("select * from homepage_videos order by id")).rows;
             assert.equal(rows.length, 9);
             assert.deepEqual(rows.map(({ description_translation_key, thumbnail_alt_translation_key, category_translation_key, ...source }) => source), before);

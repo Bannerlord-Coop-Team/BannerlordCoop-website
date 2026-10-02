@@ -21,7 +21,7 @@ test("roadmap translation migration preserves identities, prose, order, status a
         const itemsBefore = (await db.query("select * from roadmap_items order by id")).rows;
         const milestonesBefore = (await db.query("select * from roadmap_milestones order by id")).rows;
         const policiesBefore = (await db.query("select * from pg_policies where tablename like 'roadmap_%' order by tablename")).rows;
-        await db.exec(await readFile("supabase/migrations/20260930150000_roadmap_translation_keys.sql", "utf8"));
+        await db.exec(await readFile("supabase/migrations/20261002150000_roadmap_translation_keys.sql", "utf8"));
         const items = (await db.query<Record<string, unknown>>("select * from roadmap_items order by id")).rows;
         const milestones = (await db.query<Record<string, unknown>>("select * from roadmap_milestones order by id")).rows;
         assert.deepEqual(items.map(({ title_translation_key, description_translation_key, ...source }) => source), itemsBefore);
