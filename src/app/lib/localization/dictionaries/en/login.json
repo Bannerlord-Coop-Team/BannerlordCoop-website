@@ -11,6 +11,8 @@
   "loading.status": "Loading sign in…",
   "provider.connecting": "Connecting",
   "error.generic": "Something went wrong. Please try again.",
+  "error.callback": "We could not complete your sign-in. Please try again.",
+  "error.configuration": "Authentication is not configured. Add the Supabase environment variables and restart the server.",
   "emailSent.eyebrow": "Dispatch sent",
   "emailSent.heading": "Check your inbox",
   "emailSent.description": "We sent a secure sign-in link to {email}. The link can only be used once.",

@@ -98,12 +98,13 @@ export function LoginForm({
             : t("error.generic");
     }
 
+    /** Starts provider sign-in with localized configuration errors and unchanged OAuth options. */
     async function signInWithProvider(provider: OAuthProvider) {
         setError("");
         setPending(provider);
 
         try {
-            const supabase = getSupabaseBrowserClient();
+            const supabase = getSupabaseBrowserClient(t("error.configuration"));
             const { error: signInError } = await supabase.auth.signInWithOAuth({
                 provider,
                 options: { redirectTo: callbackUrl() },
@@ -116,13 +117,14 @@ export function LoginForm({
         }
     }
 
+    /** Sends the magic link with localized configuration errors and unchanged email auth options. */
     async function signInWithEmail(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         setError("");
         setPending("email");
 
         try {
-            const supabase = getSupabaseBrowserClient();
+            const supabase = getSupabaseBrowserClient(t("error.configuration"));
             const { error: signInError } = await supabase.auth.signInWithOtp({
                 email: email.trim(),
                 options: {

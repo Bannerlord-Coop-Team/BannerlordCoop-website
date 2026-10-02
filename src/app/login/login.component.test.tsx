@@ -14,10 +14,17 @@ const mocks = vi.hoisted(() => ({
     cookie: undefined as string | undefined,
     oauth: vi.fn(),
     otp: vi.fn(),
+    configurationFailure: false,
+    client: vi.fn(),
 }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: mocks.cookie }) }) }));
 vi.mock("@/app/lib/supabase/client", () => ({
-    getSupabaseBrowserClient: () => ({ auth: { signInWithOAuth: mocks.oauth, signInWithOtp: mocks.otp } }),
+    // Models the helper's injected diagnostic without making external authentication requests.
+    getSupabaseBrowserClient: (configurationError: string) => {
+        mocks.client(configurationError);
+        if (mocks.configurationFailure) throw new Error(configurationError);
+        return { auth: { signInWithOAuth: mocks.oauth, signInWithOtp: mocks.otp } };
+    },
 }));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -27,6 +34,7 @@ afterEach(async () => {
     for (const root of roots.splice(0)) await act(async () => root.unmount());
     document.body.replaceChildren();
     mocks.cookie = undefined;
+    mocks.configurationFailure = false;
     vi.resetAllMocks();
     localeDefinitions.ru = originalRussian;
 });
@@ -182,6 +190,23 @@ describe("login localization", () => {
         await submitEmail(container);
         expect(container.querySelector('[role="alert"]')!.textContent).toBe(translated["error.generic"]);
         expect(container.querySelector("input")!.disabled).toBe(false);
+    });
+
+    it.each(["provider", "email"])("shows the injected localized configuration error for %s sign-in", async (action) => {
+        mocks.configurationFailure = true;
+        const translated = translatedMessages();
+        const container = await mount(form(translated));
+        if (action === "email") {
+            await enterEmail(container, "commander@example.com");
+            await submitEmail(container);
+        } else {
+            await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+        }
+        expect(mocks.client).toHaveBeenCalledWith(translated["error.configuration"]);
+        expect(container.querySelector('[role="alert"]')!.textContent).toBe(translated["error.configuration"]);
+        expect(container.querySelector("button")!.disabled).toBe(false);
+        expect(mocks.oauth).not.toHaveBeenCalled();
+        expect(mocks.otp).not.toHaveBeenCalled();
     });
 
     it("retains external query and provider error text as escaped source content", async () => {
