@@ -27,19 +27,19 @@ The foundation is multi-seam. Each worker owns an isolated worktree; the foundat
 | Entry / namespace | Exclusive foundation source owner |
 | --- | --- |
 | shared / `common` | runtime: `layout.tsx`, `loading.tsx`, `components/layout/*`, `components/ui/*`, `components/home/modulesection/DownloadModal.tsx`, all localization runtime files and scaffolding (not completed page dictionary contents); `lib/auth/account-display.ts` optional translated fallback and focused helper test (preserve default English and user metadata precedence) |
-| home `/` / `home` | home: `page.tsx`, `components/home/**` except DownloadModal, `lib/roadmap.ts` |
+| home `/` / `home` | home: `page.tsx`, `components/home/**` except DownloadModal, `lib/roadmap.ts`; `lib/youtube.ts` and directly affected homepage-media helpers/types/tests for injected generated fallback/thumbnail labels (preserve external content and fetch/cache semantics) |
 | account `/account` / `account` | account: `account/**` including account action presentation |
 | changelog `/changelog` / `changelog` | changelog: `changelog/**`; external release bodies remain source text |
 | cheats `/cheats` / `cheats` | cheats: `cheats/**`, all published command names/descriptions/argument prose and categories, existing Chinese compatibility data |
-| login `/login` / `login` | login: `login/**`, `components/auth/LoginForm.tsx`; auth redirect/error codes and callbacks retain behavior |
+| login `/login` / `login` | login: `login/**`, `components/auth/LoginForm.tsx`, `auth/callback/route.ts` website fallback only when provider `error_description` is absent, `lib/supabase/client.ts` optional injected configuration-error text and focused tests; preserve raw provider errors, singleton/auth behavior, redirect/query/error semantics |
 | servers `/servers` / `servers` | servers: `servers/page.tsx`, `servers/loading.tsx`, `servers/onboarding-actions.ts`, `components/servers/{AllServersDirectory,ServerDirectoryTable,ServerOnboarding,MembershipNextStep}.tsx` |
-| managed-server `/servers/[serverId]` / `managed-server`, `server-common` | managed-server: `servers/[serverId]/**`, `components/servers/ManagedServer*.tsx`, `components/servers/{ServerControlPanel,ServerSettingsPanel,ServerSaveConfigPanels,ServerVisibilitySetting,ServerManagementWorkspace,EditableServerName,CopyJoinButton,DownloadServerLogButton}.tsx`, `components/servers/managed-server-backup-policy.ts`, `servers/managed-server-*.ts`, `servers/{name-actions,server-release-actions,server-settings-actions,server-visibility-actions}.ts`, user-facing parts of `lib/control-plane/{presentation,explanations}.ts` through injected translator/default-English compatibility rather than changing admin behavior |
+| managed-server `/servers/[serverId]` / `managed-server`, `server-common` | managed-server: `servers/[serverId]/**`, `components/servers/ManagedServer*.tsx`, `components/servers/{ServerControlPanel,ServerSettingsPanel,ServerSaveConfigPanels,ServerVisibilitySetting,ServerManagementWorkspace,EditableServerName,CopyJoinButton,DownloadServerLogButton}.tsx`, `components/servers/managed-server-backup-policy.ts`, `servers/managed-server-*.ts`, `servers/{name-actions,server-release-actions,server-settings-actions,server-visibility-actions}.ts`, user-facing parts of `lib/control-plane/{presentation,explanations}.ts` through injected translator/default-English compatibility rather than changing admin behavior; `lib/hosting/server-names.ts` optional injected validation messages and focused tests (same rules/result/default English); `lib/console/access.ts:getLiveConsoleMember` optional missing-name/email labels and focused tests (same identity precedence/coercion/access behavior) |
 | live-server `/servers/live/[serverId]` / `live-server` | live-server: preserve legacy route redirect to unified manage, own its compatibility test; `components/servers/LiveServer*.tsx`, `components/servers/Ionos*.tsx`, `servers/{actions,access-actions}.ts`. Live UI is actually rendered by unified manage; provider there includes live-server and server-common. |
 | server-wireframe `/servers/wireframe` / `server-wireframe` | wireframe: `servers/wireframe/**`; explicitly public interactive UI |
 | support `/support` / `support` | support: `support/**` |
 | not-found / `not-found` | not-found: `not-found.tsx` and focused test |
 
-Shared server namespaces have one extraction owner. The servers directory and unified manage pages both deliver `server-common`; unified manage also delivers `live-server`. Pure hosting/auth/transport helpers retain operational values and behavior. Where helpers produce website-owned labels, translate at the presentation boundary or inject the translator without importing request state into pure logic. Do not translate admin-only fields. If an unlisted shared source needs edits, ask the orchestrator to assign exclusive ownership first.
+Shared server namespaces have one extraction owner. The servers directory and unified manage pages both deliver `server-common`; unified manage also delivers `live-server` and `cheats`. Reuse cheats keys `command.<identifier>.name`, `command.<identifier>.summary`, `command.<identifier>.argument.<argument-name>` and category keys from its authoritative dictionary for command-reference presentation; do not duplicate prose in managed-server. Pure helper injections must remain request-independent. The unified page supplies localized missing-member labels to `getLiveConsoleMember`. Pure hosting/auth/transport helpers retain operational values and behavior. Where helpers produce website-owned labels, translate at the presentation boundary or inject the translator without importing request state into pure logic. Do not translate admin-only fields. If an unlisted shared source needs edits, ask the orchestrator to assign exclusive ownership first.
 
 For later language PRs there is one worker for each of the eleven page entries. The home translator also owns `common`; managed-server owns `server-common`. No other worker duplicates these dictionaries.
 
@@ -61,8 +61,38 @@ Do not translate Bannerlord Coop, Mount & Blade II: Bannerlord, product/brand na
 | Locale plural categories/rich slots | Whole messages reorder safely; correct Intl plural/number/date formatting |
 | Localized account/server action presentation | Authorization and operation inputs/results retain behavior |
 
-Run only localization unit/component tests and directly affected existing page/action tests. Never run full test/build/lint/typecheck locally. Exact commands and final evidence will be recorded here after integration.
+Run only localization unit/component tests and directly affected existing page/action tests. Never run full test/build/lint/typecheck locally. Targeted checkpoint commands and evidence are recorded below; full foundation acceptance remains pending.
 
 ## Integration and publication
 
 Runtime worker commits first and returns a durable API/test handoff. Page workers fast-forward their separate worktrees to that runtime baseline, implement only owned files, run focused tests, and commit. Orchestrator reads all actual outputs, integrates commits, checks English regression/coverage and dictionary integrity, then freezes this contract for data-only language lanes. Record every retained output reference. Obtain master approval for the exact foundation SHA/diff/tests before pushing only `feature/localization-foundation` and opening one unmerged PR against `main`. Language PRs target the foundation branch and independently activate themselves; no merges or deployments.
+
+
+## Preserved implementation checkpoint
+
+Shared runtime/common and five reviewed page seams (changelog, cheats, servers directory, support, not-found) are integrated. Home, account, unified managed server/server-common remain incomplete; login/live/wireframe partial commits remain in their isolated worktrees, not integrated. No locale translations are enabled and no foundation publication is approved.
+
+**Roadmap decision remains pending the user.** Live Supabase milestone/item prose uses generated UUIDs without stable message identities. Do not add a schema/migration, source-text lookup map, or declare that prose exempt until the user approves the content contract. Surrounding home UI remains in scope.
+
+Coordinator reviewed each of the five READY production diffs and owned file lists against this contract and consumed every page's actual handoff/evidence. No concrete ownership/scope blocker was found for those five commits. This is bounded integration review, not final independent foundation acceptance.
+
+Verified shared baseline at `ef6af4f2` (8 files / 33 tests passed):
+
+```sh
+npx --no-install vitest run src/app/lib/localization/runtime.component.test.tsx src/app/components/layout/LocaleSelector.component.test.tsx src/app/components/layout/Navbar.component.test.tsx src/app/components/layout/CommunityDropdown.component.test.tsx src/app/components/layout/ProfileDropdown.component.test.tsx src/app/components/ui/loading.component.test.tsx src/app/components/home/modulesection/DownloadModal.component.test.tsx src/app/lib/auth/account-display.component.test.tsx
+```
+
+Verified combined runtime + integrated page seams (11 files / 131 tests passed):
+
+```sh
+npx --no-install vitest run src/app/lib/localization/runtime.component.test.tsx src/app/components/layout/LocaleSelector.component.test.tsx src/app/changelog/page.component.test.tsx src/app/cheats/localization.component.test.tsx src/app/servers/onboarding-page.component.test.tsx src/app/servers/onboarding-actions.component.test.tsx src/app/components/servers/ServerOnboarding.component.test.tsx src/app/components/servers/MembershipNextStep.component.test.tsx src/app/components/servers/AllServersDirectory.component.test.tsx src/app/support/page.component.test.tsx src/app/not-found.component.test.tsx
+```
+
+Verified cheats/catalog/Chinese parity and directory table regressions (14 tests passed):
+
+```sh
+npx --no-install tsx --test src/app/cheats/locale.test.ts src/app/cheats/CheatsDirectory.test.tsx src/app/components/servers/ServerDirectoryTable.test.tsx
+git diff --check
+```
+
+Counts overlap shared runtime tests; do not sum them as unique coverage. Commands run locally are explicit targeted files, not a full suite/build/lint/typecheck. Future continuation must recheck directory/shared consumers after managed-server integration. Full run/commit/artifact/failure evidence is retained in the master foundation handoff; this checkpoint does not claim browser E2E, visual, production transport, full compilation, native proofreading, or completed ordinary-user coverage.
