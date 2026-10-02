@@ -231,6 +231,7 @@ function ManagedServerLifecycleSection({ server }: { server: MyServerSummary }) 
                     displayName={server.displayName}
                     accessRole={server.accessRole}
                     operationState={server.operationState}
+                    observedGameState={server.observedGameState}
                     expectedUpdatedAt={server.updatedAt}
                 />
         </section>

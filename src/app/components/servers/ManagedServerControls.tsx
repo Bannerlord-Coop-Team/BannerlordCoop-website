@@ -26,6 +26,7 @@ type ManagedServerControlsProps = {
     displayName: string;
     accessRole: "owner" | "manager" | "support" | "admin";
     operationState: string;
+    observedGameState: string;
     expectedUpdatedAt: string;
 };
 
@@ -35,6 +36,7 @@ export function ManagedServerControls({
     displayName,
     accessRole,
     operationState,
+    observedGameState,
     expectedUpdatedAt,
 }: ManagedServerControlsProps) {
     const router = useRouter();
@@ -46,10 +48,26 @@ export function ManagedServerControls({
     const [startStatus, setStartStatus] = useState<StartProgressStatus | null>(null);
     const [progressPaused, setProgressPaused] = useState(false);
     const [pollRun, setPollRun] = useState(0);
-    const { session: pollingSession } = useManagedServerPolling();
+    const [stopRevision, setStopRevision] = useState<string | null>(null);
+    const { session: pollingSession, timedOutSession, beginPolling, endPolling } = useManagedServerPolling();
     const canOperate = accessRole === "owner" || accessRole === "manager";
     const displayedState = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision ? "running" : operationState;
     const stateIsTransitional = TRANSITIONAL_STATES.has(displayedState);
+    const trackingStop = stopRevision !== null;
+    const stopCheckPaused = trackingStop && timedOutSession?.serverId === serverId
+        && timedOutSession.statusSource === "server" && timedOutSession.initialUpdatedAt === stopRevision;
+
+    useEffect(() => {
+        if (stopRevision === null || isPending) return;
+        // A completed command is not enough: require a newer, confirmed server observation.
+        if (operationState !== "stopped" || observedGameState !== "stopped" || expectedUpdatedAt <= stopRevision) return;
+        const timeout = setTimeout(() => {
+            setMessage("Server stopped.");
+            setStopRevision(null);
+            endPolling(serverId);
+        }, 0);
+        return () => clearTimeout(timeout);
+    }, [serverId, stopRevision, operationState, observedGameState, expectedUpdatedAt, isPending, endPolling]);
 
     useEffect(() => {
         if (startJobId === null) return;
@@ -92,13 +110,14 @@ export function ManagedServerControls({
         );
     }
 
-    const busy = isPending || trackingStart || stateIsTransitional || pollingSession !== null;
+    const busy = isPending || trackingStart || trackingStop || stateIsTransitional || pollingSession !== null;
     const canStart = ["stopped", "failed", "degraded"].includes(displayedState);
     const canStop = ["running", "starting", "failed", "degraded"].includes(displayedState);
     const canRestart = ["running", "degraded"].includes(displayedState);
 
     /** Confirms disruptive operations and reports the existing action result. */
     function requestOperation(operation: Operation) {
+        if (busy) return;
         if (operation === "stop" && !window.confirm(
             `Stop ${displayName}? Players will be disconnected without a save-flush check or advance warning. Unsaved progress may be lost.`,
         )) return;
@@ -109,7 +128,7 @@ export function ManagedServerControls({
             `Update ${displayName} now? A backup will be taken first. If the server is running, players will be disconnected while its selected release is installed.`,
         )) return;
 
-        setMessage(operation === "start" ? "Sending your Start request…" : "");
+        setMessage(operation === "start" ? "Sending your Start request…" : operation === "stop" ? "Sending your Stop request…" : "");
         setStartRevision(expectedUpdatedAt);
         setStartJobId(null);
         setStartStatus(null);
@@ -123,12 +142,22 @@ export function ManagedServerControls({
                     ...(operation === "update-now" ? { expectedUpdatedAt } : {}),
                 });
                 setMessage(result.message);
+                if (operation === "stop" && result.checkStatus) {
+                    setStopRevision(expectedUpdatedAt);
+                    beginPolling(serverId, expectedUpdatedAt);
+                }
                 if (operation === "start" && result.ok) {
                     if (result.operationId) setStartJobId(result.operationId);
                     else setStartStatus({ state: "succeeded", phase: "ready", progress: result.message });
                 }
             } catch {
-                setMessage("The command could not be confirmed. It may have executed. Refresh server status before sending another command.");
+                if (operation === "stop") {
+                    setMessage("Checking whether your server has stopped…");
+                    setStopRevision(expectedUpdatedAt);
+                    beginPolling(serverId, expectedUpdatedAt);
+                } else {
+                    setMessage("The command could not be confirmed. It may have executed. Refresh server status before sending another command.");
+                }
             } finally {
                 setPendingOperation(null);
             }
@@ -149,7 +178,7 @@ export function ManagedServerControls({
                     label="Stop"
                     icon={Square}
                     disabled={busy || !canStop}
-                    pending={pendingOperation === "stop"}
+                    pending={pendingOperation === "stop" || (trackingStop && !stopCheckPaused)}
                     onClick={() => requestOperation("stop")}
                 />
                 <ControlButton
@@ -177,7 +206,14 @@ export function ManagedServerControls({
                     Resume progress updates
                 </button>
             </div>}
-            {message && (
+            {stopCheckPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted" role="status">
+                <p>Stop is taking longer than expected. We haven’t confirmed that the server stopped. Check status again; if this continues, contact support.</p>
+                <button type="button" className="mt-2 min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold"
+                    onClick={() => beginPolling(serverId, stopRevision!)}>
+                    Check status again
+                </button>
+            </div>}
+            {message && !stopCheckPaused && (
                 <p
                     aria-live="polite"
                     className="max-w-xl text-left text-xs leading-5 text-foreground-muted"
@@ -214,7 +250,7 @@ function StartProgress({ status, paused }: { status: StartProgressStatus | null;
 }
 
 /** Owns the owner-only password form in Settings, preserving confirmation and pending guards. */
-export function ManagedServerPassword({ serverId, accessRole, operationState, expectedUpdatedAt }: Omit<ManagedServerControlsProps, "displayName">) {
+export function ManagedServerPassword({ serverId, accessRole, operationState, expectedUpdatedAt }: Omit<ManagedServerControlsProps, "displayName" | "observedGameState">) {
     const [isPending, startTransition] = useTransition();
     const [password, setPassword] = useState("");
     const [message, setMessage] = useState("");
