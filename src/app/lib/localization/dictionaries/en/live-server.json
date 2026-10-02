@@ -96,6 +96,7 @@
   "console.disconnectedNotice": "Disconnected.",
   "console.opening": "Opening the secure console connection…",
   "console.sessionExpired": "Your Supabase session is no longer available. Sign in again.",
+  "console.authenticationNotConfigured": "Authentication is not configured. Add the Supabase environment variables and restart the server.",
   "console.authenticationFailed": "Authentication failed.",
   "console.verifying": "Verifying your server access…",
   "console.loadingState": "Server access verified. Loading container state…",

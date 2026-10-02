@@ -236,7 +236,7 @@ export function LiveServerConsole({
         let accessToken: string;
         let sessionUnavailable = false;
         try {
-            const supabase = getSupabaseBrowserClient();
+            const supabase = getSupabaseBrowserClient(t("console.authenticationNotConfigured"));
             const { data, error } = await supabase.auth.getSession();
             if (error || !data.session?.access_token) {
                 sessionUnavailable = true;

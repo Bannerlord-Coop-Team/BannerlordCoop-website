@@ -11,7 +11,10 @@ import managedMessages from "@/app/lib/localization/dictionaries/en/managed-serv
 import commonMessages from "@/app/lib/localization/dictionaries/en/common.json";
 import cheatsMessages from "@/app/lib/localization/dictionaries/en/cheats.json";
 
-vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({ auth: { getSession: async () => ({ data: { session: { access_token: "test-token" } } }) } }) }));
+// Expose the authentication seam before the console module is imported.
+const { getSupabaseBrowserClient } = vi.hoisted(() => ({ getSupabaseBrowserClient: vi.fn() }));
+// Isolate authentication while retaining the approved optional configuration-error argument.
+vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient }));
 class Socket extends EventTarget {
     static OPEN = 1;
     static CONNECTING = 0;
@@ -26,7 +29,11 @@ class Socket extends EventTarget {
 let container: HTMLDivElement;
 let root: Root;
 let socket: Socket;
+// Mount a configured console with a successful session and an isolated transport.
 beforeEach(async () => {
+    getSupabaseBrowserClient.mockReset();
+    // Supply a valid fixture session without accessing Supabase.
+    getSupabaseBrowserClient.mockReturnValue({ auth: { getSession: async () => ({ data: { session: { access_token: "test-token" } } }) } });
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.stubGlobal("WebSocket", Socket);
     Socket.instances = [];
@@ -172,6 +179,33 @@ it("keeps the active socket and pending operation when only translation data cha
     expect(container.textContent).toContain("Inicio en curso");
     expect(container.textContent).toContain("Inicio solicitado…");
     expect(container.textContent).toContain("Enviar");
+});
+
+// Verify the helper receives localized configuration copy before opening a new connection.
+it("localizes missing authentication configuration through the browser-client injection", async () => {
+    await renderConsole({ ...liveMessages, "console.authenticationNotConfigured": "Autenticación sin configurar." });
+    await act(async () => button("Disconnect").click());
+    // Model the approved helper's missing-configuration failure.
+    getSupabaseBrowserClient.mockImplementationOnce((configurationError: string) => {
+        throw new Error(configurationError);
+    });
+    const connections = Socket.instances.length;
+    await act(async () => button("Connect").click());
+    expect(getSupabaseBrowserClient).toHaveBeenLastCalledWith("Autenticación sin configurar.");
+    expect(container.textContent).toContain("Autenticación sin configurar.");
+    expect(Socket.instances.length).toBe(connections);
+});
+
+// Keep externally supplied authentication failures distinct from injected website copy.
+it("preserves external authentication errors verbatim", async () => {
+    await act(async () => button("Disconnect").click());
+    // Model an external failure that must not be translated or matched by text.
+    getSupabaseBrowserClient.mockImplementationOnce(() => {
+        throw new Error("External provider failure {name}");
+    });
+    await act(async () => button("Connect").click());
+    expect(container.textContent).toContain("External provider failure {name}");
+    expect(container.textContent).not.toContain(liveMessages["console.authenticationNotConfigured"]);
 });
 
 it("retains unrecognized external state and operation codes instead of treating them as dictionary keys", async () => {

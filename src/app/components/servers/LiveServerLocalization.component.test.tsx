@@ -56,6 +56,17 @@ it("localizes operator presentation and escapes real names without changing form
     expect(html).not.toContain("Assign owner");
 });
 
+// Preserve helper-injected missing labels and actual member values without text-based replacement.
+it("renders injected member labels and real names matching English fallbacks unchanged", () => {
+    const html = renderToStaticMarkup(<LocalizationProvider locale="es" messages={{ "live-server": messages }}>
+        <LiveServerAccessManager canAssignOwner={false} serverId="live"
+            owner={{ id: "owner", displayName: "Sin nombre", email: "Sin correo" }}
+            operators={[{ id: "target", displayName: "Unnamed member", email: "No email" }]} />
+    </LocalizationProvider>);
+    for (const value of ["Sin nombre", "Sin correo", "Unnamed member", "No email"]) expect(html).toContain(value);
+    expect(html).toContain('name="operatorUserId" value="target"');
+});
+
 it("localizes every operation label and accessible group while preserving disabled states", () => {
     const translated = { ...messages, "operation.group": "Operaciones", "operation.start.label": "Iniciar", "operation.stop.label": "Detener", "operation.restart.label": "Reiniciar", "operation.update.label": "Actualizar" };
     const html = renderToStaticMarkup(<LocalizationProvider locale="es" messages={{ "live-server": translated }}>
