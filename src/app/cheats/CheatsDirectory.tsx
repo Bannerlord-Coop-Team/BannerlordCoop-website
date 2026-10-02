@@ -57,7 +57,6 @@ function textMatches(command: CheatCommand, query: string, { t }: Translator) {
         command.category,
         command.name,
         command.sourceSearch,
-        t(`command.${command.command}.name`),
         t(`command.${command.command}.summary`),
         t(categoryKey(command.category)),
         ...command.arguments.flatMap((argument) => [argument.name, t(`command.${command.command}.argument.${argument.name}`)]),

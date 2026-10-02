@@ -58,7 +58,6 @@ export default async function CheatsPage({ searchParams }: CheatsPageProps) {
         ...command,
         arguments: args.map(({ description: _description, ...argument }) => argument),
         sourceSearch: locale === "en" ? undefined : [
-            english.t(`command.${command.command}.name`),
             english.t(`command.${command.command}.summary`),
             ...args.map((argument) => english.t(`command.${command.command}.argument.${argument.name}`)),
         ].join(" "),
