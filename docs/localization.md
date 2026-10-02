@@ -76,11 +76,11 @@ Initial base was `d0bbf5c78c32e3b92a1071c72b7bae4c54f51883`. The approved main s
 
 ### Frozen dictionary inventory
 
-There are **2,428 messages in 13 English namespaces**. Each later locale supplies exactly these namespaces/keys and preserves message kinds, tokens and rich slots. One home translator owns both home/common; one managed translator owns managed-server/server-common; the other nine page translators own their named namespace only.
+There are **2,427 messages in 13 English namespaces**. Each later locale supplies exactly these namespaces/keys and preserves message kinds, tokens and rich slots. One home translator owns both home/common; one managed translator owns managed-server/server-common; the other nine page translators own their named namespace only.
 
 | Namespace | Keys | Data owner |
 | --- | ---: | --- |
-| common | 49 | home translator |
+| common | 48 | home translator |
 | home | 154 | home translator |
 | account | 45 | account |
 | changelog | 25 | changelog |
