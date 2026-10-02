@@ -1,9 +1,10 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), tables: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), tables: vi.fn(), observations: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerReadSession: mocks.session, getSupabaseServerViewer: mocks.auth }));
 vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts }));
 vi.mock("@/app/lib/control-plane/server-read", () => ({ readControlPlaneAdmin: mocks.request }));
+vi.mock("@/app/lib/control-plane/release-observations", () => ({ recordReleaseFirstObservations: mocks.observations }));
 vi.mock("@/app/components/admin/RefreshReleaseCatalog", () => ({ RefreshReleaseCatalog: () => null }));
 vi.mock("next/navigation", async importOriginal => ({
     ...await importOriginal<typeof import("next/navigation")>(), useRouter: () => ({ refresh: vi.fn() }),
@@ -25,6 +26,7 @@ import ControlPlaneAdminPage from "./page";
 
 beforeEach(() => {
     vi.resetAllMocks();
+    mocks.observations.mockImplementation(async builds => builds.map((build: object) => ({ ...build, firstObservedAt: "2026-09-28T12:00:00.000Z" })));
     mocks.session.mockResolvedValue({ impersonating: false, session: { access_token: "test-admin-token", user: { id: "admin", app_metadata: { role: "Member" } } } });
     mocks.auth.mockResolvedValue({ user: { id: "admin", app_metadata: { role: "Admin" } }, accessToken: "test-admin-token" });
     mocks.request.mockImplementation(async request => {
@@ -69,6 +71,10 @@ it("renders both complete release groups from one catalog request without accoun
     expect(html).toContain("v0.1.10"); expect(html).toContain("v0.1.11");
     expect(html.replaceAll("<!-- -->", "")).toContain("Current Public");
     expect(html.replaceAll("<!-- -->", "")).toContain("Current Nightly");
+    expect(html).toContain("First observed");
+    expect(html).toContain('dateTime="2026-09-28T12:00:00.000Z"');
+    expect(html).not.toContain('dateTime="2026-09-30T00:00:00.000Z"');
+    expect(mocks.observations).toHaveBeenCalledTimes(1);
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "release-catalog",
         input: { stableCursor: null, nightlyCursor: null, limit: 100 }, signal: expect.any(AbortSignal), expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function) }]]);
@@ -142,6 +148,7 @@ it.each(["overview", "servers", "server", "vps", "jobs", "releases", "audit", "o
     mocks.request.mockRejectedValue(new Error("Oracle did not confirm authority"));
     mocks.auth.mockRejectedValue(new Error("session context unavailable"));
     await expect(ControlPlaneAdminPage({ searchParams: Promise.resolve({ view, serverId: "test-server" }) })).rejects.toThrow("session context unavailable");
+    expect(mocks.observations).not.toHaveBeenCalled();
     expect(mocks.request.mock.calls.length).toBeGreaterThan(0);
     for (const [request] of mocks.request.mock.calls) {
         expect(["overview", "servers", "server-dashboard", "vps-hosts", "jobs", "release-catalog", "audit"]).toContain(request.operation);
