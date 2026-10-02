@@ -76,7 +76,7 @@ Initial base was `d0bbf5c78c32e3b92a1071c72b7bae4c54f51883`. The approved main s
 
 ### Frozen dictionary inventory
 
-There are **2,427 messages in 13 English namespaces**. Each later locale supplies exactly these namespaces/keys and preserves message kinds, tokens and rich slots. One home translator owns both home/common; one managed translator owns managed-server/server-common; the other nine page translators own their named namespace only.
+There are **2,432 messages in 13 English namespaces**. Each later locale supplies exactly these namespaces/keys and preserves message kinds, tokens and rich slots. One home translator owns both home/common; one managed translator owns managed-server/server-common; the other nine page translators own their named namespace only.
 
 | Namespace | Keys | Data owner |
 | --- | ---: | --- |
@@ -87,7 +87,7 @@ There are **2,427 messages in 13 English namespaces**. Each later locale supplie
 | cheats | 933 | cheats |
 | login | 27 | login |
 | servers | 133 | servers |
-| managed-server | 664 | managed-server |
+| managed-server | 669 | managed-server |
 | server-common | 49 | managed-server |
 | live-server | 170 | live-server |
 | server-wireframe | 137 | server-wireframe |

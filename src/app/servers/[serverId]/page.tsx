@@ -236,6 +236,7 @@ async function ManagedServerLifecycleSection({ server }: { server: MyServerSumma
                     displayName={server.displayName}
                     accessRole={server.accessRole}
                     operationState={server.operationState}
+                    observedGameState={server.observedGameState}
                     expectedUpdatedAt={server.updatedAt}
                 />
         </section>

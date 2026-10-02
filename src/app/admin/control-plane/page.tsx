@@ -13,6 +13,7 @@ import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
 import { hasAdminAccess } from "@/app/lib/auth/access";
 import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
+import { recordReleaseFirstObservations } from "@/app/lib/control-plane/release-observations";
 import {
     destructiveExplanation,
     operationExplanation,
@@ -313,8 +314,14 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                     limit: 100,
                 },
             });
-        case "releases":
-            return loadReleaseCatalog(token, signal, identity);
+        case "releases": {
+            const catalog = await loadReleaseCatalog(token, signal, identity);
+            const builds = await recordReleaseFirstObservations([...catalog.stable.items, ...catalog.nightly.items], signal);
+            return {
+                stable: { ...catalog.stable, items: builds.slice(0, catalog.stable.items.length) },
+                nightly: { ...catalog.nightly, items: builds.slice(catalog.stable.items.length) },
+            };
+        }
         case "audit":
             return readControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, signal, ...identity, operation: "audit", input: { cursor: null, limit: 100 } });
     }
@@ -641,7 +648,7 @@ function BuildTable({ builds }: { builds: ReleaseBuild[] }) {
             <h3 className="break-all font-semibold">{releaseVersion(build)}</h3>
             {build.currentChannel && <span className="border border-gold/30 px-2 py-1 text-xs text-gold">Current {releaseChannelLabel(build.channel)}</span>}
         </div>
-        <p className="mt-2 text-xs text-foreground-muted">{build.registryMetadata ? "Observed" : "Published"} <LocalDateTime value={build.publishedAt} /></p>
+        <p className="mt-2 text-xs text-foreground-muted">{build.registryMetadata ? "First observed" : "Published"} <LocalDateTime value={build.registryMetadata ? build.firstObservedAt ?? null : build.publishedAt} empty="Unavailable" /></p>
         <ReleaseMetadata build={build} />
     </article>)}{builds.length === 0 && <Empty>No verified GHCR versions available in this channel.</Empty>}</div>;
 }
