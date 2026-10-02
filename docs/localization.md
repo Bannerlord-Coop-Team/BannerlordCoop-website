@@ -61,42 +61,80 @@ Do not translate Bannerlord Coop, Mount & Blade II: Bannerlord, product/brand na
 | Locale plural categories/rich slots | Whole messages reorder safely; correct Intl plural/number/date formatting |
 | Localized account/server action presentation | Authorization and operation inputs/results retain behavior |
 
-Run only localization unit/component tests and directly affected existing page/action tests. Never run full test/build/lint/typecheck locally. Targeted checkpoint commands and evidence are recorded below; full foundation acceptance remains pending.
+Run only localization unit/component tests and directly affected existing page/action tests. Never run full test/build/lint/typecheck locally. Targeted integrated commands and independent review evidence are recorded below.
 
 ## Integration and publication
 
 Runtime worker commits first and returns a durable API/test handoff. Page workers fast-forward their separate worktrees to that runtime baseline, implement only owned files, run focused tests, and commit. Orchestrator reads all actual outputs, integrates commits, checks English regression/coverage and dictionary integrity, then freezes this contract for data-only language lanes. Record every retained output reference. Obtain master approval for the exact foundation SHA/diff/tests before pushing only `feature/localization-foundation` and opening one unmerged PR against `main`. Language PRs target the foundation branch and independently activate themselves; no merges or deployments.
 
 
-## Preserved implementation checkpoint
+## Completed foundation and translation handoff
 
-Shared runtime/common and five reviewed page seams (changelog, cheats, servers directory, support, not-found) are integrated. Home, account, unified managed server/server-common remain incomplete; login/live/wireframe partial commits remain in their isolated worktrees, not integrated. No locale translations are enabled and no foundation publication is approved.
+All eleven page entries and the shared runtime are integrated. English is the only enabled global locale; seven independent language branches supply data and activate themselves after completion. Existing Chinese cheats deep links remain supported. Explicit locale-specific cheats shares and metadata include `lang=en` for English; bare navigation follows the cookie.
 
-**Full roadmap localization is user-approved.** Home owns an additive migration introducing nullable stable translation-key fields on `roadmap_milestones` and `roadmap_items`, assigning explicit semantic identities to all known checked-in website-authored seed prose. Preserve row IDs, original prose, statuses, ordering, and RLS/access policies; never rewrite historical migrations or use environment-specific UUIDs as message identities. English translations live in `home`; loaders/renderers consume explicit row keys, never runtime source-text replacement maps. Unkeyed/new live rows retain source prose until an editor assigns a corresponding dictionary key. Deployment must apply this migration before code; no production application is authorized here. Ongoing prose edits require updating the corresponding English and enabled-locale dictionary messages, and assigning keys for new translated rows. No admin editor or generic CMS infrastructure is in scope. Focused tests cover mapped content, unkeyed preservation, and migration preservation of identities/order/status.
+Initial base was `d0bbf5c78c32e3b92a1071c72b7bae4c54f51883`. The approved main snapshot `a8ed3ede0d906f560618811f696443f02ff1428a` was subsequently merged non-destructively at `74661998d1cf5743c755f144f515e120bc712f49`: #235 runner diagnostic groups/reload semantics are preserved and localized; #236 is byte-identical to main. Do not infer authorization to deploy or merge this PR.
 
-Home's approved media follow-up uses the same explicit-key pattern for the known Twitch seed's description, thumbnail alternative and category. Preserve external French title, creator/platform names, URLs, duration, all source fields/IDs/order and access policies. Unkeyed custom rows stay source content. Apply the new media-key migration before deploying its loader; editorial updates require corresponding dictionary/key maintenance, with no production migration authorized.
+### Frozen dictionary inventory
 
-The remaining six page lanes use only `website-localization-leaf` in isolated retained worktrees. Native internal workflows run with user-approved `async:false`; actual blocked leaf reports return to the coordinator without live questions. Preserve original partial commits, integrate each owned patch once, and validate shared consumers after integration.
+There are **2,828 messages in 13 English namespaces**. Each later locale supplies exactly these namespaces/keys and preserves message kinds, tokens and rich slots. One home translator owns both home/common; one managed translator owns managed-server/server-common; the other nine page translators own their named namespace only.
 
-Coordinator reviewed each of the five READY production diffs and owned file lists against this contract and consumed every page's actual handoff/evidence. No concrete ownership/scope blocker was found for those five commits. This is bounded integration review, not final independent foundation acceptance.
+| Namespace | Keys | Data owner |
+| --- | ---: | --- |
+| common | 49 | home translator |
+| home | 154 | home translator |
+| account | 45 | account |
+| changelog | 25 | changelog |
+| cheats | 1333 | cheats |
+| login | 27 | login |
+| servers | 133 | servers |
+| managed-server | 664 | managed-server |
+| server-common | 49 | managed-server |
+| live-server | 170 | live-server |
+| server-wireframe | 137 | server-wireframe |
+| support | 35 | support |
+| not-found | 7 | not-found |
 
-Verified shared baseline at `ef6af4f2` (8 files / 33 tests passed):
+Add `dictionaries/<locale>/<namespace>.json`; populate that locale's existing `locales/<locale>.ts` lazy namespace imports and set `enabled: true` only after all thirteen dictionaries pass `runtime.component.test.tsx`. No shared registry/page rewrites. Chinese translators should consult `cheats/locales/zh-CN.json` and its README for vetted legacy catalog prose; the completed locale's authoritative data still belongs under its localization dictionary directory. Do not claim native proofreading unless performed. Preserve newline segmentation used by home headlines and all named rich slots. Command syntax, product names and user/source values remain immutable.
+
+### Deployed-content migration and maintenance
+
+**Apply both additive migrations before deploying the new loaders**, through a separately authorized deployment process:
+
+1. `20260930150000_roadmap_translation_keys.sql`: nullable `title_translation_key` on milestones/items and `description_translation_key` on items. Maps all checked-in roadmap prose: 4 milestone titles, 39 item titles, 3 nonempty descriptions. Semantic keys are in home; no environment-specific UUID identities.
+2. `20260930160000_homepage_video_translation_keys.sql`: nullable `description_translation_key`, `thumbnail_alt_translation_key`, `category_translation_key` on homepage videos. Maps three unchanged website-authored editorial fields at the known Twitch seed URL; preserves the external French title, creator/platform names, URLs, thumbnail and duration.
+
+Both migrations preserve original IDs, prose, relationships, statuses, ordering, publication values, RLS and access policies. Assignment guards leave edited/unmatched content unkeyed. Loaders carry explicit keys; rendering translates keyed fields, never matches English text at runtime. Unkeyed/new live rows remain visible as source prose, including identical unkeyed text. Invalid assigned keys fail under the strict dictionary contract. Migration tests use disposable in-memory PGlite only; **no production schema or data was accessed/applied**. Deploying code before schema can trigger the loaders' existing unavailable-data paths.
+
+For new translated content, first add semantic messages to English and every enabled locale, validate and deploy dictionaries, then assign those keys via a separately authorized trusted content workflow. For edits to keyed content, update corresponding dictionary messages and retained source fields; editing source alone does not update translated presentation. Clear a field's key if current source must display before translations are ready. No automatic translation of future database edits, new editor feature or generic CMS is promised.
+
+### Injected presentation APIs
+
+Pure helpers remain cookie/request-independent and preserve default English and operational behavior. Website callers supply translated messages:
+
+- `accountDisplayName(user, fallback?)`; `getSupabaseBrowserClient(configurationError?)`.
+- `getYouTubeVideos(urls, labels?)` and `getHomepageVideos(labels?)`: generated fallback title and thumbnail-label functions only; explicit media editorial keys are resolved by CommunityMedia outside network-error handling.
+- `validateServerDisplayName(value, messages?)`; `getLiveConsoleMember(user, { missingName, missingEmail }?)`; `releaseChannelLabel(channel, labels?)`; `restoreDisabledReason(backup, messages?)`.
+- `myServersEndpoint(messages?)`; `downloadMyServerLog(token, serverId, messages?)`; `serverLogDownloadHeaders(headers, invalidMessage?)`.
+- `parseManagedServerConfiguration(value, messages?)` and configuration-import read/parse/apply optional diagnostic messages, including nested parser messages. `servers/managed-server-messages.ts` creates these message objects from injected `Translator.t`, not request state.
+
+Unified management delivers managed-server/server-common/live-server/cheats; directory delivers servers/server-common. Actual logs, transport/provider errors, user names, files/configuration payloads and external media/release text remain source data. Admin-only controls remain excluded. All known accepted backup type labels are dictionary-backed. Legacy live route remains a redirect to unified management.
+
+## Targeted acceptance evidence
+
+Three independent read-only source reviews covered all owned runtime/page/helper seams on `a9b5575`. Four concrete findings were fixed: seeded Twitch editorial fields, six accepted backup labels, nine async Server Component fixture failures, and English cheats share metadata/links. Affected-only independent re-review passed at `9ebd5be4d22eecee2690eabdfa4f4d7dfeda60a2` (87 component + 15 node tests). Subsequent independent #235 overlap review passed at `74661998d1cf5743c755f144f515e120bc712f49` (16 focused tests); #236 committed blobs equal approved main.
+
+Coordinator independently reran integrated shared/provider/helper consumers at `74661998`: **14 explicit component files / 135 tests passed**:
 
 ```sh
-npx --no-install vitest run src/app/lib/localization/runtime.component.test.tsx src/app/components/layout/LocaleSelector.component.test.tsx src/app/components/layout/Navbar.component.test.tsx src/app/components/layout/CommunityDropdown.component.test.tsx src/app/components/layout/ProfileDropdown.component.test.tsx src/app/components/ui/loading.component.test.tsx src/app/components/home/modulesection/DownloadModal.component.test.tsx src/app/lib/auth/account-display.component.test.tsx
+npx --no-install vitest run src/app/lib/localization/runtime.component.test.tsx src/app/components/layout/LocaleSelector.component.test.tsx src/app/components/home/home-localization.component.test.tsx src/app/lib/homepage-media.component.test.tsx src/app/cheats/localization.component.test.tsx 'src/app/servers/[serverId]/page.component.test.tsx' 'src/app/servers/[serverId]/page-files.component.test.tsx' src/app/components/servers/ManagedServerLocalization.component.test.tsx src/app/components/servers/LiveServerLocalization.component.test.tsx src/app/components/servers/LiveServerConsole.component.test.tsx src/app/components/servers/AllServersDirectory.component.test.tsx src/app/components/servers/CopyJoinButton.component.test.tsx src/app/components/servers/DownloadServerLogButton.component.test.tsx src/app/servers/managed-server-config-actions.component.test.tsx
 ```
 
-Verified combined runtime + integrated page seams (11 files / 131 tests passed):
+**9 explicit node files / 39 tests passed**:
 
 ```sh
-npx --no-install vitest run src/app/lib/localization/runtime.component.test.tsx src/app/components/layout/LocaleSelector.component.test.tsx src/app/changelog/page.component.test.tsx src/app/cheats/localization.component.test.tsx src/app/servers/onboarding-page.component.test.tsx src/app/servers/onboarding-actions.component.test.tsx src/app/components/servers/ServerOnboarding.component.test.tsx src/app/components/servers/MembershipNextStep.component.test.tsx src/app/components/servers/AllServersDirectory.component.test.tsx src/app/support/page.component.test.tsx src/app/not-found.component.test.tsx
+npx --no-install tsx --test src/app/lib/roadmap-migration.test.ts src/app/lib/homepage-video-migration.test.ts src/app/lib/homepage-videos.test.mjs src/app/cheats/locale.test.ts src/app/cheats/CheatsDirectory.test.tsx src/app/components/servers/ServerDirectoryTable.test.tsx supabase/functions/_shared/managed-server-configuration.test.ts supabase/functions/_shared/configuration-file-import.test.ts supabase/functions/_shared/server-log-contract.test.ts
 ```
 
-Verified cheats/catalog/Chinese parity and directory table regressions (14 tests passed):
+Additional independent route review evidence: account/home/login 65 component tests plus roadmap migration; remaining public pages/runtime 144 component + 14 node tests; shared chrome 19 tests. Counts overlap other runs; do not sum as unique coverage. Original lane reports retain their directly affected action/component checks. No full suite/build/lint/typecheck, browser E2E, visual layout, production transport or native linguistic review is claimed. Full CI remains the PR gate.
 
-```sh
-npx --no-install tsx --test src/app/cheats/locale.test.ts src/app/cheats/CheatsDirectory.test.tsx src/app/components/servers/ServerDirectoryTable.test.tsx
-git diff --check
-```
-
-Counts overlap shared runtime tests; do not sum them as unique coverage. Commands run locally are explicit targeted files, not a full suite/build/lint/typecheck. Future continuation must recheck directory/shared consumers after managed-server integration. Full run/commit/artifact/failure evidence is retained in the master foundation handoff; this checkpoint does not claim browser E2E, visual, production transport, full compilation, native proofreading, or completed ordinary-user coverage.
+Durable evidence under `G:/.pi-tmp/website-localization/`: `remaining-six-result.md`, `managed-final-result.md`, `foundation-review-result.md`, `review-fixes-result.md`, `rereview-final-result.md`, `main-overlap-fix-result.md`, `main-overlap-review-result.md`, `foundation-final-components.log`, `foundation-final-node.log`. Workflow results bind exact per-child reports, run IDs and retained sessions. The final coordinator handoff records original/integrated commit mappings, exact publication approval and PR URL. All native retained-resume containment failures were preserved; root-approved same-profile fresh fallbacks did not weaken trust checks or change runners. All original partial commits were retained and integrated once; original checkout and locale worktrees were not modified.
