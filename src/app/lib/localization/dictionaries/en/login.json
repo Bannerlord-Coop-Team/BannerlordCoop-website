@@ -1,1 +1,27 @@
-{}
+{
+  "metadata.title": "Sign In",
+  "metadata.description": "Sign in to your Bannerlord Coop account.",
+  "hero.imageAlt": "Bannerlord warrior overlooking a battlefield",
+  "navigation.homeLabel": "Bannerlord Coop home",
+  "navigation.backHome": "Back to home",
+  "hero.quote": "“No banner rises alone.”",
+  "hero.description": "Gather your allies, reclaim your campaign, and continue the conquest together.",
+  "footer.security": "Secure access powered by encrypted authentication",
+  "loading.label": "Loading sign in",
+  "loading.status": "Loading sign in…",
+  "provider.connecting": "Connecting",
+  "error.generic": "Something went wrong. Please try again.",
+  "emailSent.eyebrow": "Dispatch sent",
+  "emailSent.heading": "Check your inbox",
+  "emailSent.description": "We sent a secure sign-in link to {email}. The link can only be used once.",
+  "emailSent.useDifferentEmail": "Use a different email",
+  "form.eyebrow": "Player access",
+  "form.heading": "Return to the campaign.",
+  "form.description": "Sign in to manage your profile and stay connected to your warband.",
+  "form.emailAlternative": "Or use email",
+  "form.emailLabel": "Email address",
+  "form.emailPlaceholder": "commander@example.com",
+  "form.sendingLink": "Sending link",
+  "form.continueWithEmail": "Continue with email",
+  "form.security": "We'll email you a one-time magic link. No password to remember, and we never post to your connected accounts."
+}

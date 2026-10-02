@@ -1,13 +1,16 @@
 import { Skeleton } from "@/app/components/ui/Skeleton";
+import { getTranslations } from "@/app/lib/localization/server";
 
-export default function LoginLoading() {
+/** Announces sign-in loading in the request locale while the page streams. */
+export default async function LoginLoading() {
+    const { t } = await getTranslations("login");
     return (
-        <main className="min-h-svh bg-background lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(30rem,0.95fr)]" aria-busy="true" aria-label="Loading sign in">
+        <main className="min-h-svh bg-background lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(30rem,0.95fr)]" aria-busy="true" aria-label={t("loading.label")}>
             <aside className="hidden min-h-svh border-r border-white/10 bg-surface lg:block" aria-hidden="true"/>
 
             <section className="flex min-h-svh items-center bg-surface/95 px-5 py-8 sm:px-8 lg:px-12 xl:px-20">
                 <span className="sr-only" role="status">
-                    Loading sign in…
+                    {t("loading.status")}
                 </span>
 
                 <div className="mx-auto w-full max-w-lg">
