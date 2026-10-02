@@ -22,17 +22,35 @@ async function currentToken(expectedUserId: string) {
 }
 
 // Revision or operation conflicts need a fresh read; everything else can be retried as-is.
-const RELOAD_CODES = new Set(["request_conflict", "configuration_unavailable", "security_check_failed"]);
+const RELOAD_CODES = new Set(["request_conflict", "configuration_unavailable", "security_check_failed", "idempotency_conflict"]);
 
 function failure(error: unknown, notSubmitted = false): ManagedServerConfigResult {
     const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
+    const runnerUnavailable = "The server runner did not respond. Try again in a moment.";
+    const runnerRejected = "The server runner rejected this request. Reload the page and try again.";
     const messages: Record<string, string> = {
         server_not_found: "This server is unavailable or your access changed.",
         identity_unavailable: "Link your Discord account before changing configuration.",
         request_conflict: "The configuration changed or another server operation is in progress. Reload the settings before saving again.",
         configuration_unavailable: "The server runner could not confirm this configuration. Reload the settings to check what is saved.",
+        idempotency_conflict: "The file changed on the runner since you loaded it. Reload the settings before saving again.",
         agent_target_unavailable: "This server has no active runner right now, so its configuration cannot be read.",
+        agent_target_invalid: "This server's runner assignment is out of date. Refresh the page and try again.",
         managed_agent_or_resolver_unavailable: "The server runner is unavailable right now. Try again later.",
+        agent_transport_unavailable: runnerUnavailable,
+        storage_unavailable: runnerUnavailable,
+        internal_error: runnerUnavailable,
+        agent_request_invalid: runnerRejected,
+        agent_correlation_invalid: runnerRejected,
+        agent_request_failed: runnerRejected,
+        request_rejected: runnerRejected,
+        route_unavailable: "The server runner is running an older version that cannot edit configuration yet.",
+        not_found: "The runner has no configuration file for this server yet. Start the server once, then reload the settings.",
+        integrity_failed: "The runner refused this configuration file because it failed an integrity check.",
+        agent_response_invalid: "The server runner returned an unreadable response. Try again.",
+        configuration_response_invalid: "The runner's configuration file contains settings this page does not understand.",
+        control_plane_failure: "The hosting service hit an unexpected error. Try again.",
+        runtime_unavailable: "The hosting service is not ready for runner operations right now. Try again later.",
         rate_limited: "Too many requests were sent. Wait a moment and try again.",
         control_plane_unavailable: "The hosting service could not be reached. Try again.",
         server_api_unavailable: "The hosting service could not be reached. Try again.",
