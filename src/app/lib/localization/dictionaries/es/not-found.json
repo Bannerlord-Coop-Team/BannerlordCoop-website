@@ -1,0 +1,9 @@
+{
+    "links.brandHome": "Inicio de {brand}",
+    "error.code": "Error {code}",
+    "heading": "No hay ninguna página que mostrar.",
+    "description": "Es posible que la página que buscabas se haya movido, se haya eliminado o nunca haya existido. Vuelve a territorio conocido o continúa al directorio de servidores.",
+    "links.home": "Volver al inicio",
+    "links.servers": "Explorar servidores",
+    "footer.motto": "Ningún estandarte se alza sin amigos"
+}
