@@ -28,7 +28,7 @@ vi.mock("@/app/lib/console/servers", () => ({ getLiveConsoleServer: (id: string)
 function member(id: string, assignment: "owner" | "operator" | null = null): User {
     return { id, email: `${id}@example.test`, user_metadata: {}, app_metadata: {
         role: "User", ...(assignment ? { [`live_console_${assignment}_server_ids`]: ["live"] } : {}),
-    } } as User;
+    } } as unknown as User;
 }
 /** Constructs the same form fields submitted by the live access manager. */
 function form(values: Record<string, string> = {}) {
