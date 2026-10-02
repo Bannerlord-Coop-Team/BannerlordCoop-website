@@ -43,11 +43,13 @@ function saveDownload(bytes: BlobPart, fileName: string) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
-export function ManagedServerTransfers({ userId, serverId, status, canImportConfig, canExportSave }: { userId: string; serverId: string; status: OwnerFileStatus | null; canImportConfig: boolean; canExportSave: boolean }) {
-    return <TransferSession key={`${userId}:${serverId}`} userId={userId} serverId={serverId} status={status} canImportConfig={canImportConfig} canExportSave={canExportSave} />;
+type TransferProps = { userId: string; serverId: string; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean };
+
+export function ManagedServerTransfers(props: TransferProps) {
+    return <TransferSession key={`${props.userId}:${props.serverId}`} {...props} />;
 }
 
-function TransferSession({ userId, serverId, status, canImportConfig, canExportSave }: { userId: string; serverId: string; status: OwnerFileStatus | null; canImportConfig: boolean; canExportSave: boolean }) {
+function TransferSession({ userId, serverId, status, canImportConfig, canEditConfig = false, canExportSave }: TransferProps) {
     const router = useRouter();
     const storageKey = `managed-file-transfer:v1:${userId}:${serverId}`;
     const [ready, setReady] = useState(false);
@@ -231,6 +233,7 @@ function TransferSession({ userId, serverId, status, canImportConfig, canExportS
         <ServerSaveConfigPanels
             saveName={status ? status.activeSave?.displayName ?? "No active campaign save" : undefined}
             configuration={status?.managedConfig}
+            configAccess={canEditConfig ? { serverId, userId, canEdit: true } : undefined}
             saveActions={<>
                 <button className={buttonClass} disabled={blocked || !canExportSave || !status?.activeSave || !["running", "stopped", "awaiting-save"].includes(status.operationState)} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />Export save</button>
                 <button className={buttonClass} disabled={blocked || !canTransferSave} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />Import save</button>
@@ -255,7 +258,7 @@ function TransferSession({ userId, serverId, status, canImportConfig, canExportS
             </>}
             configNotice={<>
                 <p className="mt-3 text-xs leading-5 text-foreground-muted">Export downloads a ZIP containing server-config.json and mod-config.json. Import either file individually. Passwords and campaign paths are excluded.</p>
-                <p className="mt-2 text-xs leading-5 text-foreground-muted">{canImportConfig ? "After importing, stop and start a running server to use the new settings." : "Only the server owner can import configuration settings."}</p>
+                <p className="mt-2 text-xs leading-5 text-foreground-muted">{canImportConfig ? "After importing or saving settings, stop and start a running server to use them." : "Only the server owner can import or edit configuration settings."}</p>
             </>}
         />
         <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-foreground-muted"><Info aria-hidden className="mt-0.5 size-3.5 shrink-0" />Review each import before confirming any changes.</p>

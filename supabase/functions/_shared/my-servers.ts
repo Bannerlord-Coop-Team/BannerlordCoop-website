@@ -5,6 +5,7 @@ import { serverLogDownloadHeaders } from "./server-log-contract.ts";
 import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
 import { parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingRegion } from "./server-onboarding-contract.ts";
+import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, requireRunnerConfigurationPart, type RunnerConfigurationMutation, type RunnerConfigurationPart } from "./server-configuration-contract.ts";
 
 const MAXIMUM_URL_LENGTH = 4_096;
 const MAXIMUM_REQUEST_BYTES = 16 * 1_024;
@@ -34,6 +35,8 @@ type UpstreamRequest =
     | { operation: "server-files" | "my-server-latest-log"; input: { serverId: string } }
     | { operation: "file-transfer-status" | "download-save-export"; input: { serverId: string; transferRequestId: string } }
     | { operation: "file-transfer"; input: OwnerFileMutation }
+    | { operation: "configuration-file"; input: { serverId: string; configPart: RunnerConfigurationPart } }
+    | { operation: "save-configuration-file"; input: RunnerConfigurationMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
     | { operation: "server-onboarding"; input: Record<string, never> }
     | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion; releaseChannel?: "stable" | "nightly" } }
@@ -97,7 +100,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // Durable mutations must retain the caller's UUID for exactly-once handling.
-            if (upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server") {
+            if (upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -117,9 +120,22 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         }
 
         const isDirectCommand = upstreamRequest.operation === "server-operation";
+        const isConfigurationFile = upstreamRequest.operation === "configuration-file" || upstreamRequest.operation === "save-configuration-file";
         let endpoint = controlPlaneEndpoint;
-        let upstreamBody = JSON.stringify({ version: 1, requestId, ...upstreamRequest });
+        let upstreamMethod: "GET" | "POST" = "POST";
+        let upstreamBody: string | undefined = JSON.stringify({ version: 1, requestId, ...upstreamRequest });
         if (upstreamRequest.operation === "file-transfer") endpoint = new URL("/v1/user/files", controlPlaneEndpoint);
+        if (upstreamRequest.operation === "configuration-file") {
+            endpoint = new URL("/api/v1/config", controlPlaneEndpoint);
+            endpoint.searchParams.set("serverId", upstreamRequest.input.serverId);
+            endpoint.searchParams.set("configPart", upstreamRequest.input.configPart);
+            upstreamMethod = "GET";
+            upstreamBody = undefined;
+        }
+        if (upstreamRequest.operation === "save-configuration-file") {
+            endpoint = new URL("/api/v1/config", controlPlaneEndpoint);
+            upstreamBody = JSON.stringify({ requestId, ...upstreamRequest.input });
+        }
         if (upstreamRequest.operation === "server-operation") {
             const command = upstreamRequest.input.action === "restart-game" ? "restart" : upstreamRequest.input.action;
             endpoint = new URL(`/api/v1/${command}`, controlPlaneEndpoint);
@@ -132,15 +148,15 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         let upstream: Response;
         try {
             upstream = await fetchImplementation(endpoint, {
-                method: "POST",
+                method: upstreamMethod,
                 redirect: "error",
                 headers: {
                     authorization: `Bearer ${token}`,
                     ...(upstreamRequest.operation === "my-server-latest-log" ? { accept: "application/octet-stream" } : {}),
-                    "content-type": "application/json",
+                    ...(upstreamBody === undefined ? {} : { "content-type": "application/json" }),
                     "x-request-id": requestId,
                 },
-                body: upstreamBody,
+                ...(upstreamBody === undefined ? {} : { body: upstreamBody }),
                 signal: upstreamRequest.operation === "my-server-latest-log" ? request.signal : AbortSignal.timeout(upstreamTimeoutMilliseconds),
             });
         } catch {
@@ -186,8 +202,10 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     : MAXIMUM_OPERATION_RESPONSE_BYTES,
             );
             const parsed: unknown = JSON.parse(responseBody);
-            const envelope = isDirectCommand ? directCommandEnvelope(parsed, requestId, upstream.status) : parsed;
-            if (isDirectCommand) responseBody = JSON.stringify(envelope);
+            const envelope = isDirectCommand ? directCommandEnvelope(parsed, requestId, upstream.status)
+                : isConfigurationFile ? configurationEnvelope(parsed, requestId, upstream.status, upstreamRequest.operation === "save-configuration-file")
+                : parsed;
+            if (isDirectCommand || isConfigurationFile) responseBody = JSON.stringify(envelope);
             if (!isControlPlaneEnvelope(envelope, requestId)) {
                 throw new Error("Invalid control-plane envelope");
             }
@@ -205,6 +223,10 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
                 if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
                 if (upstreamRequest.operation === "download-save-export") parseOwnerFileDownload(envelope.result);
+                if ((upstreamRequest.operation === "configuration-file" || upstreamRequest.operation === "save-configuration-file")
+                    && (!isRecord(envelope.result) || envelope.result.configPart !== upstreamRequest.input.configPart)) {
+                    throw new Error("Configuration response belongs to another file");
+                }
                 if (upstreamRequest.operation === "server-onboarding") parseOnboardingSummary(envelope.result);
                 if (upstreamRequest.operation === "set-server-visibility") {
                     parseVisibilityResult(envelope.result, { action: "set-server-visibility", ...upstreamRequest.input });
@@ -261,6 +283,12 @@ function listRequest(request: Request): UpstreamRequest {
     if (resource === "files") {
         assertQueryParameters(url, ["resource", "serverId"]);
         return { operation: "server-files", input: { serverId: readServerId(url) } };
+    }
+    if (resource === "config") {
+        assertQueryParameters(url, ["resource", "serverId", "configPart"]);
+        const configPart = url.searchParams.get("configPart");
+        requireRunnerConfigurationPart(configPart);
+        return { operation: "configuration-file", input: { serverId: readServerId(url), configPart } };
     }
     if (resource === "file-transfer-status" || resource === "download-save-export") {
         assertQueryParameters(url, ["resource", "serverId", "transferRequestId"]);
@@ -330,6 +358,11 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
     if (value.action === "save-server-settings") {
         const { action, ...input } = value;
         return { operation: action, input: parseOwnerSettingsMutation(input) };
+    }
+    if (value.action === "save-config") {
+        const input: Record<string, unknown> = { ...value };
+        delete input.action;
+        return { operation: "save-configuration-file", input: parseRunnerConfigurationMutation(input) };
     }
     if (value.action === "set-release-channel") {
         const parsed = parseReleaseMutation(value);
@@ -573,6 +606,23 @@ function directCommandEnvelope(value: unknown, requestId: string, status: number
     return { version: 1, requestId, ok: false, error: {
         code: "container_command_failed", message: `The container command failed with exit code ${exitCode}.`, retryable: false,
     } };
+}
+
+// The direct configuration routes answer success without a version and may correlate
+// read failures with the adapter's own request ID; present the website's envelope instead.
+function configurationEnvelope(value: unknown, requestId: string, status: number, expectRequestId: boolean): unknown {
+    if (!isRecord(value) || typeof value.ok !== "boolean") throw new Error("Invalid configuration response");
+    if (value.ok) {
+        if (status !== 200 || !hasExactKeys(value, ["ok", "requestId", "result"])) throw new Error("Invalid configuration response");
+        if (expectRequestId && value.requestId !== requestId) throw new Error("Configuration response belongs to another request");
+        return { version: 1, requestId, ok: true, result: parseRunnerConfigurationFile(value.result) };
+    }
+    if (status < 400 || !hasExactKeys(value, ["error", "ok", "requestId", "version"]) || typeof value.requestId !== "string") {
+        throw new Error("Invalid configuration error");
+    }
+    const normalized = { ...value, requestId };
+    if (!isControlPlaneEnvelope(normalized, requestId)) throw new Error("Invalid configuration error");
+    return normalized;
 }
 
 function isControlPlaneEnvelope(value: unknown, requestId: string) {

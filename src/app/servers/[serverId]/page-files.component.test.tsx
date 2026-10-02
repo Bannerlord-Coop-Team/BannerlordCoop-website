@@ -6,7 +6,7 @@ import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/ser
 import ServerPage from "./page";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 
-const mocks = vi.hoisted(() => ({ live: vi.fn(), access: vi.fn(), servers: vi.fn(), files: vi.fn(), submit: vi.fn(), preview: vi.fn() }));
+const mocks = vi.hoisted(() => ({ live: vi.fn(), access: vi.fn(), servers: vi.fn(), files: vi.fn(), submit: vi.fn(), preview: vi.fn(), configFile: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: (url: string) => { throw Error(url); }, useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: async () => ({ auth: {
@@ -22,6 +22,7 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
 }));
 vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.servers }));
 vi.mock("@/app/lib/hosting/server-files", () => ({ getMyServerFiles: mocks.files, submitMyServerFile: mocks.submit }));
+vi.mock("@/app/lib/hosting/server-configuration", () => ({ getMyServerConfiguration: mocks.configFile, saveMyServerConfiguration: vi.fn() }));
 vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: async () => new Map() }));
 vi.mock("@/app/lib/hosting/servers", () => ({ getServerForRole: mocks.preview }));
 
@@ -39,6 +40,9 @@ beforeEach(() => {
     mocks.live.mockReturnValue(live); mocks.access.mockReturnValue("operator");
     mocks.servers.mockResolvedValue([{ serverId: managedId, accessRole: "owner" }]);
     mocks.files.mockResolvedValue(status);
+    mocks.configFile.mockImplementation(async (_token: string, _serverId: string, part: string) => part === "server"
+        ? { configPart: "server", revision: "a".repeat(64), settings: { ...status.managedConfig.serverConfig, autosaveMinutes: 30 } }
+        : { configPart: "mod", revision: "b".repeat(64), settings: status.managedConfig.modConfig });
     mocks.submit.mockResolvedValue({ kind: "job", outcome: "enqueued", jobId: "33333333-3333-4333-8333-333333333333", action: "export-save", state: "queued" });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
@@ -102,7 +106,19 @@ it.each(["owner", "manager"])("shows actual mapped save/config for managed %s an
     await render();
     expect(mocks.files).toHaveBeenCalledExactlyOnceWith("token", managedId);
     expect(container.textContent).toContain(status.activeSave!.displayName);
-    expect(JSON.parse(container.querySelector<HTMLTextAreaElement>("#config-json")!.value)).toEqual(status.managedConfig);
+    // Owners edit the runner's live files; managers only see the stored configuration.
+    const autosave = container.querySelector<HTMLInputElement>("#config-serverConfig-autosaveMinutes")!;
+    expect(button("Form").getAttribute("aria-pressed")).toBe("true");
+    if (accessRole === "owner") {
+        expect(mocks.configFile).toHaveBeenCalledWith("token", managedId, "server");
+        expect(mocks.configFile).toHaveBeenCalledWith("token", managedId, "mod");
+        expect(autosave.value).toBe("30");
+        expect(container.querySelector("fieldset")!.disabled).toBe(false);
+    } else {
+        expect(mocks.configFile).not.toHaveBeenCalled();
+        expect(autosave.value).toBe(String(status.managedConfig.serverConfig.autosaveMinutes));
+        expect(container.querySelector("fieldset")!.disabled).toBe(true);
+    }
     expect(button("Import save").disabled).toBe(false);
     expect(button("Export config").disabled).toBe(false);
     expect(button("Import config").disabled).toBe(accessRole !== "owner");

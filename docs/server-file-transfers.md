@@ -5,6 +5,37 @@ Existing backup polling, restore confirmations, and retained request recovery
 remain in `ManagedServerBackups`. Campaign and configuration transfers appear
 above them, with a responsive two-card layout and native import review dialogs.
 
+## Inline configuration editing
+
+The Configuration card edits the runner's native `server-config.json` and
+`mod-config.json` directly through the control plane's `GET`/`POST /api/v1/config`
+route (ControlPlane PR #163, `docs/managed-hosting/web-admin.md`). The `my-servers`
+Edge Function proxies it as `GET ?resource=config&serverId=<uuid>&configPart=server|mod`
+(a bodiless upstream GET) and `POST { action: "save-config", serverId, configPart,
+expectedRevision, settings }` with a required durable `x-request-id`. The adapter's
+unversioned success envelope and its read failures, which carry the adapter's own
+request ID, are re-wrapped into the website envelope; mismatched write request IDs,
+foreign file parts and unsupported fields are rejected as invalid responses.
+
+- The form is the default editor; JSON shows `{ serverConfig, modConfig }` and
+  validates on every keystroke. Both views share one draft, so switching never
+  loses edits. Discard restores the last loaded values.
+- Only the managed owner (`manage-settings`) loads and saves live files. Managers,
+  support and administrators see the stored managed configuration read-only, and a
+  failed live read keeps that read-only preview with an alert and a Reload control.
+- Each file is saved separately with the SHA-256 revision returned by its last read
+  or write. A conflict or runner failure asks for a reload before saving again.
+  An unconfirmed response keeps the request ID so a retry replays instead of
+  re-applying; a conflict or local rejection discards it.
+- Settings apply on the next Start. The stored `managedConfig` from `getMyServerFiles`
+  is not synchronized with the runner files by this route.
+- `supabase/functions/_shared/server-configuration-contract.ts` mirrors the control
+  plane's `direct-configuration.ts`; `server-configuration.ts` and
+  `managed-server-config-actions.ts` carry the website side. Edge, action and
+  component tests cover forwarding, validation, replay identity and the read-only
+  states. Rollout requires the control plane route to be merged and deployed first;
+  until then the owner card shows the load failure and the stored preview.
+
 - Import a downloaded `.blcexport` or a `.sav` and its matching `.json` companion,
   up to 20 MiB total (including archive metadata/encoding). Both
   filenames must be simple basenames. Backend/runner limits may be stricter.
