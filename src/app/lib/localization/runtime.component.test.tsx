@@ -45,7 +45,7 @@ describe("localization runtime", () => {
             expect(resolveLocale(value)).toBe("en");
             expect(await getLocale()).toBe("en");
             expect((await getTranslations("common")).locale).toBe("en");
-            const layout = await RootLayout({ children: <span /> });
+            const layout = await RootLayout({ children: <span />, params: Promise.resolve({}) });
             expect(layout.props.lang).toBe("en");
             expect(layout.props.children.props.children.props.locale).toBe("en");
             expect((await generateMetadata()).openGraph).toMatchObject({ locale: "en_US", description: common["metadata.description"] });
@@ -70,7 +70,7 @@ describe("localization runtime", () => {
             expect(await setLocale("ru")).toBe("ru");
             expect(await getLocale()).toBe("ru");
             expect((await getTranslations("common")).t("loading.page")).toBe("Загрузка…");
-            const layout = await RootLayout({ children: <span /> });
+            const layout = await RootLayout({ children: <span />, params: Promise.resolve({}) });
             expect(layout.props.lang).toBe("ru");
             expect(layout.props.children.props.children.props.locale).toBe("ru");
             expect((await generateMetadata()).openGraph).toMatchObject({ locale: "ru_RU", description: "Описание" });
@@ -78,10 +78,10 @@ describe("localization runtime", () => {
     });
 
     it("loads only requested namespaces and root serializes common only", async () => {
-        const spy = vi.spyOn(localeDefinitions.en.dictionaries, "cheats");
+        const spy = vi.spyOn(localeDefinitions.en.dictionaries as Required<typeof localeDefinitions.en.dictionaries>, "cheats");
         try {
             expect(Object.keys(await getMessages(["common"]))).toEqual(["common"]);
-            const layout = await RootLayout({ children: <span /> });
+            const layout = await RootLayout({ children: <span />, params: Promise.resolve({}) });
             expect(Object.keys(layout.props.children.props.children.props.messages)).toEqual(["common"]);
             expect(spy).not.toHaveBeenCalled();
             const disabled = locales.find((locale) => !localeDefinitions[locale].enabled);
