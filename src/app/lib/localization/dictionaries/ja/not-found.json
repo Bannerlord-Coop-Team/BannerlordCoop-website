@@ -1,0 +1,9 @@
+{
+  "links.brandHome": "{brand}のホーム",
+  "error.code": "エラー {code}",
+  "heading": "ページが見つかりません。",
+  "description": "お探しのページは移動または削除されたか、存在しない可能性があります。慣れ親しんだ地へ戻るか、サーバー一覧へお進みください。",
+  "links.home": "ホームに戻る",
+  "links.servers": "サーバーを探す",
+  "footer.motto": "仲間なくして旗は掲げられない"
+}
