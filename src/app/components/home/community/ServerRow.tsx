@@ -1,3 +1,4 @@
+import { getTranslations } from "@/app/lib/localization/server";
 import type { CoopServer } from "@/app/components/utils/types/server.types";
 
 type ServerRowProps = {
@@ -26,7 +27,9 @@ function getPingColor(ping: number | null) {
     return "text-crimson-hover";
 }
 
-export function ServerRow({ server }: ServerRowProps) {
+// Renders localized ServerRow presentation while preserving source values.
+export async function ServerRow({ server }: ServerRowProps) {
+    const { t, number } = await getTranslations("home");
     const status = statusStyles[server.status];
 
     return (
@@ -48,16 +51,16 @@ export function ServerRow({ server }: ServerRowProps) {
                 </span>
             </td>
             <td className="whitespace-nowrap px-4 py-4 font-label text-sm font-semibold tabular-nums text-foreground sm:px-6 sm:py-5">
-                {server.warriors}{" "}
-                <span className="text-foreground-dim">/ {server.maxWarriors}</span>
+                {number(server.warriors)}{" "}
+                <span className="text-foreground-dim">/ {number(server.maxWarriors)}</span>
             </td>
             <td className={`whitespace-nowrap px-4 py-4 font-label text-sm font-semibold tabular-nums sm:px-6 sm:py-5 ${getPingColor(server.ping)}`}>
-                {server.ping === null ? "—" : `${server.ping} ms`}
+                {server.ping === null ? "—" : t("servers.ping", { ping: number(server.ping) })}
             </td>
             <td className="whitespace-nowrap px-4 py-4 sm:px-6 sm:py-5">
                 <span className={`inline-flex items-center gap-2 font-label text-xs font-semibold uppercase tracking-[0.16em] ${status.text}`}>
                     <span aria-hidden="true" className={`size-1.5 rounded-full ${status.dot}`} />
-                    {server.status}
+                    {t(`servers.status.${server.status}`)}
                 </span>
             </td>
         </tr>

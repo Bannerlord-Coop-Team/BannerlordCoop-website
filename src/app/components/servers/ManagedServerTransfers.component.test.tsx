@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { Blob as NodeBlob } from "node:buffer";
 import { unzipSync, strFromU8 } from "fflate";
 import { readConfigurationFile, applyConfigurationImport } from "../../../../supabase/functions/_shared/configuration-file-import";
@@ -26,7 +28,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 async function render(current = status, owner = true, userId = "owner") {
-    await act(async () => root.render(<ManagedServerTransfers userId={userId} serverId={current.serverId} status={current} canImportConfig={owner} canEditConfig={owner} canExportSave={owner} />));
+    await act(async () => root.render(<TestLocalization>{<ManagedServerTransfers userId={userId} serverId={current.serverId} status={current} canImportConfig={owner} canEditConfig={owner} canExportSave={owner} />} </TestLocalization>));
     await act(async () => vi.advanceTimersByTimeAsync(0));
 }
 function button(label: string) { const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label); if (!found) throw Error(`Missing button ${label}`); return found; }
@@ -282,3 +284,10 @@ it("edits the live configuration in the form by default while file transfers sta
     expect(container.querySelector("fieldset")!.disabled).toBe(true);
     expect(button("Save config").disabled).toBe(true);
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

@@ -1,27 +1,31 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
+import { LocaleSelector } from "./LocaleSelector";
 import { ProfileDropdown } from "@/app/components/layout/ProfileDropdown";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
 const navigation = [
-    { label: "Home", href: "/" },
-    { label: "Servers", href: "/servers" },
-    { label: "Cheats", href: "/cheats" },
-    { label: "Changelog", href: "/changelog" },
-    { label: "Support", href: "/support" },
+    { label: "nav.home", href: "/" },
+    { label: "nav.servers", href: "/servers" },
+    { label: "nav.cheats", href: "/cheats" },
+    { label: "nav.changelog", href: "/changelog" },
+    { label: "nav.support", href: "/support" },
 ] as const;
 
+/** Renders localized mobile navigation without changing authentication or link targets. */
 export function MobileNavigation({
     isAdmin,
     isAuthenticated,
-    accountName = "Your account",
+    accountName,
 }: {
     accountName?: string;
     isAdmin: boolean;
     isAuthenticated: boolean;
 }) {
+    const { t } = useTranslations("common");
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -67,7 +71,7 @@ export function MobileNavigation({
                 type="button"
                 onClick={() => setIsOpen((open) => !open)}
                 className="relative z-60 flex size-10 items-center justify-center rounded-full border border-white/20 text-foreground transition-colors duration-300 hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                aria-label={isOpen ? "Close navigation menu" : "Open navigation menu"}
+                aria-label={t(isOpen ? "nav.close" : "nav.open")}
                 aria-expanded={isOpen}
                 aria-controls="mobile-navigation"
             >
@@ -120,7 +124,7 @@ export function MobileNavigation({
                             </p>
                         </div>
 
-                        <nav className="mt-8" aria-label="Mobile navigation">
+                        <nav className="mt-8" aria-label={t("nav.mobile")}>
                             <ul className="space-y-1">
                                 {navigation.map((item) => (
                                     <li key={item.href}>
@@ -130,7 +134,7 @@ export function MobileNavigation({
                                             onClick={closeMenu}
                                             className="block border-b border-white/10 py-4 font-display text-3xl font-semibold uppercase text-foreground transition-colors hover:text-gold focus-visible:outline-none"
                                         >
-                                            {item.label}
+                                            {t(item.label)}
                                         </Link>
                                     </li>
                                 ))}
@@ -149,6 +153,7 @@ export function MobileNavigation({
                         </nav>
 
                         <div className="mt-auto grid gap-3 pt-8">
+                            <LocaleSelector variant="mobile" />
                             <a
                                 href="https://discord.gg/bannerlordcoop"
                                 target="_blank"
@@ -164,7 +169,7 @@ export function MobileNavigation({
                                     onClick={closeMenu}
                                     className="inline-flex min-h-12 items-center justify-center rounded-sm border border-crimson bg-transparent font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors hover:border-crimson-hover hover:bg-crimson/15 hover:text-white"
                                 >
-                                    Sign in
+                                    {t("nav.signIn")}
                                 </Link>
                             )}
                         </div>

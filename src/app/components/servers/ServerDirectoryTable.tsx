@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "@/app/lib/localization/client";
 import type {
     DirectoryServer,
     HostedServerStatus,
@@ -27,11 +30,13 @@ const connectionTypeStyles = {
     GOG: "border-violet-400/20 bg-violet-400/[0.07] text-violet-300",
 } as const;
 
+/** Renders localized inventory labels while preserving names, state codes and management routes. */
 export function ServerDirectoryTable({
     servers,
     showManage = false,
     emptyMessage,
 }: ServerDirectoryTableProps) {
+    const { t, number } = useTranslations("servers");
     if (servers.length === 0) {
         return (
             <div className="flex min-h-36 items-center justify-center border border-dashed border-white/15 bg-surface px-6 text-center text-sm text-foreground-muted">
@@ -46,16 +51,16 @@ export function ServerDirectoryTable({
                 <thead className="border-b border-white/10 bg-white/[0.025]">
                     <tr>
                         <th scope="col" className="px-5 py-3.5 font-label text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-foreground-dim sm:px-6">
-                            Name
+                            {t("table.name")}
                         </th>
                         <th scope="col" className="px-5 py-3.5 font-label text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-foreground-dim sm:px-6">
-                            Player count
+                            {t("table.players")}
                         </th>
                         <th scope="col" className="px-5 py-3.5 font-label text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-foreground-dim sm:px-6">
-                            Type
+                            {t("table.type")}
                         </th>
                         <th scope="col" className="px-5 py-3.5 text-right font-label text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-foreground-dim sm:px-6">
-                            Actions
+                            {t("table.actions")}
                         </th>
                     </tr>
                 </thead>
@@ -79,17 +84,17 @@ export function ServerDirectoryTable({
                                             </p>
                                             <p className="mt-1 flex items-center gap-1.5 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted">
                                                 <span aria-hidden="true" className={`size-1.5 rounded-full ${isOnline ? "bg-emerald-400" : "bg-foreground-dim"}`} />
-                                                {server.status}
+                                                {t(`table.status.${server.status}`)}
                                             </p>
                                         </div>
                                     </div>
                                 </td>
                                 <td className="whitespace-nowrap px-5 py-4 font-label text-sm font-semibold tabular-nums text-foreground sm:px-6 sm:py-5">
-                                    {server.players ?? "—"}
+                                    {server.players === null ? t("table.unknownPlayers") : number(server.players)}
                                 </td>
                                 <td className="whitespace-nowrap px-5 py-4 sm:px-6 sm:py-5">
                                     <span className={`inline-flex border px-2.5 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-[0.14em] ${connectionTypeStyles[server.connectionType]}`}>
-                                        {server.connectionType}
+                                        {server.connectionType === "Direct" ? t("table.direct") : server.connectionType}
                                     </span>
                                 </td>
                                 <td className="px-5 py-4 sm:px-6 sm:py-5">
@@ -103,7 +108,7 @@ export function ServerDirectoryTable({
                                                 href={manageUrl}
                                                 className="inline-flex min-h-10 items-center justify-center gap-1.5 border border-gold/35 bg-gold/[0.07] px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                                             >
-                                                Manage
+                                                {t("table.manage")}
                                                 <ChevronRight aria-hidden="true" className="size-3.5" />
                                             </Link>
                                         )}

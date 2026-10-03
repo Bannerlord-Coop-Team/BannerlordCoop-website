@@ -1,3 +1,5 @@
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import common from "@/app/lib/localization/dictionaries/en/common.json";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
@@ -10,7 +12,7 @@ it("shows the account name and server link, and closes with Escape restoring foc
     document.body.append(container);
     const root = createRoot(container);
     try {
-        await act(async () => root.render(<ProfileDropdown accountName="Andrew" />));
+        await act(async () => root.render(<LocalizationProvider locale="en" messages={{ common }}><ProfileDropdown accountName="Andrew" /></LocalizationProvider>));
         const trigger = container.querySelector("button")!;
         expect(trigger.getAttribute("aria-label")).toBe("Account menu for Andrew");
         await act(async () => trigger.click());
@@ -34,7 +36,7 @@ it("shows the admin link for administrators", async () => {
     document.body.append(container);
     const root = createRoot(container);
     try {
-        await act(async () => root.render(<ProfileDropdown accountName="Andrew" isAdmin />));
+        await act(async () => root.render(<LocalizationProvider locale="en" messages={{ common }}><ProfileDropdown accountName="Andrew" isAdmin /></LocalizationProvider>));
         await act(async () => container.querySelector("button")!.click());
         expect(container.querySelector('a[href="/admin"]')?.textContent).toContain("Admin");
     } finally {

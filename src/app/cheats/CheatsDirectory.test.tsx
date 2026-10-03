@@ -3,12 +3,17 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CheatsDirectory, type CheatCommand } from "./CheatsDirectory";
 import data from "./commands.json";
-import { getCheatsMessages } from "./locales";
+import { LocalizationProvider } from "../lib/localization/client";
+import en from "../lib/localization/dictionaries/en/cheats.json";
+import zh from "./locales/zh-CN.json";
 import { parseCheatsQuery } from "./query";
 
-function render(q: string, lang = "en", side = "all") {
+/** Renders the real directory with its route-scoped dictionary for source/translated regressions. */
+function render(q: string, lang: "en" | "zh-CN" = "en", side = "all") {
     const query = parseCheatsQuery({ q, lang, side, tab: "all" });
-    return renderToStaticMarkup(<CheatsDirectory commands={data.commands as CheatCommand[]} initialQuery={query} locale={query.lang} messages={getCheatsMessages(query.lang)} />);
+    return renderToStaticMarkup(<LocalizationProvider locale={lang} messages={{ cheats: lang === "en" ? en : zh }}>
+        <CheatsDirectory commands={data.commands as CheatCommand[]} initialQuery={query} />
+    </LocalizationProvider>);
 }
 
 test("CheatsDirectory renders source descriptions and required/optional argument help", () => {
@@ -23,6 +28,7 @@ test("CheatsDirectory renders source descriptions and required/optional argument
     assert.ok(!gold.includes("SetGold"));
     const heroId = render("coop.debug.hero.id", "zh-CN");
     assert.ok(heroId.includes('id="cheat-coop.debug.hero.id"'));
+    assert.ok(heroId.includes(">coop.debug.hero.id</a>"));
     assert.ok(heroId.includes("&lt;heroName&gt;"));
     assert.ok(heroId.includes("查找显示名称完全匹配的英雄的注册 ID。"));
     assert.ok(heroId.includes("要查找的英雄的完整显示名称。包含多个词的值需加双引号。"));

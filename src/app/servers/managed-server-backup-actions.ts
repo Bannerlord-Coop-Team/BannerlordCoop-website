@@ -1,5 +1,7 @@
 "use server";
 
+import { getTranslations } from "@/app/lib/localization/server";
+
 import {
     MyServersApiError,
     getMyServerBackupStatus,
@@ -14,9 +16,11 @@ export type ManagedServerBackupActionResult =
     | { ok: true; message: string; jobId: string }
     | { ok: false; message: string; retrySameRequest: boolean };
 
+// Authenticates backup operations and preserves durable retry identity.
 export async function manageServerBackup(input: unknown, expectedPageUserId: unknown): Promise<ManagedServerBackupActionResult> {
+    const { t } = await getTranslations("managed-server");
     const parsed = parseManagedServerBackupInput(input);
-    if (parsed === null) return rejected("The backup request is invalid.");
+    if (parsed === null) return rejected(t("action.backup.theBackupRequestIsInvalid"));
 
     let accessToken: string | null = null;
     try {
@@ -26,19 +30,19 @@ export async function manageServerBackup(input: unknown, expectedPageUserId: unk
             supabase.auth.getSession(),
         ]);
         if (userData.user === null) {
-            return uncertain("Please sign in again before managing backups; then retry the pending request.");
+            return uncertain(t("action.backup.pleaseSignInAgainBeforeManagingBackupsThenRetryThe"));
         }
         // This caller-supplied comparison can only restrict dispatch. Authentication and
         // backend authorization still derive exclusively from the current session.
         if (typeof expectedPageUserId !== "string" || expectedPageUserId !== userData.user.id) {
-            return uncertain("Your signed-in account changed. Sign in with the account that submitted this request, then retry the pending request.");
+            return uncertain(t("action.backup.yourSignedInAccountChangedSignInWithTheAccount"));
         }
         accessToken = sessionData.session?.access_token ?? null;
     } catch {
-        return uncertain("Your authenticated server session is unavailable. Retry the pending request once it recovers.");
+        return uncertain(t("action.backup.yourAuthenticatedServerSessionIsUnavailableRetryThePendingRequest"));
     }
     if (accessToken === null) {
-        return uncertain("Please sign in again before managing backups; then retry the pending request.");
+        return uncertain(t("action.backup.pleaseSignInAgainBeforeManagingBackupsThenRetryThe"));
     }
 
     try {
@@ -65,11 +69,11 @@ export async function manageServerBackup(input: unknown, expectedPageUserId: unk
             ok: true,
             message: result.outcome === "existing"
                 ? parsed.action === "create-backup"
-                    ? "That backup request was already accepted."
-                    : "That restore request was already accepted."
+                    ? t("action.backup.thatBackupRequestWasAlreadyAccepted")
+                    : t("action.backup.thatRestoreRequestWasAlreadyAccepted")
                 : parsed.action === "create-backup"
-                    ? "Backup request accepted."
-                    : "Save restore request accepted.",
+                    ? t("action.backup.backupRequestAccepted")
+                    : t("action.backup.saveRestoreRequestAccepted"),
             jobId: result.jobId,
         };
     } catch (error) {
@@ -77,50 +81,52 @@ export async function manageServerBackup(input: unknown, expectedPageUserId: unk
         console.error("Managed server backup operation failed", { code });
         if (backupRequestOutcomeIsUncertain(error)) {
             return uncertain(
-                "The submission outcome could not be confirmed. Retry this request to reconcile it without creating a duplicate.",
+                t("action.backup.theSubmissionOutcomeCouldNotBeConfirmedRetryThisRequest"),
             );
         }
         if (code === "stale_interaction") {
             revalidatePath("/servers");
             revalidatePath(`/servers/${parsed.serverId}`);
-            return uncertain("The server is still changing. Your request is saved; retry it when the server settles.");
+            return uncertain(t("action.backup.theServerIsStillChangingYourRequestIsSavedRetry"));
         }
         if (code === "server_not_found" || code === "access_denied") {
             // Authority is checked before replay, so this cannot resolve an earlier submission.
-            return uncertain("This server is unavailable or your access was removed. The pending request remains unconfirmed.");
+            return uncertain(t("action.backup.thisServerIsUnavailableOrYourAccessWasRemovedThe"));
         }
         if (["backup_not_found", "backup_expired", "backup_unavailable"].includes(code)) {
             revalidatePath(`/servers/${parsed.serverId}`);
-            return rejected("That backup is no longer available to restore.");
+            return rejected(t("action.backup.thatBackupIsNoLongerAvailableToRestore"));
         }
         if (code === "backup_build_mismatch") {
             revalidatePath(`/servers/${parsed.serverId}`);
-            return rejected("Save-only restore requires a backup from the currently installed game and mod version.");
+            return rejected(t("action.backup.saveOnlyRestoreRequiresABackupFromTheCurrentlyInstalled"));
         }
         if (code === "safe_stop_required") {
             revalidatePath(`/servers/${parsed.serverId}`);
-            return rejected("The game could not be verified stopped safely. Refresh its status before trying again.");
+            return rejected(t("action.backup.theGameCouldNotBeVerifiedStoppedSafelyRefreshIts"));
         }
         if (code === "operation_in_progress") {
             revalidatePath(`/servers/${parsed.serverId}`);
-            return rejected("Another server operation is active. Wait for its status to finish, then try again.");
+            return rejected(t("action.backup.anotherServerOperationIsActiveWaitForItsStatusTo"));
         }
         if (code === "operation_unavailable") {
             revalidatePath(`/servers/${parsed.serverId}`);
-            return rejected("That backup operation is not available in the server's current state.");
+            return rejected(t("action.backup.thatBackupOperationIsNotAvailableInTheServerS"));
         }
         if (code === "rate_limited" || code === "busy") {
-            return uncertain("Too many requests were submitted. Please wait and retry the pending request.");
+            return uncertain(t("action.backup.tooManyRequestsWereSubmittedPleaseWaitAndRetryThe"));
         }
         // Unknown/authentication rejections may happen before idempotency lookup.
-        return uncertain("The backup operation could not be confirmed right now. Retry the pending request.");
+        return uncertain(t("action.backup.theBackupOperationCouldNotBeConfirmedRightNowRetry"));
     }
 }
 
+// Presents a definitive backup rejection without enabling retries.
 function rejected(message: string): ManagedServerBackupActionResult {
     return { ok: false, message, retrySameRequest: false };
 }
 
+// Presents an unconfirmed backup outcome while retaining retry identity.
 function uncertain(message: string): ManagedServerBackupActionResult {
     return { ok: false, message, retrySameRequest: true };
 }

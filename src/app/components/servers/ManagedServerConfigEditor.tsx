@@ -1,5 +1,10 @@
 "use client";
 
+import { configurationMessages } from "@/app/servers/managed-server-messages";
+
+import { useTranslations } from "@/app/lib/localization/client";
+import type { Translator } from "@/app/lib/localization/types";
+
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { CircleAlert, LoaderCircle, RefreshCw } from "lucide-react";
 import { readManagedServerConfig, saveManagedServerConfig } from "@/app/servers/managed-server-config-actions";
@@ -20,86 +25,96 @@ type Field = { key: string; label: string; help?: string } & (
     | { kind: "number"; min: number; max: number; step: number }
     | { kind: "choice"; options: readonly string[] });
 
-const SERVER_FIELDS: Field[] = [
-    { key: "autosaveMinutes", label: "Autosave interval (minutes)", kind: "integer", min: 0, max: 1440, help: "0 turns autosave off." },
-    { key: "logFile", label: "Write a server log file", kind: "boolean" },
-    { key: "steam", label: "Steam integration", kind: "boolean" },
-    { key: "traceTick", label: "Trace ticks (diagnostics)", kind: "boolean" },
-    { key: "tracePublish", label: "Trace publishing (diagnostics)", kind: "boolean" },
-    { key: "traceBandits", label: "Trace bandits (diagnostics)", kind: "boolean" },
-];
-const DIFFICULTY_FIELDS: Field[] = [
-    { key: "playerReceivedDamage", label: "Damage to player", kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
-    { key: "playerTroopsReceivedDamage", label: "Damage to player troops", kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
-    { key: "combatAIDifficulty", label: "Combat AI difficulty", kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
-    { key: "recruitmentDifficulty", label: "Recruitment difficulty", kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
-    { key: "playerMapMovementSpeed", label: "Player map movement speed", kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
-    { key: "stealthAndDisguiseDifficulty", label: "Stealth and disguise difficulty", kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
-    { key: "persuasionSuccessChance", label: "Persuasion success chance", kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
-    { key: "clanMemberDeathChance", label: "Clan member death chance", kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
-    { key: "battleDeath", label: "Death in battle", kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
-    { key: "birthAndDeath", label: "Birth and death", kind: "boolean" },
-    { key: "autoAllocateClanMemberPerks", label: "Automatically allocate clan member perks", kind: "boolean" },
-];
-const MOD_OPTION_FIELDS: Field[] = [
-    { key: "fastForwardEnabled", label: "Allow fast forward", kind: "boolean" },
-    { key: "autoPauseEnabled", label: "Auto-pause", kind: "boolean" },
-    { key: "clientsCanUseCheats", label: "Clients can use cheats", kind: "boolean" },
-    { key: "goldFoodInfluenceChangeInSettlements", label: "Gold, food and influence change in settlements", kind: "boolean" },
-    { key: "goldFoodInfluenceChangeInBattles", label: "Gold, food and influence change in battles", kind: "choice", options: MANAGED_GOLD_FOOD_CHANGE_MODES },
-    { key: "goldFoodInfluenceChangeForDisconnectedPlayers", label: "Gold, food and influence change for disconnected players", kind: "boolean" },
-    { key: "playerBattleAiJoinWindowHours", label: "Hours AI may join player battles", kind: "integer", min: 0, max: 8760 },
-    { key: "speedLimitWhilePlayersInBattle", label: "Limit map speed while players are in battle", kind: "boolean" },
-    { key: "wandererLimit", label: "Wanderer limit", kind: "integer", min: 0, max: 1000 },
-    { key: "wandererLimitScalesWithPlayers", label: "Wanderer limit scales with players", kind: "boolean" },
-    { key: "playerKingdomClanTierRequired", label: "Clan tier required to create a kingdom", kind: "integer", min: 0, max: 6 },
-    { key: "smithingStaminaRecoveryOutsideSettlements", label: "Smithing stamina recovers outside settlements", kind: "boolean" },
-    { key: "smithingStaminaRecoveryMultiplier", label: "Smithing stamina recovery multiplier", kind: "number", min: 0, max: 100, step: 0.01 },
-    { key: "maximumLootersMultiplier", label: "Maximum looters multiplier", kind: "number", min: 0, max: 100, step: 0.1 },
-    { key: "looterPartySizeMultiplier", label: "Looter party size multiplier", kind: "number", min: 0, max: 100, step: 0.1 },
-    { key: "lordDefectionRetries", label: "Lord defection retries", kind: "choice", options: MANAGED_LORD_DEFECTION_RETRY_MODES },
-    { key: "enableHeroExecutions", label: "Allow hero executions", kind: "boolean" },
-    { key: "enablePlayerClanMemberExecutions", label: "Allow executing player clan members", kind: "boolean" },
-];
-const GROUPS: { group: Group; title: string; description: string; fields: Field[] }[] = [
-    { group: "serverConfig", title: "Server settings", description: "Saved to server-config.json. Passwords, ports and campaign selection are managed separately.", fields: SERVER_FIELDS },
-    { group: "difficulty", title: "Difficulty", description: "Saved to mod-config.json.", fields: DIFFICULTY_FIELDS },
-    { group: "modOptions", title: "Gameplay options", description: "Saved to mod-config.json.", fields: MOD_OPTION_FIELDS },
-];
 const inputClass = "mt-2 block w-full min-w-0 rounded-md border border-white/15 bg-background px-3 py-2 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-red-400";
 
-function humanize(value: string) {
-    return value.replace(/([a-z])([A-Z])/gu, "$1 $2").replace(/^./u, (letter) => letter.toUpperCase()).replace(/ [A-Z](?=[a-z])/gu, (word) => word.toLowerCase());
+// Resolves the label for an unchanged configuration choice value.
+function configurationChoiceLabel(value: string, t: Translator["t"]) {
+    return t(`configuration.option.${value}`);
 }
+// Selects the configuration group without modifying its values.
 function groupValues(settings: Settings, group: Group): Record<string, unknown> {
     return (group === "serverConfig" ? settings.serverConfig : settings.modConfig[group]) as unknown as Record<string, unknown>;
 }
+// Updates the selected draft setting without altering other configuration.
 function withValue(settings: Settings, group: Group, key: string, value: unknown): Settings {
     if (group === "serverConfig") return { ...settings, serverConfig: { ...settings.serverConfig, [key]: value } };
     return { ...settings, modConfig: { ...settings.modConfig, [group]: { ...settings.modConfig[group], [key]: value } } };
 }
-function numberProblem(field: Field, value: unknown): string | null {
+// Reports the existing numeric validation rule using injected presentation.
+function numberProblem(field: Field, value: unknown, t: Translator["t"], number: Translator["number"]): string | null {
     if (field.kind !== "integer" && field.kind !== "number") return null;
-    if (typeof value !== "number" || Number.isNaN(value)) return "Enter a number.";
-    if (field.kind === "integer" && !Number.isInteger(value)) return "Enter a whole number.";
-    if (value < field.min || value > field.max) return `Enter a value from ${field.min} to ${field.max}.`;
+    if (typeof value !== "number" || Number.isNaN(value)) return t("configEditor.enterANumber");
+    if (field.kind === "integer" && !Number.isInteger(value)) return t("configEditor.enterAWholeNumber");
+    if (value < field.min || value > field.max) return t("configEditor.enterAValueFromMinToMax", { min: number(field.min), max: number(field.max) });
     return null;
 }
+// Serializes editable configuration without translating its payload.
 function pretty(settings: Settings) { return JSON.stringify({ serverConfig: settings.serverConfig, modConfig: settings.modConfig }, null, 2); }
-function parseSettings(value: unknown): Settings {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Expected an object with serverConfig and modConfig.");
+// Validates configuration shape and injects detailed parser diagnostics.
+function parseSettings(value: unknown, t: Translator["t"]): Settings {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(t("configEditor.expectedAnObjectWithServerconfigAndModconfig"));
     const keys = Object.keys(value);
-    if (keys.length !== 2 || !("serverConfig" in value) || !("modConfig" in value)) throw new Error("Expected exactly serverConfig and modConfig.");
-    const parsed = parseManagedServerConfiguration({ schemaVersion: 1, ...(value as object) });
+    if (keys.length !== 2 || !("serverConfig" in value) || !("modConfig" in value)) throw new Error(t("configEditor.expectedExactlyServerconfigAndModconfig"));
+    const parsed = parseManagedServerConfiguration({ schemaVersion: 1, ...(value as object) }, configurationMessages(t));
     return { serverConfig: parsed.serverConfig, modConfig: parsed.modConfig };
 }
+// Compares serialized settings to detect unsaved changes.
 function sameSettings(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.stringify(b); }
 
+// Keys editable configuration state to the current account and server.
 export function ManagedServerConfigEditor({ configuration, access, notice }: { configuration?: ManagedServerConfiguration; access?: ConfigAccess; notice?: ReactNode }) {
     return <ConfigSession key={access ? `${access.userId}:${access.serverId}` : "preview"} configuration={configuration} access={access} notice={notice} />;
 }
 
+// Presents live configuration editing and localized validation feedback.
 function ConfigSession({ configuration, access, notice }: { configuration?: ManagedServerConfiguration; access?: ConfigAccess; notice?: ReactNode }) {
+    const { t, number, locale } = useTranslations("managed-server");
+    const SERVER_FIELDS: Field[] = [
+        { key: "autosaveMinutes", label: t("configuration.field.autosaveMinutes"), kind: "integer", min: 0, max: 1440, help: t("configEditor.0TurnsAutosaveOff") },
+        { key: "logFile", label: t("configuration.field.logFile"), kind: "boolean" },
+        { key: "steam", label: t("configuration.field.steam"), kind: "boolean" },
+        { key: "traceTick", label: t("configuration.field.traceTick"), kind: "boolean" },
+        { key: "tracePublish", label: t("configuration.field.tracePublish"), kind: "boolean" },
+        { key: "traceBandits", label: t("configuration.field.traceBandits"), kind: "boolean" },
+    ];
+    const DIFFICULTY_FIELDS: Field[] = [
+        { key: "playerReceivedDamage", label: t("configuration.field.playerReceivedDamage"), kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
+        { key: "playerTroopsReceivedDamage", label: t("configuration.field.playerTroopsReceivedDamage"), kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
+        { key: "combatAIDifficulty", label: t("configuration.field.combatAIDifficulty"), kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
+        { key: "recruitmentDifficulty", label: t("configuration.field.recruitmentDifficulty"), kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
+        { key: "playerMapMovementSpeed", label: t("configuration.field.playerMapMovementSpeed"), kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
+        { key: "stealthAndDisguiseDifficulty", label: t("configuration.field.stealthAndDisguiseDifficulty"), kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
+        { key: "persuasionSuccessChance", label: t("configuration.field.persuasionSuccessChance"), kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
+        { key: "clanMemberDeathChance", label: t("configuration.field.clanMemberDeathChance"), kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
+        { key: "battleDeath", label: t("configuration.field.battleDeath"), kind: "choice", options: MANAGED_DIFFICULTY_LEVELS },
+        { key: "birthAndDeath", label: t("configuration.field.birthAndDeath"), kind: "boolean" },
+        { key: "autoAllocateClanMemberPerks", label: t("configuration.field.autoAllocateClanMemberPerks"), kind: "boolean" },
+    ];
+    const MOD_OPTION_FIELDS: Field[] = [
+        { key: "fastForwardEnabled", label: t("configuration.field.fastForwardEnabled"), kind: "boolean" },
+        { key: "autoPauseEnabled", label: t("configuration.field.autoPauseEnabled"), kind: "boolean" },
+        { key: "clientsCanUseCheats", label: t("configuration.field.clientsCanUseCheats"), kind: "boolean" },
+        { key: "goldFoodInfluenceChangeInSettlements", label: t("configuration.field.goldFoodInfluenceChangeInSettlements"), kind: "boolean" },
+        { key: "goldFoodInfluenceChangeInBattles", label: t("configuration.field.goldFoodInfluenceChangeInBattles"), kind: "choice", options: MANAGED_GOLD_FOOD_CHANGE_MODES },
+        { key: "goldFoodInfluenceChangeForDisconnectedPlayers", label: t("configuration.field.goldFoodInfluenceChangeForDisconnectedPlayers"), kind: "boolean" },
+        { key: "playerBattleAiJoinWindowHours", label: t("configuration.field.playerBattleAiJoinWindowHours"), kind: "integer", min: 0, max: 8760 },
+        { key: "speedLimitWhilePlayersInBattle", label: t("configuration.field.speedLimitWhilePlayersInBattle"), kind: "boolean" },
+        { key: "wandererLimit", label: t("configuration.field.wandererLimit"), kind: "integer", min: 0, max: 1000 },
+        { key: "wandererLimitScalesWithPlayers", label: t("configuration.field.wandererLimitScalesWithPlayers"), kind: "boolean" },
+        { key: "playerKingdomClanTierRequired", label: t("configuration.field.playerKingdomClanTierRequired"), kind: "integer", min: 0, max: 6 },
+        { key: "smithingStaminaRecoveryOutsideSettlements", label: t("configuration.field.smithingStaminaRecoveryOutsideSettlements"), kind: "boolean" },
+        { key: "smithingStaminaRecoveryMultiplier", label: t("configuration.field.smithingStaminaRecoveryMultiplier"), kind: "number", min: 0, max: 100, step: 0.01 },
+        { key: "maximumLootersMultiplier", label: t("configuration.field.maximumLootersMultiplier"), kind: "number", min: 0, max: 100, step: 0.1 },
+        { key: "looterPartySizeMultiplier", label: t("configuration.field.looterPartySizeMultiplier"), kind: "number", min: 0, max: 100, step: 0.1 },
+        { key: "lordDefectionRetries", label: t("configuration.field.lordDefectionRetries"), kind: "choice", options: MANAGED_LORD_DEFECTION_RETRY_MODES },
+        { key: "enableHeroExecutions", label: t("configuration.field.enableHeroExecutions"), kind: "boolean" },
+        { key: "enablePlayerClanMemberExecutions", label: t("configuration.field.enablePlayerClanMemberExecutions"), kind: "boolean" },
+    ];
+    const GROUPS: { group: Group; title: string; description: string; fields: Field[] }[] = [
+        { group: "serverConfig", title: t("configEditor.serverSettings"), description: t("configEditor.savedToServerConfigJsonPasswordsPortsAndCampaignSelection"), fields: SERVER_FIELDS },
+        { group: "difficulty", title: t("configEditor.difficulty"), description: t("configEditor.savedToModConfigJson"), fields: DIFFICULTY_FIELDS },
+        { group: "modOptions", title: t("configEditor.gameplayOptions"), description: t("configEditor.savedToModConfigJson"), fields: MOD_OPTION_FIELDS },
+    ];
     const stored: Settings | null = configuration ? { serverConfig: configuration.serverConfig, modConfig: configuration.modConfig } : null;
     const [mode, setMode] = useState<"form" | "json">("form");
     const [live, setLive] = useState<Live>({ server: null, mod: null });
@@ -131,7 +146,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
                 setDraft(settings); setJsonText(pretty(settings)); setJsonError(""); setStale(false);
                 setLoadState("ready");
             } else {
-                setLoadMessage((server && !server.ok ? server.message : mod && !mod.ok ? mod.message : null) ?? "The live configuration could not be loaded. Try again.");
+                setLoadMessage((server && !server.ok ? server.message : mod && !mod.ok ? mod.message : null) ?? t("configEditor.theLiveConfigurationCouldNotBeLoadedTryAgain"));
                 setLoadState("failed");
             }
         })();
@@ -142,36 +157,41 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         ? { serverConfig: live.server.settings as Settings["serverConfig"], modConfig: live.mod.settings as Settings["modConfig"] } : stored;
     const editable = access?.canEdit === true && loadState === "ready" && !pending;
     const dirtyParts = draft && baseline ? ([
-        ...(sameSettings(draft.serverConfig, baseline.serverConfig) ? [] : ["server settings"]),
-        ...(sameSettings(draft.modConfig, baseline.modConfig) ? [] : ["gameplay settings"]),
+        ...(sameSettings(draft.serverConfig, baseline.serverConfig) ? [] : [t("configEditor.serverSettings2")]),
+        ...(sameSettings(draft.modConfig, baseline.modConfig) ? [] : [t("configEditor.gameplaySettings")]),
     ]) : [];
     const dirty = dirtyParts.length > 0;
-    const problems = draft ? GROUPS.flatMap(({ group, fields }) => fields.filter((field) => numberProblem(field, groupValues(draft, group)[field.key]) !== null)) : [];
+    const problems = draft ? GROUPS.flatMap(({ group, fields }) => fields.filter((field) => numberProblem(field, groupValues(draft, group)[field.key], t, number) !== null)) : [];
 
+    // Reloads current configuration without retaining stale edits.
     function reload() {
         if (!access) return;
         setLoadState("loading"); setMessage(""); setStale(false); setLoadVersion((value) => value + 1);
     }
+    // Switches configuration views only when the JSON draft is valid.
     function switchMode(next: "form" | "json") {
         if (next === mode || !draft) return;
         if (next === "json") setJsonText(pretty(draft));
-        else if (jsonError) { setMessage("Fix the JSON before switching to the form."); return; }
+        else if (jsonError) { setMessage(t("configEditor.fixTheJsonBeforeSwitchingToTheForm")); return; }
         setMode(next);
     }
+    // Parses a JSON draft and reports validation without changing saved settings.
     function editJson(text: string) {
         setJsonText(text); setMessage("");
-        try { setDraft(parseSettings(JSON.parse(text))); setJsonError(""); }
-        catch (error) { setJsonError(error instanceof SyntaxError ? "This is not valid JSON." : error instanceof Error ? error.message : "Unsupported settings."); }
+        try { setDraft(parseSettings(JSON.parse(text), t)); setJsonError(""); }
+        catch (error) { setJsonError(error instanceof SyntaxError ? t("configEditor.thisIsNotValidJson") : error instanceof Error ? error.message : t("configEditor.unsupportedSettings")); }
     }
+    // Restores the draft from the last confirmed configuration.
     function discard() {
         if (!baseline) return;
         setDraft(baseline); setJsonText(pretty(baseline)); setJsonError(""); setMessage("");
     }
+    // Submits the existing settings operation and presents its outcome.
     function save() {
         if (!access || !editable || !draft || !dirty || jsonError) return;
         let parsed: Settings;
-        try { parsed = parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }); }
-        catch { setMessage("Some values are missing or out of range. Check the fields marked as invalid."); return; }
+        try { parsed = parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t); }
+        catch { setMessage(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe")); return; }
         setMessage("");
         startTransition(async () => {
             const saved: string[] = [];
@@ -189,40 +209,40 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
                 let response: Awaited<ReturnType<typeof saveManagedServerConfig>> | null = null;
                 try { response = await saveManagedServerConfig({ requestId, ...body }, access.userId); } catch { response = null; }
                 if (!response?.ok) {
-                    response ??= { ok: false, message: "Connection interrupted. Save again to retry the same request.", reload: false, notSubmitted: false };
+                    response ??= { ok: false, message: t("configEditor.connectionInterruptedSaveAgainToRetryTheSameRequest"), reload: false, notSubmitted: false };
                     if (response.reload || response.notSubmitted) requests.current[part] = null;
                     setStale(response.reload);
-                    setMessage([...saved.map((name) => `Saved ${name}.`), response.message].join(" "));
+                    setMessage([...saved.map((name) => t("configEditor.savedName", { name: name })), response.message].join(" "));
                     return;
                 }
                 requests.current[part] = null;
                 next = { ...next, [part]: response.file };
                 setLive(next);
-                saved.push(part === "server" ? "server settings" : "gameplay settings");
+                saved.push(part === "server" ? t("configEditor.serverSettings2") : t("configEditor.gameplaySettings"));
             }
             setDraft(parsed); setJsonText(pretty(parsed));
-            setMessage(saved.length ? `Saved ${saved.join(" and ")}. Restart the server to apply the new settings.` : "No changes to save.");
+            setMessage(saved.length ? t("configEditor.savedValue1RestartTheServerToApplyTheNewSettings", { value1: new Intl.ListFormat(locale, { type: "conjunction" }).format(saved) }) : t("configEditor.noChangesToSave"));
         });
     }
 
-    const status = !access ? (stored ? "Only the server owner can edit configuration. This is the stored managed configuration." : "Configuration is unavailable for this server.")
-        : loadState === "loading" ? "Loading the server's current configuration…"
+    const status = !access ? (stored ? t("configEditor.onlyTheServerOwnerCanEditConfigurationThisIsThe") : t("configEditor.configurationIsUnavailableForThisServer"))
+        : loadState === "loading" ? t("configEditor.loadingTheServerSCurrentConfiguration")
         : loadState === "failed" ? loadMessage
-        : access.canEdit ? "Editing the files on the server's runner. Changes apply the next time the server starts." : "Only the server owner can edit configuration.";
+        : access.canEdit ? t("configEditor.editingTheFilesOnTheServerSRunnerChangesApply") : t("configEditor.onlyTheServerOwnerCanEditConfiguration");
 
     return <div className="p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex gap-2" role="group" aria-label="Config editor mode">
-                <button type="button" disabled={!draft} aria-pressed={mode === "form"} className={mode === "form" ? filePrimaryButtonClass : fileButtonClass} onClick={() => switchMode("form")}>Form</button>
-                <button type="button" disabled={!draft} aria-pressed={mode === "json"} className={mode === "json" ? filePrimaryButtonClass : fileButtonClass} onClick={() => switchMode("json")}>JSON</button>
+            <div className="flex gap-2" role="group" aria-label={t("configEditor.configEditorMode")}>
+                <button type="button" disabled={!draft} aria-pressed={mode === "form"} className={mode === "form" ? filePrimaryButtonClass : fileButtonClass} onClick={() => switchMode("form")}>{t("configEditor.form")}</button>
+                <button type="button" disabled={!draft} aria-pressed={mode === "json"} className={mode === "json" ? filePrimaryButtonClass : fileButtonClass} onClick={() => switchMode("json")}>{t("configEditor.json")}</button>
             </div>
-            {access && <button type="button" className={fileButtonClass} disabled={loadState === "loading" || pending} onClick={reload}><RefreshCw aria-hidden className="size-4" />Reload settings</button>}
+            {access && <button type="button" className={fileButtonClass} disabled={loadState === "loading" || pending} onClick={reload}><RefreshCw aria-hidden className="size-4" />{t("configEditor.reloadSettings")}</button>}
         </div>
         <p id="config-help" role={loadState === "failed" ? "alert" : undefined} className="mb-4 flex items-start gap-2 text-xs leading-5 text-foreground-muted">
             {loadState === "loading" && <LoaderCircle aria-hidden className="mt-0.5 size-3.5 shrink-0 animate-spin" />}{status}
         </p>
         {draft && mode === "json" && <>
-            <label htmlFor="config-json" className="mb-2 block text-xs text-foreground-muted">Managed configuration · JSON</label>
+            <label htmlFor="config-json" className="mb-2 block text-xs text-foreground-muted">{t("configEditor.managedConfigurationJson")}</label>
             <textarea id="config-json" spellCheck={false} disabled={!editable} value={jsonText} onChange={(event) => editJson(event.target.value)} aria-invalid={jsonError ? true : undefined} aria-describedby={jsonError ? "config-json-error config-help" : "config-help"} className="min-h-64 w-full resize-y rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm leading-7 text-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-red-400" />
             {jsonError && <p id="config-json-error" role="alert" className="mt-2 text-sm text-red-200">{jsonError}</p>}
         </>}
@@ -242,10 +262,10 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
                         if (field.kind === "choice") return <div key={field.key}>
                             <label htmlFor={id} className="text-sm">{field.label}</label>
                             <select id={id} className={inputClass} value={typeof value === "string" ? value : ""} onChange={(event) => update(event.target.value)}>
-                                {field.options.map((option) => <option key={option} value={option}>{humanize(option)}</option>)}
+                                {field.options.map((option) => <option key={option} value={option}>{configurationChoiceLabel(option, t)}</option>)}
                             </select>
                         </div>;
-                        const problem = numberProblem(field, value);
+                        const problem = numberProblem(field, value, t, number);
                         return <div key={field.key}>
                             <label htmlFor={id} className="text-sm">{field.label}</label>
                             <input id={id} type="number" inputMode={field.kind === "integer" ? "numeric" : "decimal"} min={field.min} max={field.max} step={field.kind === "integer" ? 1 : field.step}
@@ -258,12 +278,12 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
             </fieldset>)}
         </div>}
         {notice}
-        {message && <p role="status" className="mt-4 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-sm text-foreground-muted">{pending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{message}{stale && <> <button type="button" className="underline" onClick={reload}>Reload settings</button></>}</p>}
+        {message && <p role="status" className="mt-4 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-sm text-foreground-muted">{pending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{message}{stale && <> <button type="button" className="underline" onClick={reload}>{t("configEditor.reloadSettings")}</button></>}</p>}
         <div className={`sticky bottom-0 z-10 -mx-5 -mb-5 mt-5 flex flex-wrap items-center justify-between gap-3 rounded-b-lg border-t bg-surface px-5 py-4 ${dirty ? "border-gold/60 bg-linear-to-r from-gold/15 to-gold/5" : "border-white/10"}`}>
-            <p className="text-sm text-foreground-muted">{dirty ? <span className="flex items-center gap-2 font-semibold text-gold"><CircleAlert className="size-4 shrink-0" aria-hidden="true" />Unsaved changes to {dirtyParts.join(" and ")}</span> : "No pending changes"}</p>
+            <p className="text-sm text-foreground-muted">{dirty ? <span className="flex items-center gap-2 font-semibold text-gold"><CircleAlert className="size-4 shrink-0" aria-hidden="true" />{t("configEditor.unsavedChanges", { settings: new Intl.ListFormat(locale, { type: "conjunction" }).format(dirtyParts) })}</span> : t("configEditor.noPendingChanges")}</p>
             <div className="ml-auto flex gap-2">
-                <button type="button" disabled={!dirty || pending} className={fileButtonClass} onClick={discard}>Discard</button>
-                <button type="button" disabled={!dirty || !editable || !!jsonError || problems.length > 0} className={filePrimaryButtonClass} onClick={save}>{pending ? "Saving…" : "Save config"}</button>
+                <button type="button" disabled={!dirty || pending} className={fileButtonClass} onClick={discard}>{t("configEditor.discard")}</button>
+                <button type="button" disabled={!dirty || !editable || !!jsonError || problems.length > 0} className={filePrimaryButtonClass} onClick={save}>{pending ? t("configEditor.saving") : t("configEditor.saveConfig")}</button>
             </div>
         </div>
     </div>;

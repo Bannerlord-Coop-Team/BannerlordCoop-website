@@ -23,6 +23,16 @@ test("requires server-approved eligibility and a retained restore state", () => 
     assert.equal(canRequestServerBackupRestore({ canRestore: true, restoreState: "expired" }), false);
 });
 
+// Proves injected presentation does not change restore eligibility or the selected reason.
+test("injects the selected restore reason without changing eligibility", () => {
+    const messages = { expired: "localized expired", inProgress: "localized progress", installedBuildUnknown: "localized installed",
+        backupBuildUnknown: "localized backup", buildMismatch: "localized mismatch", unknown: "localized unknown" };
+    const backup = { canRestore: false, restoreState: "available", restoreUnavailableReason: "build_mismatch" } as const;
+    assert.equal(restoreDisabledReason(backup, messages), "localized mismatch");
+    assert.equal(canRequestServerBackupRestore(backup), false);
+    assert.equal(restoreDisabledReason({ canRestore: true, restoreState: "available" }, messages), undefined);
+});
+
 test("legacy responses explain known states without inventing a build mismatch", () => {
     assert.match(restoreDisabledReason({ canRestore: false, restoreState: "available" })!, /did not provide/);
     assert.match(restoreDisabledReason({ canRestore: false, restoreState: "expired" })!, /expired/);

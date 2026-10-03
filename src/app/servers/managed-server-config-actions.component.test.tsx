@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { beforeEach, expect, it, vi } from "vitest";
 import { readManagedServerConfig, saveManagedServerConfig } from "./managed-server-config-actions";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
@@ -47,6 +49,15 @@ it("maps conflicts to reload guidance and keeps unconfirmed failures retryable",
     mocks.read.mockRejectedValueOnce(new MyServersApiError("agent_target_unavailable", "No runner"));
     expect(await readManagedServerConfig(id, "mod", "owner")).toMatchObject({ ok: false, message: expect.stringContaining("no active runner") });
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));
+
+// Keeps upstream runner diagnostics distinct from connectivity errors for every new code.
 it("explains runner-side failures surfaced by the control plane instead of blaming connectivity", async () => {
     for (const [code, fragment, reload] of [
         ["idempotency_conflict", "changed on the runner", true],
@@ -55,10 +66,32 @@ it("explains runner-side failures surfaced by the control plane instead of blami
         ["route_unavailable", "older version", false],
         ["agent_transport_unavailable", "did not respond", false],
         ["configuration_response_invalid", "does not understand", false],
+        ["agent_target_invalid", "assignment is out of date", false],
+        ["storage_unavailable", "did not respond", false],
+        ["internal_error", "did not respond", false],
+        ["agent_request_invalid", "rejected this request", false],
+        ["agent_correlation_invalid", "rejected this request", false],
+        ["agent_request_failed", "rejected this request", false],
+        ["request_rejected", "rejected this request", false],
+        ["agent_response_invalid", "unreadable response", false],
+        ["control_plane_failure", "unexpected error", false],
+        ["runtime_unavailable", "not ready for runner operations", false],
     ] as const) {
         mocks.read.mockRejectedValueOnce(new MyServersApiError(code, "Runner failure"));
         const result = await readManagedServerConfig(id, "server", "owner");
         expect(result).toMatchObject({ ok: false, reload, message: expect.stringContaining(fragment) });
         expect(result.ok || result.message).not.toContain("could not be reached");
     }
+});
+
+// Distinguishes submitted revision conflicts from failures before any write was sent.
+it.each([false, true])("preserves idempotency conflict submission semantics (notSubmitted=%s)", async (notSubmitted) => {
+    const error = new MyServersApiError("idempotency_conflict", "Runner failure");
+    if (notSubmitted) mocks.auth.mockRejectedValueOnce(error);
+    else mocks.save.mockRejectedValueOnce(error);
+    expect(await saveManagedServerConfig(request, "owner")).toMatchObject({
+        ok: false, notSubmitted, reload: !notSubmitted,
+        message: expect.stringContaining(notSubmitted ? "were not sent" : "changed on the runner"),
+    });
+    expect(mocks.save).toHaveBeenCalledTimes(notSubmitted ? 0 : 1);
 });

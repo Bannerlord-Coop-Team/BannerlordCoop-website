@@ -1,5 +1,9 @@
 "use client";
 
+import type { Translator } from "@/app/lib/localization/types";
+
+import { useTranslations } from "@/app/lib/localization/client";
+
 import type {
     HostedServerLog,
     HostedServerStatus,
@@ -25,15 +29,12 @@ const statusStyles: Record<RuntimeStatus, string> = {
     Restarting: "bg-gold animate-pulse",
 };
 
-function currentTime() {
-    return new Intl.DateTimeFormat("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-    }).format(new Date());
+// Formats simulated log timestamps using the selected locale.
+function currentTime(date: Translator["date"]) {
+    return date(new Date(), { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 }
 
+// Presents the existing browser-only server simulation and schedule controls.
 export function ServerControlPanel({
     initialLogs,
     initialStatus,
@@ -45,6 +46,7 @@ export function ServerControlPanel({
     restartSchedule: RestartSchedule;
     serverName: string;
 }) {
+    const { t, rich, number, date } = useTranslations("managed-server");
     const [status, setStatus] = useState<RuntimeStatus>(initialStatus);
     const [logs, setLogs] = useState(initialLogs);
     const [cronRestartEnabled, setCronRestartEnabled] = useState(
@@ -60,9 +62,9 @@ export function ServerControlPanel({
     const addLog = useCallback((message: string, level: HostedServerLog["level"] = "INFO") => {
         setLogs((current) => [
             ...current.slice(-79),
-            { time: currentTime(), level, message },
+            { time: currentTime(date), level, message },
         ]);
-    }, []);
+    }, [date]);
 
     useEffect(() => {
         const viewport = logViewport.current;
@@ -72,21 +74,23 @@ export function ServerControlPanel({
     useEffect(() => {
         if (status !== "Online") return;
         const interval = setInterval(() => {
-            addLog("Demo health check passed — placeholder node is responsive");
+            addLog(t("controlPanel.demoHealthCheckPassedPlaceholderNodeIsResponsive"));
         }, 8000);
         return () => clearInterval(interval);
-    }, [addLog, status]);
+    }, [addLog, status, t]);
 
     useEffect(() => {
         const pendingTimers = timers.current;
         return () => pendingTimers.forEach(clearTimeout);
     }, []);
 
+    // Retains simulation timers for cleanup on unmount.
     function completeAfter(delay: number, callback: () => void) {
         const timer = setTimeout(callback, delay);
         timers.current.push(timer);
     }
 
+    // Toggles the browser-only schedule and appends localized simulated output.
     function toggleCronRestart() {
         const nextEnabled = !cronRestartEnabled;
         setCronRestartEnabled(nextEnabled);
@@ -95,16 +99,17 @@ export function ServerControlPanel({
             setCronError("");
         }
         addLog(
-            `Scheduled restart ${nextEnabled ? `enabled with cron ${cronExpression}` : "disabled"} (simulation)`,
+            nextEnabled ? t("controlPanel.cronEnabledLog", { cron: cronExpression }) : t("controlPanel.cronDisabledLog"),
             nextEnabled ? "INFO" : "WARN",
         );
     }
 
+    // Validates the existing cron draft before applying it to the preview.
     function applyCronSchedule(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         const normalizedCron = cronDraft.trim().replace(/\s+/g, " ");
         if (normalizedCron.split(" ").length !== 5) {
-            setCronError("Enter exactly five cron fields separated by spaces.");
+            setCronError(t("controlPanel.enterExactlyFiveCronFieldsSeparatedBySpaces"));
             return;
         }
 
@@ -112,38 +117,39 @@ export function ServerControlPanel({
         setCronDraft(normalizedCron);
         setCronExpression(normalizedCron);
         addLog(
-            `Scheduled restart cron updated to ${normalizedCron} ${restartSchedule.timezone} (simulation)`,
+            t("controlPanel.scheduledRestartCronUpdatedToNormalizedcronTimezoneSimulation", { normalizedCron: normalizedCron, timezone: restartSchedule.timezone }),
         );
     }
 
+    // Simulates the requested lifecycle transition without contacting a server.
     function runAction(action: ControlAction) {
         if (isTransitioning) return;
 
         if (action === "start" && status === "Offline") {
             setStatus("Starting");
-            addLog(`Start requested for ${serverName} (simulation)`);
+            addLog(t("controlPanel.startRequestedForServernameSimulation", { serverName: serverName }));
             completeAfter(900, () => {
                 setStatus("Online");
-                addLog("Server started successfully in demo mode");
+                addLog(t("controlPanel.serverStartedSuccessfullyInDemoMode"));
             });
         }
 
         if (action === "stop" && status === "Online") {
             setStatus("Stopping");
-            addLog(`Graceful stop requested for ${serverName} (simulation)`, "WARN");
+            addLog(t("controlPanel.gracefulStopRequestedForServernameSimulation", { serverName: serverName }), "WARN");
             completeAfter(900, () => {
                 setStatus("Offline");
-                addLog("Server stopped; campaign state preserved in demo mode", "WARN");
+                addLog(t("controlPanel.serverStoppedCampaignStatePreservedInDemoMode"), "WARN");
             });
         }
 
         if (action === "restart" && status === "Online") {
             setStatus("Restarting");
-            addLog(`Restart requested for ${serverName} (simulation)`, "WARN");
-            completeAfter(650, () => addLog("Stopping game process…"));
+            addLog(t("controlPanel.restartRequestedForServernameSimulation", { serverName: serverName }), "WARN");
+            completeAfter(650, () => addLog(t("controlPanel.stoppingGameProcess")));
             completeAfter(1400, () => {
                 setStatus("Online");
-                addLog("Restart completed successfully in demo mode");
+                addLog(t("controlPanel.restartCompletedSuccessfullyInDemoMode"));
             });
         }
     }
@@ -154,23 +160,20 @@ export function ServerControlPanel({
                 <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-5">
                     <div>
                         <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-muted">
-                            Runtime state
-                        </p>
+                            {t("controlPanel.runtimeState")}</p>
                         <div className="mt-2 flex items-center gap-2.5">
                             <span aria-hidden="true" className={`size-2 rounded-full ${statusStyles[status]}`} />
                             <p className="font-display text-2xl font-semibold text-foreground" aria-live="polite">
-                                {status}
+                                {t(`controlPanel.state.${status}`)}
                             </p>
                         </div>
                     </div>
                     <span className="rounded-sm border border-gold/20 bg-gold/[0.06] px-2.5 py-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-gold">
-                        Simulated
-                    </span>
+                        {t("controlPanel.simulated")}</span>
                 </div>
 
                 <h2 id="server-controls-heading" className="mt-5 font-label text-xs font-semibold uppercase tracking-[0.18em] text-foreground-muted">
-                    Server controls
-                </h2>
+                    {t("controlPanel.serverControls")}</h2>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
                     <button
                         type="button"
@@ -178,24 +181,21 @@ export function ServerControlPanel({
                         disabled={status !== "Offline" || isTransitioning}
                         className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-emerald-300 transition-colors hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:cursor-not-allowed disabled:opacity-35"
                     >
-                        <Play aria-hidden="true" className="size-4" /> Start
-                    </button>
+                        <Play aria-hidden="true" className="size-4" /> {t("controlPanel.start")}</button>
                     <button
                         type="button"
                         onClick={() => runAction("stop")}
                         disabled={status !== "Online" || isTransitioning}
                         className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-crimson/60 bg-crimson/15 px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-red-200 transition-colors hover:bg-crimson/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson disabled:cursor-not-allowed disabled:opacity-35"
                     >
-                        <CircleStop aria-hidden="true" className="size-4" /> Stop
-                    </button>
+                        <CircleStop aria-hidden="true" className="size-4" /> {t("controlPanel.stop")}</button>
                     <button
                         type="button"
                         onClick={() => runAction("restart")}
                         disabled={status !== "Online" || isTransitioning}
                         className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-gold/40 bg-gold/10 px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:bg-gold/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:opacity-35"
                     >
-                        <RotateCw aria-hidden="true" className="size-4" /> Restart
-                    </button>
+                        <RotateCw aria-hidden="true" className="size-4" /> {t("controlPanel.restart")}</button>
                 </div>
                 <div className="mt-5 border-t border-white/10 pt-5">
                     <div className="flex items-start justify-between gap-4">
@@ -203,18 +203,16 @@ export function ServerControlPanel({
                             <Clock3 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
                             <div>
                                 <h3 className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-foreground">
-                                    Cron restart
-                                </h3>
+                                    {t("controlPanel.cronRestart")}</h3>
                                 <p className="mt-1 text-xs leading-5 text-foreground-muted">
-                                    Automatically restart this server on a five-field cron schedule.
-                                </p>
+                                    {t("controlPanel.automaticallyRestartThisServerOnAFiveFieldCronSchedule")}</p>
                             </div>
                         </div>
                         <button
                             type="button"
                             role="switch"
                             aria-checked={cronRestartEnabled}
-                            aria-label="Toggle scheduled cron restart"
+                            aria-label={t("controlPanel.toggleScheduledCronRestart")}
                             onClick={toggleCronRestart}
                             className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
                                 cronRestartEnabled
@@ -231,21 +229,20 @@ export function ServerControlPanel({
                         </button>
                     </div>
                     <p className={`mt-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${cronRestartEnabled ? "text-emerald-300" : "text-foreground-dim"}`} aria-live="polite">
-                        Scheduled restart {cronRestartEnabled ? "enabled" : "disabled"}
+                        {cronRestartEnabled ? t("controlPanel.cronEnabled") : t("controlPanel.cronDisabled")}
                     </p>
 
                     {cronRestartEnabled && (
                         <form onSubmit={applyCronSchedule} className="mt-4 border-l-2 border-gold/50 pl-4">
                             <label htmlFor="restart-cron" className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted">
-                                Cron expression
-                            </label>
+                                {t("controlPanel.cronExpression")}</label>
                             <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                                 <input
                                     id="restart-cron"
                                     name="restartCron"
                                     type="text"
                                     required
-                                    title="Enter a five-field cron expression, such as 0 4 * * *"
+                                    title={t("controlPanel.enterAFiveFieldCronExpressionSuchAs04")}
                                     value={cronDraft}
                                     onChange={(event) => {
                                         setCronDraft(event.target.value);
@@ -265,11 +262,10 @@ export function ServerControlPanel({
                                     disabled={cronDraft.trim().replace(/\s+/g, " ") === cronExpression}
                                     className="inline-flex min-h-10 items-center justify-center rounded-sm border border-gold/40 bg-gold/10 px-4 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:bg-gold/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:opacity-35"
                                 >
-                                    Apply
-                                </button>
+                                    {t("controlPanel.apply")}</button>
                             </div>
                             <p id="restart-cron-help" className="mt-2 text-[0.68rem] leading-5 text-foreground-dim">
-                                Five fields: minute, hour, day of month, month, and day of week. Example: <code className="font-mono text-foreground-muted">0 4 * * *</code>.
+                                {rich("controlPanel.cronHelp", { example: <code className="font-mono text-foreground-muted">0 4 * * *</code> })}
                             </p>
                             {cronError && (
                                 <p role="alert" className="mt-2 text-xs text-red-300">
@@ -281,8 +277,7 @@ export function ServerControlPanel({
                 </div>
 
                 <p className="mt-5 text-xs leading-5 text-foreground-dim">
-                    Controls and schedule settings only update this browser preview. They do not contact a VPS and reset when the page reloads.
-                </p>
+                    {t("controlPanel.controlsAndScheduleSettingsOnlyUpdateThisBrowserPreviewThey")}</p>
             </section>
 
             <section className="overflow-hidden rounded-sm border border-white/10 bg-[#050605]" aria-labelledby="live-log-heading">
@@ -290,19 +285,17 @@ export function ServerControlPanel({
                     <div className="flex items-center gap-2.5">
                         <Terminal aria-hidden="true" className="size-4 text-gold" />
                         <h2 id="live-log-heading" className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-foreground">
-                            Live server log
-                        </h2>
+                            {t("controlPanel.liveServerLog")}</h2>
                     </div>
                     <span className="inline-flex items-center gap-2 font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted">
                         <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        Demo stream
-                    </span>
+                        {t("controlPanel.demoStream")}</span>
                 </div>
                 <div
                     ref={logViewport}
                     role="log"
                     aria-live="polite"
-                    aria-label="Simulated server log output"
+                    aria-label={t("controlPanel.simulatedServerLogOutput")}
                     className="h-72 overflow-y-auto px-4 py-4 font-mono text-xs leading-6 sm:px-5"
                 >
                     {logs.map((log, index) => (

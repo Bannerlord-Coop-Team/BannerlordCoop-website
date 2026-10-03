@@ -1,3 +1,8 @@
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import servers from "@/app/lib/localization/dictionaries/en/servers.json";
+import serverCommon from "@/app/lib/localization/dictionaries/en/server-common.json";
+import type { Dictionary } from "@/app/lib/localization/types";
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,8 +18,10 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
 vi.mock("@/app/lib/hosting/my-servers", async (original) => ({ ...await original<object>(), requestServerOnboarding: mocks.request }));
 let container: HTMLDivElement; let root: Root;
+let dictionary: Dictionary;
 beforeEach(() => {
     vi.useFakeTimers(); vi.resetAllMocks(); window.sessionStorage.clear();
+    dictionary = servers;
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value() { this.open = true; } });
     Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
@@ -23,8 +30,9 @@ beforeEach(() => {
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
+/** Renders the real onboarding state machine with its delivered messages. */
 async function render(summary: OnboardingSummary | null = onboardingSummary(), userId = "account-a", strict = false) {
-    const session = <ServerOnboarding summary={summary} userId={userId} />;
+    const session = <LocalizationProvider locale="en" messages={{ servers: dictionary, "server-common": serverCommon }}><ServerOnboarding summary={summary} userId={userId} /></LocalizationProvider>;
     await act(async () => root.render(strict ? <StrictMode>{session}</StrictMode> : session));
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
 }
@@ -281,8 +289,36 @@ it("membership prompts never replace a retained exact-UUID mutation, and associa
     storeOnboardingIntent(sessionStorage,onboardingIntentKey("account-a"),candidate);
     const allocation = onboardingSummary(); allocation.sources.administrativeBase=0; allocation.eligibility={eligible:false,reason:"no_grant",granted:0,used:0,remaining:0};
     const summary = composeOnboarding("account-a",null,{version:1,accountId:"account-a",hasDiscord:true,configured:true,verificationPending:false,membership:{...EMPTY_MEMBERSHIP,sync:"not_needed"}},allocation);
-    await act(async()=>root.render(<ServerOnboarding userId="account-a" summary={allocation} websiteSummary={summary} />));
+    await act(async()=>root.render(<LocalizationProvider locale="en" messages={{ servers, "server-common": serverCommon }}><ServerOnboarding userId="account-a" summary={allocation} websiteSummary={summary} /></LocalizationProvider>));
     await act(async()=>{await vi.advanceTimersByTimeAsync(0);});
     expect(container.textContent).toContain("Retry pending request"); expect(container.textContent).not.toContain("Connect Patreon");
     await click("Retry pending request"); expect(mocks.request.mock.calls[0][1]).toEqual(candidate); expect(stored()).toBeNull();
+});
+
+it("localizes region/release presentation, validation and reordered receipts without changing submitted values", async () => {
+    dictionary = {
+        ...servers,
+        "onboarding.closeLabel": "Localized close label", "onboarding.namePlaceholder": "Localized example",
+        "onboarding.invalidName": "Localized validation", "region.us-west": "Localized western region",
+        "release.nightly": "Localized nightly", "onboarding.receipt": "{region}: assigned {name}; receipt only.",
+    };
+    const summary = onboardingSummary();
+    summary.regions[0].label = "Transport-only label";
+    await render(summary); await click("Set up server ");
+    expect(container.querySelector('button[aria-label="Localized close label"]')).not.toBeNull();
+    expect(container.querySelector<HTMLInputElement>("#onboarding-server-name")?.placeholder).toBe("Localized example");
+    expect(container.textContent).toContain("Localized western region");
+    expect(container.textContent).not.toContain("Transport-only label");
+    expect(container.textContent).toContain("Localized nightly");
+    await name("!bad"); await click("Create server");
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Localized validation");
+    expect(mocks.request).not.toHaveBeenCalled();
+    await name("My Campaign");
+    await act(async () => container.querySelector<HTMLInputElement>('input[value="nightly"]')!.click());
+    mocks.request.mockResolvedValueOnce({ ...onboardingCreated(), releaseChannel: "nightly" });
+    await click("Create server");
+    expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", displayName: "My Campaign", region: "us-west", releaseChannel: "nightly" });
+    expect(container.textContent).toContain("Localized western region: assigned My Campaign; receipt only.");
+    expect(container.querySelector("a")?.getAttribute("href")).toBe(`/servers/${ONBOARDING_TEST_ID}`);
+    expect(stored()).toBeNull();
 });

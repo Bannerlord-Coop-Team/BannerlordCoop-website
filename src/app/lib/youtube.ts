@@ -1,6 +1,20 @@
 import "server-only";
 import type {YouTubeCreator, YouTubeVideo} from "@/app/components/utils/types/media.types";
 
+export type YouTubeLabels = {
+    fallbackTitle: string;
+    videoThumbnail: (title: string) => string;
+    fallbackThumbnail: (title: string) => string;
+};
+
+const defaultLabels: YouTubeLabels = {
+    fallbackTitle: "Bannerlord Coop Video",
+    // Describes an externally titled video's generated thumbnail.
+    videoThumbnail: (title) => `${title} video thumbnail`,
+    // Describes the generated thumbnail used when video details are unavailable.
+    fallbackThumbnail: (title) => `${title} thumbnail`,
+};
+
 type YouTubeThumbnail = {
     url: string;
 };
@@ -118,8 +132,10 @@ export async function getYouTubeCreators(
     }
 }
 
+// Fetches external video details while injecting only site-generated fallback and thumbnail copy.
 export async function getYouTubeVideos(
     videoUrls: string[],
+    labels: YouTubeLabels = defaultLabels,
 ): Promise<YouTubeVideo[]> {
     const apiKey = process.env.YOUTUBE_API_KEY;
     const videoIds = [
@@ -131,7 +147,7 @@ export async function getYouTubeVideos(
     }
 
     if (!apiKey) {
-        return getYouTubeOEmbedVideos(videoIds);
+        return getYouTubeOEmbedVideos(videoIds, labels);
     }
 
     const parameters = new URLSearchParams({
@@ -154,7 +170,7 @@ export async function getYouTubeVideos(
             console.error(
                 `YouTube video request failed with status ${response.status}. Falling back to oEmbed.`,
             );
-            return getYouTubeOEmbedVideos(videoIds);
+            return getYouTubeOEmbedVideos(videoIds, labels);
         }
 
         const data = (await response.json()) as YouTubeVideoResponse;
@@ -181,7 +197,7 @@ export async function getYouTubeVideos(
                         video.snippet?.description,
                     ),
                     thumbnail,
-                    thumbnailAlt: `${title} video thumbnail`,
+                    thumbnailAlt: labels.videoThumbnail(title),
                     href: `https://www.youtube.com/watch?v=${video.id}`,
                     category: video.snippet?.channelTitle ?? "YouTube",
                     duration: formatYouTubeDuration(
@@ -193,7 +209,7 @@ export async function getYouTubeVideos(
             }),
         );
         const missingVideoIds = videoIds.filter((id) => !videosById.has(id));
-        const fallbackVideos = await getYouTubeOEmbedVideos(missingVideoIds);
+        const fallbackVideos = await getYouTubeOEmbedVideos(missingVideoIds, labels);
 
         for (const video of fallbackVideos) {
             videosById.set(video.id, video);
@@ -208,12 +224,14 @@ export async function getYouTubeVideos(
             "Unable to retrieve YouTube video details. Falling back to oEmbed.",
             error,
         );
-        return getYouTubeOEmbedVideos(videoIds);
+        return getYouTubeOEmbedVideos(videoIds, labels);
     }
 }
 
+// Resolves oEmbed video details using the same injected presentation labels.
 async function getYouTubeOEmbedVideos(
     videoIds: string[],
+    labels: YouTubeLabels,
 ): Promise<YouTubeVideo[]> {
     return Promise.all(
         videoIds.map(async (id): Promise<YouTubeVideo> => {
@@ -234,11 +252,11 @@ async function getYouTubeOEmbedVideos(
                 );
 
                 if (!response.ok) {
-                    return createYouTubeVideoFallback(id);
+                    return createYouTubeVideoFallback(id, labels);
                 }
 
                 const data = (await response.json()) as YouTubeOEmbedResponse;
-                const title = data.title?.trim() || "Bannerlord Coop Video";
+                const title = data.title?.trim() || labels.fallbackTitle;
 
                 return {
                     id,
@@ -247,27 +265,28 @@ async function getYouTubeOEmbedVideos(
                     thumbnail:
                         data.thumbnail_url ??
                         `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-                    thumbnailAlt: `${title} video thumbnail`,
+                    thumbnailAlt: labels.videoThumbnail(title),
                     href,
                     category: data.author_name?.trim() || "YouTube",
                     duration: null,
                 };
             } catch {
-                return createYouTubeVideoFallback(id);
+                return createYouTubeVideoFallback(id, labels);
             }
         }),
     );
 }
 
-function createYouTubeVideoFallback(id: string): YouTubeVideo {
-    const title = "Bannerlord Coop Video";
+// Builds a playable fallback without inventing external metadata.
+function createYouTubeVideoFallback(id: string, labels: YouTubeLabels): YouTubeVideo {
+    const title = labels.fallbackTitle;
 
     return {
         id,
         title,
         description: "",
         thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-        thumbnailAlt: `${title} thumbnail`,
+        thumbnailAlt: labels.fallbackThumbnail(title),
         href: `https://www.youtube.com/watch?v=${id}`,
         category: "YouTube",
         duration: null,

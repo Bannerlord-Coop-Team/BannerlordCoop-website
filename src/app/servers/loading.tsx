@@ -1,15 +1,18 @@
+import { getTranslations } from "@/app/lib/localization/server";
 import { Navbar } from "@/app/components/layout/Navbar";
 import { Skeleton } from "@/app/components/ui/Skeleton";
 
-export default function ServersLoading() {
+/** Announces localized pending inventory while the directory streams. */
+export default async function ServersLoading() {
+    const { t } = await getTranslations("servers");
     return (
-        <div className="min-h-svh bg-background text-foreground" aria-busy="true" aria-label="Loading servers">
+        <div className="min-h-svh bg-background text-foreground" aria-busy="true" aria-label={t("loading.label")}>
             <Navbar />
 
             <main>
                 <div className="site-container py-10 sm:py-14">
                     <span className="sr-only" role="status">
-                        Loading servers…
+                        {t("loading.status")}
                     </span>
 
                     <header>
@@ -39,6 +42,7 @@ export default function ServersLoading() {
     );
 }
 
+/** Preserves the directory layout without exposing decorative skeletons to assistive technology. */
 function ServerSectionSkeleton({titleWidth, rows,}: { titleWidth: string; rows: number; }) {
     return (
         <section className="mt-14" aria-hidden="true">

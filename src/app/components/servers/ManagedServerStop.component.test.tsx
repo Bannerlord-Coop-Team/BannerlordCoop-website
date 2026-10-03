@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerControls } from "./ManagedServerControls";
 import { ManagedServerPollingProvider } from "./ManagedServerPollingProvider";
+import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 
 const { operate, router } = vi.hoisted(() => ({ operate: vi.fn(), router: { refresh: vi.fn() } }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -17,7 +18,7 @@ let container: HTMLDivElement;
 let root: Root;
 const buttons = () => [...container.querySelectorAll("button")];
 const render = (overrides: Partial<typeof server> = {}) => act(async () => root.render(
-    <ManagedServerPollingProvider><ManagedServerControls {...server} {...overrides} /></ManagedServerPollingProvider>,
+    <TestLocalization><ManagedServerPollingProvider><ManagedServerControls {...server} {...overrides} /></ManagedServerPollingProvider></TestLocalization>,
 ));
 
 beforeEach(() => {

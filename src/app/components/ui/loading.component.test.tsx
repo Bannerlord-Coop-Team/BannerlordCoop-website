@@ -1,3 +1,5 @@
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import common from "@/app/lib/localization/dictionaries/en/common.json";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { LoadingButton } from "./LoadingButton";
@@ -25,12 +27,17 @@ describe("loading UI", () => {
 
     it("exposes accessible page busy information", () => {
         const html = renderToStaticMarkup(
-            <PageLoadingState label="Loading account…" />,
+            <LocalizationProvider locale="en" messages={{ common }}><PageLoadingState label="Loading account…" /></LocalizationProvider>,
         );
 
         expect(html).toContain('aria-busy="true"');
         expect(html).toContain('aria-label="Loading account…"');
         expect(html).toContain('role="status"');
+    });
+
+    it("localizes the default page loading label", () => {
+        const html = renderToStaticMarkup(<LocalizationProvider locale="en" messages={{ common }}><PageLoadingState /></LocalizationProvider>);
+        expect(html).toContain('aria-label="Loading page…"');
     });
 
     it("hides skeletons from assistive technology", () => {

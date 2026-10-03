@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
+
 import { useEffect, useRef } from "react";
 
 const TRAILER_URL =
@@ -7,7 +9,9 @@ const TRAILER_URL =
 const TRAILER_POSTER_URL =
     "https://pub-fb57b9aef9b04b45b38e7f22d548d6a1.r2.dev/trailers/bannerlord-thumbnail-v2.webp";
 
+// Renders localized HeroTrailer presentation while preserving source values.
 export function HeroTrailer() {
+    const { t, rich } = useTranslations("home");
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
@@ -23,12 +27,11 @@ export function HeroTrailer() {
             playsInline
             preload="none"
             poster={TRAILER_POSTER_URL}
-            aria-label="Bannerlord Coop official trailer"
+            aria-label={t("trailer.label")}
             className="absolute inset-0 size-full object-cover"
         >
             <source src={TRAILER_URL} type="video/mp4" />
-            Your browser does not support HTML video. You can{" "}
-            <a href={TRAILER_URL}>watch the trailer directly</a>.
+            {rich("trailer.fallback", { link: <a href={TRAILER_URL}>{t("trailer.direct")}</a> })}
         </video>
     );
 }

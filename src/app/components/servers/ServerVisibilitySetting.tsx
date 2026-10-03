@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
+
 import { setServerVisibility } from "@/app/servers/server-visibility-actions";
 import { Check, ChevronDown, Globe2, LockKeyhole } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -11,7 +13,9 @@ type Props = {
     accessRole: "owner" | "manager" | "support" | "admin";
     expectedUpdatedAt: string;
 };
+// Presents and confirms the existing owner-only directory preference.
 export function ServerVisibilitySetting({ serverId, visibility, accessRole, expectedUpdatedAt }: Props) {
+    const { t } = useTranslations("managed-server");
     const router = useRouter();
     const picker = useRef<HTMLDetailsElement>(null);
     const [pending, startTransition] = useTransition();
@@ -20,9 +24,10 @@ export function ServerVisibilitySetting({ serverId, visibility, accessRole, expe
     const request = useRef<{
         serverId: string; visibility: "private" | "public"; expectedUpdatedAt: string; requestId: string;
     } | null>(null);
+    // Confirms publishing before dispatching the retained visibility request.
     function changeVisibility(target: "private" | "public") {
         if (accessRole !== "owner" || pending || target === (isPublic ? "public" : "private")) return;
-        if (target === "public" && !window.confirm("Make this server discoverable in the public directory with its game address? Visibility does not grant management access or change game connection permissions.")) return;
+        if (target === "public" && !window.confirm(t("visibilitySetting.makeThisServerDiscoverableInThePublicDirectoryWithIts"))) return;
         if (!request.current || request.current.serverId !== serverId || request.current.visibility !== target
             || request.current.expectedUpdatedAt !== expectedUpdatedAt) {
             request.current = { serverId, visibility: target, expectedUpdatedAt, requestId: crypto.randomUUID() };
@@ -41,10 +46,10 @@ export function ServerVisibilitySetting({ serverId, visibility, accessRole, expe
                     }
                     router.refresh();
                 }
-            } catch { setMessage("The update could not be confirmed. Try again to retry the same request, or refresh to check the current preference."); }
+            } catch { setMessage(t("visibilitySetting.theUpdateCouldNotBeConfirmedTryAgainToRetry")); }
         });
     }
-    const label = isPublic ? "Public" : "Private";
+    const label = isPublic ? t("visibilitySetting.public") : t("visibilitySetting.private");
     const Icon = isPublic ? Globe2 : LockKeyhole;
     return <div className="relative ml-auto">
         {accessRole === "owner" ? <details ref={picker} className="relative" onKeyDown={event => {
@@ -53,23 +58,23 @@ export function ServerVisibilitySetting({ serverId, visibility, accessRole, expe
                 picker.current.querySelector("summary")?.focus();
             }
         }}>
-            <summary aria-label={`Directory visibility: ${label}. Edit visibility`} className="inline-flex min-h-10 cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-foreground hover:border-gold/50 focus-visible:outline-2 focus-visible:outline-gold [&::-webkit-details-marker]:hidden">
-                <Icon className="size-4" aria-hidden="true" />{pending ? "Saving…" : label}<ChevronDown className="size-3" aria-hidden="true" />
+            <summary aria-label={t("visibilitySetting.directoryVisibilityLabelEditVisibility", { label: label })} className="inline-flex min-h-10 cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-foreground hover:border-gold/50 focus-visible:outline-2 focus-visible:outline-gold [&::-webkit-details-marker]:hidden">
+                <Icon className="size-4" aria-hidden="true" />{pending ? t("visibilitySetting.saving") : label}<ChevronDown className="size-3" aria-hidden="true" />
             </summary>
             <div className="absolute right-0 z-20 mt-2 w-64 max-w-[calc(100vw-3rem)] rounded-lg border border-white/15 bg-surface-raised p-1 shadow-xl">
-                <div role="group" aria-label="Directory visibility">
+                <div role="group" aria-label={t("visibilitySetting.directoryVisibility")}>
                     {(["private", "public"] as const).map(value => {
                         const selected = value === (isPublic ? "public" : "private");
                         const OptionIcon = value === "public" ? Globe2 : LockKeyhole;
                         return <button key={value} type="button" disabled={pending || selected} aria-pressed={selected} onClick={() => changeVisibility(value)}
                             className="flex min-h-10 w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-foreground hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-default disabled:opacity-60">
-                            <OptionIcon className="size-4" aria-hidden="true" />{value === "public" ? "Public" : "Private"}{selected && <Check className="ml-auto size-4" aria-hidden="true" />}
+                            <OptionIcon className="size-4" aria-hidden="true" />{value === "public" ? t("visibilitySetting.public") : t("visibilitySetting.private")}{selected && <Check className="ml-auto size-4" aria-hidden="true" />}
                         </button>;
                     })}
                 </div>
-                <p className="border-t border-white/10 px-3 py-2 text-xs leading-5 text-foreground-muted">Public visibility allows this server to appear in the public directory with its game address. Visibility does not grant management access or change game connection permissions.</p>
+                <p className="border-t border-white/10 px-3 py-2 text-xs leading-5 text-foreground-muted">{t("visibilitySetting.publicVisibilityAllowsThisServerToAppearInThePublic")}</p>
             </div>
-        </details> : <span title="Only the server owner can change visibility." className="inline-flex min-h-10 items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-sm text-foreground-muted"><Icon className="size-4" aria-hidden="true" />{label}<span className="sr-only">Only the server owner can change visibility.</span></span>}
+        </details> : <span title={t("visibilitySetting.onlyTheServerOwnerCanChangeVisibility")} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-sm text-foreground-muted"><Icon className="size-4" aria-hidden="true" />{label}<span className="sr-only">{t("visibilitySetting.onlyTheServerOwnerCanChangeVisibility")}</span></span>}
         <p role="status" className="max-w-64 text-xs text-foreground-muted">{message}</p>
     </div>;
 }

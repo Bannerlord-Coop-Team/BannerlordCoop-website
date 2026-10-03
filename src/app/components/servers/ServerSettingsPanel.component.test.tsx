@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -32,7 +34,7 @@ beforeEach(() => {
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
-async function render(next = props) { await act(async () => root.render(<ServerSettingsPanel {...next} />)); }
+async function render(next = props) { await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel {...next} />} </TestLocalization>)); }
 async function change(selector: string, value: string) {
     await act(async () => {
         const element = container.querySelector<HTMLInputElement | HTMLSelectElement>(selector)!;
@@ -103,3 +105,10 @@ it.each([false, true])("disables maintenance when owner access or stored prefere
     expect(container.querySelector<HTMLInputElement>("#settings-server-name")!.disabled).toBe(true);
     expect(mocks.settings).not.toHaveBeenCalled();
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { beforeEach, expect, it, vi } from "vitest";
 import { manageServerBackup } from "./managed-server-backup-actions";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
@@ -50,3 +52,10 @@ it("does not dispatch after authentication changes", async () => {
     expect(await manageServerBackup(input, "other-owner")).toMatchObject({ ok: false, retrySameRequest: true });
     expect(mocks.submit).not.toHaveBeenCalled(); expect(mocks.status).not.toHaveBeenCalled();
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

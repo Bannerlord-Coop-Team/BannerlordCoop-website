@@ -1,3 +1,4 @@
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import { onboardingSummary, ONBOARDING_TEST_ID } from "../../../tests/onboarding-fixtures";
@@ -18,7 +19,11 @@ vi.mock("@/app/lib/console/servers", () => ({ listLiveConsoleServers: () => [{ i
 vi.mock("@/app/lib/auth/access", () => ({ getLiveConsoleAccessLevel: () => "owner" }));
 vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: mocks.displayNames }));
 vi.mock("@/app/components/servers/AllServersDirectory", () => ({ AllServersDirectory: () => <div>Public directory</div> }));
-import ServersPage from "./page";
+import ServersPage, { generateMetadata } from "./page";
+import ServersLoading from "./loading";
+import { localeDefinitions } from "@/app/lib/localization/registry";
+import servers from "@/app/lib/localization/dictionaries/en/servers.json";
+import type { Dictionary } from "@/app/lib/localization/types";
 /** Collects the completed streamed page for existing content regressions. */
 async function renderPage() {
     const stream = await renderToReadableStream(await ServersPage());
@@ -240,4 +245,42 @@ it.each(["revoked", "unavailable"])("cancels an early private read when viewer v
     expect(html).toContain("Sign in to view");
     expect(mocks.account).not.toHaveBeenCalled();
     expect(mocks.onboarding).not.toHaveBeenCalled();
+});
+
+it("delivers only directory and shared server namespaces and resolves metadata/loading from message data", async () => {
+    const original = localeDefinitions.en.dictionaries.servers;
+    const translated: Dictionary = { ...servers, "metadata.title": "Directory metadata", "metadata.description": "Directory description", "page.heading": "Localized directory", "loading.label": "Localized pending label", "loading.status": "Localized pending status" };
+    localeDefinitions.en.dictionaries.servers = async () => ({ default: translated });
+    try {
+        const page = await ServersPage();
+        expect(Object.keys(page.props.messages)).toEqual(["servers", "server-common"]);
+        expect(page.props.locale).toBe("en");
+        expect(await generateMetadata()).toEqual({ title: "Directory metadata", description: "Directory description" });
+        const stream = await renderToReadableStream(page);
+        await stream.allReady;
+        expect(await new Response(stream).text()).toContain("Localized directory");
+        const loading = await ServersLoading();
+        expect(loading.props["aria-label"]).toBe("Localized pending label");
+        const pendingStream = await renderToReadableStream(loading);
+        await pendingStream.allReady;
+        expect(await new Response(pendingStream).text()).toContain("Localized pending status");
+    } finally { localeDefinitions.en.dictionaries.servers = original; }
+});
+
+it("localizes whole inventory totals and isolated errors without translating server names", async () => {
+    const original = localeDefinitions.en.dictionaries.servers;
+    localeDefinitions.en.dictionaries.servers = async () => ({ default: {
+        ...servers,
+        "page.associatedCount": { one: "One account entry: {countLabel}", other: "Account entries: {countLabel}" },
+        "page.error.publicUnavailable": "Localized public failure",
+    } });
+    mocks.publicList.mockRejectedValue(new Error("offline"));
+    try {
+        const html = await renderPage();
+        expect(html).toContain("Account entries: 2");
+        expect(html).toContain("Localized public failure");
+        expect(html).toContain("Assigned campaign");
+        expect(html).toContain("Live campaign");
+        expect(mocks.list).toHaveBeenCalledWith("test-page-jwt", expect.any(AbortSignal));
+    } finally { localeDefinitions.en.dictionaries.servers = original; }
 });

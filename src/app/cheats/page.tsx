@@ -2,82 +2,73 @@ import { type CheatCommand } from "@/app/cheats/CheatsDirectory";
 import { CheatsView } from "@/app/cheats/CheatsView";
 import commandsData from "@/app/cheats/commands.json";
 import { isPublishedCheat } from "@/app/cheats/debugOnly";
-import { CHEATS_LOCALE_COOKIE, parseCheatsLocale } from "@/app/cheats/locale";
-import { getCheatsMessages } from "@/app/cheats/locales";
+import { getCheatsLocalization } from "@/app/cheats/localization";
 import { parseCheatsQuery } from "@/app/cheats/query";
 import { Footer } from "@/app/components/layout/Footer";
 import { Navbar } from "@/app/components/layout/Navbar";
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import { getTranslations } from "@/app/lib/localization/server";
+import { getEnabledLocales } from "@/app/lib/localization/registry";
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 
 type CheatsPageProps = {
-    searchParams: Promise<{
-        q?: string;
-        tab?: string;
-        type?: string;
-        side?: string;
-        cheat?: string;
-        lang?: string;
-    }>;
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-function first(value: string | string[] | undefined) {
-    if (Array.isArray(value)) return value[0];
-    return value;
-}
-
-async function resolveCheatsLocale(searchParams: CheatsPageProps["searchParams"]) {
-    const params = await searchParams;
-    const cookieStore = await cookies();
-    return parseCheatsLocale(first(params.lang) || cookieStore.get(CHEATS_LOCALE_COOKIE)?.value);
-}
-
+/** Gives explicit cheats share links the same content language in metadata and the directory. */
 export async function generateMetadata({ searchParams }: CheatsPageProps): Promise<Metadata> {
-    const locale = await resolveCheatsLocale(searchParams);
-    const { ui } = getCheatsMessages(locale);
-
-    const canonical = locale === "zh-CN" ? "/cheats?lang=zh-CN" : "/cheats";
+    const { locale, translator: { t }, openGraphLocale } = await getCheatsLocalization((await searchParams).lang);
+    const canonical = `/cheats?lang=${locale}`;
 
     return {
-        title: ui.metadataTitle,
-        description: ui.metadataDescription,
+        title: t("ui.metadataTitle"),
+        description: t("ui.metadataDescription"),
         alternates: {
             canonical,
-            languages: {
-                en: "/cheats",
-                "zh-CN": "/cheats?lang=zh-CN",
-            },
+            languages: Object.fromEntries(
+                [...new Set([...getEnabledLocales().map((option) => option.locale), "zh-CN"])].map(
+                    (language) => [language, `/cheats?lang=${language}`],
+                ),
+            ),
         },
-
         openGraph: {
             type: "website",
             url: canonical,
-            title: ui.metadataTitle,
-            description: ui.metadataDescription,
+            locale: openGraphLocale,
+            title: t("ui.metadataTitle"),
+            description: t("ui.metadataDescription"),
         },
-
         twitter: {
             card: "summary_large_image",
-            title: ui.metadataTitle,
-            description: ui.metadataDescription,
-        }
+            title: t("ui.metadataTitle"),
+            description: t("ui.metadataDescription"),
+        },
     };
 }
 
-const publishedCommands = (commandsData.commands as CheatCommand[]).filter(isPublishedCheat);
+const publishedCommands = commandsData.commands.filter(isPublishedCheat);
 
+/** Delivers only cheats messages to its client subtree; chrome keeps the root cookie locale. */
 export default async function CheatsPage({ searchParams }: CheatsPageProps) {
     const params = await searchParams;
-    const cookieStore = await cookies();
-    const initialQuery = parseCheatsQuery({
-        ...params,
-        lang: first(params.lang) || cookieStore.get(CHEATS_LOCALE_COOKIE)?.value,
-    });
+    const { locale, messages } = await getCheatsLocalization(params.lang);
+    const english = await getTranslations("cheats", "en");
+    // Retain English-prose searching in translated views without using catalog prose as display copy.
+    const commands = publishedCommands.map(({ summary: _summary, arguments: args, ...command }) => ({
+        ...command,
+        arguments: args.map(({ description: _description, ...argument }) => argument),
+        sourceSearch: locale === "en" ? undefined : [
+            english.t(`command.${command.command}.summary`),
+            ...args.map((argument) => english.t(`command.${command.command}.argument.${argument.name}`)),
+        ].join(" "),
+    })) as CheatCommand[];
 
     return (
         <>
             <Navbar />
-            <CheatsView commands={publishedCommands} initialQuery={initialQuery} />
+            <LocalizationProvider locale={locale} messages={messages}>
+                <CheatsView commands={commands} initialQuery={parseCheatsQuery(params)} />
+            </LocalizationProvider>
             <Footer />
         </>
     );

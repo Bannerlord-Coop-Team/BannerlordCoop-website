@@ -1,7 +1,9 @@
 import { getSafeDestination } from "@/app/lib/auth/redirect";
+import { getTranslations } from "@/app/lib/localization/server";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
+/** Exchanges the auth code and localizes only the website-owned failure fallback. */
 export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl;
     const code = searchParams.get("code");
@@ -27,7 +29,7 @@ export async function GET(request: NextRequest) {
     loginUrl.searchParams.set(
         "error",
         searchParams.get("error_description") ??
-            "We could not complete your sign-in. Please try again.",
+            (await getTranslations("login")).t("error.callback"),
     );
 
     const destinationPath = `${destination.pathname}${destination.search}${destination.hash}`;

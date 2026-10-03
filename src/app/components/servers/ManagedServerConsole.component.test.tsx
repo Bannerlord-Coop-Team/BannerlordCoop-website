@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -28,7 +30,7 @@ function output() {
 
 /** Mounts or rerenders a server's console. */
 async function renderConsole(serverId = "preview") {
-    await act(async () => root.render(<ManagedServerConsole serverId={serverId} />));
+    await act(async () => root.render(<TestLocalization>{<ManagedServerConsole serverId={serverId} />} </TestLocalization>));
 }
 
 it("auto-connects once on load without connection buttons or a separate indicator", async () => {
@@ -75,12 +77,12 @@ it.each(["unavailable", "expired"])("shows %s and reload guidance inside the out
 
 it("reconnects after Strict Mode cleanup and aborts the active stream on unmount", async () => {
     fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
-    await act(async () => root.render(<StrictMode><ManagedServerConsole serverId="preview" /></StrictMode>));
+    await act(async () => root.render(<StrictMode><TestLocalization><ManagedServerConsole serverId="preview" /></TestLocalization></StrictMode>));
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
     expect(fetchMock.mock.calls[1][1].signal.aborted).toBe(false);
     expect(output()).toContain("Connecting");
-    await act(async () => root.render(null));
+    await act(async () => root.render(<TestLocalization>{null} </TestLocalization>));
     expect(fetchMock.mock.calls[1][1].signal.aborted).toBe(true);
 });
 
@@ -141,3 +143,10 @@ it("renders HTML-looking command output as text rather than executable markup", 
     expect(container.querySelector('[aria-label="Command output"]')!.textContent).toBe(`${text}\n`);
     expect(container.querySelector("img, script")).toBeNull();
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

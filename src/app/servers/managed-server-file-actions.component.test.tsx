@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { beforeEach, expect, it, vi } from "vitest";
 import { submitManagedServerFile, exportManagedServerConfig, checkManagedServerFile } from "./managed-server-file-actions";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION as config } from "../../../supabase/functions/_shared/managed-server-configuration";
@@ -74,3 +76,10 @@ it("distinguishes local campaign validation from an uncertain upstream submissio
     mocks.revalidate.mockImplementation(() => { throw new Error("Refresh failed after acceptance"); });
     expect(await submitManagedServerFile(form, "owner")).toMatchObject({ ok: false, notSubmitted: false, rejected: false });
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

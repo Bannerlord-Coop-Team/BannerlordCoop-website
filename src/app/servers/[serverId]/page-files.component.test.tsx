@@ -1,9 +1,19 @@
-import { act, Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
+import { act, Children, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 import ServerPage from "./page";
+import { createTranslator } from "@/app/lib/localization/translator";
+import { LiveServerFileSetup } from "@/app/components/servers/LiveServerFileSetup";
+
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    // Selects the requested server namespace without reading request state in file-flow tests.
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 
 const mocks = vi.hoisted(() => ({ live: vi.fn(), access: vi.fn(), servers: vi.fn(), files: vi.fn(), submit: vi.fn(), preview: vi.fn(), configFile: vi.fn() }));
@@ -67,10 +77,14 @@ async function find(node: ReactNode, name: string): Promise<ReactElement | null>
     return null;
 }
 async function page() { return ServerPage({ params: Promise.resolve({ serverId: live.id }), searchParams: Promise.resolve({}) }); }
+// Resolves real async file setup output before mounting the client-side file workspace.
 async function render(name = "ManagedServerFiles") {
     const element = await find(await page(), name);
     expect(element).not.toBeNull();
-    await act(async () => root.render(<ManagedServerPollingProvider>{element}</ManagedServerPollingProvider>));
+    const content = element!.type === LiveServerFileSetup
+        ? await LiveServerFileSetup(element!.props as ComponentProps<typeof LiveServerFileSetup>)
+        : element;
+    await act(async () => root.render(<TestLocalization>{<ManagedServerPollingProvider>{content}</ManagedServerPollingProvider>} </TestLocalization>));
     await act(async () => vi.advanceTimersByTimeAsync(0));
 }
 function button(label: string) {

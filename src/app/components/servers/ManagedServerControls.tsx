@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
+
 import { useManagedServerPolling } from "@/app/components/servers/ManagedServerPollingProvider";
 import { operateManagedServer, readManagedServerStartStatus, setManagedServerPassword } from "@/app/servers/managed-server-actions";
 import { useRouter } from "next/navigation";
@@ -39,6 +41,7 @@ export function ManagedServerControls({
     observedGameState,
     expectedUpdatedAt,
 }: ManagedServerControlsProps) {
+    const { t } = useTranslations("managed-server");
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [pendingOperation, setPendingOperation] = useState<Operation | null>(null);
@@ -62,18 +65,19 @@ export function ManagedServerControls({
         // A completed command is not enough: require a newer, confirmed server observation.
         if (operationState !== "stopped" || observedGameState !== "stopped" || expectedUpdatedAt <= stopRevision) return;
         const timeout = setTimeout(() => {
-            setMessage("Server stopped.");
+            setMessage(t("controls.serverStopped"));
             setStopRevision(null);
             endPolling(serverId);
         }, 0);
         return () => clearTimeout(timeout);
-    }, [serverId, stopRevision, operationState, observedGameState, expectedUpdatedAt, isPending, endPolling]);
+    }, [serverId, stopRevision, operationState, observedGameState, expectedUpdatedAt, isPending, endPolling, t]);
 
     useEffect(() => {
         if (startJobId === null) return;
         let cancelled = false;
         let timeout: ReturnType<typeof setTimeout>;
         const deadline = Date.now() + 15 * 60_000;
+        // Refreshes existing operation progress and reports localized connection feedback.
         async function poll() {
             try {
                 const result = await readManagedServerStartStatus(serverId, startJobId!);
@@ -88,7 +92,7 @@ export function ManagedServerControls({
                 }
             } catch {
                 if (cancelled) return;
-                setMessage("Reconnecting to server progress… Your Start request is still being tracked.");
+                setMessage(t("controls.reconnectingToServerProgressYourStartRequestIsStillBeing"));
             }
             if (Date.now() >= deadline) {
                 setProgressPaused(true);
@@ -105,8 +109,7 @@ export function ManagedServerControls({
     if (!canOperate) {
         return (
             <span className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-foreground-dim">
-                Read-only access
-            </span>
+                {t("controls.readOnlyAccess")}</span>
         );
     }
 
@@ -119,16 +122,16 @@ export function ManagedServerControls({
     function requestOperation(operation: Operation) {
         if (busy) return;
         if (operation === "stop" && !window.confirm(
-            `Stop ${displayName}? Players will be disconnected without a save-flush check or advance warning. Unsaved progress may be lost.`,
+            t("controls.stopDisplaynamePlayersWillBeDisconnectedWithoutASaveFlush", { displayName: displayName }),
         )) return;
         if (operation === "restart-game" && !window.confirm(
-            `Restart ${displayName}? Players will be disconnected without a save-flush check or advance warning. Unsaved progress may be lost.`,
+            t("controls.restartDisplaynamePlayersWillBeDisconnectedWithoutASaveFlush", { displayName: displayName }),
         )) return;
         if (operation === "update-now" && !window.confirm(
-            `Update ${displayName} now? A backup will be taken first. If the server is running, players will be disconnected while its selected release is installed.`,
+            t("controls.updateDisplaynameNowABackupWillBeTakenFirstIf", { displayName: displayName }),
         )) return;
 
-        setMessage(operation === "start" ? "Sending your Start request…" : operation === "stop" ? "Sending your Stop request…" : "");
+        setMessage(operation === "start" ? t("controls.sendingYourStartRequest") : operation === "stop" ? t("controls.sendingYourStopRequest") : "");
         setStartRevision(expectedUpdatedAt);
         setStartJobId(null);
         setStartStatus(null);
@@ -152,11 +155,11 @@ export function ManagedServerControls({
                 }
             } catch {
                 if (operation === "stop") {
-                    setMessage("Checking whether your server has stopped…");
+                    setMessage(t("controls.checkingWhetherYourServerHasStopped"));
                     setStopRevision(expectedUpdatedAt);
                     beginPolling(serverId, expectedUpdatedAt);
                 } else {
-                    setMessage("The command could not be confirmed. It may have executed. Refresh server status before sending another command.");
+                    setMessage(t("controls.theCommandCouldNotBeConfirmedItMayHaveExecuted"));
                 }
             } finally {
                 setPendingOperation(null);
@@ -168,28 +171,28 @@ export function ManagedServerControls({
         <div className="flex flex-col items-start gap-2">
             <div className="flex flex-wrap gap-2">
                 <ControlButton
-                    label="Start"
+                    label={t("controls.start")}
                     icon={Play}
                     disabled={busy || !canStart}
                     pending={pendingOperation === "start" || trackingStart}
                     onClick={() => requestOperation("start")}
                 />
                 <ControlButton
-                    label="Stop"
+                    label={t("controls.stop")}
                     icon={Square}
                     disabled={busy || !canStop}
                     pending={pendingOperation === "stop" || (trackingStop && !stopCheckPaused)}
                     onClick={() => requestOperation("stop")}
                 />
                 <ControlButton
-                    label="Restart"
+                    label={t("controls.restart")}
                     icon={RotateCw}
                     disabled={busy || !canRestart}
                     pending={pendingOperation === "restart-game"}
                     onClick={() => requestOperation("restart-game")}
                 />
                 <ControlButton
-                    label="Update now"
+                    label={t("controls.updateNow")}
                     icon={Download}
                     disabled={busy}
                     pending={pendingOperation === "update-now"}
@@ -200,17 +203,16 @@ export function ManagedServerControls({
                 <StartProgress status={startStatus} paused={progressPaused} />
             )}
             {progressPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted">
-                <p>Automatic progress updates are paused. Readiness has not been confirmed.</p>
+                <p>{t("controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed")}</p>
                 <button type="button" className="mt-2 min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold"
                     onClick={() => { setProgressPaused(false); setPollRun(current => current + 1); }}>
-                    Resume progress updates
-                </button>
+                    {t("controls.resumeProgressUpdates")}</button>
             </div>}
             {stopCheckPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted" role="status">
-                <p>Stop is taking longer than expected. We haven’t confirmed that the server stopped. Check status again; if this continues, contact support.</p>
+                <p>{t("controls.stopIsTakingLongerThanExpected")}</p>
                 <button type="button" className="mt-2 min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold"
                     onClick={() => beginPolling(serverId, stopRevision!)}>
-                    Check status again
+                    {t("controls.checkStatusAgain")}
                 </button>
             </div>}
             {message && !stopCheckPaused && (
@@ -225,14 +227,16 @@ export function ManagedServerControls({
     );
 }
 
+// Presents localized startup phases while preserving external progress.
 function StartProgress({ status, paused }: { status: StartProgressStatus | null; paused: boolean }) {
+    const { t } = useTranslations("managed-server");
     const phases = ["queued", "preparing", "starting", "verifying", "ready"] as const;
-    const labels = ["Start requested", "Prepare server", "Launch game and load campaign", "Confirm readiness", "Ready to join"];
+    const labels = [t("controls.startRequested"), t("controls.prepareServer"), t("controls.launchGameAndLoadCampaign"), t("controls.confirmReadiness"), t("controls.readyToJoin")];
     const current = phases.indexOf(status?.phase ?? "queued");
     const failed = status?.state === "failed" || status?.state === "cancelled";
     return <div className="w-full max-w-xl rounded-lg border border-gold/25 bg-gold/[0.04] p-4" role="status" aria-live="polite">
-        <p className="font-medium text-foreground">{failed ? status.state === "cancelled" ? "Start cancelled" : "Server could not start"
-            : status?.state === "succeeded" ? "Your server is ready to join" : "Starting your server…"}</p>
+        <p className="font-medium text-foreground">{failed ? status.state === "cancelled" ? t("controls.startCancelled") : t("controls.serverCouldNotStart")
+            : status?.state === "succeeded" ? t("controls.yourServerIsReadyToJoin") : t("controls.startingYourServer")}</p>
         <ol className="mt-3 space-y-2 text-sm">
             {phases.map((phase, index) => <li key={phase} aria-current={index === current ? "step" : undefined}
                 className={`flex items-center gap-2 ${index <= current ? "text-foreground" : "text-foreground-dim"}`}>
@@ -240,17 +244,18 @@ function StartProgress({ status, paused }: { status: StartProgressStatus | null;
                     ? <Check aria-hidden="true" className="size-4 text-gold" />
                     : index === current && !failed && !paused ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-gold motion-reduce:animate-none" />
                         : <span aria-hidden="true" className="size-4 rounded-full border border-white/20" />}
-                <span>{labels[index]}<span className="sr-only">{index < current ? " — completed" : index === current ? " — current phase" : " — waiting"}</span></span>
+                <span>{labels[index]}<span className="sr-only">{index < current ? t("controls.completed") : index === current ? t("controls.currentPhase") : t("controls.waiting")}</span></span>
             </li>)}
         </ol>
-        <p className="mt-3 text-sm leading-6 text-foreground-muted">{failed ? "Readiness was not confirmed. Check server status or contact support before trying again."
-            : status?.state === "retry-wait" ? `Waiting to retry safely. ${status.progress}`
-                : status?.progress ?? "Waiting for the hosting service to accept your request."}</p>
+        <p className="mt-3 text-sm leading-6 text-foreground-muted">{failed ? t("controls.readinessWasNotConfirmedCheckServerStatusOrContactSupport")
+            : status?.state === "retry-wait" ? t("controls.waitingToRetrySafelyProgress", { progress: status.progress })
+                : status?.progress ?? t("controls.waitingForTheHostingServiceToAcceptYourRequest")}</p>
     </div>;
 }
 
 /** Owns the owner-only password form in Settings, preserving confirmation and pending guards. */
 export function ManagedServerPassword({ serverId, accessRole, operationState, expectedUpdatedAt }: Omit<ManagedServerControlsProps, "displayName" | "observedGameState">) {
+    const { t } = useTranslations("managed-server");
     const [isPending, startTransition] = useTransition();
     const [password, setPassword] = useState("");
     const [message, setMessage] = useState("");
@@ -262,14 +267,14 @@ export function ManagedServerPassword({ serverId, accessRole, operationState, ex
     function savePassword(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (busy || !password) return;
-        if (operationState === "running" && !window.confirm("Change the password and restart the server after warning players?")) return;
+        if (operationState === "running" && !window.confirm(t("controls.changeThePasswordAndRestartTheServerAfterWarningPlayers"))) return;
         setMessage("");
         startTransition(async () => {
             try {
                 const result = await setManagedServerPassword({ serverId, expectedUpdatedAt, password });
                 setMessage(result.message);
             } catch {
-                setMessage("The password change could not be confirmed. It may have applied. Refresh server status before trying again.");
+                setMessage(t("controls.thePasswordChangeCouldNotBeConfirmedItMayHave"));
             } finally {
                 setPassword("");
             }
@@ -277,13 +282,12 @@ export function ManagedServerPassword({ serverId, accessRole, operationState, ex
     }
 
     return <section aria-labelledby="game-password-heading" className="rounded-lg border border-white/10 bg-surface p-5">
-        <h2 id="game-password-heading" className="text-base font-semibold">Game password</h2>
-        <p className="mt-1 text-sm leading-6 text-foreground-muted">Controls who can join the game. Changing it while running warns players and restarts the server.</p>
+        <h2 id="game-password-heading" className="text-base font-semibold">{t("controls.gamePassword")}</h2>
+        <p className="mt-1 text-sm leading-6 text-foreground-muted">{t("controls.controlsWhoCanJoinTheGameChangingItWhileRunning")}</p>
         <form onSubmit={savePassword} className="mt-4 flex max-w-xl flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="min-w-0 flex-1 text-sm font-medium">New game password
-                <input className="mt-2 block min-h-11 w-full rounded-md border border-white/15 bg-background px-3 py-2 focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-40" type="password" autoComplete="new-password" required maxLength={128} value={password} onChange={event => setPassword(event.target.value)} disabled={busy} />
+            <label className="min-w-0 flex-1 text-sm font-medium">{t("controls.newGamePassword")}<input className="mt-2 block min-h-11 w-full rounded-md border border-white/15 bg-background px-3 py-2 focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-40" type="password" autoComplete="new-password" required maxLength={128} value={password} onChange={event => setPassword(event.target.value)} disabled={busy} />
             </label>
-            <button type="submit" disabled={busy || !password} className="min-h-11 rounded-md border border-gold/40 bg-gold/10 px-4 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40">{isPending ? "Saving…" : "Set password"}</button>
+            <button type="submit" disabled={busy || !password} className="min-h-11 rounded-md border border-gold/40 bg-gold/10 px-4 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40">{isPending ? t("controls.saving") : t("controls.setPassword")}</button>
         </form>
         {message && <p role="status" className="mt-3 text-sm leading-6 text-foreground-muted">{message}</p>}
     </section>;

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { ArrowRight, LoaderCircle, LockKeyhole, Mail, MailCheck } from "lucide-react";
 import { FormEvent, ReactNode, useState } from "react";
@@ -38,6 +39,7 @@ function DiscordIcon() {
     );
 }
 
+/** Presents provider actions and their localized pending label. */
 function ProviderButton({
     children,
     disabled,
@@ -49,6 +51,7 @@ function ProviderButton({
     loading: boolean;
     onClick: () => void;
 }) {
+    const { t } = useTranslations("login");
     return (
         <button
             type="button"
@@ -59,7 +62,7 @@ function ProviderButton({
             {loading ? (
                 <>
                     <LoaderCircle aria-hidden="true" className="size-5 animate-spin" />
-                    Connecting
+                    {t("provider.connecting")}
                 </>
             ) : (
                 children
@@ -68,6 +71,7 @@ function ProviderButton({
     );
 }
 
+/** Localizes sign-in presentation while preserving provider and email authentication requests. */
 export function LoginForm({
     initialError,
     nextPath,
@@ -75,6 +79,7 @@ export function LoginForm({
     initialError?: string;
     nextPath?: string;
 }) {
+    const { t, rich } = useTranslations("login");
     const [email, setEmail] = useState("");
     const [pending, setPending] = useState<PendingAction>(null);
     const [error, setError] = useState(initialError ?? "");
@@ -86,18 +91,20 @@ export function LoginForm({
         return callback.toString();
     }
 
+    /** Preserves provider diagnostics and localizes only the website's unknown-error fallback. */
     function messageFrom(errorValue: unknown) {
         return errorValue instanceof Error
             ? errorValue.message
-            : "Something went wrong. Please try again.";
+            : t("error.generic");
     }
 
+    /** Starts provider sign-in with localized configuration errors and unchanged OAuth options. */
     async function signInWithProvider(provider: OAuthProvider) {
         setError("");
         setPending(provider);
 
         try {
-            const supabase = getSupabaseBrowserClient();
+            const supabase = getSupabaseBrowserClient(t("error.configuration"));
             const { error: signInError } = await supabase.auth.signInWithOAuth({
                 provider,
                 options: { redirectTo: callbackUrl() },
@@ -110,13 +117,14 @@ export function LoginForm({
         }
     }
 
+    /** Sends the magic link with localized configuration errors and unchanged email auth options. */
     async function signInWithEmail(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         setError("");
         setPending("email");
 
         try {
-            const supabase = getSupabaseBrowserClient();
+            const supabase = getSupabaseBrowserClient(t("error.configuration"));
             const { error: signInError } = await supabase.auth.signInWithOtp({
                 email: email.trim(),
                 options: {
@@ -141,14 +149,15 @@ export function LoginForm({
                     <MailCheck aria-hidden="true" className="size-6" />
                 </div>
                 <p className="mt-6 font-label text-xs font-semibold uppercase tracking-[0.22em] text-gold">
-                    Dispatch sent
+                    {t("emailSent.eyebrow")}
                 </p>
                 <h1 className="mt-3 font-display text-4xl font-semibold text-foreground">
-                    Check your inbox
+                    {t("emailSent.heading")}
                 </h1>
                 <p className="mx-auto mt-4 max-w-sm text-sm leading-6 text-foreground-muted">
-                    We sent a secure sign-in link to <strong className="font-medium text-foreground">{email}</strong>.
-                    The link can only be used once.
+                    {rich("emailSent.description", {
+                        email: <strong className="font-medium text-foreground">{email}</strong>,
+                    })}
                 </p>
                 <button
                     type="button"
@@ -158,7 +167,7 @@ export function LoginForm({
                     }}
                     className="mt-8 font-label text-xs font-semibold uppercase tracking-[0.16em] text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                 >
-                    Use a different email
+                    {t("emailSent.useDifferentEmail")}
                 </button>
             </div>
         );
@@ -170,13 +179,13 @@ export function LoginForm({
         <>
             <div>
                 <p className="font-label text-xs font-semibold uppercase tracking-[0.24em] text-gold">
-                    Player access
+                    {t("form.eyebrow")}
                 </p>
                 <h1 className="mt-3 font-display text-4xl font-semibold leading-none tracking-tight text-foreground sm:text-5xl">
-                    Return to the campaign.
+                    {t("form.heading")}
                 </h1>
                 <p className="mt-4 max-w-md text-sm leading-6 text-foreground-muted sm:text-base">
-                    Sign in to manage your profile and stay connected to your warband.
+                    {t("form.description")}
                 </p>
             </div>
 
@@ -211,7 +220,7 @@ export function LoginForm({
             <div className="my-7 flex items-center gap-4" aria-hidden="true">
                 <span className="h-px flex-1 bg-white/10" />
                 <span className="font-label text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-foreground-muted">
-                    Or use email
+                    {t("form.emailAlternative")}
                 </span>
                 <span className="h-px flex-1 bg-white/10" />
             </div>
@@ -221,7 +230,7 @@ export function LoginForm({
                     htmlFor="email"
                     className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-foreground-muted"
                 >
-                    Email address
+                    {t("form.emailLabel")}
                 </label>
                 <div className="relative mt-2">
                     <Mail
@@ -237,7 +246,7 @@ export function LoginForm({
                         disabled={isBusy}
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
-                        placeholder="commander@example.com"
+                        placeholder={t("form.emailPlaceholder")}
                         className="min-h-13 w-full rounded-sm border border-white/15 bg-background/65 py-3 pr-4 pl-11 text-sm text-foreground outline-none transition-colors placeholder:text-foreground-muted hover:border-white/25 focus:border-gold/65 focus:ring-1 focus:ring-gold/30 disabled:cursor-not-allowed disabled:opacity-60"
                     />
                 </div>
@@ -250,11 +259,11 @@ export function LoginForm({
                     {pending === "email" ? (
                         <>
                             <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
-                            Sending link
+                            {t("form.sendingLink")}
                         </>
                     ) : (
                         <>
-                            Continue with email
+                            {t("form.continueWithEmail")}
                             <ArrowRight
                                 aria-hidden="true"
                                 className="size-4 transition-transform group-hover:translate-x-0.5"
@@ -267,7 +276,7 @@ export function LoginForm({
             <div className="mt-6 flex items-start gap-3 border-t border-white/10 pt-5 text-xs leading-5 text-foreground-muted">
                 <LockKeyhole aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold-muted" />
                 <p>
-                    We&apos;ll email you a one-time magic link. No password to remember, and we never post to your connected accounts.
+                    {t("form.security")}
                 </p>
             </div>
         </>

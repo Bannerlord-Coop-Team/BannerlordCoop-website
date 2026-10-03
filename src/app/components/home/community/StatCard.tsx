@@ -1,3 +1,4 @@
+import { getTranslations } from "@/app/lib/localization/server";
 import type { LucideIcon } from "lucide-react";
 import { ScrollReveal } from "@/app/components/motion/ScrollReveal";
 
@@ -11,9 +12,10 @@ type StatCardProps = {
     animationDelay?: number;
 };
 
-const numberFormatter = new Intl.NumberFormat("en-US");
 
-export function StatCard({ label, description, value, status, icon: Icon, isLive = false, animationDelay = 0 }: StatCardProps) {
+// Renders localized StatCard presentation while preserving source values.
+export async function StatCard({ label, description, value, status, icon: Icon, isLive = false, animationDelay = 0 }: StatCardProps) {
+    const { t, number } = await getTranslations("home");
     return (
         <ScrollReveal className="h-full" delay={animationDelay} distance={24} amount={0.2}>
             <article className="group relative h-full min-h-52 bg-surface-raised p-6 transition-colors duration-300 hover:bg-white/2.5 sm:min-h-56 sm:p-7">
@@ -27,10 +29,10 @@ export function StatCard({ label, description, value, status, icon: Icon, isLive
                 <p className="mt-7 font-display text-4xl font-semibold leading-none tabular-nums tracking-[-0.03em] text-foreground sm:mt-8 sm:text-5xl lg:text-6xl">
                     {value === null ? (
                         <span className="font-label text-xl uppercase tracking-[0.1em] text-foreground-muted sm:text-2xl lg:text-3xl lg:tracking-[0.12em]">
-                            Not available
+                            {t("stats.notAvailable")}
                         </span>
                     ) : (
-                        numberFormatter.format(value)
+                        number(value)
                     )}
                 </p>
                 <h3 className="mt-5 font-label text-sm font-semibold uppercase tracking-[0.18em] text-foreground">

@@ -392,18 +392,23 @@ export async function readMyServersResponse(
     throw new MyServersApiError(code, message, retryable, operationId);
 }
 
-export function myServersEndpoint() {
+// Resolves the configured endpoint with optional website presentation, preserving URL/security checks.
+export function myServersEndpoint(messages = {
+    notConfigured: "The managed-server API is not configured.",
+    invalidUrl: "The Supabase URL is invalid.",
+    invalidKey: "The Supabase publishable key is invalid.",
+}) {
     const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
     const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
     if (!rawUrl || !publishableKey) {
-        throw new MyServersApiError("server_api_not_configured", "The managed-server API is not configured.");
+        throw new MyServersApiError("server_api_not_configured", messages.notConfigured);
     }
     const endpoint = new URL(rawUrl);
     if (endpoint.protocol !== "https:" || endpoint.pathname !== "/" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
-        throw new MyServersApiError("server_api_not_configured", "The Supabase URL is invalid.");
+        throw new MyServersApiError("server_api_not_configured", messages.invalidUrl);
     }
     if (publishableKey.length < 20 || publishableKey.length > 4_096) {
-        throw new MyServersApiError("server_api_not_configured", "The Supabase publishable key is invalid.");
+        throw new MyServersApiError("server_api_not_configured", messages.invalidKey);
     }
     endpoint.pathname = "/functions/v1/my-servers";
     return { endpoint, publishableKey };
