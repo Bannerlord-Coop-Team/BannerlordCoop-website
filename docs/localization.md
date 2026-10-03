@@ -2,7 +2,7 @@
 
 ## Scope and identifiers
 
-English (`en`) is the default. The independently activated locales are Simplified Chinese (`zh-CN`), Russian (`ru`), neutral Spanish (`es`), Brazilian Portuguese (`pt-BR`), European Portuguese (`pt-PT`), Japanese (`ja`), and Korean (`ko`). Never infer language from browser headers, geography, or browser settings. Preserve existing routes and auth callbacks. Admin-only pages and controls are excluded; ordinary-user account and server management are included.
+English (`en`) is the default. The independently activated locales are Simplified Chinese (`zh-CN`), Russian (`ru`), neutral Spanish (`es`), Brazilian Portuguese (`pt-BR`), European Portuguese (`pt-PT`), Japanese (`ja`), Korean (`ko`), German (`de`), Turkish (`tr`), and French (`fr`). Never infer language from browser headers, geography, or browser settings. Preserve existing routes and auth callbacks. Admin-only pages and controls are excluded; ordinary-user account and server management are included.
 
 ## Runtime API and dictionary format
 
