@@ -7,10 +7,13 @@ import ptBR from "./locales/pt-BR";
 import ptPT from "./locales/pt-PT";
 import ja from "./locales/ja";
 import ko from "./locales/ko";
+import de from "./locales/de";
+import tr from "./locales/tr";
+import fr from "./locales/fr";
 import type { Locale, LocaleDefinition, LocaleOption } from "./types";
 
 export const localeDefinitions: Record<Locale, LocaleDefinition> = {
-    en, "zh-CN": zhCN, ru, es, "pt-BR": ptBR, "pt-PT": ptPT, ja, ko,
+    en, "zh-CN": zhCN, ru, es, "pt-BR": ptBR, "pt-PT": ptPT, ja, ko, de, tr, fr,
 };
 
 /** Resolves only explicitly enabled global locales, with English as the default. */

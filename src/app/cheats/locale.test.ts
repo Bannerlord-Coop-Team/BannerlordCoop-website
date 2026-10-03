@@ -4,6 +4,7 @@ import commandsData from "./commands.json";
 import { debugOnlyCommandNames, isPublishedCheat } from "./debugOnly";
 import { featuredCommandNames } from "./featured";
 import { parseCheatsLocale } from "./locale";
+import { locales } from "../lib/localization/types";
 import en from "../lib/localization/dictionaries/en/cheats.json";
 import zh from "./locales/zh-CN.json";
 import chineseSource from "./locales/zh-CN.commands.json";
@@ -104,7 +105,7 @@ test("catalog preserves PR3538 metadata, usage and localized argument coverage",
 
 /** Protects command identifiers, filters, and explicit locales through share URL round trips. */
 test("featured links round-trip canonical snake-case commands and preserve every filter", () => {
-    for (const lang of ["en", "zh-CN", "ru", "es", "pt-BR", "pt-PT", "ja", "ko"] as const) {
+    for (const lang of locales) {
         for (const cheat of featuredCommandNames) {
             const path = buildCheatsPath(parseCheatsQuery({ cheat, lang, q: "gold", tab: "Heroes", type: "inspect", side: "either" }));
             const query = parseCheatsQuery(Object.fromEntries(new URL(path, "https://example.com").searchParams));

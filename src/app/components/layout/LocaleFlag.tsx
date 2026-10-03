@@ -18,6 +18,7 @@ function Trigram({ x, y, angle }: { x: number; y: number; angle: number }) {
 }
 
 // Simplified 3:2 flags stay recognizable at selector size; English uses the US and Spanish uses Spain.
+// Germany's 5:3 and France's 3:2 tricolours are drawn at the shared 3:2 size.
 const flags: Record<Locale, ReactNode> = {
     en: <>
         <rect width="30" height="20" fill="#fff" />
@@ -65,6 +66,22 @@ const flags: Record<Locale, ReactNode> = {
         <Trigram x={24} y={16} angle={-56.3} />
         <Trigram x={24} y={4} angle={56.3} />
         <Trigram x={6} y={16} angle={56.3} />
+    </>,
+    de: <>
+        <rect width="30" height="20" fill="#000" />
+        <rect y="6.67" width="30" height="6.67" fill="#DD0000" />
+        <rect y="13.33" width="30" height="6.67" fill="#FFCE00" />
+    </>,
+    tr: <>
+        <rect width="30" height="20" fill="#E30A17" />
+        <circle cx="11" cy="10" r="5" fill="#fff" />
+        <circle cx="12.25" cy="10" r="4" fill="#E30A17" />
+        <polygon points={starPoints(17.5, 10, 2.2)} fill="#fff" transform="rotate(-18 17.5 10)" />
+    </>,
+    fr: <>
+        <rect width="30" height="20" fill="#fff" />
+        <rect width="10" height="20" fill="#002395" />
+        <rect x="20" width="10" height="20" fill="#ED2939" />
     </>,
 };
 
