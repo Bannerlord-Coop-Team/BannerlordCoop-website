@@ -1,0 +1,30 @@
+{
+  "metadata.title": "Changelog",
+  "metadata.description": "Lies die neuesten Releases, Verbesserungen und Fehlerbehebungen von Bannerlord Coop.",
+  "hero.eyebrow": "Entwicklungs-Updates",
+  "hero.title": "Bannerlord Coop Changelog",
+  "hero.description": "Hier findest du alle aktuellen Versionen, Gameplay-Verbesserungen, technischen Änderungen und Fehlerbehebungen, die das Entwicklungsteam von Bannerlord Coop veröffentlicht hat.",
+  "links.githubReleases": "Releases auf GitHub ansehen",
+  "links.fullRelease": "Vollständiges Release ansehen",
+  "links.openGithubReleases": "GitHub-Releases öffnen",
+  "history.eyebrow": "Release-Verlauf",
+  "history.title": "Was hat sich geändert?",
+  "history.description": "Die Release-Informationen werden direkt aus dem öffentlichen GitHub-Repository des Projekts geladen und stündlich aktualisiert.",
+  "history.count": {
+    "one": "{formattedCount} Release wird angezeigt",
+    "other": "{formattedCount} Releases werden angezeigt"
+  },
+  "release.latest": "Neuestes Release",
+  "release.label": "Release",
+  "release.prerelease": "Vorabversion",
+  "release.published": "Veröffentlicht am {date}",
+  "release.publishedUnknown": "Veröffentlicht an einem unbekannten Datum",
+  "release.author": "Von {author}",
+  "release.emptyNotes": "Für diese Version wurden keine Release-Notizen angegeben.",
+  "unavailable.eyebrow": "GitHub nicht verfügbar",
+  "unavailable.title": "Der Changelog konnte nicht geladen werden.",
+  "unavailable.description": "GitHub ist möglicherweise vorübergehend nicht erreichbar oder die API-Anfrage hat das Ratenlimit erreicht. Du kannst die Releases weiterhin direkt auf GitHub ansehen.",
+  "empty.eyebrow": "Noch keine Releases",
+  "empty.title": "Der Release-Verlauf ist derzeit leer.",
+  "empty.description": "Veröffentlichte GitHub-Releases erscheinen hier automatisch."
+}

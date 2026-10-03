@@ -1,0 +1,31 @@
+{
+  "metadata.title": "Journal des modifications",
+  "metadata.description": "Découvrez les dernières versions de Bannerlord Coop, leurs améliorations et leurs corrections de bogues.",
+  "hero.eyebrow": "Actualités du développement",
+  "hero.title": "Journal des modifications de Bannerlord Coop",
+  "hero.description": "Retrouvez ici toutes les dernières versions, améliorations de gameplay, modifications techniques et corrections publiées par l’équipe de développement de Bannerlord Coop.",
+  "links.githubReleases": "Voir les versions sur GitHub",
+  "links.fullRelease": "Voir la version complète",
+  "links.openGithubReleases": "Ouvrir les versions GitHub",
+  "history.eyebrow": "Historique des versions",
+  "history.title": "Qu’est-ce qui a changé ?",
+  "history.description": "Les informations sur les versions sont chargées directement depuis le dépôt GitHub public du projet et actualisées toutes les heures.",
+  "history.count": {
+    "one": "Affichage de {formattedCount} version",
+    "many": "Affichage de {formattedCount} de versions",
+    "other": "Affichage de {formattedCount} versions"
+  },
+  "release.latest": "Dernière version",
+  "release.label": "Version",
+  "release.prerelease": "Préversion",
+  "release.published": "Publiée le {date}",
+  "release.publishedUnknown": "Publiée à une date inconnue",
+  "release.author": "Par {author}",
+  "release.emptyNotes": "Aucune note de version n’a été fournie pour cette version.",
+  "unavailable.eyebrow": "GitHub indisponible",
+  "unavailable.title": "Le journal des modifications n’a pas pu être chargé.",
+  "unavailable.description": "GitHub est peut-être temporairement indisponible, ou la requête API a atteint sa limite de débit. Vous pouvez toujours consulter les versions directement sur GitHub.",
+  "empty.eyebrow": "Aucune version pour le moment",
+  "empty.title": "L’historique des versions est actuellement vide.",
+  "empty.description": "Les versions GitHub publiées apparaîtront automatiquement ici."
+}
