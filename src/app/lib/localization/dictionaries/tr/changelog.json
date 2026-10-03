@@ -1,0 +1,30 @@
+{
+  "metadata.title": "Değişiklik günlüğü",
+  "metadata.description": "En son Bannerlord Coop sürümlerini, iyileştirmeleri ve hata düzeltmelerini okuyun.",
+  "hero.eyebrow": "Geliştirme güncellemeleri",
+  "hero.title": "Bannerlord Coop değişiklik günlüğü",
+  "hero.description": "Bannerlord Coop geliştirme ekibinin yayımladığı tüm güncel sürümler, oynanış iyileştirmeleri, teknik değişiklikler ve düzeltmeler burada.",
+  "links.githubReleases": "Sürümleri GitHub'da görüntüleyin",
+  "links.fullRelease": "Sürümün tamamını görüntüleyin",
+  "links.openGithubReleases": "GitHub sürümlerini açın",
+  "history.eyebrow": "Sürüm geçmişi",
+  "history.title": "Neler değişti?",
+  "history.description": "Sürüm bilgileri doğrudan projenin herkese açık GitHub deposundan yüklenir ve her saat yenilenir.",
+  "history.count": {
+    "one": "{formattedCount} sürüm gösteriliyor",
+    "other": "{formattedCount} sürüm gösteriliyor"
+  },
+  "release.latest": "En son sürüm",
+  "release.label": "Sürüm",
+  "release.prerelease": "Ön sürüm",
+  "release.published": "Yayın tarihi: {date}",
+  "release.publishedUnknown": "Yayın tarihi bilinmiyor",
+  "release.author": "Yazar: {author}",
+  "release.emptyNotes": "Bu sürüm için sürüm notu sağlanmadı.",
+  "unavailable.eyebrow": "GitHub kullanılamıyor",
+  "unavailable.title": "Değişiklik günlüğü yüklenemedi.",
+  "unavailable.description": "GitHub geçici olarak kullanılamıyor olabilir veya API isteği hız sınırına ulaşmış olabilir. Sürümleri yine de doğrudan GitHub'da görüntüleyebilirsiniz.",
+  "empty.eyebrow": "Henüz sürüm yok",
+  "empty.title": "Sürüm geçmişi şu anda boş.",
+  "empty.description": "Yayımlanan GitHub sürümleri burada otomatik olarak görünür."
+}

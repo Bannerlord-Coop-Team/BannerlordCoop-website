@@ -1,0 +1,9 @@
+{
+  "links.brandHome": "{brand} ana sayfası",
+  "error.code": "Hata {code}",
+  "heading": "Görüntülenecek sayfa yok.",
+  "description": "Aradığınız sayfa taşınmış, kaldırılmış ya da hiç var olmamış olabilir. Tanıdık topraklara dönün veya sunucu dizinine geçin.",
+  "links.home": "Ana sayfaya dön",
+  "links.servers": "Sunuculara göz at",
+  "footer.motto": "Dost olmadan hiçbir sancak yükselmez"
+}
