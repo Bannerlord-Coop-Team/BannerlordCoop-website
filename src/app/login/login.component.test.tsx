@@ -82,6 +82,8 @@ async function submitEmail(container: HTMLElement) {
 
 describe("login localization", () => {
     it.each([undefined, "invalid", "ru"])("keeps English page, metadata and loading aligned for cookie %s", async (cookie) => {
+        // ru stands in for any switched-off locale; afterEach restores its definition.
+        if (cookie === "ru") localeDefinitions.ru = { ...originalRussian, enabled: false };
         mocks.cookie = cookie;
         const html = renderToStaticMarkup(await LoginPage({ searchParams: Promise.resolve({}) }));
         expect(html).toContain(login["form.heading"]);

@@ -30,7 +30,12 @@ import {
     storeManagedServerBackupIntent,
 } from "@/app/servers/managed-server-backup-intent";
 import { Archive, ChevronDown, LoaderCircle, RotateCcw } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
+
+/** Backup history that failed to load is re-read this many times, this far apart, before the notice stays. */
+const MAXIMUM_LOAD_RETRIES = 5;
+const LOAD_RETRY_MILLISECONDS = 10_000;
 
 const TERMINAL_JOB_STATES = new Set(["succeeded", "failed", "cancelled"]);
 const TRANSITIONAL_SERVER_STATES = new Set([
@@ -105,6 +110,8 @@ function ManagedServerBackupsSession({
     const [showExpired, setShowExpired] = useState(false);
     const retainedIntentRef = useRef<ManagedServerBackupInput | null>(null);
     const polledJobIds = useRef(new Set<string>());
+    const router = useRouter();
+    const loadRetries = useRef(0);
     const {
         session: pollingSession,
         timedOutSession,
@@ -112,6 +119,17 @@ function ManagedServerBackupsSession({
         beginPolling,
         endPolling,
     } = useManagedServerPolling();
+
+    useEffect(() => {
+        if (!loadError) { loadRetries.current = 0; return; }
+        if (loadRetries.current >= MAXIMUM_LOAD_RETRIES) return;
+        // History that failed to load reloads itself a few times instead of asking the owner to refresh.
+        const timer = window.setTimeout(() => {
+            loadRetries.current += 1;
+            router.refresh();
+        }, LOAD_RETRY_MILLISECONDS);
+        return () => window.clearTimeout(timer);
+    }, [loadError, backups, status, router]);
     const activeJob = status?.job && ACTIVE_BACKUP_JOB_STATES.has(status.job.state) ? status.job : null;
     // Progress seen on this page makes the job's eventual outcome worth reporting.
     if (activeJob !== null && !watchedJobIds.has(activeJob.jobId)) {
@@ -395,7 +413,7 @@ function ManagedServerBackupsSession({
                     {t("backups.backupRequestRecoveryStorageIsUnavailableOrInvalidMutationsAre")}</p>
             )}
             {loadError && (
-                <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
+                <p role="status" className="border-l-2 border-gold/50 bg-gold/5 px-4 py-3 text-sm text-foreground-muted">
                     {loadError}
                 </p>
             )}

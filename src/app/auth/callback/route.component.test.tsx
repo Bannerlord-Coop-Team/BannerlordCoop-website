@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import login from "@/app/lib/localization/dictionaries/en/login.json";
 import { localeDefinitions } from "@/app/lib/localization/registry";
 import { GET } from "./route";
@@ -38,6 +38,10 @@ async function callback(params: Record<string, string>) {
 
 describe("localized auth callback", () => {
     it.each([undefined, "invalid", "ja", "ru"])("uses request-localized fallback for cookie %s", async (cookie) => {
+        // ja stands in for any switched-off locale, which must fall back to English.
+        const originalJapanese = localeDefinitions.ja;
+        if (cookie === "ja") localeDefinitions.ja = { ...originalJapanese, enabled: false };
+        onTestFinished(() => { localeDefinitions.ja = originalJapanese; });
         useRequestLocale(cookie);
         const url = await callback({ next: "/servers?tab=mine#details" });
         expect(url.origin + url.pathname).toBe("https://coop.example/login");

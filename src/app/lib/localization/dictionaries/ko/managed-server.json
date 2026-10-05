@@ -420,7 +420,6 @@
   "page.lifecycle": "수명 주기",
   "page.releaseChannel": "릴리스 채널",
   "page.serverControls": "서버 제어",
-  "page.backupHistoryOrDurableProgressCouldNotBeLoadedRefreshBeforeSubmitting": "백업 기록 또는 보관된 진행 상황을 불러오지 못했습니다. 다른 백업 작업을 제출하기 전에 새로고침하세요.",
   "page.loadingSavesConfigsAndBackups": "저장 파일, 설정 및 백업 불러오는 중",
   "page.administrator": "관리자",
   "page.operator": "운영자",
@@ -707,5 +706,9 @@
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "다른 전송이 열려 있는 동안 일시 중지됩니다. 새 전송을 시작하려면 해당 전송을 완료하거나 닫으세요.",
   "transfers.preparingDownload": "다운로드 준비 중…",
   "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "이 페이지가 열려 있는 동안 활성 캠페인이 변경되었습니다. 위에서 확인한 후 ‘저장 파일 내보내기’를 다시 누르세요.",
-  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "이 페이지가 유휴 상태여서 실시간 출력이 일시 중지되었습니다. 계속 보려면 다시 연결하세요."
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "이 페이지가 유휴 상태여서 실시간 출력이 일시 중지되었습니다. 계속 보려면 다시 연결하세요.",
+  "page.backingUp": "백업 중",
+  "page.pausedForBackup": "백업을 위해 일시 중지됨",
+  "page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused": "지금은 백업 기록을 불러올 수 없어 백업 작업이 일시 중지되었습니다. 자동으로 다시 불러옵니다.",
+  "server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen": "이 페이지가 열려 있는 동안 다른 곳에서 이 설정이 변경되었습니다. 현재 값이 표시되어 있으니 확인한 후 다시 저장하세요."
 }

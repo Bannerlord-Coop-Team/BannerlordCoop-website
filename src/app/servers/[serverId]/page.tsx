@@ -194,9 +194,9 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
         address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
         visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} />}
         summary={t("page.managedSummary", { region: formatManagedValue(server.friendlyRegion), access: managedAccessLabels[server.accessRole] })}
-        status={<dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs" aria-label={t("page.serverStatus")}>
-            {[[t("page.gameState"), formatManagedValue(server.observedGameState, t)], [t("page.lifecycle"), formatManagedValue(server.operationState, t)], [t("page.releaseChannel"), releaseChannelLabel(server.releaseChannel, { stable: t("page.releaseStable"), nightly: t("page.releaseNightly") })]].map(([label, value]) => <div key={label} className="flex items-center gap-2"><dt className="text-foreground-muted">{label}</dt><dd className="font-medium text-foreground">{value}</dd></div>)}
-        </dl>}
+        status={<Suspense fallback={<ManagedServerStatus accessToken={accessToken} server={server} checkBackup={false} />}>
+            <ManagedServerStatus accessToken={accessToken} server={server} checkBackup={server.accessRole === "owner" || server.accessRole === "manager"} />
+        </Suspense>}
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
         <ServerWorkspacePanel section="Settings">
@@ -266,15 +266,25 @@ async function ManagedServerBackupsSection({
         return <ManagedServerFiles userId={userId} server={server} files={null} backups={[]} status={null} />;
     }
 
-    const [backupsResult, statusResult, filesResult] = await Promise.allSettled([
+    const [initialBackups, initialStatus, filesResult] = await Promise.allSettled([
         listAllMyServerBackups(accessToken, server.serverId),
         getMyServerBackupStatus(accessToken, server.serverId),
         getMyServerFiles(accessToken, server.serverId),
     ]);
+    let backupsResult = initialBackups;
+    let statusResult = initialStatus;
+    // Reads can fail briefly while the server restarts; retry once before reporting anything.
+    if (backupsResult.status === "rejected" || statusResult.status === "rejected") {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        [backupsResult, statusResult] = await Promise.allSettled([
+            backupsResult.status === "rejected" ? listAllMyServerBackups(accessToken, server.serverId) : Promise.resolve(backupsResult.value),
+            statusResult.status === "rejected" ? getMyServerBackupStatus(accessToken, server.serverId) : Promise.resolve(statusResult.value),
+        ]);
+    }
     const backups = backupsResult.status === "fulfilled" ? backupsResult.value : [];
     const status = statusResult.status === "fulfilled" ? statusResult.value : null;
     const loadError = backupsResult.status === "rejected" || statusResult.status === "rejected"
-        ? t("page.backupHistoryOrDurableProgressCouldNotBeLoadedRefreshBeforeSubmitting")
+        ? t("page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused")
         : undefined;
     if (backupsResult.status === "rejected") {
         console.error("Managed server backups failed to load");
@@ -420,6 +430,27 @@ async function LiveServerManagementPage({
                 )}
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
+}
+
+const ACTIVE_BACKUP_STATES = new Set(["queued", "running", "retry-wait"]);
+
+// Lists the header status. A running-server backup stops the game inside the runner without changing the
+// recorded lifecycle, so an active backup job is shown here rather than an unchanged "Running".
+async function ManagedServerStatus({ accessToken, server, checkBackup }: { accessToken: string; server: MyServerSummary; checkBackup: boolean }) {
+    const { t } = await getTranslations("managed-server");
+    let backup: "active" | "paused" | null = null;
+    if (checkBackup && server.operationState === "running") {
+        const job = (await getMyServerBackupStatus(accessToken, server.serverId).catch(() => null))?.job;
+        if (job?.action === "backup" && ACTIVE_BACKUP_STATES.has(job.state)) backup = job.state === "running" ? "paused" : "active";
+    }
+    const entries = [
+        [t("page.gameState"), backup === "paused" ? t("page.pausedForBackup") : formatManagedValue(server.observedGameState, t)],
+        [t("page.lifecycle"), backup !== null ? t("page.backingUp") : formatManagedValue(server.operationState, t)],
+        [t("page.releaseChannel"), releaseChannelLabel(server.releaseChannel, { stable: t("page.releaseStable"), nightly: t("page.releaseNightly") })],
+    ];
+    return <dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs" aria-label={t("page.serverStatus")}>
+        {entries.map(([label, value]) => <div key={label} className="flex items-center gap-2"><dt className="text-foreground-muted">{label}</dt><dd className="font-medium text-foreground">{value}</dd></div>)}
+    </dl>;
 }
 
 // Localizes known operational states while preserving the existing external-value display.

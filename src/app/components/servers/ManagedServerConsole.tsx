@@ -209,11 +209,13 @@ function useConsoleStream(serverId: string, run: ConsoleRun) {
             signals?.publish({ type: "closed", serverId, connection, runEnded });
             const stable = Date.now() - openedAt >= STABLE_CONNECTION_MILLISECONDS;
             if (stable) failures = 0;
-            if (ending === "expired" && stable && idleRenewals >= MAXIMUM_IDLE_CONSOLE_RENEWALS) {
+            // A healthy stream that expires or ends (the runner caps each log reader) renews silently while the game runs.
+            const renewable = (ending === "expired" || ending === "ended") && stable && runRef.current !== "inactive";
+            if (renewable && idleRenewals >= MAXIMUM_IDLE_CONSOLE_RENEWALS) {
                 // An unattended page stops holding a stream open; any activity resumes it.
                 idle = true;
                 setState("idle");
-            } else if (ending === "expired" && stable) {
+            } else if (renewable) {
                 idleRenewals += 1;
                 reconnectWhenVisible("renew");
             } else if (runRef.current === "inactive") {

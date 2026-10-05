@@ -420,7 +420,6 @@
   "page.lifecycle": "Жизненный цикл",
   "page.releaseChannel": "Канал релизов",
   "page.serverControls": "Управление сервером",
-  "page.backupHistoryOrDurableProgressCouldNotBeLoadedRefreshBeforeSubmitting": "Не удалось загрузить историю резервных копий или сохранённые сведения о ходе выполнения. Обновите страницу, прежде чем отправлять другую операцию с резервными копиями.",
   "page.loadingSavesConfigsAndBackups": "Загрузка сохранений, конфигураций и резервных копий",
   "page.administrator": "Администратор",
   "page.operator": "Оператор",
@@ -710,5 +709,9 @@
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "Приостановлено, пока открыта другая передача. Завершите или скройте её, чтобы начать новую.",
   "transfers.preparingDownload": "Подготовка загрузки…",
   "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Активная кампания изменилась, пока эта страница была открыта. Проверьте её выше и снова нажмите «Экспорт сохранения».",
-  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "Вывод в реальном времени приостановлен, пока страница была неактивна. Переподключитесь, чтобы продолжить просмотр."
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "Вывод в реальном времени приостановлен, пока страница была неактивна. Переподключитесь, чтобы продолжить просмотр.",
+  "page.backingUp": "Создание резервной копии",
+  "page.pausedForBackup": "Приостановлен для резервного копирования",
+  "page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused": "Сейчас не удалось загрузить историю резервных копий, поэтому действия с резервными копиями приостановлены. Она загрузится автоматически.",
+  "server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen": "Пока эта страница была открыта, настройку изменили в другом месте. Сейчас показано текущее значение — проверьте его и сохраните снова."
 }

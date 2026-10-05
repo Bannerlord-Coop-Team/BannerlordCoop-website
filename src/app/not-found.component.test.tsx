@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import NotFound from "./not-found";
 import { LocalizationProvider, useTranslations } from "@/app/lib/localization/client";
 import { assertDictionaryParity } from "@/app/lib/localization/integrity";
@@ -36,6 +36,10 @@ function pageDocument(html: string) {
 
 describe("NotFound localization", () => {
     it.each([undefined, "en", "invalid", "zh-CN"])("preserves English recovery content for cookie %s", async (locale) => {
+        // zh-CN stands in for any switched-off locale, which must fall back to English.
+        const originalChinese = localeDefinitions["zh-CN"];
+        if (locale === "zh-CN") localeDefinitions["zh-CN"] = { ...originalChinese, enabled: false };
+        onTestFinished(() => { localeDefinitions["zh-CN"] = originalChinese; });
         request.locale = locale;
         const page = await NotFound();
         expect(page.type).toBe(LocalizationProvider);

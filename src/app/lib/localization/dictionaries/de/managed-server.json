@@ -420,7 +420,6 @@
   "page.lifecycle": "Lebenszyklus",
   "page.releaseChannel": "Release-Kanal",
   "page.serverControls": "Serversteuerung",
-  "page.backupHistoryOrDurableProgressCouldNotBeLoadedRefreshBeforeSubmitting": "Backup-Verlauf oder dauerhafter Fortschritt konnten nicht geladen werden. Aktualisiere die Seite, bevor du einen weiteren Backup-Vorgang sendest.",
   "page.loadingSavesConfigsAndBackups": "Spielstände, Konfigurationen und Backups werden geladen",
   "page.administrator": "Administrator",
   "page.operator": "Operator",
@@ -708,5 +707,9 @@
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "Pausiert, solange eine andere Übertragung offen ist. Schließe sie ab oder blende sie aus, um eine neue zu starten.",
   "transfers.preparingDownload": "Download wird vorbereitet …",
   "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Deine aktive Kampagne hat sich geändert, während diese Seite geöffnet war. Prüfe sie oben und klicke dann erneut auf „Spielstand exportieren“.",
-  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "Die Live-Ausgabe wurde pausiert, weil diese Seite inaktiv war. Verbinde dich erneut, um weiter zuzusehen."
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "Die Live-Ausgabe wurde pausiert, weil diese Seite inaktiv war. Verbinde dich erneut, um weiter zuzusehen.",
+  "page.backingUp": "Backup läuft",
+  "page.pausedForBackup": "Für Backup pausiert",
+  "page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused": "Der Backup-Verlauf konnte gerade nicht geladen werden, daher sind Backup-Aktionen pausiert. Er wird automatisch neu geladen.",
+  "server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen": "Diese Einstellung wurde an anderer Stelle geändert, während diese Seite geöffnet war. Der aktuelle Wert wird jetzt angezeigt – prüfe ihn und speichere erneut."
 }

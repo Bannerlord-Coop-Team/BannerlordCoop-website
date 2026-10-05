@@ -221,7 +221,7 @@ it("saves the selected release only on Save and shows durable progress through c
     await act(async () => { select.value = "nightly"; select.dispatchEvent(new Event("change", { bubbles: true })); });
     expect(settingsMocks.release).not.toHaveBeenCalled();
     await act(async () => click("Save settings"));
-    expect(settingsMocks.release).toHaveBeenCalledWith({ serverId, releaseChannel: "nightly", expectedUpdatedAt, requestId: expect.any(String) });
+    expect(settingsMocks.release).toHaveBeenCalledWith({ serverId, releaseChannel: "nightly", expectedUpdatedAt, requestId: expect.any(String), previousChannel: "stable" });
     expect(select.disabled).toBe(true);
     expect(container.textContent).toContain("Saving and stopping the server");
     await act(async () => vi.advanceTimersByTimeAsync(4_000));

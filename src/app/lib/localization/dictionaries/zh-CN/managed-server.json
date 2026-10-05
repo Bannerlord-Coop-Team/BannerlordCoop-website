@@ -420,7 +420,6 @@
   "page.lifecycle": "生命周期",
   "page.releaseChannel": "版本通道",
   "page.serverControls": "服务器控制",
-  "page.backupHistoryOrDurableProgressCouldNotBeLoadedRefreshBeforeSubmitting": "无法加载备份历史或已存储的进度。请刷新后再提交其他备份操作。",
   "page.loadingSavesConfigsAndBackups": "正在加载存档、配置和备份",
   "page.administrator": "管理员",
   "page.operator": "操作员",
@@ -707,5 +706,9 @@
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "另一项传输尚未结束，因此已暂停。请完成或清除该传输后再开始新的传输。",
   "transfers.preparingDownload": "正在准备下载…",
   "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "此页面打开期间，你的当前战役已更改。请在上方确认后，再次点击“导出存档”。",
-  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "此页面闲置期间，实时输出已暂停。请重新连接以继续查看。"
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "此页面闲置期间，实时输出已暂停。请重新连接以继续查看。",
+  "page.backingUp": "正在备份",
+  "page.pausedForBackup": "为备份暂停",
+  "page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused": "暂时无法加载备份历史，备份操作已暂停。它会自动重新加载。",
+  "server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen": "此页面打开期间，此设置已在其他地方更改。现在显示的是当前值，请检查后再次保存。"
 }

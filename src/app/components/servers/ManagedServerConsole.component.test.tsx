@@ -207,16 +207,29 @@ it("retries hidden-tab failures only after the tab is shown", async () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 
-it("restarts the backoff after a stream that stayed healthy", async () => {
+it("renews a healthy stream that ends (the runner caps each log reader) at once, without a reconnecting notice", async () => {
     vi.useFakeTimers();
     const first = liveStream();
     fetchMock.mockResolvedValueOnce(first.response).mockImplementation(() => new Promise<Response>(() => {}));
     await renderConsole();
+    await first.send("Line one");
     vi.setSystemTime(Date.now() + 2 * 60_000);
     await first.end("ended");
-    await advance(1_999);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(output()).toBe("Line one\n");
+    expect(output()).not.toContain("Reconnecting");
+});
+
+it("still backs off when a stream ends before it was healthy", async () => {
+    vi.useFakeTimers();
+    const first = liveStream();
+    fetchMock.mockResolvedValueOnce(first.response).mockImplementation(() => new Promise<Response>(() => {}));
+    await renderConsole();
+    vi.setSystemTime(Date.now() + 10_000);
+    await first.end("ended");
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    await advance(1);
+    expect(output()).toContain("Reconnecting");
+    await advance(2_000);
     expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 

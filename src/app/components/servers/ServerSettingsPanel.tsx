@@ -9,7 +9,7 @@ import { managedServerNameMessage, managedServerNameProblem } from "@/app/server
 import { renameLiveServer } from "@/app/servers/name-actions";
 import { setServerVisibility } from "@/app/servers/server-visibility-actions";
 import { changeServerRelease, readServerReleaseStatus } from "@/app/servers/server-release-actions";
-import { saveServerSettings, type ServerSettingsField } from "@/app/servers/server-settings-actions";
+import { saveServerSettings, type ServerSettingsField, type ServerSettingsPrevious } from "@/app/servers/server-settings-actions";
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE, type MaintenanceSlot, type OwnerSettingsMutation } from "../../../../supabase/functions/_shared/server-settings-contract";
 import type { ReleaseChannel, ReleaseStatus } from "../../../../supabase/functions/_shared/server-release-contract";
 import { CircleAlert, Globe2, LockKeyhole } from "lucide-react";
@@ -44,12 +44,12 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
     const [visibilityState, setVisibilityState] = useState({ source: visibility, draft: visibility });
     const [channelState, setChannelState] = useState({ source: releaseAccess?.channel, draft: releaseAccess?.channel });
     const [maintenanceState, setMaintenanceState] = useState({ source: settingsAccess?.maintenanceSlot, draft: settingsAccess?.maintenanceSlot });
-    const settingsRequest = useRef<(OwnerSettingsMutation & { requestId: string }) | null>(null);
+    const settingsRequest = useRef<(OwnerSettingsMutation & { requestId: string; previous: ServerSettingsPrevious }) | null>(null);
     const [releaseStatus, setReleaseStatus] = useState<ReleaseStatus | null>(null);
     const [watchedReleaseJobs, setWatchedReleaseJobs] = useState<ReadonlySet<string>>(() => new Set());
     const [pollVersion, setPollVersion] = useState(0);
     const [progressError, setProgressError] = useState("");
-    const releaseRequest = useRef<{ serverId: string; releaseChannel: ReleaseChannel; expectedUpdatedAt: string; requestId: string } | null>(null);
+    const releaseRequest = useRef<{ serverId: string; releaseChannel: ReleaseChannel; expectedUpdatedAt: string; requestId: string; previousChannel: ReleaseChannel } | null>(null);
     const expectedJob = useRef<string | null>(null);
     const releaseServerId = releaseAccess?.serverId;
     const canReadRelease = releaseAccess?.canEdit === true;
@@ -151,7 +151,12 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
                 };
                 if (!settingsRequest.current || settingsRequest.current.serverId !== settingsAccess.serverId
                     || JSON.stringify(settingsRequest.current.patch) !== JSON.stringify(patch)) {
-                    settingsRequest.current = { serverId: settingsAccess.serverId, expectedUpdatedAt: settingsAccess.expectedUpdatedAt, patch, requestId: crypto.randomUUID() };
+                    // The shown values let the server tell an unrelated revision change from an edit made elsewhere.
+                    const previous: ServerSettingsPrevious = {
+                        ...("displayName" in patch ? { displayName: nameState.saved } : {}),
+                        ...("maintenanceSlot" in patch && settingsAccess.maintenanceSlot ? { maintenanceSlot: settingsAccess.maintenanceSlot } : {}),
+                    };
+                    settingsRequest.current = { serverId: settingsAccess.serverId, expectedUpdatedAt: settingsAccess.expectedUpdatedAt, patch, requestId: crypto.randomUUID(), previous };
                 }
                 const result = await saveServerSettings(settingsRequest.current);
                 if (result.rejected) settingsRequest.current = null;
@@ -160,6 +165,8 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
                     if (result.field) setFieldErrors({ [result.field]: result.message });
                     else messages.push(result.message);
                     setMessage(messages.join(" "));
+                    // A definitive rejection may reflect newer values; show them instead of asking for a reload.
+                    if (result.rejected) router.refresh();
                     return;
                 }
                 messages.push(result.message);
@@ -180,7 +187,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
             }
             if (channelDirty && releaseAccess && channelState.draft && expectedUpdatedAt) {
                 if (!releaseRequest.current || releaseRequest.current.releaseChannel !== channelState.draft || releaseRequest.current.serverId !== releaseAccess.serverId) {
-                    releaseRequest.current = { serverId: releaseAccess.serverId, releaseChannel: channelState.draft, expectedUpdatedAt, requestId: crypto.randomUUID() };
+                    releaseRequest.current = { serverId: releaseAccess.serverId, releaseChannel: channelState.draft, expectedUpdatedAt, requestId: crypto.randomUUID(), previousChannel: releaseAccess.channel };
                 }
                 const result = await changeServerRelease(releaseRequest.current);
                 messages.push(result.message);

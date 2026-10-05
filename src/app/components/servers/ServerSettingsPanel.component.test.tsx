@@ -70,9 +70,10 @@ it("saves name and maintenance once, then carries each returned generation into 
     await change("#settings-release-channel", "nightly");
     await submit();
     expect(mocks.settings).toHaveBeenCalledExactlyOnceWith({ serverId, expectedUpdatedAt: updatedAt,
-        patch: { displayName: "Renamed QA", maintenanceSlot: "18:00-19:00" }, requestId: expect.any(String) });
+        patch: { displayName: "Renamed QA", maintenanceSlot: "18:00-19:00" }, requestId: expect.any(String),
+        previous: { displayName: "Settings QA", maintenanceSlot: "03:00-04:00" } });
     expect(mocks.visibility).toHaveBeenCalledWith({ serverId, visibility: "public", expectedUpdatedAt: savedAt, requestId: expect.any(String) });
-    expect(mocks.release).toHaveBeenCalledWith({ serverId, releaseChannel: "nightly", expectedUpdatedAt: visibilityAt, requestId: expect.any(String) });
+    expect(mocks.release).toHaveBeenCalledWith({ serverId, releaseChannel: "nightly", expectedUpdatedAt: visibilityAt, requestId: expect.any(String), previousChannel: "stable" });
     expect(mocks.rename).not.toHaveBeenCalled();
     expect(mocks.router.refresh).toHaveBeenCalled();
 });

@@ -158,6 +158,17 @@ export function CheatsDirectory({
     const [selectedCheat, setSelectedCheat] = useState<string | null>(initialQuery.cheat);
     const [copied, setCopied] = useState<string | null>(null);
 
+    // Keeps the selected cheat visible: a search or tab that would hide it is cleared while rendering, which
+    // converges in one pass instead of re-rendering from an effect.
+    const selectedMatch = selectedCheat ? commands.find((command) => command.command === selectedCheat) : undefined;
+    if (selectedCheat && selectedMatch) {
+        const queryHidesCheat = search.trim() !== "" && !textMatches(selectedMatch, search.trim().toLowerCase(), translator);
+        const featuredHidesCheat = category === FEATURED_TAB && !isFeaturedCommand(selectedCheat);
+        const categoryHidesCheat = category !== FEATURED_TAB && category !== "all" && selectedMatch.category !== category;
+        if (queryHidesCheat) setSearch("");
+        if (featuredHidesCheat || categoryHidesCheat) setCategory(isFeaturedCommand(selectedCheat) ? FEATURED_TAB : "all");
+    }
+
     const query = search.trim().toLowerCase();
 
     const featuredCommands = useMemo(() => {
@@ -223,22 +234,6 @@ export function CheatsDirectory({
     });
     const searchSharePath = buildCheatsPath({ ...activeQuery, cheat: null });
     const canShareSearch = Boolean(activeQuery.q || activeQuery.tab !== FEATURED_TAB || activeQuery.type !== "all" || activeQuery.side !== "all");
-
-    useEffect(() => {
-        if (!selectedCheat) return;
-
-        const match = commands.find((command) => command.command === selectedCheat);
-        if (!match) return;
-
-        const queryHidesCheat = search.trim() !== "" && !textMatches(match, search.trim().toLowerCase(), translator);
-        const featuredHidesCheat = category === FEATURED_TAB && !isFeaturedCommand(selectedCheat);
-        const categoryHidesCheat = category !== FEATURED_TAB && category !== "all" && match.category !== category;
-
-        if (queryHidesCheat) setSearch("");
-        if (featuredHidesCheat || categoryHidesCheat) {
-            setCategory(isFeaturedCommand(selectedCheat) ? FEATURED_TAB : "all");
-        }
-    }, [category, commands, translator, search, selectedCheat]);
 
     useEffect(() => {
         const nextQuery = currentCheatsQuery({

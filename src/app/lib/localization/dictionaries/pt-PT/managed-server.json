@@ -420,7 +420,6 @@
   "page.lifecycle": "Ciclo de vida",
   "page.releaseChannel": "Canal de versões",
   "page.serverControls": "Controlos do servidor",
-  "page.backupHistoryOrDurableProgressCouldNotBeLoadedRefreshBeforeSubmitting": "Não foi possível carregar o histórico de cópias de segurança ou o progresso persistente. Atualize antes de enviar outra operação de cópia de segurança.",
   "page.loadingSavesConfigsAndBackups": "A carregar jogos guardados, configurações e cópias de segurança",
   "page.administrator": "Administrador",
   "page.operator": "Operador",
@@ -708,5 +707,9 @@
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "Em pausa enquanto outra transferência estiver aberta. Conclua-a ou dispense-a para iniciar uma nova.",
   "transfers.preparingDownload": "A preparar para descarregar…",
   "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "A sua campanha ativa mudou enquanto esta página estava aberta. Verifique-a acima e prima novamente Exportar jogo guardado.",
-  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "A saída em tempo real foi pausada porque esta página esteve inativa. Volte a ligar para continuar a acompanhar."
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "A saída em tempo real foi pausada porque esta página esteve inativa. Volte a ligar para continuar a acompanhar.",
+  "page.backingUp": "A criar cópia de segurança",
+  "page.pausedForBackup": "Em pausa para a cópia de segurança",
+  "page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused": "Não foi possível carregar o histórico de cópias de segurança neste momento, por isso as ações de cópia de segurança estão em pausa. Será recarregado automaticamente.",
+  "server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen": "Esta definição foi alterada noutro local enquanto esta página estava aberta. O valor atual é agora apresentado — reveja-o e guarde novamente."
 }

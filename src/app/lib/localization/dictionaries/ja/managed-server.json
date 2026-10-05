@@ -420,7 +420,6 @@
   "page.lifecycle": "ライフサイクル",
   "page.releaseChannel": "リリースチャンネル",
   "page.serverControls": "サーバー操作",
-  "page.backupHistoryOrDurableProgressCouldNotBeLoadedRefreshBeforeSubmitting": "バックアップ履歴または永続化された進行状況を読み込めませんでした。別のバックアップ操作を送信する前に、再読み込みしてください。",
   "page.loadingSavesConfigsAndBackups": "セーブデータ、設定、バックアップを読み込んでいます",
   "page.administrator": "管理者",
   "page.operator": "オペレーター",
@@ -707,5 +706,9 @@
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "別の転送が開いている間は一時停止しています。新しい転送を開始するには、その転送を完了するか閉じてください。",
   "transfers.preparingDownload": "ダウンロードを準備しています…",
   "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "このページを開いている間にアクティブなキャンペーンが変更されました。上で確認してから、もう一度「セーブデータをエクスポート」を押してください。",
-  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "このページが操作されていなかったため、リアルタイム出力を一時停止しました。引き続き表示するには再接続してください。"
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "このページが操作されていなかったため、リアルタイム出力を一時停止しました。引き続き表示するには再接続してください。",
+  "page.backingUp": "バックアップ中",
+  "page.pausedForBackup": "バックアップのため一時停止中",
+  "page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused": "現在バックアップ履歴を読み込めないため、バックアップ操作を一時停止しています。自動的に再読み込みされます。",
+  "server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen": "このページを開いている間に、この設定が別の場所で変更されました。現在の値を表示しています。確認してからもう一度保存してください。"
 }

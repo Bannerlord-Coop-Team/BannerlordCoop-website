@@ -420,7 +420,6 @@
   "page.lifecycle": "Ciclo de vida",
   "page.releaseChannel": "Canal de versões",
   "page.serverControls": "Controles do servidor",
-  "page.backupHistoryOrDurableProgressCouldNotBeLoadedRefreshBeforeSubmitting": "Não foi possível carregar o histórico de backups ou o progresso persistente. Atualize antes de enviar outra operação de backup.",
   "page.loadingSavesConfigsAndBackups": "Carregando jogos salvos, configurações e backups",
   "page.administrator": "Administrador",
   "page.operator": "Operador",
@@ -708,5 +707,9 @@
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "Pausado enquanto outra transferência estiver aberta. Conclua-a ou dispense-a para iniciar uma nova.",
   "transfers.preparingDownload": "Preparando o download…",
   "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Sua campanha ativa mudou enquanto esta página estava aberta. Confira acima e clique em Exportar jogo salvo novamente.",
-  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "A saída em tempo real foi pausada porque esta página ficou inativa. Reconecte para continuar acompanhando."
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "A saída em tempo real foi pausada porque esta página ficou inativa. Reconecte para continuar acompanhando.",
+  "page.backingUp": "Fazendo backup",
+  "page.pausedForBackup": "Pausado para backup",
+  "page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused": "Não foi possível carregar o histórico de backups agora, então as ações de backup estão pausadas. Ele será recarregado automaticamente.",
+  "server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen": "Esta configuração foi alterada em outro lugar enquanto esta página estava aberta. O valor atual agora é exibido — revise-o e salve novamente."
 }
