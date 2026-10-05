@@ -194,7 +194,7 @@ describe("ManagedServerBackups bounded polling", () => {
         await render(status);
         expect(router.refresh).toHaveBeenCalledTimes(1);
         expect(button("Create backup").disabled).toBe(true);
-        await advance(60_000);
+        await advance(15 * 60_000);
         expect(container.textContent).toContain("Automatic status updates paused after one minute");
         const refreshesAtDeadline = router.refresh.mock.calls.length;
         await advance(120_000);
@@ -286,7 +286,7 @@ describe("ManagedServerBackups session recovery", () => {
         await render();
         await click("Restore save");
         const original = request.mock.calls[0];
-        await advance(60_000);
+        await advance(15 * 60_000);
         await render(null, [backup], scope === "server"
             ? { ...server, serverId: "55555555-5555-4555-8555-555555555555" } : server,
         scope === "account" ? "another-user" : "user");

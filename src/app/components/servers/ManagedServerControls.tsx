@@ -2,12 +2,18 @@
 
 import { useTranslations } from "@/app/lib/localization/client";
 
-import { useManagedServerPolling } from "@/app/components/servers/ManagedServerPollingProvider";
+import {
+    useManagedConsoleSignals,
+    useManagedServerPolling,
+    useManagedServerStatusSlot,
+    type ManagedConsoleSignal,
+} from "@/app/components/servers/ManagedServerPollingProvider";
 import { operateManagedServer, readManagedServerStartStatus, setManagedServerPassword } from "@/app/servers/managed-server-actions";
 import { useRouter } from "next/navigation";
 import type { ManagedStartStatus } from "@/app/lib/hosting/my-servers-server";
 import { Check, Download, LoaderCircle, Play, RotateCw, Square } from "lucide-react";
-import { useEffect, useState, useTransition, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 const TRANSITIONAL_STATES = new Set([
     "provisioning",
@@ -18,6 +24,14 @@ const TRANSITIONAL_STATES = new Set([
     "updating",
     "deleting",
 ]);
+
+/** Lifecycle states with dictionary labels; others keep their title-cased external value. */
+const LABELLED_STATES = new Set(["running", "stopped", "starting", "stopping", "failed", "degraded", "unknown", "provisioning", "configuring", "maintenance", "updating", "deletion-pending", "deleting", "deleted", "suspended", "awaiting-save", "ready", "offline", "online"]);
+
+/** Restart progress gives way to plain guidance if the game has not reported ready by then. */
+const RESTART_WATCH_MILLISECONDS = 5 * 60_000;
+/** An unconfirmed request is checked for at least this long before the observed state is reported. */
+const VERIFY_WINDOW_MILLISECONDS = 20_000;
 
 type StartProgressStatus = Pick<ManagedStartStatus, "state" | "phase" | "progress">;
 
@@ -31,6 +45,67 @@ type ManagedServerControlsProps = {
     observedGameState: string;
     expectedUpdatedAt: string;
 };
+
+const RESTART_STEPS = ["requested", "stopping", "loading", "ready"] as const;
+
+export type RestartStage = (typeof RESTART_STEPS)[number] | "failed";
+
+/** Restart evidence gathered from live console phases. */
+export type RestartProgress = {
+    stage: RestartStage;
+    /** Streams numbered at or above this boundary carry the restarted run. */
+    boundary: number;
+    /** A stream that showed the old run stopping and may continue with the new run. */
+    stoppedConnection: number | null;
+    /** The stopped stream once it has shown the new run booting. */
+    resumedConnection: number | null;
+    accepted: boolean;
+    consoleLost: boolean;
+    detail?: string;
+};
+
+/** Begins tracking before the request is sent, so the old run's shutdown is not missed. */
+export function beginRestartProgress(): RestartProgress {
+    return { stage: "requested", boundary: Number.POSITIVE_INFINITY, stoppedConnection: null, resumedConnection: null, accepted: false, consoleLost: false };
+}
+
+/** Reports whether restart progress has reached a final step. */
+function restartSettled(progress: RestartProgress) {
+    return progress.stage === "ready" || progress.stage === "failed";
+}
+
+/** Moves to at least the given step without ever moving backwards. */
+function atLeast(progress: RestartProgress, stage: "stopping" | "loading"): RestartProgress {
+    const current = RESTART_STEPS.indexOf(progress.stage as (typeof RESTART_STEPS)[number]);
+    return current >= RESTART_STEPS.indexOf(stage) ? progress : { ...progress, stage };
+}
+
+/** Records an accepted Restart: streams opened after this point carry the restarted game. */
+export function acceptRestartProgress(progress: RestartProgress, latestConnection: number): RestartProgress {
+    if (restartSettled(progress)) return progress;
+    return { ...atLeast(progress, "stopping"), boundary: Math.min(progress.boundary, latestConnection + 1), accepted: true };
+}
+
+/** Advances only on evidence from the restarted run, never on replayed output from the run being stopped. */
+export function advanceRestartProgress(progress: RestartProgress, signal: ManagedConsoleSignal): RestartProgress {
+    if (restartSettled(progress)) return progress;
+    if (signal.type === "unavailable") return progress.consoleLost ? progress : { ...progress, consoleLost: true };
+    if (signal.type === "closed") {
+        if (!signal.runEnded) return progress;
+        return { ...atLeast(progress, "stopping"), boundary: Math.min(progress.boundary, signal.connection + 1) };
+    }
+    if (signal.type !== "phase") return progress;
+    if (signal.phase === "stopping") return { ...atLeast(progress, "stopping"), stoppedConnection: signal.connection };
+    const restarted = signal.connection >= progress.boundary || signal.connection === progress.resumedConnection;
+    if (!restarted) {
+        // A stream that outlives the shutdown counts only once it shows the new run booting.
+        if (signal.connection !== progress.stoppedConnection || (signal.phase !== "boot" && signal.phase !== "loading")) return progress;
+        return { ...atLeast(progress, "loading"), resumedConnection: signal.connection };
+    }
+    if (signal.phase === "fatal") return { ...progress, stage: "failed", ...(signal.detail ? { detail: signal.detail } : {}) };
+    if (signal.phase === "serving") return { ...progress, stage: "ready" };
+    return atLeast(progress, "loading");
+}
 
 /** Provides confirmed lifecycle operations without mixing in server configuration. */
 export function ManagedServerControls({
@@ -52,13 +127,31 @@ export function ManagedServerControls({
     const [progressPaused, setProgressPaused] = useState(false);
     const [pollRun, setPollRun] = useState(0);
     const [stopRevision, setStopRevision] = useState<string | null>(null);
+    const [restart, setRestart] = useState<RestartProgress | null>(null);
+    const [verifyRevision, setVerifyRevision] = useState<string | null>(null);
+    const [verifyWindowOpen, setVerifyWindowOpen] = useState(false);
+    const restartRef = useRef<RestartProgress | null>(null);
+    const timers = useRef<{ restart?: ReturnType<typeof setTimeout>; verify?: ReturnType<typeof setTimeout> }>({});
     const { session: pollingSession, timedOutSession, beginPolling, endPolling } = useManagedServerPolling();
+    const consoleSignals = useManagedConsoleSignals();
+    const statusSlot = useManagedServerStatusSlot();
     const canOperate = accessRole === "owner" || accessRole === "manager";
     const displayedState = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision ? "running" : operationState;
     const stateIsTransitional = TRANSITIONAL_STATES.has(displayedState);
     const trackingStop = stopRevision !== null;
+    const trackingRestart = restart !== null && !restartSettled(restart);
     const stopCheckPaused = trackingStop && timedOutSession?.serverId === serverId
         && timedOutSession.statusSource === "server" && timedOutSession.initialUpdatedAt === stopRevision;
+    const verifyTimedOut = verifyRevision !== null && timedOutSession?.serverId === serverId
+        && timedOutSession.statusSource === "server" && timedOutSession.initialUpdatedAt === verifyRevision;
+
+    useEffect(() => {
+        const scheduled = timers.current;
+        return () => {
+            clearTimeout(scheduled.restart);
+            clearTimeout(scheduled.verify);
+        };
+    }, []);
 
     useEffect(() => {
         if (stopRevision === null || isPending) return;
@@ -71,6 +164,19 @@ export function ManagedServerControls({
         }, 0);
         return () => clearTimeout(timeout);
     }, [serverId, stopRevision, operationState, observedGameState, expectedUpdatedAt, isPending, endPolling, t]);
+
+    useEffect(() => {
+        if (verifyRevision === null || isPending) return;
+        // Settle on a newer settled observation, or on the current one once the short check window has passed.
+        const observed = expectedUpdatedAt > verifyRevision;
+        if (!verifyTimedOut && ((!observed && verifyWindowOpen) || TRANSITIONAL_STATES.has(operationState))) return;
+        const timeout = setTimeout(() => {
+            setMessage(t("controls.statusCheckedCurrentStateState", { state: stateLabel(operationState, t) }));
+            setVerifyRevision(null);
+            endPolling(serverId);
+        }, 0);
+        return () => clearTimeout(timeout);
+    }, [serverId, verifyRevision, verifyWindowOpen, verifyTimedOut, operationState, expectedUpdatedAt, isPending, endPolling, t]);
 
     useEffect(() => {
         if (startJobId === null) return;
@@ -104,6 +210,43 @@ export function ManagedServerControls({
         return () => { cancelled = true; clearTimeout(timeout); };
     }, [serverId, startJobId, pollRun, router]);
 
+    /** Keeps the restart ref and rendered progress in step. */
+    function updateRestart(next: RestartProgress | null) {
+        restartRef.current = next;
+        setRestart(next);
+    }
+
+    /** Stops following a restart that cannot be confirmed live, without blocking the controls. */
+    function settleRestartWithGuidance() {
+        clearTimeout(timers.current.restart);
+        updateRestart(null);
+        setMessage(t("controls.restartingPlayersCanRejoinOnceTheCampaignFinishesLoadingUsually"));
+        endPolling(serverId);
+    }
+
+    // Applies live console phases to the restart being followed.
+    const followConsoleSignal = useEffectEvent((signal: ManagedConsoleSignal) => {
+        const current = restartRef.current;
+        if (signal.serverId !== serverId || current === null || restartSettled(current)) return;
+        const next = advanceRestartProgress(current, signal);
+        if (next === current) return;
+        if (next.consoleLost && next.accepted) {
+            settleRestartWithGuidance();
+            return;
+        }
+        updateRestart(next);
+        if (restartSettled(next)) {
+            clearTimeout(timers.current.restart);
+            endPolling(serverId);
+            router.refresh();
+        }
+    });
+
+    useEffect(() => {
+        if (!trackingRestart || consoleSignals === null) return;
+        return consoleSignals.subscribe((signal) => followConsoleSignal(signal));
+    }, [consoleSignals, trackingRestart]);
+
     const trackingStart = startJobId !== null && !["succeeded", "failed", "cancelled"].includes(startStatus?.state ?? "");
 
     if (!canOperate) {
@@ -113,29 +256,65 @@ export function ManagedServerControls({
         );
     }
 
-    const busy = isPending || trackingStart || trackingStop || stateIsTransitional || pollingSession !== null;
+    const busy = isPending || trackingStart || trackingStop || trackingRestart || stateIsTransitional || pollingSession !== null;
     const canStart = ["stopped", "failed", "degraded"].includes(displayedState);
     const canStop = ["running", "starting", "failed", "degraded"].includes(displayedState);
     const canRestart = ["running", "degraded"].includes(displayedState);
+    const operationLabels: Record<Operation, string> = {
+        start: t("controls.start"),
+        stop: t("controls.stop"),
+        "restart-game": t("controls.restart"),
+        "update-now": t("controls.updateNow"),
+    };
+
+    /** Follows an accepted Restart through live console phases, or explains the wait when they are unavailable. */
+    function followRestart() {
+        const current = restartRef.current;
+        if (current === null || restartSettled(current)) return;
+        if (consoleSignals === null || !consoleSignals.isAttached(serverId) || current.consoleLost) {
+            settleRestartWithGuidance();
+            router.refresh();
+            return;
+        }
+        updateRestart(acceptRestartProgress(current, consoleSignals.latestConnection(serverId)));
+        setMessage("");
+        beginPolling(serverId, expectedUpdatedAt);
+        clearTimeout(timers.current.restart);
+        timers.current.restart = setTimeout(settleRestartWithGuidance, RESTART_WATCH_MILLISECONDS);
+    }
+
+    /** Follows server status after an unconfirmed request until it settles, without resending anything. */
+    function verifyStatus() {
+        setVerifyRevision(expectedUpdatedAt);
+        setVerifyWindowOpen(true);
+        clearTimeout(timers.current.verify);
+        timers.current.verify = setTimeout(() => setVerifyWindowOpen(false), VERIFY_WINDOW_MILLISECONDS);
+        beginPolling(serverId, expectedUpdatedAt);
+    }
 
     /** Confirms disruptive operations and reports the existing action result. */
     function requestOperation(operation: Operation) {
         if (busy) return;
         if (operation === "stop" && !window.confirm(
-            t("controls.stopDisplaynamePlayersWillBeDisconnectedWithoutASaveFlush", { displayName: displayName }),
+            t("controls.stopDisplaynameEveryoneConnectedWillBeDisconnectedTheServerSaves", { displayName: displayName }),
         )) return;
         if (operation === "restart-game" && !window.confirm(
-            t("controls.restartDisplaynamePlayersWillBeDisconnectedWithoutASaveFlush", { displayName: displayName }),
+            t("controls.restartDisplaynameEveryoneConnectedWillBeDisconnectedWhileItRestarts", { displayName: displayName }),
         )) return;
         if (operation === "update-now" && !window.confirm(
             t("controls.updateDisplaynameNowABackupWillBeTakenFirstIf", { displayName: displayName }),
         )) return;
 
-        setMessage(operation === "start" ? t("controls.sendingYourStartRequest") : operation === "stop" ? t("controls.sendingYourStopRequest") : "");
+        setMessage(operation === "start" ? t("controls.sendingYourStartRequest")
+            : operation === "stop" ? t("controls.sendingYourStopRequest")
+                : operation === "update-now" ? t("controls.sendingYourUpdateRequest") : "");
         setStartRevision(expectedUpdatedAt);
         setStartJobId(null);
         setStartStatus(null);
         setProgressPaused(false);
+        setVerifyRevision(null);
+        clearTimeout(timers.current.restart);
+        updateRestart(operation === "restart-game" ? beginRestartProgress() : null);
         setPendingOperation(operation);
         startTransition(async () => {
             try {
@@ -144,28 +323,67 @@ export function ManagedServerControls({
                     action: operation,
                     ...(operation === "update-now" ? { expectedUpdatedAt } : {}),
                 });
+                if (operation === "restart-game" && result.ok) {
+                    followRestart();
+                    return;
+                }
+                if (operation === "restart-game") updateRestart(null);
                 setMessage(result.message);
+                if (result.refresh) router.refresh();
                 if (operation === "stop" && result.checkStatus) {
                     setStopRevision(expectedUpdatedAt);
                     beginPolling(serverId, expectedUpdatedAt);
+                } else if (result.checkStatus) {
+                    verifyStatus();
                 }
                 if (operation === "start" && result.ok) {
                     if (result.operationId) setStartJobId(result.operationId);
                     else setStartStatus({ state: "succeeded", phase: "ready", progress: result.message });
                 }
             } catch {
+                if (operation === "restart-game") updateRestart(null);
                 if (operation === "stop") {
                     setMessage(t("controls.checkingWhetherYourServerHasStopped"));
                     setStopRevision(expectedUpdatedAt);
                     beginPolling(serverId, expectedUpdatedAt);
                 } else {
-                    setMessage(t("controls.theCommandCouldNotBeConfirmedItMayHaveExecuted"));
+                    setMessage(t("controls.weCouldnTConfirmThatYourOperationRequestWentThrough", { operation: operationLabels[operation] }));
+                    verifyStatus();
                 }
             } finally {
                 setPendingOperation(null);
             }
         });
     }
+
+    const showStart = pendingOperation === "start" || startJobId !== null || startStatus !== null;
+    const statusArea = showStart || restart !== null || progressPaused || stopCheckPaused || message ? (
+        <div className="flex w-full flex-col items-start gap-2">
+            {showStart && <StartProgress status={startStatus} paused={progressPaused} />}
+            {restart !== null && <RestartProgressCard progress={restart} />}
+            {progressPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted">
+                <p>{t("controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed")}</p>
+                <button type="button" className="mt-2 min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold"
+                    onClick={() => { setProgressPaused(false); setPollRun(current => current + 1); }}>
+                    {t("controls.resumeProgressUpdates")}</button>
+            </div>}
+            {stopCheckPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted" role="status">
+                <p>{t("controls.stoppingIsTakingLongerThanUsualSoAutomaticStatusUpdates")}</p>
+                <button type="button" className="mt-2 min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold"
+                    onClick={() => beginPolling(serverId, stopRevision!)}>
+                    {t("controls.checkNow")}
+                </button>
+            </div>}
+            {message && !stopCheckPaused && (
+                <p
+                    aria-live="polite"
+                    className="max-w-xl text-left text-xs leading-5 text-foreground-muted"
+                >
+                    {message}
+                </p>
+            )}
+        </div>
+    ) : null;
 
     return (
         <div className="flex flex-col items-start gap-2">
@@ -188,7 +406,7 @@ export function ManagedServerControls({
                     label={t("controls.restart")}
                     icon={RotateCw}
                     disabled={busy || !canRestart}
-                    pending={pendingOperation === "restart-game"}
+                    pending={pendingOperation === "restart-game" || trackingRestart}
                     onClick={() => requestOperation("restart-game")}
                 />
                 <ControlButton
@@ -199,32 +417,40 @@ export function ManagedServerControls({
                     onClick={() => requestOperation("update-now")}
                 />
             </div>
-            {(pendingOperation === "start" || startJobId !== null || startStatus !== null) && (
-                <StartProgress status={startStatus} paused={progressPaused} />
-            )}
-            {progressPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted">
-                <p>{t("controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed")}</p>
-                <button type="button" className="mt-2 min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold"
-                    onClick={() => { setProgressPaused(false); setPollRun(current => current + 1); }}>
-                    {t("controls.resumeProgressUpdates")}</button>
-            </div>}
-            {stopCheckPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted" role="status">
-                <p>{t("controls.stopIsTakingLongerThanExpected")}</p>
-                <button type="button" className="mt-2 min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold"
-                    onClick={() => beginPolling(serverId, stopRevision!)}>
-                    {t("controls.checkStatusAgain")}
-                </button>
-            </div>}
-            {message && !stopCheckPaused && (
-                <p
-                    aria-live="polite"
-                    className="max-w-xl text-left text-xs leading-5 text-foreground-muted"
-                >
-                    {message}
-                </p>
-            )}
+            {statusArea !== null && (statusSlot === undefined ? statusArea : statusSlot ? createPortal(statusArea, statusSlot) : null)}
         </div>
     );
+}
+
+// Resolves a lifecycle state label, keeping unknown external values readable.
+function stateLabel(state: string, t: (key: string) => string) {
+    if (LABELLED_STATES.has(state)) return t(`state.${state}`);
+    return state.split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+}
+
+// Renders an operation's phases as a checklist with its current step and outcome.
+function OperationProgress({ title, labels, current, outcome, footer }: {
+    title: string;
+    labels: string[];
+    current: number;
+    outcome: "active" | "succeeded" | "failed" | "paused";
+    footer?: ReactNode;
+}) {
+    const { t } = useTranslations("managed-server");
+    return <div className="w-full max-w-xl rounded-lg border border-gold/25 bg-gold/[0.04] p-4" role="status" aria-live="polite">
+        <p className="font-medium text-foreground">{title}</p>
+        <ol className="mt-3 space-y-2 text-sm">
+            {labels.map((label, index) => <li key={index} aria-current={index === current ? "step" : undefined}
+                className={`flex items-center gap-2 ${index <= current ? "text-foreground" : "text-foreground-dim"}`}>
+                {index < current || (index === current && outcome === "succeeded")
+                    ? <Check aria-hidden="true" className="size-4 text-gold" />
+                    : index === current && outcome === "active" ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-gold motion-reduce:animate-none" />
+                        : <span aria-hidden="true" className="size-4 rounded-full border border-white/20" />}
+                <span>{label}<span className="sr-only">{index < current ? t("controls.completed") : index === current ? t("controls.currentPhase") : t("controls.waiting")}</span></span>
+            </li>)}
+        </ol>
+        {footer && <p className="mt-3 text-sm leading-6 text-foreground-muted">{footer}</p>}
+    </div>;
 }
 
 // Presents localized startup phases while preserving external progress.
@@ -232,30 +458,41 @@ function StartProgress({ status, paused }: { status: StartProgressStatus | null;
     const { t } = useTranslations("managed-server");
     const phases = ["queued", "preparing", "starting", "verifying", "ready"] as const;
     const labels = [t("controls.startRequested"), t("controls.prepareServer"), t("controls.launchGameAndLoadCampaign"), t("controls.confirmReadiness"), t("controls.readyToJoin")];
-    const current = phases.indexOf(status?.phase ?? "queued");
     const failed = status?.state === "failed" || status?.state === "cancelled";
-    return <div className="w-full max-w-xl rounded-lg border border-gold/25 bg-gold/[0.04] p-4" role="status" aria-live="polite">
-        <p className="font-medium text-foreground">{failed ? status.state === "cancelled" ? t("controls.startCancelled") : t("controls.serverCouldNotStart")
-            : status?.state === "succeeded" ? t("controls.yourServerIsReadyToJoin") : t("controls.startingYourServer")}</p>
-        <ol className="mt-3 space-y-2 text-sm">
-            {phases.map((phase, index) => <li key={phase} aria-current={index === current ? "step" : undefined}
-                className={`flex items-center gap-2 ${index <= current ? "text-foreground" : "text-foreground-dim"}`}>
-                {index < current || (index === current && status?.state === "succeeded")
-                    ? <Check aria-hidden="true" className="size-4 text-gold" />
-                    : index === current && !failed && !paused ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-gold motion-reduce:animate-none" />
-                        : <span aria-hidden="true" className="size-4 rounded-full border border-white/20" />}
-                <span>{labels[index]}<span className="sr-only">{index < current ? t("controls.completed") : index === current ? t("controls.currentPhase") : t("controls.waiting")}</span></span>
-            </li>)}
-        </ol>
-        <p className="mt-3 text-sm leading-6 text-foreground-muted">{failed ? t("controls.readinessWasNotConfirmedCheckServerStatusOrContactSupport")
+    const outcome = failed ? "failed" : status?.state === "succeeded" ? "succeeded" : paused ? "paused" : "active";
+    return <OperationProgress
+        title={failed ? status.state === "cancelled" ? t("controls.startCancelled") : t("controls.serverCouldNotStart")
+            : status?.state === "succeeded" ? t("controls.yourServerIsReadyToJoin") : t("controls.startingYourServer")}
+        labels={labels}
+        current={phases.indexOf(status?.phase ?? "queued")}
+        outcome={outcome}
+        footer={failed ? [status.progress, t("controls.youCanPressActionToTryAgain", { action: t("controls.start") })].filter(Boolean).join(" ")
             : status?.state === "retry-wait" ? t("controls.waitingToRetrySafelyProgress", { progress: status.progress })
-                : status?.progress ?? t("controls.waitingForTheHostingServiceToAcceptYourRequest")}</p>
-    </div>;
+                : status?.progress ?? t("controls.waitingForTheHostingServiceToAcceptYourRequest")}
+    />;
+}
+
+// Presents restart phases observed in the live console, never claiming readiness before the game reports it.
+function RestartProgressCard({ progress }: { progress: RestartProgress }) {
+    const { t } = useTranslations("managed-server");
+    const labels = [t("controls.restartRequested"), t("controls.stopTheGame"), t("controls.loadCampaign"), t("controls.readyToJoin")];
+    const failed = progress.stage === "failed";
+    const ready = progress.stage === "ready";
+    return <OperationProgress
+        title={failed ? t("controls.serverCouldNotRestart") : ready ? t("controls.yourServerIsReadyToJoin") : t("controls.restartingYourServer")}
+        labels={labels}
+        current={failed ? RESTART_STEPS.indexOf("loading") : RESTART_STEPS.indexOf(progress.stage as (typeof RESTART_STEPS)[number])}
+        outcome={failed ? "failed" : ready ? "succeeded" : "active"}
+        footer={failed ? <>{t("controls.theGameStoppedWithAnErrorBeforeTheCampaignFinished")}{progress.detail && <span className="mt-1 block break-words font-mono text-xs">{progress.detail}</span>}</>
+            : progress.stage === "requested" ? t("controls.sendingYourRestartRequest")
+                : ready ? undefined : t("controls.playersCanRejoinOnceTheCampaignFinishesLoading")}
+    />;
 }
 
 /** Owns the owner-only password form in Settings, preserving confirmation and pending guards. */
 export function ManagedServerPassword({ serverId, accessRole, operationState, expectedUpdatedAt }: Omit<ManagedServerControlsProps, "displayName" | "observedGameState">) {
     const { t } = useTranslations("managed-server");
+    const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [password, setPassword] = useState("");
     const [message, setMessage] = useState("");
@@ -263,7 +500,7 @@ export function ManagedServerPassword({ serverId, accessRole, operationState, ex
     const busy = isPending || TRANSITIONAL_STATES.has(operationState) || pollingSession !== null;
     if (accessRole !== "owner") return null;
 
-    /** Applies a confirmed password change once and clears the sensitive draft after the response. */
+    /** Applies a confirmed password change once, clears the draft, and refreshes status when the outcome is unknown. */
     function savePassword(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (busy || !password) return;
@@ -273,8 +510,10 @@ export function ManagedServerPassword({ serverId, accessRole, operationState, ex
             try {
                 const result = await setManagedServerPassword({ serverId, expectedUpdatedAt, password });
                 setMessage(result.message);
+                if (result.checkStatus) router.refresh();
             } catch {
-                setMessage(t("controls.thePasswordChangeCouldNotBeConfirmedItMayHave"));
+                setMessage(t("controls.weCouldnTConfirmThePasswordChangeSoWeRefreshed"));
+                router.refresh();
             } finally {
                 setPassword("");
             }
