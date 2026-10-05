@@ -1,8 +1,8 @@
-import { act } from "react";
+import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerControls } from "./ManagedServerControls";
-import { ManagedServerPollingProvider } from "./ManagedServerPollingProvider";
+import { ManagedServerPollingProvider, managedServerPollDelay, useManagedServerPolling } from "./ManagedServerPollingProvider";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 
 const { operate, router } = vi.hoisted(() => ({ operate: vi.fn(), router: { refresh: vi.fn() } }));
@@ -64,7 +64,7 @@ it("shows immediate feedback while Stop is being sent", async () => {
     await act(async () => response.resolve({ ok: true, checkStatus: true, message: "Checking whether your server has stopped…" }));
 });
 
-it("requires a newer stopped observation and offers a read-only status check after the bounded wait", async () => {
+it("requires a newer stopped observation and keeps checking for fifteen minutes before offering Check now", async () => {
     operate.mockResolvedValue({ ok: false, checkStatus: true, message: "Checking whether your server has stopped…" });
     await render(); await act(async () => buttons()[1].click());
     await render({ operationState: "stopped", observedGameState: "stopped" });
@@ -72,15 +72,20 @@ it("requires a newer stopped observation and offers a read-only status check aft
     await render({ operationState: "stopped", expectedUpdatedAt: "2026-10-02T16:00:01.000Z" });
     expect(container.textContent).not.toContain("Server stopped.");
     await render();
-    await act(async () => vi.advanceTimersByTimeAsync(60_000));
-    expect(container.textContent).toContain("Stop is taking longer than expected");
+    await act(async () => vi.advanceTimersByTimeAsync(5 * 60_000));
+    expect(container.textContent).not.toContain("taking longer than usual");
+    expect(container.textContent).not.toContain("paused");
+    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+    await act(async () => vi.advanceTimersByTimeAsync(10 * 60_000));
+    expect(container.textContent).toContain("Stopping is taking longer than usual, so automatic status updates have paused.");
+    expect(container.textContent).not.toContain("contact support");
     expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
     const refreshes = router.refresh.mock.calls.length;
-    await act(async () => vi.advanceTimersByTimeAsync(12_000));
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(router.refresh).toHaveBeenCalledTimes(refreshes);
-    await act(async () => buttons().find(button => button.textContent === "Check status again")!.click());
+    await act(async () => buttons().find(button => button.textContent === "Check now")!.click());
     expect(router.refresh).toHaveBeenCalledTimes(refreshes + 1);
-    expect(container.textContent).not.toContain("Stop is taking longer than expected");
+    expect(container.textContent).not.toContain("taking longer than usual");
     expect(operate).toHaveBeenCalledTimes(1);
 });
 
@@ -99,4 +104,76 @@ it("stops refreshing when the controls unmount", async () => {
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(router.refresh).toHaveBeenCalledOnce();
     expect(operate).toHaveBeenCalledTimes(1);
+});
+
+let polling: ReturnType<typeof useManagedServerPolling>;
+/** Exposes the shared polling API to tests. */
+function PollingProbe() {
+    const value = useManagedServerPolling();
+    useEffect(() => { polling = value; });
+    return null;
+}
+
+/** Mounts the provider with a probe and the lifecycle controls. */
+async function renderWithProbe() {
+    await act(async () => root.render(
+        <TestLocalization><ManagedServerPollingProvider><PollingProbe /><ManagedServerControls {...server} /></ManagedServerPollingProvider></TestLocalization>,
+    ));
+}
+
+it("spaces refreshes from 4 s to 8 s to 15 s as an operation runs longer", () => {
+    expect([0, 59_999, 60_000, 179_999, 180_000, 14 * 60_000].map(managedServerPollDelay)).toEqual([4_000, 4_000, 8_000, 8_000, 15_000, 15_000]);
+});
+
+it("keeps a backup session, and the controls busy, until the operation settles or fifteen minutes pass", async () => {
+    await renderWithProbe();
+    await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt, "33333333-3333-4333-8333-333333333333", "backup"));
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(router.refresh).toHaveBeenCalledTimes(16);
+    await act(async () => vi.advanceTimersByTimeAsync(120_000));
+    expect(router.refresh).toHaveBeenCalledTimes(31);
+    await act(async () => vi.advanceTimersByTimeAsync(150_000));
+    expect(router.refresh).toHaveBeenCalledTimes(41);
+    expect(polling.session).not.toBeNull();
+    expect(polling.timedOutSession).toBeNull();
+    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+    await act(async () => vi.advanceTimersByTimeAsync(15 * 60_000 - 330_000));
+    expect(polling.session).toBeNull();
+    expect(polling.timedOutSession).toMatchObject({ serverId: server.serverId, statusSource: "backup", jobId: "33333333-3333-4333-8333-333333333333" });
+    const refreshes = router.refresh.mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(router.refresh).toHaveBeenCalledTimes(refreshes);
+});
+
+it("ends a session as soon as its owner reports that the operation settled", async () => {
+    await renderWithProbe();
+    await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt, undefined, "backup"));
+    await act(async () => polling.attachJob(server.serverId, "33333333-3333-4333-8333-333333333333"));
+    expect(polling.session).toMatchObject({ jobId: "33333333-3333-4333-8333-333333333333" });
+    await act(async () => polling.endPolling(server.serverId));
+    expect(polling.session).toBeNull();
+    expect(buttons()[1].disabled).toBe(false);
+    const refreshes = router.refresh.mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(router.refresh).toHaveBeenCalledTimes(refreshes);
+});
+
+it("defers refreshes while the tab is hidden and catches up when it is shown", async () => {
+    let visibility: DocumentVisibilityState = "visible";
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
+    try {
+        await renderWithProbe();
+        await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt));
+        visibility = "hidden";
+        await act(async () => vi.advanceTimersByTimeAsync(30_000));
+        expect(router.refresh).toHaveBeenCalledTimes(1);
+        visibility = "visible";
+        await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+        expect(router.refresh).toHaveBeenCalledTimes(2);
+        await act(async () => vi.advanceTimersByTimeAsync(2_000));
+        expect(router.refresh).toHaveBeenCalledTimes(3);
+    } finally {
+        Reflect.deleteProperty(document, "visibilityState");
+    }
 });
