@@ -6,7 +6,8 @@ import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { ManagedServerCommands } from "./ManagedServerCommands";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 
-const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn() }));
+const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn(), refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/app/servers/managed-server-console-actions", () => ({ submitManagedConsoleCommand: mocks.submit, checkManagedConsoleCommand: mocks.check, acknowledgeManagedConsoleCommand: mocks.ack }));
 vi.mock("./DownloadServerLogButton", () => ({ DownloadServerLogButton: () => <span>Download logs</span> }));
 const server: MyServerSummary = { serverId: "22222222-2222-4222-8222-222222222222", displayName: "Campaign", accessRole: "owner", operationState: "running", observedGameState: "running", friendlyRegion: "germany", releaseChannel: "stable", updatedAt: "2026-09-20T12:00:00.000Z" };
@@ -137,7 +138,7 @@ it("places only the input and Send below live output in the same card while idle
     expect(form.querySelector("button")!.textContent).toBe("Send");
 });
 
-it.each(["rejected", "uncertain", "network"])("reports a late %s failure without locking or replacing the next draft", async (failure) => {
+it.each(["rejected", "uncertain", "network"])("reports a late %s failure under the input without locking or replacing the next draft", async (failure) => {
     let resolve!: (value: unknown) => void;
     let reject!: (error: Error) => void;
     mocks.submit.mockReturnValueOnce(new Promise((accept, fail) => { resolve = accept; reject = fail; }));
@@ -147,17 +148,47 @@ it.each(["rejected", "uncertain", "network"])("reports a late %s failure without
     await typeDraft("coop.debug.alley.abandon");
     await act(async () => {
         if (failure === "network") reject(new Error("network"));
-        else resolve({ ok: false, notSubmitted: failure === "rejected", message: "The command could not be sent." });
+        else resolve({ ok: false, notSubmitted: failure === "rejected", uncertain: failure === "uncertain", refresh: false, message: "The command was not sent." });
     });
-    const error = container.querySelector('pre [role="alert"]')!.textContent;
-    expect(error).toContain("coop.help:");
-    expect(error).toContain(failure === "network" ? "Delivery could not be confirmed" : "The command could not be sent.");
+    const alert = container.querySelector('form [role="alert"]')!;
+    expect(container.querySelector('pre [role="alert"]')).toBeNull();
+    expect(alert.textContent).toBe(failure === "rejected"
+        ? "coop.help: The command was not sent."
+        : "We couldn’t confirm coop.help was delivered. If no output appears above in a few seconds, send it again.");
+    expect(alert.textContent).not.toContain("Discord");
+    expect(input.getAttribute("aria-describedby")).toContain(alert.parentElement!.id);
+    expect(input.getAttribute("aria-invalid")).toBeNull();
     expect(input.value).toBe("coop.debug.alley.abandon");
     expect(input.disabled).toBe(false);
     expect(button("Retry send")).toBeUndefined();
+    expect(mocks.refresh).not.toHaveBeenCalled();
     await act(async () => button("Send").click());
     expect(mocks.submit).toHaveBeenCalledTimes(2);
     expect(mocks.submit.mock.calls[1][1]).not.toBe(mocks.submit.mock.calls[0][1]);
+});
+
+it("refreshes server status when the server reports that it changed", async () => {
+    mocks.submit.mockResolvedValueOnce({ ok: false, notSubmitted: false, uncertain: false, refresh: true, message: "The server is busy with another command or its status just changed. Wait a moment, then send it again." });
+    await mount();
+    await typeDraft("coop.help");
+    await act(async () => button("Send").click());
+    expect(container.querySelector('form [role="alert"]')!.textContent).toContain("coop.help: The server is busy");
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+});
+
+it("confirms a delivered command briefly under the input", async () => {
+    await mount();
+    const input = await typeDraft("coop.help");
+    await act(async () => button("Send").click());
+    const feedback = document.getElementById(input.getAttribute("aria-describedby")!.split(" ")[1])!;
+    expect(feedback.getAttribute("aria-live")).toBe("polite");
+    expect(feedback.textContent).toBe("Sent coop.help. Output appears above.");
+    expect(feedback.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => vi.advanceTimersByTimeAsync(4_999));
+    expect(feedback.textContent).toBe("Sent coop.help. Output appears above.");
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(feedback.textContent).toBe("");
+    expect(input.getAttribute("aria-describedby")).not.toContain(feedback.id);
 });
 
 it("allows multiple pending submissions and preserves the new draft when responses arrive", async () => {
@@ -171,8 +202,9 @@ it("allows multiple pending submissions and preserves the new draft when respons
     expect(input.value).toBe("");
     expect(input.disabled).toBe(false);
     expect(document.activeElement).toBe(input);
-    expect(button("Sending…")).toBeUndefined();
+    expect(button("Sending…")!.getAttribute("aria-busy")).toBe("true");
     await typeDraft("coop.debug.alley.abandon");
+    expect(button("Sending…")!.disabled).toBe(false);
     await act(async () => input.form!.requestSubmit());
     expect(mocks.submit).toHaveBeenCalledTimes(2);
     expect(mocks.submit.mock.calls[0]).toEqual([expect.objectContaining({ command: "coop.help" }), expect.any(String), "owner-id"]);
@@ -182,22 +214,54 @@ it("allows multiple pending submissions and preserves the new draft when respons
     await typeDraft("coop.help next");
     await act(async () => acceptSecond({ ok: true, result: { outcome: "enqueued", jobId } }));
     expect(input.value).toBe("coop.help next");
+    expect(button("Sending…")).toBeDefined();
     await act(async () => acceptFirst({ ok: true, result: { outcome: "enqueued", jobId } }));
     expect(input.value).toBe("coop.help next");
     expect(input.disabled).toBe(false);
+    expect(button("Sending…")).toBeUndefined();
+    expect(button("Send")!.getAttribute("aria-busy")).toBeNull();
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(mocks.check).not.toHaveBeenCalled();
     expect(mocks.ack).not.toHaveBeenCalled();
 });
 
-it("reports invalid input inside the console without adding footer messages", async () => {
+it("explains a non-coop command directly under the input and points to the command browser", async () => {
     await mount();
-    const input = await typeDraft("not-a-coop-command");
-    await act(async () => input.form!.requestSubmit());
+    const input = await typeDraft("status");
+    await act(async () => button("Send").click());
     expect(mocks.submit).not.toHaveBeenCalled();
-    expect(container.querySelector('pre [role="alert"]')!.textContent).toContain("Enter one coop.* command");
+    const alert = input.form!.querySelector('[role="alert"]')!;
+    expect(alert.textContent).toBe("The web console runs coop.* commands only. Use Browse commands below to find one.");
+    expect(alert.querySelector("strong")!.textContent).toBe("Browse commands");
+    expect(container.querySelector('pre [role="alert"]')).toBeNull();
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(input.getAttribute("aria-describedby")!.split(" ")).toContain(alert.parentElement!.id);
+    expect(input.value).toBe("status");
+    expect(document.activeElement).toBe(input);
     expect(input.form!.nextElementSibling!.textContent).toBe("Enter to send");
     expect(input.form!.nextElementSibling!.nextElementSibling).toBeNull();
+    await typeDraft("coop.help");
+    expect(input.form!.querySelector('[role="alert"]')).toBeNull();
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+});
+
+it("explains a malformed coop command under the input", async () => {
+    await mount();
+    const input = await typeDraft("coop.help; stop");
+    await act(async () => input.form!.requestSubmit());
+    expect(mocks.submit).not.toHaveBeenCalled();
+    expect(input.form!.querySelector('[role="alert"]')!.textContent).toBe("Enter one coop.* command (up to 4096 characters), without control characters or command separators.");
+});
+
+it("keeps lifecycle progress in its own row below the toolbar, hidden while empty", async () => {
+    await mount();
+    const heading = container.querySelector("h2")!;
+    const toolbar = heading.parentElement!;
+    const statusRow = toolbar.nextElementSibling!;
+    expect(statusRow.className).toContain("empty:hidden");
+    expect(statusRow.childElementCount).toBe(0);
+    expect(toolbar.contains(statusRow)).toBe(false);
+    expect(statusRow.compareDocumentPosition(container.querySelector("pre")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 it.each([{ accessRole: "support" as const }, { operationState: "stopped" as const }, { observedGameState: "unknown" as const }])("disables commands for a read-only or non-running server: %o", async (state) => {

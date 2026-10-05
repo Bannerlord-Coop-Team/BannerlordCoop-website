@@ -7,7 +7,7 @@ import type { Translator } from "@/app/lib/localization/types";
 
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { CircleAlert, LoaderCircle, RefreshCw } from "lucide-react";
-import { readManagedServerConfig, saveManagedServerConfig } from "@/app/servers/managed-server-config-actions";
+import { readManagedServerConfigFiles, saveManagedServerConfig } from "@/app/servers/managed-server-config-actions";
 import { fileButtonClass, filePrimaryButtonClass } from "./server-file-styles";
 import {
     MANAGED_DIFFICULTY_LEVELS, MANAGED_GOLD_FOOD_CHANGE_MODES, MANAGED_LORD_DEFECTION_RETRY_MODES,
@@ -60,6 +60,27 @@ function parseSettings(value: unknown, t: Translator["t"]): Settings {
 }
 // Compares serialized settings to detect unsaved changes.
 function sameSettings(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.stringify(b); }
+// Finds a JSON syntax error's line and column from the position the browser reports, when it reports one.
+function jsonErrorLocation(text: string, error: SyntaxError) {
+    const lineColumn = /line (\d+) column (\d+)/u.exec(error.message);
+    if (lineColumn) return { line: Number(lineColumn[1]), column: Number(lineColumn[2]) };
+    const position = /position (\d+)/u.exec(error.message);
+    if (!position) return null;
+    const before = text.slice(0, Number(position[1])).split("\n");
+    return { line: before.length, column: before.at(-1)!.length + 1 };
+}
+// Keeps the browser's description of a JSON error without its location wording, which is shown separately.
+function jsonErrorDetail(error: SyntaxError) {
+    return error.message.replace(/^JSON\.parse: /u, "").replace(/\s+(?:in JSON )?at (?:position \d+|line \d+ column \d+).*$/u, "").trim();
+}
+// Describes invalid JSON with its location when known.
+function jsonSyntaxMessage(text: string, error: SyntaxError, t: Translator["t"]) {
+    const location = jsonErrorLocation(text, error);
+    const detail = jsonErrorDetail(error) || error.message;
+    return location
+        ? t("configEditor.thisIsnTValidJsonLineColumnDetail", { line: location.line, column: location.column, detail })
+        : t("configEditor.thisIsnTValidJsonDetail", { detail });
+}
 
 // Keys editable configuration state to the current account and server.
 export function ManagedServerConfigEditor({ configuration, access, notice }: { configuration?: ManagedServerConfiguration; access?: ConfigAccess; notice?: ReactNode }) {
@@ -135,11 +156,10 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         if (!serverId || !userId) return;
         let cancelled = false;
         void (async () => {
-            const read = async (part: RunnerConfigurationPart) => {
-                try { return await readManagedServerConfig(serverId, part, userId); } catch { return null; }
-            };
-            const [server, mod] = await Promise.all([read("server"), read("mod")]);
+            const files = await readManagedServerConfigFiles(serverId, userId).catch(() => null);
             if (cancelled) return;
+            const server = files?.server ?? null;
+            const mod = files?.mod ?? null;
             if (server?.ok && mod?.ok && server.file.configPart === "server" && mod.file.configPart === "mod") {
                 const settings: Settings = { serverConfig: server.file.settings, modConfig: mod.file.settings };
                 setLive({ server: server.file, mod: mod.file });
@@ -160,26 +180,32 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         ...(sameSettings(draft.serverConfig, baseline.serverConfig) ? [] : [t("configEditor.serverSettings2")]),
         ...(sameSettings(draft.modConfig, baseline.modConfig) ? [] : [t("configEditor.gameplaySettings")]),
     ]) : [];
-    const dirty = dirtyParts.length > 0;
+    // JSON that does not parse yet is still an edit the user may want to discard.
+    const dirty = dirtyParts.length > 0 || jsonError !== "";
     const problems = draft ? GROUPS.flatMap(({ group, fields }) => fields.filter((field) => numberProblem(field, groupValues(draft, group)[field.key], t, number) !== null)) : [];
 
-    // Reloads current configuration without retaining stale edits.
+    // Reloads current configuration, confirming first when that would discard unsaved edits.
     function reload() {
         if (!access) return;
+        if (dirty && !window.confirm(t("configEditor.reloadTheSettingsFromTheServerYourUnsavedChangesWillBeLost"))) return;
         setLoadState("loading"); setMessage(""); setStale(false); setLoadVersion((value) => value + 1);
     }
-    // Switches configuration views only when the JSON draft is valid.
+    // Switches views; invalid JSON can be left behind after confirming its edits will be dropped.
     function switchMode(next: "form" | "json") {
         if (next === mode || !draft) return;
         if (next === "json") setJsonText(pretty(draft));
-        else if (jsonError) { setMessage(t("configEditor.fixTheJsonBeforeSwitchingToTheForm")); return; }
+        else if (jsonError) {
+            if (!window.confirm(t("configEditor.switchToTheFormYourJsonEditsSinceItWasLastValidWillBeDiscarded"))) return;
+            setJsonText(pretty(draft)); setJsonError("");
+        }
+        setMessage("");
         setMode(next);
     }
     // Parses a JSON draft and reports validation without changing saved settings.
     function editJson(text: string) {
         setJsonText(text); setMessage("");
         try { setDraft(parseSettings(JSON.parse(text), t)); setJsonError(""); }
-        catch (error) { setJsonError(error instanceof SyntaxError ? t("configEditor.thisIsNotValidJson") : error instanceof Error ? error.message : t("configEditor.unsupportedSettings")); }
+        catch (error) { setJsonError(error instanceof SyntaxError ? jsonSyntaxMessage(text, error, t) : error instanceof Error ? error.message : t("configEditor.unsupportedSettings")); }
     }
     // Restores the draft from the last confirmed configuration.
     function discard() {
@@ -228,7 +254,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     const status = !access ? (stored ? t("configEditor.onlyTheServerOwnerCanEditConfigurationThisIsThe") : t("configEditor.configurationIsUnavailableForThisServer"))
         : loadState === "loading" ? t("configEditor.loadingTheServerSCurrentConfiguration")
         : loadState === "failed" ? loadMessage
-        : access.canEdit ? t("configEditor.editingTheFilesOnTheServerSRunnerChangesApply") : t("configEditor.onlyTheServerOwnerCanEditConfiguration");
+        : access.canEdit ? t("configEditor.editingTheFilesOnTheServerSRunner") : t("configEditor.onlyTheServerOwnerCanEditConfiguration");
 
     return <div className="p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -279,11 +305,17 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         </div>}
         {notice}
         {message && <p role="status" className="mt-4 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-sm text-foreground-muted">{pending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{message}{stale && <> <button type="button" className="underline" onClick={reload}>{t("configEditor.reloadSettings")}</button></>}</p>}
-        <div className={`sticky bottom-0 z-10 -mx-5 -mb-5 mt-5 flex flex-wrap items-center justify-between gap-3 rounded-b-lg border-t bg-surface px-5 py-4 ${dirty ? "border-gold/60 bg-linear-to-r from-gold/15 to-gold/5" : "border-white/10"}`}>
-            <p className="text-sm text-foreground-muted">{dirty ? <span className="flex items-center gap-2 font-semibold text-gold"><CircleAlert className="size-4 shrink-0" aria-hidden="true" />{t("configEditor.unsavedChanges", { settings: new Intl.ListFormat(locale, { type: "conjunction" }).format(dirtyParts) })}</span> : t("configEditor.noPendingChanges")}</p>
-            <div className="ml-auto flex gap-2">
-                <button type="button" disabled={!dirty || pending} className={fileButtonClass} onClick={discard}>{t("configEditor.discard")}</button>
-                <button type="button" disabled={!dirty || !editable || !!jsonError || problems.length > 0} className={filePrimaryButtonClass} onClick={save}>{pending ? t("configEditor.saving") : t("configEditor.saveConfig")}</button>
+        {/* Root overflow clipping defeats position: sticky, so unsaved changes pin the bar to the viewport instead. */}
+        {dirty && <div aria-hidden="true" className="h-20" />}
+        <div data-unsaved-bar={dirty ? "pinned" : undefined} className={dirty ? "fixed inset-x-0 bottom-0 z-30 border-t border-gold/60 bg-surface shadow-[0_-12px_32px_rgba(0,0,0,0.45)]" : "-mx-5 -mb-5 mt-5 rounded-b-lg border-t border-white/10 bg-surface"}>
+            <div className={dirty ? "bg-linear-to-r from-gold/15 to-gold/5" : ""}>
+                <div className={`flex flex-wrap items-center justify-between gap-3 py-4 ${dirty ? "site-container" : "px-5"}`}>
+                    <p className="text-sm text-foreground-muted">{dirty ? <span className="flex items-center gap-2 font-semibold text-gold"><CircleAlert className="size-4 shrink-0" aria-hidden="true" />{jsonError ? t("configEditor.theJsonHasUnsavedEditsThatArenTValidYet") : t("configEditor.unsavedChanges", { settings: new Intl.ListFormat(locale, { type: "conjunction" }).format(dirtyParts) })}</span> : t("configEditor.noPendingChanges")}</p>
+                    <div className="ml-auto flex gap-2">
+                        <button type="button" disabled={!dirty || pending} className={fileButtonClass} onClick={discard}>{t("configEditor.discard")}</button>
+                        <button type="button" disabled={!dirty || !editable || !!jsonError || problems.length > 0} className={filePrimaryButtonClass} onClick={save}>{pending ? t("configEditor.saving") : t("configEditor.saveConfig")}</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>;

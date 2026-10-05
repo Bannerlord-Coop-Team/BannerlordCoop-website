@@ -15,6 +15,9 @@ async function currentToken(expectedUserId: string) {
     return session.access_token;
 }
 
+/** Codes after which the page's server status is stale and should be refreshed before resending. */
+const REFRESH_CODES = new Set(["operation_unavailable", "request_conflict"]);
+
 /** Distinguishes local rejection from uncertain submissions without exposing internal errors. */
 async function failure(error: unknown, notSubmitted = false) {
     const { t } = await getTranslations("managed-server");
@@ -22,14 +25,21 @@ async function failure(error: unknown, notSubmitted = false) {
     const messages: Record<string, string> = {
         server_not_found: t("action.console.thisServerIsUnavailableOrYourAccessChanged"),
         identity_unavailable: t("action.console.linkYourDiscordAccountAndSignInAgainBeforeUsing"),
-        operation_unavailable: t("action.console.theServerIsNotRunningRefreshServerStatusIfDelivery"),
-        request_conflict: t("action.console.theServerChangedOrAnotherCommandIsActiveCheckConsole"),
+        operation_unavailable: t("action.console.theServerIsnTRunningSoTheCommandCanT"),
+        request_conflict: t("action.console.theServerIsBusyWithAnotherCommandOrItsStatus"),
         invalid_request: t("action.console.enterOneSupportedCoopCommandWithValidArguments"),
         rate_limited: t("action.console.tooManyRequestsWaitBeforeCheckingAgain"),
     };
-    return { ok: false as const, notSubmitted, message: notSubmitted
-        ? t("action.console.theCommandWasNotSentCheckYourCommandAndSign")
-        : messages[code] ?? t("action.console.theOutcomeCouldNotBeConfirmedCheckConsoleOutputOr") };
+    const known = Object.hasOwn(messages, code);
+    return {
+        ok: false as const,
+        notSubmitted,
+        uncertain: !notSubmitted && !known,
+        refresh: !notSubmitted && REFRESH_CODES.has(code),
+        message: notSubmitted
+            ? t("action.console.theCommandWasNotSentCheckYourCommandAndSign")
+            : known ? messages[code] : t("action.console.weCouldnTConfirmTheCommandWasDeliveredIfNo"),
+    };
 }
 
 /** Validates and authenticates an enqueue while preserving the caller's durable request ID. */

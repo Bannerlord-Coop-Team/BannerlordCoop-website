@@ -34,9 +34,9 @@ does not knowingly include code copied from another project without permission.
 
 ## Managed read-only console
 
-Managed server owner/manager pages include an explicit Connect/Disconnect live-output panel. The browser connects only to the same-origin `/api/servers/[serverId]/console` route. That route revalidates the current Supabase user/session and forwards only the bearer token and validated server UUID to the fixed server-only `CONTROL_PLANE_CONSOLE_ORIGIN`; callers cannot select an upstream destination, actor, agent, process, or path.
+Managed server owner/manager pages include a live-output panel that connects automatically. The browser connects only to the same-origin `/api/servers/[serverId]/console` route. That route revalidates the current Supabase user/session and forwards only the bearer token and validated server UUID to the fixed server-only `CONTROL_PLANE_CONSOLE_ORIGIN`; callers cannot select an upstream destination, actor, agent, process, or path.
 
-The response is private, unbuffered SSE with a five-minute maximum session and no automatic reconnect or history. The UI retains at most 128 KiB and 2,000 lines. Production enablement still requires verified OpenNext/Cloudflare streaming and disconnect behavior plus the reviewed Oracle Caddy route; local mocks do not establish those deployment properties.
+The response is private, unbuffered SSE with a five-minute maximum session; each connection replays the current run's output, and nothing is stored. The UI keeps one connection at a time: it renews an expired session at once while the tab is visible (or when the tab is shown again), retries other closures with a capped backoff (2 s, 5 s, 10 s, 30 s, 60 s) before offering a manual Reconnect, waits while the server is stopped, and reconnects as soon as the server is running again. The UI retains at most 128 KiB and 2,000 lines. Production enablement still requires verified OpenNext/Cloudflare streaming and disconnect behavior plus the reviewed Oracle Caddy route; local mocks do not establish those deployment properties.
 
 ## Local Development
 
