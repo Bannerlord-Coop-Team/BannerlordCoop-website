@@ -10,7 +10,7 @@ import { strToU8, zipSync } from "fflate";
 import { Download, Upload, Info, X, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { checkManagedServerFile, downloadManagedServerSave, exportManagedServerConfig, readManagedServerFileStatus, submitManagedServerFile } from "@/app/servers/managed-server-file-actions";
+import { checkManagedServerFile, downloadManagedServerSave, exportManagedServerConfig, submitManagedServerFile } from "@/app/servers/managed-server-file-actions";
 import { readConfigurationFile, applyConfigurationImport, type ConfigurationPart } from "../../../../supabase/functions/_shared/configuration-file-import";
 import { MAXIMUM_WEB_SAVE_BYTES, MAXIMUM_WEB_CONFIG_BYTES, requireUuid, requireFileTimestamp, type OwnerFileStatus, type OwnerFileResult } from "../../../../supabase/functions/_shared/server-file-contract";
 
@@ -19,7 +19,6 @@ type Intent = {
     action: "import-save" | "export-save" | "import-config";
     fingerprints: string[]; displayName: string; saveId: string | null; configPart?: ConfigurationPart;
 };
-type Scope = "save" | "config";
 const buttonClass = fileButtonClass;
 const inputClass = "mt-2 block w-full min-w-0 border border-white/15 bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
 
@@ -42,21 +41,7 @@ export function readFileIntent(value: string | null, serverId: string): Intent |
     return parsed;
 }
 
-// Names a downloaded save export after the server and local day, keeping the server-supplied extension.
-export function saveExportFileName(serverName: string | undefined, serverFileName: string, now = new Date()) {
-    const extension = /\.[a-z0-9]{1,16}$/iu.exec(serverFileName)?.[0] ?? ".blcexport";
-    const slug = (serverName ?? "").normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
-        .replace(/[^a-z0-9]+/gu, "-").slice(0, 48).replace(/^-+|-+$/gu, "") || "server";
-    const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()].map((part) => String(part).padStart(2, "0")).join("-");
-    return `${slug}-save-${day}${extension}`;
-}
-
-// Places transfer feedback in the card whose control started the transfer.
-function transferScope(action: Intent["action"]): Scope {
-    return action === "import-config" ? "config" : "save";
-}
-
-// Downloads the original bytes using the given filename.
+// Downloads the original bytes using the server-supplied filename.
 function saveDownload(bytes: BlobPart, fileName: string) {
     const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
     const anchor = document.createElement("a");
@@ -65,7 +50,7 @@ function saveDownload(bytes: BlobPart, fileName: string) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
-type TransferProps = { userId: string; serverId: string; serverName?: string; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean };
+type TransferProps = { userId: string; serverId: string; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean };
 
 // Keys transfer state to the current account and server.
 export function ManagedServerTransfers(props: TransferProps) {
@@ -73,7 +58,7 @@ export function ManagedServerTransfers(props: TransferProps) {
 }
 
 // Presents file imports and durable transfer progress with localized diagnostics.
-function TransferSession({ userId, serverId, serverName, status, canImportConfig, canEditConfig = false, canExportSave }: TransferProps) {
+function TransferSession({ userId, serverId, status, canImportConfig, canEditConfig = false, canExportSave }: TransferProps) {
     const { t, rich, number, locale } = useTranslations("managed-server");
     const router = useRouter();
     const storageKey = `managed-file-transfer:v1:${userId}:${serverId}`;
@@ -82,9 +67,8 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
     const [intent, setIntent] = useState<Intent | null>(null);
     const intentRef = useRef<Intent | null>(null);
     const [result, setResult] = useState<OwnerFileResult | null>(null);
-    const [feedback, setFeedback] = useState<{ scope: Scope; text: string } | null>(null);
+    const [message, setMessage] = useState("");
     const [isPending, startTransition] = useTransition();
-    const [downloading, setDownloading] = useState(false);
     const [dialogKind, setDialogKind] = useState<"import-save" | "import-config" | null>(null);
     const [configPart, setConfigPart] = useState<ConfigurationPart>("server");
     const [ignoredSettings, setIgnoredSettings] = useState<string[]>([]);
@@ -101,11 +85,6 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
         && ["stopped", "awaiting-save"].includes(status.operationState);
     const blocked = !ready || storageError || isPending || intent !== null || status === null;
 
-    // Shows transfer feedback beside the controls of the given card.
-    function say(text: string, scope: Scope) {
-        setFeedback({ scope, text });
-    }
-
     // Persists the existing transfer intent before dispatch.
     function remember(next: Intent | null) {
         try {
@@ -119,7 +98,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
             try {
                 const stored = readFileIntent(sessionStorage.getItem(storageKey), serverId);
                 intentRef.current = stored; setIntent(stored); setReady(true);
-                if (stored) setFeedback({ scope: transferScope(stored.action), text: t("transfers.aPreviousTransferIsSavedCheckItsStatusBeforeRetrying") });
+                if (stored) setMessage(t("transfers.aPreviousTransferIsSavedCheckItsStatusBeforeRetrying"));
             } catch { setStorageError(true); }
         }, 0);
         return () => window.clearTimeout(timer);
@@ -133,31 +112,28 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
 
     // Presents the durable transfer result without changing its state transitions.
     function accept(next: OwnerFileResult | null) {
-        const scope = next?.kind === "job" ? transferScope(next.action)
-            : next?.kind === "configuration" ? "config" : transferScope(intentRef.current?.action ?? "export-save");
         setResult(next);
-        if (next === null) { say(t("transfers.noAcceptedTransferWasFoundRetryTheSameRequestWith"), scope); return; }
+        if (next === null) { setMessage(t("transfers.noAcceptedTransferWasFoundRetryTheSameRequestWith")); return; }
         if (next.kind === "rejected") {
-            say(t("transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck"), scope); remember(null); setDeadline(null); router.refresh();
+            setMessage(t("transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck")); remember(null); setDeadline(null); router.refresh();
         } else if (next.kind === "configuration") {
-            say(t("transfers.settingsImportedIfTheServerIsRunningStopItAnd"), scope); remember(null); setDeadline(null); router.refresh();
+            setMessage(t("transfers.settingsImportedIfTheServerIsRunningStopItAnd")); remember(null); setDeadline(null); router.refresh();
         } else if (["succeeded", "failed", "cancelled"].includes(next.state)) {
             setDeadline(null); router.refresh();
-            say(next.state === "succeeded" ? next.action === "export-save" ? t("transfers.yourSaveExportIsReadyToDownload") : t("transfers.campaignAddedYourCurrentCampaignIsUnchanged")
-                : t("transfers.theTransferStateYourRequestIsRetainedForReference", { state: t(`transferState.${next.state}`) }), scope);
+            setMessage(next.state === "succeeded" ? next.action === "export-save" ? t("transfers.yourSaveExportIsReadyToDownload") : t("transfers.campaignAddedYourCurrentCampaignIsUnchanged")
+                : t("transfers.theTransferStateYourRequestIsRetainedForReference", { state: t(`transferState.${next.state}`) }));
             if (next.state === "succeeded" && next.action === "import-save") remember(null);
-        } else say(next.action === "export-save" ? t("transfers.preparingYourSaveExport") : t("transfers.validatingAndImportingYourCampaign"), scope);
+        } else setMessage(next.action === "export-save" ? t("transfers.preparingYourSaveExport") : t("transfers.validatingAndImportingYourCampaign"));
     }
 
     useEffect(() => {
         if (deadline === null || intent === null) return;
         let cancelled = false;
         let timer: number;
-        const scope = transferScope(intent.action);
         // Refreshes existing operation progress and reports localized connection feedback.
         async function poll() {
             if (Date.now() >= deadline!) {
-                setDeadline(null); say(t("transfers.stillWaitingForConfirmationUseCheckStatusToContinue"), scope); return;
+                setDeadline(null); setMessage(t("transfers.stillWaitingForConfirmationUseCheckStatusToContinue")); return;
             }
             const response = await checkManagedServerFile(serverId, intent!.requestId, userId).catch(() => ({ ok: false as const, message: t("transfers.connectionInterruptedYourTransferRequestIsRetained") }));
             if (cancelled || intentRef.current?.requestId !== intent!.requestId) return;
@@ -165,7 +141,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
                 accept(response.result);
                 if (response.result?.kind === "rejected" || response.result?.kind === "configuration" || response.result?.kind === "job"
                     && ["succeeded", "failed", "cancelled"].includes(response.result.state)) return;
-            } else say(response.message, scope);
+            } else setMessage(response.message);
             timer = window.setTimeout(poll, 4_000);
         }
         timer = window.setTimeout(poll, 4_000);
@@ -221,20 +197,10 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
         }));
     }
 
-    // Encodes a retained transfer request together with its original files.
-    function transferForm(next: Intent) {
-        const form = new FormData();
-        for (const [key, value] of Object.entries(next)) if (typeof value === "string") form.set(key, value);
-        if (next.action === "import-config") form.set("config", files[0]);
-        if (next.action === "import-save") for (const file of files) form.append("files", file);
-        return form;
-    }
-
     // Submits the retained transfer request without changing operation inputs.
     function submit(action: Intent["action"]) {
         if (submitting.current || status === null) return;
         submitting.current = true;
-        const scope = transferScope(action);
         startTransition(async () => {
             try {
                 if (action === "import-config" && !intentRef.current && reviewUpdatedAt !== status.updatedAt) throw new Error(t("transfers.theServerSettingsChangedWhileThisScreenWasOpenGo"));
@@ -246,38 +212,25 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
                 if (next.action !== action || action === "import-config" && (next.configPart ?? "combined") !== configPart || JSON.stringify(next.fingerprints) !== JSON.stringify(hashes)
                     || action === "import-save" && next.displayName !== displayName.trim()) throw new Error(t("transfers.retryRequiresTheSameFilesAndCampaignNameAsThe"));
                 if (!remember(next)) return;
-                setResult(null); setDownloadLink(null); setFeedback(null);
-                let response = await submitManagedServerFile(transferForm(next), userId);
-                if (!response.ok && response.stale && action === "export-save" && previous === null) {
-                    // Export never changes the server, so a stale page is refreshed and the export retried once.
-                    // The stale rejection is definitive, so the retry safely uses a new request identity.
-                    remember(null);
-                    const fresh = await readManagedServerFileStatus(serverId, userId).catch(() => null);
-                    router.refresh();
-                    const activeSave = fresh?.ok ? fresh.status.activeSave : null;
-                    if (fresh?.ok && activeSave && next.saveId !== null && activeSave.saveId !== next.saveId) {
-                        // Never silently export a different campaign than the one the owner chose.
-                        response = { ...response, message: t("transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt") };
-                    } else if (fresh?.ok && activeSave) {
-                        const retry: Intent = { ...next, requestId: crypto.randomUUID(), expectedUpdatedAt: fresh.status.updatedAt, saveId: activeSave.saveId };
-                        if (!remember(retry)) return;
-                        response = await submitManagedServerFile(transferForm(retry), userId);
-                        if (!response.ok && response.stale) response = { ...response, message: t("transfers.theServerIsStillChangingWaitAMomentAndTryExportSaveAgain") };
-                    }
-                }
+                setResult(null); setDownloadLink(null);
+                const form = new FormData();
+                for (const [key, value] of Object.entries(next)) if (typeof value === "string") form.set(key, value);
+                if (action === "import-config") form.set("config", files[0]);
+                if (action === "import-save") for (const file of files) form.append("files", file);
+                const response = await submitManagedServerFile(form, userId);
                 setDialogKind(null);
                 if (response.ok) {
                     accept(response.result);
                     if (response.result.kind === "job" && !["succeeded", "failed", "cancelled"].includes(response.result.state)) setDeadline(Date.now() + 60_000);
                 } else {
-                    say(response.notSubmitted && previous ? t("transfers.thisAttemptWasNotSentYourPreviousRequestIsStill") : response.message, scope);
+                    setMessage(response.notSubmitted && previous ? t("transfers.thisAttemptWasNotSentYourPreviousRequestIsStill") : response.message);
                     setDeadline(null);
                     // A local retry failure cannot rule out acceptance of the earlier attempt.
                     if (response.rejected || response.notSubmitted && !previous) { remember(null); router.refresh(); }
                 }
             } catch (error) {
                 const text = error instanceof Error ? error.message : t("transfers.theTransferCouldNotBeSubmitted");
-                if (dialogKind) setDialogError(text); else say(text, scope);
+                if (dialogKind) setDialogError(text); else setMessage(text);
             } finally { submitting.current = false; }
         });
     }
@@ -285,85 +238,17 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
     // Reads the retained transfer outcome without creating a new request.
     function checkStatus() {
         if (!intent) return;
-        const scope = transferScope(intent.action);
         startTransition(async () => {
             const response = await checkManagedServerFile(serverId, intent.requestId, userId).catch(() => ({ ok: false as const, message: t("transfers.connectionInterruptedYourTransferRequestIsRetained") }));
             if (intentRef.current?.requestId !== intent.requestId) return;
             if (response.ok) {
                 accept(response.result);
                 if (response.result?.kind === "job" && !["succeeded", "failed", "cancelled"].includes(response.result.state)) setDeadline(Date.now() + 60_000);
-            } else say(response.message, scope);
+            } else setMessage(response.message);
         });
-    }
-
-    // Downloads the finished export, naming the file after this server.
-    function downloadExport() {
-        if (!intent || downloading) return;
-        const requestId = intent.requestId;
-        setDownloading(true);
-        startTransition(async () => {
-            try {
-                const response = await downloadManagedServerSave(serverId, requestId, userId).catch(() => ({ ok: false as const, message: t("transfers.downloadFailedYourExportIsRetainedTryDownloadingAgain") }));
-                if (!response.ok) { say(response.message, "save"); return; }
-                if (response.download.kind === "link") setDownloadLink(response.download);
-                else saveDownload(Uint8Array.from(atob(response.download.base64), (char) => char.charCodeAt(0)), saveExportFileName(serverName, response.download.fileName));
-            } finally { setDownloading(false); }
-        });
-    }
-
-    // Exports the current configuration as a ZIP of the two native files.
-    function exportConfig() {
-        startTransition(async () => {
-            const response = await exportManagedServerConfig(serverId, userId).catch(() => ({ ok: false as const, message: t("transfers.configurationDownloadFailedPleaseTryAgain") }));
-            if (response.ok) {
-                try {
-                    const archive = zipSync({
-                        "server-config.json": strToU8(JSON.stringify(response.managedConfig.serverConfig, null, 2) + "\n"),
-                        "mod-config.json": strToU8(JSON.stringify(response.managedConfig.modConfig, null, 2) + "\n"),
-                    }, { level: 0 });
-                    saveDownload(new Uint8Array(archive), "BannerlordCoop-configuration.zip");
-                    say(t("transfers.configurationZipDownloadedOpenYourDownloadsFolderRightClickBannerlordcoop"), "config");
-                } catch { say(t("transfers.configurationDownloadFailedPleaseTryAgain"), "config"); }
-            }
-            else say(response.message, "config");
-        });
-    }
-
-    // Repeats the retained request with the same identity and inputs.
-    function retrySameRequest() {
-        if (!intent) return;
-        if (intent.action === "export-save") submit("export-save");
-        else openImport(intent.action);
-    }
-
-    // Clears a finished transfer and everything it was still showing.
-    function dismiss() {
-        remember(null); setResult(null); setDownloadLink(null); setFeedback(null);
-    }
-
-    const intentScope = intent ? transferScope(intent.action) : null;
-    // Shows a card's transfer feedback and follow-up actions beside the controls that started them.
-    function transferFeedback(scope: Scope) {
-        return <>
-            {intent !== null && ready && intentScope !== scope && <p className="mt-3 text-xs leading-5 text-foreground-muted">{t("transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt")}</p>}
-            <div aria-live="polite">
-                {feedback?.scope === scope && <p className="mt-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-sm text-foreground-muted">{isPending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{feedback.text}</p>}
-            </div>
-            {intent && intentScope === scope && <div className="mt-3 flex flex-wrap gap-3">
-                <button className={buttonClass} disabled={isPending} onClick={checkStatus}>{t("transfers.checkStatus")}</button>
-                {result === null && <button className={buttonClass} disabled={isPending} onClick={retrySameRequest}>{t("transfers.retrySameRequest")}</button>}
-                {result?.kind === "job" && result.state === "succeeded" && result.action === "export-save" && <button className={buttonClass} disabled={isPending} aria-busy={downloading || undefined} onClick={downloadExport}>
-                    {downloading ? <><LoaderCircle aria-hidden className="size-4 animate-spin" />{t("transfers.preparingDownload")}</> : <><Download aria-hidden className="size-4" />{t("transfers.downloadSaveExport")}</>}
-                </button>}
-                {result?.kind === "job" && ["succeeded", "failed", "cancelled"].includes(result.state) && <button className={buttonClass} disabled={isPending} onClick={dismiss}>{t("transfers.dismissCompletedTransfer")}</button>}
-            </div>}
-            {scope === "save" && downloadLink && <a className={`${buttonClass} mt-3`} href={downloadLink.url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{t("transfers.openPrivateDownload")}</a>}
-        </>;
     }
 
     return <div>
-        {status === null && <p role="alert" className="mb-3 text-sm text-foreground-muted">{t("transfers.fileTransfersCouldNotBeLoadedRefreshThePageTo")}</p>}
-        {storageError && <p role="alert" className="mb-3 text-sm text-red-200">{t("transfers.pendingTransfersCouldNotBeSavedOrRecoveredInThis")}</p>}
         <ServerSaveConfigPanels
             saveName={status ? status.activeSave?.displayName ?? t("transfers.noActiveCampaignSave") : undefined}
             configuration={status?.managedConfig}
@@ -372,21 +257,45 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
                 <button className={buttonClass} disabled={blocked || !canExportSave || !status?.activeSave || !["running", "stopped", "awaiting-save"].includes(status.operationState)} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />{t("transfers.exportSave")}</button>
                 <button className={buttonClass} disabled={blocked || !canTransferSave} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />{t("transfers.importSave")}</button>
             </>}
-            saveNotice={<>
-                <p className="mt-3 text-xs leading-5 text-foreground-muted">{t("transfers.onlyTheServerOwnerCanExportSavesExportDownloadsThe")}</p>
-                {transferFeedback("save")}
-            </>}
+            saveNotice={<p className="mt-3 text-xs leading-5 text-foreground-muted">{t("transfers.onlyTheServerOwnerCanExportSavesExportDownloadsThe")}</p>}
             configActions={<>
                 <button className={buttonClass} disabled={blocked || !canImportConfig} onClick={() => openImport("import-config")}><Upload aria-hidden className="size-4" />{t("transfers.importConfig")}</button>
-                <button className={buttonClass} disabled={blocked} onClick={exportConfig}><Download aria-hidden className="size-4" />{t("transfers.exportConfig")}</button>
+                <button className={buttonClass} disabled={blocked} onClick={() => startTransition(async () => {
+                        const response = await exportManagedServerConfig(serverId, userId).catch(() => ({ ok: false as const, message: t("transfers.configurationDownloadFailedPleaseTryAgain") }));
+                        if (response.ok) {
+                            try {
+                                const archive = zipSync({
+                                    "server-config.json": strToU8(JSON.stringify(response.managedConfig.serverConfig, null, 2) + "\n"),
+                                    "mod-config.json": strToU8(JSON.stringify(response.managedConfig.modConfig, null, 2) + "\n"),
+                                }, { level: 0 });
+                                saveDownload(new Uint8Array(archive), "BannerlordCoop-configuration.zip");
+                                setMessage(t("transfers.configurationZipDownloadedOpenYourDownloadsFolderRightClickBannerlordcoop"));
+                            } catch { setMessage(t("transfers.configurationDownloadFailedPleaseTryAgain")); }
+                        }
+                        else setMessage(response.message);
+                    })}><Download aria-hidden className="size-4" />{t("transfers.exportConfig")}</button>
             </>}
-            configStatus={transferFeedback("config")}
             configNotice={<>
                 <p className="mt-3 text-xs leading-5 text-foreground-muted">{t("transfers.exportDownloadsAZipContainingServerConfigJsonAndMod")}</p>
-                {!canImportConfig && <p className="mt-2 text-xs leading-5 text-foreground-muted">{t("transfers.onlyTheServerOwnerCanImportOrEditConfigurationSettings")}</p>}
+                <p className="mt-2 text-xs leading-5 text-foreground-muted">{canImportConfig ? t("transfers.afterImportingOrSavingSettingsStopAndStartARunning") : t("transfers.onlyTheServerOwnerCanImportOrEditConfigurationSettings")}</p>
             </>}
         />
         <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-foreground-muted"><Info aria-hidden className="mt-0.5 size-3.5 shrink-0" />{t("transfers.reviewEachImportBeforeConfirmingAnyChanges")}</p>
+        {status === null && <p role="alert" className="mt-3 text-sm text-foreground-muted">{t("transfers.fileTransfersCouldNotBeLoadedRefreshThePageTo")}</p>}
+        {storageError && <p role="alert" className="mt-3 text-sm text-red-200">{t("transfers.pendingTransfersCouldNotBeSavedOrRecoveredInThis")}</p>}
+        {message && <p role="status" className="mt-4 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-sm text-foreground-muted">{isPending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{message}</p>}
+        {intent && <div className="mt-3 flex flex-wrap gap-3">
+            <button className={buttonClass} disabled={isPending} onClick={checkStatus}>{t("transfers.checkStatus")}</button>
+            {result === null && <button className={buttonClass} disabled={isPending} onClick={() => intent.action === "export-save" ? submit("export-save") : openImport(intent.action)}>{t("transfers.retrySameRequest")}</button>}
+            {result?.kind === "job" && result.state === "succeeded" && result.action === "export-save" && <button className={buttonClass} disabled={isPending} onClick={() => startTransition(async () => {
+                const response = await downloadManagedServerSave(serverId, intent.requestId, userId).catch(() => ({ ok: false as const, message: t("transfers.downloadFailedYourExportIsRetainedTryDownloadingAgain") }));
+                if (!response.ok) { setMessage(response.message); return; }
+                if (response.download.kind === "link") setDownloadLink(response.download);
+                else saveDownload(Uint8Array.from(atob(response.download.base64), (char) => char.charCodeAt(0)), response.download.fileName);
+            })}><Download aria-hidden className="size-4" />{t("transfers.downloadSaveExport")}</button>}
+            {result?.kind === "job" && ["succeeded", "failed", "cancelled"].includes(result.state) && <button className={buttonClass} disabled={isPending} onClick={() => { remember(null); setResult(null); setDownloadLink(null); }}>{t("transfers.dismissCompletedTransfer")}</button>}
+        </div>}
+        {downloadLink && <a className={`${buttonClass} mt-3`} href={downloadLink.url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{t("transfers.openPrivateDownload")}</a>}
         <dialog ref={dialogRef} onCancel={(event) => { if (isPending) event.preventDefault(); else setDialogKind(null); }} aria-labelledby="file-import-title"
             className="fixed inset-0 m-auto max-h-[90svh] w-[calc(100%-2rem)] max-w-xl overflow-y-auto border border-gold/30 bg-surface-raised p-5 text-foreground shadow-2xl backdrop:bg-black/70 sm:p-6">
             <div className="flex items-start justify-between gap-4">

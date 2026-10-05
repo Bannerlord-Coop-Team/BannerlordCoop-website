@@ -1,7 +1,7 @@
 import { createTranslator } from "@/app/lib/localization/translator";
 import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { beforeEach, expect, it, vi } from "vitest";
-import { readManagedServerConfig, readManagedServerConfigFiles, saveManagedServerConfig } from "./managed-server-config-actions";
+import { readManagedServerConfig, saveManagedServerConfig } from "./managed-server-config-actions";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION as config } from "../../../supabase/functions/_shared/managed-server-configuration";
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), read: vi.fn(), save: vi.fn() }));
@@ -23,27 +23,6 @@ it("checks the current account before reading or saving configuration", async ()
     expect(await readManagedServerConfig(id, "server", "owner")).toEqual({ ok: true, file });
     expect(mocks.read).toHaveBeenCalledWith("original-owner-token", id, "server");
     expect((await readManagedServerConfig(id, "combined", "owner")).ok).toBe(false);
-});
-it("reads both configuration files concurrently in one authenticated action", async () => {
-    const pending: ((value: unknown) => void)[] = [];
-    mocks.read.mockImplementation(() => new Promise((resolve) => pending.push(resolve)));
-    const result = readManagedServerConfigFiles(id, "owner");
-    await vi.waitFor(() => expect(mocks.read).toHaveBeenCalledTimes(2));
-    expect(mocks.read.mock.calls).toEqual([["original-owner-token", id, "server"], ["original-owner-token", id, "mod"]]);
-    pending[1](file);
-    pending[0](file);
-    expect(await result).toEqual({ server: { ok: true, file }, mod: { ok: true, file } });
-    expect(mocks.auth).toHaveBeenCalledOnce();
-});
-it("reports each configuration file independently and checks the account before reading either", async () => {
-    mocks.read.mockResolvedValueOnce(file).mockRejectedValueOnce(new MyServersApiError("agent_target_unavailable", "No runner"));
-    const result = await readManagedServerConfigFiles(id, "owner");
-    expect(result.server).toEqual({ ok: true, file });
-    expect(result.mod).toMatchObject({ ok: false, message: expect.stringContaining("no active runner") });
-    mocks.read.mockClear();
-    expect(await readManagedServerConfigFiles(id, "previous-owner")).toMatchObject({ server: { ok: false }, mod: { ok: false } });
-    expect(await readManagedServerConfigFiles("not-a-uuid", "owner")).toMatchObject({ server: { ok: false }, mod: { ok: false } });
-    expect(mocks.read).not.toHaveBeenCalled();
 });
 it("re-validates settings and forwards the exact request identity, revision and file", async () => {
     mocks.save.mockResolvedValue(file);

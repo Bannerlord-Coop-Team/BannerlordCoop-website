@@ -1,12 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-    CONSOLE_RECONNECT_DELAYS,
     boundedConsoleText,
-    consoleReconnectDelay,
     decodeConsoleStreamChunk,
-    isScrolledToBottom,
-    parseConsoleControlLine,
     parseConsoleEvent,
 } from "./ManagedServerConsole";
 import {
@@ -86,42 +82,6 @@ test("bounds retained browser output", () => {
     assert.ok(output.split("\n").length <= 2_000);
     assert.ok(output.includes("line-2099"));
     assert.ok(!output.includes("line-0\n"));
-});
-
-test("recognizes game state records, with or without a timestamp, and hides roster and command lists", () => {
-    assert.deepEqual(parseConsoleControlLine('@DS@{"ev":"state","phase":"loading","save":"saveauto1","pw":false}'), { kind: "state", prefix: "", phase: "loading" });
-    assert.deepEqual(parseConsoleControlLine('[12:00:01] @DS@{"ev":"state","phase":"serving"}'), { kind: "state", prefix: "[12:00:01] ", phase: "serving" });
-    assert.deepEqual(parseConsoleControlLine('2026-10-04T12:00:01.123Z @DS@{"ev":"state","phase":"fatal","detail":"IOException: disk full"}'),
-        { kind: "state", prefix: "2026-10-04T12:00:01.123Z ", phase: "fatal", detail: "IOException: disk full" });
-    assert.equal((parseConsoleControlLine(`@DS@{"ev":"state","phase":"fatal","detail":"${"x".repeat(600)}"}`) as { detail: string }).detail.length, 500);
-    assert.deepEqual(parseConsoleControlLine('@DS@{"ev":"players","list":["Alice"]}'), { kind: "hidden" });
-    assert.deepEqual(parseConsoleControlLine('@DS@{"ev":"commands","builtin":["status"],"game":[]}'), { kind: "hidden" });
-    assert.deepEqual(parseConsoleControlLine('@DS@{"ev":"managed-command","id":"a","ok":true,"output":"done"}'), { kind: "managed-command", ok: true, output: "done" });
-});
-
-test("leaves unknown, malformed, or mid-line control records as ordinary stdout", () => {
-    for (const line of [
-        "[DedicatedServer] SERVING - coop server up, waiting for clients",
-        '@DS@{"ev":"state","phase":"dancing"}',
-        '@DS@{"ev":"state"}',
-        '@DS@{"ev":"players","list":"Alice"}',
-        '@DS@{"ev":"commands"}',
-        "@DS@[]",
-        "@DS@not-json",
-        'game output @DS@{"ev":"state","phase":"serving"}',
-    ]) assert.equal(parseConsoleControlLine(line), null, line);
-});
-
-test("backs off reconnects and then stops retrying automatically", () => {
-    assert.deepEqual(CONSOLE_RECONNECT_DELAYS.map((_, attempt) => consoleReconnectDelay(attempt)), [2_000, 5_000, 10_000, 30_000, 60_000]);
-    assert.equal(consoleReconnectDelay(CONSOLE_RECONNECT_DELAYS.length), null);
-});
-
-test("follows output only while the reader is at the bottom", () => {
-    assert.equal(isScrolledToBottom(800, 1_000, 200), true);
-    assert.equal(isScrolledToBottom(780, 1_000, 200), true);
-    assert.equal(isScrolledToBottom(700, 1_000, 200), false);
-    assert.equal(isScrolledToBottom(0, 100, 200), true);
 });
 
 function context(serverId: string) {

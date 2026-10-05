@@ -106,61 +106,6 @@ it.each([false, true])("disables maintenance when owner access or stored prefere
     expect(mocks.settings).not.toHaveBeenCalled();
 });
 
-it("explains an invalid server name beside the field before contacting the server", async () => {
-    await render();
-    const name = () => container.querySelector<HTMLInputElement>("#settings-server-name")!;
-    await change("#settings-server-name", "ab");
-    await submit();
-    expect(mocks.settings).not.toHaveBeenCalled();
-    expect(name().getAttribute("aria-invalid")).toBe("true");
-    expect(container.querySelector("#settings-server-name-error")?.textContent).toBe("Server names need at least 3 characters.");
-    expect(name().getAttribute("aria-describedby")).toContain("settings-server-name-error");
-    expect(document.activeElement).toBe(name());
-    await change("#settings-server-name", "Bad <name>");
-    expect(container.querySelector("#settings-server-name-error")?.textContent).toContain("Use only letters, numbers, spaces");
-    await change("#settings-server-name", "Valid QA name");
-    expect(container.querySelector("#settings-server-name-error")).toBeNull();
-    expect(name().getAttribute("aria-invalid")).toBeNull();
-    await submit();
-    expect(mocks.settings).toHaveBeenCalledOnce();
-});
-
-it("applies the live rename rules to live server names", async () => {
-    await render({ name: "Live", renameServerId: "live-server" });
-    await change("#settings-server-name", "   ");
-    await submit();
-    expect(mocks.rename).not.toHaveBeenCalled();
-    expect(container.querySelector("#settings-server-name-error")?.textContent).toBe("Enter a server name.");
-});
-
-it.each([
-    ["displayName", "#settings-server-name", "Server names can have at most 48 characters."],
-    ["maintenanceSlot", "#settings-maintenance-window", "Choose one of the listed maintenance windows."],
-] as const)("shows a server rejection of %s under that field and clears Saving at once", async (field, selector, message) => {
-    mocks.settings.mockResolvedValue({ ok: false, rejected: true, field, message });
-    await render();
-    await change("#settings-maintenance-window", "10:00-11:00");
-    await submit();
-    const control = container.querySelector(selector)!;
-    expect(control.getAttribute("aria-invalid")).toBe("true");
-    const error = document.getElementById(control.getAttribute("aria-describedby")!.split(" ")[0])!;
-    expect(error.textContent).toBe(message);
-    expect(container.querySelector("[data-unsaved-bar]")!.textContent).not.toContain(message);
-    expect(Array.from(container.querySelectorAll("button")).find(button => button.type === "submit")!.textContent).toBe("Save settings");
-});
-
-it("pins the save bar to the viewport only while there are unsaved changes", async () => {
-    await render();
-    expect(container.querySelector("[data-unsaved-bar]")).toBeNull();
-    await change("#settings-maintenance-window", "18:00-19:00");
-    const bar = container.querySelector("[data-unsaved-bar]")!;
-    expect(bar.getAttribute("data-unsaved-bar")).toBe("pinned");
-    expect(bar.className).toContain("fixed");
-    expect(bar.textContent).toContain("Save settings");
-    await click("Discard");
-    expect(container.querySelector("[data-unsaved-bar]")).toBeNull();
-});
-
 // Resolves real English messages without reading cookies in standalone tests.
 vi.mock("@/app/lib/localization/server", () => ({
     getLocale: async () => "en",

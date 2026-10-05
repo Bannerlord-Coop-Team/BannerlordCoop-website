@@ -3,9 +3,7 @@
 import { useTranslations } from "@/app/lib/localization/client";
 
 import { Copy } from "lucide-react";
-import { useEffect, useState } from "react";
-
-const COPIED_FEEDBACK_MILLISECONDS = 2_000;
+import { useState } from "react";
 
 type Props = {
     address: string | null;
@@ -19,12 +17,6 @@ export function CopyJoinButton({ address, disabled = false, onCopied }: Props) {
     const [result, setResult] = useState<{ address: string; ok: boolean } | null>(null);
     const unavailable = disabled || !address;
     const current = result?.address === address ? result : null;
-    useEffect(() => {
-        if (!result?.ok) return;
-        // "Copied!" is momentary; a failure keeps its manual-copy address visible.
-        const timer = window.setTimeout(() => setResult(null), COPIED_FEEDBACK_MILLISECONDS);
-        return () => window.clearTimeout(timer);
-    }, [result]);
 
     // Copies the supplied address without navigating or changing its syntax.
     async function copy() {

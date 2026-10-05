@@ -12,14 +12,12 @@ export function DownloadServerLogButton({ serverId, userId, className }: { serve
     const { t } = useTranslations("managed-server");
     const [pending, setPending] = useState(false);
     const [error, setError] = useState("");
-    const [notice, setNotice] = useState("");
 
-    // Downloads original log bytes after the existing account check; an empty log is reported instead of saved.
+    // Downloads original log bytes after the existing account check.
     async function download() {
         if (!serverId || !userId || pending) return;
         setPending(true);
         setError("");
-        setNotice("");
         try {
             const { data: { session } } = await getSupabaseBrowserClient(t("log.authentication")).auth.getSession();
             if (!session || session.user.id !== userId) throw new Error(t("downloadServerLogButton.authenticationChangedRefreshThePageAndTryAgain"));
@@ -28,10 +26,6 @@ export function DownloadServerLogButton({ serverId, userId, className }: { serve
                 incomplete: t("log.incomplete"), invalid: t("log.invalid"),
                 endpoint: { notConfigured: t("log.notConfigured"), invalidUrl: t("log.invalidUrl"), invalidKey: t("log.invalidKey") },
             });
-            if (result.blob.size === 0) {
-                setNotice(t("downloadServerLogButton.theServerSLogFileIsEmptyRightNowIt"));
-                return;
-            }
             const url = URL.createObjectURL(result.blob);
             const link = document.createElement("a");
             link.href = url;
@@ -51,6 +45,5 @@ export function DownloadServerLogButton({ serverId, userId, className }: { serve
             {pending ? t("downloadServerLogButton.downloading") : t("downloadServerLogButton.downloadLogs")}
         </button>
         {error && <p role="alert" className="max-w-sm text-sm text-red-300">{error}</p>}
-        {notice && <p role="status" className="max-w-sm text-sm text-foreground-muted">{notice}</p>}
     </>;
 }
