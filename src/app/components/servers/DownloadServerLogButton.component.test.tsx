@@ -23,7 +23,7 @@ it("downloads the server file with its original name and shows API errors", asyn
     let filename = "";
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { filename = this.download; });
     await act(async () => root.render(<TestLocalization>{<DownloadServerLogButton serverId="server" userId="user" className="existing-server-button" />} </TestLocalization>));
-    expect(container.firstElementChild?.tagName).toBe("BUTTON");
+    expect(container.querySelector("span > button")).not.toBeNull();
     expect(container.querySelector("button")!.className).toBe("existing-server-button");
     await act(async () => container.querySelector("button")!.click());
     expect(download).toHaveBeenCalledWith("token", "server", {

@@ -3,6 +3,7 @@
 import { getTranslations } from "@/app/lib/localization/server";
 
 import {
+    getMyServerBackupStatus,
     MyServersApiError,
     requestMyServerOperation,
     requestMyServerUpdate,
@@ -166,5 +167,24 @@ export async function readManagedServerStartStatus(serverId: string, jobId: stri
             return { ok: false as const, retryable: false, message: t("action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain") };
         }
         return { ok: false as const, retryable: true, message: t("action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing") };
+    }
+}
+
+/**
+ * Reads only the compact status that lifecycle and backup polling watch. Polling re-renders the
+ * page only when this fingerprint changes, keeping repeated checks far cheaper than full renders.
+ */
+export async function readManagedServerStatusFingerprint(serverId: string): Promise<{ ok: true; fingerprint: string } | { ok: false }> {
+    if (typeof serverId !== "string" || !SERVER_ID.test(serverId)) return { ok: false };
+    try {
+        const supabase = await getSupabaseServerClient();
+        const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
+        if (!user || !session) return { ok: false };
+        const status = await getMyServerBackupStatus(session.access_token, serverId);
+        const job = status.job;
+        return { ok: true, fingerprint: JSON.stringify([status.updatedAt, status.operationState, status.observedGameState,
+            job?.jobId ?? null, job?.state ?? null, job?.progress ?? null]) };
+    } catch {
+        return { ok: false };
     }
 }

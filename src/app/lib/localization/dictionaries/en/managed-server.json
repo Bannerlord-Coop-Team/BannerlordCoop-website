@@ -707,5 +707,6 @@
   "transfers.theServerIsStillChangingWaitAMomentAndTryExportSaveAgain": "The server is still changing. Wait a moment and try Export save again.",
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "Paused while another transfer is open. Finish or dismiss it to start a new one.",
   "transfers.preparingDownload": "Preparing download…",
-  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Your active campaign changed while this page was open. Check it above, then press Export save again."
+  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Your active campaign changed while this page was open. Check it above, then press Export save again.",
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "Live output paused while this page was idle. Reconnect to keep watching."
 }

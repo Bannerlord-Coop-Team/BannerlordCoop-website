@@ -706,5 +706,6 @@
   "transfers.theServerIsStillChangingWaitAMomentAndTryExportSaveAgain": "サーバーの状態がまだ変化しています。しばらく待ってから、もう一度「セーブデータをエクスポート」をお試しください。",
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "別の転送が開いている間は一時停止しています。新しい転送を開始するには、その転送を完了するか閉じてください。",
   "transfers.preparingDownload": "ダウンロードを準備しています…",
-  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "このページを開いている間にアクティブなキャンペーンが変更されました。上で確認してから、もう一度「セーブデータをエクスポート」を押してください。"
+  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "このページを開いている間にアクティブなキャンペーンが変更されました。上で確認してから、もう一度「セーブデータをエクスポート」を押してください。",
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "このページが操作されていなかったため、リアルタイム出力を一時停止しました。引き続き表示するには再接続してください。"
 }

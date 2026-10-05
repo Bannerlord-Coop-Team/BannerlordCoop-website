@@ -14,11 +14,15 @@ const MAXIMUM_STATE_DETAIL_CHARACTERS = 500;
 export const CONSOLE_RECONNECT_DELAYS = [2_000, 5_000, 10_000, 30_000, 60_000] as const;
 /** A stream open this long counts as healthy, so its end starts a fresh backoff. */
 const STABLE_CONNECTION_MILLISECONDS = 60_000;
+/** Five-minute sessions renew automatically for about half an hour without page activity, then pause. */
+export const MAXIMUM_IDLE_CONSOLE_RENEWALS = 6;
+/** Logging the container host writes before the game's own output, such as podman cgroup warnings. */
+const HOST_LOG_LINE = /^time="[^"]*" level=(?:debug|info|warning|warn) msg="/u;
 const GAME_PHASES = new Set<ManagedGamePhase>(["boot", "loading", "serving", "stopping", "fatal"]);
 /** Optional timestamp written before a control record, such as "[12:00:01] " or "2026-10-04T12:00:01Z ". */
 const TIMESTAMP_PREFIX = /^[\d\s[\]:.,/TZ+-]{0,48}$/u;
 
-type ConsoleState = "connecting" | "connected" | "reconnecting" | "stopped" | "unavailable";
+type ConsoleState = "connecting" | "connected" | "reconnecting" | "stopped" | "idle" | "unavailable";
 type ConsoleRun = "running" | "active" | "inactive";
 type StreamHandle = { reconnect: () => void; activate: () => void; deactivate: () => void };
 
@@ -61,6 +65,13 @@ export function parseConsoleControlLine(line: string): ConsoleControlLine | null
     }
 }
 
+/** Hides container-host logging and control records that are incomplete, such as a truncated command list. */
+export function isHiddenConsoleLine(line: string) {
+    if (HOST_LOG_LINE.test(line)) return true;
+    const marker = line.indexOf("@DS@");
+    return marker >= 0 && TIMESTAMP_PREFIX.test(line.slice(0, marker));
+}
+
 /** Reports whether a scrolled element is showing its newest content, within a small tolerance. */
 export function isScrolledToBottom(scrollTop: number, scrollHeight: number, clientHeight: number, tolerance = 24) {
     return scrollHeight - scrollTop - clientHeight <= tolerance;
@@ -93,6 +104,7 @@ function ConsoleLines({ text }: { text: string }) {
     return lines.map((line, index) => {
         const control = parseConsoleControlLine(line);
         const ending = index < lines.length - 1 ? "\n" : "";
+        if (!control && isHiddenConsoleLine(line)) return null;
         if (!control) return <Fragment key={index}>{line}{ending}</Fragment>;
         if (control.kind === "hidden") return null;
         if (control.kind === "state") {
@@ -129,8 +141,10 @@ function useConsoleStream(serverId: string, run: ConsoleRun) {
         let failures = 0;
         let streaming = false;
         let waitingForVisibility = false;
+        let idleRenewals = 0;
+        let idle = false;
 
-        // Opens a fresh stream; renewed output replaces the old text only once the replay arrives.
+        // Opens a fresh stream; streams carry only new output, so reconnects append to what is shown.
         async function connect(mode: "initial" | "retry" | "renew") {
             clearTimeout(timer);
             timer = undefined;
@@ -141,7 +155,6 @@ function useConsoleStream(serverId: string, run: ConsoleRun) {
             streaming = true;
             const connection = ++consoleConnections;
             const openedAt = Date.now();
-            let replacing = mode !== "initial";
             let ending: "ended" | "expired" | "failed" = "failed";
             let runEnded = false;
             if (mode === "initial") {
@@ -184,11 +197,7 @@ function useConsoleStream(serverId: string, run: ConsoleRun) {
                             ending = "failed";
                         }
                     }
-                    if (lines.length > 0) {
-                        const start = replacing;
-                        replacing = false;
-                        setText((existing) => lines.reduce(boundedConsoleText, start ? "" : existing));
-                    }
+                    if (lines.length > 0) setText((existing) => lines.reduce(boundedConsoleText, existing));
                     if (next.done) break;
                 }
             } catch {
@@ -200,7 +209,12 @@ function useConsoleStream(serverId: string, run: ConsoleRun) {
             signals?.publish({ type: "closed", serverId, connection, runEnded });
             const stable = Date.now() - openedAt >= STABLE_CONNECTION_MILLISECONDS;
             if (stable) failures = 0;
-            if (ending === "expired" && stable) {
+            if (ending === "expired" && stable && idleRenewals >= MAXIMUM_IDLE_CONSOLE_RENEWALS) {
+                // An unattended page stops holding a stream open; any activity resumes it.
+                idle = true;
+                setState("idle");
+            } else if (ending === "expired" && stable) {
+                idleRenewals += 1;
                 reconnectWhenVisible("renew");
             } else if (runRef.current === "inactive") {
                 setState("stopped");
@@ -238,9 +252,19 @@ function useConsoleStream(serverId: string, run: ConsoleRun) {
             if (document.visibilityState === "visible" && waitingForVisibility) void connect("retry");
         }
 
+        // Owner activity restarts the idle allowance and resumes a stream paused for inactivity.
+        function markActive() {
+            idleRenewals = 0;
+            if (!idle) return;
+            idle = false;
+            if (runRef.current !== "inactive") void connect("retry");
+        }
+
         handleRef.current = {
             reconnect() {
                 failures = 0;
+                idleRenewals = 0;
+                idle = false;
                 void connect("retry");
             },
             activate() {
@@ -257,12 +281,16 @@ function useConsoleStream(serverId: string, run: ConsoleRun) {
             },
         };
         document.addEventListener("visibilitychange", resumeWhenVisible);
+        window.addEventListener("pointerdown", markActive);
+        window.addEventListener("keydown", markActive);
         void connect("initial");
         return () => {
             handleRef.current = null;
             controller?.abort();
             clearTimeout(timer);
             document.removeEventListener("visibilitychange", resumeWhenVisible);
+            window.removeEventListener("pointerdown", markActive);
+            window.removeEventListener("keydown", markActive);
             detach?.();
         };
     }, [serverId, signals]);
@@ -286,6 +314,7 @@ export function ManagedServerConsole({ serverId, operationState = "running", obs
         connected: t("console.connectedWaitingForOutput"),
         reconnecting: t("console.reconnectingToLiveOutput"),
         stopped: t("console.theServerIsStoppedOutputWillAppearHereWhenIt"),
+        idle: t("console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching"),
         unavailable: t("console.liveOutputIsnTAvailableRightNow"),
     };
 
@@ -330,7 +359,7 @@ export function ManagedServerConsole({ serverId, operationState = "running", obs
                 {!following && text && <button type="button" onClick={jumpToLatest} className="absolute right-4 bottom-4 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-gold/40 bg-surface/95 px-3 py-1.5 text-xs font-medium text-gold shadow-lg hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-gold">
                     <ArrowDown className="size-3.5" aria-hidden="true" />{t("console.jumpToLatest")}</button>}
             </div>
-            {state === "unavailable" && <div className="flex justify-end border-t border-white/10 px-4 py-2">
+            {(state === "unavailable" || state === "idle") && <div className="flex justify-end border-t border-white/10 px-4 py-2">
                 <button type="button" onClick={reconnect} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold">
                     <RotateCw className="size-4" aria-hidden="true" />{t("console.reconnect")}</button>
             </div>}

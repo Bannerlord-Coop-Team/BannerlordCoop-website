@@ -707,5 +707,6 @@
   "transfers.theServerIsStillChangingWaitAMomentAndTryExportSaveAgain": "Der Server ändert sich noch. Warte einen Moment und versuche „Spielstand exportieren“ erneut.",
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "Pausiert, solange eine andere Übertragung offen ist. Schließe sie ab oder blende sie aus, um eine neue zu starten.",
   "transfers.preparingDownload": "Download wird vorbereitet …",
-  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Deine aktive Kampagne hat sich geändert, während diese Seite geöffnet war. Prüfe sie oben und klicke dann erneut auf „Spielstand exportieren“."
+  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Deine aktive Kampagne hat sich geändert, während diese Seite geöffnet war. Prüfe sie oben und klicke dann erneut auf „Spielstand exportieren“.",
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "Die Live-Ausgabe wurde pausiert, weil diese Seite inaktiv war. Verbinde dich erneut, um weiter zuzusehen."
 }

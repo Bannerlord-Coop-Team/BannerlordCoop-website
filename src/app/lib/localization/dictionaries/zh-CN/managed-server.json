@@ -706,5 +706,6 @@
   "transfers.theServerIsStillChangingWaitAMomentAndTryExportSaveAgain": "服务器状态仍在变化。请稍候，然后再次尝试“导出存档”。",
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "另一项传输尚未结束，因此已暂停。请完成或清除该传输后再开始新的传输。",
   "transfers.preparingDownload": "正在准备下载…",
-  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "此页面打开期间，你的当前战役已更改。请在上方确认后，再次点击“导出存档”。"
+  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "此页面打开期间，你的当前战役已更改。请在上方确认后，再次点击“导出存档”。",
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "此页面闲置期间，实时输出已暂停。请重新连接以继续查看。"
 }

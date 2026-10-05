@@ -709,5 +709,6 @@
   "transfers.theServerIsStillChangingWaitAMomentAndTryExportSaveAgain": "Состояние сервера всё ещё меняется. Подождите немного и снова нажмите «Экспорт сохранения».",
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "Приостановлено, пока открыта другая передача. Завершите или скройте её, чтобы начать новую.",
   "transfers.preparingDownload": "Подготовка загрузки…",
-  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Активная кампания изменилась, пока эта страница была открыта. Проверьте её выше и снова нажмите «Экспорт сохранения»."
+  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Активная кампания изменилась, пока эта страница была открыта. Проверьте её выше и снова нажмите «Экспорт сохранения».",
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "Вывод в реальном времени приостановлен, пока страница была неактивна. Переподключитесь, чтобы продолжить просмотр."
 }

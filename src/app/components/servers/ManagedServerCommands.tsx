@@ -15,6 +15,8 @@ import { MAXIMUM_CONSOLE_COMMAND_LENGTH, parseConsoleSubmission, type ConsoleSub
 
 const button = "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-gold/40 bg-gold/10 px-4 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
 const commandNames = coopConsoleCommands.map(([usage]) => usage.split(/\s/u, 1)[0]);
+/** An unconfirmed delivery stops being useful once output would have appeared. */
+const UNCERTAIN_NOTICE_MILLISECONDS = 20_000;
 const SENT_NOTICE_MILLISECONDS = 5_000;
 
 type ComposerFeedback = { kind: "invalid" | "error" | "sent"; text: ReactNode };
@@ -63,12 +65,12 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
         setDraft(draft + completion);
     }
 
-    /** Shows composer feedback under the input; a sent notice clears itself shortly afterwards. */
-    function showFeedback(next: ComposerFeedback) {
+    /** Shows composer feedback under the input; transient notices clear themselves once they are no longer useful. */
+    function showFeedback(next: ComposerFeedback, clearAfter = next.kind === "sent" ? SENT_NOTICE_MILLISECONDS : undefined) {
         clearTimeout(sentTimer.current);
         setFeedback(next);
-        if (next.kind === "sent") {
-            sentTimer.current = setTimeout(() => setFeedback(current => current?.kind === "sent" ? null : current), SENT_NOTICE_MILLISECONDS);
+        if (clearAfter !== undefined) {
+            sentTimer.current = setTimeout(() => setFeedback(current => current === next ? null : current), clearAfter);
         }
     }
 
@@ -101,13 +103,13 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
             if (response.ok) {
                 showFeedback({ kind: "sent", text: t("commands.sentCommandOutputAppearsAbove", { command: input.command }) });
             } else if (response.uncertain) {
-                showFeedback({ kind: "error", text: t("commands.weCouldnTConfirmCommandWasDeliveredIfNoOutput", { command: input.command }) });
+                showFeedback({ kind: "error", text: t("commands.weCouldnTConfirmCommandWasDeliveredIfNoOutput", { command: input.command }) }, UNCERTAIN_NOTICE_MILLISECONDS);
             } else {
                 showFeedback({ kind: "error", text: `${input.command}: ${response.message}` });
                 if (response.refresh) router.refresh();
             }
         } catch {
-            showFeedback({ kind: "error", text: t("commands.weCouldnTConfirmCommandWasDeliveredIfNoOutput", { command: input.command }) });
+            showFeedback({ kind: "error", text: t("commands.weCouldnTConfirmCommandWasDeliveredIfNoOutput", { command: input.command }) }, UNCERTAIN_NOTICE_MILLISECONDS);
         } finally {
             setSending(count => count - 1);
         }

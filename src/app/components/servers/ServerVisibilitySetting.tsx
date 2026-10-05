@@ -70,7 +70,14 @@ export function ServerVisibilitySetting({ serverId, visibility, accessRole, expe
                         picker.current.querySelector("summary")?.focus();
                     }
                     router.refresh();
-                } else setError(result.message);
+                } else {
+                    setError(result.message);
+                    // A definitive rejection must not pin the next attempt to the same stale request.
+                    if (result.rejected) {
+                        request.current = null;
+                        router.refresh();
+                    }
+                }
             } catch { setError(t("visibilitySetting.theUpdateCouldNotBeConfirmedTryAgainToRetry")); }
         });
     }

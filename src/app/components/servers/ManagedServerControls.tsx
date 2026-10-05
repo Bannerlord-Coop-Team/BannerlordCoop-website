@@ -55,9 +55,7 @@ export type RestartProgress = {
     stage: RestartStage;
     /** Streams numbered at or above this boundary carry the restarted run. */
     boundary: number;
-    /** A stream that showed the old run stopping and may continue with the new run. */
-    stoppedConnection: number | null;
-    /** The stopped stream once it has shown the new run booting. */
+    /** A stream that showed the restarted run booting or loading. */
     resumedConnection: number | null;
     accepted: boolean;
     consoleLost: boolean;
@@ -66,7 +64,7 @@ export type RestartProgress = {
 
 /** Begins tracking before the request is sent, so the old run's shutdown is not missed. */
 export function beginRestartProgress(): RestartProgress {
-    return { stage: "requested", boundary: Number.POSITIVE_INFINITY, stoppedConnection: null, resumedConnection: null, accepted: false, consoleLost: false };
+    return { stage: "requested", boundary: Number.POSITIVE_INFINITY, resumedConnection: null, accepted: false, consoleLost: false };
 }
 
 /** Reports whether restart progress has reached a final step. */
@@ -95,11 +93,12 @@ export function advanceRestartProgress(progress: RestartProgress, signal: Manage
         return { ...atLeast(progress, "stopping"), boundary: Math.min(progress.boundary, signal.connection + 1) };
     }
     if (signal.type !== "phase") return progress;
-    if (signal.phase === "stopping") return { ...atLeast(progress, "stopping"), stoppedConnection: signal.connection };
+    if (signal.phase === "stopping") return atLeast(progress, "stopping");
     const restarted = signal.connection >= progress.boundary || signal.connection === progress.resumedConnection;
     if (!restarted) {
-        // A stream that outlives the shutdown counts only once it shows the new run booting.
-        if (signal.connection !== progress.stoppedConnection || (signal.phase !== "boot" && signal.phase !== "loading")) return progress;
+        // Runner streams follow only new output (podman logs --tail=0) and survive the container restart,
+        // so once Restart is pressed a booting or loading game is the restarted run on whichever stream reports it.
+        if (signal.phase !== "boot" && signal.phase !== "loading") return progress;
         return { ...atLeast(progress, "loading"), resumedConnection: signal.connection };
     }
     if (signal.phase === "fatal") return { ...progress, stage: "failed", ...(signal.detail ? { detail: signal.detail } : {}) };

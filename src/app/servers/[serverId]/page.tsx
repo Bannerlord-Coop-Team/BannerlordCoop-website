@@ -19,6 +19,7 @@ import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles"
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
 import { ManagedServerControls, ManagedServerPassword } from "@/app/components/servers/ManagedServerControls";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
+import { readManagedServerStatusFingerprint } from "@/app/servers/managed-server-actions";
 import {
     getLiveConsoleAccessLevel,
     getMemberRole,
@@ -217,7 +218,7 @@ function ManagedServerSections({
     hasLiveConsole?: boolean;
 }) {
     return (
-        <ManagedServerPollingProvider>
+        <ManagedServerPollingProvider readStatus={readManagedServerStatusFingerprint}>
             <ServerWorkspacePanel section="Console">
                 {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : server.accessRole === "owner" || server.accessRole === "manager"
                     ? <ManagedServerCommands key={`${userId}:${server.serverId}`} server={server} userId={userId} controls={<ManagedServerLifecycleSection server={server} />} />

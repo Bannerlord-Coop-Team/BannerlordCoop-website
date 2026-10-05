@@ -707,5 +707,6 @@
   "transfers.theServerIsStillChangingWaitAMomentAndTryExportSaveAgain": "O servidor ainda está mudando. Aguarde um momento e tente Exportar jogo salvo novamente.",
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "Pausado enquanto outra transferência estiver aberta. Conclua-a ou dispense-a para iniciar uma nova.",
   "transfers.preparingDownload": "Preparando o download…",
-  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Sua campanha ativa mudou enquanto esta página estava aberta. Confira acima e clique em Exportar jogo salvo novamente."
+  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Sua campanha ativa mudou enquanto esta página estava aberta. Confira acima e clique em Exportar jogo salvo novamente.",
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "A saída em tempo real foi pausada porque esta página ficou inativa. Reconecte para continuar acompanhando."
 }

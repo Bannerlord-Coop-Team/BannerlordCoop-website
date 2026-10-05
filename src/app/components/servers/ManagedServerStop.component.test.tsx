@@ -2,7 +2,7 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerControls } from "./ManagedServerControls";
-import { ManagedServerPollingProvider, managedServerPollDelay, useManagedServerPolling } from "./ManagedServerPollingProvider";
+import { ManagedServerPollingProvider, managedServerPollDelay, useManagedServerPolling, type ManagedServerStatusReader } from "./ManagedServerPollingProvider";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 
 const { operate, router } = vi.hoisted(() => ({ operate: vi.fn(), router: { refresh: vi.fn() } }));
@@ -116,9 +116,9 @@ function PollingProbe() {
 }
 
 /** Mounts the provider with a probe and the lifecycle controls. */
-async function renderWithProbe() {
+async function renderWithProbe(readStatus?: ManagedServerStatusReader) {
     await act(async () => root.render(
-        <TestLocalization><ManagedServerPollingProvider><PollingProbe /><ManagedServerControls {...server} /></ManagedServerPollingProvider></TestLocalization>,
+        <TestLocalization><ManagedServerPollingProvider readStatus={readStatus}><PollingProbe /><ManagedServerControls {...server} /></ManagedServerPollingProvider></TestLocalization>,
     ));
 }
 
@@ -158,6 +158,25 @@ it("ends a session as soon as its owner reports that the operation settled", asy
     const refreshes = router.refresh.mock.calls.length;
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(router.refresh).toHaveBeenCalledTimes(refreshes);
+});
+
+it("re-renders the page only when the compact server status changes", async () => {
+    const readStatus = vi.fn<ManagedServerStatusReader>().mockResolvedValue({ ok: true, fingerprint: "running" });
+    await renderWithProbe(readStatus);
+    await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt));
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(router.refresh).toHaveBeenCalledTimes(2);
+    await act(async () => vi.advanceTimersByTimeAsync(16_000));
+    expect(readStatus).toHaveBeenCalledTimes(5);
+    expect(router.refresh).toHaveBeenCalledTimes(2);
+    readStatus.mockResolvedValue({ ok: true, fingerprint: "stopping" });
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(router.refresh).toHaveBeenCalledTimes(3);
+    readStatus.mockResolvedValue({ ok: false });
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(router.refresh).toHaveBeenCalledTimes(4);
+    expect(readStatus).toHaveBeenCalledWith(server.serverId);
 });
 
 it("releases the controls after two minutes when a backup request's job never appears", async () => {

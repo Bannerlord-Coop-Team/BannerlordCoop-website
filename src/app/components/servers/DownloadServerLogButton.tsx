@@ -7,6 +7,9 @@ import { Download, LoaderCircle } from "lucide-react";
 import { downloadMyServerLog } from "@/app/lib/hosting/server-files";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 
+/** How long the empty-log notice stays beside the button. */
+const NOTICE_MILLISECONDS = 10_000;
+
 // Presents authenticated log downloads with detailed localized diagnostics.
 export function DownloadServerLogButton({ serverId, userId, className }: { serverId?: string; userId?: string; className: string }) {
     const { t } = useTranslations("managed-server");
@@ -30,6 +33,7 @@ export function DownloadServerLogButton({ serverId, userId, className }: { serve
             });
             if (result.blob.size === 0) {
                 setNotice(t("downloadServerLogButton.theServerSLogFileIsEmptyRightNowIt"));
+                window.setTimeout(() => setNotice(""), NOTICE_MILLISECONDS);
                 return;
             }
             const url = URL.createObjectURL(result.blob);
@@ -43,14 +47,15 @@ export function DownloadServerLogButton({ serverId, userId, className }: { serve
         } finally { setPending(false); }
     }
 
-    return <>
+    // Feedback floats under the button so toolbars never reflow around it.
+    return <span className="relative inline-flex">
         <button type="button" disabled={!serverId || !userId || pending} onClick={download}
             title={t("downloadServerLogButton.downloadTheLatestLogFileFromTheServerSLogs")}
             className={className}>
             {pending ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
             {pending ? t("downloadServerLogButton.downloading") : t("downloadServerLogButton.downloadLogs")}
         </button>
-        {error && <p role="alert" className="max-w-sm text-sm text-red-300">{error}</p>}
-        {notice && <p role="status" className="max-w-sm text-sm text-foreground-muted">{notice}</p>}
-    </>;
+        {error && <p role="alert" className="absolute top-full right-0 z-20 mt-1 w-72 rounded-md border border-red-400/30 bg-surface-raised p-3 text-sm text-red-300 shadow-xl">{error}</p>}
+        {notice && <p role="status" className="absolute top-full right-0 z-20 mt-1 w-72 rounded-md border border-white/15 bg-surface-raised p-3 text-sm text-foreground-muted shadow-xl">{notice}</p>}
+    </span>;
 }

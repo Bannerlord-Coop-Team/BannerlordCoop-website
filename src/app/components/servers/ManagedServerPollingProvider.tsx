@@ -100,8 +100,11 @@ export function createManagedConsoleSignals(): ManagedConsoleSignals {
     };
 }
 
+/** Reads a compact status fingerprint; polling re-renders the page only when it changes. */
+export type ManagedServerStatusReader = (serverId: string) => Promise<{ ok: true; fingerprint: string } | { ok: false }>;
+
 /** Shares status polling and live console phases between the managed server's panels. */
-export function ManagedServerPollingProvider({ children }: { children: ReactNode }) {
+export function ManagedServerPollingProvider({ children, readStatus }: { children: ReactNode; readStatus?: ManagedServerStatusReader }) {
     const router = useRouter();
     const [session, setSession] = useState<PollingSession | null>(null);
     const [timedOutSession, setTimedOutSession] = useState<PollingSession | null>(null);
@@ -142,22 +145,36 @@ export function ManagedServerPollingProvider({ children }: { children: ReactNode
 
     useEffect(() => {
         if (session === null) return;
-        const { startedAt } = session;
+        const { serverId, startedAt } = session;
         let timer: number | undefined;
         let refreshWhenVisible = false;
+        let cancelled = false;
+        let lastFingerprint: string | null = null;
 
-        // Refreshes on a widening schedule; a hidden tab defers its refresh until it is shown again.
-        function tick() {
-            if (document.visibilityState === "hidden") refreshWhenVisible = true;
-            else router.refresh();
-            timer = window.setTimeout(tick, managedServerPollDelay(Date.now() - startedAt));
+        // Full page renders are expensive on the edge runtime, so unchanged status skips them.
+        // The fingerprint is read before refreshing, so a change after it is caught next time.
+        async function refreshIfChanged() {
+            if (readStatus) {
+                const result = await readStatus(serverId).catch(() => null);
+                if (cancelled) return;
+                if (result?.ok && result.fingerprint === lastFingerprint) return;
+                lastFingerprint = result?.ok ? result.fingerprint : null;
+            }
+            router.refresh();
         }
 
-        // Catches up immediately when the owner returns to a tab that skipped refreshes.
+        // Checks on a widening schedule; a hidden tab defers its check until it is shown again.
+        async function tick() {
+            if (document.visibilityState === "hidden") refreshWhenVisible = true;
+            else await refreshIfChanged();
+            if (!cancelled) timer = window.setTimeout(tick, managedServerPollDelay(Date.now() - startedAt));
+        }
+
+        // Catches up immediately when the owner returns to a tab that skipped checks.
         function refreshOnReturn() {
             if (document.visibilityState !== "visible" || !refreshWhenVisible) return;
             refreshWhenVisible = false;
-            router.refresh();
+            void refreshIfChanged();
         }
 
         timer = window.setTimeout(tick, managedServerPollDelay(Date.now() - startedAt));
@@ -167,11 +184,12 @@ export function ManagedServerPollingProvider({ children }: { children: ReactNode
         }, Math.max(0, session.deadline - Date.now()));
         document.addEventListener("visibilitychange", refreshOnReturn);
         return () => {
+            cancelled = true;
             window.clearTimeout(timer);
             window.clearTimeout(deadline);
             document.removeEventListener("visibilitychange", refreshOnReturn);
         };
-    }, [router, session]);
+    }, [readStatus, router, session]);
 
     const value = useMemo(() => ({ session, timedOutSession, beginPolling, attachJob, endPolling }), [
         attachJob,

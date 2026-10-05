@@ -3,7 +3,7 @@ import { TestLocalization, serverTestMessages } from "@/app/components/servers/M
 import { act, StrictMode, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ManagedServerConsole } from "./ManagedServerConsole";
+import { MAXIMUM_IDLE_CONSOLE_RENEWALS, ManagedServerConsole } from "./ManagedServerConsole";
 import { ManagedServerPollingProvider, useManagedConsoleSignals, type ManagedConsoleSignal } from "./ManagedServerPollingProvider";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
@@ -110,7 +110,8 @@ it("aborts the old server connection and ignores its late response after switchi
     expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 
-it("renews an expired session at once while visible, keeping output until the replay arrives", async () => {
+it("renews an expired session at once while visible, keeping earlier output and appending new lines", async () => {
+    // Runner streams follow only new output (podman logs --tail=0), so a renewal never replays history.
     vi.useFakeTimers();
     const first = liveStream();
     const second = liveStream();
@@ -122,8 +123,39 @@ it("renews an expired session at once while visible, keeping output until the re
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(output()).toBe("Line one\n");
     expect(output()).not.toContain("Reload");
-    await second.send("Line one", "Line two");
+    await second.send("Line two");
     expect(output()).toBe("Line one\nLine two\n");
+});
+
+it("pauses renewals on an unattended page and resumes on owner activity", async () => {
+    vi.useFakeTimers();
+    const streams = Array.from({ length: MAXIMUM_IDLE_CONSOLE_RENEWALS + 2 }, () => liveStream());
+    for (const stream of streams) fetchMock.mockResolvedValueOnce(stream.response);
+    await renderConsole();
+    for (let index = 0; index <= MAXIMUM_IDLE_CONSOLE_RENEWALS; index += 1) {
+        await streams[index].send(`Line ${index}`);
+        vi.setSystemTime(Date.now() + 5 * 60_000);
+        await streams[index].end("expired");
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(MAXIMUM_IDLE_CONSOLE_RENEWALS + 1);
+    expect(output()).toContain("Live output paused while this page was idle.");
+    expect(output()).toContain("Line 0");
+    expect([...container.querySelectorAll("button")].some(button => button.textContent === "Reconnect")).toBe(true);
+    await act(async () => window.dispatchEvent(new Event("pointerdown")));
+    expect(fetchMock).toHaveBeenCalledTimes(MAXIMUM_IDLE_CONSOLE_RENEWALS + 2);
+});
+
+it("hides container-host logging and incomplete control records", async () => {
+    const truncated = `@DS@{"ev":"commands","builtin":["status","${"x".repeat(40)}`;
+    fetchMock.mockResolvedValue(new Response([
+        'time="2026-10-05T00:10:15Z" level=warning msg="Falling back to --cgroup-manager=cgroupfs"',
+        truncated,
+        "[DedicatedServer] pulse: players=0",
+    ].map(stdoutFrame).join("")));
+    await renderConsole();
+    expect(output()).toContain("[DedicatedServer] pulse: players=0");
+    expect(output()).not.toContain("cgroup-manager");
+    expect(output()).not.toContain("@DS@");
 });
 
 it("waits for the tab to be shown again before renewing an expired session", async () => {
@@ -342,16 +374,23 @@ it("uses red styling for a failed command record without claiming success", asyn
     expect(container.querySelector('[aria-label="Command output"]')).toBeNull();
 });
 
+it("preserves ordinary stdout as text", async () => {
+    const line = "Ordinary stdout containing coop.debug.alley.abandon";
+    fetchMock.mockResolvedValue(new Response(stdoutFrame(line)));
+    await renderConsole();
+    expect(output()).toContain(`${line}\n`);
+    expect(container.querySelector('[role="group"]')).toBeNull();
+});
+
 it.each([
-    "Ordinary stdout containing coop.debug.alley.abandon",
     "@DS@{not-json}",
     `@DS@${JSON.stringify({ ...commandRecord, ev: "another-event" })}`,
     `@DS@${JSON.stringify({ ...commandRecord, ok: "true" })}`,
     `@DS@${JSON.stringify({ ...commandRecord, output: null })}`,
-])("preserves unrecognized stdout as ordinary text: %s", async line => {
+])("hides unrecognized control records instead of showing protocol text: %s", async line => {
     fetchMock.mockResolvedValue(new Response(stdoutFrame(line)));
     await renderConsole();
-    expect(output()).toContain(`${line}\n`);
+    expect(output()).not.toContain("@DS@");
     expect(container.querySelector('[role="group"]')).toBeNull();
 });
 

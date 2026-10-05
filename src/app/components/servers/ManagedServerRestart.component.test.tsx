@@ -99,22 +99,36 @@ it("follows Restart through live game phases to readiness while keeping the cont
     expect(operate).toHaveBeenCalledExactlyOnceWith({ serverId, action: "restart-game" });
 });
 
-it("ignores replayed output from the old run, even on a stream renewed during the request", async () => {
+it("follows the restarted run on the same stream, as the live runner reports it", async () => {
+    // Production sequence: the stream opened before Restart survives the container restart.
     await render();
     await emit({ type: "opened", serverId, connection: 1 });
     const response = await requestRestart();
-    await emit({ type: "opened", serverId, connection: 2 });
-    for (const phase of ["boot", "loading", "serving"] as const) await emit({ type: "phase", serverId, connection: 2, phase });
+    await act(async () => response.resolve(accepted));
+    expect(currentStep()).toContain("Stop the game");
+    await emit({ type: "phase", serverId, connection: 1, phase: "loading" });
+    expect(currentStep()).toContain("Load campaign");
+    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+    await emit({ type: "phase", serverId, connection: 1, phase: "serving" });
+    expect(container.textContent).toContain("Your server is ready to join");
+    expect(buttons()[2].disabled).toBe(false);
+});
+
+it("ignores a ready report from the old run until the restarted run is seen", async () => {
+    await render();
+    await emit({ type: "opened", serverId, connection: 1 });
+    const response = await requestRestart();
+    await emit({ type: "phase", serverId, connection: 1, phase: "serving" });
     expect(currentStep()).toContain("Restart requested");
     await act(async () => response.resolve(accepted));
-    await emit({ type: "phase", serverId, connection: 2, phase: "serving" });
+    await emit({ type: "phase", serverId, connection: 1, phase: "serving" });
     expect(currentStep()).toContain("Stop the game");
-    await emit({ type: "opened", serverId, connection: 3 });
-    await emit({ type: "phase", serverId, connection: 3, phase: "serving" });
+    await emit({ type: "opened", serverId, connection: 2 });
+    await emit({ type: "phase", serverId, connection: 2, phase: "serving" });
     expect(container.textContent).toContain("Your server is ready to join");
 });
 
-it("accepts a stream that continues into the new run only after it shows the game booting", async () => {
+it("waits for the restarted run to boot before trusting the same stream", async () => {
     await render();
     await emit({ type: "opened", serverId, connection: 1 });
     const response = await requestRestart();
