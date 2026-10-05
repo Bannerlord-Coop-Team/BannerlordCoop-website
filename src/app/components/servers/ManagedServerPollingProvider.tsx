@@ -13,6 +13,8 @@ import {
 
 /** Matches Start progress: long-running operations are followed for up to fifteen minutes. */
 const POLL_DEADLINE_MILLISECONDS = 15 * 60_000;
+/** A backup request whose job never appears releases the lifecycle controls sooner. */
+const UNATTACHED_BACKUP_DEADLINE_MILLISECONDS = 2 * 60_000;
 
 type PollingSession = {
     serverId: string;
@@ -119,7 +121,8 @@ export function ManagedServerPollingProvider({ children }: { children: ReactNode
             jobId: jobId ?? null,
             statusSource,
             startedAt,
-            deadline: startedAt + POLL_DEADLINE_MILLISECONDS,
+            deadline: startedAt + (statusSource === "backup" && jobId === undefined
+                ? UNATTACHED_BACKUP_DEADLINE_MILLISECONDS : POLL_DEADLINE_MILLISECONDS),
         });
         router.refresh();
     }, [router]);
@@ -128,7 +131,7 @@ export function ManagedServerPollingProvider({ children }: { children: ReactNode
         setSession((current) => current?.serverId === serverId
             && current.statusSource === "backup"
             && current.jobId === null
-            ? { ...current, jobId }
+            ? { ...current, jobId, deadline: current.startedAt + POLL_DEADLINE_MILLISECONDS }
             : current);
     }, []);
 

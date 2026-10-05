@@ -159,6 +159,28 @@ it("ends a session as soon as its owner reports that the operation settled", asy
     expect(router.refresh).toHaveBeenCalledTimes(refreshes);
 });
 
+it("releases the controls after two minutes when a backup request's job never appears", async () => {
+    await renderWithProbe();
+    await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt, undefined, "backup"));
+    await act(async () => vi.advanceTimersByTimeAsync(2 * 60_000 - 1));
+    expect(polling.session).not.toBeNull();
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(polling.session).toBeNull();
+    expect(polling.timedOutSession).toMatchObject({ statusSource: "backup", jobId: null });
+    expect(buttons()[1].disabled).toBe(false);
+});
+
+it("follows an attached backup job for the full fifteen minutes", async () => {
+    await renderWithProbe();
+    await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt, undefined, "backup"));
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    await act(async () => polling.attachJob(server.serverId, "33333333-3333-4333-8333-333333333333"));
+    await act(async () => vi.advanceTimersByTimeAsync(14 * 60_000 - 1));
+    expect(polling.session).toMatchObject({ jobId: "33333333-3333-4333-8333-333333333333" });
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(polling.session).toBeNull();
+});
+
 it("defers refreshes while the tab is hidden and catches up when it is shown", async () => {
     let visibility: DocumentVisibilityState = "visible";
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
