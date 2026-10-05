@@ -8,6 +8,7 @@ import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfi
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
 import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "@/app/components/servers/ServerManagementWorkspace";
 import { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
+import { serverWorkspaceSectionFromTab, type ServerWorkspaceSection } from "@/app/components/servers/server-workspace-tabs";
 import { LiveServerVisibilitySetup } from "@/app/components/servers/LiveServerVisibilitySetup";
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
@@ -56,6 +57,7 @@ type ServerPageProps = {
     searchParams: Promise<{
         accessError?: string | string[];
         accessUpdated?: string | string[];
+        tab?: string | string[];
     }>;
 };
 
@@ -82,6 +84,8 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
         supabase.auth.getSession(),
     ]);
     const user = userData.user;
+    // A remembered tab renders on the server, so reloading does not flash the Console first.
+    const rememberedSection = serverWorkspaceSectionFromTab(firstValue(query.tab));
 
     if (!user) redirect(`/login?next=/servers/${encodeURIComponent(serverId)}`);
 
@@ -111,6 +115,7 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
                 accessLevel={liveAccessLevel}
                 accessToken={accessToken}
                 accessUpdated={firstValue(query.accessUpdated)}
+                rememberedSection={rememberedSection}
                 userId={user.id}
                 managedServer={managedServer}
                 backupUnavailableReason={managedLookupFailed ? "lookup-failed" : liveServer.managedServerId ? "access-required" : "mapping-required"}
@@ -125,7 +130,7 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
     }
 
     if (managedServer !== null) {
-        return <ManagedServerManagementPage userId={user.id} accessToken={accessToken} server={managedServer} />;
+        return <ManagedServerManagementPage userId={user.id} accessToken={accessToken} server={managedServer} initialSection={rememberedSection} />;
     }
 
     if (!hasHostedServerAccess(user)) redirect("/");
@@ -138,6 +143,7 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.name}</h1>}
         summary={t("page.previewSummary", { plan: server.plan, location: server.location })}
         notice={t("page.previewServerTheControlPlaneIsNotConnectedServerActionsAreUnavailable")}
+        initialSection={rememberedSection}
     >
         <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><UnavailableServerConsole /></ServerConsoleWorkspace></ServerWorkspacePanel>
         <UnavailableFileWorkspaces />
@@ -170,8 +176,8 @@ async function UnavailableFileWorkspaces() {
 }
 
 /** Composes the managed workspace with compact runtime metadata and task-specific panels. */
-async function ManagedServerManagementPage({ userId, accessToken, server }: {
-    userId: string; accessToken: string; server: MyServerSummary;
+async function ManagedServerManagementPage({ userId, accessToken, server, initialSection }: {
+    userId: string; accessToken: string; server: MyServerSummary; initialSection?: ServerWorkspaceSection;
 }) {
     const { t } = await getTranslations("managed-server");
     const managedAccessLabels: Record<MyServerSummary["accessRole"], string> = {
@@ -183,6 +189,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server }: {
 
     return <ServerManagementWorkspace
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.displayName}</h1>}
+        initialSection={initialSection}
         address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
         visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} />}
         summary={t("page.managedSummary", { region: formatManagedValue(server.friendlyRegion), access: managedAccessLabels[server.accessRole] })}
@@ -299,6 +306,7 @@ async function LiveServerManagementPage({
     accessLevel,
     accessToken,
     accessUpdated,
+    rememberedSection,
     managedServer,
     backupUnavailableReason,
     logDownload,
@@ -309,6 +317,7 @@ async function LiveServerManagementPage({
     accessLevel: LiveConsoleAccessLevel;
     accessToken: string;
     accessUpdated?: string;
+    rememberedSection?: ServerWorkspaceSection;
     managedServer: MyServerSummary | null;
     backupUnavailableReason: LiveServerBackupUnavailableReason;
     logDownload?: { serverId: string; userId: string };
@@ -360,7 +369,7 @@ async function LiveServerManagementPage({
             ? <ServerVisibilitySetting serverId={managedServer.serverId} visibility={managedServer.visibility} accessRole={managedServer.accessRole} expectedUpdatedAt={managedServer.updatedAt} />
             : <a href="#server-visibility" className="ml-auto inline-flex min-h-10 items-center rounded-md border border-white/15 px-3 text-sm text-gold underline focus-visible:outline-2 focus-visible:outline-gold">{t("page.setUpVisibility")}</a>}
         summary={t("page.liveSummary", { provider: server.provider, access: accessLabels[accessLevel] })}
-        initialSection={accessError || accessUpdated ? "Settings" : "Console"}
+        initialSection={accessError || accessUpdated ? "Settings" : rememberedSection ?? "Console"}
         notice={t("page.protectedProductionAccessControlsAndCommandsAffectTheLiveBannerlordProcessImmediately")}
     >
         <ServerWorkspacePanel section="Console">

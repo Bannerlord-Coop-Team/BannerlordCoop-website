@@ -46,6 +46,22 @@ describe("copy server address", () => {
         expect(onCopied).not.toHaveBeenCalled();
     });
 
+    it("returns from Copied! to Join after a moment but keeps the manual-copy fallback", async () => {
+        vi.useFakeTimers();
+        try {
+            const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Denied"));
+            vi.stubGlobal("navigator", { clipboard: { writeText } });
+            await act(async () => root.render(<TestLocalization>{<CopyJoinButton address="203.0.113.10:7210" />} </TestLocalization>));
+            await act(async () => container.querySelector("button")!.click());
+            expect(container.querySelector("button")?.textContent).toContain("Copied!");
+            await act(async () => vi.advanceTimersByTimeAsync(2_000));
+            expect(container.querySelector("button")?.textContent).toContain("Join");
+            await act(async () => container.querySelector("button")!.click());
+            await act(async () => vi.advanceTimersByTimeAsync(5_000));
+            expect(container.querySelector('[role="status"]')?.textContent).toContain("Copy manually: 203.0.113.10:7210");
+        } finally { vi.useRealTimers(); }
+    });
+
     it("does not copy missing or offline endpoints", async () => {
         const writeText = vi.fn();
         vi.stubGlobal("navigator", { clipboard: { writeText } });

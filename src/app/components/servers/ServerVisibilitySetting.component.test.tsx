@@ -45,7 +45,8 @@ it.each(["throw", "error"] as const)("retries the identical UUID and input after
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!.click());
     expect(mocks.update.mock.calls[1][0]).toEqual(first);
     expect(mocks.refresh).toHaveBeenCalledOnce();
-    expect(container.querySelector("summary")?.textContent).toContain("Private");
+    // An acknowledgement may be a replay, so it never claims the new preference before refreshed props do.
+    expect(container.querySelector("summary")?.textContent).not.toContain("Public");
 });
 it("uses a new request after an authoritative generation change", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -82,6 +83,43 @@ it("shows the selected choice and closes the picker with Escape", async () => {
     await act(async () => picker.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(picker.open).toBe(false);
     expect(document.activeElement).toBe(summary);
+});
+
+it("closes the picker when the pointer or focus moves outside it, but not inside it", async () => {
+    await act(async () => root.render(<TestLocalization><button>Elsewhere</button><ServerVisibilitySetting {...props} /></TestLocalization>));
+    const picker = container.querySelector("details")!;
+    picker.open = true;
+    await act(async () => container.querySelector('button[aria-pressed="true"]')!.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    expect(picker.open).toBe(true);
+    await act(async () => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    expect(picker.open).toBe(false);
+    picker.open = true;
+    await act(async () => container.querySelector("button")!.focus());
+    expect(picker.open).toBe(false);
+});
+
+it("acknowledges a change without a lingering message, then shows the refreshed preference", async () => {
+    vi.useFakeTimers();
+    try {
+        vi.spyOn(window, "confirm").mockReturnValue(true);
+        mocks.update.mockResolvedValue({ ok: true, message: "Discovery preference update acknowledged. Refreshing the current setting." });
+        await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} />} </TestLocalization>));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!.click());
+        const announcement = [...container.querySelectorAll('[role="status"]')].find((status) => status.textContent?.includes("acknowledged"));
+        // Screen readers hear the acknowledgement; sighted users see "Saving…" in place, so nothing shifts.
+        expect(announcement?.className).toBe("sr-only");
+        expect(container.querySelector("summary")!.textContent).toContain("Saving…");
+        await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} visibility="public" expectedUpdatedAt="2026-09-14T00:00:00.000Z" />} </TestLocalization>));
+        expect(container.querySelector("summary")!.textContent).toContain("Public");
+        expect(container.textContent).not.toContain("acknowledged");
+        // A replay that leaves the preference unchanged still stops saying "Saving…" after a few seconds.
+        await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} visibility="public" expectedUpdatedAt="2026-09-14T00:00:00.000Z" />} </TestLocalization>));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!.click());
+        expect(container.querySelector("summary")!.textContent).toContain("Saving…");
+        await act(async () => vi.advanceTimersByTimeAsync(6_000));
+        expect(container.querySelector("summary")!.textContent).toContain("Public");
+        expect(container.textContent).not.toContain("acknowledged");
+    } finally { vi.useRealTimers(); }
 });
 
 // Resolves real English messages without reading cookies in standalone tests.

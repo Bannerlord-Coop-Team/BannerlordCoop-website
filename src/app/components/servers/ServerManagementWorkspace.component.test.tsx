@@ -267,13 +267,83 @@ it("carries visibility's new generation into a combined channel save", async () 
     expect(container.textContent).toContain("Visibility saved Nightly unavailable");
 });
 
-it("restores failed update status on reload without claiming completion", async () => {
+it("does not report an earlier update's outcome on reload", async () => {
     const serverId = "11111111-1111-4111-8111-111111111111";
     settingsMocks.releaseStatus.mockResolvedValue({ serverId, releaseChannel: "nightly", job: { jobId: serverId, state: "failed", progress: "Finishing up" } });
     await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel name="Campaign" releaseAccess={{ serverId, channel: "nightly", expectedUpdatedAt: "2026-09-29T12:00:00.000Z", canEdit: true }} />} </TestLocalization>));
-    expect(container.textContent).toContain("Release update failed");
+    expect(settingsMocks.releaseStatus).toHaveBeenCalled();
+    expect(container.textContent).not.toContain("didn't finish");
     expect(container.textContent).not.toContain("Release update completed");
+    expect(container.querySelector<HTMLSelectElement>("#settings-release-channel")!.disabled).toBe(false);
     expect(settingsMocks.release).not.toHaveBeenCalled();
+});
+
+it("reports a failure without blame for an update watched on this page", async () => {
+    vi.useFakeTimers();
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    const jobId = "22222222-2222-4222-8222-222222222222";
+    settingsMocks.releaseStatus.mockResolvedValueOnce({ serverId, releaseChannel: "stable", job: { jobId, state: "running", progress: "Installing the selected server version" } })
+        .mockResolvedValue({ serverId, releaseChannel: "stable", job: { jobId, state: "failed", progress: "Finishing up" } });
+    await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel name="Campaign" releaseAccess={{ serverId, channel: "stable", expectedUpdatedAt: "2026-09-29T12:00:00.000Z", canEdit: true }} />} </TestLocalization>));
+    expect(container.textContent).toContain("Installing the selected server version");
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(container.textContent).toContain("The release update didn't finish. You can try again once the server status above has settled.");
+    expect(container.textContent).not.toContain("contact hosting support");
+});
+
+it("returns Copy IP feedback to its normal label after a moment", async () => {
+    vi.useFakeTimers();
+    const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Denied"));
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    await act(async () => root.render(<TestLocalization>{<ServerManagementWorkspace name="Server" address="203.0.113.8:7210" summary="Running">Content</ServerManagementWorkspace>} </TestLocalization>));
+    const copy = () => [...container.querySelectorAll("button")].find(button => ["Copy IP", "Copied!", "Copy failed"].includes(button.textContent ?? ""))!;
+    await act(async () => copy().click());
+    expect(copy().textContent).toBe("Copied!");
+    await act(async () => vi.advanceTimersByTimeAsync(2_000));
+    expect(copy().textContent).toBe("Copy IP");
+    await act(async () => copy().click());
+    expect(copy().textContent).toBe("Copy failed");
+    await act(async () => vi.advanceTimersByTimeAsync(2_000));
+    expect(copy().textContent).toBe("Copy IP");
+});
+
+it("remembers the selected tab in the URL without navigating and restores it on load", async () => {
+    window.history.replaceState(null, "", "/servers/test?accessUpdated=1#server-access");
+    const replace = vi.spyOn(window.history, "replaceState");
+    const workspace = <ServerManagementWorkspace name="Server" summary="Running">
+        <ServerWorkspacePanel section="Console"><div id="console-content">Console</div></ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Backups"><div id="backup-content">Backups</div></ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Save & config"><div id="file-content">Files</div></ServerWorkspacePanel>
+    </ServerManagementWorkspace>;
+    await act(async () => root.render(<TestLocalization>{workspace} </TestLocalization>));
+    await act(async () => click("Save & config"));
+    expect(replace).toHaveBeenCalledOnce();
+    expect(window.location.pathname).toBe("/servers/test");
+    expect(new URLSearchParams(window.location.search).get("tab")).toBe("save-config");
+    expect(new URLSearchParams(window.location.search).get("accessUpdated")).toBe("1");
+    expect(window.location.hash).toBe("");
+    await act(async () => click("Backups"));
+    expect(new URLSearchParams(window.location.search).get("tab")).toBe("backups");
+    // A fresh page load reopens the remembered tab.
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<TestLocalization>{workspace} </TestLocalization>));
+    expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Backups");
+    expect(container.querySelector("#backup-content")!.closest("[hidden]")).toBeNull();
+    // Unknown values are ignored rather than trusted.
+    window.history.replaceState(null, "", "/servers/test?tab=../../admin");
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<TestLocalization>{workspace} </TestLocalization>));
+    expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Console");
+});
+
+it("keeps access feedback in Settings even when another tab is remembered", async () => {
+    window.history.replaceState(null, "", "/servers/test?tab=backups&accessError=Denied");
+    await act(async () => root.render(<TestLocalization>{<ServerManagementWorkspace name="Server" summary="Running" initialSection="Settings">
+        <ServerWorkspacePanel section="Settings"><div id="settings-content">Access</div></ServerWorkspacePanel>
+    </ServerManagementWorkspace>} </TestLocalization>));
+    expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Settings");
 });
 
 // Resolves real English messages without reading cookies in standalone tests.
