@@ -11,9 +11,9 @@ import type { ManagedServerConfiguration } from "../../../../supabase/functions/
 export { fileButtonClass } from "./server-file-styles";
 
 // Composes save and configuration panels with localized unavailable states.
-export function ServerSaveConfigPanels({ saveName, configuration, configAccess, saveActions, configActions, saveNotice, configNotice }: {
+export function ServerSaveConfigPanels({ saveName, configuration, configAccess, saveActions, configActions, saveNotice, configNotice, configStatus }: {
     saveName?: string; configuration?: ManagedServerConfiguration; configAccess?: ConfigAccess; saveActions?: ReactNode; configActions?: ReactNode;
-    saveNotice?: ReactNode; configNotice?: ReactNode;
+    saveNotice?: ReactNode; configNotice?: ReactNode; configStatus?: ReactNode;
 }) {
     const { t } = useTranslations("managed-server");
     return <div className="space-y-5">
@@ -38,6 +38,8 @@ export function ServerSaveConfigPanels({ saveName, configuration, configAccess, 
                     <button disabled className={fileButtonClass}><Download className="size-4" aria-hidden="true" />{t("saveConfigPanels.exportConfig")}</button>
                 </>}</div>
             </div>
+            {/* Import and export feedback sits directly under the buttons that started it. */}
+            {configStatus && <div className="px-5">{configStatus}</div>}
             <ManagedServerConfigEditor configuration={configuration} access={configAccess} notice={configNotice} />
         </section>
     </div>;
