@@ -420,7 +420,6 @@
   "page.lifecycle": "Lifecycle",
   "page.releaseChannel": "Release channel",
   "page.serverControls": "Server controls",
-  "page.backupHistoryOrDurableProgressCouldNotBeLoadedRefreshBeforeSubmitting": "Backup history or durable progress could not be loaded. Refresh before submitting another backup operation.",
   "page.loadingSavesConfigsAndBackups": "Loading saves, configs and backups",
   "page.administrator": "Administrator",
   "page.operator": "Operator",
@@ -708,5 +707,9 @@
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "Paused while another transfer is open. Finish or dismiss it to start a new one.",
   "transfers.preparingDownload": "Preparing download…",
   "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Your active campaign changed while this page was open. Check it above, then press Export save again.",
-  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "Live output paused while this page was idle. Reconnect to keep watching."
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "Live output paused while this page was idle. Reconnect to keep watching.",
+  "page.backingUp": "Backing up",
+  "page.pausedForBackup": "Paused for backup",
+  "page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused": "Backup history couldn’t be loaded just now, so backup actions are paused. It will reload automatically.",
+  "server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen": "This setting was changed elsewhere while this page was open. The current value is now shown — review it and save again."
 }

@@ -170,6 +170,26 @@ it.each([["settings", "Settings"], ["unknown", undefined]] as const)("opens the 
     expect((workspace!.props as { initialSection?: string }).initialSection).toBe(section);
 });
 
+it.each([
+    ["running", "Paused for backup", "Backing up"],
+    ["queued", "Running", "Backing up"],
+    [null, "Running", "Running"],
+] as const)("reports a %s backup job on a running server in the header status", async (jobState, gameState, lifecycle) => {
+    mocks.liveServer.mockReturnValue(null);
+    const updatedAt = "2026-10-01T00:00:00.000Z";
+    mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole: "owner", displayName: "Managed", friendlyRegion: "Europe", operationState: "running", observedGameState: "running", releaseChannel: "stable", updatedAt }]);
+    mocks.backupStatus.mockResolvedValue({ serverId: managedId, updatedAt, operationState: "running", observedGameState: "running",
+        job: jobState === null ? null : { jobId: "44444444-4444-4444-8444-444444444444", action: "backup", state: jobState, progress: "Creating a safe restore point", createdAt: updatedAt, updatedAt } });
+    const tree = (await ServerPage({ params: Promise.resolve({ serverId: managedId }), searchParams: Promise.resolve({}) })).props.children;
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace" as string);
+    // The status sits in a Suspense boundary whose child reads the backup job; resolve that server component directly.
+    const status = (workspace!.props as { status: ReactElement<{ children: ReactElement }> }).status.props.children;
+    const html = renderToStaticMarkup(<>{await (status.type as (props: unknown) => Promise<ReactNode>)(status.props)}</>);
+    expect(html).toContain(`Game state</dt><dd class="font-medium text-foreground">${gameState}`);
+    expect(html).toContain(`Lifecycle</dt><dd class="font-medium text-foreground">${lifecycle}`);
+    expect(mocks.backupStatus).toHaveBeenCalledWith("token", managedId);
+});
+
 // Resolve the page's server components, leaving client components for React to render.
 function findServerElement(node: ReactNode, name: "LiveServerBackupSetup"): Promise<ReactElement<ComponentProps<typeof LiveServerBackupSetup>> | null>;
 function findServerElement(node: ReactNode, name: "LiveServerVisibilitySetup"): Promise<ReactElement<ComponentProps<typeof LiveServerVisibilitySetup>> | null>;
@@ -265,7 +285,7 @@ it("keeps managed backup load failures distinct from missing onboarding", async 
     try {
         const tree = await page();
         const files = await findServerElement(tree, "ManagedServerFiles");
-        expect(files?.props).toMatchObject({ backups: [], loadError: expect.stringContaining("Refresh before submitting") });
+        expect(files?.props).toMatchObject({ backups: [], loadError: expect.stringContaining("It will reload automatically") });
         expect(await findServerElement(tree, "LiveServerBackupSetup")).toBeNull();
     } finally { error.mockRestore(); }
 });

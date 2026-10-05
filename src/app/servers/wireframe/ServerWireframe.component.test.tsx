@@ -128,6 +128,8 @@ async function mountLocalizedDemo() {
 test("wireframe metadata and route deliver only the cookie-selected page namespace", async () => {
     const original = localeDefinitions.ja;
     try {
+        // ja stands in for any switched-off locale, which must fall back to English.
+        localeDefinitions.ja = { ...original, enabled: false };
         for (const locale of [undefined, "invalid", "ja"]) {
             request.locale = locale;
             const page = await ServerWireframePage();

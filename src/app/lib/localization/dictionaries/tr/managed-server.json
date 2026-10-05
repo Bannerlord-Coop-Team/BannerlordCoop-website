@@ -420,7 +420,6 @@
   "page.lifecycle": "Yaşam döngüsü",
   "page.releaseChannel": "Sürüm kanalı",
   "page.serverControls": "Sunucu denetimleri",
-  "page.backupHistoryOrDurableProgressCouldNotBeLoadedRefreshBeforeSubmitting": "Yedek geçmişi veya kalıcı ilerleme yüklenemedi. Başka bir yedekleme işlemi göndermeden önce yenileyin.",
   "page.loadingSavesConfigsAndBackups": "Kayıt dosyaları, yapılandırmalar ve yedekler yükleniyor",
   "page.administrator": "Yönetici",
   "page.operator": "Operatör",
@@ -708,5 +707,9 @@
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "Başka bir aktarım açıkken duraklatıldı. Yeni bir aktarım başlatmak için onu tamamlayın veya kapatın.",
   "transfers.preparingDownload": "İndirme hazırlanıyor…",
   "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Bu sayfa açıkken etkin seferiniz değişti. Yukarıdan kontrol edin, ardından Kayıt dosyasını dışa aktar düğmesine yeniden basın.",
-  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "Bu sayfa boşta kaldığı için canlı çıktı duraklatıldı. İzlemeye devam etmek için yeniden bağlanın."
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "Bu sayfa boşta kaldığı için canlı çıktı duraklatıldı. İzlemeye devam etmek için yeniden bağlanın.",
+  "page.backingUp": "Yedekleniyor",
+  "page.pausedForBackup": "Yedekleme için duraklatıldı",
+  "page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused": "Yedek geçmişi şu anda yüklenemedi, bu yüzden yedekleme işlemleri duraklatıldı. Otomatik olarak yeniden yüklenecek.",
+  "server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen": "Bu sayfa açıkken bu ayar başka bir yerde değiştirildi. Geçerli değer şimdi gösteriliyor; gözden geçirip yeniden kaydedin."
 }

@@ -22,7 +22,7 @@ test("membership shared upgrade inventory pins own history and exact new CP Git 
         migrationName:"drop_unused_community_servers",source:"supabase_migrations.schema_migrations.statements",
     });
     assert.equal(retiredCommunityServers.releaseClassification,"required already-applied external history; NEVER replay");
-    assert.deepEqual((await readdir("supabase/migrations")).filter(f=>f.endsWith(".sql") && !["20261002160000_homepage_video_translation_keys.sql", "20261002150000_roadmap_translation_keys.sql", "202610020003_release_first_observations.sql", "202610020001_membership_allocation_usd20.sql", "20260930142800_control_plane_admin_job_index.sql", "202609300001_website_impersonation.sql", "202609100010_control_plane_monitor_indexes.sql", "202609100011_network_stats_updated_at_index.sql", "202609100001_control_plane_web_admin_principals.sql", "20260910162653_create_homepage_videos.sql", "20260910164925_homepage_video_publication_dates.sql", "20260914130215_create_roadmap.sql", "20260914132950_rename_roadmap_unstable_to_experimental.sql", "202609200001_drop_unused_server_statistics_indexes.sql"].includes(f)).sort(),expected.map(e=>e.websitePath.split("/").at(-1)).sort());
+    assert.deepEqual((await readdir("supabase/migrations")).filter(f=>f.endsWith(".sql") && !["20261002160000_homepage_video_translation_keys.sql", "20261002150000_roadmap_translation_keys.sql", "202610020003_release_first_observations.sql", "202610020002_control_plane_campaign_reset.sql", "202610020001_membership_allocation_usd20.sql", "20260930142800_control_plane_admin_job_index.sql", "202609300001_website_impersonation.sql", "202609100010_control_plane_monitor_indexes.sql", "202609100011_network_stats_updated_at_index.sql", "202609100001_control_plane_web_admin_principals.sql", "20260910162653_create_homepage_videos.sql", "20260910164925_homepage_video_publication_dates.sql", "20260914130215_create_roadmap.sql", "20260914132950_rename_roadmap_unstable_to_experimental.sql", "202609200001_drop_unused_server_statistics_indexes.sql"].includes(f)).sort(),expected.map(e=>e.websitePath.split("/").at(-1)).sort());
     assert.deepEqual(expected.filter(e=>e.representationException).map(e=>e.version),["20260821074242","20260821083000","20260821100640","20260821112235","202608240001","202608260001","202608260002","202608260003","202608260004","202608260005"]);
     for (const entry of expected) {
         // Canonical Git text bytes; CRLF checkouts are not new SQL provenance.
@@ -56,4 +56,10 @@ test("pending control-plane monitor migration mirrors its source bytes", async (
 test("applied control-plane administrator job index retains exact merged SQL", async () => {
     const sql = await readFile("supabase/migrations/20260930142800_control_plane_admin_job_index.sql", "utf8");
     assert.equal(createHash("sha256").update(sql.replaceAll("\r\n", "\n")).digest("hex"), "2eb71c8b41be2db7ca610964cbbccee99b9f5b5842c6e0debb9368d36c8220d0");
+});
+
+test("applied control-plane campaign reset migration mirrors its source bytes", async () => {
+    // Catalogued so the Supabase GitHub integration sees every remotely applied version; never edit it here.
+    const sql = await readFile("supabase/migrations/202610020002_control_plane_campaign_reset.sql", "utf8");
+    assert.equal(createHash("sha256").update(sql.replaceAll("\r\n", "\n")).digest("hex"), "a4098af9782910f3a7dee168f1a88d1944b11d60a2df77aa4c9c6214621dba88");
 });

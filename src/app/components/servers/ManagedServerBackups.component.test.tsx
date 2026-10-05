@@ -586,3 +586,21 @@ vi.mock("@/app/lib/localization/server", () => ({
     getMessages: async () => serverTestMessages,
     getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
 }));
+
+it("re-reads backup history that failed to load, a bounded number of times, instead of asking for a refresh", async () => {
+    const notice = "Backup history couldn’t be loaded just now, so backup actions are paused. It will reload automatically.";
+    await render(null, [], server, "user", notice);
+    expect(container.textContent).toContain(notice);
+    expect(container.textContent).not.toContain("Refresh before");
+    router.refresh.mockClear();
+    await advance(9_999);
+    expect(router.refresh).not.toHaveBeenCalled();
+    await advance(1);
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+    // Each refresh that still fails renders new props; retries stop after five attempts.
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+        await render(null, [], server, "user", notice);
+        await advance(10_000);
+    }
+    expect(router.refresh).toHaveBeenCalledTimes(5);
+});

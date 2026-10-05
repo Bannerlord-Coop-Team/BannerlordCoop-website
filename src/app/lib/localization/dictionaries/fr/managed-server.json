@@ -420,7 +420,6 @@
   "page.lifecycle": "Cycle de vie",
   "page.releaseChannel": "Canal de versions",
   "page.serverControls": "Contrôles du serveur",
-  "page.backupHistoryOrDurableProgressCouldNotBeLoadedRefreshBeforeSubmitting": "L’historique des copies de sauvegarde ou la progression durable n’ont pas pu être chargés. Actualisez la page avant de soumettre une autre opération de sauvegarde.",
   "page.loadingSavesConfigsAndBackups": "Chargement des sauvegardes, des configurations et des copies de sauvegarde",
   "page.administrator": "Administrateur",
   "page.operator": "Opérateur",
@@ -708,5 +707,9 @@
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "En pause tant qu’un autre transfert est ouvert. Terminez-le ou ignorez-le pour en démarrer un nouveau.",
   "transfers.preparingDownload": "Préparation du téléchargement…",
   "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Votre campagne active a changé pendant que cette page était ouverte. Vérifiez-la ci-dessus, puis cliquez à nouveau sur Exporter la sauvegarde.",
-  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "La sortie en direct a été mise en pause car cette page était inactive. Reconnectez-vous pour continuer à la suivre."
+  "console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching": "La sortie en direct a été mise en pause car cette page était inactive. Reconnectez-vous pour continuer à la suivre.",
+  "page.backingUp": "Sauvegarde en cours",
+  "page.pausedForBackup": "En pause pour la sauvegarde",
+  "page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused": "L’historique des copies de sauvegarde n’a pas pu être chargé pour le moment, les actions de sauvegarde sont donc en pause. Il se rechargera automatiquement.",
+  "server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen": "Ce paramètre a été modifié ailleurs pendant que cette page était ouverte. La valeur actuelle est maintenant affichée : vérifiez-la, puis enregistrez à nouveau."
 }
