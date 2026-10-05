@@ -127,11 +127,13 @@ export function ManagedServerControls({
     const [progressPaused, setProgressPaused] = useState(false);
     const [pollRun, setPollRun] = useState(0);
     const [stopRevision, setStopRevision] = useState<string | null>(null);
+    const [restartRevision, setRestartRevision] = useState<string | null>(null);
+    const [restartWindowOpen, setRestartWindowOpen] = useState(false);
     const [restart, setRestart] = useState<RestartProgress | null>(null);
     const [verifyRevision, setVerifyRevision] = useState<string | null>(null);
     const [verifyWindowOpen, setVerifyWindowOpen] = useState(false);
     const restartRef = useRef<RestartProgress | null>(null);
-    const timers = useRef<{ restart?: ReturnType<typeof setTimeout>; verify?: ReturnType<typeof setTimeout> }>({});
+    const timers = useRef<{ restart?: ReturnType<typeof setTimeout>; restartWindow?: ReturnType<typeof setTimeout>; verify?: ReturnType<typeof setTimeout> }>({});
     const { session: pollingSession, timedOutSession, beginPolling, endPolling } = useManagedServerPolling();
     const consoleSignals = useManagedConsoleSignals();
     const statusSlot = useManagedServerStatusSlot();
@@ -149,6 +151,7 @@ export function ManagedServerControls({
         const scheduled = timers.current;
         return () => {
             clearTimeout(scheduled.restart);
+            clearTimeout(scheduled.restartWindow);
             clearTimeout(scheduled.verify);
         };
     }, []);
@@ -164,6 +167,22 @@ export function ManagedServerControls({
         }, 0);
         return () => clearTimeout(timeout);
     }, [serverId, stopRevision, operationState, observedGameState, expectedUpdatedAt, isPending, endPolling, t]);
+
+    useEffect(() => {
+        const current = restartRef.current;
+        if (restartRevision === null || restartWindowOpen || current === null || !current.accepted || restartSettled(current)
+            || expectedUpdatedAt <= restartRevision) return;
+        // The control plane can report a crashed or stopped run before the console does; report it rather than wait.
+        if (!["failed", "stopped"].includes(operationState) && observedGameState !== "failed") return;
+        const timeout = setTimeout(() => {
+            clearTimeout(timers.current.restart);
+            updateRestart(null);
+            setMessage(t("controls.statusCheckedCurrentStateState", { state: stateLabel(operationState, t) }));
+            setRestartRevision(null);
+            endPolling(serverId);
+        }, 0);
+        return () => clearTimeout(timeout);
+    }, [serverId, restart, restartRevision, restartWindowOpen, operationState, observedGameState, expectedUpdatedAt, endPolling, t]);
 
     useEffect(() => {
         if (verifyRevision === null || isPending) return;
@@ -256,7 +275,7 @@ export function ManagedServerControls({
         );
     }
 
-    const busy = isPending || trackingStart || trackingStop || trackingRestart || stateIsTransitional || pollingSession !== null;
+    const busy = isPending || trackingStart || (trackingStop && !stopCheckPaused) || trackingRestart || stateIsTransitional || pollingSession !== null;
     const canStart = ["stopped", "failed", "degraded"].includes(displayedState);
     const canStop = ["running", "starting", "failed", "degraded"].includes(displayedState);
     const canRestart = ["running", "degraded"].includes(displayedState);
@@ -277,10 +296,19 @@ export function ManagedServerControls({
             return;
         }
         updateRestart(acceptRestartProgress(current, consoleSignals.latestConnection(serverId)));
+        setRestartWindowOpen(true);
+        clearTimeout(timers.current.restartWindow);
+        timers.current.restartWindow = setTimeout(() => setRestartWindowOpen(false), VERIFY_WINDOW_MILLISECONDS);
         setMessage("");
         beginPolling(serverId, expectedUpdatedAt);
         clearTimeout(timers.current.restart);
         timers.current.restart = setTimeout(settleRestartWithGuidance, RESTART_WATCH_MILLISECONDS);
+    }
+
+    /** Follows a Stop until a newer observation confirms it. */
+    function trackStop() {
+        setStopRevision(expectedUpdatedAt);
+        beginPolling(serverId, expectedUpdatedAt);
     }
 
     /** Follows server status after an unconfirmed request until it settles, without resending anything. */
@@ -313,8 +341,10 @@ export function ManagedServerControls({
         setStartStatus(null);
         setProgressPaused(false);
         setVerifyRevision(null);
+        setStopRevision(null);
         clearTimeout(timers.current.restart);
         updateRestart(operation === "restart-game" ? beginRestartProgress() : null);
+        setRestartRevision(operation === "restart-game" ? expectedUpdatedAt : null);
         setPendingOperation(operation);
         startTransition(async () => {
             try {
@@ -331,8 +361,7 @@ export function ManagedServerControls({
                 setMessage(result.message);
                 if (result.refresh) router.refresh();
                 if (operation === "stop" && result.checkStatus) {
-                    setStopRevision(expectedUpdatedAt);
-                    beginPolling(serverId, expectedUpdatedAt);
+                    trackStop();
                 } else if (result.checkStatus) {
                     verifyStatus();
                 }
@@ -344,8 +373,7 @@ export function ManagedServerControls({
                 if (operation === "restart-game") updateRestart(null);
                 if (operation === "stop") {
                     setMessage(t("controls.checkingWhetherYourServerHasStopped"));
-                    setStopRevision(expectedUpdatedAt);
-                    beginPolling(serverId, expectedUpdatedAt);
+                    trackStop();
                 } else {
                     setMessage(t("controls.weCouldnTConfirmThatYourOperationRequestWentThrough", { operation: operationLabels[operation] }));
                     verifyStatus();

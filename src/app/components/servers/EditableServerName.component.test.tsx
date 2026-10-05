@@ -35,6 +35,8 @@ it("explains an invalid name beside the field without calling the rename action"
     expect(mocks.rename).not.toHaveBeenCalled();
     expect(input.getAttribute("aria-invalid")).toBe("true");
     expect(document.getElementById(input.getAttribute("aria-describedby")!)?.textContent).toBe("Enter a server name.");
+    // The rejected draft stays in the field instead of reverting to the old name beside the error.
+    expect(input.value).toBe("   ");
     await enter("Renamed");
     await act(async () => container.querySelector("form")!.requestSubmit());
     expect(mocks.rename).toHaveBeenCalledOnce();

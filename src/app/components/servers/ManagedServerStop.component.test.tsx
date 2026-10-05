@@ -79,7 +79,8 @@ it("requires a newer stopped observation and keeps checking for fifteen minutes 
     await act(async () => vi.advanceTimersByTimeAsync(10 * 60_000));
     expect(container.textContent).toContain("Stopping is taking longer than usual, so automatic status updates have paused.");
     expect(container.textContent).not.toContain("contact support");
-    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+    // A paused check no longer blocks the owner: controls follow the last observed state.
+    expect(buttons().slice(0, 4).map(button => button.disabled)).toEqual([true, false, false, false]);
     const refreshes = router.refresh.mock.calls.length;
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(router.refresh).toHaveBeenCalledTimes(refreshes);

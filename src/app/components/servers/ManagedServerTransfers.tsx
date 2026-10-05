@@ -255,7 +255,10 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
                     const fresh = await readManagedServerFileStatus(serverId, userId).catch(() => null);
                     router.refresh();
                     const activeSave = fresh?.ok ? fresh.status.activeSave : null;
-                    if (fresh?.ok && activeSave) {
+                    if (fresh?.ok && activeSave && next.saveId !== null && activeSave.saveId !== next.saveId) {
+                        // Never silently export a different campaign than the one the owner chose.
+                        response = { ...response, message: t("transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt") };
+                    } else if (fresh?.ok && activeSave) {
                         const retry: Intent = { ...next, requestId: crypto.randomUUID(), expectedUpdatedAt: fresh.status.updatedAt, saveId: activeSave.saveId };
                         if (!remember(retry)) return;
                         response = await submitManagedServerFile(transferForm(retry), userId);

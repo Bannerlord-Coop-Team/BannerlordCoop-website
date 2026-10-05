@@ -706,5 +706,6 @@
   "configEditor.editingTheFilesOnTheServerSRunner": "Estás editando los archivos en el ejecutor del servidor.",
   "transfers.theServerIsStillChangingWaitAMomentAndTryExportSaveAgain": "El servidor sigue cambiando. Espera un momento y vuelve a intentar Exportar partida guardada.",
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "En pausa mientras haya otra transferencia abierta. Termínala o descártala para iniciar una nueva.",
-  "transfers.preparingDownload": "Preparando la descarga…"
+  "transfers.preparingDownload": "Preparando la descarga…",
+  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Tu campaña activa cambió mientras esta página estaba abierta. Revísala arriba y vuelve a pulsar Exportar partida guardada."
 }

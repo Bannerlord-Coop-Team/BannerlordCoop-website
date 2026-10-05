@@ -706,5 +706,6 @@
   "configEditor.editingTheFilesOnTheServerSRunner": "Modification des fichiers sur l’exécuteur du serveur.",
   "transfers.theServerIsStillChangingWaitAMomentAndTryExportSaveAgain": "Le serveur est encore en train de changer. Patientez un instant, puis réessayez « Exporter la sauvegarde ».",
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "En pause tant qu’un autre transfert est ouvert. Terminez-le ou ignorez-le pour en démarrer un nouveau.",
-  "transfers.preparingDownload": "Préparation du téléchargement…"
+  "transfers.preparingDownload": "Préparation du téléchargement…",
+  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Votre campagne active a changé pendant que cette page était ouverte. Vérifiez-la ci-dessus, puis cliquez à nouveau sur Exporter la sauvegarde."
 }

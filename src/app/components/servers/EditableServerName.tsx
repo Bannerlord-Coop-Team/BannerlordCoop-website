@@ -41,6 +41,8 @@ export function EditableServerName({
     const { t } = useTranslations("managed-server");
     const [displayName, setDisplayName] = useState(initialName);
     const [editing, setEditing] = useState(false);
+    // Controlled, because React resets uncontrolled fields after a form action and would discard a rejected draft.
+    const [draft, setDraft] = useState(initialName);
     const [error, setError] = useState("");
 
     // Submits the unchanged rename form and reports its result.
@@ -80,6 +82,7 @@ export function EditableServerName({
                             type="button"
                             onClick={() => {
                                 setError("");
+                                setDraft(displayName);
                                 setEditing(true);
                             }}
                             aria-label={t("editableServerName.editDisplaynameServerName", { displayName: displayName })}
@@ -107,7 +110,8 @@ export function EditableServerName({
                             maxLength={80}
                             aria-invalid={error ? true : undefined}
                             aria-describedby={error ? `server-name-error-${serverId}` : undefined}
-                            defaultValue={displayName}
+                            value={draft}
+                            onChange={(event) => setDraft(event.target.value)}
                             className="min-h-12 min-w-0 flex-1 rounded-sm border border-gold/40 bg-surface px-4 font-display text-2xl font-semibold text-foreground outline-none transition-colors hover:border-gold/60 focus:border-gold focus:ring-1 focus:ring-gold/30 sm:text-3xl"
                         />
                         <div className="flex shrink-0 gap-2">

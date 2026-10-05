@@ -705,5 +705,6 @@
   "configEditor.editingTheFilesOnTheServerSRunner": "서버 실행기에 있는 파일을 편집합니다.",
   "transfers.theServerIsStillChangingWaitAMomentAndTryExportSaveAgain": "서버 상태가 아직 바뀌고 있습니다. 잠시 기다린 후 ‘저장 파일 내보내기’를 다시 시도하세요.",
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "다른 전송이 열려 있는 동안 일시 중지됩니다. 새 전송을 시작하려면 해당 전송을 완료하거나 닫으세요.",
-  "transfers.preparingDownload": "다운로드 준비 중…"
+  "transfers.preparingDownload": "다운로드 준비 중…",
+  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "이 페이지가 열려 있는 동안 활성 캠페인이 변경되었습니다. 위에서 확인한 후 ‘저장 파일 내보내기’를 다시 누르세요."
 }

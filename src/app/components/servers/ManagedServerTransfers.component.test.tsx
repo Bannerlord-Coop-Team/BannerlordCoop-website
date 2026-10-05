@@ -291,7 +291,7 @@ it("edits the live configuration in the form by default while file transfers sta
 const staleRejection = { ok: false, rejected: true, stale: true, notSubmitted: false, message: "The server changed. Refresh before starting a new transfer." };
 
 it("refreshes a stale page and retries a save export once with the current server state", async () => {
-    const fresh = { ...status, updatedAt: "2026-09-14T00:00:00.000Z", activeSave: { saveId: "44444444-4444-4444-8444-444444444444", displayName: "Campaign" } };
+    const fresh = { ...status, updatedAt: "2026-09-14T00:00:00.000Z" };
     mocks.submit.mockResolvedValueOnce(staleRejection).mockResolvedValueOnce({ ok: true, result: job });
     mocks.fileStatus.mockResolvedValue({ ok: true, status: fresh });
     await render(); await click("Export save");
@@ -301,11 +301,22 @@ it("refreshes a stale page and retries a save export once with the current serve
     const [first, retry] = mocks.submit.mock.calls.map(([form]) => form as FormData);
     expect(first.get("expectedUpdatedAt")).toBe(status.updatedAt);
     expect(retry.get("expectedUpdatedAt")).toBe(fresh.updatedAt);
-    expect(retry.get("saveId")).toBe(fresh.activeSave.saveId);
+    expect(retry.get("saveId")).toBe(status.activeSave!.saveId);
     expect(retry.get("requestId")).not.toBe(first.get("requestId"));
     expect(JSON.parse(sessionStorage.getItem(key)!).requestId).toBe(retry.get("requestId"));
     expect(container.textContent).not.toContain("The server changed");
     expect(container.textContent).toContain("Preparing your save export");
+});
+
+it("never exports a different campaign than the one shown when the active save changed", async () => {
+    mocks.submit.mockResolvedValue(staleRejection);
+    mocks.fileStatus.mockResolvedValue({ ok: true, status: { ...status, updatedAt: "2026-09-14T00:00:00.000Z", activeSave: { saveId: "44444444-4444-4444-8444-444444444444", displayName: "Other" } } });
+    await render(); await click("Export save");
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+    expect(mocks.refresh).toHaveBeenCalled();
+    expect(container.textContent).toContain("Your active campaign changed while this page was open. Check it above, then press Export save again.");
+    expect(sessionStorage.getItem(key)).toBeNull();
+    expect(button("Export save").disabled).toBe(false);
 });
 
 it("retries a stale export only once, then explains that the server is still changing", async () => {

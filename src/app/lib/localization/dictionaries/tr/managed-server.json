@@ -706,5 +706,6 @@
   "configEditor.editingTheFilesOnTheServerSRunner": "Sunucunun çalıştırıcısındaki dosyalar düzenleniyor.",
   "transfers.theServerIsStillChangingWaitAMomentAndTryExportSaveAgain": "Sunucu hâlâ değişiyor. Biraz bekleyip Kayıt dosyasını dışa aktar'ı yeniden deneyin.",
   "transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt": "Başka bir aktarım açıkken duraklatıldı. Yeni bir aktarım başlatmak için onu tamamlayın veya kapatın.",
-  "transfers.preparingDownload": "İndirme hazırlanıyor…"
+  "transfers.preparingDownload": "İndirme hazırlanıyor…",
+  "transfers.yourActiveCampaignChangedWhileThisPageWasOpenCheckIt": "Bu sayfa açıkken etkin seferiniz değişti. Yukarıdan kontrol edin, ardından Kayıt dosyasını dışa aktar düğmesine yeniden basın."
 }

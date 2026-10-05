@@ -222,3 +222,33 @@ it("never moves restart progress backwards or past a final step", () => {
     expect(advanceRestartProgress(ready, { type: "phase", serverId, connection: 6, phase: "fatal" })).toBe(ready);
     expect(acceptRestartProgress(ready, 9)).toBe(ready);
 });
+
+it("releases the controls when the control plane reports the restarted run failed", async () => {
+    await render();
+    await emit({ type: "opened", serverId, connection: 1 });
+    const response = await requestRestart();
+    await act(async () => response.resolve(accepted));
+    // A failed observation inside the short check window may be transient, so it does not settle yet.
+    await render({ operationState: "failed", observedGameState: "failed", expectedUpdatedAt: "2026-10-02T16:00:05.000Z" });
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(container.textContent).toContain("Restarting your server…");
+    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+    await act(async () => vi.advanceTimersByTimeAsync(20_000));
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(container.textContent).toContain("Status checked. Current state: Failed");
+    expect(container.textContent).not.toContain("Restarting your server…");
+    expect(container.textContent).not.toContain("Players can rejoin once the campaign finishes loading");
+    expect(buttons()[0].disabled).toBe(false);
+    expect(operate).toHaveBeenCalledOnce();
+});
+
+it("keeps following Restart through a newer running observation", async () => {
+    await render();
+    await emit({ type: "opened", serverId, connection: 1 });
+    const response = await requestRestart();
+    await act(async () => response.resolve(accepted));
+    await render({ expectedUpdatedAt: "2026-10-02T16:00:05.000Z" });
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(container.textContent).toContain("Restarting your server…");
+    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+});
