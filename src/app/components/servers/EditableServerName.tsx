@@ -2,7 +2,6 @@
 
 import { useTranslations } from "@/app/lib/localization/client";
 
-import { MAX_SERVER_DISPLAY_NAME_LENGTH, validateServerDisplayName } from "@/app/lib/hosting/server-names";
 import { renameLiveServer } from "@/app/servers/name-actions";
 import { Check, LoaderCircle, Pencil, X } from "lucide-react";
 import { useState } from "react";
@@ -41,23 +40,11 @@ export function EditableServerName({
     const { t } = useTranslations("managed-server");
     const [displayName, setDisplayName] = useState(initialName);
     const [editing, setEditing] = useState(false);
-    // Controlled, because React resets uncontrolled fields after a form action and would discard a rejected draft.
-    const [draft, setDraft] = useState(initialName);
     const [error, setError] = useState("");
 
     // Submits the unchanged rename form and reports its result.
     async function saveName(formData: FormData) {
         setError("");
-        // Applies the rename action's own rules first, so a bad name is explained without a round trip.
-        const checked = validateServerDisplayName(formData.get("displayName"), {
-            required: t("name.required"),
-            singleLine: t("name.singleLine"),
-            tooLong: t("name.tooLong", { maximum: MAX_SERVER_DISPLAY_NAME_LENGTH }),
-        });
-        if (!checked.ok) {
-            setError(checked.error);
-            return;
-        }
         const result = await renameLiveServer(formData);
         if (!result.ok) {
             setError(result.error);
@@ -82,7 +69,6 @@ export function EditableServerName({
                             type="button"
                             onClick={() => {
                                 setError("");
-                                setDraft(displayName);
                                 setEditing(true);
                             }}
                             aria-label={t("editableServerName.editDisplaynameServerName", { displayName: displayName })}
@@ -96,7 +82,7 @@ export function EditableServerName({
             )}
 
             {editing && (
-                <form action={saveName} noValidate className="max-w-3xl">
+                <form action={saveName} className="max-w-3xl">
                     <input type="hidden" name="serverId" value={serverId} />
                     <label htmlFor={`server-name-${serverId}`} className="sr-only">
                         {t("editableServerName.serverName")}</label>
@@ -108,10 +94,7 @@ export function EditableServerName({
                             required
                             autoFocus
                             maxLength={80}
-                            aria-invalid={error ? true : undefined}
-                            aria-describedby={error ? `server-name-error-${serverId}` : undefined}
-                            value={draft}
-                            onChange={(event) => setDraft(event.target.value)}
+                            defaultValue={displayName}
                             className="min-h-12 min-w-0 flex-1 rounded-sm border border-gold/40 bg-surface px-4 font-display text-2xl font-semibold text-foreground outline-none transition-colors hover:border-gold/60 focus:border-gold focus:ring-1 focus:ring-gold/30 sm:text-3xl"
                         />
                         <div className="flex shrink-0 gap-2">
@@ -132,7 +115,7 @@ export function EditableServerName({
             )}
 
             {error && (
-                <p id={`server-name-error-${serverId}`} role="alert" className="mt-3 text-sm text-red-300">
+                <p role="alert" className="mt-3 text-sm text-red-300">
                     {error}
                 </p>
             )}

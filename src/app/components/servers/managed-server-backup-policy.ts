@@ -1,5 +1,4 @@
 import type {
-    MyServerBackupJob,
     MyServerBackupSummary,
     MyServerSummary,
 } from "@/app/lib/control-plane/types";
@@ -45,46 +44,4 @@ export function restoreDisabledReason(
     }
     if (!backup.canRestore) return messages.unknown;
     return undefined;
-}
-
-export const ACTIVE_BACKUP_JOB_STATES: ReadonlySet<string> = new Set(["queued", "running", "retry-wait"]);
-
-// Expired backups remain listed for reference but are collapsed behind the current history.
-export function isExpiredServerBackup(
-    backup: Pick<MyServerBackupSummary, "restoreState" | "restoreUnavailableReason">,
-) {
-    return backup.restoreState === "expired" || backup.restoreUnavailableReason === "expired";
-}
-
-// Splits backup history into current and expired groups, keeping the server's order in each.
-export function partitionServerBackups<T extends Pick<MyServerBackupSummary, "restoreState" | "restoreUnavailableReason">>(
-    backups: readonly T[],
-) {
-    const current: T[] = [];
-    const expired: T[] = [];
-    for (const backup of backups) (isExpiredServerBackup(backup) ? expired : current).push(backup);
-    return { current, expired };
-}
-
-// Finds the newest backup timestamp for the neutral last-backup summary.
-export function latestServerBackupAt(backups: readonly Pick<MyServerBackupSummary, "createdAt">[]) {
-    let latest: string | null = null;
-    let latestTime = Number.NEGATIVE_INFINITY;
-    for (const backup of backups) {
-        const time = Date.parse(backup.createdAt);
-        if (Number.isFinite(time) && time > latestTime) {
-            latest = backup.createdAt;
-            latestTime = time;
-        }
-    }
-    return latest;
-}
-
-// Always shows durable progress, but reports outcomes only for jobs requested or watched on this page.
-export function visibleBackupJob<T extends Pick<MyServerBackupJob, "jobId" | "state">>(
-    job: T | null | undefined,
-    watchedJobIds: ReadonlySet<string>,
-) {
-    if (!job) return null;
-    return ACTIVE_BACKUP_JOB_STATES.has(job.state) || watchedJobIds.has(job.jobId) ? job : null;
 }

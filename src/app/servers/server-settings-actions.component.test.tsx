@@ -43,22 +43,6 @@ it("rejects mismatched sessions and retains uncertain requests for safe retry", 
     expect(await saveServerSettings(input)).toMatchObject({ ok: false, rejected: false });
 });
 
-it("names the rejected field instead of describing every rule at once", async () => {
-    for (const [patch, field, message] of [
-        [{ displayName: "ab" }, "displayName", "Server names need at least 3 characters."],
-        [{ displayName: "a".repeat(49) }, "displayName", "Server names can have at most 48 characters."],
-        [{ displayName: "../../bad" }, "displayName", "Use only letters, numbers, spaces, periods, apostrophes and hyphens, and start and end with a letter or number."],
-        [{ displayName: "   " }, "displayName", "Enter a server name."],
-        [{ maintenanceSlot: "12:00-13:00" }, "maintenanceSlot", "Choose one of the listed maintenance windows."],
-        [{ displayName: "Valid name", maintenanceSlot: "12:00-13:00" }, "maintenanceSlot", "Choose one of the listed maintenance windows."],
-    ] as const) {
-        expect(await saveServerSettings({ ...input, patch })).toEqual({ ok: false, rejected: true, field, message });
-    }
-    expect(await saveServerSettings({ ...input, serverId: "not-a-server" })).toEqual({ ok: false, rejected: true,
-        message: "The settings request is invalid. Refresh the page and try again." });
-    expect(mocks.auth).not.toHaveBeenCalled(); expect(mocks.save).not.toHaveBeenCalled();
-});
-
 // Resolves real English messages without reading cookies in standalone tests.
 vi.mock("@/app/lib/localization/server", () => ({
     getLocale: async () => "en",

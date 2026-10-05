@@ -1,8 +1,7 @@
 import { createTranslator } from "@/app/lib/localization/translator";
 import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act } from "react";
-import { createRoot, hydrateRoot, type Root } from "react-dom/client";
-import { renderToStaticMarkup } from "react-dom/server";
+import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ManagedServerBackups } from "@/app/components/servers/ManagedServerBackups";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
@@ -151,7 +150,7 @@ describe("ManagedServerBackups action reconciliation", () => {
             request.mockRejectedValueOnce(new MyServersApiError(rejection, "Rejected before replay"));
         }
         await click("Retry pending request");
-        expect(container.textContent).toContain("We're confirming your restore request.");
+        expect(container.textContent).toContain("unconfirmed outcome");
         expect(button("Create backup").disabled).toBe(true);
 
         request.mockResolvedValueOnce({ outcome: "existing", jobId: activeStatus.job!.jobId, action: "restore" });
@@ -195,18 +194,17 @@ describe("ManagedServerBackups bounded polling", () => {
         await render(status);
         expect(router.refresh).toHaveBeenCalledTimes(1);
         expect(button("Create backup").disabled).toBe(true);
-        // Past any bounded polling window, whatever its backoff schedule.
-        await advance(16 * 60_000);
-        expect(container.textContent).toContain("Automatic status updates have paused");
+        await advance(60_000);
+        expect(container.textContent).toContain("Automatic status updates paused after one minute");
         const refreshesAtDeadline = router.refresh.mock.calls.length;
         await advance(120_000);
         expect(router.refresh).toHaveBeenCalledTimes(refreshesAtDeadline);
 
         await click("Refresh status and resume updates");
         expect(router.refresh).toHaveBeenCalledTimes(refreshesAtDeadline + 1);
-        expect(container.textContent).not.toContain("Automatic status updates have paused");
-        await advance(30_000);
-        expect(router.refresh.mock.calls.length).toBeGreaterThan(refreshesAtDeadline + 1);
+        expect(container.textContent).not.toContain("Automatic status updates paused");
+        await advance(4_000);
+        expect(router.refresh).toHaveBeenCalledTimes(refreshesAtDeadline + 2);
         await render({ ...status, operationState: "running", observedGameState: "running",
             updatedAt: "2026-09-02T16:00:00.000Z", job: { ...status.job, state: "succeeded" } });
         expect(container.textContent).toContain(action === "backup" ? "Backup completed." : "Save restore completed.");
@@ -215,14 +213,13 @@ describe("ManagedServerBackups bounded polling", () => {
         const refreshesAtCompletion = router.refresh.mock.calls.length;
         await advance(65_000);
         expect(router.refresh).toHaveBeenCalledTimes(refreshesAtCompletion);
-        expect(container.textContent).not.toContain("Automatic status updates have paused");
+        expect(container.textContent).not.toContain("Automatic status updates paused");
     });
 });
 
 it.each(["available", "restored", "failed"])("does not misdescribe an expired %s row as a build mismatch", async (restoreState) => {
     await render(null, [{ ...backup, restoreState, canRestore: false,
         retentionExpiresAt: "2026-09-02T14:00:00.000Z", restoreUnavailableReason: "expired" }]);
-    await click("Show 1 expired backup");
     expect(button("Restore save").disabled).toBe(true);
     expect(button("Restore save").title).toBe("This backup has expired and can no longer be restored.");
     expect(container.textContent).toContain("This backup has expired and can no longer be restored.");
@@ -289,8 +286,7 @@ describe("ManagedServerBackups session recovery", () => {
         await render();
         await click("Restore save");
         const original = request.mock.calls[0];
-        // Past any bounded polling window, so only the retained intent can block mutations.
-        await advance(16 * 60_000);
+        await advance(60_000);
         await render(null, [backup], scope === "server"
             ? { ...server, serverId: "55555555-5555-4555-8555-555555555555" } : server,
         scope === "account" ? "another-user" : "user");
@@ -398,7 +394,7 @@ describe("ManagedServerBackups stale authenticated page recovery", () => {
         await click("Retry pending request");
         expect(request.mock.calls[1]).toEqual(["test-only-b", original[1], original[2]]);
         expect(window.sessionStorage.getItem(intentKey)).toBe(stored);
-        expect(container.textContent).toContain("We're confirming your restore request.");
+        expect(container.textContent).toContain("unconfirmed outcome");
 
         await act(async () => root.render(<TestLocalization>{null} </TestLocalization>));
         await render(null, [], { ...server, updatedAt: "2026-09-02T16:00:00.000Z" });
@@ -433,151 +429,6 @@ it.each([
     expect(button("Restore save").disabled).toBe(true);
     expect(button("Restore save").title).toContain(message);
     expect(container.textContent).toContain(message);
-});
-
-const stopped = { ...server, operationState: "stopped", observedGameState: "stopped" };
-const second: MyServerBackupSummary = { ...backup, backupId: "55555555-5555-4555-8555-555555555555", createdAt: "2026-09-02T09:00:00.000Z" };
-
-// Pins the browser's reported time zone without changing how dates are formatted.
-function viewerTimeZone(timeZone: string) {
-    const real = new Intl.DateTimeFormat().resolvedOptions();
-    vi.spyOn(Intl.DateTimeFormat.prototype, "resolvedOptions").mockReturnValue({ ...real, timeZone });
-}
-
-// Normalizes the narrow spaces ICU places before AM/PM.
-function text(value: string | null | undefined) {
-    return (value ?? "").replace(/\s/gu, " ");
-}
-
-describe("ManagedServerBackups owner experience", () => {
-    it("confirms the brief interruption before backing up a running server, but not a stopped one", async () => {
-        const confirm = vi.mocked(window.confirm);
-        confirm.mockReturnValueOnce(false);
-        await render();
-        await click("Create backup");
-        expect(confirm).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("Connected players will be disconnected"));
-        expect(confirm.mock.calls[0][0]).toContain("stop briefly while the backup is made");
-        expect(request).not.toHaveBeenCalled();
-        expect(window.sessionStorage.getItem(intentKey)).toBeNull();
-
-        confirm.mockClear();
-        request.mockResolvedValueOnce({ outcome: "accepted", jobId: activeStatus.job!.jobId, action: "backup" });
-        await render(null, [backup], stopped);
-        await click("Create backup");
-        expect(confirm).not.toHaveBeenCalled();
-        expect(request).toHaveBeenCalledTimes(1);
-    });
-
-    it("explains that a running server is temporarily stopped while its backup runs", async () => {
-        request.mockResolvedValueOnce({ outcome: "accepted", jobId: activeStatus.job!.jobId, action: "backup" });
-        await render();
-        await click("Create backup");
-        await render({ ...activeStatus, operationState: "running", observedGameState: "running",
-            job: { ...activeStatus.job!, action: "backup", progress: "Saving the campaign" } });
-        expect(container.textContent).toContain("Saving the campaign");
-        expect(container.textContent).toContain("The server is temporarily stopped for this backup");
-    });
-
-    it("does not announce an earlier job's outcome on load, but reports jobs watched on this page", async () => {
-        viewerTimeZone("America/Chicago");
-        const finished: MyServerBackupStatus = { ...activeStatus, operationState: "stopped", observedGameState: "stopped",
-            job: { ...activeStatus.job!, action: "backup", state: "succeeded" } };
-        await render(finished, [backup, second], stopped);
-        expect(container.textContent).not.toContain("Backup completed.");
-        expect(text(container.textContent)).toContain("Last backup: Sep 2, 2026, 4:00 AM CDT");
-
-        const watchedJobId = "66666666-6666-4666-8666-666666666666";
-        await render({ ...finished, job: { ...finished.job!, jobId: watchedJobId, state: "running" } }, [backup, second], stopped);
-        await render({ ...finished, job: { ...finished.job!, jobId: watchedJobId, state: "succeeded" } }, [backup, second], stopped);
-        expect(container.textContent).toContain("Backup completed.");
-        expect(container.textContent).not.toContain("Last backup:");
-    });
-
-    it("keeps request feedback beside Create backup instead of below the history", async () => {
-        request.mockResolvedValueOnce({ outcome: "accepted", jobId: activeStatus.job!.jobId, action: "backup" });
-        await render(null, [backup, second], stopped);
-        await click("Create backup");
-        const list = container.querySelector("ul")!;
-        const accepted = [...container.querySelectorAll("p")].find((paragraph) => paragraph.textContent === "Backup request accepted.");
-        expect(accepted).toBeDefined();
-        expect(accepted!.closest('[aria-live="polite"]')).not.toBeNull();
-        expect(list.contains(accepted!)).toBe(false);
-        expect(accepted!.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-        // The acceptance note gives way to the job's own outcome.
-        await render({ ...activeStatus, operationState: "stopped", observedGameState: "stopped",
-            job: { ...activeStatus.job!, action: "backup", state: "succeeded" } }, [backup, second], stopped);
-        expect(container.textContent).toContain("Backup completed.");
-        expect(container.textContent).not.toContain("Backup request accepted.");
-    });
-
-    it("shows a restore result inside the row that requested it", async () => {
-        request.mockRejectedValueOnce(new MyServersApiError("backup_build_mismatch", "Incompatible"));
-        await render(null, [backup, second], stopped);
-        const rows = container.querySelectorAll("ul > li");
-        await act(async () => rows[1].querySelector("button")!.click());
-        await advance(0);
-        expect(rows[1].textContent).toContain("currently installed game and mod version");
-        expect(rows[0].textContent).not.toContain("currently installed game and mod version");
-    });
-
-    it("does not show the unconfirmed-outcome notice while a request is merely in flight", async () => {
-        let respond!: (value: unknown) => void;
-        request.mockImplementationOnce(() => new Promise((resolve) => { respond = resolve; }));
-        await render(null, [backup], stopped);
-        await click("Create backup");
-        expect(button("Submitting…").disabled).toBe(true);
-        expect(container.textContent).not.toContain("We're confirming");
-        expect(container.textContent).not.toContain("Retry pending request");
-        await act(async () => respond({ outcome: "accepted", jobId: activeStatus.job!.jobId, action: "backup" }));
-        await advance(0);
-        expect(container.textContent).not.toContain("We're confirming");
-        expect(container.textContent).toContain("Backup request accepted.");
-    });
-
-    it("explains a genuinely unconfirmed backup in plain language and retries the same request", async () => {
-        request.mockRejectedValueOnce(new Error("Accepted response was lost"));
-        await render(null, [backup], stopped);
-        await click("Create backup");
-        expect(container.textContent).toContain("We're confirming your backup request.");
-        expect(container.textContent).not.toContain("request ID");
-        request.mockResolvedValueOnce({ outcome: "existing", jobId: activeStatus.job!.jobId, action: "backup" });
-        await click("Retry pending request");
-        expect(request.mock.calls[1]).toEqual(request.mock.calls[0]);
-    });
-
-    it("collapses expired backups behind a toggle and keeps the current history visible", async () => {
-        const expired = (backupId: string): MyServerBackupSummary => ({ ...backup, backupId, restoreState: "expired", canRestore: false, restoreUnavailableReason: "expired" });
-        await render(null, [expired("expired-1"), backup, expired("expired-2"), second, expired("expired-3")], stopped);
-        const visibleRows = () => [...container.querySelectorAll("li")].filter((row) => row.closest("[hidden]") === null);
-        expect(visibleRows()).toHaveLength(2);
-        expect(button("Show 3 expired backups").getAttribute("aria-expanded")).toBe("false");
-        await click("Show 3 expired backups");
-        expect(visibleRows()).toHaveLength(5);
-        expect(visibleRows().slice(0, 2).every((row) => !row.textContent!.includes("Expired"))).toBe(true);
-        expect(button("Hide expired backups").getAttribute("aria-expanded")).toBe("true");
-        await click("Hide expired backups");
-        expect(visibleRows()).toHaveLength(2);
-    });
-
-    it("renders UTC on the server, then the viewer's local time with a zone label after hydration", async () => {
-        viewerTimeZone("America/Chicago");
-        const errors: unknown[] = [];
-        const element = <TestLocalization>{<ManagedServerPollingProvider>
-            <ManagedServerBackups userId="user" server={stopped} backups={[backup]} status={null} />
-        </ManagedServerPollingProvider>} </TestLocalization>;
-        const html = renderToStaticMarkup(element);
-        expect(text(html)).toContain("Sep 1, 2026, 2:45 PM UTC");
-        const hydrated = document.createElement("div");
-        hydrated.innerHTML = html;
-        document.body.append(hydrated);
-        const hydratedRoot = await act(async () => hydrateRoot(hydrated, element, { onRecoverableError: (error) => errors.push(error) }));
-        await advance(0);
-        expect(errors).toEqual([]);
-        expect(text(hydrated.querySelector("time")!.textContent)).toBe("Sep 1, 2026, 9:45 AM CDT");
-        expect(text(hydrated.textContent)).toContain("Retained until Sep 30, 2026, 9:45 AM CDT");
-        await act(async () => hydratedRoot.unmount());
-        hydrated.remove();
-    });
 });
 
 // Resolves real English messages without reading cookies in standalone tests.

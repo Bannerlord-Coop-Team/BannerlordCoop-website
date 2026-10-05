@@ -32,7 +32,6 @@ async function failure(error: unknown, notSubmitted = false) {
     };
     return { ok: false as const, notSubmitted,
         rejected: !notSubmitted && ["stale_interaction", "safe_stop_required", "operation_unavailable"].includes(code),
-        stale: !notSubmitted && code === "stale_interaction",
         message: notSubmitted ? t("action.file.theTransferWasNotSentCheckYourFilesAndCampaign")
             : messages[code] ?? t("action.file.theTransferOutcomeCouldNotBeConfirmedCheckItsStatus") };
 }
@@ -74,14 +73,6 @@ export async function checkManagedServerFile(serverId: string, requestId: string
     try {
         requireUuid(serverId); requireUuid(requestId);
         return { ok: true as const, result: await getMyServerFileResult(await currentToken(expectedUserId), serverId, requestId) };
-    } catch (error) { return await failure(error); }
-}
-
-// Reads current transfer status so a stale page can retry a non-destructive export with fresh state.
-export async function readManagedServerFileStatus(serverId: string, expectedUserId: string) {
-    try {
-        requireUuid(serverId);
-        return { ok: true as const, status: await getMyServerFiles(await currentToken(expectedUserId), serverId) };
     } catch (error) { return await failure(error); }
 }
 

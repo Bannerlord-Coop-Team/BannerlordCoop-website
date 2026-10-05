@@ -9,7 +9,6 @@ import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, Eye
 import commandsData from "@/app/cheats/commands.json";
 import { isPublishedCheat } from "@/app/cheats/debugOnly";
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
-import { SERVER_WORKSPACE_TAB_PARAMETER, serverWorkspaceSectionFromTab, serverWorkspaceTab, type ServerWorkspaceSection } from "./server-workspace-tabs";
 
 const sections = [
     { name: "Console", label: "section.console", icon: Terminal },
@@ -17,8 +16,7 @@ const sections = [
     { name: "Save & config", label: "section.saveConfig", icon: FileJson },
     { name: "Settings", label: "section.settings", icon: Settings2 },
 ] as const;
-type Section = ServerWorkspaceSection;
-const COPY_FEEDBACK_MILLISECONDS = 2_000;
+type Section = typeof sections[number]["name"];
 const WorkspaceContext = createContext<{ current: Section; initial: Section }>({ current: "Console", initial: "Console" });
 const subscribe = () => () => {};
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-foreground hover:border-gold/50 focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
@@ -114,14 +112,8 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
     const { t } = useTranslations("server-common");
     const [section, setSection] = useState<Section>(initialSection);
     const [showAddress, setShowAddress] = useState(false);
-    const [copyFeedback, setCopyFeedback] = useState<{ state: "copied" | "failed" } | null>(null);
-    const copyState = copyFeedback?.state ?? "idle";
+    const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
     useEffect(() => {
-        // Restores a tab remembered in the URL unless the page already opened a specific one (such as access feedback).
-        function followTab() {
-            const remembered = serverWorkspaceSectionFromTab(new URLSearchParams(window.location.search).get(SERVER_WORKSPACE_TAB_PARAMETER));
-            if (remembered && initialSection === "Console") setSection(remembered);
-        }
         // Selects the existing workspace section for deep-linked server tasks.
         function followHash() {
             const target = window.location.hash;
@@ -130,27 +122,10 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
             if (target === "#server-files") setSection("Save & config");
             if (target === "#server-lifecycle") setSection("Console");
         }
-        followTab();
         followHash();
         window.addEventListener("hashchange", followHash);
         return () => window.removeEventListener("hashchange", followHash);
-    }, [initialSection]);
-    useEffect(() => {
-        if (copyFeedback === null) return;
-        // Copy feedback is momentary; the button returns to its normal label.
-        const timer = window.setTimeout(() => setCopyFeedback(null), COPY_FEEDBACK_MILLISECONDS);
-        return () => window.clearTimeout(timer);
-    }, [copyFeedback]);
-
-    // Shows a workspace tab and remembers it in the URL without a navigation or server request.
-    function selectSection(next: Section) {
-        setSection(next);
-        const url = new URL(window.location.href);
-        url.searchParams.set(SERVER_WORKSPACE_TAB_PARAMETER, serverWorkspaceTab(next));
-        // A section hash would reopen its own tab on reload, contradicting the chosen one.
-        url.hash = "";
-        window.history.replaceState(null, "", url);
-    }
+    }, []);
 
     return <WorkspaceContext.Provider value={{ current: section, initial: initialSection }}><main className="min-h-svh bg-background">
         <div className="site-container py-5 sm:py-6">
@@ -171,8 +146,8 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
                             <button disabled={!address} className={button} aria-controls="server-address" aria-expanded={showAddress} aria-label={showAddress ? t("managementWorkspace.hideServerIpAndPort") : t("managementWorkspace.showServerIpAndPort")} title={showAddress ? t("managementWorkspace.hideServerIpAndPort") : t("managementWorkspace.showServerIpAndPort")} onClick={() => setShowAddress(!showAddress)}>{showAddress ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}</button>
                             <button disabled={!address} className={button} aria-live="polite" title={copyState === "failed" ? t("managementWorkspace.couldNotCopyRevealTheIpToCopyItManually") : t("managementWorkspace.copyServerIpAndPort")} onClick={async () => {
                                 if (!address) return;
-                                try { await navigator.clipboard.writeText(address); setCopyFeedback({ state: "copied" }); }
-                                catch { setCopyFeedback({ state: "failed" }); }
+                                try { await navigator.clipboard.writeText(address); setCopyState("copied"); }
+                                catch { setCopyState("failed"); }
                             }}><Copy className="size-4" aria-hidden="true" />{copyState === "copied" ? t("managementWorkspace.copied") : copyState === "failed" ? t("managementWorkspace.copyFailed") : t("managementWorkspace.copyIp")}</button>
                         </div>
                     </div>
@@ -180,7 +155,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
                 {status && <div className="mt-4">{status}</div>}
             </header>
             <nav aria-label={t("managementWorkspace.serverWorkspace")} className="mb-4 grid grid-cols-4 border-b border-white/10 sm:flex sm:gap-1">
-                {sections.map(({ name: label, label: messageKey, icon: Icon }) => <button key={label} aria-current={section === label ? "page" : undefined} onClick={() => selectSection(label)} className={`inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 px-1 py-2 text-xs sm:min-h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm focus-visible:outline-2 focus-visible:outline-gold ${section === label ? "border-gold text-gold" : "border-transparent text-foreground-muted hover:text-foreground"}`}><Icon className="size-4" aria-hidden="true" />{t(messageKey)}</button>)}
+                {sections.map(({ name: label, label: messageKey, icon: Icon }) => <button key={label} aria-current={section === label ? "page" : undefined} onClick={() => setSection(label)} className={`inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 px-1 py-2 text-xs sm:min-h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm focus-visible:outline-2 focus-visible:outline-gold ${section === label ? "border-gold text-gold" : "border-transparent text-foreground-muted hover:text-foreground"}`}><Icon className="size-4" aria-hidden="true" />{t(messageKey)}</button>)}
             </nav>
             <div className="space-y-5">{children}</div>
         </div>
