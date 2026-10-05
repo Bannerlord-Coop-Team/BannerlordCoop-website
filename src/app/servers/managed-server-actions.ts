@@ -3,6 +3,7 @@
 import { getTranslations } from "@/app/lib/localization/server";
 
 import {
+    getMyServerBackupStatus,
     MyServersApiError,
     requestMyServerOperation,
     requestMyServerUpdate,
@@ -16,7 +17,8 @@ import { revalidatePath } from "next/cache";
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const OPERATIONS = new Set<MyServerOperation>(["start", "stop", "restart-game"]);
 
-export type ManagedServerActionResult = { ok: boolean; message: string; operationId?: string; checkStatus?: boolean };
+/** `checkStatus` asks the page to follow server status; `refresh` asks it to reload status once. */
+export type ManagedServerActionResult = { ok: boolean; message: string; operationId?: string; checkStatus?: boolean; refresh?: boolean };
 
 // Authenticates and submits lifecycle operations with localized result presentation.
 export async function operateManagedServer(input: unknown): Promise<ManagedServerActionResult> {
@@ -58,7 +60,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         revalidatePath("/servers");
         if (parsed.action === "start") return { ok: true, message: t("action.actions.serverStartedAndGameReadinessConfirmed") };
         if (parsed.action === "stop") return { ok: true, checkStatus: true, message: t("controls.checkingWhetherYourServerHasStopped") };
-        return { ok: true, message: t("operation.operationCommandExitedSuccessfullyCode0ThisDoesNotConfirm", { operation: operationLabel(parsed.action, t) }) };
+        return { ok: true, message: t("controls.restartingPlayersCanRejoinOnceTheCampaignFinishesLoadingUsually") };
     } catch (error) {
         revalidatePath("/servers");
         const code = error instanceof MyServersApiError ? error.code : "operation_failed";
@@ -74,7 +76,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         }
         if (parsed.action === "update-now") {
             if (code === "stale_interaction") {
-                return { ok: false, message: t("action.actions.serverStatusChangedRefreshThePageThenTryUpdateNow") };
+                return { ok: false, refresh: true, message: t("action.actions.yourServerSStatusChangedSoWeRefreshedItPress", { action: t("controls.updateNow") }) };
             }
             if (code === "no_update_available") {
                 return { ok: false, message: t("action.actions.thisServerAlreadyHasItsSelectedRelease") };
@@ -84,7 +86,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             }
         }
         if (parsed.action === "stop") return { ok: false, checkStatus: true, message: t("controls.checkingWhetherYourServerHasStopped") };
-        return { ok: false, message: t("action.actions.theCommandCouldNotBeConfirmedItMayHaveExecuted") };
+        return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThatYourOperationRequestWentThrough", { operation: operationLabel(parsed.action, t) }) };
     }
 }
 
@@ -113,11 +115,12 @@ function parseOperation(value: unknown): {
 }
 
 // Resolves the localized label for an unchanged operation code.
-function operationLabel(action: MyServerOperation, t: (key: string) => string) {
+function operationLabel(action: MyServerOperation | "update-now", t: (key: string) => string) {
     switch (action) {
         case "start": return t("operation.start");
         case "stop": return t("operation.stop");
         case "restart-game": return t("operation.restart");
+        case "update-now": return t("controls.updateNow");
     }
 }
 
@@ -144,7 +147,7 @@ export async function setManagedServerPassword(input: { serverId: string; expect
         revalidatePath(`/servers/${input.serverId}`);
         return { ok: true, message: result.restartQueued ? t("action.actions.passwordChangedARestartIsQueuedWithAPlayerWarning") : t("action.actions.passwordChangedUseItWhenJoiningYourServer") };
     } catch {
-        return { ok: false, message: t("action.actions.theChangeCouldNotBeConfirmedRefreshServerStatusBefore") };
+        return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThePasswordChangeSoWeRefreshed") };
     }
 }
 
@@ -164,5 +167,24 @@ export async function readManagedServerStartStatus(serverId: string, jobId: stri
             return { ok: false as const, retryable: false, message: t("action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain") };
         }
         return { ok: false as const, retryable: true, message: t("action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing") };
+    }
+}
+
+/**
+ * Reads only the compact status that lifecycle and backup polling watch. Polling re-renders the
+ * page only when this fingerprint changes, keeping repeated checks far cheaper than full renders.
+ */
+export async function readManagedServerStatusFingerprint(serverId: string): Promise<{ ok: true; fingerprint: string } | { ok: false }> {
+    if (typeof serverId !== "string" || !SERVER_ID.test(serverId)) return { ok: false };
+    try {
+        const supabase = await getSupabaseServerClient();
+        const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
+        if (!user || !session) return { ok: false };
+        const status = await getMyServerBackupStatus(session.access_token, serverId);
+        const job = status.job;
+        return { ok: true, fingerprint: JSON.stringify([status.updatedAt, status.operationState, status.observedGameState,
+            job?.jobId ?? null, job?.state ?? null, job?.progress ?? null]) };
+    } catch {
+        return { ok: false };
     }
 }

@@ -15,6 +15,7 @@ import {
 export type ManagedServerConfigResult =
     | { ok: true; file: RunnerConfigurationFile }
     | { ok: false; message: string; reload: boolean; notSubmitted: boolean };
+export type ManagedServerConfigFiles = { server: ManagedServerConfigResult; mod: ManagedServerConfigResult };
 
 // Binds the existing operation to the authenticated page account.
 async function currentToken(expectedUserId: string) {
@@ -72,6 +73,22 @@ export async function readManagedServerConfig(serverId: string, configPart: stri
         requireUuid(serverId); requireRunnerConfigurationPart(configPart);
         return { ok: true, file: await getMyServerConfiguration(await currentToken(expectedUserId), serverId, configPart) };
     } catch (error) { return await failure(error); }
+}
+
+// Reads both runner files in one request; separate actions would be queued and run one after the other.
+export async function readManagedServerConfigFiles(serverId: string, expectedUserId: string): Promise<ManagedServerConfigFiles> {
+    let token: string;
+    try {
+        requireUuid(serverId);
+        token = await currentToken(expectedUserId);
+    } catch (error) {
+        const failed = await failure(error);
+        return { server: failed, mod: failed };
+    }
+    const [server, mod] = await Promise.all((["server", "mod"] as const).map(async (configPart): Promise<ManagedServerConfigResult> => {
+        try { return { ok: true, file: await getMyServerConfiguration(token, serverId, configPart) }; } catch (error) { return await failure(error); }
+    }));
+    return { server, mod };
 }
 
 // Authenticates and validates configuration writes without changing their inputs.

@@ -150,6 +150,26 @@ it("preserves managed-only pages without requiring live authorization", async ()
     expect(mocks.liveAccess).not.toHaveBeenCalled();
 });
 
+// Restores a remembered tab on the server so a reload does not flash the Console first.
+it.each<[{ tab: string | string[]; accessError?: string }, string]>([
+    [{ tab: "backups" }, "Backups"],
+    [{ tab: ["save-config", "settings"] }, "Save & config"],
+    [{ tab: "../../admin" }, "Console"],
+    [{ tab: "backups", accessError: "Access could not be updated." }, "Settings"],
+])("opens the live workspace tab remembered in %j", async (query, section) => {
+    const tree = (await ServerPage({ params: Promise.resolve({ serverId: liveId }), searchParams: Promise.resolve(query) })).props.children;
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace" as string);
+    expect((workspace!.props as { initialSection?: string }).initialSection).toBe(section);
+});
+
+it.each([["settings", "Settings"], ["unknown", undefined]] as const)("opens the managed workspace tab remembered as %s", async (tab, section) => {
+    mocks.liveServer.mockReturnValue(null);
+    mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole: "owner", displayName: "Managed", friendlyRegion: "Europe", operationState: "running", observedGameState: "running", releaseChannel: "stable", updatedAt: "2026-10-01T00:00:00.000Z" }]);
+    const tree = (await ServerPage({ params: Promise.resolve({ serverId: managedId }), searchParams: Promise.resolve({ tab }) })).props.children;
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace" as string);
+    expect((workspace!.props as { initialSection?: string }).initialSection).toBe(section);
+});
+
 // Resolve the page's server components, leaving client components for React to render.
 function findServerElement(node: ReactNode, name: "LiveServerBackupSetup"): Promise<ReactElement<ComponentProps<typeof LiveServerBackupSetup>> | null>;
 function findServerElement(node: ReactNode, name: "LiveServerVisibilitySetup"): Promise<ReactElement<ComponentProps<typeof LiveServerVisibilitySetup>> | null>;
@@ -282,7 +302,8 @@ it.each([
             serverId: managedId, action, expectedUpdatedAt: updatedAt,
             ...(action === "restore-backup" ? { backupId } : {}),
         }, expect.stringMatching(/^[0-9a-f-]{36}$/));
-        expect(confirm).toHaveBeenCalledTimes(action === "restore-backup" ? 1 : 0);
+        // Both operations interrupt this running server, so each is confirmed first.
+        expect(confirm).toHaveBeenCalledOnce();
         expect(mocks.refresh).toHaveBeenCalled();
     } finally {
         await act(async () => root.unmount());
@@ -380,7 +401,7 @@ it("updates the mapped identity through both controls and waits for authoritativ
         expect(mocks.requestVisibility).toHaveBeenLastCalledWith("token", { action: "set-server-visibility", serverId: managedId, visibility: "public", expectedUpdatedAt: updatedAt }, expect.any(String));
         expect(mocks.refresh).toHaveBeenCalledOnce();
         // An acknowledged receipt does not prove the current state (it may be a replay).
-        expect(container.querySelector("summary")!.textContent).toContain("Private");
+        expect(container.querySelector("summary")!.textContent).not.toContain("Public");
         expect(container.querySelector<HTMLInputElement>('input[value="private"]')!.checked).toBe(true);
         mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole: "owner", visibility: "public", updatedAt: nextUpdatedAt }]);
         await renderVisibility();

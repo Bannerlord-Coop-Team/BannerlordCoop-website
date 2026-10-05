@@ -21,7 +21,7 @@ export function ManagedServerFiles({ userId, server, files, backups, status, loa
         <ServerWorkspacePanel section="Save & config">
             <section id="server-files" aria-label={t("files.saveConfig")}>
                 {canManage
-                    ? <ManagedServerTransfers userId={userId} serverId={server.serverId} status={files} canImportConfig={server.accessRole === "owner"} canEditConfig={server.accessRole === "owner"} canExportSave={server.accessRole === "owner"} />
+                    ? <ManagedServerTransfers userId={userId} serverId={server.serverId} serverName={server.displayName} status={files} canImportConfig={server.accessRole === "owner"} canEditConfig={server.accessRole === "owner"} canExportSave={server.accessRole === "owner"} />
                     : <ServerSaveConfigPanels saveNotice={readOnly} configNotice={readOnly} />}
             </section>
         </ServerWorkspacePanel>

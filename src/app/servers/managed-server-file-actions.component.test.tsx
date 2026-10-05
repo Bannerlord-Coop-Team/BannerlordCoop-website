@@ -1,7 +1,8 @@
 import { createTranslator } from "@/app/lib/localization/translator";
 import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { beforeEach, expect, it, vi } from "vitest";
-import { submitManagedServerFile, exportManagedServerConfig, checkManagedServerFile } from "./managed-server-file-actions";
+import { submitManagedServerFile, exportManagedServerConfig, checkManagedServerFile, readManagedServerFileStatus } from "./managed-server-file-actions";
+import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION as config } from "../../../supabase/functions/_shared/managed-server-configuration";
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), submit: vi.fn(), files: vi.fn(), status: vi.fn(), revalidate: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
@@ -75,6 +76,26 @@ it("distinguishes local campaign validation from an uncertain upstream submissio
     mocks.submit.mockResolvedValue({ kind: "job", action: "import-save", state: "queued" });
     mocks.revalidate.mockImplementation(() => { throw new Error("Refresh failed after acceptance"); });
     expect(await submitManagedServerFile(form, "owner")).toMatchObject({ ok: false, notSubmitted: false, rejected: false });
+});
+
+it("marks only a submitted stale rejection as stale so the page can refresh and retry an export", async () => {
+    const form = new FormData();
+    for (const [key, value] of Object.entries({ action: "export-save", requestId: id, serverId: id, expectedUpdatedAt: updatedAt, saveId: id })) form.set(key, value);
+    mocks.submit.mockRejectedValueOnce(new MyServersApiError("stale_interaction", "Stale page"));
+    expect(await submitManagedServerFile(form, "owner")).toMatchObject({ ok: false, rejected: true, stale: true, notSubmitted: false });
+    mocks.submit.mockRejectedValueOnce(new MyServersApiError("safe_stop_required", "Running"));
+    expect(await submitManagedServerFile(form, "owner")).toMatchObject({ ok: false, rejected: true, stale: false });
+    expect(await submitManagedServerFile(form, "previous-owner")).toMatchObject({ ok: false, notSubmitted: true, stale: false });
+});
+
+it("reads current transfer status for the authenticated page account only", async () => {
+    const status = { serverId: id, updatedAt, operationState: "running", observedGameState: "running", activeSave: null, managedConfig: config };
+    mocks.files.mockResolvedValue(status);
+    expect(await readManagedServerFileStatus(id, "previous-owner")).toMatchObject({ ok: false });
+    expect(await readManagedServerFileStatus("not-a-uuid", "owner")).toMatchObject({ ok: false });
+    expect(mocks.files).not.toHaveBeenCalled();
+    expect(await readManagedServerFileStatus(id, "owner")).toEqual({ ok: true, status });
+    expect(mocks.files).toHaveBeenCalledExactlyOnceWith("original-owner-token", id);
 });
 
 // Resolves real English messages without reading cookies in standalone tests.

@@ -28,12 +28,25 @@ it.each(["changed account", "mismatched session"])("blocks all console actions w
 
 it("preserves the original request UUID and treats transport errors as uncertain rather than rejected", async () => {
     mocks.submit.mockRejectedValue(new MyServersApiError("server_api_unavailable", "Unavailable", true));
-    expect(await submitManagedConsoleCommand(input, requestId, "owner")).toMatchObject({ ok: false, notSubmitted: false });
+    const result = await submitManagedConsoleCommand(input, requestId, "owner");
+    expect(result).toMatchObject({ ok: false, notSubmitted: false, uncertain: true, refresh: false,
+        message: "We couldn’t confirm the command was delivered. If no output appears in the console in a few seconds, send it again." });
     expect(mocks.submit).toHaveBeenCalledExactlyOnceWith("token", requestId, input);
 });
 
+it.each([
+    ["operation_unavailable", "The server isn’t running, so the command can’t be delivered. Send it again once the server is running.", true],
+    ["request_conflict", "The server is busy with another command or its status just changed. Wait a moment, then send it again.", true],
+    ["rate_limited", "Too many requests. Wait before checking again.", false],
+])("explains a definitive %s rejection without pointing the owner to Discord", async (code, message, refresh) => {
+    mocks.submit.mockRejectedValue(new MyServersApiError(code, "Private details"));
+    const result = await submitManagedConsoleCommand(input, requestId, "owner");
+    expect(result).toEqual({ ok: false, notSubmitted: false, uncertain: false, refresh, message });
+    expect(JSON.stringify(result)).not.toContain("Discord");
+});
+
 it("rejects a malformed command before dispatch", async () => {
-    expect(await submitManagedConsoleCommand({ ...input, command: "coop.help; stop" }, requestId, "owner")).toMatchObject({ ok: false, notSubmitted: true });
+    expect(await submitManagedConsoleCommand({ ...input, command: "coop.help; stop" }, requestId, "owner")).toMatchObject({ ok: false, notSubmitted: true, uncertain: false, refresh: false });
     expect(mocks.submit).not.toHaveBeenCalled();
 });
 
