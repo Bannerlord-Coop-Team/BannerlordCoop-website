@@ -10,6 +10,7 @@ import {
     parseConsoleEvent,
 } from "./ManagedServerConsole";
 import {
+    CONSOLE_SESSION_BACKSTOP_MILLISECONDS,
     consoleStreamEndpoint,
     createConsoleStreamHandler,
 } from "../../lib/console/stream-handler";
@@ -77,6 +78,46 @@ test("forwards only the verified bearer session and streams before upstream clos
     await reader.cancel();
     assert.equal(upstreamCancelled, true);
     assert.equal((forwarded?.init?.signal as AbortSignal).aborted, true);
+});
+
+test("passes the control plane's session expiry through and then ends the browser stream cleanly", async () => {
+    const handler = routeHandler(async () => new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+            controller.enqueue(new TextEncoder().encode('event: line\ndata: "last"\n\nevent: expired\ndata: {}\n\n'));
+            controller.close();
+        },
+    }), { headers: { "content-type": "text/event-stream" } }));
+    const response = await handler(new Request(`https://website.example/api/servers/${SERVER_ID}/console`), context(SERVER_ID));
+    assert.match(await response.text(), /event: expired/u);
+});
+
+test("finishes a silent session with an expired event at the backstop and releases the upstream read", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    let upstreamCancelled = false;
+    const handler = routeHandler(async () => new Response(new ReadableStream<Uint8Array>({
+        start(controller) { controller.enqueue(new TextEncoder().encode('event: line\ndata: "first"\n\n')); },
+        cancel() { upstreamCancelled = true; },
+    }), { headers: { "content-type": "text/event-stream" } }));
+    const response = await handler(new Request(`https://website.example/api/servers/${SERVER_ID}/console`), context(SERVER_ID));
+    const reader = response.body!.getReader();
+    assert.match(new TextDecoder().decode((await reader.read()).value), /first/u);
+    const pending = reader.read();
+    t.mock.timers.tick(CONSOLE_SESSION_BACKSTOP_MILLISECONDS);
+    assert.match(new TextDecoder().decode((await pending).value), /event: expired/u);
+    assert.equal((await reader.read()).done, true);
+    assert.equal(upstreamCancelled, true);
+});
+
+test("ends the browser stream normally when the upstream connection breaks", async () => {
+    let upstreamController!: ReadableStreamDefaultController<Uint8Array>;
+    const handler = routeHandler(async () => new Response(new ReadableStream<Uint8Array>({
+        start(controller) { upstreamController = controller; },
+    }), { headers: { "content-type": "text/event-stream" } }));
+    const response = await handler(new Request(`https://website.example/api/servers/${SERVER_ID}/console`), context(SERVER_ID));
+    const reader = response.body!.getReader();
+    const pending = reader.read();
+    upstreamController.error(new Error("connection reset"));
+    assert.equal((await pending).done, true);
 });
 
 test("bounds retained browser output", () => {

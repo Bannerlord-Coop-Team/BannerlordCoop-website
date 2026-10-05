@@ -2,6 +2,12 @@ import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const SESSION_MILLISECONDS = 5 * 60_000;
+/**
+ * The control plane ends each session at five minutes with an `expired` event. This backstop fires later
+ * so that clean ending wins; it only finishes a session whose upstream went silent.
+ */
+export const CONSOLE_SESSION_BACKSTOP_MILLISECONDS = SESSION_MILLISECONDS + 30_000;
+const EXPIRED_FRAME = new TextEncoder().encode("event: expired\ndata: {}\n\n");
 
 type ConsoleRouteDependencies = Readonly<{
     getAuthClient: typeof getSupabaseServerClient;
@@ -41,8 +47,11 @@ async function handleConsoleStream(
         return new Response("Console streaming is unavailable.", { status: 503 });
     }
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), SESSION_MILLISECONDS);
-    const abort = () => controller.abort();
+    // Before the response starts these only abort the upstream request; afterwards they finish the stream.
+    let backstop = () => controller.abort();
+    let disconnect = () => controller.abort();
+    const timer = setTimeout(() => backstop(), CONSOLE_SESSION_BACKSTOP_MILLISECONDS);
+    const abort = () => disconnect();
     request.signal.addEventListener("abort", abort, { once: true });
     if (request.signal.aborted) controller.abort();
     let upstream: Response;
@@ -73,25 +82,44 @@ async function handleConsoleStream(
     }
 
     const reader = upstream.body.getReader();
-    const body = new ReadableStream<Uint8Array>({
-        async pull(streamController) {
-            try {
-                const next = await reader.read();
-                if (next.done) streamController.close();
-                else streamController.enqueue(next.value);
-            } catch (error) {
-                streamController.error(error);
-            }
-        },
-        async cancel() {
-            controller.abort();
-            await reader.cancel().catch(() => undefined);
-        },
-    });
-    void reader.closed.finally(() => {
+    let browser: ReadableStreamDefaultController<Uint8Array> | undefined;
+    let finished = false;
+    // Ends the browser stream exactly once and settles any pending upstream read, so the runtime never
+    // sees a request waiting on a read that cannot complete.
+    const finish = (finalFrame?: Uint8Array) => {
+        if (finished) return;
+        finished = true;
         clearTimeout(timer);
         request.signal.removeEventListener("abort", abort);
-    }).catch(() => undefined);
+        try {
+            if (finalFrame) browser?.enqueue(finalFrame);
+            browser?.close();
+        } catch { /* The browser already went away. */ }
+        controller.abort();
+        void reader.cancel().catch(() => undefined);
+    };
+    backstop = () => finish(EXPIRED_FRAME);
+    disconnect = () => finish();
+    const body = new ReadableStream<Uint8Array>({
+        start(streamController) {
+            browser = streamController;
+        },
+        async pull(streamController) {
+            if (finished) return;
+            try {
+                const next = await reader.read();
+                if (finished) return;
+                if (next.done) finish();
+                else streamController.enqueue(next.value);
+            } catch {
+                // An abrupt upstream end closes the browser stream normally; the console retries it.
+                finish();
+            }
+        },
+        cancel() {
+            finish();
+        },
+    });
     return new Response(body, {
         status: 200,
         headers: {
