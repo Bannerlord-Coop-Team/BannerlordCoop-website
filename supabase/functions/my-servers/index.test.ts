@@ -330,6 +330,29 @@ function successEnvelope(result: unknown) {
     return Response.json({ version: 1, requestId: REQUEST_ID, ok: true, result });
 }
 
+test("deletion forwards exact confirmation, generation and required request ID through the closed owner API", async () => {
+    const input = { action: "delete-server", serverId: "22222222-2222-4222-8222-222222222222",
+        expectedUpdatedAt: "2026-10-07T12:00:00.000Z", confirmationText: "The Northern March" };
+    const calls: { url: string; body: unknown }[] = [];
+    let leak = false;
+    const handler = createHandler(async (url, init) => {
+        calls.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+        return successEnvelope({ outcome: "enqueued", jobId: REQUEST_ID, action: "delete", ...(leak ? { requestPayload: {} } : {}) });
+    });
+    assert.equal((await handler(operationRequest(input))).status, 200);
+    const { action, ...expectedInput } = input;
+    assert.equal(action, "delete-server");
+    assert.deepEqual(calls[0].body, { version: 1, requestId: REQUEST_ID, operation: "delete-server", input: expectedInput });
+    assert.ok(calls[0].url.endsWith("/v1/user/control-plane"));
+    for (const invalid of [{ ...input, actor: "owner" }, { ...input, confirmationText: "" }, { ...input, confirmationText: "x".repeat(49) },
+        { ...input, confirmationText: undefined }, { ...input, expectedUpdatedAt: "yesterday" }]) {
+        assert.equal((await handler(operationRequest(invalid))).status, 400);
+    }
+    const missingId = operationRequest(input); missingId.headers.delete("x-request-id");
+    assert.equal((await handler(missingId)).status, 400); assert.equal(calls.length, 1);
+    leak = true; assert.equal((await handler(operationRequest(input))).status, 502);
+});
+
 function listRequest(query = "", method = "GET") {
     return new Request(`https://function.example.test${query}`, {
         method,

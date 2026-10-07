@@ -47,6 +47,15 @@ const BACKUP_JOB_STATES = new Set([
     "cancelled",
 ]);
 
+import { parseServerDeletionIntent, parseServerDeletionResult, type ServerDeletionIntent } from "../../../../supabase/functions/_shared/server-deletion-contract";
+
+export async function requestMyServerDeletion(accessToken: string, intent: ServerDeletionIntent) {
+    const { requestId, ...input } = parseServerDeletionIntent(intent);
+    const result = await requestMyServersApi(accessToken, { method: "POST",
+        body: JSON.stringify({ action: "delete-server", ...input }), requestId });
+    try { return parseServerDeletionResult(result); } catch { throw invalidResponse(); }
+}
+
 export type MyServerOperation = "start" | "stop" | "restart-game";
 export type MyServerBackupOperation = "create-backup" | "restore-backup";
 

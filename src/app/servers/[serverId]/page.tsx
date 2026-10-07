@@ -19,6 +19,7 @@ import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles"
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
 import { ManagedServerControls, ManagedServerPassword } from "@/app/components/servers/ManagedServerControls";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
+import { ManagedServerDelete } from "@/app/components/servers/ManagedServerDelete";
 import { readManagedServerStatusFingerprint } from "@/app/servers/managed-server-actions";
 import {
     getLiveConsoleAccessLevel,
@@ -226,6 +227,7 @@ function ManagedServerSections({
             </ServerWorkspacePanel>
             <ServerWorkspacePanel section="Settings">
                 <ManagedServerPassword serverId={server.serverId} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} />
+                <ManagedServerDelete key={`${userId}:${server.serverId}`} serverId={server.serverId} displayName={server.displayName} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} />
             </ServerWorkspacePanel>
             <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
                 <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />

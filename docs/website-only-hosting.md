@@ -11,6 +11,23 @@ custom password using the current server generation. A running server queues a
 warned restart. No password or secret reference is returned; refresh current
 status after an uncertain response instead of automatically resubmitting.
 
+The owner's Settings tab also contains a separate **Delete server** panel. Its
+dialog requires the exact current server name and a permanent-removal acknowledgement;
+Cancel receives initial focus. Managers and read-only users do not see this control.
+The control plane rechecks ownership, name and generation before queuing its existing
+deletion workflow. A final off-host backup must succeed before removal, and retained
+backups still expire under policy. Download important saves before deleting.
+An accepted request is shown as queued, not completed. Uncertain manual retries
+reuse the original request ID and generation while this page remains mounted;
+a rejected request requires a fresh confirmation. Never automatically retry at a
+newer generation. Deploy the matching control-plane `delete-server` operation
+before the `my-servers` Edge function and website. This does not require a database
+migration or a runner update.
+
+The public `/servers/wireframe` Settings tab uses the same deletion panel with a
+local-only mock submission. [Screenshots and reproduction](server-deletion/README.md)
+illustrate the UI; they do not establish production deletion or backup evidence.
+
 Deploy with the matching control-plane and Bot_UP retirement branches. Apply
 `202609280002_control_plane_website_accounts.sql` and
 `202609280003_account_owned_membership.sql` once during the coordinated migration
