@@ -78,7 +78,7 @@ test("strict CP endpoint authenticates dedicated token and always fences exact a
     const evidence = (await verifyPatreonMembership(identity(), policy, now)).evidence;
     const snapshot = { version: 1, accountId, discordUserId: "123456789012345678", patreonUserId: "1", linkGeneration: "1", revision: "1", linkState: "linked", ...evidence };
     const handler = createControlPlaneMembershipHandler({ supabaseUrl: "https://wfvqnijwuyqjibhlcrhz.supabase.co", serviceRoleKey: "synthetic-service-key", syncToken: "a".repeat(64), fetch: async (url, init) => {
-        const path = new URL(String(url)).pathname; calls.push(path); assert.equal(init?.redirect, "error");
+        const path = new URL(String(url)).pathname; calls.push(path); assert.equal(init?.redirect, "manual");
         if (path.startsWith("/auth/")) return outage ? new Response("outage", { status: 503 }) : deleted ? new Response("missing", { status: 404 }) : Response.json({ id: accountId, identities: [{ provider: "discord", identity_data: { sub: snapshot.discordUserId } }] });
         assert.equal(path, "/rest/v1/rpc/membership_fence");
         const input = JSON.parse(String(init?.body)); assert.equal(input.p_account_id, accountId); assert.equal(input.p_deleted, deleted);
