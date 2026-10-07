@@ -7,7 +7,7 @@ export async function verifyWebsiteSessionContext(options: {
     const [context, userId] = await Promise.all([
         (async () => {
             const response = await (options.fetch ?? fetch)(new URL('/rest/v1/rpc/website_session_context', options.supabaseUrl), {
-                method: 'POST', cache: 'no-store', redirect: 'error', signal,
+                method: 'POST', cache: 'no-store', redirect: 'manual', signal, // workerd rejects redirect: 'error'; a manual 3xx is not ok.
                 headers: { apikey: options.key, authorization: options.authorization, 'content-type': 'application/json' },
                 body: JSON.stringify({ p_action: options.action, p_request_id: options.requestId ?? crypto.randomUUID() }),
             });

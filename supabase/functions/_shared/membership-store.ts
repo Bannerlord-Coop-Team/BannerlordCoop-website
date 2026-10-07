@@ -26,7 +26,8 @@ export function membershipStore(config: StoreConfig) {
         for (let attempt = 0; ; attempt++) {
             const remaining = deadline - Date.now();
             if (remaining <= 0) throw new Error("Membership service unavailable");
-            const response = await requestFetch(new URL(path, origin), { ...init, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(remaining), headers: { apikey: config.serviceRoleKey, ...(!config.serviceRoleKey.startsWith("sb_secret_") ? { Authorization: `Bearer ${config.serviceRoleKey}` } : {}), "Content-Type": "application/json", ...init.headers } });
+            // Shared with the Cloudflare-hosted website server: workerd rejects redirect: "error", and a manual 3xx is already not ok.
+            const response = await requestFetch(new URL(path, origin), { ...init, cache: "no-store", redirect: "manual", signal: AbortSignal.timeout(remaining), headers: { apikey: config.serviceRoleKey, ...(!config.serviceRoleKey.startsWith("sb_secret_") ? { Authorization: `Bearer ${config.serviceRoleKey}` } : {}), "Content-Type": "application/json", ...init.headers } });
             if (allowDeleted && response.status === 404) return null;
             if (response.status === 429) throw new MembershipRateLimit();
             let contention = false;

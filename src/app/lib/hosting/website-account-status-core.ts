@@ -17,7 +17,8 @@ export async function prepareWebsiteAccountStatus(accessToken: string, config: S
     const [user, configured] = await Promise.all([
         store.user(`Bearer ${accessToken}`),
         (async () => {
-            const response = await requestFetch(endpoint, { cache: "no-store", redirect: "error", signal: AbortSignal.timeout(4_000),
+            // workerd rejects redirect: "error"; "manual" still fails closed because a 3xx is not ok.
+            const response = await requestFetch(endpoint, { cache: "no-store", redirect: "manual", signal: AbortSignal.timeout(4_000),
                 headers: { apikey: config.publishableKey } });
             if (!response.ok) {
                 await response.body?.cancel();
@@ -36,7 +37,7 @@ export async function prepareWebsiteAccountStatus(accessToken: string, config: S
         const read = async () => {
             // An older function can remain active briefly while the automatic publishers roll out.
             if (configured === null) {
-                const legacy = await requestFetch(endpoint, { method: "POST", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(4_000),
+                const legacy = await requestFetch(endpoint, { method: "POST", cache: "no-store", redirect: "manual", signal: AbortSignal.timeout(4_000),
                     headers: { apikey: config.publishableKey, Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
                     body: JSON.stringify({ operation: "status" }) });
                 if (!legacy.ok) { await legacy.body?.cancel(); throw new Error("Website account status is unavailable"); }
