@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, ArrowUpRight, Check, ChevronDown, ChevronRight, Copy, Database, Download, FileJson, Globe2, LockKeyhole, Pencil, Play, RotateCw, Search, Settings2, Square, Terminal, Upload, X } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "@/app/lib/localization/client";
+import { ServerDeletionPanel } from "@/app/components/servers/ManagedServerDelete";
 
 const sections = [
     { name: "Console", labelKey: "workspace.console", icon: Terminal },
@@ -74,6 +75,7 @@ function Panel({ title, description, children, action }: { title: string; descri
 /** Runs the public, local-only management demo using page-scoped messages. */
 export default function ServerWireframe() {
     const { t, number, date } = useTranslations("server-wireframe");
+    const { t: managedT } = useTranslations("managed-server");
     const [section, setSection] = useState<Section>("Console");
     const [running, setRunning] = useState(true);
     const [pendingLifecycle, setPendingLifecycle] = useState<"stop" | "restart" | null>(null);
@@ -472,6 +474,8 @@ export default function ServerWireframe() {
                     </SaveBar>
                 </form>
             </Panel>}
+            {section === "Settings" && <ServerDeletionPanel key={name} serverId="aaaaaaaa-1111-4111-8111-111111111111" displayName={name} expectedUpdatedAt="2026-10-07T12:00:00.000Z" operationState="running"
+                onDelete={async () => ({ ok: true, message: managedT("deletion.queued") })} />}
         </div>
     </main>;
 }

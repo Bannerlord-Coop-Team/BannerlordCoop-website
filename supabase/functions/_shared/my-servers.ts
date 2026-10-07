@@ -19,6 +19,8 @@ const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const SERVER_OPERATIONS = new Set(["start", "stop", "restart-game"]);
 const SAFE_ERROR_CODE = /^[a-z][a-z0-9_-]{0,63}$/u;
 
+import { parseServerDeletionInput, parseServerDeletionResult, type ServerDeletionInput } from "./server-deletion-contract.ts";
+
 export type MyServersHandlerOptions = {
     allowedOrigins: readonly string[];
     controlPlaneUrl: string;
@@ -45,6 +47,7 @@ type UpstreamRequest =
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "server-backup-status"; input: { serverId: string } }
     | { operation: "update-server"; input: { serverId: string; expectedUpdatedAt: string } }
+    | { operation: "delete-server"; input: ServerDeletionInput }
     | {
         operation: "server-operation";
         input: { serverId: string; action: string };
@@ -100,7 +103,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // Durable mutations must retain the caller's UUID for exactly-once handling.
-            if (upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server") {
+            if (upstreamRequest.operation === "delete-server" || upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -217,6 +220,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "console-command") parseConsoleReceipt(envelope.result);
                 if (upstreamRequest.operation === "console-command-result") parseConsoleResult(envelope.result);
                 if (upstreamRequest.operation === "acknowledge-console-command") parseConsoleAcknowledgement(envelope.result);
+                if (upstreamRequest.operation === "delete-server") parseServerDeletionResult(envelope.result);
                 if (upstreamRequest.operation === "set-password" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["changed", "restartQueued"]) || envelope.result.changed !== true || typeof envelope.result.restartQueued !== "boolean")) throw new Error("Invalid password response");
                 if (upstreamRequest.operation === "server-update-status") parseReleaseStatus(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "save-server-settings") parseOwnerSettingsResult(envelope.result, upstreamRequest.input.serverId);
@@ -394,6 +398,10 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
                 action: value.action,
             },
         };
+    }
+    if (value.action === "delete-server") {
+        const { action, ...input } = value;
+        return { operation: action, input: parseServerDeletionInput(input) };
     }
     if (value.action === "set-password") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "password", "serverId"]) || typeof value.password !== "string" || value.password.length < 1 || value.password.length > 128) throw new Error("Invalid password request");

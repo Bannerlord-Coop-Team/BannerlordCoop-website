@@ -16,6 +16,6 @@ export async function generateMetadata(): Promise<Metadata> {
 /** Delivers only this route's messages to the interactive public demo. */
 export default async function ServerWireframePage() {
     const locale = await getLocale();
-    const messages = await getMessages(["server-wireframe"], locale);
+    const messages = await getMessages(["server-wireframe", "managed-server"], locale);
     return <LocalizationProvider locale={locale} messages={messages}><ServerWireframe /></LocalizationProvider>;
 }
