@@ -263,6 +263,11 @@ as old and retry automatically. A successful response with missing fields clears
 older measurements. Hidden tabs pause both loops and refresh on return. Leaving
 the tab cancels both requests; superseded responses cannot replace new inventory.
 Expanded host details remain open during either refresh.
+Each collapsed Billing cell shows `Renews MM/DD/YYYY` beneath the price when
+auto-renew is enabled, using the provider's expiration date in UTC to preserve
+its calendar date. Disabled auto-renew shows `Won't Renew`. Missing renewal
+settings or dates remain explicitly unknown; pending or unavailable billing
+does not claim a renewal status.
 Legacy full responses without `liveDataIncluded` render directly. Deploy the
 backend that honors explicit provider exclusion before this website change.
 No Edge Function deployment is needed. This isolates the provider failure; it does

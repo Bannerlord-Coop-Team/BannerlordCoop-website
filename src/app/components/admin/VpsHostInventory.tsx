@@ -82,7 +82,10 @@ export function VpsHostInventory({
                                     <div role="cell" data-label="Capacity" className={SUMMARY_LABEL}><CapacitySummary host={host} /></div>
                                     <div role="cell" data-label="Slots" className={SUMMARY_LABEL}><SlotSummary host={host} ownerLabels={ownerLabels} /></div>
                                     <div role="cell" data-label="System" className={SUMMARY_LABEL}><SystemSummary resources={host.resources} pending={liveDataPending} /></div>
-                                    <div role="cell" data-label="Billing" className={SUMMARY_LABEL}><p className="text-xs font-semibold text-foreground">{billingPending ? "Loading…" : billingUnavailable ? "Unavailable" : formatVpsCost(host.cost)}</p></div>
+                                    <div role="cell" data-label="Billing" className={SUMMARY_LABEL}>
+                                        <p className="text-xs font-semibold text-foreground">{billingPending ? "Loading…" : billingUnavailable ? "Unavailable" : formatVpsCost(host.cost)}</p>
+                                        {!billingPending && !billingUnavailable && <p className="mt-1 text-xs text-foreground-muted">{formatVpsRenewal(host)}</p>}
+                                    </div>
                                     <div role="cell" data-label="Runner" className={SUMMARY_LABEL}>{liveDataPending ? <StateBadge value="loading" /> : <RunnerOnboardingStatus
                                         compact
                                         onRefresh={onRefresh}
@@ -223,6 +226,16 @@ function formatVpsCost(cost: HostingAdminVpsHost["cost"]) {
     const amount = new Intl.NumberFormat("en", { style: "currency", currency: cost.currencyCode }).format(cost.priceInMicrocents / 100_000_000);
     const cadence = cost.interval === 1 && cost.duration === "P1M" ? "month" : cost.interval === 1 && cost.duration === "P1Y" ? "year" : `${cost.interval} × ${cost.duration}`;
     return `${amount} / ${cadence}`;
+}
+
+function formatVpsRenewal(host: HostingAdminVpsHost) {
+    if (host.autoRenew === false) return "Won't Renew";
+    if (host.autoRenew !== true) return "Renewal unknown";
+    const date = host.expirationDate === null ? null : new Date(host.expirationDate);
+    if (!date || !Number.isFinite(date.valueOf())) return "Renewal date unknown";
+    return `Renews ${new Intl.DateTimeFormat("en-US", {
+        timeZone: "UTC", month: "2-digit", day: "2-digit", year: "numeric",
+    }).format(date)}`;
 }
 
 function formatCpu(resources: HostingServerResources | null | undefined) {
