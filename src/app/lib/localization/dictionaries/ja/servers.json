@@ -83,7 +83,7 @@
   "onboarding.recoveryHint": "閉じたり再読み込みしたりしても、送信済みのリクエストはキャンセルされません。利用枠や空き状況が変わっていても、再試行では保存済みのリクエストをそのまま使用します。",
   "onboarding.quotaLabel": "付与されたサーバー利用枠",
   "onboarding.availableTitle": "サーバーを作成できます",
-  "onboarding.availableHint": "キャンペーンに名前を付け、配置するリージョンを選んでください。セットアップでは、管理者から付与された利用枠、または確認済みのメンバーシップによるサーバー利用枠を、未使用分から1つ使用します。",
+  "onboarding.availableHint": "キャンペーンに名前を付け、配置するリージョンを選んでください。",
   "onboarding.setup": "サーバーをセットアップ",
   "onboarding.checking": "保存済みのサーバーリクエストの権限を確認中…",
   "onboarding.manage": "サーバーを管理",
@@ -121,7 +121,7 @@
   "onboarding.pendingServer": "{region}でのサーバー（{name}）作成リクエストが保留中で、確認が必要です。",
   "onboarding.pendingRegion": "{region}のリージョンリクエストが保留中で、確認が必要です。",
   "onboarding.unused": {
-    "other": "未使用：{countLabel}枠 · リージョンの空き状況は送信時に確認されます"
+    "other": "未使用：{countLabel}枠"
   },
   "onboarding.receipt": "{region}に{name}が割り当てられました。作成時は停止状態でした。この通知は現在の稼働状況を示すものではありません。「自分のサーバー」またはサーバー管理画面で現在の状態を確認してください。",
   "onboarding.receiptSetup": "{release} · メンテナンス時間：03:00–04:00 America/Chicago。セットアップではサーバーは起動しません。初回起動時には同梱のデフォルトのセーブデータを使用するため、インポートは不要です。",

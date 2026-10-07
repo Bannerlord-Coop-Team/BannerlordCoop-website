@@ -83,7 +83,7 @@
   "onboarding.recoveryHint": "关闭或刷新不会取消已提交的请求。重试会原样使用已保存的请求，即使您的配额或容量已发生变化。",
   "onboarding.quotaLabel": "授予您的服务器配额",
   "onboarding.availableTitle": "您可以创建一台服务器",
-  "onboarding.availableHint": "为您的战役命名并选择托管地区。设置将使用一个尚未使用的服务器配额，该配额须由管理员授予或通过会员资格验证获得。",
+  "onboarding.availableHint": "为您的战役命名并选择托管地区。",
   "onboarding.setup": "设置服务器",
   "onboarding.checking": "正在检查已保存服务器请求的操作权限…",
   "onboarding.manage": "管理服务器",
@@ -121,7 +121,7 @@
   "onboarding.pendingServer": "在{region}创建服务器（{name}）的待处理请求需要确认。",
   "onboarding.pendingRegion": "{region}的待处理地区请求需要确认。",
   "onboarding.unused": {
-    "other": "剩余 {countLabel} 个配额 · 提交时检查地区容量"
+    "other": "剩余 {countLabel} 个配额"
   },
   "onboarding.receipt": "已在{region}分配服务器 {name}。服务器创建时处于停止状态；此回执并非实时状态。请查看“我的服务器”或进入服务器管理页面以了解当前状态。",
   "onboarding.receiptSetup": "{release} · 维护时间为 03:00–04:00（America/Chicago）。设置不会启动服务器。首次启动将使用内置的默认存档，无需导入。",

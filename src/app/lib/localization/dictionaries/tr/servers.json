@@ -86,7 +86,7 @@
   "onboarding.recoveryHint": "Kapatmak veya sayfayı yenilemek gönderilmiş bir isteği iptal etmez. Yeniden deneme, kotanız veya kapasite değişmiş olsa bile tam olarak kaydedilen isteği kullanır.",
   "onboarding.quotaLabel": "Tanımlanan sunucu kotanız",
   "onboarding.availableTitle": "Kullanabileceğiniz bir sunucunuz var",
-  "onboarding.availableHint": "Seferinize bir ad verin ve nerede barınacağını seçin. Kurulum, kullanılmamış bir yönetici tarafından verilmiş veya doğrulanmış üyelik sunucu hakkını kullanır.",
+  "onboarding.availableHint": "Seferinize bir ad verin ve nerede barınacağını seçin.",
   "onboarding.setup": "Sunucuyu kur",
   "onboarding.checking": "Saklanan sunucu isteğinin yetkisi denetleniyor…",
   "onboarding.manage": "Sunucuyu yönet",
@@ -124,8 +124,8 @@
   "onboarding.pendingServer": "{region} bölgesinde bekleyen bir sunucu oluşturma isteği ({name}) doğrulama bekliyor.",
   "onboarding.pendingRegion": "{region} bölgesinde bekleyen bir bölge isteği doğrulama bekliyor.",
   "onboarding.unused": {
-    "one": "{countLabel} kullanılmamış · bölgesel kapasite gönderim sırasında denetlenir",
-    "other": "{countLabel} kullanılmamış · bölgesel kapasite gönderim sırasında denetlenir"
+    "one": "{countLabel} kullanılmamış",
+    "other": "{countLabel} kullanılmamış"
   },
   "onboarding.receipt": "{name} adlı sunucu {region} bölgesinde atandı. Oluşturulurken durdurulmuş durumdaydı; bu makbuz canlı durum değildir. Güncel durum için Sunucularım sayfasına bakın veya sunucuyu yönetin.",
   "onboarding.receiptSetup": "{release} · bakım 03:00–04:00 America/Chicago. Kurulum sunucuyu başlatmaz. İlk Başlat işlemi paketle gelen varsayılan kayıt dosyasını kullanır; içe aktarma gerekmez.",

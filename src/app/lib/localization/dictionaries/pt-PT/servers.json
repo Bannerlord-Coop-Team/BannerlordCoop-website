@@ -86,7 +86,7 @@
   "onboarding.recoveryHint": "Fechar ou atualizar não cancela um pedido enviado. Ao tentar novamente, é usado exatamente o pedido guardado, mesmo que a sua quota ou a capacidade tenha mudado.",
   "onboarding.quotaLabel": "A sua quota de servidores atribuída",
   "onboarding.availableTitle": "Tem um servidor disponível",
-  "onboarding.availableHint": "Dê um nome à sua campanha e escolha onde ficará alojada. A configuração utiliza uma unidade disponível da quota de servidores atribuída pela administração ou por uma subscrição verificada.",
+  "onboarding.availableHint": "Dê um nome à sua campanha e escolha onde ficará alojada.",
   "onboarding.setup": "Configurar servidor",
   "onboarding.checking": "A verificar a autorização do pedido de servidor guardado…",
   "onboarding.manage": "Gerir servidor",
@@ -124,8 +124,8 @@
   "onboarding.pendingServer": "Uma criação de servidor pendente ({name}) na região {region} precisa de confirmação.",
   "onboarding.pendingRegion": "Um pedido de região pendente na região {region} precisa de confirmação.",
   "onboarding.unused": {
-    "one": "{countLabel} por utilizar · capacidade regional verificada no envio",
-    "other": "{countLabel} por utilizar · capacidade regional verificada no envio"
+    "one": "{countLabel} por utilizar",
+    "other": "{countLabel} por utilizar"
   },
   "onboarding.receipt": "O servidor {name} foi atribuído na região {region}. Foi criado no estado parado; este comprovativo não indica o estado em tempo real. Consulte Os meus servidores ou faça a gestão do servidor para ver o estado atual.",
   "onboarding.receiptSetup": "{release} · manutenção 03:00–04:00 America/Chicago. A configuração não inicia o servidor. A primeira ação Iniciar utiliza o jogo guardado predefinido incluído; não é necessário importar nada.",

@@ -86,7 +86,7 @@
   "onboarding.recoveryHint": "Das Schließen oder Aktualisieren bricht eine gesendete Anfrage nicht ab. Der erneute Versuch verwendet exakt die gespeicherte Anfrage, auch wenn sich dein Kontingent oder die Kapazität geändert hat.",
   "onboarding.quotaLabel": "Dein gewährtes Server-Kontingent",
   "onboarding.availableTitle": "Du hast einen Server verfügbar",
-  "onboarding.availableHint": "Gib deiner Kampagne einen Namen und wähle, wo sie laufen soll. Die Einrichtung verwendet eine ungenutzte administrative oder verifizierte Mitgliedschafts-Serverzuteilung.",
+  "onboarding.availableHint": "Gib deiner Kampagne einen Namen und wähle, wo sie laufen soll.",
   "onboarding.setup": "Server einrichten",
   "onboarding.checking": "Berechtigung der gespeicherten Serveranfrage wird geprüft …",
   "onboarding.manage": "Server verwalten",
@@ -124,8 +124,8 @@
   "onboarding.pendingServer": "Eine ausstehende Servererstellung ({name}) in {region} muss bestätigt werden.",
   "onboarding.pendingRegion": "Eine ausstehende Regionsanfrage in {region} muss bestätigt werden.",
   "onboarding.unused": {
-    "one": "{countLabel} ungenutzt · Regionskapazität wird bei der Übermittlung geprüft",
-    "other": "{countLabel} ungenutzt · Regionskapazität wird bei der Übermittlung geprüft"
+    "one": "{countLabel} ungenutzt",
+    "other": "{countLabel} ungenutzt"
   },
   "onboarding.receipt": "{name} wurde in {region} zugewiesen. Der Server wurde bei der Erstellung gestoppt; dieser Beleg ist kein Live-Status. Sieh unter „Meine Server“ nach oder verwalte den Server, um seinen aktuellen Zustand zu sehen.",
   "onboarding.receiptSetup": "{release} · Wartung 03:00–04:00 America/Chicago. Die Einrichtung startet den Server nicht. Der erste Start verwendet den mitgelieferten Standard-Spielstand; ein Import ist nicht erforderlich.",

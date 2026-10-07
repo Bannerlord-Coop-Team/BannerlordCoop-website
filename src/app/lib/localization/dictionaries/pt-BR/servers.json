@@ -86,7 +86,7 @@
   "onboarding.recoveryHint": "Fechar ou atualizar não cancela uma solicitação enviada. Uma nova tentativa usa exatamente a solicitação salva, mesmo que sua cota ou a capacidade tenha mudado.",
   "onboarding.quotaLabel": "Sua cota de servidores concedida",
   "onboarding.availableTitle": "Você tem um servidor disponível",
-  "onboarding.availableHint": "Dê um nome à sua campanha e escolha onde ela ficará hospedada. A configuração usa uma vaga disponível da cota de servidores concedida pela administração ou por uma assinatura verificada.",
+  "onboarding.availableHint": "Dê um nome à sua campanha e escolha onde ela ficará hospedada.",
   "onboarding.setup": "Configurar servidor",
   "onboarding.checking": "Verificando a autorização da solicitação de servidor armazenada…",
   "onboarding.manage": "Gerenciar servidor",
@@ -124,8 +124,8 @@
   "onboarding.pendingServer": "Uma solicitação pendente de criação do servidor ({name}) na região {region} precisa de confirmação.",
   "onboarding.pendingRegion": "Uma solicitação pendente para a região {region} precisa de confirmação.",
   "onboarding.unused": {
-    "one": "{countLabel} vaga disponível · capacidade regional verificada no envio",
-    "other": "{countLabel} vagas disponíveis · capacidade regional verificada no envio"
+    "one": "{countLabel} vaga disponível",
+    "other": "{countLabel} vagas disponíveis"
   },
   "onboarding.receipt": "{name} foi atribuído na região {region}. Ele foi criado parado; este comprovante não mostra o status em tempo real. Consulte Meus servidores ou gerencie o servidor para ver seu estado atual.",
   "onboarding.receiptSetup": "{release} · manutenção 03:00–04:00 America/Chicago. A configuração não inicia o servidor. Na primeira vez que for iniciado, ele usará o arquivo salvo padrão incluído; não é necessário importar nada.",
