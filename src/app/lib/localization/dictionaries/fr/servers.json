@@ -89,7 +89,7 @@
   "onboarding.recoveryHint": "Fermer ou actualiser la page n’annule pas une demande envoyée. La nouvelle tentative utilise exactement la demande enregistrée, même si votre quota ou la capacité ont changé.",
   "onboarding.quotaLabel": "Votre quota de serveurs accordé",
   "onboarding.availableTitle": "Vous disposez d’un serveur disponible",
-  "onboarding.availableHint": "Donnez un nom à votre campagne et choisissez où elle sera hébergée. La configuration utilise une allocation de serveur non utilisée, administrative ou issue d’un abonnement vérifié.",
+  "onboarding.availableHint": "Donnez un nom à votre campagne et choisissez où elle sera hébergée.",
   "onboarding.setup": "Configurer le serveur",
   "onboarding.checking": "Vérification de l’autorisation de la demande de serveur conservée…",
   "onboarding.manage": "Gérer le serveur",
@@ -127,9 +127,9 @@
   "onboarding.pendingServer": "Une création de serveur en attente ({name}) pour la région {region} doit être confirmée.",
   "onboarding.pendingRegion": "Une demande en attente pour la région {region} doit être confirmée.",
   "onboarding.unused": {
-    "one": "{countLabel} non utilisée · capacité régionale vérifiée à l’envoi",
-    "many": "{countLabel} non utilisées · capacité régionale vérifiée à l’envoi",
-    "other": "{countLabel} non utilisées · capacité régionale vérifiée à l’envoi"
+    "one": "{countLabel} non utilisée",
+    "many": "{countLabel} non utilisées",
+    "other": "{countLabel} non utilisées"
   },
   "onboarding.receipt": "Le serveur {name} a été attribué dans la région {region}. Il a été arrêté à sa création ; ce reçu n’indique pas son état en direct. Consultez Mes serveurs ou gérez le serveur pour connaître son état actuel.",
   "onboarding.receiptSetup": "{release} · maintenance 03:00–04:00 America/Chicago. La configuration ne démarre pas le serveur. Son premier démarrage utilise la sauvegarde par défaut fournie ; aucune importation n’est nécessaire.",

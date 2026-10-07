@@ -83,7 +83,7 @@
   "onboarding.recoveryHint": "탭을 닫거나 새로고침해도 제출한 요청은 취소되지 않습니다. 재시도 시 할당량이나 수용 용량이 변경되었더라도 저장된 요청을 그대로 사용합니다.",
   "onboarding.quotaLabel": "부여된 서버 할당량",
   "onboarding.availableTitle": "사용 가능한 서버가 있습니다",
-  "onboarding.availableHint": "캠페인 이름을 정하고 호스팅할 지역을 선택하세요. 설정 시 관리자가 부여했거나 인증된 멤버십을 통해 받은 미사용 서버 할당량 1개를 사용합니다.",
+  "onboarding.availableHint": "캠페인 이름을 정하고 호스팅할 지역을 선택하세요.",
   "onboarding.setup": "서버 설정",
   "onboarding.checking": "보관된 서버 요청의 권한 확인 중…",
   "onboarding.manage": "서버 관리",
@@ -121,7 +121,7 @@
   "onboarding.pendingServer": "{region} 지역의 대기 중인 서버 생성 요청({name})을 확인해야 합니다.",
   "onboarding.pendingRegion": "{region} 지역의 대기 중인 지역 요청을 확인해야 합니다.",
   "onboarding.unused": {
-    "other": "미사용 {countLabel}개 · 제출 시 지역별 수용 용량 확인"
+    "other": "미사용 {countLabel}개"
   },
   "onboarding.receipt": "{region} 지역에 {name} 서버가 할당되었습니다. 생성 당시 중지 상태였으며, 이 확인 내역은 실시간 상태가 아닙니다. 현재 상태는 내 서버 또는 서버 관리에서 확인하세요.",
   "onboarding.receiptSetup": "{release} · 점검 시간 03:00–04:00 America/Chicago. 설정만으로 서버가 시작되지는 않습니다. 처음 시작할 때는 함께 제공된 기본 저장 파일을 사용하므로 가져올 필요가 없습니다.",

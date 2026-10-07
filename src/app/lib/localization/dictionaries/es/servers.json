@@ -86,7 +86,7 @@
   "onboarding.recoveryHint": "Cerrar o actualizar no cancela una solicitud enviada. Al volver a intentarlo se usa exactamente la solicitud guardada, aunque tu cupo o la capacidad hayan cambiado.",
   "onboarding.quotaLabel": "Tu cupo de servidores concedido",
   "onboarding.availableTitle": "Tienes un servidor disponible",
-  "onboarding.availableHint": "Dale un nombre a tu campaña y elige dónde alojarla. La configuración utiliza un cupo para un servidor que no esté en uso, concedido por administración o por una membresía verificada.",
+  "onboarding.availableHint": "Dale un nombre a tu campaña y elige dónde alojarla.",
   "onboarding.setup": "Configurar servidor",
   "onboarding.checking": "Comprobando la autorización de la solicitud de servidor conservada…",
   "onboarding.manage": "Administrar servidor",
@@ -124,8 +124,8 @@
   "onboarding.pendingServer": "Una solicitud pendiente de creación de servidor ({name}) en {region} necesita confirmación.",
   "onboarding.pendingRegion": "Una solicitud de región pendiente en {region} necesita confirmación.",
   "onboarding.unused": {
-    "one": "{countLabel} sin usar · la capacidad regional se comprueba al enviar la solicitud",
-    "other": "{countLabel} sin usar · la capacidad regional se comprueba al enviar la solicitud"
+    "one": "{countLabel} sin usar",
+    "other": "{countLabel} sin usar"
   },
   "onboarding.receipt": "Se asignó {name} en {region}. Se creó detenido; este comprobante no indica su estado en tiempo real. Consulta Mis servidores o administra el servidor para ver su estado actual.",
   "onboarding.receiptSetup": "{release} · mantenimiento de 03:00–04:00 America/Chicago. La configuración no inicia el servidor. Al iniciarlo por primera vez se usa la partida guardada predeterminada incluida; no hace falta importar ninguna.",
