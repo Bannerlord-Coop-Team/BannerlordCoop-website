@@ -361,3 +361,14 @@ required. Status reads recheck owner/manager access and never resubmit Start.
 Only confirmed success shows Ready to join. Transient read failures reconnect;
 after fifteen minutes the UI offers Resume progress updates for the same job.
 Deploy the control-plane status read before deploying this website change.
+
+## Managed Restart progress
+
+Restart blocks lifecycle controls while its command is being submitted. After a
+successful command response, Stop and Restart follow the current server state
+while console progress continues in the background. A missing console readiness
+signal therefore does not lock these controls for the five-minute progress watch.
+Transitional server states and other polling operations still block controls;
+Update stays blocked until restart progress settles. Only a fresh console signal
+from the restarted run shows Ready to join. Configuration edits remain available
+while running and take effect on the next Start or Restart.
