@@ -26,6 +26,25 @@ afterEach(async () => {
 });
 
 describe("compact VPS host inventory", () => {
+    it.each([
+        { autoRenew: true, expirationDate: "2026-11-01T00:00:00.000Z", status: "Renews 11/01/2026" },
+        { autoRenew: false, expirationDate: "2026-11-01T00:00:00.000Z", status: "Won't Renew" },
+        { autoRenew: false, expirationDate: null, status: "Won't Renew" },
+        { autoRenew: null, expirationDate: "2026-11-01T00:00:00.000Z", status: "Renewal unknown" },
+        { autoRenew: true, expirationDate: null, status: "Renewal date unknown" },
+        { autoRenew: true, expirationDate: "not-a-date", status: "Renewal date unknown" },
+    ])("shows $status beneath the price in a collapsed row", async ({ autoRenew, expirationDate, status }) => {
+        await act(async () => root.render(<VpsHostInventory
+            hosts={[{ ...host("host-billing", resources(60, 40), 0), autoRenew, expirationDate }]}
+            ownerLabels={{}}
+            runnerTargetSourceCommit={null}
+        />));
+
+        const billing = container.querySelector('[role="cell"][data-label="Billing"]');
+        expect([...billing!.querySelectorAll("p")].map(line => line.textContent)).toEqual(["$12.32 / month", status]);
+        expect(container.querySelector('[role="region"]')).toBeNull();
+    });
+
     it("keeps summaries compact and reveals only one host detail panel at a time", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-a", resources(70, 30), 0, true), host("host-b", resources(80, 20), 1)]}
