@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ServerWireframe from "./ServerWireframe";
 import { LocalizationProvider } from "@/app/lib/localization/client";
 import messages from "@/app/lib/localization/dictionaries/en/server-wireframe.json";
+import managed from "@/app/lib/localization/dictionaries/en/managed-server.json";
 import { createTranslator } from "@/app/lib/localization/translator";
 import { assertDictionaryParity } from "@/app/lib/localization/integrity";
 import { localeDefinitions } from "@/app/lib/localization/registry";
@@ -17,7 +18,7 @@ import ServerWireframePage, { generateMetadata } from "./page";
 
 /** Supplies the same scoped dictionary boundary used by the public route. */
 function Demo({ dictionary = messages, locale = "en" }: { dictionary?: Dictionary; locale?: Locale }) {
-    return <LocalizationProvider locale={locale} messages={{ "server-wireframe": dictionary }}><ServerWireframe /></LocalizationProvider>;
+    return <LocalizationProvider locale={locale} messages={{ "server-wireframe": dictionary, "managed-server": managed }}><ServerWireframe /></LocalizationProvider>;
 }
 
 test("public wireframe starts with a concealed address and clearly labeled demo console", () => {
@@ -134,10 +135,10 @@ test("wireframe metadata and route deliver only the cookie-selected page namespa
             request.locale = locale;
             const page = await ServerWireframePage();
             assert.equal(page.props.locale, "en");
-            assert.deepEqual(Object.keys(page.props.messages), ["server-wireframe"]);
+            assert.deepEqual(Object.keys(page.props.messages), ["server-wireframe", "managed-server"]);
             assert.equal((await generateMetadata()).title, messages["metadata.title"]);
         }
-        localeDefinitions.ja = { ...original, enabled: true, dictionaries: { "server-wireframe": async () => ({ default: localized }) } };
+        localeDefinitions.ja = { ...original, enabled: true, dictionaries: { ...original.dictionaries, "server-wireframe": async () => ({ default: localized }) } };
         request.locale = "ja";
         const metadata = await generateMetadata();
         assert.equal(metadata.title, translated.t("metadata.title"));
@@ -145,7 +146,7 @@ test("wireframe metadata and route deliver only the cookie-selected page namespa
         assert.deepEqual(metadata.robots, { index: false, follow: false });
         const page = await ServerWireframePage();
         assert.equal(page.props.locale, "ja");
-        assert.deepEqual(Object.keys(page.props.messages), ["server-wireframe"]);
+        assert.deepEqual(Object.keys(page.props.messages), ["server-wireframe", "managed-server"]);
         assert.match(renderToStaticMarkup(page), /訳 Public wireframe/);
         assertDictionaryParity(messages, localized, "wireframe-test");
     } finally { localeDefinitions.ja = original; request.locale = undefined; }
