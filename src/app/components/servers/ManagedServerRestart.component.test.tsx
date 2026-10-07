@@ -2,7 +2,7 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerControls, acceptRestartProgress, advanceRestartProgress, beginRestartProgress } from "./ManagedServerControls";
-import { ManagedServerPollingProvider, useManagedConsoleSignals, type ManagedConsoleSignal, type ManagedConsoleSignals } from "./ManagedServerPollingProvider";
+import { ManagedServerPollingProvider, useManagedConsoleSignals, useManagedServerPolling, type ManagedConsoleSignal, type ManagedConsoleSignals } from "./ManagedServerPollingProvider";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 
 const { operate, router } = vi.hoisted(() => ({ operate: vi.fn(), router: { refresh: vi.fn() } }));
@@ -19,12 +19,15 @@ const accepted = { ok: true, message: "Restarting. Players can rejoin once the c
 let container: HTMLDivElement;
 let root: Root;
 let channel: ManagedConsoleSignals;
+let polling: ReturnType<typeof useManagedServerPolling>;
 const buttons = () => [...container.querySelectorAll("button")];
 const currentStep = () => container.querySelector('[aria-current="step"]')?.textContent ?? "";
 
 /** Stands in for a mounted live console sharing its phases through the provider. */
 function FakeConsole() {
     const signals = useManagedConsoleSignals()!;
+    const pollingContext = useManagedServerPolling();
+    useEffect(() => { polling = pollingContext; }, [pollingContext]);
     useEffect(() => {
         channel = signals;
         return signals.attach(serverId);
@@ -61,7 +64,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); vi.restoreAllMocks(); vi.useRealTimers(); });
 
-it("follows Restart through live game phases to readiness while keeping the controls busy", async () => {
+it("follows Restart through live game phases without locking Stop and Restart after command success", async () => {
     await render();
     await emit({ type: "opened", serverId, connection: 1 });
     await emit({ type: "phase", serverId, connection: 1, phase: "serving" });
@@ -77,7 +80,7 @@ it("follows Restart through live game phases to readiness while keeping the cont
     expect(container.textContent).toContain("Players can rejoin once the campaign finishes loading.");
     expect(container.textContent).not.toContain("code 0");
     expect(router.refresh).toHaveBeenCalledTimes(1);
-    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+    expect(buttons().slice(0, 4).map(button => button.disabled)).toEqual([true, false, false, true]);
     await emit({ type: "phase", serverId, connection: 1, phase: "stopping" });
     await emit({ type: "closed", serverId, connection: 1, runEnded: true });
     expect(currentStep()).toContain("Stop the game");
@@ -87,7 +90,7 @@ it("follows Restart through live game phases to readiness while keeping the cont
     await act(async () => vi.advanceTimersByTimeAsync(4_000));
     expect(router.refresh).toHaveBeenCalledTimes(2);
     await emit({ type: "phase", serverId, connection: 2, phase: "loading" });
-    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+    expect(buttons().slice(0, 4).map(button => button.disabled)).toEqual([true, false, false, true]);
     await emit({ type: "phase", serverId, connection: 2, phase: "serving" });
     expect(container.textContent).toContain("Your server is ready to join");
     expect(currentStep()).toContain("Ready to join");
@@ -108,7 +111,7 @@ it("follows the restarted run on the same stream, as the live runner reports it"
     expect(currentStep()).toContain("Stop the game");
     await emit({ type: "phase", serverId, connection: 1, phase: "loading" });
     expect(currentStep()).toContain("Load campaign");
-    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+    expect(buttons().slice(0, 4).map(button => button.disabled)).toEqual([true, false, false, true]);
     await emit({ type: "phase", serverId, connection: 1, phase: "serving" });
     expect(container.textContent).toContain("Your server is ready to join");
     expect(buttons()[2].disabled).toBe(false);
@@ -163,7 +166,7 @@ it("falls back to plain guidance and releases the controls if the game is not re
     const response = await requestRestart();
     await act(async () => response.resolve(accepted));
     await act(async () => vi.advanceTimersByTimeAsync(5 * 60_000 - 1));
-    expect(buttons()[2].disabled).toBe(true);
+    expect(buttons()[2].disabled).toBe(false);
     await act(async () => vi.advanceTimersByTimeAsync(1));
     expect(container.textContent).toContain("Restarting. Players can rejoin once the campaign finishes loading, usually within a couple of minutes.");
     expect(container.querySelector("ol")).toBeNull();
@@ -237,7 +240,7 @@ it("never moves restart progress backwards or past a final step", () => {
     expect(acceptRestartProgress(ready, 9)).toBe(ready);
 });
 
-it("releases the controls when the control plane reports the restarted run failed", async () => {
+it("clears restart progress when the control plane reports the restarted run failed", async () => {
     await render();
     await emit({ type: "opened", serverId, connection: 1 });
     const response = await requestRestart();
@@ -246,7 +249,7 @@ it("releases the controls when the control plane reports the restarted run faile
     await render({ operationState: "failed", observedGameState: "failed", expectedUpdatedAt: "2026-10-02T16:00:05.000Z" });
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(container.textContent).toContain("Restarting your server…");
-    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+    expect(buttons().slice(0, 4).map(button => button.disabled)).toEqual([false, false, true, true]);
     await act(async () => vi.advanceTimersByTimeAsync(20_000));
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(container.textContent).toContain("Status checked. Current state: Failed");
@@ -256,7 +259,7 @@ it("releases the controls when the control plane reports the restarted run faile
     expect(operate).toHaveBeenCalledOnce();
 });
 
-it("keeps following Restart through a newer running observation", async () => {
+it("keeps following Restart through a newer running observation without locking lifecycle controls", async () => {
     await render();
     await emit({ type: "opened", serverId, connection: 1 });
     const response = await requestRestart();
@@ -264,5 +267,47 @@ it("keeps following Restart through a newer running observation", async () => {
     await render({ expectedUpdatedAt: "2026-10-02T16:00:05.000Z" });
     await act(async () => vi.advanceTimersByTimeAsync(30_000));
     expect(container.textContent).toContain("Restarting your server…");
+    expect(container.textContent).not.toContain("Your server is ready to join");
+    expect(buttons().slice(0, 4).map(button => button.disabled)).toEqual([true, false, false, true]);
+});
+
+it("still blocks controls for transitional state or backup polling during restart progress", async () => {
+    await render();
+    const response = await requestRestart();
+    await act(async () => response.resolve(accepted));
+    await render({ operationState: "starting" });
     expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+    await render();
+    expect(buttons()[1].disabled).toBe(false);
+    await act(async () => polling.beginPolling(serverId, server.expectedUpdatedAt, "backup-job", "backup"));
+    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+});
+
+it("can Stop after a successful restart even when console readiness never arrives", async () => {
+    await render();
+    const restartResponse = await requestRestart();
+    await act(async () => restartResponse.resolve(accepted));
+    const stopResponse = Promise.withResolvers<{ ok: boolean; checkStatus: boolean; message: string }>();
+    operate.mockReturnValueOnce(stopResponse.promise);
+    await act(async () => buttons()[1].click());
+    expect(operate).toHaveBeenNthCalledWith(2, { serverId, action: "stop" });
+    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+    await act(async () => stopResponse.resolve({ ok: true, checkStatus: true, message: "Checking whether your server has stopped…" }));
+    await emit({ type: "phase", serverId, connection: 2, phase: "serving" });
+    expect(container.textContent).not.toContain("Your server is ready to join");
+    await render({ operationState: "stopped", observedGameState: "stopped", expectedUpdatedAt: "2026-10-02T16:01:00.000Z" });
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(container.textContent).toContain("Server stopped.");
+    expect(buttons()[0].disabled).toBe(false);
+});
+
+it("keeps controls locked while checking an unconfirmed restart without resending it", async () => {
+    await render();
+    const response = await requestRestart();
+    await act(async () => response.resolve({ ok: false, checkStatus: true, message: "Checking restart status" }));
+    expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
+    await act(async () => vi.advanceTimersByTimeAsync(20_000));
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(buttons()[2].disabled).toBe(false);
+    expect(operate).toHaveBeenCalledOnce();
 });

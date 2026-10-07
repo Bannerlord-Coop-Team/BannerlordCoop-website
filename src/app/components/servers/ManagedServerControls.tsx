@@ -274,7 +274,13 @@ export function ManagedServerControls({
         );
     }
 
-    const busy = isPending || trackingStart || (trackingStop && !stopCheckPaused) || trackingRestart || stateIsTransitional || pollingSession !== null;
+    // A successful restart command leaves console readiness as background progress,
+    // so a missed console phase cannot prevent the owner from stopping or restarting.
+    const watchingAcceptedRestart = trackingRestart && restart.accepted;
+    const restartPolling = watchingAcceptedRestart && pollingSession?.serverId === serverId
+        && pollingSession.statusSource === "server" && pollingSession.initialUpdatedAt === restartRevision;
+    const busy = isPending || trackingStart || (trackingStop && !stopCheckPaused)
+        || (trackingRestart && !watchingAcceptedRestart) || stateIsTransitional || (pollingSession !== null && !restartPolling);
     const canStart = ["stopped", "failed", "degraded"].includes(displayedState);
     const canStop = ["running", "starting", "failed", "degraded"].includes(displayedState);
     const canRestart = ["running", "degraded"].includes(displayedState);
@@ -433,13 +439,13 @@ export function ManagedServerControls({
                     label={t("controls.restart")}
                     icon={RotateCw}
                     disabled={busy || !canRestart}
-                    pending={pendingOperation === "restart-game" || trackingRestart}
+                    pending={pendingOperation === "restart-game"}
                     onClick={() => requestOperation("restart-game")}
                 />
                 <ControlButton
                     label={t("controls.updateNow")}
                     icon={Download}
-                    disabled={busy}
+                    disabled={busy || trackingRestart}
                     pending={pendingOperation === "update-now"}
                     onClick={() => requestOperation("update-now")}
                 />
