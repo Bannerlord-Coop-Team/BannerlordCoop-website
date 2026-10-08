@@ -215,6 +215,11 @@ export function useManagedServerPolling() {
     return value;
 }
 
+/** Returns the polling channel when a managed panel is embedded in the workspace. */
+export function useOptionalManagedServerPolling() {
+    return useContext(ManagedServerPollingContext);
+}
+
 /** Returns the console signal channel, or null when the console is rendered on its own. */
 export function useManagedConsoleSignals() {
     return useContext(ManagedConsoleSignalsContext);

@@ -30,7 +30,10 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
     ...await original<typeof import("@/app/lib/hosting/my-servers")>(),
     listAllMyServerBackups: async () => [], getMyServerBackupStatus: async () => null,
 }));
-vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.servers }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({
+    listAllMyServers: mocks.servers,
+    getMyServerDeletionStatus: async () => null,
+}));
 vi.mock("@/app/lib/hosting/server-files", () => ({ getMyServerFiles: mocks.files, submitMyServerFile: mocks.submit }));
 vi.mock("@/app/lib/hosting/server-configuration", () => ({ getMyServerConfiguration: mocks.configFile, saveMyServerConfiguration: vi.fn() }));
 vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: async () => new Map() }));

@@ -729,6 +729,9 @@
   "deletion.unknown": "요청 결과를 확인할 수 없습니다. 이미 대기열에 있을 수 있습니다. 재시도는 같은 요청을 사용합니다. 새 삭제를 시작하지 마세요.",
   "deletion.rejected": "서버가 변경되었거나 삭제가 거부되었습니다. 창을 닫고 새로 고친 뒤, 여전히 삭제하려면 다시 확인하세요.",
   "deletion.busy": "현재 서버를 삭제할 수 없습니다. 나중에 다시 시도해 주세요.",
+  "deletion.progress": "Deletion status: {progress}",
+  "deletion.failed": "Deletion could not be completed. {progress}",
+  "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "삭제 요청이 잘못되었습니다.",
   "deletion.signIn": "서버를 삭제하기 전에 다시 로그인하세요.",
   "deletion.unavailable": "서버 준비, 일시 중지 또는 삭제 중에는 삭제할 수 없습니다."

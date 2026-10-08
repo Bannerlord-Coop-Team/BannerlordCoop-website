@@ -16,7 +16,7 @@ function auth(userId = "account-a", sessionId = userId) { return { auth: {
 } }; }
 beforeEach(() => { vi.resetAllMocks(); mocks.auth.mockResolvedValue(auth()); mocks.request.mockResolvedValue({ outcome: "enqueued", jobId: intent.serverId, action: "delete" }); });
 it("authenticates each retry, preserves intent, and reports queued rather than completed deletion", async () => {
-    expect(await deleteManagedServer(intent)).toMatchObject({ ok: true, message: expect.stringContaining("still pending") });
+    expect(await deleteManagedServer(intent)).toMatchObject({ ok: true, jobId: intent.serverId, message: expect.stringContaining("leave this page") });
     expect(mocks.request).toHaveBeenCalledExactlyOnceWith("synthetic-token", intent);
     expect(mocks.revalidate).toHaveBeenCalledWith("/servers");
 });

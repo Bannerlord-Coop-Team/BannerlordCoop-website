@@ -19,6 +19,7 @@ const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const SERVER_OPERATIONS = new Set(["start", "stop", "restart-game"]);
 const SAFE_ERROR_CODE = /^[a-z][a-z0-9_-]{0,63}$/u;
+const SAFE_STATUS_VALUE = /^[a-z][a-z0-9-]{0,63}$/u;
 
 import { parseServerDeletionInput, parseServerDeletionResult, type ServerDeletionInput } from "./server-deletion-contract.ts";
 
@@ -51,6 +52,7 @@ type UpstreamRequest =
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "server-backup-status"; input: { serverId: string } }
+    | { operation: "server-deletion-status"; input: { serverId: string } }
     | { operation: "update-server"; input: { serverId: string; expectedUpdatedAt: string } }
     | { operation: "delete-server"; input: ServerDeletionInput }
     | {
@@ -249,6 +251,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "delete-server") parseServerDeletionResult(envelope.result);
                 if (upstreamRequest.operation === "set-password" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["changed", "restartQueued"]) || envelope.result.changed !== true || typeof envelope.result.restartQueued !== "boolean")) throw new Error("Invalid password response");
                 if (upstreamRequest.operation === "server-update-status") parseReleaseStatus(envelope.result, upstreamRequest.input.serverId);
+                if (upstreamRequest.operation === "server-deletion-status") parseServerDeletionStatus(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "save-server-settings") parseOwnerSettingsResult(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
                 if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
@@ -377,6 +380,14 @@ function listRequest(request: Request): UpstreamRequest {
         };
     }
 
+    if (resource === "deletion-status") {
+        assertQueryParameters(url, ["resource", "serverId"]);
+        return {
+            operation: "server-deletion-status",
+            input: { serverId: readServerId(url) },
+        };
+    }
+
     throw new Error("Unsupported resource");
 }
 
@@ -450,6 +461,7 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
         const { action, ...input } = value;
         return { operation: action, input: parseServerDeletionInput(input) };
     }
+
     if (value.action === "set-password") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "password", "serverId"]) || typeof value.password !== "string" || value.password.length < 1 || value.password.length > 128) throw new Error("Invalid password request");
         assertExpectedUpdatedAt(value.expectedUpdatedAt);
@@ -524,6 +536,30 @@ function readServerId(url: URL) {
     const serverId = url.searchParams.get("serverId");
     if (serverId === null || !SERVER_ID.test(serverId)) throw new Error("Invalid server ID");
     return serverId;
+}
+
+function parseServerDeletionStatus(value: unknown, requestedServerId: string) {
+    if (!isRecord(value) || !hasExactKeys(value, ["job", "operationState", "serverId", "updatedAt"])) {
+        throw new Error("Invalid deletion status");
+    }
+    if (value.serverId !== requestedServerId || typeof value.operationState !== "string"
+        || !SAFE_STATUS_VALUE.test(value.operationState)) {
+        throw new Error("Invalid deletion status");
+    }
+    assertExpectedUpdatedAt(value.updatedAt);
+    if (value.job === null) return;
+    if (!isRecord(value.job) || !hasExactKeys(value.job, ["createdAt", "jobId", "progress", "state", "updatedAt"])) {
+        throw new Error("Invalid deletion status job");
+    }
+    if (typeof value.job.jobId !== "string" || !REQUEST_ID.test(value.job.jobId)
+        || typeof value.job.state !== "string"
+        || !new Set(["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"]).has(value.job.state)
+        || typeof value.job.progress !== "string" || value.job.progress.length < 1 || value.job.progress.length > 256
+        || /[\p{Cc}\p{Cf}]/u.test(value.job.progress)) {
+        throw new Error("Invalid deletion status job");
+    }
+    assertExpectedUpdatedAt(value.job.createdAt);
+    assertExpectedUpdatedAt(value.job.updatedAt);
 }
 
 function assertExpectedUpdatedAt(value: unknown): asserts value is string {

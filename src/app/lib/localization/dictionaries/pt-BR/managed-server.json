@@ -730,6 +730,9 @@
   "deletion.unknown": "Não foi possível confirmar o resultado. A solicitação pode já estar na fila. A nova tentativa usa a mesma solicitação; não inicie outra exclusão.",
   "deletion.rejected": "O servidor mudou ou a exclusão foi recusada. Feche a janela, atualize e confirme novamente se ainda quiser excluí-lo.",
   "deletion.busy": "O servidor não pode ser excluído no momento. Tente novamente mais tarde.",
+  "deletion.progress": "Deletion status: {progress}",
+  "deletion.failed": "Deletion could not be completed. {progress}",
+  "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "A solicitação de exclusão é inválida.",
   "deletion.signIn": "Entre novamente antes de excluir um servidor.",
   "deletion.unavailable": "A exclusão não está disponível durante a preparação, suspensão ou exclusão do servidor."

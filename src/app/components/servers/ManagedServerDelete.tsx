@@ -5,24 +5,43 @@ import { useRouter } from "next/navigation";
 import { Trash2, TriangleAlert, X } from "lucide-react";
 import { useTranslations } from "@/app/lib/localization/client";
 import { deleteManagedServer, type ServerDeletionActionResult } from "@/app/servers/server-deletion-actions";
+import { useOptionalManagedServerPolling } from "./ManagedServerPollingProvider";
+import type { MyServerDeletionJob, MyServerDeletionStatus } from "@/app/lib/hosting/my-servers";
 import type { ServerDeletionIntent } from "../../../../supabase/functions/_shared/server-deletion-contract";
 
 type Props = { serverId: string; displayName: string; expectedUpdatedAt: string; operationState: string };
 const button = "inline-flex min-h-11 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
 const dangerButton = `${button} border-red-400/40 bg-red-400/10 text-red-200 hover:bg-red-400/15`;
 
-export function ManagedServerDelete(props: Props & { accessRole: string }) {
+const ACTIVE_DELETION_STATES = new Set(["queued", "running", "retry-wait"]);
+
+export function ManagedServerDelete(props: Props & { accessRole: string; deletionStatus?: MyServerDeletionStatus | null }) {
     const router = useRouter();
+    const polling = useOptionalManagedServerPolling();
+    const deletionJob = props.deletionStatus?.job ?? null;
+    const activeJobId = deletionJob !== null && ACTIVE_DELETION_STATES.has(deletionJob.state) ? deletionJob.jobId : null;
+    useEffect(() => {
+        if (polling === null || activeJobId === null) return;
+        polling.beginPolling(props.serverId, props.expectedUpdatedAt, activeJobId, "server");
+        return () => polling.endPolling(props.serverId);
+    }, [activeJobId, polling?.beginPolling, polling?.endPolling, props.expectedUpdatedAt, props.serverId]);
     if (props.accessRole !== "owner") return null;
     return <ServerDeletionPanel {...props} onDelete={async intent => {
         const outcome = await deleteManagedServer(intent);
-        if (outcome.ok || outcome.rejected) router.refresh();
+        if (outcome.ok) {
+            if (outcome.jobId !== undefined && polling !== null) {
+                polling.beginPolling(props.serverId, props.expectedUpdatedAt, outcome.jobId, "server");
+            }
+            router.refresh();
+        } else if (outcome.rejected) {
+            router.refresh();
+        }
         return outcome;
-    }} />;
+    }} deletionJob={deletionJob} />;
 }
 
 /** The public mock uses this same confirmation UI with a local-only submit callback. */
-export function ServerDeletionPanel({ onDelete, ...props }: Props & { onDelete: (intent: ServerDeletionIntent) => Promise<ServerDeletionActionResult> }) {
+export function ServerDeletionPanel({ onDelete, deletionJob = null, ...props }: Props & { deletionJob?: MyServerDeletionJob | null; onDelete: (intent: ServerDeletionIntent) => Promise<ServerDeletionActionResult> }) {
     const { t } = useTranslations("managed-server");
     const trigger = useRef<HTMLButtonElement>(null);
     const [attempt, setAttempt] = useState<ServerDeletionIntent | null>(null);
@@ -30,7 +49,7 @@ export function ServerDeletionPanel({ onDelete, ...props }: Props & { onDelete: 
     const [target, setTarget] = useState<Props | null>(null);
     const [pending, setPending] = useState(false);
     const [result, setResult] = useState<ServerDeletionActionResult | null>(null);
-    const unavailable = ["provisioning", "configuring", "suspended", "deletion-pending", "deleting", "deleted"].includes(props.operationState);
+    const unavailable = ["suspended", "deletion-pending", "deleting", "deleted"].includes(props.operationState);
     const changed = target !== null && (target.serverId !== props.serverId || target.displayName !== props.displayName || target.expectedUpdatedAt !== props.expectedUpdatedAt);
 
     async function submit(confirmationText: string) {
@@ -53,15 +72,26 @@ export function ServerDeletionPanel({ onDelete, ...props }: Props & { onDelete: 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div><h2 id="server-deletion-heading" className="flex items-center gap-2 text-base font-semibold text-red-200"><TriangleAlert aria-hidden="true" className="size-5" />{t("deletion.title")}</h2>
                 <p className="mt-2 max-w-xl text-sm leading-6 text-foreground-muted">{t("deletion.description")}</p></div>
-            <button ref={trigger} type="button" disabled={(unavailable && !attempt) || result?.ok === true} className={`${dangerButton} shrink-0`}
+            <button ref={trigger} type="button" disabled={(unavailable && !attempt) || result?.ok === true || (deletionJob !== null && ACTIVE_DELETION_STATES.has(deletionJob.state))} className={`${dangerButton} shrink-0`}
                 onClick={() => { if (!attempt) setResult(null); setTarget(attempt ? { ...props, displayName: attempt.confirmationText, expectedUpdatedAt: attempt.expectedUpdatedAt } : props); }}>
                 <Trash2 aria-hidden="true" className="size-4" />{t("deletion.open")}</button>
         </div>
+        {deletionJob && <DeletionProgress job={deletionJob} />}
         {result?.ok && <p role="status" className="mt-3 text-sm leading-6 text-foreground-muted">{result.message}</p>}
         {unavailable && !result?.ok && <p className="mt-3 text-sm text-foreground-muted">{t("deletion.unavailable")}</p>}
         {target && <DeletionDialog name={target.displayName} pending={pending} result={result} changed={changed}
             retry={attempt !== null && !result?.ok && !result?.rejected} onSubmit={submit} onDismiss={dismiss} trigger={trigger} />}
     </section>;
+}
+
+function DeletionProgress({ job }: { job: MyServerDeletionJob }) {
+    const { t } = useTranslations("managed-server");
+    const message = job.state === "succeeded"
+        ? t("deletion.completed")
+        : job.state === "failed" || job.state === "cancelled"
+            ? t("deletion.failed", { progress: job.progress })
+            : t("deletion.progress", { progress: job.progress });
+    return <p role="status" aria-live="polite" className="mt-4 border-l-2 border-gold bg-gold/10 px-4 py-3 text-sm leading-6 text-foreground-muted">{message}</p>;
 }
 
 function DeletionDialog({ name, pending, result, changed, retry, onSubmit, onDismiss, trigger }: {

@@ -43,8 +43,9 @@ import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import {
     getMyServerBackupStatus,
     listAllMyServerBackups,
+    type MyServerDeletionStatus,
 } from "@/app/lib/hosting/my-servers";
-import { listAllMyServers } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerDeletionStatus, listAllMyServers } from "@/app/lib/hosting/my-servers-server";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -182,6 +183,9 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
     userId: string; accessToken: string; server: MyServerSummary; initialSection?: ServerWorkspaceSection;
 }) {
     const { t } = await getTranslations("managed-server");
+    const deletionStatus = server.accessRole === "owner"
+        ? await getMyServerDeletionStatus(accessToken, server.serverId, AbortSignal.timeout(5_000)).catch(() => null)
+        : null;
     const managedAccessLabels: Record<MyServerSummary["accessRole"], string> = {
         admin: t("page.readOnlyAdministrator"),
         manager: t("page.manager"),
@@ -199,7 +203,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
             <ManagedServerStatus accessToken={accessToken} server={server} checkBackup={server.accessRole === "owner" || server.accessRole === "manager"} />
         </Suspense>}
     >
-        <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
+        <ManagedServerSections userId={userId} accessToken={accessToken} server={server} deletionStatus={deletionStatus} />
         <ServerWorkspacePanel section="Settings">
             <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
         </ServerWorkspacePanel>
@@ -212,11 +216,13 @@ function ManagedServerSections({
     accessToken,
     server,
     hasLiveConsole = false,
+    deletionStatus,
 }: {
     userId: string;
     accessToken: string;
     server: MyServerSummary;
     hasLiveConsole?: boolean;
+    deletionStatus?: MyServerDeletionStatus | null;
 }) {
     return (
         <ManagedServerPollingProvider readStatus={readManagedServerStatusFingerprint}>
@@ -227,7 +233,7 @@ function ManagedServerSections({
             </ServerWorkspacePanel>
             <ServerWorkspacePanel section="Settings">
                 <ManagedServerPassword serverId={server.serverId} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} />
-                <ManagedServerDelete key={`${userId}:${server.serverId}`} serverId={server.serverId} displayName={server.displayName} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} />
+                <ManagedServerDelete key={`${userId}:${server.serverId}`} serverId={server.serverId} displayName={server.displayName} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} deletionStatus={deletionStatus} />
             </ServerWorkspacePanel>
             <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
                 <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
@@ -375,6 +381,10 @@ async function LiveServerManagementPage({
         }
     }
 
+    const deletionStatus = managedServer?.accessRole === "owner"
+        ? await getMyServerDeletionStatus(accessToken, managedServer.serverId, AbortSignal.timeout(5_000)).catch(() => null)
+        : null;
+
     return <ServerManagementWorkspace
         name={<EditableServerName key={server.name} canEdit={canManageAssignments && managedServer === null} initialName={server.name} serverId={server.id} />}
         address={server.address}
@@ -390,7 +400,7 @@ async function LiveServerManagementPage({
             {!logDownload && <p className="text-sm text-foreground-muted">{t("page.logDownloadsRequireALinkedManagedServerAndOwnerOrManagerAccess")}</p>}
         </ServerWorkspacePanel>
         {managedServer !== null
-            ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
+            ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole deletionStatus={deletionStatus} />
             : <>
                 <ServerWorkspacePanel section="Backups"><LiveServerBackupSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>
                 <ServerWorkspacePanel section="Save & config"><LiveServerFileSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>

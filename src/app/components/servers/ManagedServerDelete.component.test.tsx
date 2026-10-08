@@ -80,3 +80,22 @@ it("requires a new confirmation after a known rejection", async () => {
     expect(mocks.remove.mock.calls[1][0]).toMatchObject({ confirmationText: "Renamed server", expectedUpdatedAt: "2026-10-07T12:00:01.000Z" });
     expect(mocks.remove.mock.calls[1][0].requestId).not.toBe(original.requestId);
 });
+it("shows the durable deletion progress after returning to the page", async () => {
+    await render({
+        operationState: "deletion-pending",
+        deletionStatus: {
+            serverId: props.serverId,
+            updatedAt: props.expectedUpdatedAt,
+            operationState: "deletion-pending",
+            job: {
+                jobId: "bbbbbbbb-1111-4111-8111-111111111111",
+                state: "running",
+                progress: "Removing the hosted server safely",
+                createdAt: props.expectedUpdatedAt,
+                updatedAt: props.expectedUpdatedAt,
+            },
+        },
+    });
+    expect(container.textContent).toContain("Deletion status: Removing the hosted server safely");
+    expect(container.querySelector('[role="status"]')).not.toBeNull();
+});

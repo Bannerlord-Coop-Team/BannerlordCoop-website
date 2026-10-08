@@ -730,6 +730,9 @@
   "deletion.unknown": "No pudimos confirmar el resultado. La solicitud quizá ya esté en cola. Reintentar usa la misma solicitud; no inicies otra eliminación.",
   "deletion.rejected": "El servidor cambió o la eliminación fue rechazada. Cierra el diálogo, actualiza y confirma de nuevo si aún deseas eliminarlo.",
   "deletion.busy": "El servidor no se puede eliminar en este momento. Inténtalo de nuevo más tarde.",
+  "deletion.progress": "Deletion status: {progress}",
+  "deletion.failed": "Deletion could not be completed. {progress}",
+  "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "La solicitud de eliminación no es válida.",
   "deletion.signIn": "Vuelve a iniciar sesión antes de eliminar un servidor.",
   "deletion.unavailable": "No se puede eliminar mientras el servidor se prepara, está suspendido o se elimina."

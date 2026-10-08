@@ -6,7 +6,7 @@ import { MyServersApiError, requestMyServerDeletion } from "@/app/lib/hosting/my
 import { parseServerDeletionIntent, type ServerDeletionIntent } from "../../../supabase/functions/_shared/server-deletion-contract";
 import { revalidatePath } from "next/cache";
 
-export type ServerDeletionActionResult = { ok: boolean; message: string; rejected?: boolean };
+export type ServerDeletionActionResult = { ok: boolean; message: string; rejected?: boolean; jobId?: string };
 
 /** Reauthenticates every request; ownership, generation and exact name are checked by the control plane. */
 export async function deleteManagedServer(value: unknown): Promise<ServerDeletionActionResult> {
@@ -22,10 +22,10 @@ export async function deleteManagedServer(value: unknown): Promise<ServerDeletio
         accessToken = session.access_token;
     } catch { return { ok: false, message: t("deletion.unknown") }; }
     try {
-        await requestMyServerDeletion(accessToken, intent);
+        const result = await requestMyServerDeletion(accessToken, intent);
         revalidatePath("/servers");
         revalidatePath(`/servers/${intent.serverId}`);
-        return { ok: true, message: t("deletion.queued") };
+        return { ok: true, jobId: result.jobId, message: t("deletion.queued") };
     } catch (error) {
         const code = error instanceof MyServersApiError ? error.code : "unknown";
         const busy = code === "operation_in_progress";

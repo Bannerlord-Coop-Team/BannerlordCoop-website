@@ -726,11 +726,14 @@
   "deletion.confirm": "Permanently delete server",
   "deletion.submitting": "Submitting deletion…",
   "deletion.retry": "Retry confirmed deletion",
-  "deletion.queued": "Deletion requested. The final backup and removal are still pending. Refresh the server list to check progress.",
+  "deletion.queued": "Deletion queued. You can leave this page; progress will be here when you return.",
   "deletion.unknown": "We could not confirm the request outcome. It may already be queued. Retry uses the same request; do not start a new deletion.",
   "deletion.rejected": "The server changed or deletion was refused. Close this dialog, refresh, and confirm again if you still want to delete it.",
   "deletion.busy": "The server can't be deleted at the moment. Please try again later",
+  "deletion.progress": "Deletion status: {progress}",
+  "deletion.failed": "Deletion could not be completed. {progress}",
+  "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "The deletion request is invalid.",
   "deletion.signIn": "Sign in again before deleting a server.",
-  "deletion.unavailable": "Deletion is unavailable while this server is being prepared, suspended or deleted."
+  "deletion.unavailable": "Deletion is unavailable while this server is suspended or already being deleted."
 }
