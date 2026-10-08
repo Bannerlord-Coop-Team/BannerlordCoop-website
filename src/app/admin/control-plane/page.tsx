@@ -22,11 +22,13 @@ import {
 } from "@/app/lib/control-plane/explanations";
 import {
     adminActionOptionValue,
+    availableVpsHostOptions,
     createServerRegionOptions,
     formatAccountOwner,
     installableBuilds,
     MAINTENANCE_TIME_ZONE,
     maintenanceSlotOptions,
+    manualVpsProviderOptions,
     operationCardRowClass,
     operationCardRows,
     overviewStatRowClass,
@@ -579,7 +581,8 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     const jobOptions: AdminActionOption[] = overview.jobs.items.map((job) => ({ label: `${job.action} · ${job.state} · ${shortId(job.jobId)}`, value: job.jobId, updatedAt: job.updatedAt }));
     const buildOptions = installableBuilds([...overview.stableBuilds.items, ...overview.nightlyBuilds.items]).map((build) => ({ label: `Pinned version: ${releaseVersion(build)} · ${releaseChannelLabel(build.channel)}${build.currentChannel ? " (current)" : ""}`, value: build.buildId, releaseChannel: build.channel }));
     const accountOptions: AdminActionOption[] = accounts.map(user => ({ label: user.label, value: user.accountId }));
-    const availableVpsOptions: AdminActionOption[] = (Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : []).map((serviceName) => ({ label: serviceName, value: serviceName }));
+    const availableVpsOptions: AdminActionOption[] = availableVpsHostOptions(inventory);
+    const providerOptions: AdminActionOption[] = manualVpsProviderOptions();
     const createRegionOptions: AdminActionOption[] = createServerRegionOptions(inventory.hosts);
     const maintenanceOptions: AdminActionOption[] = maintenanceSlotOptions();
     const accountField = (name: string, label: string): AdminActionField => ({ name, label, kind: "account", required: true, options: accountOptions, help: "Choose a website account by its email or account ID." });
@@ -587,13 +590,14 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     const serverField: AdminActionField = { name: "serverId", label: "Server", kind: "server", required: true, options: serverOptions, defaultValue: selectedServerOption === undefined ? "" : adminActionOptionValue("server", selectedServerOption), help: "The selected row carries its current update generation so a stale action fails safely." };
     const plainServerField: AdminActionField = { name: "serverId", label: "Server", kind: "select", required: true, options: serverPlainOptions, defaultValue: selectedServerOption?.value ?? "" };
     const cards: Array<{ group: string; operation: string; title: string; description: string; fields: AdminActionField[]; destructive?: boolean; layoutPriority?: number }> = [
-        { group: "Fleet", operation: "onboard-vps-host", title: "Onboard existing OVH VPS", description: "Choose one already-purchased VPS, then click Onboard VPS. The control plane revalidates its OVH account identity, location, vCPU capacity, and primary IPv4; acquires and pins its Ed25519 host identity; uses the preinstalled fleet-operator key; installs and hardens every managed runner slot; establishes private mTLS routes; and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.", fields: [
-            { name: "serviceName", label: "Available OVH VPS", kind: "select", required: true, options: availableVpsOptions, defaultValue: availableVpsOptions.length === 1 ? availableVpsOptions[0]!.value : "", help: "Only unregistered VPS products discovered in the authenticated OVH account are shown. Select the saved bannerlord-fleet-operator key when installing the VPS; no SSH key, IP address, vCPU count, region, or audit reason is entered here." },
+        { group: "Fleet", operation: "onboard-vps-host", title: "Onboard existing VPS", description: "Choose one already-purchased OVHcloud or Contabo VPS, then click Onboard VPS. The control plane resolves the provider from the host, revalidates its account identity, location, vCPU capacity, and primary IPv4; acquires and pins its Ed25519 host identity; uses the preinstalled fleet-operator key; installs and hardens every managed runner slot; establishes private mTLS routes; and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.", fields: [
+            { name: "serviceName", label: "Available VPS", kind: "select", required: true, options: availableVpsOptions, defaultValue: availableVpsOptions.length === 1 ? availableVpsOptions[0]!.value : "", help: "Only unregistered VPS products discovered in each enabled provider's authenticated account are shown. Install the saved bannerlord-fleet-operator key when ordering the VPS (for Contabo, on root); no SSH key, IP address, vCPU count, region, or audit reason is entered here." },
         ] },
-        { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity in stopped state. New servers use Public by default; choose Nightly later with Change release settings if needed. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from an explicit administrator grant. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
+        { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered VPS capacity in stopped state. New servers use Public by default; choose Nightly later with Change release settings if needed. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from an explicit administrator grant. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
             accountField("ownerDiscordUserId", "Owner account"),
             { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: createRegionOptions, help: "Only regions with a prepared, currently available slot on a registered VPS are shown. The control plane revalidates capacity when you submit; no VPS is purchased automatically." },
             { name: "maintenanceSlot", label: "Maintenance slot", kind: "select", required: true, options: maintenanceOptions, help: `All maintenance windows use ${MAINTENANCE_TIME_ZONE} (Central Time and its daylight-saving changes).` },
+            { name: "provider", label: "VPS provider", kind: "select", options: providerOptions, help: "Optional. Leave as None to use the configured provider order; choose a provider to assign only its capacity. The provider must be enabled, and a control plane that predates provider pinning rejects a chosen provider." },
         ] },
         { group: "Fleet", operation: "set-global-controls", title: "Global controls", description: `Replace all four live pause switches as one audited update.${overview.controls.reason ? ` Last recorded reason: ${overview.controls.reason}` : " No override reason is recorded."}`, fields: [
             { name: "provisioningPaused", label: "Pause provisioning", kind: "checkbox", defaultValue: overview.controls.provisioningPaused, help: "Checked means new server provisioning is currently paused." },
@@ -622,7 +626,7 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     ];
     const groups = [...new Set(cards.map((card) => card.group))];
     return <div className="mt-8 space-y-12">{vpsProviderError && <div role="status" className="border-l-2 border-gold bg-gold/10 px-4 py-3 text-sm text-foreground">
-        <p>OVH account inventory is unavailable, so unregistered VPS products cannot be listed for onboarding. Other operations still work.</p>
+        <p>VPS provider account inventory is unavailable, so unregistered VPS products cannot be listed for onboarding. Other operations still work.</p>
         <p className="mt-1 text-xs text-foreground-muted">{vpsProviderError}</p>
     </div>}{groups.map((group) => {
         const groupCards = cards.filter((card) => card.group === group);
@@ -693,7 +697,7 @@ function RuntimeObservation({ server }: { server: ManagedServer }) {
     const runtimeHelp = `Observed VM state is ${server.observedVmState}; the shared host may remain running while a game is stopped. Observed game state is ${server.observedGameState}; this is the latest runner-confirmed game-container state.`;
     const failedStopHref = `/admin/control-plane?view=jobs&state=failed&action=stop&serverId=${encodeURIComponent(server.serverId)}`;
     const stopHelp = server.provider === "experiment-host"
-        ? "This retired experiment-provider server cannot be operated by the current OVH-only runtime. Its last Stop failed and automatic OVH reconciliation intentionally excludes it."
+        ? "This retired experiment-provider server cannot be operated by the current manual-VPS runtime. Its last Stop failed and automatic reconciliation intentionally excludes it."
         : "The administrative hold is active, but the runner has not confirmed a graceful Stop. Review the failed Stop evidence.";
     return <div className="text-xs text-foreground-muted" title={runtimeHelp}><p className="cursor-help">VM {server.observedVmState} · Game {server.observedGameState}</p>{suspendedWhileRunning && <Link href={failedStopHref} className="mt-1 block cursor-help font-semibold text-amber-300 underline decoration-dotted underline-offset-4" title={stopHelp}>Suspended · stop not confirmed</Link>}</div>;
 }

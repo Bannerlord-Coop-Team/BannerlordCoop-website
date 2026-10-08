@@ -1,5 +1,15 @@
-import type { HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
+import type {
+    HostingAdminVpsHost,
+    HostingAdminVpsInventory,
+    ManualVpsProvider,
+    ReleaseBuild,
+} from "@/app/lib/control-plane/types";
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE } from "../../../../supabase/functions/_shared/server-settings-contract";
+
+const MANUAL_VPS_PROVIDER_LABELS: Record<ManualVpsProvider, string> = {
+    "ovhcloud-vps": "OVHcloud",
+    "contabo-vps": "Contabo",
+};
 
 const SERVER_REGION_LABELS = {
     "us-west": "US-West",
@@ -73,6 +83,28 @@ export function createServerRegionOptions(
     );
     return serverRegionOptions()
         .filter(({ value }) => regionsWithAvailableCapacity.has(value as keyof typeof SERVER_REGION_LABELS));
+}
+
+/** Rows from control planes without the provider field are OVHcloud, the only provider they served. */
+export function vpsProviderLabel(provider: string | undefined) {
+    if (provider === undefined) return MANUAL_VPS_PROVIDER_LABELS["ovhcloud-vps"];
+    return Object.hasOwn(MANUAL_VPS_PROVIDER_LABELS, provider)
+        ? MANUAL_VPS_PROVIDER_LABELS[provider as ManualVpsProvider]
+        : provider;
+}
+
+/** Onboarding choices; still submitted as `serviceName` so older control planes accept them. */
+export function availableVpsHostOptions(inventory: Pick<HostingAdminVpsInventory, "availableHosts" | "availableServiceNames">) {
+    if (Array.isArray(inventory.availableHosts)) {
+        return inventory.availableHosts.map((host) => ({ label: host.label, value: host.hostKey }));
+    }
+    return (Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : [])
+        .map((serviceName) => ({ label: serviceName, value: serviceName }));
+}
+
+/** Optional administrator provider pin; leaving it empty uses the configured provider order. */
+export function manualVpsProviderOptions() {
+    return Object.entries(MANUAL_VPS_PROVIDER_LABELS).map(([value, label]) => ({ value, label }));
 }
 
 export function maintenanceSlotOptions() {

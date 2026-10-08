@@ -242,6 +242,24 @@ it("ignores old billing after new inventory arrives and aborts billing on unmoun
     expect(currentSignal.aborted).toBe(true);
 });
 
+it("lists each failed provider account read, shows n/a billing for its hosts, and labels each host's provider", async () => {
+    const live = inventory(true);
+    live.hosts = [{ ...live.hosts[0], provider: "contabo-vps" }];
+    mocks.resources.mockResolvedValue(live);
+    mocks.billing.mockResolvedValue({ ...inventory(), hosts: [{ ...inventory().hosts[0], provider: "contabo-vps" }],
+        availableServiceNames: ["vps-a.vps.ovh.us"],
+        availableHosts: [{ provider: "ovhcloud-vps", hostKey: "vps-a.vps.ovh.us", label: "OVHcloud VPS \u00b7 vps-a.vps.ovh.us" }],
+        providerReads: [{ provider: "ovhcloud-vps", status: "ok", code: null }, { provider: "contabo-vps", status: "failed", code: "contabo_account_unavailable" }] });
+    await act(async () => root.render(<VpsView inventory={inventory()} accounts={[]} />));
+    const failures = container.querySelector('[aria-label="Provider account read failures"]');
+    expect(failures?.querySelectorAll("li")).toHaveLength(1);
+    expect(failures?.textContent).toContain("Contabo account read failed (contabo_account_unavailable)");
+    expect(failures?.textContent).not.toContain("OVHcloud");
+    expect(container.textContent).toContain("1 authenticated VPS is available to onboard.");
+    expect(container.querySelector('[data-label="Billing"]')?.textContent).toContain("n/a");
+    expect(container.textContent).toContain("Contabo · us-east · os-us-east-va-2");
+});
+
 function host(name: string, hostResources: HostingAdminHostResources, slotIndex: number, updating = false): HostingAdminVpsHost {
     return {
         name,
