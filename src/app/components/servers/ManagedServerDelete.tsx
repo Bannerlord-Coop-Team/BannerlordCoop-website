@@ -70,8 +70,17 @@ export function ServerDeletionPanel({ onDelete, deletionJob = null, ...props }: 
         setAttempt(intent);
         inFlight.current = true; setPending(true);
         try {
-            const outcome = await onDelete(intent).catch(() => ({ ok: false, message: t("deletion.unknown") }));
+            const outcome = await onDelete(intent).catch<ServerDeletionActionResult>(() => ({ ok: false, message: t("deletion.unknown") }));
             setResult(outcome);
+            // Accepted jobs are tracked by the page-level status row. Close the
+            // confirmation modal so the live deletion progress is immediately
+            // visible instead of being trapped behind its backdrop. A
+            // definitive rejection also needs the same treatment: the owner
+            // must refresh/reconfirm rather than staring at a disabled form.
+            if (outcome.ok || outcome.rejected) {
+                setTarget(null);
+                setAttempt(null);
+            }
         } finally { inFlight.current = false; setPending(false); }
     }
     function dismiss() {
@@ -89,7 +98,7 @@ export function ServerDeletionPanel({ onDelete, deletionJob = null, ...props }: 
                 <Trash2 aria-hidden="true" className="size-4" />{t("deletion.open")}</button>
         </div>
         {deletionJob && <DeletionProgress job={deletionJob} />}
-        {result?.ok && <p role="status" className="mt-3 text-sm leading-6 text-foreground-muted">{result.message}</p>}
+        {result && <p role={result.ok ? "status" : "alert"} aria-live={result.ok ? "polite" : "assertive"} className="mt-3 text-sm leading-6 text-foreground-muted">{result.message}</p>}
         {unavailable && !result?.ok && <p className="mt-3 text-sm text-foreground-muted">{t("deletion.unavailable")}</p>}
         {target && <DeletionDialog name={target.displayName} pending={pending} result={result} changed={changed}
             retry={attempt !== null && !result?.ok && !result?.rejected} onSubmit={submit} onDismiss={dismiss} trigger={trigger} />}

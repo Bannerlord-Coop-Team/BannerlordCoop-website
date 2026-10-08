@@ -75,11 +75,18 @@ it("retains an uncertain request across close, reopen and revision changes", asy
 it("requires a new confirmation after a known rejection", async () => {
     mocks.remove.mockResolvedValueOnce({ ok: false, rejected: true, message: "The server changed" });
     await openConfirmed(); await click("Permanently delete server"); const original = mocks.remove.mock.calls[0][0];
-    await click("Cancel"); await render({ expectedUpdatedAt: "2026-10-07T12:00:01.000Z", displayName: "Renamed server" });
+    expect(container.querySelector("dialog")).toBeNull();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("The server changed");
+    await render({ expectedUpdatedAt: "2026-10-07T12:00:01.000Z", displayName: "Renamed server" });
     await click("Delete server…"); expect(button("Permanently delete server").disabled).toBe(true);
     await type("Renamed server"); await acknowledge(); await click("Permanently delete server");
     expect(mocks.remove.mock.calls[1][0]).toMatchObject({ confirmationText: "Renamed server", expectedUpdatedAt: "2026-10-07T12:00:01.000Z" });
     expect(mocks.remove.mock.calls[1][0].requestId).not.toBe(original.requestId);
+});
+it("closes the modal after acceptance so deletion progress remains visible", async () => {
+    await openConfirmed(); await click("Permanently delete server");
+    expect(container.querySelector("dialog")).toBeNull();
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("Removal is pending");
 });
 it("shows the durable deletion progress after returning to the page", async () => {
     await render({
