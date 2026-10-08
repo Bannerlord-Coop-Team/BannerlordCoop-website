@@ -7,7 +7,7 @@ import { VpsHostInventory } from "./VpsHostInventory";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
-import type { HostingAdminHostResources, HostingAdminVpsInventory } from "@/app/lib/control-plane/types";
+import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminVpsInventory, HostingPage } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
 export function VpsView({ inventory: initialInventory, accounts }: { inventory: HostingAdminVpsInventory; accounts: WebsiteAccountSummary[] }) {
@@ -53,6 +53,94 @@ export function VpsView({ inventory: initialInventory, accounts }: { inventory: 
                 ownerLabels={Object.fromEntries(ownerLabels)}
                 runnerTargetSourceCommit={runnerTargetSourceCommit}
             />
+            <RegionRequestsPane />
+        </section>
+    );
+}
+
+function RegionRequestsPane() {
+    const [requests, setRequests] = useState<HostingPage<HostingAdminRegionRequest> | null>(null);
+    const [error, setError] = useState("");
+    const [pendingRequest, setPendingRequest] = useState<string | null>(null);
+    const [reload, setReload] = useState(0);
+
+    useEffect(() => {
+        let cancelled = false;
+        async function load() {
+            try {
+                const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+                if (!session?.access_token) throw new Error("Authentication is required.");
+                const result = await requestControlPlaneAdmin<HostingPage<HostingAdminRegionRequest>>({
+                    accessToken: session.access_token,
+                    requestId: crypto.randomUUID(),
+                    operation: "region-requests",
+                    input: { cursor: null, limit: 100 },
+                });
+                if (!cancelled) {
+                    setRequests(result);
+                    setError("");
+                }
+            } catch (cause) {
+                if (!cancelled) setError(cause instanceof Error ? cause.message : "Region requests could not be loaded.");
+            }
+        }
+        void load();
+        return () => { cancelled = true; };
+    }, [reload]);
+
+    async function resolve(requestId: string, resolution: "fulfilled" | "dismissed") {
+        if (pendingRequest !== null) return;
+        setPendingRequest(requestId);
+        setError("");
+        try {
+            const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+            if (!session?.access_token) throw new Error("Authentication is required.");
+            await requestControlPlaneAdmin({
+                accessToken: session.access_token,
+                requestId: crypto.randomUUID(),
+                operation: "resolve-region-request",
+                input: { requestId, resolution },
+            });
+            setRequests(current => current === null ? current : { ...current, items: current.items.filter(item => item.requestId !== requestId) });
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "The region request could not be resolved.");
+        } finally {
+            setPendingRequest(null);
+        }
+    }
+
+    return (
+        <section className="mt-8 overflow-hidden border border-gold/30 bg-surface" aria-labelledby="pending-region-requests-heading">
+            <div className="flex items-end justify-between gap-4 border-b border-white/10 px-5 py-4">
+                <div>
+                    <p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-gold">Admin queue</p>
+                    <h2 id="pending-region-requests-heading" className="mt-1 font-display text-2xl font-semibold text-foreground">Pending region requests</h2>
+                </div>
+                <span className="font-display text-xl text-foreground-muted">{requests?.items.length ?? "…"}</span>
+            </div>
+            {error && <div role="alert" className="border-b border-crimson/40 bg-crimson/10 px-5 py-3 text-xs text-red-200">{error} <button type="button" className="ml-2 underline" onClick={() => setReload(value => value + 1)}>Retry</button></div>}
+            {requests?.items.length === 0 && <p className="px-5 py-6 text-sm text-foreground-muted">No pending region requests.</p>}
+            {requests && requests.items.length > 0 && (
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-190 text-left text-sm">
+                        <thead className="border-b border-white/10 font-label text-[0.62rem] uppercase tracking-[0.12em] text-foreground-muted">
+                            <tr><th className="p-4">Region</th><th className="p-4">Requester</th><th className="p-4">Requested</th><th className="p-4 text-right">Clear inline</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/10">
+                            {requests.items.map(request => (
+                                <tr key={request.requestId}>
+                                    <td className="p-4 font-semibold text-foreground">{request.region}<span className="mt-1 block font-mono text-[0.62rem] font-normal text-foreground-dim">{request.requestId}</span></td>
+                                    <td className="p-4 text-xs text-foreground-muted">{request.discordUserId}</td>
+                                    <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={request.createdAt} /></td>
+                                    <td className="p-4"><div className="flex justify-end gap-2">
+                                        <button type="button" disabled={pendingRequest !== null} onClick={() => void resolve(request.requestId, "dismissed")} className="min-h-9 border border-white/20 px-3 font-label text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-foreground-muted hover:border-white/40 hover:text-foreground disabled:cursor-wait disabled:opacity-50">Dismiss</button>
+                                    </div></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </section>
     );
 }
