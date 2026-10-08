@@ -155,8 +155,10 @@ Stop immediately shows pending feedback. After a successful command or an
 uncertain response, the existing page poller refreshes authenticated server
 status every four seconds. Lifecycle controls stay disabled until a newer
 server revision confirms both the stopped lifecycle and observed game state.
-After sixty seconds without confirmation, polling pauses and **Check status
-again** resumes only the reads; it never sends another Stop. Explicit rejection
+If the control plane rejects a request because another operation is already active, the page
+refreshes the authoritative server state and keeps that rejection separate from an uncertain
+operation submitted by the current tab. After sixty seconds without confirmation, polling pauses
+and **Check status again** resumes only the reads; it never sends another Stop. Explicit rejection
 or a nonzero exit remains an error. Only successful lifecycle Start claims
 readiness; direct Restart success reports the exit code. Existing backup
 polling/interlocks remain.

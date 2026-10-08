@@ -76,6 +76,12 @@ it.each([null, "container_command_unavailable", "server_api_unavailable", "inval
     },
 );
 
+it("refreshes after a lifecycle conflict without pretending this tab submitted Stop", async () => {
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_in_progress", "Another server operation is already in progress."));
+    const result = await serverActions.operateManagedServer({ serverId: "22222222-2222-4222-8222-222222222222", action: "stop" });
+    expect(result).toEqual({ ok: false, refresh: true, message: "Another server operation is active. Wait for its status to finish, then try again." });
+});
+
 it("reports an accepted Restart honestly instead of an exit code", async () => {
     request.mockReset().mockResolvedValue({ exitCode: 0 });
     const result = await serverActions.operateManagedServer({ serverId: "22222222-2222-4222-8222-222222222222", action: "restart-game" });

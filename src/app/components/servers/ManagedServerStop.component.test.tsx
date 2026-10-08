@@ -54,6 +54,18 @@ it.each(["accepted", "unknown", "lost-response"])("automatically confirms Stop a
     expect(operate).toHaveBeenCalledExactlyOnceWith({ serverId: server.serverId, action: "stop" });
 });
 
+it("does not enter the long Stop poll when another operation already owns the server", async () => {
+    operate.mockResolvedValue({ ok: false, refresh: true, message: "Another server operation is active. Wait for its status to finish, then try again." });
+    await render();
+    await act(async () => buttons()[1].click());
+    expect(container.textContent).toContain("Another server operation is active");
+    expect(router.refresh).toHaveBeenCalledOnce();
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(router.refresh).toHaveBeenCalledOnce();
+    expect(buttons()[1].disabled).toBe(false);
+    expect(operate).toHaveBeenCalledExactlyOnceWith({ serverId: server.serverId, action: "stop" });
+});
+
 it("shows immediate feedback while Stop is being sent", async () => {
     const response = Promise.withResolvers<{ ok: boolean; checkStatus: boolean; message: string }>();
     operate.mockReturnValue(response.promise);

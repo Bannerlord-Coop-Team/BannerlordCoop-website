@@ -74,6 +74,9 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             && error instanceof MyServersApiError && error.operationId !== undefined) {
             return { ok: true, operationId: error.operationId, message: t("action.actions.startAcceptedFollowingYourServerSProgress") };
         }
+        if (code === "operation_in_progress") {
+            return { ok: false, refresh: true, message: t("action.backup.anotherServerOperationIsActiveWaitForItsStatusTo") };
+        }
         if (parsed.action === "update-now") {
             if (code === "stale_interaction") {
                 return { ok: false, refresh: true, message: t("action.actions.yourServerSStatusChangedSoWeRefreshedItPress", { action: t("controls.updateNow") }) };
