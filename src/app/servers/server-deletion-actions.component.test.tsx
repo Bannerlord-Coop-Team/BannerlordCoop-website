@@ -39,6 +39,10 @@ it("retains unknown outcomes and never resubmits or upgrades a stale generation 
 
 it("treats a busy server as a definitive rejection instead of an uncertain deletion", async () => {
     mocks.request.mockRejectedValueOnce(new MyServersApiError("operation_in_progress", "The server is changing."));
-    expect(await deleteManagedServer(intent)).toMatchObject({ ok: false, rejected: true });
+    expect(await deleteManagedServer(intent)).toMatchObject({
+        ok: false,
+        rejected: true,
+        message: "The server can't be deleted at the moment. Please try again later",
+    });
     expect(mocks.revalidate).not.toHaveBeenCalled();
 });

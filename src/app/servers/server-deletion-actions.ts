@@ -28,11 +28,12 @@ export async function deleteManagedServer(value: unknown): Promise<ServerDeletio
         return { ok: true, message: t("deletion.queued") };
     } catch (error) {
         const code = error instanceof MyServersApiError ? error.code : "unknown";
+        const busy = code === "operation_in_progress";
         // The control plane has definitely refused the request when another
         // lifecycle operation owns the server. Keep this out of the
         // ambiguous retry path; the owner must refresh and confirm again
         // after that operation settles.
-        const rejected = ["stale_interaction", "confirmation_mismatch", "forbidden", "server_not_found", "invalid_request", "request_conflict", "hosting_conflict", "operation_conflict", "operation_in_progress"].includes(code);
-        return { ok: false, rejected, message: t(rejected ? "deletion.rejected" : "deletion.unknown") };
+        const rejected = busy || ["stale_interaction", "confirmation_mismatch", "forbidden", "server_not_found", "invalid_request", "request_conflict", "hosting_conflict", "operation_conflict"].includes(code);
+        return { ok: false, rejected, message: t(busy ? "deletion.busy" : rejected ? "deletion.rejected" : "deletion.unknown") };
     }
 }
