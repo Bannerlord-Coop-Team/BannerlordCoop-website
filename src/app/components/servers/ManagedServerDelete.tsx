@@ -22,7 +22,7 @@ export function ManagedServerDelete(props: Props & { accessRole: string; deletio
     const activeJobId = deletionJob !== null && ACTIVE_DELETION_STATES.has(deletionJob.state) ? deletionJob.jobId : null;
     const pollingRef = useRef(polling);
     const startedDeletionJobId = useRef<string | null>(null);
-    pollingRef.current = polling;
+    useEffect(() => { pollingRef.current = polling; }, [polling]);
     useEffect(() => {
         if (activeJobId === null) {
             if (startedDeletionJobId.current !== null) pollingRef.current?.endPolling(props.serverId);
