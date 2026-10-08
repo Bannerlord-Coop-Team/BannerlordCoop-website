@@ -156,7 +156,7 @@ links/receipts/outbox changes and is not an acceptable automatic rollback. Keep 
 linking paused during a failed cutover; never weaken account/generation checks to
 rescue a consumed callback. No remote DB changes or production drop occurred here.
 
-Full regions remain selectable with “[Region] is full—choose another region or check back later.” Create is disabled for full regions. The website no longer offers new region requests or displays outstanding requests; exact recovery of previously submitted uncertain requests is preserved.
+Full regions remain selectable for a private Request, without reservation or ETA.
 Create remains stopped; first Start uses the bundled default save. Password controls
 remain the documented Discord owner path, not a new web password endpoint.
 

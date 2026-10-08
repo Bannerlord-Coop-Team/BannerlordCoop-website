@@ -109,35 +109,29 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         expect(container.querySelector("a")?.getAttribute("href")).toBe(`/servers/${ONBOARDING_TEST_ID}`);
         expect(mocks.refresh).toHaveBeenCalled();
     });
-    it.each([false, true])("blocks full regions with clear guidance, including saved requests (%s)", async (hasRequest) => {
-        const summary = onboardingSummary();
-        summary.regions[1].available = false;
-        if (hasRequest) summary.regions[1].request = { ...onboardingRequested().request, region: "us-east" };
-        await render(summary);
-        expect(container.textContent).not.toContain("outstanding");
-        await click("Set up server "); await name("My Campaign"); await choose("us-east");
-        expect(container.textContent).toContain("US-East is full—choose another region or check back later.");
-        expect(container.textContent).not.toContain("Request region");
-        expect(container.textContent).not.toContain("Requested");
-        expect(button("Create server").disabled).toBe(true);
+    it("requests a full region without a name and shows the saved request on reload", async () => {
+        mocks.request.mockResolvedValueOnce(onboardingRequested()); await setup(); await choose("france");
+        expect(container.textContent).toContain("France is full. Request it to let us know you want a server there");
+        await click("Request region");
+        expect(mocks.request.mock.calls[0][1]).toEqual({ action: "request-region", region: "france", requestId: expect.any(String) });
+        expect(stored()).toBeNull(); expect(container.textContent).toContain("Region request confirmed");
+        await click("Done"); const summary = onboardingSummary(); summary.regions[2].request = onboardingRequested().request;
+        await render(summary); await click("Set up server "); await choose("france");
+        expect(container.textContent).toContain("Full · Requested"); expect(container.textContent).toContain("Your request for France is saved.");
+        expect(button("Region requested").disabled).toBe(true);
         await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
-        expect(mocks.request).not.toHaveBeenCalled(); expect(stored()).toBeNull();
-        await click("Refresh availability"); expect(mocks.refresh).toHaveBeenCalled();
-        await choose("us-west"); expect(button("Create server").disabled).toBe(false);
-        expect(container.textContent).not.toContain("US-East is full—");
-        await click("Create server");
-        expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", region: "us-west" });
+        expect(mocks.request).toHaveBeenCalledTimes(1);
+        await choose("us-east"); expect(button("Create server").disabled).toBe(false);
     });
     it("allows creation after capacity returns even with an older region request", async () => {
         const summary = onboardingSummary(); summary.regions[1].available = false;
         summary.regions[1].request = { ...onboardingRequested().request, region: "us-east" };
         await render(summary); await click("Set up server "); await choose("us-east"); await name("My Campaign");
-        expect(button("Create server").disabled).toBe(true);
+        expect(button("Region requested").disabled).toBe(true);
         const refreshed = { ...summary, regions: summary.regions.map((region) => ({ ...region, available: true })) };
         await render(refreshed);
         expect(button("Create server").disabled).toBe(false);
-        expect(container.textContent).not.toContain("is full—");
-        expect(container.textContent).not.toContain("outstanding");
+        expect(container.textContent).not.toContain("is saved");
         mocks.request.mockResolvedValueOnce({ ...onboardingCreated(), region: "us-east" });
         await click("Create server");
         expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", region: "us-east" });
@@ -153,7 +147,7 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         for (const call of mocks.request.mock.calls) expect(call[1]).toEqual(original);
         expect(stored()).toBeNull(); expect(container.textContent).toContain("Server assigned");
     });
-    it("recovers a legacy uncertain region request with its original UUID and account", async () => {
+    it("recovers an uncertain region request with its original UUID and account", async () => {
         const original = { action: "request-region", region: "france", requestId: ONBOARDING_TEST_ID } as const;
         storeOnboardingIntent(sessionStorage, onboardingIntentKey("account-a"), original);
         mocks.request.mockRejectedValueOnce(new Error("lost")); await render(); await click("Retry pending request");

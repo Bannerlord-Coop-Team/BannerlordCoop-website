@@ -109,6 +109,15 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
             void dispatch({ action: "create-server", displayName, region, releaseChannel, requestId });
         } catch { setStorageError(true); }
     }
+    /** Records demand for a full region the account has not already requested. */
+    function requestCandidate(region: OnboardingRegion) {
+        if (!canOffer || busy || intentRef.current !== null || inFlight.current) return;
+        const entry = summary?.regions.find((entry) => entry.region === region);
+        if (!entry || entry.available || entry.request !== null) return;
+        try {
+            void dispatch({ action: "request-region", region, requestId: crypto.randomUUID() });
+        } catch { setStorageError(true); }
+    }
     const recovery = <>
         {storageError && <p role="alert" className="mt-4 text-sm text-red-200">{t("onboarding.storageError")}</p>}
         {intent && <div className="mt-4 border border-gold/30 bg-surface p-4 text-sm">
@@ -139,7 +148,7 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
         {!open && recovery}
         {!open && result && <div className="mt-5 border border-gold/30 bg-surface p-5"><OnboardingReceipt result={result} /></div>}
         {open && <SetupDialog summary={summary} canOffer={canOffer} disabled={busy || intent !== null} pending={pending} result={result} recovery={recovery}
-            onSubmit={createCandidate} onDismiss={() => setOpen(false)} onRefresh={() => router.refresh()} fallbackFocus={() => fallbackRef.current?.focus()} />}
+            onSubmit={createCandidate} onRequest={requestCandidate} onDismiss={() => setOpen(false)} onRefresh={() => router.refresh()} fallbackFocus={() => fallbackRef.current?.focus()} />}
     </div>;
 }
 
@@ -164,9 +173,9 @@ const CONTINENTS: { label: string; regions: OnboardingRegion[] }[] = [
 ];
 
 /** Collects validated server details while preserving native dialog focus and submission rules. */
-function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, onSubmit, onDismiss, onRefresh, fallbackFocus }: {
+function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, onSubmit, onRequest, onDismiss, onRefresh, fallbackFocus }: {
     summary: OnboardingSummary | null; canOffer: boolean; disabled: boolean; pending: boolean; result: OnboardingResult | null; recovery: ReactNode;
-    onSubmit: (name: string, region: OnboardingRegion, releaseChannel: OnboardingReleaseChannel) => void; onDismiss: () => void; onRefresh: () => void; fallbackFocus: () => void;
+    onSubmit: (name: string, region: OnboardingRegion, releaseChannel: OnboardingReleaseChannel) => void; onRequest: (region: OnboardingRegion) => void; onDismiss: () => void; onRefresh: () => void; fallbackFocus: () => void;
 }) {
     const { t } = useTranslations("servers");
     const dialogRef = useRef<HTMLDialogElement>(null);
@@ -200,10 +209,14 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
         if (result) resultRef.current?.focus();
         else if (pending) closeRef.current?.focus();
     }, [result, pending]);
-    /** Validates the existing name contract before forwarding unchanged operational values. */
+    /** Requests a full region, or validates the name before forwarding a create. */
     function submit(event: FormEvent) {
         event.preventDefault();
-        if (!canOffer || disabled || !entry?.available) return;
+        if (!canOffer || disabled || !entry || (!entry.available && entry.request !== null)) return;
+        if (!entry.available) {
+            onRequest(entry.region);
+            return;
+        }
         const normalized = normalizeOnboardingName(name);
         if (normalized === null) {
             setError(t("onboarding.invalidName"));
@@ -262,18 +275,18 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
                         </div>
                         <div role="tabpanel" id="continent-regions" aria-labelledby={`continent-tab-${continent}`} className="mt-3 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">{summary?.regions.filter((region) => CONTINENTS[continent].regions.includes(region.region)).map((region) => <label key={region.region} className={`relative flex cursor-pointer items-start gap-2 rounded-sm border p-3 transition-colors hover:border-gold/60 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${selected === region.region ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
                             <input type="radio" name="region" value={region.region} checked={selected === region.region} onChange={() => setSelected(region.region)} className="mt-1 size-3.5 shrink-0 accent-gold" />
-                            <span className="min-w-0"><span className="block text-sm font-medium">{t(`region.${region.region}`)}</span><span className={`mt-2 block text-xs ${region.available ? "text-emerald-200" : "text-amber-200"}`}>{region.available ? t("onboarding.available") : t("onboarding.full")}</span></span>
+                            <span className="min-w-0"><span className="block text-sm font-medium">{t(`region.${region.region}`)}</span><span className={`mt-2 block text-xs ${region.available ? "text-emerald-200" : "text-amber-200"}`}>{region.available ? t("onboarding.available") : t("onboarding.full")}{region.request ? ` · ${t("onboarding.requested")}` : ""}</span></span>
                         </label>)}</div>
                     </fieldset>
                 </fieldset>
                 {!canOffer && <p role="status" className="mt-4 text-sm text-gold">{t("onboarding.changed")}</p>}
-                {entry && !entry.available && <p role="status" className="mt-4 text-sm text-gold">{t("onboarding.regionFull", { region: t(`region.${entry.region}`) })}</p>}
+                {entry && !entry.available && <p role="status" className="mt-4 text-sm text-gold">{t(entry.request ? "onboarding.alreadyRequested" : "onboarding.regionFull", { region: t(`region.${entry.region}`) })}</p>}
                 {pending && <p role="status" className="mt-4 text-sm text-gold">{t("onboarding.pendingHint")}</p>}
                 {recovery}
                 <div className="mt-5 flex flex-col-reverse gap-3 border-t border-white/10 pt-5 sm:flex-row sm:flex-wrap sm:justify-end">
                     <button type="button" onClick={onDismiss} className={secondaryButton}>{pending ? t("onboarding.closePending") : t("onboarding.close")}</button>
                     <button type="button" onClick={onRefresh} className={secondaryButton}>{t("onboarding.refresh")}</button>
-                    <button type="submit" disabled={disabled || !canOffer || !entry?.available} className={primaryButton}>{pending ? t("onboarding.submitting") : t("onboarding.create")}</button>
+                    <button type="submit" disabled={disabled || !canOffer || !entry || (!entry.available && entry.request !== null)} className={primaryButton}>{pending ? t("onboarding.submitting") : entry?.available !== false ? t("onboarding.create") : entry.request ? t("onboarding.requestedButton") : t("onboarding.request")}</button>
                 </div>
             </form>}
         </div>
