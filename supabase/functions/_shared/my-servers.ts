@@ -6,6 +6,7 @@ import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseO
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
 import { parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingRegion } from "./server-onboarding-contract.ts";
 import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, requireRunnerConfigurationPart, type RunnerConfigurationMutation, type RunnerConfigurationPart } from "./server-configuration-contract.ts";
+import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
 
 const MAXIMUM_URL_LENGTH = 4_096;
 const MAXIMUM_REQUEST_BYTES = 16 * 1_024;
@@ -26,6 +27,10 @@ export type MyServersHandlerOptions = {
     controlPlaneUrl: string;
     fetchImplementation?: typeof fetch;
     upstreamTimeoutMilliseconds?: number;
+    // Invoked after the backend durably accepts a new region request; failures never alter the receipt.
+    onRegionRequested?: (event: RegionRequestedEvent) => Promise<void>;
+    // Invoked when a created server leaves its region without capacity; failures never alter the receipt.
+    onRegionFull?: (event: RegionFullEvent) => Promise<void>;
 };
 
 type UpstreamRequest =
@@ -70,6 +75,25 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
     );
     const fetchImplementation = options.fetchImplementation ?? fetch;
     const upstreamTimeoutMilliseconds = boundedTimeout(options.upstreamTimeoutMilliseconds ?? 30_000);
+
+    // Reads the caller's onboarding summary to tell whether a region has no remaining capacity.
+    async function regionIsFull(region: OnboardingRegion, token: string) {
+        const requestId = crypto.randomUUID();
+        const response = await fetchImplementation(controlPlaneEndpoint, {
+            method: "POST",
+            redirect: "error",
+            headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "x-request-id": requestId },
+            body: JSON.stringify({ version: 1, requestId, operation: "server-onboarding", input: {} }),
+            signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),
+        });
+        const envelope: unknown = JSON.parse(await readBoundedText(response, MAXIMUM_OPERATION_RESPONSE_BYTES));
+        if (!response.ok || !isControlPlaneEnvelope(envelope, requestId) || !isRecord(envelope) || envelope.ok !== true) {
+            throw new Error("Onboarding summary is unavailable");
+        }
+        const summary = parseOnboardingSummary(envelope.result);
+        // Paused or blocked provisioning also reports regions unavailable, which is not a capacity signal.
+        return summary.unavailableReason === null && summary.regions.some((entry) => entry.region === region && !entry.available);
+    }
 
     return async (request: Request): Promise<Response> => {
         const origin = request.headers.get("origin");
@@ -195,6 +219,8 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         }
 
         let responseBody: string;
+        let regionRequested: RegionRequestedEvent | null = null;
+        let created: RegionFullEvent | null = null;
         try {
             responseBody = await readBoundedText(
                 upstream,
@@ -236,10 +262,18 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     parseVisibilityResult(envelope.result, { action: "set-server-visibility", ...upstreamRequest.input });
                 }
                 if (upstreamRequest.operation === "create-server") {
-                    parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, ...upstreamRequest.input });
+                    const result = parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, ...upstreamRequest.input });
+                    if (result.action === "create-server") {
+                        created = { region: result.region, serverId: result.serverId, createdAt: result.createdAt, requester: requesterFromToken(token) };
+                    }
                 }
                 if (upstreamRequest.operation === "request-region") {
-                    parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, ...upstreamRequest.input });
+                    const result = parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, ...upstreamRequest.input });
+                    // A receipt carrying the submitted UUID is a newly accepted request (or its exact replay);
+                    // any other UUID is the backend deduplicating an already outstanding request.
+                    if (result.action === "request-region" && result.request.requestId.toLowerCase() === requestId) {
+                        regionRequested = { requestId, region: result.request.region, createdAt: result.request.createdAt, requester: requesterFromToken(token) };
+                    }
                 }
             } else if (upstream.ok) throw new Error("Inconsistent failure status");
         } catch {
@@ -251,6 +285,19 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 true,
                 cors,
             );
+        }
+
+        if (regionRequested !== null && options.onRegionRequested !== undefined) {
+            // Best-effort: the request is already durable, so the confirmed receipt is returned regardless.
+            try { await options.onRegionRequested(regionRequested); } catch { /* reported by the hook */ }
+        }
+        if (created !== null && options.onRegionFull !== undefined) {
+            // Best-effort like request alerts: the server already exists, so the receipt is returned regardless.
+            try {
+                if (await regionIsFull(created.region, token)) await options.onRegionFull(created);
+            } catch (error) {
+                console.error(`Region full check failed for ${created.region}: ${error instanceof Error ? error.message : "unknown error"}`);
+            }
         }
 
         return new Response(responseBody, {

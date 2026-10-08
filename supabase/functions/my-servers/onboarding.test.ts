@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createMyServersHandler } from "../_shared/my-servers.ts";
 import { parseOnboardingIntent, parseOnboardingResult, parseOnboardingSummary, normalizeOnboardingName } from "../_shared/server-onboarding-contract.ts";
-import { onboardingSummary, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID } from "../../../tests/onboarding-fixtures.ts";
+import type { RegionFullEvent, RegionRequestedEvent } from "../_shared/region-alerts.ts";
+import { onboardingSummary, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID, ONBOARDING_TEST_TIME } from "../../../tests/onboarding-fixtures.ts";
 
 const token = "synthetic-jwt-for-contract-tests-only";
 function request(body?: unknown, id: string | null = ONBOARDING_TEST_ID, query = body === undefined ? "?resource=onboarding" : "") {
@@ -95,4 +96,76 @@ test("onboarding Edge preserves typed 400/404/409/429 errors and transport uncer
     }
     const h = createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test", fetchImplementation: async () => { throw new Error("lost"); } });
     const response = await h(request()); assert.equal(response.status, 502); assert.equal((await response.json()).error.retryable, true);
+});
+
+const JWT = `header.${Buffer.from(JSON.stringify({ sub: ONBOARDING_TEST_ID, email: "Owner@Example.test" }), "utf8").toString("base64url")}.signature`;
+const REQUEST_REGION = { action: "request-region", region: "france" };
+function alerting(result: unknown, events: RegionRequestedEvent[], options: { status?: number; error?: unknown; fail?: boolean } = {}) {
+    return createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
+        fetchImplementation: async (_url, init) => {
+            const body = JSON.parse(init?.body as string);
+            return Response.json({ version: 1, requestId: body.requestId, ok: options.error === undefined, ...(options.error === undefined ? { result } : { error: options.error }) }, { status: options.status ?? 200 });
+        },
+        onRegionRequested: async (event) => { events.push(event); if (options.fail) throw new Error("smtp unavailable"); } });
+}
+function requestWithToken(body: unknown, bearer: string) {
+    return new Request("https://edge.example.test/", { method: "POST", headers: { authorization: `Bearer ${bearer}`, "x-request-id": ONBOARDING_TEST_ID, "content-type": "application/json" }, body: JSON.stringify(body) });
+}
+test("onboarding Edge alerts once per newly accepted region request, never for dedupes, creates or failures", async () => {
+    const events: RegionRequestedEvent[] = [];
+    const accepted = await alerting(onboardingRequested(), events)(requestWithToken(REQUEST_REGION, JWT));
+    assert.equal(accepted.status, 200);
+    assert.deepEqual(await accepted.json(), { version: 1, requestId: ONBOARDING_TEST_ID, ok: true, result: onboardingRequested() });
+    assert.deepEqual(events, [{ requestId: ONBOARDING_TEST_ID, region: "france", createdAt: ONBOARDING_TEST_TIME, requester: { accountId: ONBOARDING_TEST_ID, email: "owner@example.test" } }]);
+    // Opaque bearer tokens still alert, without requester details.
+    assert.equal((await alerting(onboardingRequested(), events)(request(REQUEST_REGION))).status, 200);
+    assert.deepEqual(events[1], { requestId: ONBOARDING_TEST_ID, region: "france", createdAt: ONBOARDING_TEST_TIME, requester: { accountId: null, email: null } });
+    // Dedupe receipts carry the existing request's UUID and must not alert again.
+    const deduplicated = { action: "request-region", request: { ...onboardingRequested().request, requestId: "abcdefab-9999-4999-8999-999999999999" } };
+    assert.equal((await alerting(deduplicated, events)(request(REQUEST_REGION))).status, 200);
+    assert.equal((await alerting(onboardingCreated(), events)(request({ action: "create-server", displayName: "My Campaign", region: "us-west" }))).status, 200);
+    assert.equal((await alerting({ action: "request-region", request: { ...onboardingRequested().request, status: "fulfilled" } }, events)(request(REQUEST_REGION))).status, 502);
+    assert.equal((await alerting(null, events, { status: 409, error: { code: "capacity_available", message: "Create instead", retryable: false } })(request(REQUEST_REGION))).status, 409);
+    assert.equal((await alerting(onboardingRequested(), events)(request({ ...REQUEST_REGION, region: "spain" }))).status, 400);
+    assert.equal(events.length, 2);
+});
+test("onboarding Edge returns the confirmed receipt unchanged when alerting fails", async () => {
+    const events: RegionRequestedEvent[] = [];
+    const response = await alerting(onboardingRequested(), events, { fail: true })(request(REQUEST_REGION));
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).result, onboardingRequested());
+    assert.equal(events.length, 1);
+});
+
+const CREATE_SERVER = { action: "create-server", displayName: "My Campaign", region: "us-west" };
+// Serves the create receipt, then the follow-up summary (null simulates a lost summary response).
+function creating(summary: unknown, events: RegionFullEvent[], operations: string[] = []) {
+    return createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
+        fetchImplementation: async (_url, init) => {
+            const body = JSON.parse(init?.body as string); operations.push(body.operation);
+            if (body.operation === "server-onboarding" && summary === null) throw new Error("summary lost");
+            return Response.json({ version: 1, requestId: body.requestId, ok: true, result: body.operation === "create-server" ? onboardingCreated() : summary });
+        },
+        onRegionFull: async (event) => { events.push(event); } });
+}
+// Builds a summary whose regions all report the given availability.
+function summaryWith(available: boolean, unavailableReason: "provisioning_paused" | null = null) {
+    return { ...onboardingSummary(), unavailableReason, regions: onboardingSummary().regions.map((entry) => ({ ...entry, available })) };
+}
+test("onboarding Edge alerts when a created server leaves its region full", async () => {
+    const events: RegionFullEvent[] = []; const operations: string[] = [];
+    const response = await creating(summaryWith(false), events, operations)(requestWithToken(CREATE_SERVER, JWT));
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).result, onboardingCreated());
+    assert.deepEqual(operations, ["create-server", "server-onboarding"]);
+    assert.deepEqual(events, [{ region: "us-west", serverId: ONBOARDING_TEST_ID, createdAt: ONBOARDING_TEST_TIME, requester: { accountId: ONBOARDING_TEST_ID, email: "owner@example.test" } }]);
+});
+test("onboarding Edge sends no full-region alert while capacity remains, provisioning is unavailable or the summary fails", async () => {
+    for (const summary of [summaryWith(true), summaryWith(false, "provisioning_paused"), null]) {
+        const events: RegionFullEvent[] = [];
+        const response = await creating(summary, events)(request(CREATE_SERVER));
+        assert.equal(response.status, 200);
+        assert.deepEqual((await response.json()).result, onboardingCreated());
+        assert.equal(events.length, 0);
+    }
 });
