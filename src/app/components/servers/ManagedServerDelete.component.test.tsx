@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 import { ManagedServerDelete } from "./ManagedServerDelete";
+import { ManagedServerPollingProvider } from "./ManagedServerPollingProvider";
 const mocks = vi.hoisted(() => ({ remove: vi.fn(), refresh: vi.fn() }));
 vi.mock("@/app/servers/server-deletion-actions", () => ({ deleteManagedServer: mocks.remove }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
@@ -98,4 +99,20 @@ it("shows the durable deletion progress after returning to the page", async () =
     });
     expect(container.textContent).toContain("Deletion status: Removing the hosted server safely");
     expect(container.querySelector('[role="status"]')).not.toBeNull();
+});
+it("starts the shared status stream when a queued deletion is present", async () => {
+    const deletionStatus = {
+        serverId: props.serverId,
+        updatedAt: props.expectedUpdatedAt,
+        operationState: "deletion-pending",
+        job: {
+            jobId: "bbbbbbbb-1111-4111-8111-111111111111",
+            state: "queued" as const,
+            progress: "Waiting to begin",
+            createdAt: props.expectedUpdatedAt,
+            updatedAt: props.expectedUpdatedAt,
+        },
+    };
+    await act(async () => root.render(<TestLocalization><ManagedServerPollingProvider readStatus={async () => ({ ok: true, fingerprint: "queued" })}><ManagedServerDelete {...props} operationState="deletion-pending" deletionStatus={deletionStatus} /></ManagedServerPollingProvider></TestLocalization>));
+    expect(mocks.refresh).toHaveBeenCalled();
 });

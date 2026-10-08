@@ -20,11 +20,23 @@ export function ManagedServerDelete(props: Props & { accessRole: string; deletio
     const polling = useOptionalManagedServerPolling();
     const deletionJob = props.deletionStatus?.job ?? null;
     const activeJobId = deletionJob !== null && ACTIVE_DELETION_STATES.has(deletionJob.state) ? deletionJob.jobId : null;
+    const pollingRef = useRef(polling);
+    const startedDeletionJobId = useRef<string | null>(null);
+    pollingRef.current = polling;
     useEffect(() => {
-        if (polling === null || activeJobId === null) return;
-        polling.beginPolling(props.serverId, props.expectedUpdatedAt, activeJobId, "server");
-        return () => polling.endPolling(props.serverId);
-    }, [activeJobId, polling?.beginPolling, polling?.endPolling, props.expectedUpdatedAt, props.serverId]);
+        if (activeJobId === null) {
+            if (startedDeletionJobId.current !== null) pollingRef.current?.endPolling(props.serverId);
+            startedDeletionJobId.current = null;
+            return;
+        }
+        const channel = pollingRef.current;
+        if (channel === null || startedDeletionJobId.current === activeJobId) return;
+        startedDeletionJobId.current = activeJobId;
+        channel.beginPolling(props.serverId, props.expectedUpdatedAt, activeJobId, "server");
+    }, [activeJobId, props.expectedUpdatedAt, props.serverId]);
+    useEffect(() => () => {
+        if (startedDeletionJobId.current !== null) pollingRef.current?.endPolling(props.serverId);
+    }, [props.serverId]);
     if (props.accessRole !== "owner") return null;
     return <ServerDeletionPanel {...props} onDelete={async intent => {
         const outcome = await deleteManagedServer(intent);
