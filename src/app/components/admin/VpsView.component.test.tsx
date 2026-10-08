@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { HostingAdminHostResources, HostingAdminVpsHost, HostingAdminVpsInventory } from "@/app/lib/control-plane/types";
 import { VpsView } from "./VpsView";
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), resources: vi.fn(), billing: vi.fn(), session: vi.fn() }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), resources: vi.fn(), billing: vi.fn(), regionRequests: vi.fn(), session: vi.fn() }));
 vi.mock("@/app/lib/control-plane/client", () => ({ requestControlPlaneAdmin: mocks.request }));
 vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({ auth: { getSession: mocks.session } }) }));
 vi.mock("./RunnerOnboardingStatus", () => ({ RunnerOnboardingStatus: () => <span>Runner current</span> }));
@@ -13,8 +13,11 @@ let root: Root;
 beforeEach(() => {
     vi.resetAllMocks();
     vi.useFakeTimers();
-    mocks.request.mockImplementation(options => (options.input.includeLiveData ? mocks.resources : mocks.billing)(options));
+    mocks.request.mockImplementation(options => options.operation === "region-requests"
+        ? mocks.regionRequests(options)
+        : (options.input.includeLiveData ? mocks.resources : mocks.billing)(options));
     mocks.billing.mockResolvedValue({ ...inventory(true), liveDataIncluded: false });
+    mocks.regionRequests.mockResolvedValue({ items: [], nextCursor: null });
     mocks.session.mockResolvedValue({ data: { session: { access_token: "test-token" } } });
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     container = document.createElement("div");
@@ -75,6 +78,37 @@ it("ignores an old result after the server supplies a new inventory", async () =
 it.each([true, undefined])("does not reload an already complete or legacy response (%s)", async (flag) => {
     await act(async () => root.render(<VpsView inventory={{ ...inventory(true), liveDataIncluded: flag }} accounts={[]} />));
     expect(mocks.resources).not.toHaveBeenCalled();
+});
+
+it("shows pending region requests and removes one after an inline resolution", async () => {
+    mocks.regionRequests.mockResolvedValue({ items: [{
+        requestId: "11111111-1111-4111-8111-111111111111",
+        guildId: "709516043332354119",
+        discordUserId: "123456789012345678",
+        region: "united-kingdom",
+        status: "outstanding",
+        createdAt: "2026-10-08T12:00:00.000Z",
+    }], nextCursor: null });
+    mocks.request.mockImplementation(async options => {
+        if (options.operation === "region-requests") return mocks.regionRequests(options);
+        if (options.operation === "resolve-region-request") return {};
+        return options.input.includeLiveData ? mocks.resources(options) : mocks.billing(options);
+    });
+    await act(async () => root.render(<VpsView inventory={inventory(true)} accounts={[]} />));
+    expect(container.textContent).toContain("Pending region requests");
+    expect(container.textContent).toContain("united-kingdom");
+    expect(container.textContent).toContain("Dismiss");
+    expect(container.textContent).not.toContain("Approve");
+    expect(container.textContent).not.toContain("Fulfill");
+    expect(container.textContent).not.toContain("Requests are saved without");
+    const dismiss = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Dismiss");
+    expect(dismiss).toBeDefined();
+    await act(async () => dismiss!.click());
+    expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({
+        operation: "resolve-region-request",
+        input: { requestId: "11111111-1111-4111-8111-111111111111", resolution: "dismissed" },
+    }));
+    expect(container.textContent).not.toContain("united-kingdom");
 });
 
 it("updates readings in place without overlapping slow requests or collapsing details", async () => {

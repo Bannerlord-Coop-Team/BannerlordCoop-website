@@ -212,6 +212,15 @@ export type HostingAdminVpsInventory = {
     runnerTargetSourceCommit?: string | null;
 };
 
+export type HostingAdminRegionRequest = {
+    requestId: string;
+    guildId: string;
+    discordUserId: string;
+    region: string;
+    status: "outstanding";
+    createdAt: string;
+};
+
 export type OperationsData = {
     overview: Pick<Overview, "controls" | "servers" | "jobs" | "stableBuilds" | "nightlyBuilds">;
     inventory: HostingAdminVpsInventory;
