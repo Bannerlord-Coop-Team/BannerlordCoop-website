@@ -93,7 +93,7 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));
     await stream.allReady;
     const html = await new Response(stream).text();
-    expect(html).toContain("Onboard existing OVH VPS");
+    expect(html).toContain("Onboard existing VPS");
     expect(html).toContain("vps-available.vps.ovh.us");
     expect(html).toContain('value="us-east"');
     expect(html).not.toContain("The control plane view could not be loaded");

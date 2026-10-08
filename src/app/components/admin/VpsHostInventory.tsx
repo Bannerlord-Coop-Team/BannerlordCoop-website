@@ -2,7 +2,7 @@
 
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
-import { formatAccountOwner } from "@/app/lib/control-plane/presentation";
+import { formatAccountOwner, vpsProviderLabel } from "@/app/lib/control-plane/presentation";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import type {
     HostingAdminHostResources,
@@ -46,7 +46,7 @@ export function VpsHostInventory({
     const idPrefix = useId();
 
     if (hosts.length === 0) {
-        return <div className="mt-6 border border-white/10 bg-surface px-6 py-12 text-center text-sm text-foreground-muted">No registered OVH VPS hosts.</div>;
+        return <div className="mt-6 border border-white/10 bg-surface px-6 py-12 text-center text-sm text-foreground-muted">No registered VPS hosts.</div>;
     }
 
     return (
@@ -128,7 +128,8 @@ export function diskPressureLevel(resources: HostingAdminHostResources | null): 
 }
 
 function HostIdentity({ host }: { host: HostingAdminVpsHost }) {
-    return <div className="min-w-0"><p className="truncate font-mono text-xs text-foreground" title={host.name}>{host.name}</p><p className="mt-1 truncate text-xs text-foreground-muted" title={`${host.region} · ${host.locationId}`}>{host.region} · {host.locationId}</p></div>;
+    const provider = vpsProviderLabel(host.provider);
+    return <div className="min-w-0"><p className="truncate font-mono text-xs text-foreground" title={host.name}>{host.name}</p><p className="mt-1 truncate text-xs text-foreground-muted" title={`${provider} · ${host.region} · ${host.locationId}`}>{provider} · {host.region} · {host.locationId}</p></div>;
 }
 
 function CapacitySummary({ host }: { host: HostingAdminVpsHost }) {
@@ -206,8 +207,8 @@ function HostDetailFooter({ host, runnerTargetSourceCommit }: { host: HostingAdm
             <span>Uptime {formatUptime(resources.uptimeSeconds)}</span>
             <span>Observed <LocalDateTime value={resources.observedAt} /></span>
         </>}
-        <span>Expires <LocalDateTime value={host.expirationDate} empty="Unknown" /></span>
-        <span>Auto-renew {host.autoRenew === true ? "enabled" : host.autoRenew === false ? "disabled" : "unknown"}</span>
+        <span>Expires <LocalDateTime value={host.expirationDate} empty="n/a" /></span>
+        <span>Auto-renew {host.autoRenew === true ? "enabled" : host.autoRenew === false ? "disabled" : "n/a"}</span>
         {runnerSource && <span title={runnerSource}>Runner {runnerSource.slice(0, 12)}</span>}
         {runnerTargetSourceCommit && <span title={runnerTargetSourceCommit}>Target {runnerTargetSourceCommit.slice(0, 12)}</span>}
         {latestUpdate && <span title={`${latestUpdate.priorSourceCommit} → ${latestUpdate.targetSourceCommit}`}>Latest update {latestUpdate.state} · {humanize(latestUpdate.progressStage)} · {latestUpdate.priorSourceCommit.slice(0, 8)} → {latestUpdate.targetSourceCommit.slice(0, 8)}{latestUpdate.errorCode ? ` · ${latestUpdate.errorCode}` : ""}</span>}
@@ -222,7 +223,8 @@ function StateBadge({ value }: { value: string }) {
 }
 
 function formatVpsCost(cost: HostingAdminVpsHost["cost"]) {
-    if (!cost) return "Unknown";
+    // Billing is null when a provider reports none, its account read failed, or the provider is disabled.
+    if (!cost) return "n/a";
     const amount = new Intl.NumberFormat("en", { style: "currency", currency: cost.currencyCode }).format(cost.priceInMicrocents / 100_000_000);
     const cadence = cost.interval === 1 && cost.duration === "P1M" ? "month" : cost.interval === 1 && cost.duration === "P1Y" ? "year" : `${cost.interval} × ${cost.duration}`;
     return `${amount} / ${cadence}`;

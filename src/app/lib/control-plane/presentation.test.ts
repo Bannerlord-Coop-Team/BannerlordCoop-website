@@ -5,6 +5,7 @@ import type { ReleaseBuild } from "./types";
 import {
     adminActionOptionValue,
     applyControlPlaneOperationDefaults,
+    availableVpsHostOptions,
     createServerRegionOptions,
     fieldRequirementLabel,
     formatAccountOwner,
@@ -13,6 +14,7 @@ import {
     releaseVersion,
     MAINTENANCE_TIME_ZONE,
     maintenanceSlotOptions,
+    manualVpsProviderOptions,
     operationCardRowClass,
     operationCardRows,
     operationTargetMatchesHash,
@@ -20,6 +22,7 @@ import {
     presentControlPlaneOperationResult,
     serverLifecycleOperationHref,
     serverRegionOptions,
+    vpsProviderLabel,
 } from "./presentation";
 
 test("server regions use the approved display order and protocol values", () => {
@@ -400,4 +403,31 @@ test("release selectors load the same full catalog as the Releases view", async 
     assert.match(operations, /operation: "overview", input: \{ operations: true \}/u);
     assert.match(operations, /loadReleaseCatalog\(token, signal, identity\)/u);
     assert.match(operations, /stableBuilds: releases.stable, nightlyBuilds: releases.nightly/u);
+});
+
+test("VPS provider labels treat a missing provider as OVHcloud and keep unknown values visible", () => {
+    assert.equal(vpsProviderLabel("ovhcloud-vps"), "OVHcloud");
+    assert.equal(vpsProviderLabel("contabo-vps"), "Contabo");
+    assert.equal(vpsProviderLabel(undefined), "OVHcloud");
+    assert.equal(vpsProviderLabel("future-vps"), "future-vps");
+    assert.deepEqual(manualVpsProviderOptions(), [
+        { value: "ovhcloud-vps", label: "OVHcloud" },
+        { value: "contabo-vps", label: "Contabo" },
+    ]);
+});
+
+test("onboarding options prefer labelled available hosts and fall back to service names", () => {
+    assert.deepEqual(availableVpsHostOptions({
+        availableServiceNames: ["vps-a.vps.ovh.us", "vmi1.contaboserver.net"],
+        availableHosts: [
+            { provider: "ovhcloud-vps", hostKey: "vps-a.vps.ovh.us", label: "OVHcloud VPS \u00b7 vps-a.vps.ovh.us" },
+            { provider: "contabo-vps", hostKey: "vmi1.contaboserver.net", label: "Contabo VPS \u00b7 vmi1.contaboserver.net" },
+        ],
+    }), [
+        { label: "OVHcloud VPS \u00b7 vps-a.vps.ovh.us", value: "vps-a.vps.ovh.us" },
+        { label: "Contabo VPS \u00b7 vmi1.contaboserver.net", value: "vmi1.contaboserver.net" },
+    ]);
+    assert.deepEqual(availableVpsHostOptions({ availableServiceNames: ["vps-a.vps.ovh.us"] }), [
+        { label: "vps-a.vps.ovh.us", value: "vps-a.vps.ovh.us" },
+    ]);
 });

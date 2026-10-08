@@ -67,7 +67,7 @@ const OPERATION_EXPLANATIONS: Record<string, string> = {
     "cancel-job": "Requests cancellation. A running worker stops only at its next reviewed safe checkpoint.",
     "cleanup-orphan": "Queues cleanup for one exact digest from a prior orphan review. It cannot target new or unreviewed provider resources.",
     "collect-diagnostics": "Collects a bounded, sanitized diagnostic window. Secrets, arbitrary files, and general shell access remain unavailable.",
-    "create-server": "Assigns one free slot from an already registered OVH VPS in stopped state; it never purchases an OVH product or starts Bannerlord. If no prepared slot exists in the selected region, the request fails without creating or billing anything.",
+    "create-server": "Assigns one free slot from an already registered VPS (OVHcloud or Contabo) in stopped state; it never purchases a VPS product or starts Bannerlord. An optional provider pin limits the choice to that provider; otherwise providers are tried in their configured order. If no prepared slot exists in the selected region, the request fails without creating or billing anything.",
     diagnostics: "Reads the sanitized result of a completed diagnostics job; it cannot read arbitrary runner files.",
     "execute-deletion": "Advances an eligible pending deletion through its final backup, retention, and cleanup gates.",
     "extend-deletion": "Moves an existing pending-deletion deadline forward by the selected bounded duration.",
@@ -76,7 +76,7 @@ const OPERATION_EXPLANATIONS: Record<string, string> = {
     "open-orphan-review": "Reads a previously captured orphan review and its immutable cleanup-group digests.",
     "orphan-review": "Reads a previously captured orphan review and its immutable cleanup-group digests.",
     "reactivate-server": "Clears an administrative hold after current entitlement checks. It does not automatically start the game.",
-    "onboard-vps-host": "Verifies one already-purchased OVH VPS from authenticated account inventory, pins the Ed25519 SSH identity presented at its provider-derived public IP on first contact, uses the preinstalled fleet key, hardens the host, installs and activates every isolated managed-runner slot through private mTLS routes, and publishes capacity only after health proof. It never orders, renews, or cancels the VPS, and accepts no browser-supplied host identity or topology.",
+    "onboard-vps-host": "Verifies one already-purchased VPS (OVHcloud or Contabo) from its provider's authenticated account inventory, pins the Ed25519 SSH identity presented at its provider-derived public IP on first contact, uses the preinstalled fleet key, hardens the host, installs and activates every isolated managed-runner slot through private mTLS routes, and publishes capacity only after health proof. It never orders, renews, or cancels the VPS, and accepts no browser-supplied host identity or topology.",
     "reject-build": "Permanently marks a pending build rejected while retaining its receipt and audit history.",
     "replace-provider": "Creates a guarded replacement generation for resize, rebuild, or migration, then cuts over only after backup, restore, and health checks.",
     "reset-password": "Generates or accepts a new game password, stores it through the encrypted secret boundary, and reveals generated output once.",
@@ -128,6 +128,14 @@ const AUDIT_ACTION_EXPLANATIONS: Record<string, string> = {
     "hosting.runner.ovhcloud_vps_update_succeeded": "Every isolated slot passed revision, identity, build, save, and capability continuity checks after the runner update.",
     "hosting.runner.ovhcloud_vps_update_failed": "A managed-runner update stopped safely after a terminal failure and retained its evidence and rollback target.",
     "hosting.runner.ovhcloud_vps_update_retry_scheduled": "A retryable managed-runner update failure was retained and scheduled for bounded recovery.",
+    "hosting.admin.manual_vps_host_registration_requested": "An administrator requested that an existing non-OVHcloud VPS be verified and added to managed inventory.",
+    "hosting.admin.manual_vps_runner_onboarding_requested": "An administrator requested full managed-runner commissioning for an existing non-OVHcloud VPS.",
+    "hosting.admin.manual_vps_runner_update_requested": "An administrator requested a transactional host-wide managed-runner update to the control plane's reviewed revision.",
+    "hosting.provider.manual_vps_host_registered": "The control plane verified and recorded an existing non-OVHcloud VPS as inventory. This event alone does not publish schedulable capacity.",
+    "hosting.runner.manual_vps_onboarding_succeeded": "Every reviewed runner slot passed installation, private-route, identity, activation, and health gates before capacity was published.",
+    "hosting.runner.manual_vps_update_succeeded": "Every isolated slot passed revision, identity, build, save, and capability continuity checks after the runner update.",
+    "hosting.runner.manual_vps_update_failed": "A managed-runner update stopped safely after a terminal failure and retained its evidence and rollback target.",
+    "hosting.runner.manual_vps_update_retry_scheduled": "A retryable managed-runner update failure was retained and scheduled for bounded recovery.",
 };
 
 export function stateExplanation(value: string) {

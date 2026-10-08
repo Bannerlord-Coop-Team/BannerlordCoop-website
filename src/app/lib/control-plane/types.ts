@@ -160,7 +160,11 @@ export type HostingServerResources = {
     memoryLimitBytes: number;
 };
 
+export type ManualVpsProvider = "ovhcloud-vps" | "contabo-vps";
+
 export type HostingAdminVpsHost = {
+    /** Absent in responses from control planes that predate the manual VPS provider family (OVHcloud only). */
+    provider?: ManualVpsProvider;
     name: string;
     locationId: string;
     region: string;
@@ -204,11 +208,27 @@ export type HostingAdminVpsHost = {
     } | null;
 };
 
+/** One enabled provider's account read; a failed read nulls only that provider's billing. */
+export type HostingAdminVpsProviderRead = {
+    provider: ManualVpsProvider;
+    status: "ok" | "failed";
+    code: string | null;
+};
+
+/** One unregistered account host that can be onboarded. */
+export type HostingAdminVpsAvailableHost = {
+    provider: ManualVpsProvider;
+    hostKey: string;
+    label: string;
+};
+
 export type HostingAdminVpsInventory = {
     liveDataIncluded?: boolean;
     controlPlaneHost: HostingAdminHostResources | null;
     hosts: HostingAdminVpsHost[];
     availableServiceNames: string[];
+    availableHosts?: HostingAdminVpsAvailableHost[];
+    providerReads?: HostingAdminVpsProviderRead[];
     runnerTargetSourceCommit?: string | null;
 };
 
