@@ -1,5 +1,5 @@
 import "server-only";
-import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse } from "./my-servers";
+import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse, type MyServerDeletionStatus } from "./my-servers";
 import { parseOnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 
 /** Reads owner inventory directly; Oracle rechecks the current session and durable access on every page. */
@@ -14,6 +14,34 @@ export async function getServerOnboarding(accessToken: string, callerSignal?: Ab
     const result = await readOwner(accessToken, { operation: "server-onboarding", input: {} }, ownerReadSignal(accessToken, callerSignal));
     try { return parseOnboardingSummary(result); }
     catch { throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid response.", true); }
+}
+
+/** Reads the durable owner deletion receipt without dispatching another operation. */
+export async function getMyServerDeletionStatus(accessToken: string, serverId: string, callerSignal?: AbortSignal): Promise<MyServerDeletionStatus> {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+    if (!uuid.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid deletion reference.");
+    const result = await readOwner(accessToken, { operation: "server-deletion-status", input: { serverId } }, ownerReadSignal(accessToken, callerSignal));
+    if (!result || typeof result !== "object" || Array.isArray(result)) throw new MyServersApiError("invalid_response", "Invalid deletion status.");
+    const value = result as Record<string, unknown>;
+    const job = value.job;
+    if (Object.keys(value).length !== 4 || !["job", "operationState", "serverId", "updatedAt"].every(key => Object.hasOwn(value, key))
+        || value.serverId !== serverId || typeof value.operationState !== "string" || !/^[a-z][a-z0-9-]{0,63}$/u.test(value.operationState)
+        || typeof value.updatedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value.updatedAt)
+        || (job !== null && (!job || typeof job !== "object" || Array.isArray(job)))) {
+        throw new MyServersApiError("invalid_response", "Invalid deletion status.");
+    }
+    if (job !== null) {
+        const parsed = job as Record<string, unknown>;
+        if (Object.keys(parsed).length !== 5 || !["createdAt", "jobId", "progress", "state", "updatedAt"].every(key => Object.hasOwn(parsed, key))
+            || typeof parsed.jobId !== "string" || !uuid.test(parsed.jobId)
+            || typeof parsed.state !== "string" || !["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"].includes(parsed.state)
+            || typeof parsed.progress !== "string" || parsed.progress.length < 1 || parsed.progress.length > 256 || /[\p{Cc}\p{Cf}]/u.test(parsed.progress)
+            || typeof parsed.createdAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(parsed.createdAt)
+            || typeof parsed.updatedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(parsed.updatedAt)) {
+            throw new MyServersApiError("invalid_response", "Invalid deletion status.");
+        }
+    }
+    return value as MyServerDeletionStatus;
 }
 
 export type ManagedStartStatus = {
@@ -54,6 +82,7 @@ function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
 async function readOwner(accessToken: string, request:
     | { operation: "my-servers"; input: { cursor: string | null; limit: 100 } }
     | { operation: "server-onboarding"; input: Record<string, never> }
+    | { operation: "server-deletion-status"; input: { serverId: string } }
     | { operation: "server-start-status"; input: { serverId: string; jobId: string } }, signal: AbortSignal) {
     const requestId = crypto.randomUUID();
     let response: Response;

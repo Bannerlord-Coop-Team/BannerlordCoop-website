@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 import { ManagedServerDelete } from "./ManagedServerDelete";
+import { ManagedServerPollingProvider } from "./ManagedServerPollingProvider";
 const mocks = vi.hoisted(() => ({ remove: vi.fn(), refresh: vi.fn() }));
 vi.mock("@/app/servers/server-deletion-actions", () => ({ deleteManagedServer: mocks.remove }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
@@ -79,4 +80,39 @@ it("requires a new confirmation after a known rejection", async () => {
     await type("Renamed server"); await acknowledge(); await click("Permanently delete server");
     expect(mocks.remove.mock.calls[1][0]).toMatchObject({ confirmationText: "Renamed server", expectedUpdatedAt: "2026-10-07T12:00:01.000Z" });
     expect(mocks.remove.mock.calls[1][0].requestId).not.toBe(original.requestId);
+});
+it("shows the durable deletion progress after returning to the page", async () => {
+    await render({
+        operationState: "deletion-pending",
+        deletionStatus: {
+            serverId: props.serverId,
+            updatedAt: props.expectedUpdatedAt,
+            operationState: "deletion-pending",
+            job: {
+                jobId: "bbbbbbbb-1111-4111-8111-111111111111",
+                state: "running",
+                progress: "Removing the hosted server safely",
+                createdAt: props.expectedUpdatedAt,
+                updatedAt: props.expectedUpdatedAt,
+            },
+        },
+    });
+    expect(container.textContent).toContain("Deletion status: Removing the hosted server safely");
+    expect(container.querySelector('[role="status"]')).not.toBeNull();
+});
+it("starts the shared status stream when a queued deletion is present", async () => {
+    const deletionStatus = {
+        serverId: props.serverId,
+        updatedAt: props.expectedUpdatedAt,
+        operationState: "deletion-pending",
+        job: {
+            jobId: "bbbbbbbb-1111-4111-8111-111111111111",
+            state: "queued" as const,
+            progress: "Waiting to begin",
+            createdAt: props.expectedUpdatedAt,
+            updatedAt: props.expectedUpdatedAt,
+        },
+    };
+    await act(async () => root.render(<TestLocalization><ManagedServerPollingProvider readStatus={async () => ({ ok: true, fingerprint: "queued" })}><ManagedServerDelete {...props} operationState="deletion-pending" deletionStatus={deletionStatus} /></ManagedServerPollingProvider></TestLocalization>));
+    expect(mocks.refresh).toHaveBeenCalled();
 });

@@ -16,7 +16,7 @@ function auth(userId = "account-a", sessionId = userId) { return { auth: {
 } }; }
 beforeEach(() => { vi.resetAllMocks(); mocks.auth.mockResolvedValue(auth()); mocks.request.mockResolvedValue({ outcome: "enqueued", jobId: intent.serverId, action: "delete" }); });
 it("authenticates each retry, preserves intent, and reports queued rather than completed deletion", async () => {
-    expect(await deleteManagedServer(intent)).toMatchObject({ ok: true, message: expect.stringContaining("still pending") });
+    expect(await deleteManagedServer(intent)).toMatchObject({ ok: true, jobId: intent.serverId, message: expect.stringContaining("leave this page") });
     expect(mocks.request).toHaveBeenCalledExactlyOnceWith("synthetic-token", intent);
     expect(mocks.revalidate).toHaveBeenCalledWith("/servers");
 });
@@ -35,4 +35,14 @@ it("retains unknown outcomes and never resubmits or upgrades a stale generation 
     mocks.request.mockRejectedValueOnce(new MyServersApiError("stale_interaction", "stale"));
     expect(await deleteManagedServer(intent)).toMatchObject({ ok: false, rejected: true }); expect(mocks.request).toHaveBeenCalledTimes(2);
     expect(mocks.request.mock.calls[1][1]).toEqual(intent);
+});
+
+it("treats a busy server as a definitive rejection instead of an uncertain deletion", async () => {
+    mocks.request.mockRejectedValueOnce(new MyServersApiError("operation_in_progress", "The server is changing."));
+    expect(await deleteManagedServer(intent)).toMatchObject({
+        ok: false,
+        rejected: true,
+        message: "The server can't be deleted at the moment. Please try again later",
+    });
+    expect(mocks.revalidate).not.toHaveBeenCalled();
 });

@@ -106,9 +106,13 @@ test("routes bounded backup history and status requests through closed operation
     const status = await handler(listRequest(
         "?resource=backup-status&serverId=22222222-2222-4222-8222-222222222222",
     ));
+    const deletion = await handler(listRequest(
+        "?resource=deletion-status&serverId=22222222-2222-4222-8222-222222222222",
+    ));
 
     assert.equal(backups.status, 200);
     assert.equal(status.status, 200);
+    assert.equal(deletion.status, 502);
     assert.deepEqual(upstreamBodies, [
         {
             version: 1,
@@ -126,7 +130,33 @@ test("routes bounded backup history and status requests through closed operation
             operation: "server-backup-status",
             input: { serverId: "22222222-2222-4222-8222-222222222222" },
         },
+        {
+            version: 1,
+            requestId: REQUEST_ID,
+            operation: "server-deletion-status",
+            input: { serverId: "22222222-2222-4222-8222-222222222222" },
+        },
     ]);
+});
+
+test("validates a durable deletion status response", async () => {
+    const handler = createHandler(async () => successEnvelope({
+        serverId: "22222222-2222-4222-8222-222222222222",
+        updatedAt: "2026-09-02T14:46:07.479Z",
+        operationState: "deletion-pending",
+        job: {
+            jobId: "55555555-5555-4555-8555-555555555555",
+            state: "running",
+            progress: "Removing the hosted server safely",
+            createdAt: "2026-09-02T14:45:37.479Z",
+            updatedAt: "2026-09-02T14:46:07.479Z",
+        },
+    }));
+    const response = await handler(listRequest(
+        "?resource=deletion-status&serverId=22222222-2222-4222-8222-222222222222",
+    ));
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).result.job.state, "running");
 });
 
 test("maps create and restore requests without forwarding a control-plane method", async () => {

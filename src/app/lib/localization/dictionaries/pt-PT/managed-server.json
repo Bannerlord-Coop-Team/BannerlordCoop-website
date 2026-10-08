@@ -729,6 +729,10 @@
   "deletion.queued": "Eliminação solicitada. A cópia final e a remoção estão pendentes. Atualize a lista de servidores para verificar o progresso.",
   "deletion.unknown": "Não foi possível confirmar o resultado. O pedido pode já estar em fila. A nova tentativa usa o mesmo pedido; não inicie outra eliminação.",
   "deletion.rejected": "O servidor mudou ou a eliminação foi recusada. Feche a janela, atualize e confirme novamente se ainda pretender eliminá-lo.",
+  "deletion.busy": "O servidor não pode ser eliminado de momento. Tente novamente mais tarde.",
+  "deletion.progress": "Deletion status: {progress}",
+  "deletion.failed": "Deletion could not be completed. {progress}",
+  "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "O pedido de eliminação é inválido.",
   "deletion.signIn": "Inicie sessão novamente antes de eliminar um servidor.",
   "deletion.unavailable": "A eliminação não está disponível durante a preparação, suspensão ou eliminação do servidor."

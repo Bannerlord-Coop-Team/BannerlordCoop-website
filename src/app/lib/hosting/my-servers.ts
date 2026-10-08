@@ -73,6 +73,21 @@ export type MyServerUpdateResult = {
     action: "update";
 };
 
+export type MyServerDeletionJob = {
+    jobId: string;
+    state: "queued" | "running" | "retry-wait" | "succeeded" | "failed" | "cancelled";
+    progress: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type MyServerDeletionStatus = {
+    serverId: string;
+    updatedAt: string;
+    operationState: string;
+    job: MyServerDeletionJob | null;
+};
+
 export class MyServersApiError extends Error {
     constructor(
         readonly code: string,
@@ -157,6 +172,22 @@ export async function getMyServerBackupStatus(
         method: "GET",
         configureEndpoint(endpoint) {
             endpoint.searchParams.set("resource", "backup-status");
+            endpoint.searchParams.set("serverId", serverId);
+        },
+    }), serverId);
+}
+
+export async function getMyServerDeletionStatus(
+    accessToken: string,
+    serverId: string,
+): Promise<MyServerDeletionStatus> {
+    if (!RESOURCE_ID.test(serverId)) {
+        throw new MyServersApiError("invalid_request", "Invalid server ID.");
+    }
+    return parseDeletionStatus(await requestMyServersApi(accessToken, {
+        method: "GET",
+        configureEndpoint(endpoint) {
+            endpoint.searchParams.set("resource", "deletion-status");
             endpoint.searchParams.set("serverId", serverId);
         },
     }), serverId);
@@ -502,6 +533,41 @@ function parseBackupStatus(value: unknown, serverId: string): MyServerBackupStat
         updatedAt: value.updatedAt,
         job: value.job === null ? null : parseBackupJob(value.job),
     };
+}
+
+function parseDeletionStatus(value: unknown, serverId: string): MyServerDeletionStatus {
+    if (
+        !isRecord(value)
+        || !hasExactKeys(value, ["job", "operationState", "serverId", "updatedAt"])
+        || value.serverId !== serverId
+        || typeof value.operationState !== "string"
+        || !SAFE_STATUS_VALUE.test(value.operationState)
+        || !isTimestamp(value.updatedAt)
+    ) throw invalidResponse();
+    return {
+        serverId,
+        operationState: value.operationState,
+        updatedAt: value.updatedAt,
+        job: value.job === null ? null : parseDeletionJob(value.job),
+    };
+}
+
+function parseDeletionJob(value: unknown): MyServerDeletionJob {
+    if (
+        !isRecord(value)
+        || !hasExactKeys(value, ["createdAt", "jobId", "progress", "state", "updatedAt"])
+        || typeof value.jobId !== "string"
+        || !RESOURCE_ID.test(value.jobId)
+        || typeof value.state !== "string"
+        || !BACKUP_JOB_STATES.has(value.state)
+        || typeof value.progress !== "string"
+        || value.progress.length < 1
+        || value.progress.length > 256
+        || /[\p{Cc}\p{Cf}]/u.test(value.progress)
+        || !isTimestamp(value.createdAt)
+        || !isTimestamp(value.updatedAt)
+    ) throw invalidResponse();
+    return value as MyServerDeletionJob;
 }
 
 function parseBackupJob(value: unknown): MyServerBackupJob {

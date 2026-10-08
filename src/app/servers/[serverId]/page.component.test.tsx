@@ -53,7 +53,10 @@ vi.mock("@/app/lib/hosting/my-servers", async (importOriginal) => ({
     requestMyServerBackupOperation: mocks.requestBackup,
     requestServerVisibility: mocks.requestVisibility,
 }));
-vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.managedServers }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({
+    listAllMyServers: mocks.managedServers,
+    getMyServerDeletionStatus: async () => null,
+}));
 vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: mocks.displayNames }));
 vi.mock("@/app/lib/hosting/servers", () => ({ getServerForRole: mocks.preview }));
 

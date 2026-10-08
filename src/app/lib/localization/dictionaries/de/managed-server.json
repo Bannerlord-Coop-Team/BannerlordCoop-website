@@ -729,6 +729,10 @@
   "deletion.queued": "Löschung angefordert. Abschließende Sicherung und Entfernung stehen noch aus. Aktualisiere die Serverliste, um den Fortschritt zu prüfen.",
   "deletion.unknown": "Das Ergebnis ist unbekannt. Die Anfrage könnte bereits eingereiht sein. Ein erneuter Versuch verwendet dieselbe Anfrage; starte keine neue Löschung.",
   "deletion.rejected": "Der Server hat sich geändert oder die Löschung wurde abgelehnt. Schließe den Dialog, aktualisiere und bestätige erneut, falls du ihn weiterhin löschen möchtest.",
+  "deletion.busy": "Der Server kann momentan nicht gelöscht werden. Bitte versuche es später erneut.",
+  "deletion.progress": "Deletion status: {progress}",
+  "deletion.failed": "Deletion could not be completed. {progress}",
+  "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "Ungültige Löschanfrage.",
   "deletion.signIn": "Melde dich erneut an, bevor du einen Server löschst.",
   "deletion.unavailable": "Während Vorbereitung, Sperrung oder Löschung ist die Löschung nicht verfügbar."

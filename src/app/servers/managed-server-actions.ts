@@ -10,7 +10,7 @@ import {
     requestMyServerPassword,
     type MyServerOperation,
 } from "@/app/lib/hosting/my-servers";
-import { getMyServerStartStatus } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerDeletionStatus, getMyServerStartStatus } from "@/app/lib/hosting/my-servers-server";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -171,7 +171,7 @@ export async function readManagedServerStartStatus(serverId: string, jobId: stri
 }
 
 /**
- * Reads only the compact status that lifecycle and backup polling watch. Polling re-renders the
+ * Reads only the compact status that lifecycle, backup, and deletion polling watch. Polling re-renders the
  * page only when this fingerprint changes, keeping repeated checks far cheaper than full renders.
  */
 export async function readManagedServerStatusFingerprint(serverId: string): Promise<{ ok: true; fingerprint: string } | { ok: false }> {
@@ -180,10 +180,18 @@ export async function readManagedServerStatusFingerprint(serverId: string): Prom
         const supabase = await getSupabaseServerClient();
         const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
         if (!user || !session) return { ok: false };
-        const status = await getMyServerBackupStatus(session.access_token, serverId);
+        const [status, deletion] = await Promise.all([
+            getMyServerBackupStatus(session.access_token, serverId),
+            getMyServerDeletionStatus(session.access_token, serverId).catch(() => null),
+        ]);
         const job = status.job;
-        return { ok: true, fingerprint: JSON.stringify([status.updatedAt, status.operationState, status.observedGameState,
-            job?.jobId ?? null, job?.state ?? null, job?.progress ?? null]) };
+        const deletionJob = deletion?.job;
+        return { ok: true, fingerprint: JSON.stringify([
+            status.updatedAt, status.operationState, status.observedGameState,
+            job?.jobId ?? null, job?.state ?? null, job?.progress ?? null,
+            deletion?.updatedAt ?? null, deletion?.operationState ?? null,
+            deletionJob?.jobId ?? null, deletionJob?.state ?? null, deletionJob?.progress ?? null,
+        ]) };
     } catch {
         return { ok: false };
     }

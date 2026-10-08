@@ -729,6 +729,10 @@
   "deletion.queued": "Suppression demandée. La sauvegarde finale et la suppression sont en attente. Actualisez la liste des serveurs pour suivre la progression.",
   "deletion.unknown": "Le résultat est inconnu. La demande est peut-être déjà en file d’attente. Réessayer utilise la même demande ; ne créez pas une autre suppression.",
   "deletion.rejected": "Le serveur a changé ou la suppression a été refusée. Fermez cette fenêtre, actualisez et confirmez à nouveau si vous souhaitez toujours le supprimer.",
+  "deletion.busy": "Le serveur ne peut pas être supprimé pour le moment. Veuillez réessayer plus tard.",
+  "deletion.progress": "Deletion status: {progress}",
+  "deletion.failed": "Deletion could not be completed. {progress}",
+  "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "La demande de suppression est invalide.",
   "deletion.signIn": "Reconnectez-vous avant de supprimer un serveur.",
   "deletion.unavailable": "Suppression indisponible pendant la préparation, la suspension ou la suppression du serveur."

@@ -4,6 +4,7 @@ import { createMyServersHandler } from "../../../../supabase/functions/_shared/m
 import { connectionAddress } from "./connection-address";
 import {
     getMyServerBackupStatus,
+    getMyServerDeletionStatus,
     listAllMyServerBackups,
     listAllMyServers,
     MyServersApiError,
@@ -271,6 +272,42 @@ test("loads a sanitized durable backup-operation status", async () => {
         assert.equal(result.job?.state, "running");
         const endpoint = new URL(request?.url ?? "");
         assert.equal(endpoint.searchParams.get("resource"), "backup-status");
+        assert.equal(endpoint.searchParams.get("serverId"), FIRST_SERVER.serverId);
+    } finally {
+        restoreEnvironment();
+    }
+});
+
+test("loads a durable deletion receipt for page reattachment", async () => {
+    configureEnvironment();
+    let request: Request | undefined;
+    globalThis.fetch = async (input, init) => {
+        request = new Request(input, init);
+        return Response.json({
+            version: 1,
+            requestId: request.headers.get("x-request-id"),
+            ok: true,
+            result: {
+                serverId: FIRST_SERVER.serverId,
+                updatedAt: "2026-09-02T14:46:07.479Z",
+                operationState: "deletion-pending",
+                job: {
+                    jobId: "55555555-5555-4555-8555-555555555555",
+                    state: "running",
+                    progress: "Removing the hosted server safely",
+                    createdAt: "2026-09-02T14:45:37.479Z",
+                    updatedAt: "2026-09-02T14:46:07.479Z",
+                },
+            },
+        });
+    };
+
+    try {
+        const result = await getMyServerDeletionStatus(TOKEN, FIRST_SERVER.serverId);
+        assert.equal(result.job?.state, "running");
+        assert.equal(result.job?.progress, "Removing the hosted server safely");
+        const endpoint = new URL(request?.url ?? "");
+        assert.equal(endpoint.searchParams.get("resource"), "deletion-status");
         assert.equal(endpoint.searchParams.get("serverId"), FIRST_SERVER.serverId);
     } finally {
         restoreEnvironment();

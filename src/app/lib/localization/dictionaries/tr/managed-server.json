@@ -729,6 +729,10 @@
   "deletion.queued": "Silme istendi. Son yedek ve kaldırma hâlâ bekliyor. İlerlemeyi kontrol etmek için sunucu listesini yenileyin.",
   "deletion.unknown": "İstek sonucu doğrulanamadı. Zaten sıraya alınmış olabilir. Yeniden deneme aynı isteği kullanır; yeni bir silme başlatmayın.",
   "deletion.rejected": "Sunucu değişti veya silme reddedildi. Pencereyi kapatıp yenileyin; hâlâ silmek istiyorsanız tekrar onaylayın.",
+  "deletion.busy": "Sunucu şu anda silinemiyor. Lütfen daha sonra tekrar deneyin.",
+  "deletion.progress": "Deletion status: {progress}",
+  "deletion.failed": "Deletion could not be completed. {progress}",
+  "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "Silme isteği geçersiz.",
   "deletion.signIn": "Sunucuyu silmeden önce yeniden giriş yapın.",
   "deletion.unavailable": "Sunucu hazırlanırken, askıya alınmışken veya silinirken silme kullanılamaz."
