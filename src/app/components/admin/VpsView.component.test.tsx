@@ -88,6 +88,8 @@ it("shows pending region requests and removes one after an inline resolution", a
         region: "united-kingdom",
         status: "outstanding",
         createdAt: "2026-10-08T12:00:00.000Z",
+        requesterEmail: "owner@example.com",
+        allocatedRegions: ["germany"],
     }], nextCursor: null });
     mocks.request.mockImplementation(async options => {
         if (options.operation === "region-requests") return mocks.regionRequests(options);
@@ -97,6 +99,9 @@ it("shows pending region requests and removes one after an inline resolution", a
     await act(async () => root.render(<VpsView inventory={inventory(true)} accounts={[]} />));
     expect(container.textContent).toContain("Pending region requests");
     expect(container.textContent).toContain("united-kingdom");
+    expect(container.textContent).toContain("owner@example.com");
+    expect(container.textContent).toContain("Germany");
+    expect(container.textContent).not.toContain("123456789012345678");
     expect(container.textContent).toContain("Dismiss");
     expect(container.textContent).not.toContain("Approve");
     expect(container.textContent).not.toContain("Fulfill");
