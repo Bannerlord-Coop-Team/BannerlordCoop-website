@@ -138,7 +138,8 @@ function host(name: string, hostResources: HostingAdminHostResources, slotIndex:
     return {
         name,
         locationId: "os-us-east-va-2",
-        region: "us-east",
+        countryCode: "US",
+        region: null,
         totalSlots: 3,
         runningServers: 1,
         availableServers: 2,

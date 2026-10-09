@@ -1,14 +1,12 @@
 import type { HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE } from "../../../../supabase/functions/_shared/server-settings-contract";
-
-const SERVER_REGION_LABELS = {
-    "us-west": "US-West",
-    "us-east": "US-East",
-    france: "France",
-    germany: "Germany",
-    "united-kingdom": "United Kingdom",
-    poland: "Poland",
-} as const;
+import {
+    HOSTING_REGIONS,
+    hostingRegion,
+    isHostingRegionKey,
+    placementMatchesHost,
+    placementPayload,
+} from "../../../../supabase/functions/_shared/hosting-regions";
 
 export const MAINTENANCE_TIME_ZONE = HOSTING_TIME_ZONE;
 
@@ -56,23 +54,19 @@ export function formatAccountOwner(
     return accountLabels[accountId] ?? `Account unavailable (${accountId})`;
 }
 
+/** Offered website regions, in display order. */
 export function serverRegionOptions() {
-    return Object.entries(SERVER_REGION_LABELS).map(([value, label]) => ({ value, label }));
+    return HOSTING_REGIONS.map(({ key, label }) => ({ value: key, label }));
 }
 
+/** Offered regions whose placement matches a registered host with a free prepared slot. */
 export function createServerRegionOptions(
-    hosts: readonly Pick<HostingAdminVpsHost, "region" | "availableServers">[],
+    hosts: readonly Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "availableServers">[],
 ) {
-    const regionsWithAvailableCapacity = new Set(
-        hosts
-            .filter((host) => Number.isSafeInteger(host.availableServers) && host.availableServers > 0)
-            .map((host) => host.region)
-            .filter((region): region is keyof typeof SERVER_REGION_LABELS => (
-                Object.hasOwn(SERVER_REGION_LABELS, region)
-            )),
-    );
-    return serverRegionOptions()
-        .filter(({ value }) => regionsWithAvailableCapacity.has(value as keyof typeof SERVER_REGION_LABELS));
+    const withCapacity = hosts.filter((host) => Number.isSafeInteger(host.availableServers) && host.availableServers > 0);
+    return HOSTING_REGIONS
+        .filter((region) => withCapacity.some((host) => placementMatchesHost(region.placement, host)))
+        .map(({ key, label }) => ({ value: key, label }));
 }
 
 export function maintenanceSlotOptions() {
@@ -88,6 +82,10 @@ export function applyControlPlaneOperationDefaults(
 ) {
     if (operation === "create-server" && input.releaseChannel === undefined) {
         input.releaseChannel = "stable";
+    }
+    // The control plane matches hosts by the placement the website defines for the selected region.
+    if (operation === "create-server" && input.placement === undefined && isHostingRegionKey(input.friendlyRegion)) {
+        input.placement = placementPayload(hostingRegion(input.friendlyRegion).placement);
     }
 }
 

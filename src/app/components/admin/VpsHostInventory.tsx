@@ -1,5 +1,6 @@
 "use client";
 
+import { hostingRegionForHost, hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
 import { formatAccountOwner } from "@/app/lib/control-plane/presentation";
@@ -128,7 +129,8 @@ export function diskPressureLevel(resources: HostingAdminHostResources | null): 
 }
 
 function HostIdentity({ host }: { host: HostingAdminVpsHost }) {
-    return <div className="min-w-0"><p className="truncate font-mono text-xs text-foreground" title={host.name}>{host.name}</p><p className="mt-1 truncate text-xs text-foreground-muted" title={`${host.region} · ${host.locationId}`}>{host.region} · {host.locationId}</p></div>;
+    const placement = hostPlacementLabel(host);
+    return <div className="min-w-0"><p className="truncate font-mono text-xs text-foreground" title={host.name}>{host.name}</p><p className="mt-1 truncate text-xs text-foreground-muted" title={placement}>{placement}</p></div>;
 }
 
 function CapacitySummary({ host }: { host: HostingAdminVpsHost }) {
@@ -258,4 +260,11 @@ function formatUptime(seconds: number) {
 
 function humanize(value: string) {
     return value.replaceAll("-", " ").replace(/\b\w/gu, (letter) => letter.toUpperCase());
+}
+
+/** The website region a host serves, from its provider country and zone, then those facts themselves. */
+export function hostPlacementLabel(host: Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region">) {
+    const region = hostingRegionForHost(host)?.label
+        ?? (host.region === null ? "No website region" : `${hostingRegionLabel(host.region)} (legacy)`);
+    return `${region} · ${host.countryCode ?? "Country unknown"} · ${host.locationId}`;
 }

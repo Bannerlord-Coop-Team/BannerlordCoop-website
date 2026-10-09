@@ -87,7 +87,7 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
         if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
         if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
         if (request.operation === "vps-hosts") return { availableServiceNames: ["vps-available.vps.ovh.us"],
-            hosts: [{ region: "us-east", availableServers: 1, totalSlots: 2 }] };
+            hosts: [{ locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }] };
         throw new Error("Unexpected read");
     });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));

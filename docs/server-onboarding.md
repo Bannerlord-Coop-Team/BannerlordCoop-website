@@ -26,12 +26,20 @@ The backend requires active, unused allocation under `max(administrativeBase, qu
 | Website Edge request | Fixed backend operation | Exact backend input |
 | --- | --- | --- |
 | `GET my-servers?resource=onboarding` | `server-onboarding` | `{}` |
-| `POST my-servers` `{action:'create-server',displayName,region,releaseChannel?}` | `create-server` | `{displayName,region,releaseChannel?}` |
-| `POST my-servers` `{action:'request-region',region}` | `request-region` | `{region}` |
+| `POST my-servers` `{action:'create-server',displayName,region,releaseChannel?}` | `create-server` | `{displayName,region,placement,releaseChannel?}` |
+| `POST my-servers` `{action:'request-region',region}` | `request-region` | `{region,placement}` |
 
 All use existing Supabase JWT forwarding to authenticated `POST /v1/user/control-plane`, `{version:1,requestId,operation,input}`. Mutations require a caller-generated UUID in `x-request-id`, normalized to lowercase. There is no browser service secret or owner/role/host/build/slot selection. Adequate independent administrative grants bypass membership steps; an administrator role alone is not allocation authority. New membership runtime configuration is documented separately. The shared closed DTO parser is used by **both** Edge and website facade. Unknown enums, extra/private fields, missing fields, inconsistent eligibility, wrong regions/names, invalid timestamps, mismatched receipts/envelopes and inconsistent HTTP success/failure are rejected as unavailable, not displayed as safe data.
 
-Canonical order: **US-West, US-East, France, Germany, United Kingdom, Poland**. Name policy matches backend raw 3–48 UTF-16 code units, then NFKC, trim and whitespace collapse, normalized 3–48 policy. Letters/numbers at both ends; letters/numbers/spaces/periods/apostrophes/hyphens inside. Region requests do not send a name.
+### Website-owned regions
+
+Regions are defined only by the website, in `supabase/functions/_shared/hosting-regions.ts`. Each entry has a key, an English label, a continent tab, and a **placement**: the ISO country codes it covers and, optionally, the exact provider zones. The control plane records each host's provider-reported country and zone and matches hosts against the placement sent with each call; it has no region list of its own. The current order is **US-West, US-East, France, Germany, United Kingdom, Poland**; US-West and US-East name their exact Oregon and Virginia zones, because a US country code alone never implies a coast.
+
+The browser only ever sends a region key from this catalog. The `my-servers` Edge Function and the server-rendered summary read attach the placements: the summary request sends every definition as `input.regions`, and Create and Request send the selected region's `placement`. The control plane answers with a version-3 summary that lists exactly those regions in order, without labels, plus `otherRequests` for an outstanding request whose key the catalog no longer offers. The shared parser accepts only version 3 and takes labels from the catalog.
+
+To offer a new region after onboarding a VPS in a new country, add one catalog entry, add its `region.<key>` translation in every `servers.json` dictionary (dictionary parity is enforced), and deploy the website. No control-plane configuration or release is needed.
+
+Name policy matches backend raw 3–48 UTF-16 code units, then NFKC, trim and whitespace collapse, normalized 3–48 policy. Letters/numbers at both ends; letters/numbers/spaces/periods/apostrophes/hyphens inside. Region requests do not send a name.
 
 Both mutations require `eligibility.eligible && unavailableReason === null`. Availability is advisory. Available regions offer Create. Full regions remain selectable and offer **Request region**, or show a **Requested** badge and a disabled **Region requested** button for the owner's existing outstanding request. Summary failure is **unknown/unavailable**, not evidence of entitlement or full capacity. Inventory failure is independent of onboarding/recovery.
 
@@ -43,7 +51,7 @@ sequenceDiagram
     participant Edge as my-servers Edge
     participant Backend as User boundary / owner workflow
     participant DB as Private Supabase persistence
-    Owner->>UI: Name + canonical region
+    Owner->>UI: Name + website region
     UI->>UI: Persist normalized exact intent + UUID in sessionStorage
     UI->>Action: Intent + expected page user
     Action->>Action: getUser + session; compare page user (restriction only)
@@ -64,7 +72,7 @@ Create reserves/assigns an existing prepared slot and creates a **stopped** serv
 
 **Password limitation:** Manage your game password through the existing Discord owner controls: **My Servers → choose server → Settings / Configure your server → Custom game password (optional)**. Enter a new custom password and submit. Blank preserves the generated password that cannot be read from this website. Discord does not mask this input or echo the submitted password. Do not direct owners to the administrator-only Generate Password action.
 
-Region requests are private durable backend writes. One outstanding owner+region request deduplicates even different UUIDs. The returned request UUID may therefore differ from the submitted envelope UUID. Summary reload marks existing requests as Requested. Requests consume **no quota** and the backend creates **no server, reservation, job or notification**; no ETA or automatic capacity/allocation is promised. They remain outstanding if capacity arrives or a server is subsequently created. The website's `my-servers` Edge Function separately sends best-effort [administrator alert emails](#administrator-alert-emails).
+Region requests are private durable backend writes. One outstanding request per owner deduplicates even different UUIDs; requesting a different region, including one whose request was earlier dismissed, replaces it after explicit confirmation, which also covers a pending request for a region the catalog no longer offers. The returned request UUID may therefore differ from the submitted envelope UUID. Summary reload marks existing requests as Requested. Requests consume **no quota** and the backend creates **no server, reservation, job or notification**; no ETA or automatic capacity/allocation is promised. They remain outstanding if capacity arrives or a server is subsequently created. The website's `my-servers` Edge Function separately sends best-effort [administrator alert emails](#administrator-alert-emails).
 
 Recovery follows the existing managed-server-backup pattern, with one pending onboarding intent per authenticated website account in **sessionStorage**. Exact action/name/region/UUID is written and read back before dispatch; there is no expected generation field in this backend contract. Concurrent double clicks are synchronously guarded. Corrupt/inaccessible storage blocks mutations. Account-keyed remounting separates identity state, and exact compare-clear prevents late responses deleting newer intents.
 
@@ -186,3 +194,5 @@ All images below are **synthetic auth/API**, not real backend results. The banne
 Independent reviewer acceptance is still required. Full-stack browser/backend testing, live rollout, database/provider changes, push/PR/merge and deployments remain out of scope without separate authorization.
 
 Deploy the control-plane channel contract first, then the `my-servers` Edge function and website. Region requests carry no release selection.
+
+Website-owned regions require the control plane with migration 096 (`20261009120000_control_plane_provider_regions.sql`) and the version-3 onboarding summary to be live first. Against an older control plane the summary and mutations fail closed as unavailable, because it rejects the region definitions and placements.

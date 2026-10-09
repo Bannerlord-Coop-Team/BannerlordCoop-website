@@ -163,7 +163,10 @@ export type HostingServerResources = {
 export type HostingAdminVpsHost = {
     name: string;
     locationId: string;
-    region: string;
+    // Provider-reported ISO country; null only for a retained legacy host without one.
+    countryCode: string | null;
+    // Legacy region a retained host was registered with; null for hosts registered from provider facts.
+    region: string | null;
     totalSlots: number;
     runningServers: number;
     availableServers: number;

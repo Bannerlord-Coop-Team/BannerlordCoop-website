@@ -7,7 +7,7 @@ import { VpsHostInventory } from "./VpsHostInventory";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
-import { serverRegionOptions } from "@/app/lib/control-plane/presentation";
+import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminVpsInventory, HostingPage } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
@@ -130,7 +130,7 @@ function RegionRequestsPane({ accounts }: { accounts: WebsiteAccountSummary[] })
                         <tbody className="divide-y divide-white/10">
                             {requests.items.map(request => (
                                 <tr key={request.requestId}>
-                                    <td className="p-4 font-semibold text-foreground">{request.region}<span className="mt-1 block font-mono text-[0.62rem] font-normal text-foreground-dim">{request.requestId}</span></td>
+                                    <td className="p-4 font-semibold text-foreground">{hostingRegionLabel(request.region)}<span className="mt-1 block font-mono text-[0.62rem] font-normal text-foreground-dim">{request.requestId}</span></td>
                                     <td className="p-4 text-xs text-foreground-muted">{formatRequesterEmail(request, accounts)}</td>
                                     <td className="p-4 text-xs text-foreground-muted">{formatAllocatedRegions(request.allocatedRegions)}</td>
                                     <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={request.createdAt} /></td>
@@ -155,11 +155,9 @@ function formatRequesterEmail(request: HostingAdminRegionRequest, accounts: read
         ?? "Email unavailable";
 }
 
-const regionLabels = new Map(serverRegionOptions().map(({ value, label }) => [value, label]));
-
 function formatAllocatedRegions(regions: readonly string[]) {
     if (regions.length === 0) return "—";
-    return regions.map(region => regionLabels.get(region) ?? region).join(", ");
+    return regions.map(hostingRegionLabel).join(", ");
 }
 
 function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resources" | "billing") {

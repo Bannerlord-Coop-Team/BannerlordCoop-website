@@ -1,6 +1,7 @@
 import "server-only";
 import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse, type MyServerDeletionStatus } from "./my-servers";
 import { parseOnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { regionDefinitionsPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 /** Reads owner inventory directly; Oracle rechecks the current session and durable access on every page. */
 export async function listAllMyServers(accessToken: string, callerSignal?: AbortSignal) {
@@ -11,7 +12,8 @@ export async function listAllMyServers(accessToken: string, callerSignal?: Abort
 
 /** Called after website account synchronization; eligibility and capacity are freshly checked by Oracle. */
 export async function getServerOnboarding(accessToken: string, callerSignal?: AbortSignal) {
-    const result = await readOwner(accessToken, { operation: "server-onboarding", input: {} }, ownerReadSignal(accessToken, callerSignal));
+    // The website owns regions: Oracle answers exactly these definitions.
+    const result = await readOwner(accessToken, { operation: "server-onboarding", input: { regions: regionDefinitionsPayload() } }, ownerReadSignal(accessToken, callerSignal));
     try { return parseOnboardingSummary(result); }
     catch { throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid response.", true); }
 }
@@ -81,7 +83,7 @@ function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
 
 async function readOwner(accessToken: string, request:
     | { operation: "my-servers"; input: { cursor: string | null; limit: 100 } }
-    | { operation: "server-onboarding"; input: Record<string, never> }
+    | { operation: "server-onboarding"; input: { regions: ReturnType<typeof regionDefinitionsPayload> } }
     | { operation: "server-deletion-status"; input: { serverId: string } }
     | { operation: "server-start-status"; input: { serverId: string; jobId: string } }, signal: AbortSignal) {
     const requestId = crypto.randomUUID();

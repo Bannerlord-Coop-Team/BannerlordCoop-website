@@ -1,15 +1,15 @@
-import { ONBOARDING_REGION_LABELS, type OnboardingRegion } from "./server-onboarding-contract.ts";
+import { hostingRegionLabel } from "./hosting-regions.ts";
 import { isEmailAddress, type SmtpMessage, type SmtpOptions } from "./smtp.ts";
 
 export type RegionRequester = { accountId: string | null; email: string | null };
 export type RegionRequestedEvent = {
     requestId: string;
-    region: OnboardingRegion;
+    region: string;
     createdAt: string;
     requester: RegionRequester;
 };
 export type RegionFullEvent = {
-    region: OnboardingRegion;
+    region: string;
     serverId: string;
     createdAt: string;
     requester: RegionRequester;
@@ -98,7 +98,7 @@ export function requesterFromToken(token: string): RegionRequester {
 
 // Builds the administrator email for a newly accepted region request.
 export function regionRequestAlertMessage(event: RegionRequestedEvent, envelope: AlertEnvelope): SmtpMessage {
-    const label = ONBOARDING_REGION_LABELS[event.region];
+    const label = hostingRegionLabel(event.region);
     return alertMessage(envelope, `Server region request: ${label}`, [
         `A server owner requested capacity in ${label}, which is currently full.`,
         "",
@@ -114,7 +114,7 @@ export function regionRequestAlertMessage(event: RegionRequestedEvent, envelope:
 
 // Builds the administrator email for a website-created server that used a region's last free slot.
 export function regionFullAlertMessage(event: RegionFullEvent, envelope: AlertEnvelope): SmtpMessage {
-    const label = ONBOARDING_REGION_LABELS[event.region];
+    const label = hostingRegionLabel(event.region);
     return alertMessage(envelope, `Server region full: ${label}`, [
         `${label} has no free server slots after a website owner created a server there.`,
         "",

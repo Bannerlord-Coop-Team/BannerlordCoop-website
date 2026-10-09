@@ -5,6 +5,7 @@ import { serverLogDownloadHeaders } from "./server-log-contract.ts";
 import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
 import { parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingRegion } from "./server-onboarding-contract.ts";
+import { hostingRegion, placementPayload, regionDefinitionsPayload } from "./hosting-regions.ts";
 import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, requireRunnerConfigurationPart, type RunnerConfigurationMutation, type RunnerConfigurationPart } from "./server-configuration-contract.ts";
 import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
 
@@ -46,9 +47,10 @@ type UpstreamRequest =
     | { operation: "configuration-file"; input: { serverId: string; configPart: RunnerConfigurationPart } }
     | { operation: "save-configuration-file"; input: RunnerConfigurationMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
-    | { operation: "server-onboarding"; input: Record<string, never> }
-    | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion; releaseChannel?: "stable" | "nightly" } }
-    | { operation: "request-region"; input: { region: OnboardingRegion } }
+    // The website owns regions: every onboarding call carries the placements it means.
+    | { operation: "server-onboarding"; input: { regions: ReturnType<typeof regionDefinitionsPayload> } }
+    | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion; placement: ReturnType<typeof placementPayload>; releaseChannel?: "stable" | "nightly" } }
+    | { operation: "request-region"; input: { region: OnboardingRegion; placement: ReturnType<typeof placementPayload> } }
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "server-backup-status"; input: { serverId: string } }
@@ -79,13 +81,13 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
     const upstreamTimeoutMilliseconds = boundedTimeout(options.upstreamTimeoutMilliseconds ?? 30_000);
 
     // Reads the caller's onboarding summary to tell whether a region has no remaining capacity.
-    async function regionIsFull(region: OnboardingRegion, token: string) {
+    async function regionIsFull(region: string, token: string) {
         const requestId = crypto.randomUUID();
         const response = await fetchImplementation(controlPlaneEndpoint, {
             method: "POST",
             redirect: "error",
             headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "x-request-id": requestId },
-            body: JSON.stringify({ version: 1, requestId, operation: "server-onboarding", input: {} }),
+            body: JSON.stringify({ version: 1, requestId, operation: "server-onboarding", input: { regions: regionDefinitionsPayload() } }),
             signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),
         });
         const envelope: unknown = JSON.parse(await readBoundedText(response, MAXIMUM_OPERATION_RESPONSE_BYTES));
@@ -265,13 +267,16 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     parseVisibilityResult(envelope.result, { action: "set-server-visibility", ...upstreamRequest.input });
                 }
                 if (upstreamRequest.operation === "create-server") {
-                    const result = parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, ...upstreamRequest.input });
+                    const { displayName, region, releaseChannel } = upstreamRequest.input;
+                    const result = parseOnboardingResult(envelope.result, {
+                        action: upstreamRequest.operation, displayName, region, ...(releaseChannel === undefined ? {} : { releaseChannel }),
+                    });
                     if (result.action === "create-server") {
                         created = { region: result.region, serverId: result.serverId, createdAt: result.createdAt, requester: requesterFromToken(token) };
                     }
                 }
                 if (upstreamRequest.operation === "request-region") {
-                    const result = parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, ...upstreamRequest.input });
+                    const result = parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, region: upstreamRequest.input.region });
                     // A receipt carrying the submitted UUID is a newly accepted request (or its exact replay);
                     // any other UUID is the backend deduplicating an already outstanding request.
                     if (result.action === "request-region" && result.request.requestId.toLowerCase() === requestId) {
@@ -353,7 +358,7 @@ function listRequest(request: Request): UpstreamRequest {
 
     if (resource === "onboarding") {
         assertQueryParameters(url, ["resource"]);
-        return { operation: "server-onboarding", input: {} };
+        return { operation: "server-onboarding", input: { regions: regionDefinitionsPayload() } };
     }
 
     if (resource === "backups") {
@@ -438,9 +443,11 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
     }
     if (value.action === "create-server" || value.action === "request-region") {
         const parsed = parseOnboardingMutation(value);
+        // The browser names only a region key; its placement comes from the website's own catalog.
+        const placement = placementPayload(hostingRegion(parsed.region).placement);
         return parsed.action === "create-server"
-            ? { operation: parsed.action, input: { displayName: parsed.displayName, region: parsed.region, ...(parsed.releaseChannel !== undefined ? { releaseChannel: parsed.releaseChannel } : {}) } }
-            : { operation: parsed.action, input: { region: parsed.region } };
+            ? { operation: parsed.action, input: { displayName: parsed.displayName, region: parsed.region, placement, ...(parsed.releaseChannel !== undefined ? { releaseChannel: parsed.releaseChannel } : {}) } }
+            : { operation: parsed.action, input: { region: parsed.region, placement } };
     }
     if (typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)) {
         throw new Error("Invalid server ID");

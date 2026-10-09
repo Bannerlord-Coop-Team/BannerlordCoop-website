@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getServerOnboarding, requestServerOnboarding, MyServersApiError } from "./my-servers";
 import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
-import { onboardingSummary, onboardingCreated, ONBOARDING_TEST_ID } from "../../../../tests/onboarding-fixtures";
+import { onboardingSummary, onboardingSummaryWire, onboardingCreated, ONBOARDING_TEST_ID } from "../../../../tests/onboarding-fixtures";
 import { clearOnboardingIntent, onboardingIntentKey, readOnboardingIntent, storeOnboardingIntent } from "../../servers/onboarding-intent";
 
 const intent = { action: "create-server", displayName: "My Campaign", region: "us-west", requestId: ONBOARDING_TEST_ID } as const;
@@ -17,7 +17,7 @@ test("real website facade → real strict Edge → synthetic upstream preserves 
     const edge = createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test", fetchImplementation: async (_url, init) => {
         const body = JSON.parse(init?.body as string); calls.push(body);
         assert.equal(new Headers(init?.headers).get("authorization"), "Bearer synthetic-test-access-token");
-        return Response.json({ version: 1, requestId: body.requestId, ok: true, result: body.operation === "server-onboarding" ? onboardingSummary() : { ...onboardingCreated(), ...(body.input.releaseChannel ? { releaseChannel: body.input.releaseChannel } : {}) } });
+        return Response.json({ version: 1, requestId: body.requestId, ok: true, result: body.operation === "server-onboarding" ? onboardingSummaryWire() : { ...onboardingCreated(), ...(body.input.releaseChannel ? { releaseChannel: body.input.releaseChannel } : {}) } });
     } });
     globalThis.fetch = async (url, init) => {
         const request = new Request(url, init); assert.equal(request.url.startsWith("https://supabase.example.test/functions/v1/my-servers"), true);
@@ -26,7 +26,8 @@ test("real website facade → real strict Edge → synthetic upstream preserves 
     try {
         assert.deepEqual(await getServerOnboarding("synthetic-test-access-token"), onboardingSummary());
         assert.deepEqual(await requestServerOnboarding("synthetic-test-access-token", { ...intent, displayName: "  My   Campaign  ", requestId: ONBOARDING_TEST_ID.toUpperCase() }), onboardingCreated());
-        assert.deepEqual(calls[1], { version: 1, requestId: ONBOARDING_TEST_ID, operation: "create-server", input: { displayName: "My Campaign", region: "us-west" } });
+        assert.deepEqual(calls[1], { version: 1, requestId: ONBOARDING_TEST_ID, operation: "create-server", input: { displayName: "My Campaign", region: "us-west",
+            placement: { countryCodes: ["US"], locationIds: ["os-us-west-or-2", "us-west-or"] } } });
         const nightly = { ...intent, releaseChannel: "nightly" as const };
         assert.deepEqual(await requestServerOnboarding("synthetic-test-access-token", nightly), { ...onboardingCreated(), releaseChannel: "nightly" });
         assert.equal((calls[2].input as Record<string, unknown>).releaseChannel, "nightly");

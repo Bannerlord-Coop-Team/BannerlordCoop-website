@@ -1,5 +1,6 @@
 import type { Translator } from "@/app/lib/localization/types";
 import { LocalizationProvider } from "@/app/lib/localization/client";
+import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 import { getLocale, getMessages, getTranslations } from "@/app/lib/localization/server";
 import { ManagedServerCommands } from "@/app/components/servers/ManagedServerCommands";
 import { releaseChannelLabel } from "@/app/lib/control-plane/presentation";
@@ -198,7 +199,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
         initialSection={initialSection}
         address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
         visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} />}
-        summary={t("page.managedSummary", { region: formatManagedValue(server.friendlyRegion), access: managedAccessLabels[server.accessRole] })}
+        summary={t("page.managedSummary", { region: hostingRegionLabel(server.friendlyRegion), access: managedAccessLabels[server.accessRole] })}
         status={<Suspense fallback={<ManagedServerStatus accessToken={accessToken} server={server} checkBackup={false} />}>
             <ManagedServerStatus accessToken={accessToken} server={server} checkBackup={server.accessRole === "owner" || server.accessRole === "manager"} />
         </Suspense>}

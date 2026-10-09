@@ -33,52 +33,59 @@ test("server regions use the approved display order and protocol values", () => 
     ]);
 });
 
-test("create-server regions come only from registered hosts with available prepared slots", () => {
+const host = (countryCode: string | null, locationId: string, availableServers: number) => ({ countryCode, locationId, availableServers });
+
+test("create-server regions come from host provider facts matched by website placements", () => {
     assert.deepEqual(createServerRegionOptions([
-        { region: "poland", availableServers: 1 },
-        { region: "us-east", availableServers: 2 },
-        { region: "germany", availableServers: 1 },
-        { region: "us-west", availableServers: 1 },
-        { region: "france", availableServers: 1 },
-        { region: "united-kingdom", availableServers: 1 },
-        { region: "us-east", availableServers: 1 },
-        { region: "spain", availableServers: 5 },
-        { region: "united-states", availableServers: 5 },
-        { region: "europe-automatic", availableServers: 5 },
-        { region: "unexpected", availableServers: 5 },
+        host("PL", "os-waw2", 1),
+        host("US", "os-us-east-va-2", 2),
+        host("DE", "de-fra", 1),
+        host("US", "us-west-or", 1),
+        host("FR", "fr-par", 1),
+        host("GB", "os-uk2", 1),
+        host("US", "us-east-va", 1),
     ]), serverRegionOptions());
     assert.deepEqual(createServerRegionOptions([]), []);
 });
 
 test("create-server regions require positive safe-integer capacity", () => {
     for (const availableServers of [0, -1, 0.5, 1.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, -Infinity]) {
-        assert.deepEqual(createServerRegionOptions(
-            serverRegionOptions().map(({ value: region }) => ({ region, availableServers })),
-        ), [], `Invalid available capacity: ${availableServers}`);
+        assert.deepEqual(createServerRegionOptions([host("PL", "os-waw2", availableServers), host("US", "us-east-va", availableServers)]),
+            [], `Invalid available capacity: ${availableServers}`);
     }
     assert.deepEqual(createServerRegionOptions([
-        { region: "poland", availableServers: Number.MAX_SAFE_INTEGER },
-        { region: "us-east", availableServers: 1 },
-        { region: "us-east", availableServers: 0 },
-        { region: "germany", availableServers: 0 },
-        { region: "united-kingdom", availableServers: -1 },
-        { region: "france", availableServers: 0.5 },
-        { region: "us-west", availableServers: Infinity },
-        { region: "poland", availableServers: 2 },
+        host("PL", "os-waw2", Number.MAX_SAFE_INTEGER),
+        host("US", "us-east-va", 1),
+        host("US", "os-us-east-va-2", 0),
+        host("DE", "de-fra", 0),
+        host("GB", "os-uk2", -1),
+        host("FR", "fr-par", 0.5),
+        host("US", "us-west-or", Infinity),
     ]), [
         { value: "us-east", label: "US-East" },
         { value: "poland", label: "Poland" },
     ]);
 });
 
-test("create-server regions exclude legacy values, provider locations, and noncanonical spellings", () => {
-    for (const region of [
-        "united-states", "spain", "europe-automatic", "unexpected",
-        "us/las", "us/ewr", "de/fra", "US-West", "us-east ", " france",
-        "", "toString", "constructor", "__proto__",
+test("create-server regions never guess a coast or a country", () => {
+    for (const unmatched of [
+        host("US", "us-las", 5), host("US", "US-EAST-VA", 5), host("US", "us-east-va-other", 5),
+        host(null, "os-waw2", 5), host("ES", "es-mad", 5), host("us", "us-east-va", 5), host("", "fr-par", 5),
     ]) {
-        assert.deepEqual(createServerRegionOptions([{ region, availableServers: 5 }]), [], region);
+        assert.deepEqual(createServerRegionOptions([unmatched]), [], JSON.stringify(unmatched));
     }
+});
+
+test("administrator create sends the selected region's website placement", () => {
+    const input: Record<string, unknown> = { friendlyRegion: "us-east" };
+    applyControlPlaneOperationDefaults("create-server", input);
+    assert.deepEqual(input, {
+        friendlyRegion: "us-east", releaseChannel: "stable",
+        placement: { countryCodes: ["US"], locationIds: ["os-us-east-va-2", "us-east-va"] },
+    });
+    const unknown: Record<string, unknown> = { friendlyRegion: "atlantis", releaseChannel: "nightly" };
+    applyControlPlaneOperationDefaults("create-server", unknown);
+    assert.deepEqual(unknown, { friendlyRegion: "atlantis", releaseChannel: "nightly" });
 });
 
 test("maintenance choices show their authoritative timezone without changing protocol values", () => {

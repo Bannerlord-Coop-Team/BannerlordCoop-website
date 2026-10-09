@@ -98,7 +98,7 @@ it("shows pending region requests and removes one after an inline resolution", a
     });
     await act(async () => root.render(<VpsView inventory={inventory(true)} accounts={[]} />));
     expect(container.textContent).toContain("Pending region requests");
-    expect(container.textContent).toContain("united-kingdom");
+    expect(container.textContent).toContain("United Kingdom");
     expect(container.textContent).toContain("owner@example.com");
     expect(container.textContent).toContain("Germany");
     expect(container.textContent).not.toContain("123456789012345678");
@@ -277,7 +277,8 @@ function host(name: string, hostResources: HostingAdminHostResources, slotIndex:
     return {
         name,
         locationId: "os-us-east-va-2",
-        region: "us-east",
+        countryCode: "US",
+        region: null,
         totalSlots: 3,
         runningServers: 1,
         availableServers: 2,
