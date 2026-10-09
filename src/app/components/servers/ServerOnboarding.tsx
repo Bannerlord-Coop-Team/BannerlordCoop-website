@@ -9,13 +9,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { submitServerOnboarding } from "@/app/servers/onboarding-actions";
 import { clearOnboardingIntent, onboardingIntentKey, readOnboardingIntent, storeOnboardingIntent } from "@/app/servers/onboarding-intent";
-import { normalizeOnboardingName, type OnboardingReleaseChannel, type OnboardingIntent, type OnboardingRegion, type OnboardingResult, type OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
-import { HOSTING_REGIONS, hostingRegionLabel, isHostingRegionKey, type HostingContinent } from "../../../../supabase/functions/_shared/hosting-regions";
-
-/** Offered regions use their translations; a stored key no longer offered shows its catalog label. */
-function regionName(t: (key: string) => string, region: string): string {
-    return isHostingRegionKey(region) ? t(`region.${region}`) : hostingRegionLabel(region);
-}
+import { normalizeOnboardingName, type OnboardingReleaseChannel, type OnboardingIntent, type OnboardingResult, type OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { HOSTING_CONTINENTS, hostingRegion, isHostingRegionKey, type HostingContinent, type HostingRegionKey } from "../../../../supabase/functions/_shared/hosting-regions";
+import { localizedContinentLabel, localizedRegionLabel } from "@/app/lib/hosting/region-labels";
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 const primaryButton = `inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-gold px-5 py-3 font-label text-sm font-semibold uppercase tracking-[0.1em] text-background transition-colors hover:bg-[#c3b07b] disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`;
@@ -107,7 +103,7 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
         }
     }
     /** Creates a request only for an available region and unused authorized allocation. */
-    function createCandidate(displayName: string, region: OnboardingRegion, releaseChannel: OnboardingReleaseChannel) {
+    function createCandidate(displayName: string, region: string, releaseChannel: OnboardingReleaseChannel) {
         if (!canOffer || busy || intentRef.current !== null || inFlight.current) return;
         const entry = summary?.regions.find((entry) => entry.region === region);
         if (!entry?.available) return;
@@ -117,7 +113,7 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
         } catch { setStorageError(true); }
     }
     /** Records demand for a full region the account has not already requested. */
-    function requestCandidate(region: OnboardingRegion) {
+    function requestCandidate(region: string) {
         if (!canOffer || busy || intentRef.current !== null || inFlight.current) return;
         const entry = summary?.regions.find((entry) => entry.region === region);
         if (!entry || entry.available || entry.request !== null) return;
@@ -125,12 +121,28 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
             void dispatch({ action: "request-region", region, requestId: crypto.randomUUID() });
         } catch { setStorageError(true); }
     }
+    /** Releases a retained intent for a region no longer offered, once the owner chooses to. */
+    function discardIntent() {
+        const current = intentRef.current;
+        if (!current || inFlight.current || !ready || storageError) return;
+        try { clearOnboardingIntent(window.sessionStorage, key, current); }
+        catch { setStorageError(true); return; }
+        intentRef.current = null;
+        setIntent(null);
+        setMessage("");
+    }
+    // A retained intent may name a region since removed from either catalog; it can still be retried or discarded.
+    const intentUnoffered = intent !== null && summary !== null && !offeredRegions(summary).some((region) => region === intent.region);
     const recovery = <>
         {storageError && <p role="alert" className="mt-4 text-sm text-red-200">{t("onboarding.storageError")}</p>}
         {intent && <div className="mt-4 border border-gold/30 bg-surface p-4 text-sm">
-            <p>{intent.action === "create-server" ? t("onboarding.pendingServer", { name: intent.displayName, region: regionName(t, intent.region) }) : t("onboarding.pendingRegion", { region: regionName(t, intent.region) })}</p>
+            <p>{intent.action === "create-server" ? t("onboarding.pendingServer", { name: intent.displayName, region: localizedRegionLabel(t, intent.region) }) : t("onboarding.pendingRegion", { region: localizedRegionLabel(t, intent.region) })}</p>
             <p className="mt-2 text-foreground-muted">{t("onboarding.recoveryHint")}</p>
-            <button type="button" disabled={busy} onClick={() => { if (intentRef.current) void dispatch(intentRef.current); }} className={`${secondaryButton} mt-3`}>{pending ? t("onboarding.confirming") : t("onboarding.retry")}</button>
+            {intentUnoffered && <p className="mt-2 text-amber-200">{t("onboarding.unofferedPending", { region: localizedRegionLabel(t, intent.region) })}</p>}
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <button type="button" disabled={busy} onClick={() => { if (intentRef.current) void dispatch(intentRef.current); }} className={secondaryButton}>{pending ? t("onboarding.confirming") : t("onboarding.retry")}</button>
+                {intentUnoffered && <button type="button" disabled={busy} onClick={discardIntent} className={secondaryButton}>{t("onboarding.discardPending")}</button>}
+            </div>
         </div>}
         {message && <p role="status" className="mt-4 text-sm text-gold">{message}</p>}
     </>;
@@ -165,29 +177,40 @@ function OnboardingReceipt({ result }: { result: OnboardingResult }) {
     return <div role="status">
         <h3 className="font-display text-2xl font-semibold">{result.action === "create-server" ? t("onboarding.assigned") : t("onboarding.regionConfirmed")}</h3>
         {result.action === "create-server" ? <>
-            <p className="mt-3 break-words text-sm leading-6">{t("onboarding.receipt", { name: result.displayName, region: regionName(t, result.region) })}</p>
+            <p className="mt-3 break-words text-sm leading-6">{t("onboarding.receipt", { name: result.displayName, region: localizedRegionLabel(t, result.region) })}</p>
             <p className="mt-3 text-sm text-foreground-muted">{t("onboarding.receiptSetup", { release: t(result.releaseChannel === "nightly" ? "release.nightly" : "release.stable") })}</p>
             <Link href={`/servers/${encodeURIComponent(result.serverId)}`} className={`${primaryButton} mt-5`}>{t("onboarding.manage")} <ArrowRight aria-hidden="true" className="size-4" /></Link>
-        </> : <p className="mt-3 text-sm leading-6">{t("onboarding.regionReceipt", { region: regionName(t, result.request.region) })}</p>}
+        </> : <p className="mt-3 text-sm leading-6">{t("onboarding.regionReceipt", { region: localizedRegionLabel(t, result.request.region) })}</p>}
     </div>;
 }
-// Continent tabs come from the website region catalog; empty continents show "coming soon".
-const CONTINENT_LABELS: readonly { id: HostingContinent; label: string }[] = [
-    { id: "north-america", label: "continent.northAmerica" },
-    { id: "europe", label: "continent.europe" },
-    { id: "south-america", label: "continent.southAmerica" },
-    { id: "asia", label: "continent.asia" },
-    { id: "oceania", label: "continent.oceana" },
-];
-const CONTINENTS: { label: string; regions: OnboardingRegion[] }[] = CONTINENT_LABELS.map(({ id, label }) => ({
-    label, regions: HOSTING_REGIONS.filter((region) => region.continent === id).map((region) => region.key),
-}));
-const ENABLED_CONTINENTS = CONTINENTS.flatMap((item, index) => item.regions.length ? [index] : []);
+/** One continent tab and the offered regions it contains. */
+type ContinentTab = { id: HostingContinent; regions: HostingRegionKey[] };
+
+/** Stored-catalog keys the website catalog knows, in stored order; only these have a continent and translation. */
+function offeredRegions(summary: OnboardingSummary | null): HostingRegionKey[] {
+    return (summary?.regions ?? []).map((entry) => entry.region).filter(isHostingRegionKey);
+}
+/** Groups offered regions into every continent tab; a tab without regions shows "coming soon". */
+function continentTabs(summary: OnboardingSummary | null): ContinentTab[] {
+    const offered = offeredRegions(summary);
+    return HOSTING_CONTINENTS.map((id) => ({ id, regions: offered.filter((region) => hostingRegion(region).continent === id) }));
+}
+/** Maps a tab-navigation key to the next enabled-tab position, wrapping at both ends; null for other keys. */
+function continentStep(key: string, position: number, count: number): number | null {
+    if (count === 0) return null;
+    switch (key) {
+        case "Home": return 0;
+        case "End": return count - 1;
+        case "ArrowRight": return (position + 1) % count;
+        case "ArrowLeft": return (position + count - 1) % count;
+        default: return null;
+    }
+}
 
 /** Collects validated server details while preserving native dialog focus and submission rules. */
 function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, onSubmit, onRequest, onDismiss, onRefresh, fallbackFocus }: {
     summary: OnboardingSummary | null; canOffer: boolean; disabled: boolean; pending: boolean; result: OnboardingResult | null; recovery: ReactNode;
-    onSubmit: (name: string, region: OnboardingRegion, releaseChannel: OnboardingReleaseChannel) => void; onRequest: (region: OnboardingRegion) => void; onDismiss: () => void; onRefresh: () => void; fallbackFocus: () => void;
+    onSubmit: (name: string, region: string, releaseChannel: OnboardingReleaseChannel) => void; onRequest: (region: string) => void; onDismiss: () => void; onRefresh: () => void; fallbackFocus: () => void;
 }) {
     const { t } = useTranslations("servers");
     const dialogRef = useRef<HTMLDialogElement>(null);
@@ -197,12 +220,15 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
     const fallback = useRef(fallbackFocus);
     const [name, setName] = useState("");
     const [releaseChannel, setReleaseChannel] = useState<OnboardingReleaseChannel>("stable");
-    const [selected, setSelected] = useState<OnboardingRegion>(HOSTING_REGIONS[0].key);
+    const [selected, setSelected] = useState<string | null>(() => offeredRegions(summary)[0] ?? null);
     const [error, setError] = useState("");
     const [isRefreshing, startRefresh] = useTransition();
     const [refreshRequested, setRefreshRequested] = useState(false);
-    const continent = CONTINENTS.findIndex((continent) => continent.regions.includes(selected));
-    const entry = summary?.regions.find((entry) => entry.region === selected);
+    const continents = continentTabs(summary);
+    const enabledContinents = continents.flatMap((tab, index) => tab.regions.length ? [index] : []);
+    const selectedContinent = continents.findIndex((tab) => tab.regions.some((region) => region === selected));
+    const continent = selectedContinent >= 0 ? selectedContinent : enabledContinents[0] ?? 0;
+    const entry = summary?.regions.find((entry) => entry.region === selected && isHostingRegionKey(entry.region));
     const refreshBusy = isRefreshing || refreshRequested;
     const [replacement, setReplacement] = useState<string | null>(null);
     // An outstanding request for any other region, including one no longer offered, is replaced on request.
@@ -285,39 +311,36 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
                     </fieldset>
                     <fieldset className="mt-6"><legend className="text-sm font-medium">{t("onboarding.region")}</legend>
                         <div role="tablist" aria-label={t("onboarding.continent")} className="mt-3 flex flex-wrap gap-2">
-                            {CONTINENTS.map((item, index) => <button key={item.label} type="button" role="tab"
+                            {continents.map((item, index) => <button key={item.id} type="button" role="tab"
                                 id={`continent-tab-${index}`} aria-selected={continent === index} aria-controls={item.regions.length ? "continent-regions" : undefined}
                                 tabIndex={continent === index ? 0 : -1} disabled={!item.regions.length}
                                 onClick={() => { setSelected(item.regions[0]); setReplacement(null); setError(""); }}
                                 onKeyDown={(event) => {
-                                    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                                    const step = continentStep(event.key, enabledContinents.indexOf(continent), enabledContinents.length);
+                                    if (step === null) return;
                                     event.preventDefault();
-                                    const position = ENABLED_CONTINENTS.indexOf(continent);
-                                    const last = ENABLED_CONTINENTS.length - 1;
-                                    const next = ENABLED_CONTINENTS[event.key === "Home" ? 0 : event.key === "End" ? last
-                                        : event.key === "ArrowRight" ? (position + 1) % ENABLED_CONTINENTS.length
-                                            : (position + last) % ENABLED_CONTINENTS.length];
-                                    setSelected(CONTINENTS[next].regions[0]); setReplacement(null);
+                                    const next = enabledContinents[step];
+                                    setSelected(continents[next].regions[0]); setReplacement(null);
                                     setError("");
                                     document.getElementById(`continent-tab-${next}`)?.focus();
                                 }}
                                 className={`min-h-11 rounded-sm border px-3 py-2 text-sm ${focusRing} disabled:cursor-not-allowed disabled:opacity-45 ${continent === index ? "border-gold bg-gold/10 text-gold" : "border-white/15 text-foreground-muted"}`}>
-                                {t(item.label)}{!item.regions.length && <span className="mt-1 block text-[0.65rem]">{t("onboarding.comingSoon")}</span>}
+                                {localizedContinentLabel(t, item.id)}{!item.regions.length && <span className="mt-1 block text-[0.65rem]">{t("onboarding.comingSoon")}</span>}
                             </button>)}
                         </div>
-                        <div role="tabpanel" id="continent-regions" aria-labelledby={`continent-tab-${continent}`} className="mt-3 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">{summary?.regions.filter((region) => CONTINENTS[continent].regions.includes(region.region)).map((region) => <label key={region.region} className={`relative flex cursor-pointer items-start gap-2 rounded-sm border p-3 transition-colors hover:border-gold/60 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${selected === region.region ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
+                        <div role="tabpanel" id="continent-regions" aria-labelledby={`continent-tab-${continent}`} className="mt-3 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">{summary?.regions.filter((region) => continents[continent].regions.some((key) => key === region.region)).map((region) => <label key={region.region} className={`relative flex cursor-pointer items-start gap-2 rounded-sm border p-3 transition-colors hover:border-gold/60 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${selected === region.region ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
                             <input type="radio" name="region" value={region.region} checked={selected === region.region} onChange={() => { setSelected(region.region); setReplacement(null); }} className="mt-1 size-3.5 shrink-0 accent-gold" />
-                            <span className="min-w-0"><span className="block text-sm font-medium">{regionName(t, region.region)}</span><span className={`mt-2 block text-xs ${region.available ? "text-emerald-200" : "text-amber-200"}`}>{region.available ? t("onboarding.available") : t("onboarding.full")}{region.request ? ` · ${t("onboarding.requested")}` : ""}</span></span>
+                            <span className="min-w-0"><span className="block text-sm font-medium">{localizedRegionLabel(t, region.region)}</span><span className={`mt-2 block text-xs ${region.available ? "text-emerald-200" : "text-amber-200"}`}>{region.available ? t("onboarding.available") : t("onboarding.full")}{region.request ? ` · ${t("onboarding.requested")}` : ""}</span></span>
                         </label>)}</div>
                     </fieldset>
                 </fieldset>
                 {!canOffer && <p role="status" className="mt-4 text-sm text-gold">{t("onboarding.changed")}</p>}
-                {entry && !entry.available && <p role="status" className="mt-4 text-sm text-gold">{t(entry.request ? "onboarding.alreadyRequested" : "onboarding.regionFull", { region: regionName(t, entry.region) })}</p>}
+                {entry && !entry.available && <p role="status" className="mt-4 text-sm text-gold">{t(entry.request ? "onboarding.alreadyRequested" : "onboarding.regionFull", { region: localizedRegionLabel(t, entry.region) })}</p>}
                 {replacement && entry && !entry.available && <div role="alert" className="mt-4 border border-amber-200/40 bg-amber-200/10 p-4 text-sm">
-                    <p>{t("onboarding.replaceWarning", { region: regionName(t, replacement), newRegion: regionName(t, entry.region) })}</p>
+                    <p>{t("onboarding.replaceWarning", { region: localizedRegionLabel(t, replacement), newRegion: localizedRegionLabel(t, entry.region) })}</p>
                     <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                        <button type="button" disabled={disabled || pending} onClick={() => { setReplacement(null); onRequest(entry.region); }} className={primaryButton}>{t("onboarding.replaceConfirm", { region: regionName(t, replacement), newRegion: regionName(t, entry.region) })}</button>
-                        <button type="button" disabled={disabled || pending} onClick={() => setReplacement(null)} className={secondaryButton}>{t("onboarding.keepRequest", { region: regionName(t, replacement) })}</button>
+                        <button type="button" disabled={disabled || pending} onClick={() => { setReplacement(null); onRequest(entry.region); }} className={primaryButton}>{t("onboarding.replaceConfirm", { region: localizedRegionLabel(t, replacement), newRegion: localizedRegionLabel(t, entry.region) })}</button>
+                        <button type="button" disabled={disabled || pending} onClick={() => setReplacement(null)} className={secondaryButton}>{t("onboarding.keepRequest", { region: localizedRegionLabel(t, replacement) })}</button>
                     </div>
                 </div>}
                 {pending && <p role="status" className="mt-4 text-sm text-gold">{t("onboarding.pendingHint")}</p>}

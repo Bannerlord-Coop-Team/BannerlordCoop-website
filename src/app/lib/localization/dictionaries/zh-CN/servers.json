@@ -103,6 +103,8 @@
   "onboarding.unconfirmed": "提交结果尚未确认。请重试同一个待处理请求；关闭此对话框不会取消该请求。",
   "onboarding.confirming": "正在确认请求…",
   "onboarding.retry": "重试待处理请求",
+  "onboarding.discardPending": "放弃待处理请求",
+  "onboarding.unofferedPending": "{region} 已不再提供。如果重试无法确认此请求，请先查看“我的服务器”，然后放弃该请求。",
   "onboarding.unavailable": "无法确认是否可以设置服务器，或该功能暂时不可用。请刷新后再次检查。",
   "onboarding.quotaUsed": "明确授予您的服务器配额目前已用完。",
   "onboarding.noQuota": "此账户没有尚未使用的明确授予的服务器配额。",
@@ -139,9 +141,9 @@
   "region.germany": "德国",
   "region.united-kingdom": "英国",
   "region.poland": "波兰",
-  "continent.northAmerica": "北美洲",
+  "continent.north-america": "北美洲",
   "continent.europe": "欧洲",
-  "continent.southAmerica": "南美洲",
+  "continent.south-america": "南美洲",
   "continent.asia": "亚洲",
-  "continent.oceana": "大洋洲"
+  "continent.oceania": "大洋洲"
 }

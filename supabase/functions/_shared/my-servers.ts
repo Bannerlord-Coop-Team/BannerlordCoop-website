@@ -4,8 +4,7 @@ import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSetting
 import { serverLogDownloadHeaders } from "./server-log-contract.ts";
 import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
-import { parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingRegion } from "./server-onboarding-contract.ts";
-import { hostingRegion, placementPayload, regionDefinitionsPayload } from "./hosting-regions.ts";
+import { onboardingMutationRequest, onboardingSummaryRequest, parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingControlPlaneRequest, type OnboardingMutation } from "./server-onboarding-contract.ts";
 import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, requireRunnerConfigurationPart, type RunnerConfigurationMutation, type RunnerConfigurationPart } from "./server-configuration-contract.ts";
 import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
 
@@ -47,10 +46,10 @@ type UpstreamRequest =
     | { operation: "configuration-file"; input: { serverId: string; configPart: RunnerConfigurationPart } }
     | { operation: "save-configuration-file"; input: RunnerConfigurationMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
-    // The website owns regions: every onboarding call carries the placements it means.
-    | { operation: "server-onboarding"; input: { regions: ReturnType<typeof regionDefinitionsPayload> } }
-    | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion; placement: ReturnType<typeof placementPayload>; releaseChannel?: "stable" | "nightly" } }
-    | { operation: "request-region"; input: { region: OnboardingRegion; placement: ReturnType<typeof placementPayload> } }
+    // Onboarding sends region keys only; the control plane resolves them against its stored catalog.
+    | Extract<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>
+    // The parsed mutation is kept (never forwarded) to verify the receipt answers exactly it.
+    | (Exclude<OnboardingControlPlaneRequest, { operation: "server-onboarding" }> & { mutation: OnboardingMutation })
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "server-backup-status"; input: { serverId: string } }
@@ -87,7 +86,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             method: "POST",
             redirect: "error",
             headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "x-request-id": requestId },
-            body: JSON.stringify({ version: 1, requestId, operation: "server-onboarding", input: { regions: regionDefinitionsPayload() } }),
+            body: JSON.stringify({ version: 1, requestId, ...onboardingSummaryRequest() }),
             signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),
         });
         const envelope: unknown = JSON.parse(await readBoundedText(response, MAXIMUM_OPERATION_RESPONSE_BYTES));
@@ -154,7 +153,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         const isConfigurationFile = upstreamRequest.operation === "configuration-file" || upstreamRequest.operation === "save-configuration-file";
         let endpoint = controlPlaneEndpoint;
         let upstreamMethod: "GET" | "POST" = "POST";
-        let upstreamBody: string | undefined = JSON.stringify({ version: 1, requestId, ...upstreamRequest });
+        let upstreamBody: string | undefined = JSON.stringify({ version: 1, requestId, operation: upstreamRequest.operation, input: upstreamRequest.input });
         if (upstreamRequest.operation === "file-transfer") endpoint = new URL("/v1/user/files", controlPlaneEndpoint);
         if (upstreamRequest.operation === "configuration-file") {
             endpoint = new URL("/api/v1/config", controlPlaneEndpoint);
@@ -267,16 +266,13 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     parseVisibilityResult(envelope.result, { action: "set-server-visibility", ...upstreamRequest.input });
                 }
                 if (upstreamRequest.operation === "create-server") {
-                    const { displayName, region, releaseChannel } = upstreamRequest.input;
-                    const result = parseOnboardingResult(envelope.result, {
-                        action: upstreamRequest.operation, displayName, region, ...(releaseChannel === undefined ? {} : { releaseChannel }),
-                    });
+                    const result = parseOnboardingResult(envelope.result, upstreamRequest.mutation);
                     if (result.action === "create-server") {
                         created = { region: result.region, serverId: result.serverId, createdAt: result.createdAt, requester: requesterFromToken(token) };
                     }
                 }
                 if (upstreamRequest.operation === "request-region") {
-                    const result = parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, region: upstreamRequest.input.region });
+                    const result = parseOnboardingResult(envelope.result, upstreamRequest.mutation);
                     // A receipt carrying the submitted UUID is a newly accepted request (or its exact replay);
                     // any other UUID is the backend deduplicating an already outstanding request.
                     if (result.action === "request-region" && result.request.requestId.toLowerCase() === requestId) {
@@ -358,7 +354,7 @@ function listRequest(request: Request): UpstreamRequest {
 
     if (resource === "onboarding") {
         assertQueryParameters(url, ["resource"]);
-        return { operation: "server-onboarding", input: { regions: regionDefinitionsPayload() } };
+        return onboardingSummaryRequest();
     }
 
     if (resource === "backups") {
@@ -442,12 +438,9 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
         } };
     }
     if (value.action === "create-server" || value.action === "request-region") {
-        const parsed = parseOnboardingMutation(value);
-        // The browser names only a region key; its placement comes from the website's own catalog.
-        const placement = placementPayload(hostingRegion(parsed.region).placement);
-        return parsed.action === "create-server"
-            ? { operation: parsed.action, input: { displayName: parsed.displayName, region: parsed.region, placement, ...(parsed.releaseChannel !== undefined ? { releaseChannel: parsed.releaseChannel } : {}) } }
-            : { operation: parsed.action, input: { region: parsed.region, placement } };
+        // The browser names only a region key; any other field, including a placement, is rejected.
+        const mutation = parseOnboardingMutation(value);
+        return { ...onboardingMutationRequest(mutation), mutation };
     }
     if (typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)) {
         throw new Error("Invalid server ID");

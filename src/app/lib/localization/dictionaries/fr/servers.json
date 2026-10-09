@@ -109,6 +109,8 @@
   "onboarding.unconfirmed": "Le résultat de l’envoi n’est pas confirmé. Relancez la même demande en attente ; fermer cette boîte de dialogue ne l’annule pas.",
   "onboarding.confirming": "Confirmation de la demande…",
   "onboarding.retry": "Relancer la demande en attente",
+  "onboarding.discardPending": "Abandonner la demande en attente",
+  "onboarding.unofferedPending": "{region} n’est plus proposée. Si la nouvelle tentative ne peut pas confirmer cette demande, vérifiez Mes serveurs, puis abandonnez-la.",
   "onboarding.unavailable": "La disponibilité de la configuration du serveur n’a pas pu être confirmée ou est temporairement indisponible. Actualisez pour vérifier à nouveau.",
   "onboarding.quotaUsed": "Votre quota de serveurs explicitement accordé est actuellement utilisé.",
   "onboarding.noQuota": "Aucun quota de serveurs explicitement accordé et inutilisé n’est disponible pour ce compte.",
@@ -147,9 +149,9 @@
   "region.germany": "Allemagne",
   "region.united-kingdom": "Royaume-Uni",
   "region.poland": "Pologne",
-  "continent.northAmerica": "Amérique du Nord",
+  "continent.north-america": "Amérique du Nord",
   "continent.europe": "Europe",
-  "continent.southAmerica": "Amérique du Sud",
+  "continent.south-america": "Amérique du Sud",
   "continent.asia": "Asie",
-  "continent.oceana": "Océanie"
+  "continent.oceania": "Océanie"
 }

@@ -1,9 +1,10 @@
-// The website owns hosting regions: their keys, labels, grouping and placements.
-// The control plane records only provider facts for each host (an ISO country and
-// an exact zone) and matches hosts against the placement sent with each request.
-// To offer a new region, add one entry here; no control-plane change is needed.
+// The website's hosting-region catalog: keys, English labels, continent grouping and placements.
+// The control plane matches hosts against its own stored copy of these placements; an administrator
+// publishes this catalog to it from the Operations page (`set-hosting-regions`). Owners only send keys.
 
-export type HostingContinent = "north-america" | "south-america" | "europe" | "asia" | "oceania";
+/** Continent tabs, in display order. */
+export const HOSTING_CONTINENTS = ["north-america", "europe", "south-america", "asia", "oceania"] as const;
+export type HostingContinent = typeof HOSTING_CONTINENTS[number];
 
 /** Hosts eligible for a region: a country allowlist, optionally narrowed to exact provider zones. */
 export type HostingPlacement = {
@@ -18,6 +19,9 @@ export type HostingRegionDefinition = {
     readonly placement: HostingPlacement;
 };
 
+/** A JSON-safe catalog entry in the control plane's wire form. */
+export type HostingRegionPayload = { region: string; placement: { countryCodes: string[]; locationIds?: string[] } };
+
 // Coast regions name their exact zones: a US country code alone never implies a coast.
 export const HOSTING_REGIONS = [
     { key: "us-west", label: "US-West", continent: "north-america",
@@ -31,56 +35,52 @@ export const HOSTING_REGIONS = [
 ] as const satisfies readonly HostingRegionDefinition[];
 
 export type HostingRegionKey = typeof HOSTING_REGIONS[number]["key"];
-export const HOSTING_REGION_KEYS: readonly HostingRegionKey[] = HOSTING_REGIONS.map((region) => region.key);
 
 /** Region keys the control plane accepts: bounded lowercase slugs. */
 export const REGION_KEY_PATTERN = /^[a-z][a-z0-9-]{1,47}$/u;
 
-// Keys retained on older servers but no longer offered.
-const RETIRED_REGION_LABELS: Readonly<Record<string, string>> = {
-    "united-states": "United States",
-    spain: "Spain",
-    "europe-automatic": "Europe — Automatic",
-};
-
+/** Whether a value is a key in this website catalog. */
 export function isHostingRegionKey(value: unknown): value is HostingRegionKey {
-    return HOSTING_REGION_KEYS.includes(value as HostingRegionKey);
+    return HOSTING_REGIONS.some((region) => region.key === value);
 }
 
+/** Whether a value has the shape of any region key, including keys this catalog does not know. */
+export function isRegionKey(value: unknown): value is string {
+    return typeof value === "string" && REGION_KEY_PATTERN.test(value);
+}
+
+/** The catalog definition for a website region key. */
 export function hostingRegion(key: HostingRegionKey): HostingRegionDefinition {
-    const region = HOSTING_REGIONS.find((entry) => entry.key === key);
-    if (region === undefined) throw new Error("Unknown hosting region");
-    return region;
+    return HOSTING_REGIONS.find((entry) => entry.key === key)!;
 }
 
-/** Display label for any stored region key, including retired and unrecognized ones. */
+/** English display label for any region key: the catalog label, else the key humanized ("united-states" -> "United States"). */
 export function hostingRegionLabel(key: string): string {
-    return HOSTING_REGIONS.find((entry) => entry.key === key)?.label ?? RETIRED_REGION_LABELS[key] ?? key;
+    if (isHostingRegionKey(key)) return hostingRegion(key).label;
+    return key.split("-").filter(Boolean).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
 }
 
-/** A JSON-safe copy of a region's placement for a control-plane request. */
-export function placementPayload(placement: HostingPlacement): { countryCodes: string[]; locationIds?: string[] } {
-    return {
-        countryCodes: [...placement.countryCodes],
-        ...(placement.locationIds === undefined ? {} : { locationIds: [...placement.locationIds] }),
-    };
-}
-
-/** Every offered region with its placement, in display order, for the onboarding summary. */
-export function regionDefinitionsPayload() {
+/** The whole catalog in the control plane's wire form, in display order, as an independent copy. */
+export function hostingRegionCatalogPayload(): HostingRegionPayload[] {
     return HOSTING_REGIONS.map((region) => ({ region: region.key, placement: placementPayload(region.placement) }));
 }
 
+/** Whether a host's provider country (and zone, when the placement names zones) satisfies a placement. */
 export function placementMatchesHost(
     placement: HostingPlacement,
     host: { countryCode: string | null; locationId: string },
 ): boolean {
-    return host.countryCode !== null
-        && placement.countryCodes.includes(host.countryCode)
-        && (placement.locationIds === undefined || placement.locationIds.includes(host.locationId));
+    if (host.countryCode === null || !placement.countryCodes.includes(host.countryCode)) return false;
+    return placement.locationIds === undefined || placement.locationIds.includes(host.locationId);
 }
 
-/** The first offered region a registered host serves, if any. */
-export function hostingRegionForHost(host: { countryCode: string | null; locationId: string }): HostingRegionDefinition | null {
-    return HOSTING_REGIONS.find((region) => placementMatchesHost(region.placement, host)) ?? null;
+/** Every website region a registered host serves, in catalog order. */
+export function hostingRegionsForHost(host: { countryCode: string | null; locationId: string }): HostingRegionDefinition[] {
+    return HOSTING_REGIONS.filter((region) => placementMatchesHost(region.placement, host));
+}
+
+/** Copies a readonly placement into mutable JSON arrays. */
+function placementPayload(placement: HostingPlacement): HostingRegionPayload["placement"] {
+    if (placement.locationIds === undefined) return { countryCodes: [...placement.countryCodes] };
+    return { countryCodes: [...placement.countryCodes], locationIds: [...placement.locationIds] };
 }

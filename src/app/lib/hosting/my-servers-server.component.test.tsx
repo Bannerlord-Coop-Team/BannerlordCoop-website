@@ -5,8 +5,7 @@ import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getMyServerStartStatus, getServerOnboarding, listAllMyServers } from "./my-servers-server";
-import { onboardingSummary, onboardingSummaryToWire, onboardingSummaryWire } from "../../../../tests/onboarding-fixtures";
-import { regionDefinitionsPayload } from "../../../../supabase/functions/_shared/hosting-regions";
+import { onboardingRegion, onboardingSummary } from "../../../../tests/onboarding-fixtures";
 
 const TOKEN = "access-token-with-enough-characters";
 const headers = { "content-type": "application/json" };
@@ -74,16 +73,16 @@ it.each([["inventory", listAllMyServers], ["onboarding", getServerOnboarding]] a
 });
 
 it("reads onboarding eligibility and capacity afresh and propagates current authority rejection", async () => {
-    const first = onboardingSummary(), next = onboardingSummary(); next.regions[0].available = false;
+    const first = onboardingSummary(), next = onboardingSummary(); onboardingRegion(next, "us-west").available = false;
     next.eligibility = { ...next.eligibility, used: 1, remaining: 0, eligible: false, reason: "quota_exhausted" };
     let calls = 0;
     vi.stubGlobal("fetch", async (url: RequestInfo | URL, init?: RequestInit) => {
         expect(String(url)).toBe("https://control-plane.bannerlordcoop.com/v1/user/control-plane");
         expect(init).toMatchObject({ method: "POST", credentials: "omit", cache: "no-store", redirect: "manual" });
         const request = input(init);
-        expect(request).toEqual({ version: 1, requestId: expect.any(String), operation: "server-onboarding", input: { regions: regionDefinitionsPayload() } });
+        expect(request).toEqual({ version: 1, requestId: expect.any(String), operation: "server-onboarding", input: { version: 3 } });
         expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${TOKEN}`);
-        if (++calls < 3) return accepted(request, onboardingSummaryToWire(calls === 1 ? first : next));
+        if (++calls < 3) return accepted(request, (calls === 1 ? first : next));
         return Response.json({ version: 1, requestId: request.requestId, ok: false,
             error: { code: "forbidden", message: "Current session is required.", retryable: false } }, { status: 403 });
     });
@@ -94,9 +93,9 @@ it("reads onboarding eligibility and capacity afresh and propagates current auth
 });
 
 it("rejects malformed onboarding DTOs rather than displaying eligibility", async () => {
-    for (const result of [{ ...onboardingSummaryWire(), privateHost: "extra" }, { ...onboardingSummaryWire(), regions: [] },
-        { ...onboardingSummaryWire(), eligibility: { ...onboardingSummaryWire().eligibility, remaining: 100 } },
-        onboardingSummary()]) {
+    for (const result of [{ ...onboardingSummary(), privateHost: "extra" }, { ...onboardingSummary(), regions: [] },
+        { ...onboardingSummary(), eligibility: { ...onboardingSummary().eligibility, remaining: 100 } },
+        { ...onboardingSummary(), version: 2 }]) {
         vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
         await expect(getServerOnboarding(TOKEN)).rejects.toMatchObject({ code: "invalid_response" });
     }
@@ -104,7 +103,7 @@ it("rejects malformed onboarding DTOs rather than displaying eligibility", async
 
 it("keeps the onboarding response at 64 KiB including streamed bodies and cancels overflow", async () => {
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => {
-        const body = JSON.stringify({ version: 1, requestId: input(init).requestId, ok: true, result: onboardingSummaryWire() });
+        const body = JSON.stringify({ version: 1, requestId: input(init).requestId, ok: true, result: onboardingSummary() });
         return new Response(body.padEnd(65_536, " "), { headers });
     });
     expect(await getServerOnboarding(TOKEN)).toEqual(onboardingSummary());
@@ -199,17 +198,17 @@ it("uses the closed owner read in native workerd with fresh pages and no redirec
             for (const name of ["cookie", "apikey", "x-control-plane-protected-admin"]) expect(request.headers.get(name)).toBeNull();
             const body = await request.json() as Input; expect(body.requestId).toBe(request.headers.get("x-request-id"));
             expect(["my-servers", "server-onboarding"]).toContain(body.operation);
-            expect(body.input).toEqual(body.operation === "my-servers" ? { cursor: null, limit: 100 } : { regions: regionDefinitionsPayload() });
+            expect(body.input).toEqual(body.operation === "my-servers" ? { cursor: null, limit: 100 } : { version: 3 });
             if (redirectStatus) return new Response(null, { status: redirectStatus, headers: { location: "https://other.test/private" } });
-            const summary = onboardingSummary(); summary.regions[0].available = calls % 2 === 0;
-            return accepted(body, body.operation === "server-onboarding" ? onboardingSummaryToWire(summary)
+            const summary = onboardingSummary(); onboardingRegion(summary, "us-west").available = calls % 2 === 0;
+            return accepted(body, body.operation === "server-onboarding" ? summary
                 : { items: [{ ...server, displayName: `Current ${calls} 👨‍👩‍👧‍👦` }], nextCursor: null });
         },
     }] }));
     try {
         for (let revision = 1; revision <= 2; revision++) expect(await (await runtime.dispatchFetch("http://localhost/")).json()).toEqual([{ ...server, displayName: `Current ${revision} 👨‍👩‍👧‍👦` }]);
         for (let revision = 1; revision <= 2; revision++) {
-            const summary = onboardingSummary(); summary.regions[0].available = revision % 2 === 0;
+            const summary = onboardingSummary(); onboardingRegion(summary, "us-west").available = revision % 2 === 0;
             expect(await (await runtime.dispatchFetch("http://localhost/onboarding")).json()).toEqual(summary);
         }
         for (const status of [301, 302, 303, 307, 308]) for (const path of ["/", "/onboarding"]) {

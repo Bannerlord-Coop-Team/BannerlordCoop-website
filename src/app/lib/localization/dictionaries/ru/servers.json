@@ -112,6 +112,8 @@
   "onboarding.unconfirmed": "Результат отправки не подтверждён. Повторите тот же незавершённый запрос; закрытие этого окна не отменяет его.",
   "onboarding.confirming": "Подтверждение запроса…",
   "onboarding.retry": "Повторить незавершённый запрос",
+  "onboarding.discardPending": "Отменить незавершённый запрос",
+  "onboarding.unofferedPending": "Регион {region} больше не предлагается. Если повторная попытка не подтвердит этот запрос, проверьте «Мои серверы», затем отмените его.",
   "onboarding.unavailable": "Не удалось подтвердить возможность настройки сервера, либо настройка временно недоступна. Обновите данные, чтобы проверить ещё раз.",
   "onboarding.quotaUsed": "Вся явно предоставленная вам квота на серверы сейчас используется.",
   "onboarding.noQuota": "У этой учётной записи нет свободных мест в явно предоставленной квоте на серверы.",
@@ -151,9 +153,9 @@
   "region.germany": "Германия",
   "region.united-kingdom": "Великобритания",
   "region.poland": "Польша",
-  "continent.northAmerica": "Северная Америка",
+  "continent.north-america": "Северная Америка",
   "continent.europe": "Европа",
-  "continent.southAmerica": "Южная Америка",
+  "continent.south-america": "Южная Америка",
   "continent.asia": "Азия",
-  "continent.oceana": "Океания"
+  "continent.oceania": "Океания"
 }

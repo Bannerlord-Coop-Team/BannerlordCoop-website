@@ -106,6 +106,8 @@
   "onboarding.unconfirmed": "The submission outcome is unconfirmed. Retry the same pending request; closing this dialog does not cancel it.",
   "onboarding.confirming": "Confirming request…",
   "onboarding.retry": "Retry pending request",
+  "onboarding.discardPending": "Discard pending request",
+  "onboarding.unofferedPending": "{region} is no longer offered. If Retry cannot confirm this request, check My Servers, then discard it.",
   "onboarding.unavailable": "Server setup availability could not be confirmed or is temporarily unavailable. Refresh to check again.",
   "onboarding.quotaUsed": "Your explicitly granted server quota is currently in use.",
   "onboarding.noQuota": "No unused explicitly granted server quota is available for this account.",
@@ -146,9 +148,9 @@
   "region.germany": "Germany",
   "region.united-kingdom": "United Kingdom",
   "region.poland": "Poland",
-  "continent.northAmerica": "North America",
+  "continent.north-america": "North America",
   "continent.europe": "Europe",
-  "continent.southAmerica": "South America",
+  "continent.south-america": "South America",
   "continent.asia": "Asia",
-  "continent.oceana": "Oceana"
+  "continent.oceania": "Oceania"
 }

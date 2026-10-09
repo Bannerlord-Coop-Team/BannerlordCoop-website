@@ -2,10 +2,9 @@ import type { HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE } from "../../../../supabase/functions/_shared/server-settings-contract";
 import {
     HOSTING_REGIONS,
-    hostingRegion,
-    isHostingRegionKey,
+    hostingRegionLabel,
+    hostingRegionsForHost,
     placementMatchesHost,
-    placementPayload,
 } from "../../../../supabase/functions/_shared/hosting-regions";
 
 export const MAINTENANCE_TIME_ZONE = HOSTING_TIME_ZONE;
@@ -54,12 +53,7 @@ export function formatAccountOwner(
     return accountLabels[accountId] ?? `Account unavailable (${accountId})`;
 }
 
-/** Offered website regions, in display order. */
-export function serverRegionOptions() {
-    return HOSTING_REGIONS.map(({ key, label }) => ({ value: key, label }));
-}
-
-/** Offered regions whose placement matches a registered host with a free prepared slot. */
+/** Website regions whose placement matches a registered host with a free prepared slot (advisory; the control plane decides). */
 export function createServerRegionOptions(
     hosts: readonly Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "availableServers">[],
 ) {
@@ -76,6 +70,7 @@ export function maintenanceSlotOptions() {
     }));
 }
 
+/** Fills inputs an administrator card never asks for, such as Create's default release channel. */
 export function applyControlPlaneOperationDefaults(
     operation: string,
     input: Record<string, unknown>,
@@ -83,10 +78,19 @@ export function applyControlPlaneOperationDefaults(
     if (operation === "create-server" && input.releaseChannel === undefined) {
         input.releaseChannel = "stable";
     }
-    // The control plane matches hosts by the placement the website defines for the selected region.
-    if (operation === "create-server" && input.placement === undefined && isHostingRegionKey(input.friendlyRegion)) {
-        input.placement = placementPayload(hostingRegion(input.friendlyRegion).placement);
-    }
+}
+
+/** Labels a host by every website region it serves (or its legacy region), then its provider country and zone. */
+export function hostPlacementLabel(host: Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region">) {
+    return `${hostRegionsLabel(host)} · ${host.countryCode ?? "Country unknown"} · ${host.locationId}`;
+}
+
+/** Names the website regions a host serves, falling back to its legacy region or none. */
+function hostRegionsLabel(host: Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region">) {
+    const regions = hostingRegionsForHost(host);
+    if (regions.length > 0) return regions.map((region) => region.label).join(", ");
+    if (host.region === null) return "No website region";
+    return `${hostingRegionLabel(host.region)} (legacy)`;
 }
 
 export function operationTargetMatchesHash(hash: string, operation: string) {

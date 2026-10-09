@@ -8,6 +8,7 @@ import {
     createServerRegionOptions,
     fieldRequirementLabel,
     formatAccountOwner,
+    hostPlacementLabel,
     installableBuilds,
     releaseChannelLabel,
     releaseVersion,
@@ -19,19 +20,7 @@ import {
     overviewStatRowClass,
     presentControlPlaneOperationResult,
     serverLifecycleOperationHref,
-    serverRegionOptions,
 } from "./presentation";
-
-test("server regions use the approved display order and protocol values", () => {
-    assert.deepEqual(serverRegionOptions(), [
-        { value: "us-west", label: "US-West" },
-        { value: "us-east", label: "US-East" },
-        { value: "france", label: "France" },
-        { value: "germany", label: "Germany" },
-        { value: "united-kingdom", label: "United Kingdom" },
-        { value: "poland", label: "Poland" },
-    ]);
-});
 
 const host = (countryCode: string | null, locationId: string, availableServers: number) => ({ countryCode, locationId, availableServers });
 
@@ -44,7 +33,14 @@ test("create-server regions come from host provider facts matched by website pla
         host("FR", "fr-par", 1),
         host("GB", "os-uk2", 1),
         host("US", "us-east-va", 1),
-    ]), serverRegionOptions());
+    ]), [
+        { value: "us-west", label: "US-West" },
+        { value: "us-east", label: "US-East" },
+        { value: "france", label: "France" },
+        { value: "germany", label: "Germany" },
+        { value: "united-kingdom", label: "United Kingdom" },
+        { value: "poland", label: "Poland" },
+    ]);
     assert.deepEqual(createServerRegionOptions([]), []);
 });
 
@@ -76,16 +72,16 @@ test("create-server regions never guess a coast or a country", () => {
     }
 });
 
-test("administrator create sends the selected region's website placement", () => {
+test("administrator create sends only the region key", () => {
     const input: Record<string, unknown> = { friendlyRegion: "us-east" };
     applyControlPlaneOperationDefaults("create-server", input);
-    assert.deepEqual(input, {
-        friendlyRegion: "us-east", releaseChannel: "stable",
-        placement: { countryCodes: ["US"], locationIds: ["os-us-east-va-2", "us-east-va"] },
-    });
-    const unknown: Record<string, unknown> = { friendlyRegion: "atlantis", releaseChannel: "nightly" };
-    applyControlPlaneOperationDefaults("create-server", unknown);
-    assert.deepEqual(unknown, { friendlyRegion: "atlantis", releaseChannel: "nightly" });
+    assert.deepEqual(input, { friendlyRegion: "us-east", releaseChannel: "stable" });
+});
+
+test("hosts are labelled with every website region they serve, else their legacy region or none", () => {
+    assert.equal(hostPlacementLabel({ countryCode: "PL", locationId: "os-waw2", region: null }), "Poland · PL · os-waw2");
+    assert.equal(hostPlacementLabel({ countryCode: "US", locationId: "us-las", region: "united-states" }), "United States (legacy) · US · us-las");
+    assert.equal(hostPlacementLabel({ countryCode: null, locationId: "x-1", region: null }), "No website region · Country unknown · x-1");
 });
 
 test("maintenance choices show their authoritative timezone without changing protocol values", () => {

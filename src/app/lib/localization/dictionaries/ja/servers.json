@@ -103,6 +103,8 @@
   "onboarding.unconfirmed": "送信結果は未確認です。同じ保留中のリクエストを再試行してください。このダイアログを閉じてもリクエストはキャンセルされません。",
   "onboarding.confirming": "リクエストを確認中…",
   "onboarding.retry": "保留中のリクエストを再試行",
+  "onboarding.discardPending": "保留中のリクエストを破棄",
+  "onboarding.unofferedPending": "{region} は現在提供されていません。再試行でこのリクエストを確認できない場合は、マイサーバーを確認してから破棄してください。",
   "onboarding.unavailable": "サーバーのセットアップが可能か確認できないか、一時的に利用できません。情報を更新して再確認してください。",
   "onboarding.quotaUsed": "明示的に付与されたサーバー利用枠は、現在すべて使用中です。",
   "onboarding.noQuota": "このアカウントには、明示的に付与された未使用のサーバー利用枠がありません。",
@@ -139,9 +141,9 @@
   "region.germany": "ドイツ",
   "region.united-kingdom": "英国",
   "region.poland": "ポーランド",
-  "continent.northAmerica": "北米",
+  "continent.north-america": "北米",
   "continent.europe": "ヨーロッパ",
-  "continent.southAmerica": "南米",
+  "continent.south-america": "南米",
   "continent.asia": "アジア",
-  "continent.oceana": "オセアニア"
+  "continent.oceania": "オセアニア"
 }

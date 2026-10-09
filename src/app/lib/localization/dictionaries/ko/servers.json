@@ -103,6 +103,8 @@
   "onboarding.unconfirmed": "제출 결과가 확인되지 않았습니다. 대기 중인 동일한 요청을 재시도하세요. 이 대화 상자를 닫아도 요청은 취소되지 않습니다.",
   "onboarding.confirming": "요청 확인 중…",
   "onboarding.retry": "대기 중인 요청 재시도",
+  "onboarding.discardPending": "대기 중인 요청 취소",
+  "onboarding.unofferedPending": "{region} 지역은 더 이상 제공되지 않습니다. 재시도로 이 요청을 확인할 수 없다면 내 서버를 확인한 후 요청을 취소하세요.",
   "onboarding.unavailable": "서버 설정 가능 여부를 확인할 수 없거나 일시적으로 사용할 수 없습니다. 새로고침하여 다시 확인하세요.",
   "onboarding.quotaUsed": "명시적으로 부여된 서버 할당량을 현재 모두 사용 중입니다.",
   "onboarding.noQuota": "이 계정에 명시적으로 부여된 서버 할당량 중 미사용 할당량이 없습니다.",
@@ -139,9 +141,9 @@
   "region.germany": "독일",
   "region.united-kingdom": "영국",
   "region.poland": "폴란드",
-  "continent.northAmerica": "북아메리카",
+  "continent.north-america": "북아메리카",
   "continent.europe": "유럽",
-  "continent.southAmerica": "남아메리카",
+  "continent.south-america": "남아메리카",
   "continent.asia": "아시아",
-  "continent.oceana": "오세아니아"
+  "continent.oceania": "오세아니아"
 }
