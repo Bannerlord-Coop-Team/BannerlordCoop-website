@@ -47,10 +47,17 @@ it("marks missing, extra, changed-placement and reordered regions", () => {
 });
 
 it("names the last publisher by website account when the accounts list resolves it", () => {
-    const accountId = "44444444-4444-4444-8444-444444444444";
-    expect(renderToStaticMarkup(<HostingRegionsPanel catalog={catalog(undefined, 7, accountId)} error={null} accountLabels={{ [accountId]: "admin@example.com" }} />))
-        .toContain("by admin@example.com");
-    expect(renderToStaticMarkup(<HostingRegionsPanel catalog={catalog(undefined, 7, accountId)} error={null} />)).toContain(`by ${accountId}`);
+    const accountId = "4444abcd-4444-4444-8444-444444444444";
+    // The control plane records the publishing admin as `supabase:<lowercase uuid>`.
+    const actorId = `supabase:${accountId}`;
+    const labels = { [accountId]: "admin@example.com" };
+    for (const recorded of [actorId, `supabase:${accountId.toUpperCase()}`]) {
+        expect(renderToStaticMarkup(<HostingRegionsPanel catalog={catalog(undefined, 7, recorded)} error={null} accountLabels={labels} />))
+            .toContain("by admin@example.com");
+    }
+    // Unresolvable actors are shown as recorded.
+    expect(renderToStaticMarkup(<HostingRegionsPanel catalog={catalog(undefined, 7, actorId)} error={null} />)).toContain(`by ${actorId}`);
+    expect(renderToStaticMarkup(<HostingRegionsPanel catalog={catalog(undefined, 7, "system:seed")} error={null} accountLabels={labels} />)).toContain("by system:seed");
 });
 
 it("publishes exactly the compared website catalog with the read revision and keeps the confirmation once in sync", async () => {

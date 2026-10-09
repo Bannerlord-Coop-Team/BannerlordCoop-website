@@ -1,6 +1,7 @@
 import { ControlPlaneActionCard } from "@/app/components/admin/ControlPlaneActionCard";
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { operationExplanation } from "@/app/lib/control-plane/explanations";
+import { formatAdminActor } from "@/app/lib/control-plane/presentation";
 import {
     compareHostingRegionCatalogs,
     formatPlacement,
@@ -43,7 +44,7 @@ function CatalogComparison({ catalog, website, accountLabels }: {
 }) {
     const drift = compareHostingRegionCatalogs(catalog.regions, website);
     const drifted = hasHostingRegionDrift(drift);
-    const updatedBy = catalog.updatedBy === null ? null : accountLabels[catalog.updatedBy] ?? catalog.updatedBy;
+    const updatedBy = catalog.updatedBy === null ? null : formatAdminActor(catalog.updatedBy, accountLabels);
     return <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="border border-white/10 bg-surface">
             <div className="border-b border-white/10 px-4 py-3 text-xs text-foreground-muted">
