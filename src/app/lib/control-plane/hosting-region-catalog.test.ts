@@ -36,14 +36,9 @@ test("placements compare as sets, and zones matter", () => {
     assert.equal(formatPlacement(website[0].placement), "US: a-1, b-2");
 });
 
-test("an empty stored catalog parses so the panel can still publish over it", () => {
-    const empty = { revision: 0, regions: [], updatedAt: null, updatedBy: null };
-    assert.deepEqual(parseHostingRegionCatalog(empty), empty);
-});
-
 test("malformed stored catalogs are rejected", () => {
     const entry = { region: "france", placement: { countryCodes: ["FR"] }, available: false };
-    for (const value of [null, [], { ...seed(), revision: -1 }, { ...seed(), revision: "1" },
+    for (const value of [null, [], { ...seed(), revision: -1 }, { ...seed(), revision: 0 }, { ...seed(), regions: [] }, { ...seed(), revision: "1" },
         { ...seed(), regions: Array.from({ length: 33 }, (_, index) => ({ ...entry, region: `region-${index}` })) },
         { ...seed(), regions: [entry, entry] }, { ...seed(), regions: [{ ...entry, region: "France" }] },
         { ...seed(), regions: [{ ...entry, label: "France" }] }, { ...seed(), regions: [{ ...entry, placement: { countryCodes: ["fr"] } }] },

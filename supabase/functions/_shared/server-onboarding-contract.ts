@@ -36,7 +36,7 @@ export type OnboardingControlPlaneRequest =
 
 type OnboardingSummaryRequest = Extract<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>;
 /** Which upstream read `readOnboardingSummary` is making: the version-3 summary or the version-2 rollout fallback. */
-export type OnboardingSummaryAttempt = "current" | "legacy";
+type OnboardingSummaryAttempt = "current" | "legacy";
 /** Builds the control-plane request for the owner's version-3 onboarding summary. */
 export function onboardingSummaryRequest(): OnboardingSummaryRequest {
     return { operation: "server-onboarding", input: { version: ONBOARDING_SUMMARY_VERSION } };
@@ -66,7 +66,8 @@ export async function readOnboardingSummary(
 //   `src/app/lib/hosting/my-servers-server.ts`, and their `attempt` handling. `SummaryRejectedError` and
 //   `SummaryUnavailableError` stay: the Edge summary route also uses them to forward rejections and outages;
 // - `legacyOnboardingSummary` in `tests/onboarding-fixtures.ts` and the tests that use it;
-// - the "Rollout fallback" and "Removing the fallback" paragraphs and the `then {}` table note in `docs/server-onboarding.md`.
+// - in `docs/server-onboarding.md`: the "Rollout fallback" and "Removing the fallback" paragraphs, the `then {}` table
+//   note, and deploy-order step 1, rewritten to "deploy the control plane first".
 // The six regions every version-2 control plane offered, in its fixed order, with the labels it echoed.
 const LEGACY_REGION_LABELS = { "us-west": "US-West", "us-east": "US-East", france: "France", germany: "Germany",
     "united-kingdom": "United Kingdom", poland: "Poland" } as const;

@@ -32,12 +32,12 @@ export async function readHostingRegionCatalog(
     }
 }
 
-/** Validates a `hosting-regions` result: revision, 0..32 unique keys with bounded placements and availability, audit fields. */
+/** Validates a `hosting-regions` result: revision >= 1, 1..32 unique keys with bounded placements and availability, audit fields. */
 export function parseHostingRegionCatalog(value: unknown): HostingAdminRegionCatalog {
-    if (!isRecord(value) || !Number.isSafeInteger(value.revision) || (value.revision as number) < 0) throw invalidCatalog();
+    if (!isRecord(value) || !Number.isSafeInteger(value.revision) || (value.revision as number) < 1) throw invalidCatalog();
     if (!nullableText(value.updatedAt) || !nullableText(value.updatedBy)) throw invalidCatalog();
-    // An empty catalog (revision 0) is a valid state the panel must still be able to publish over.
-    if (!Array.isArray(value.regions) || value.regions.length > MAXIMUM_REGIONS) throw invalidCatalog();
+    // The control plane seeds revision 1 and never stores an empty catalog, so either is malformed.
+    if (!Array.isArray(value.regions) || value.regions.length < 1 || value.regions.length > MAXIMUM_REGIONS) throw invalidCatalog();
     const regions = value.regions.map(parseDefinition);
     if (new Set(regions.map((entry) => entry.region)).size !== regions.length) throw invalidCatalog();
     return { revision: value.revision as number, regions, updatedAt: value.updatedAt, updatedBy: value.updatedBy };
