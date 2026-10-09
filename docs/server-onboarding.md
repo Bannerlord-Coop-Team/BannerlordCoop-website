@@ -209,6 +209,6 @@ Deploy the control-plane channel contract first, then the `my-servers` Edge func
 
 Deploy order for the stored region catalog:
 
-1. Deploy the control plane with the stored catalog (`hosting-regions`/`set-hosting-regions`, the version-3 summary that accepts `{version:3}`, key-only Create/Request). It seeds the six current regions.
+1. Deploy the control plane with the stored catalog (`hosting-regions`/`set-hosting-regions`, the version-3 summary that accepts `{version:3}`, key-only Create/Request). Its migration 096, `20261009120000_control_plane_provider_regions.sql`, creates the catalog and seeds the six current regions; it is applied through the control plane's manual Supabase release procedure before that release starts.
 2. Deploy the `my-servers` and `control-plane-admin` Edge Functions and the website. Against an older control plane the summary and mutations fail closed as unavailable, and the Hosting regions panel reports that the catalog could not be read.
 3. If the website catalog differs from the seed, open **Operations → Hosting regions** and click **Publish website regions**.
