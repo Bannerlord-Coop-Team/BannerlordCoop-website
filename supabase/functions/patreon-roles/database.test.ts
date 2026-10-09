@@ -6,6 +6,7 @@ import { manualRoleMetadata } from "../../../src/app/lib/auth/manual-role";
 import { LIVE_CONSOLE_OPERATOR_IDS_KEY, LIVE_CONSOLE_OWNER_IDS_KEY } from "../../../src/app/lib/console/access";
 import { updateLiveConsoleAssignment } from "../../../src/app/lib/console/assignment";
 import { createClient } from "@supabase/supabase-js";
+import { staticCreatorToken } from "../_shared/patreon-creator-token.ts";
 import { createPatreonRoleHandler } from "../_shared/patreon-roles.ts";
 import { createHmac } from "node:crypto";
 
@@ -423,7 +424,7 @@ test("signed event through the real worker and SQL RPC grants, retains paid-thro
         },
     } };
     const handler = createPatreonRoleHandler({
-        campaignId: campaign, tierId: tier, webhookSecret, syncSecret, creatorAccessToken: "fixture-creator-token",
+        campaignId: campaign, tierId: tier, webhookSecret, syncSecret, creatorToken: staticCreatorToken("fixture-creator-token"),
         rpc,
         fetchImplementation: async (input) => new URL(String(input)).pathname.endsWith(`/members/${member}`)
             ? Response.json(snapshot) : Response.json({ data: [], meta: { pagination: { cursors: { next: null } } } }),
