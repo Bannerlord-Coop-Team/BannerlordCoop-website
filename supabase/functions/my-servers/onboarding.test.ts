@@ -136,12 +136,27 @@ test("version-2 summaries map their six fixed regions into the version-3 shape",
     }
     // Only a version rejection falls back; any other failure propagates without a second read.
     const reads: unknown[] = [];
-    await assert.rejects(readOnboardingSummary(async (request) => { reads.push(request.input); throw new Error("offline"); }, () => false), /offline/u);
-    assert.deepEqual(reads, [{ version: 3 }]);
+    await assert.rejects(readOnboardingSummary(async (request, attempt) => { reads.push([attempt, request.input]); throw new Error("offline"); }, () => false), /offline/u);
+    assert.deepEqual(reads, [["current", { version: 3 }]]);
+    // Each read names its attempt, so callers never inspect the request shape.
+    const attempts: unknown[] = [];
+    const summary = await readOnboardingSummary(async (request, attempt) => {
+        attempts.push([attempt, request.input]);
+        if (attempt === "current") throw new Error("version rejected");
+        return legacyOnboardingSummary();
+    }, () => true);
+    assert.deepEqual(summary, legacyAsVersion3());
+    assert.deepEqual(attempts, [["current", { version: 3 }], ["legacy", {}]]);
 });
-test("onboarding Edge falls back to the version-2 summary when an older control plane rejects version 3", async () => {
+test("onboarding Edge falls back to the version-2 summary when an older control plane rejects version 3", async (t) => {
+    const warn = t.mock.method(console, "warn", () => undefined);
     const calls: Array<{ requestId: string; input: unknown }> = [];
     const response = await legacyControlPlane(calls)(request());
+    // One structured line per fallback, without the token or any request or account data.
+    assert.equal(warn.mock.callCount(), 1);
+    assert.deepEqual(JSON.parse(warn.mock.calls[0].arguments[0] as string), { event: "onboarding_summary_legacy_fallback", surface: "edge",
+        summaryVersion: 2, removeWhen: "control-plane migration 096 is live in production" });
+    assert.ok(!String(warn.mock.calls[0].arguments[0]).includes(token));
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { version: 1, requestId: ONBOARDING_TEST_ID, ok: true, result: legacyAsVersion3() });
     assert.deepEqual(calls.map((call) => call.input), [{ version: 3 }, {}]);

@@ -30,37 +30,70 @@ export type OnboardingResult =
     | { action: "request-region"; request: RegionRequest };
 /** The exact control-plane operations onboarding sends; owners never send placements. */
 export type OnboardingControlPlaneRequest =
-    | { operation: "server-onboarding"; input: { version: typeof ONBOARDING_SUMMARY_VERSION } | Record<string, never> }
+    | { operation: "server-onboarding"; input: { version: typeof ONBOARDING_SUMMARY_VERSION } | Record<string, never> /* version-2 fallback: delete */ }
     | { operation: "create-server"; input: { displayName: string; region: string; releaseChannel?: OnboardingReleaseChannel } }
     | { operation: "request-region"; input: { region: string } };
 
 type OnboardingSummaryRequest = Extract<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>;
-// The six regions every version-2 control plane offered, in its fixed order, with the labels it echoed.
-const LEGACY_REGION_LABELS = { "us-west": "US-West", "us-east": "US-East", france: "France", germany: "Germany",
-    "united-kingdom": "United Kingdom", poland: "Poland" } as const;
-const LEGACY_REGIONS = Object.keys(LEGACY_REGION_LABELS) as (keyof typeof LEGACY_REGION_LABELS)[];
-
+/** Which upstream read `readOnboardingSummary` is making: the version-3 summary or the version-2 rollout fallback. */
+export type OnboardingSummaryAttempt = "current" | "legacy";
 /** Builds the control-plane request for the owner's version-3 onboarding summary. */
 export function onboardingSummaryRequest(): OnboardingSummaryRequest {
     return { operation: "server-onboarding", input: { version: ONBOARDING_SUMMARY_VERSION } };
 }
-/** Builds the version-2 summary request (`{}`) a control plane without the stored catalog accepts. */
-export function legacyOnboardingSummaryRequest(): OnboardingSummaryRequest {
-    return { operation: "server-onboarding", input: {} };
-}
 /** Reads the version-3 summary, or the version-2 one when `rejectsVersion` says an older control plane refused version 3. */
 export async function readOnboardingSummary(
-    read: (request: OnboardingSummaryRequest) => Promise<unknown>,
+    read: (request: OnboardingSummaryRequest, attempt: OnboardingSummaryAttempt) => Promise<unknown>,
     rejectsVersion: (error: unknown) => boolean,
 ): Promise<OnboardingSummary> {
     let result: unknown;
-    try { result = await read(onboardingSummaryRequest()); } catch (error) {
+    try { result = await read(onboardingSummaryRequest(), "current"); } catch (error) {
         if (!rejectsVersion(error)) throw error;
         // Rollout: keep onboarding working against a control plane that predates `{version:3}`.
-        return parseLegacyOnboardingSummary(await read(legacyOnboardingSummaryRequest()));
+        return parseLegacyOnboardingSummary(await read(legacyOnboardingSummaryRequest(), "legacy"));
     }
     return parseOnboardingSummary(result);
 }
+
+// ---- Version-2 rollout fallback ----
+// DELETE once the control-plane release containing migration 096 (the stored hosting-region catalog) is live in
+// production, which is when every control plane accepts `{version:3}`. Delete exactly:
+// - here: the `"legacy"` attempt and its catch branch in `readOnboardingSummary` (read once, then parse), the
+//   `OnboardingSummaryAttempt` type and the `attempt` read parameter, `legacyOnboardingSummaryRequest`,
+//   `parseLegacyOnboardingSummary`, `LEGACY_REGION_LABELS`, `LEGACY_REGIONS`, `logLegacySummaryFallback`, and the
+//   `| Record<string, never>` branch of the `server-onboarding` input in `OnboardingControlPlaneRequest`;
+// - the transport predicates `isSummaryVersionRejection` in `_shared/my-servers.ts` and
+//   `src/app/lib/hosting/my-servers-server.ts`, and their `attempt` handling. `SummaryRejectedError` and
+//   `SummaryUnavailableError` stay: the Edge summary route also uses them to forward rejections and outages;
+// - `legacyOnboardingSummary` in `tests/onboarding-fixtures.ts` and the tests that use it;
+// - the "Rollout fallback" and "Removing the fallback" paragraphs and the `then {}` table note in `docs/server-onboarding.md`.
+// The six regions every version-2 control plane offered, in its fixed order, with the labels it echoed.
+const LEGACY_REGION_LABELS = { "us-west": "US-West", "us-east": "US-East", france: "France", germany: "Germany",
+    "united-kingdom": "United Kingdom", poland: "Poland" } as const;
+const LEGACY_REGIONS = Object.keys(LEGACY_REGION_LABELS) as (keyof typeof LEGACY_REGION_LABELS)[];
+/** Builds the version-2 summary request (`{}`) a control plane without the stored catalog accepts. */
+function legacyOnboardingSummaryRequest(): OnboardingSummaryRequest {
+    return { operation: "server-onboarding", input: {} };
+}
+/** Writes the one structured line that records a version-2 fallback read; it carries no token, account or request data. */
+export function logLegacySummaryFallback(surface: "edge" | "website", log: (line: string) => void = console.warn) {
+    log(JSON.stringify({ event: "onboarding_summary_legacy_fallback", surface, summaryVersion: 2,
+        removeWhen: "control-plane migration 096 is live in production" }));
+}
+/** Parses a version-2 summary (its six fixed regions with labels) into the version-3 shape, with no other requests. */
+export function parseLegacyOnboardingSummary(value: unknown): OnboardingSummary {
+    if (!record(value) || !keys(value, ["version", "sources", "membership", "eligibility", "unavailableReason", "regions"])) throw invalid();
+    if (value.version !== 2 || !Array.isArray(value.regions) || value.regions.length !== LEGACY_REGIONS.length) throw invalid();
+    const regions = value.regions.map((entry: unknown, index: number) => {
+        const region = LEGACY_REGIONS[index];
+        if (!record(entry) || !keys(entry, ["region", "label", "available", "request"])) throw invalid();
+        if (entry.region !== region || entry.label !== LEGACY_REGION_LABELS[region]) throw invalid();
+        return { region, available: entry.available, request: entry.request };
+    });
+    return parseOnboardingSummary({ ...value, version: ONBOARDING_SUMMARY_VERSION, regions, otherRequests: [] });
+}
+// ---- End of version-2 rollout fallback ----
+
 type OnboardingMutationRequest = Exclude<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>;
 /** Builds the key-only control-plane request for one parsed owner mutation. */
 export function onboardingMutationRequest(mutation: OnboardingMutation): OnboardingMutationRequest {
@@ -114,18 +147,6 @@ export function parseOnboardingSummary(value: unknown): OnboardingSummary {
     const otherRequests = parseOtherRequests(value.otherRequests, regions);
     return { version: ONBOARDING_SUMMARY_VERSION, sources: parseSources(value.sources), membership: parseMembership(value.membership),
         eligibility: parseEligibility(value.eligibility), unavailableReason, regions, otherRequests };
-}
-/** Parses a version-2 summary (its six fixed regions with labels) into the version-3 shape, with no other requests. */
-export function parseLegacyOnboardingSummary(value: unknown): OnboardingSummary {
-    if (!record(value) || !keys(value, ["version", "sources", "membership", "eligibility", "unavailableReason", "regions"])) throw invalid();
-    if (value.version !== 2 || !Array.isArray(value.regions) || value.regions.length !== LEGACY_REGIONS.length) throw invalid();
-    const regions = value.regions.map((entry: unknown, index: number) => {
-        const region = LEGACY_REGIONS[index];
-        if (!record(entry) || !keys(entry, ["region", "label", "available", "request"])) throw invalid();
-        if (entry.region !== region || entry.label !== LEGACY_REGION_LABELS[region]) throw invalid();
-        return { region, available: entry.available, request: entry.request };
-    });
-    return parseOnboardingSummary({ ...value, version: ONBOARDING_SUMMARY_VERSION, regions, otherRequests: [] });
 }
 /** Parses a mutation receipt and requires it to answer exactly the expected mutation. */
 export function parseOnboardingResult(value: unknown, expected: OnboardingMutation): OnboardingResult {

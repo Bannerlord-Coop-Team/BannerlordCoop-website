@@ -1,6 +1,6 @@
 import "server-only";
 import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse, type MyServerDeletionStatus } from "./my-servers";
-import { OnboardingDtoError, readOnboardingSummary, type OnboardingControlPlaneRequest } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { logLegacySummaryFallback, OnboardingDtoError, readOnboardingSummary, type OnboardingControlPlaneRequest } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 
 /** Reads owner inventory directly; Oracle rechecks the current session and durable access on every page. */
 export async function listAllMyServers(accessToken: string, callerSignal?: AbortSignal) {
@@ -12,14 +12,19 @@ export async function listAllMyServers(accessToken: string, callerSignal?: Abort
 /** Called after website account synchronization; eligibility and capacity are freshly checked by Oracle. */
 export async function getServerOnboarding(accessToken: string, callerSignal?: AbortSignal) {
     const signal = ownerReadSignal(accessToken, callerSignal);
-    try { return await readOnboardingSummary((request) => readOwner(accessToken, request, signal), isSummaryVersionRejection); }
+    try {
+        return await readOnboardingSummary((request, attempt) => {
+            if (attempt === "legacy") logLegacySummaryFallback("website");
+            return readOwner(accessToken, request, signal);
+        }, isSummaryVersionRejection);
+    }
     catch (error) {
         if (!(error instanceof OnboardingDtoError)) throw error;
         throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid response.", true);
     }
 }
 
-/** Whether an older control plane refused the version-3 summary input as an invalid request. */
+/** Whether an older control plane refused the version-3 summary input as an invalid request (version-2 fallback: delete). */
 function isSummaryVersionRejection(error: unknown) {
     return error instanceof MyServersApiError && error.code === "invalid_request";
 }

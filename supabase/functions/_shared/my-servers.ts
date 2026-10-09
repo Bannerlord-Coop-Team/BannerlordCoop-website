@@ -4,7 +4,7 @@ import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSetting
 import { serverLogDownloadHeaders } from "./server-log-contract.ts";
 import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
-import { onboardingMutationRequest, onboardingRequestMutation, onboardingSummaryRequest, parseOnboardingMutation, parseOnboardingResult, readOnboardingSummary, type OnboardingControlPlaneRequest } from "./server-onboarding-contract.ts";
+import { onboardingMutationRequest, onboardingRequestMutation, onboardingSummaryRequest, parseOnboardingMutation, parseOnboardingResult, readOnboardingSummary, logLegacySummaryFallback, type OnboardingControlPlaneRequest } from "./server-onboarding-contract.ts";
 import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, requireRunnerConfigurationPart, type RunnerConfigurationMutation, type RunnerConfigurationPart } from "./server-configuration-contract.ts";
 import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
 
@@ -98,9 +98,12 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
 
     // Reads the caller's version-3 summary, falling back to version 2 when an older control plane rejects it.
     function readSummary(token: string, requestId: string) {
-        // The fallback is a second upstream read, so it carries its own request ID.
-        return readOnboardingSummary((summaryRequest) => postSummary(summaryRequest, token,
-            "version" in summaryRequest.input ? requestId : crypto.randomUUID()), isSummaryVersionRejection);
+        return readOnboardingSummary((summaryRequest, attempt) => {
+            if (attempt === "current") return postSummary(summaryRequest, token, requestId);
+            // The fallback is a second upstream read, so it carries its own request ID.
+            logLegacySummaryFallback("edge");
+            return postSummary(summaryRequest, token, crypto.randomUUID());
+        }, isSummaryVersionRejection);
     }
 
     // Answers the summary read with a version-3 envelope, forwarding an upstream rejection unchanged.
@@ -775,7 +778,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 type SummaryRequest = Extract<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>;
 
-/** Whether an older control plane refused the version-3 summary input as an invalid request. */
+/** Whether an older control plane refused the version-3 summary input as an invalid request (version-2 fallback: delete). */
 function isSummaryVersionRejection(error: unknown) {
     return error instanceof SummaryRejectedError && error.error.code === "invalid_request";
 }
