@@ -36,11 +36,11 @@ it("reports a stored catalog equal to the website catalog as in sync, with publi
 it("marks missing, extra, changed-placement and reordered regions", () => {
     const regions = hostingRegionCatalogPayload().filter((entry) => entry.region !== "poland").reverse()
         .map((entry) => entry.region === "france" ? { ...entry, placement: { countryCodes: ["FR", "BE"] } } : entry);
-    regions.push({ region: "japan", placement: { countryCodes: ["JP"] } });
+    regions.push({ region: "atlantis", placement: { countryCodes: ["JP"] } });
     const html = renderToStaticMarkup(<HostingRegionsPanel catalog={catalog(regions)} error={null} />);
     expect(html).toContain("1 missing, 1 extra, 1 with a different placement, order differs");
     for (const status of ["Missing from control plane", "Not in website catalog", "Placement differs"]) expect(html).toContain(status);
-    expect(html).toContain("Japan");
+    expect(html).toContain("Atlantis");
     const storedOrder = regions.map((entry) => entry.region).join(", ");
     expect(html).toContain(`Stored order: ${storedOrder}`);
     expect(html).not.toContain("Nothing to publish");

@@ -22,9 +22,9 @@ test("drift reports missing, extra, placement and order differences independentl
     const website = hostingRegionCatalogPayload();
     const stored = website.filter((entry) => entry.region !== "poland").reverse()
         .map((entry) => entry.region === "france" ? { ...entry, placement: { countryCodes: ["FR", "BE"] } } : entry);
-    stored.push({ region: "japan", placement: { countryCodes: ["JP"] } });
+    stored.push({ region: "atlantis", placement: { countryCodes: ["JP"] } });
     const drift = compareHostingRegionCatalogs(stored, website);
-    assert.deepEqual(drift, { missing: ["poland"], extra: ["japan"], placementDiffers: ["france"], orderDiffers: true });
+    assert.deepEqual(drift, { missing: ["poland"], extra: ["atlantis"], placementDiffers: ["france"], orderDiffers: true });
     assert.equal(hasHostingRegionDrift(drift), true);
 });
 

@@ -7,17 +7,23 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ServerOnboarding } from "./ServerOnboarding";
 import { onboardingSummary } from "../../../../tests/onboarding-fixtures";
+import { HOSTING_CONTINENTS, HOSTING_REGIONS, type HostingRegionDefinition } from "../../../../supabase/functions/_shared/hosting-regions";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: vi.fn() }));
-// A third enabled continent (Asia, after a disabled South America) exercises wrapping and skipping.
-vi.mock("../../../../supabase/functions/_shared/hosting-regions", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../../../../supabase/functions/_shared/hosting-regions")>();
-    const regions = [...actual.HOSTING_REGIONS, { key: "japan", label: "Japan", continent: "asia", placement: { countryCodes: ["JP"] } }];
-    return { ...actual, HOSTING_REGIONS: regions,
-        isHostingRegionKey: (value: unknown) => regions.some((region) => region.key === value),
-        hostingRegion: (key: string) => regions.find((region) => region.key === key)! };
-});
+// An injected catalog adds a region on the last continent so tabs wrap and skip every disabled continent between.
+const lastContinent = HOSTING_CONTINENTS[HOSTING_CONTINENTS.length - 1];
+const added: HostingRegionDefinition = { key: "test-region", label: "Test Region", continent: lastContinent, placement: { countryCodes: ["JP"] } };
+const catalog = [...HOSTING_REGIONS, added];
+const continentLabel = (id: string) => servers[`continent.${id}` as keyof typeof servers] as string;
+/** Offered regions on one continent, in catalog order. */
+const regionsOn = (continent: string) => catalog.filter((region) => region.continent === continent).map((region) => region.key);
+const enabled = HOSTING_CONTINENTS.filter((id) => regionsOn(id).length > 0);
+/** The expected selected tab, focused tab and visible regions for one enabled continent. */
+const showing = (position: number) => {
+    const id = enabled[(position + enabled.length) % enabled.length];
+    return { tab: continentLabel(id), focused: continentLabel(id), regions: regionsOn(id) };
+};
 
 let container: HTMLDivElement; let root: Root;
 beforeEach(async () => {
@@ -26,10 +32,11 @@ beforeEach(async () => {
     Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value() { this.open = true; } });
     Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
-    // The fixture builds its stored catalog from the (mocked) website catalog, so it includes Japan.
+    // The stored catalog also offers the added region.
     const summary = onboardingSummary();
-    await act(async () => root.render(<LocalizationProvider locale="en" messages={{ servers: { ...servers, "region.japan": "Japan" }, "server-common": serverCommon }}>
-        <ServerOnboarding summary={summary} userId="account-a" />
+    summary.regions.push({ region: added.key, available: true, request: null });
+    await act(async () => root.render(<LocalizationProvider locale="en" messages={{ servers, "server-common": serverCommon }}>
+        <ServerOnboarding summary={summary} userId="account-a" catalog={catalog} />
     </LocalizationProvider>));
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     await act(async () => tab("Set up server ").click());
@@ -53,28 +60,28 @@ function current() {
 }
 
 it("wraps ArrowLeft from the first enabled continent to the last, skipping disabled ones", async () => {
-    tab("North America").focus();
+    tab(showing(0).tab).focus();
     await press("ArrowLeft");
-    expect(current()).toEqual({ tab: "Asia", focused: "Asia", regions: ["japan"] });
+    expect(current()).toEqual(showing(-1));
     await press("ArrowLeft");
-    expect(current()).toEqual({ tab: "Europe", focused: "Europe", regions: ["france", "germany", "united-kingdom", "poland"] });
+    expect(current()).toEqual(showing(-2));
 });
 
-it("moves ArrowRight past a disabled continent and wraps from the last", async () => {
-    tab("Europe").focus(); await act(async () => tab("Europe").click());
+it("moves ArrowRight past disabled continents and wraps from the last", async () => {
+    tab(showing(-2).tab).focus(); await act(async () => tab(showing(-2).tab).click());
     await press("ArrowRight");
-    expect(current().tab).toBe("Asia");
+    expect(current().tab).toBe(showing(-1).tab);
     await press("ArrowRight");
-    expect(current()).toEqual({ tab: "North America", focused: "North America", regions: ["us-west", "us-east"] });
+    expect(current()).toEqual(showing(0));
 });
 
 it("jumps to the last enabled continent with End and back to the first with Home", async () => {
-    tab("North America").focus();
+    tab(showing(0).tab).focus();
     await press("End");
-    expect(current()).toEqual({ tab: "Asia", focused: "Asia", regions: ["japan"] });
-    expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe("japan");
+    expect(current()).toEqual(showing(-1));
+    expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe(showing(-1).regions[0]);
     await press("Home");
-    expect(current()).toEqual({ tab: "North America", focused: "North America", regions: ["us-west", "us-east"] });
+    expect(current()).toEqual(showing(0));
     await press("a");
-    expect(current().tab).toBe("North America");
+    expect(current().tab).toBe(showing(0).tab);
 });

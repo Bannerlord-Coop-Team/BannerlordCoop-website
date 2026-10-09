@@ -10,7 +10,7 @@ import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactN
 import { submitServerOnboarding } from "@/app/servers/onboarding-actions";
 import { clearOnboardingIntent, onboardingIntentKey, readOnboardingIntent, storeOnboardingIntent } from "@/app/servers/onboarding-intent";
 import { normalizeOnboardingName, type OnboardingReleaseChannel, type OnboardingIntent, type OnboardingResult, type OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
-import { HOSTING_CONTINENTS, hostingRegion, isHostingRegionKey, type HostingContinent, type HostingRegionKey } from "../../../../supabase/functions/_shared/hosting-regions";
+import { HOSTING_CONTINENTS, HOSTING_REGIONS, type HostingContinent, type HostingRegionDefinition } from "../../../../supabase/functions/_shared/hosting-regions";
 import { localizedContinentLabel, localizedRegionLabel } from "@/app/lib/hosting/region-labels";
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
@@ -19,13 +19,17 @@ const secondaryButton = `inline-flex min-h-11 items-center justify-center gap-2 
 const labelStyle = "font-label text-xs font-semibold uppercase tracking-[0.16em] text-gold";
 const REFRESH_FEEDBACK_MIN_MS = 300;
 
-type Props = { userId: string; summary: OnboardingSummary | null; websiteSummary?: WebsiteOnboardingSummary };
+type Props = {
+    userId: string; summary: OnboardingSummary | null; websiteSummary?: WebsiteOnboardingSummary;
+    // The website region catalog that supplies each offered region's continent; the real catalog unless injected.
+    catalog?: readonly HostingRegionDefinition[];
+};
 /** Keys request recovery to the verified account without changing retained intent ownership. */
 export function ServerOnboarding(props: Props) {
     return <OnboardingSession key={props.userId} {...props} />;
 }
 /** Presents localized setup and recovery guidance around the existing request state machine. */
-function OnboardingSession({ userId, summary, websiteSummary }: Props) {
+function OnboardingSession({ userId, summary, websiteSummary, catalog = HOSTING_REGIONS }: Props) {
     const { t, number } = useTranslations("servers");
     const router = useRouter();
     const key = onboardingIntentKey(userId);
@@ -139,7 +143,7 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
     }
     // A retained intent may name a region since removed from either catalog. Retry settles it (an unknown key is a
     // definite rejection), so Discard is offered only once a dispatch has ended without a definite outcome.
-    const intentUnoffered = intent !== null && summary !== null && !offeredRegions(summary).some((region) => region === intent.region);
+    const intentUnoffered = intent !== null && summary !== null && !offeredRegions(summary, catalog).some((region) => region === intent.region);
     const canDiscard = intentUnoffered && dispatchUnconfirmed;
     const recovery = <>
         {storageError && <p role="alert" className="mt-4 text-sm text-red-200">{t("onboarding.storageError")}</p>}
@@ -174,7 +178,7 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
         </div>}
         {!open && recovery}
         {!open && result && <div className="mt-5 border border-gold/30 bg-surface p-5"><OnboardingReceipt result={result} /></div>}
-        {open && <SetupDialog summary={summary} canOffer={canOffer} disabled={busy || intent !== null} pending={pending} result={result} recovery={recovery}
+        {open && <SetupDialog summary={summary} catalog={catalog} canOffer={canOffer} disabled={busy || intent !== null} pending={pending} result={result} recovery={recovery}
             onSubmit={createCandidate} onRequest={requestCandidate} onDismiss={() => setOpen(false)} onRefresh={() => router.refresh()} fallbackFocus={() => fallbackRef.current?.focus()} />}
     </div>;
 }
@@ -192,16 +196,25 @@ function OnboardingReceipt({ result }: { result: OnboardingResult }) {
     </div>;
 }
 /** One continent tab and the offered regions it contains. */
-type ContinentTab = { id: HostingContinent; regions: HostingRegionKey[] };
+type ContinentTab = { id: HostingContinent; regions: string[] };
 
 /** Stored-catalog keys the website catalog knows, in stored order; only these have a continent and translation. */
-function offeredRegions(summary: OnboardingSummary | null): HostingRegionKey[] {
-    return (summary?.regions ?? []).map((entry) => entry.region).filter(isHostingRegionKey);
+function offeredRegions(summary: OnboardingSummary | null, catalog: readonly HostingRegionDefinition[]): string[] {
+    return (summary?.regions ?? []).map((entry) => entry.region).filter((region) => catalog.some((entry) => entry.key === region));
 }
 /** Groups offered regions into every continent tab; a tab without regions shows "coming soon". */
-function continentTabs(summary: OnboardingSummary | null): ContinentTab[] {
-    const offered = offeredRegions(summary);
-    return HOSTING_CONTINENTS.map((id) => ({ id, regions: offered.filter((region) => hostingRegion(region).continent === id) }));
+function continentTabs(summary: OnboardingSummary | null, catalog: readonly HostingRegionDefinition[]): ContinentTab[] {
+    const continents = new Map(catalog.map((entry) => [entry.key, entry.continent]));
+    const offered = offeredRegions(summary, catalog);
+    return HOSTING_CONTINENTS.map((id) => ({ id, regions: offered.filter((region) => continents.get(region) === id) }));
+}
+/** The tab showing the selected region, else the first tab with regions, else the first tab. */
+function activeContinent(continents: readonly ContinentTab[], selected: string | null): number {
+    const selectedIndex = continents.findIndex((tab) => tab.regions.some((region) => region === selected));
+    if (selectedIndex >= 0) return selectedIndex;
+    const firstEnabled = continents.findIndex((tab) => tab.regions.length > 0);
+    if (firstEnabled >= 0) return firstEnabled;
+    return 0;
 }
 /** Maps a tab-navigation key to the next enabled-tab position, wrapping at both ends; null for other keys. */
 function continentStep(key: string, position: number, count: number): number | null {
@@ -216,8 +229,8 @@ function continentStep(key: string, position: number, count: number): number | n
 }
 
 /** Collects validated server details while preserving native dialog focus and submission rules. */
-function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, onSubmit, onRequest, onDismiss, onRefresh, fallbackFocus }: {
-    summary: OnboardingSummary | null; canOffer: boolean; disabled: boolean; pending: boolean; result: OnboardingResult | null; recovery: ReactNode;
+function SetupDialog({ summary, catalog, canOffer, disabled, pending, result, recovery, onSubmit, onRequest, onDismiss, onRefresh, fallbackFocus }: {
+    summary: OnboardingSummary | null; catalog: readonly HostingRegionDefinition[]; canOffer: boolean; disabled: boolean; pending: boolean; result: OnboardingResult | null; recovery: ReactNode;
     onSubmit: (name: string, region: string, releaseChannel: OnboardingReleaseChannel) => void; onRequest: (region: string) => void; onDismiss: () => void; onRefresh: () => void; fallbackFocus: () => void;
 }) {
     const { t } = useTranslations("servers");
@@ -228,15 +241,15 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
     const fallback = useRef(fallbackFocus);
     const [name, setName] = useState("");
     const [releaseChannel, setReleaseChannel] = useState<OnboardingReleaseChannel>("stable");
-    const [selected, setSelected] = useState<string | null>(() => offeredRegions(summary)[0] ?? null);
+    const [selected, setSelected] = useState<string | null>(() => offeredRegions(summary, catalog)[0] ?? null);
     const [error, setError] = useState("");
     const [isRefreshing, startRefresh] = useTransition();
     const [refreshRequested, setRefreshRequested] = useState(false);
-    const continents = continentTabs(summary);
+    const continents = continentTabs(summary, catalog);
     const enabledContinents = continents.flatMap((tab, index) => tab.regions.length ? [index] : []);
-    const selectedContinent = continents.findIndex((tab) => tab.regions.some((region) => region === selected));
-    const continent = selectedContinent >= 0 ? selectedContinent : enabledContinents[0] ?? 0;
-    const entry = summary?.regions.find((entry) => entry.region === selected && isHostingRegionKey(entry.region));
+    const continent = activeContinent(continents, selected);
+    // Selection only ever holds an offered key, so the entry is always one the website catalog knows.
+    const entry = summary?.regions.find((entry) => entry.region === selected);
     const refreshBusy = isRefreshing || refreshRequested;
     const [replacement, setReplacement] = useState<string | null>(null);
     // An outstanding request for any other region, including one no longer offered, is replaced on request.

@@ -12,6 +12,7 @@ import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import { onboardingIntentKey, storeOnboardingIntent } from "@/app/servers/onboarding-intent";
 import { onboardingRegion, onboardingSummary, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID } from "../../../../tests/onboarding-fixtures";
 import type { OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { HOSTING_CONTINENTS, HOSTING_REGIONS } from "../../../../supabase/functions/_shared/hosting-regions";
 const mocks = vi.hoisted(() => ({ request: vi.fn(), auth: vi.fn(), refresh: vi.fn(), revalidate: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
@@ -45,8 +46,14 @@ async function name(value: string) {
     const input = container.querySelector<HTMLInputElement>("#onboarding-server-name")!;
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
 }
+/** Website regions on one continent, in catalog order. */
+function regionsOn(continent: string) { return HOSTING_REGIONS.filter((region) => region.continent === continent).map((region) => region.key); }
+/** The English tab label of a continent. */
+function continentLabel(continent: string) { return servers[`continent.${continent}` as keyof typeof servers] as string; }
+/** The English tab label of the continent a website region belongs to. */
+function continentOf(region: string) { return continentLabel(HOSTING_REGIONS.find((entry) => entry.key === region)!.continent); }
 async function choose(region: string) {
-    await click(region.startsWith("us-") ? "North America" : "Europe");
+    await click(continentOf(region));
     await act(async () => container.querySelector<HTMLInputElement>(`input[value="${region}"]`)!.click());
 }
 async function setup() { await render(); await click("Set up server "); }
@@ -69,21 +76,23 @@ describe("ServerOnboarding real component and server-action recovery", () => {
     it("groups regions into accessible continent tabs and disables coming-soon continents", async () => {
         await setup();
         const regions = () => [...container.querySelectorAll<HTMLInputElement>('input[name="region"]')].map((input) => input.value);
-        expect(regions()).toEqual(["us-west", "us-east"]);
-        for (const label of ["South America", "Asia", "Oceania"]) expect(button(`${label}Coming soon`).disabled).toBe(true);
-        await click("Europe");
-        expect(regions()).toEqual(["france", "germany", "united-kingdom", "poland"]);
-        expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe("france");
-        expect(button("Europe").getAttribute("aria-selected")).toBe("true");
-        await act(async () => button("Europe").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
-        expect(regions()).toEqual(["us-west", "us-east"]);
-        expect(document.activeElement).toBe(button("North America"));
-        expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe("us-west");
+        const enabled = HOSTING_CONTINENTS.filter((id) => regionsOn(id).length > 0);
+        expect(regions()).toEqual(regionsOn(enabled[0]));
+        for (const id of HOSTING_CONTINENTS.filter((id) => !enabled.includes(id))) expect(button(`${continentLabel(id)}Coming soon`).disabled).toBe(true);
+        await click(continentLabel(enabled[1]));
+        expect(regions()).toEqual(regionsOn(enabled[1]));
+        expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe(regionsOn(enabled[1])[0]);
+        expect(button(continentLabel(enabled[1])).getAttribute("aria-selected")).toBe("true");
+        await act(async () => button(continentLabel(enabled[1])).dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+        const next = enabled[2 % enabled.length];
+        expect(regions()).toEqual(regionsOn(next));
+        expect(document.activeElement).toBe(button(continentLabel(next)));
+        expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe(regionsOn(next)[0]);
         expect(mocks.request).not.toHaveBeenCalled();
     });
     it("offers only stored-catalog regions the website knows, in stored order, and disables emptied continents", async () => {
         const summary = onboardingSummary();
-        summary.regions = [{ region: "japan", available: true, request: null }, onboardingRegion(summary, "poland"),
+        summary.regions = [{ region: "atlantis", available: true, request: null }, onboardingRegion(summary, "poland"),
             { ...onboardingRegion(summary, "germany"), available: true }];
         await render(summary); await click("Set up server ");
         const regions = () => [...container.querySelectorAll<HTMLInputElement>('input[name="region"]')].map((input) => input.value);
@@ -91,7 +100,7 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         expect(button("Europe").getAttribute("aria-selected")).toBe("true");
         expect(regions()).toEqual(["poland", "germany"]);
         expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe("poland");
-        expect(container.textContent).not.toContain("Japan");
+        expect(container.textContent).not.toContain("Atlantis");
         await choose("germany"); await name("My Campaign"); await click("Create server");
         expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", region: "germany" });
     });
