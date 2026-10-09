@@ -128,20 +128,18 @@ export function createCreatorTokenProvider(options: CreatorTokenProviderOptions)
 
     /**
      * Rotates the stored pair. Patreon consumes the refresh token during the exchange, so the new
-     * pair is the only valid one from then on: the store write is retried once, and a stale reply
-     * is checked against the store before giving up.
+     * pair is the only valid one from then on: a store write that throws is sent once more, and a
+     * reply that is not `rotated` is checked against the store before giving up.
      */
     async function refresh(current: Stored): Promise<string | null> {
         const issued = await exchange(current);
         if (issued === null) return null;
         const input = { generation: current.generation, ...issued };
-        for (let attempt = 0; attempt < 2; attempt++) {
-            let committed: unknown;
-            try { committed = await options.rpc("rotate", input); }
-            catch { continue; }
-            if (record(committed) && committed.rotated === true) return remember(issued.accessToken);
-            break;
-        }
+        // Resolves to the reply, or undefined when the request itself failed (timeout, pool, lock budget).
+        const write = () => options.rpc("rotate", input).catch(() => undefined);
+        let reply = await write();
+        if (reply === undefined) reply = await write();
+        if (record(reply) && reply.rotated === true) return remember(issued.accessToken);
         // Either the write landed but its reply was lost, or another rotation won; the store decides.
         try {
             const state = await read();
@@ -174,20 +172,20 @@ export function createCreatorTokenProvider(options: CreatorTokenProviderOptions)
 /** Sends a creator-authenticated request and retries exactly once with a replacement token after a 401. */
 export async function fetchWithCreatorToken(
     provider: CreatorTokenProvider, fetcher: typeof fetch, url: URL,
-    init: { headers: Record<string, string>; redirect?: RequestRedirect; timeoutMs?: number },
+    init: { headers: Record<string, string>; redirect?: RequestRedirect },
 ): Promise<Response> {
     // Each attempt gets its own deadline; the retry must not inherit time spent on the refresh.
     const send = (token: string) => fetcher(url, {
         headers: { ...init.headers, authorization: `Bearer ${token}` },
-        redirect: init.redirect ?? "error", signal: AbortSignal.timeout(init.timeoutMs ?? REQUEST_TIMEOUT_MS),
+        redirect: init.redirect ?? "error", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     const token = await provider.current();
     const response = await send(token);
     if (response.status !== 401) return response;
-    const replacement = await provider.replace(token);
-    if (replacement === null) return response;
+    // Nobody reads a 401 body; release it before the replacement may throw.
     await response.body?.cancel().catch(() => undefined);
-    return send(replacement);
+    const replacement = await provider.replace(token);
+    return replacement === null ? response : send(replacement);
 }
 
 /** Service-role adapter for the fixed `patreon_creator_token` RPC. */
@@ -206,6 +204,8 @@ export function createCreatorTokenRpc(options: { supabaseUrl: string; serviceKey
         });
         if (!response.ok) {
             await response.body?.cancel().catch(() => undefined);
+            // Fixed message so a missing migration or grant is distinguishable from a Patreon outage.
+            console.warn("Patreon creator token store request failed");
             throw new Error("creator_token_rpc_failed");
         }
         return boundedJson(response, 16_384);

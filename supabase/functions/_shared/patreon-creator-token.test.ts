@@ -14,7 +14,9 @@ function store(initial: { accessToken: string; refreshToken: string; refreshDue?
     const state = {
         generation: initial ? 1 : 0, accessToken: initial?.accessToken ?? "", refreshToken: initial?.refreshToken ?? "",
         refreshDue: initial?.refreshDue ?? false, failures: [] as string[],
-        /** Number of rotate replies to lose after applying the write (simulated transport failure). */
+        /** Number of rotate requests to fail before the write is applied (timeout, pool, lock budget). */
+        lostRotateRequests: 0,
+        /** Number of rotate replies to lose after applying the write (reply lost in transit). */
         lostRotateReplies: 0,
     };
     const calls: { operation: CreatorTokenOperation; input: Record<string, unknown> }[] = [];
@@ -31,6 +33,7 @@ function store(initial: { accessToken: string; refreshToken: string; refreshDue?
         }
         if (input.generation !== state.generation) return { stale: true, generation: state.generation };
         if (operation === "failed") { state.failures.push(String(input.reason)); return { recorded: true }; }
+        if (state.lostRotateRequests > 0) { state.lostRotateRequests--; throw new Error("creator_token_rpc_failed"); }
         Object.assign(state, { generation: state.generation + 1, accessToken: input.accessToken, refreshToken: input.refreshToken, refreshDue: false });
         if (state.lostRotateReplies > 0) { state.lostRotateReplies--; throw new Error("creator_token_rpc_failed"); }
         return { rotated: true, generation: state.generation };
@@ -148,24 +151,38 @@ test("rejected, unavailable and malformed refreshes keep the current token and r
     }
 });
 
-test("a lost rotate reply is retried, then reconciled against the store so the issued pair is never dropped", async () => {
-    // One lost reply: the retry succeeds.
+test("a failed rotate write is sent once more, and a lost reply is reconciled against the store", async () => {
+    // The request failed before the write landed: the second write succeeds and no re-read is needed.
     const retried = store({ accessToken: "stored-access-token-fixture", refreshToken: "stored-refresh-token-fixture", refreshDue: true });
-    retried.state.lostRotateReplies = 1;
-    let provider = createCreatorTokenProvider({ ...client, bootstrap, rpc: retried.rpc, fetchImplementation: patreon("stored-refresh-token-fixture").fetchImplementation });
+    retried.state.lostRotateRequests = 1;
+    let logs: string[] = [];
+    let provider = createCreatorTokenProvider({ ...client, bootstrap, rpc: retried.rpc, log: (m) => logs.push(m),
+        fetchImplementation: patreon("stored-refresh-token-fixture").fetchImplementation });
     assert.equal(await provider.current(), "rotated-access-token-fixture");
-    assert.deepEqual(retried.calls.map((c) => c.operation), ["read", "rotate", "rotate", "read"]);
+    assert.deepEqual(retried.calls.map((c) => c.operation), ["read", "rotate", "rotate"]);
+    assert.deepEqual(retried.calls[2].input, retried.calls[1].input);
+    assert.equal(retried.state.generation, 2);
     assert.deepEqual(retried.state.failures, []);
-    // Two lost replies: the write landed, so the re-read proves the issued token is stored.
+    assert.deepEqual(logs, []);
+    // The write landed but its reply was lost: the retry is stale and the re-read proves the issued token is stored.
     const reconciled = store({ accessToken: "stored-access-token-fixture", refreshToken: "stored-refresh-token-fixture", refreshDue: true });
-    reconciled.state.lostRotateReplies = 2;
-    const logs: string[] = [];
+    reconciled.state.lostRotateReplies = 1;
+    logs = [];
     provider = createCreatorTokenProvider({ ...client, bootstrap, rpc: reconciled.rpc, log: (m) => logs.push(m),
         fetchImplementation: patreon("stored-refresh-token-fixture").fetchImplementation });
     assert.equal(await provider.current(), "rotated-access-token-fixture");
     assert.deepEqual(reconciled.calls.map((c) => c.operation), ["read", "rotate", "rotate", "read"]);
     assert.equal(reconciled.state.generation, 2);
     assert.deepEqual(logs, []);
+    // Both writes fail before landing: the re-read shows the old token and the loss is reported.
+    const lost = store({ accessToken: "stored-access-token-fixture", refreshToken: "stored-refresh-token-fixture", refreshDue: true });
+    lost.state.lostRotateRequests = 2;
+    logs = [];
+    provider = createCreatorTokenProvider({ ...client, bootstrap, rpc: lost.rpc, log: (m) => logs.push(m),
+        fetchImplementation: patreon("stored-refresh-token-fixture").fetchImplementation });
+    assert.equal(await provider.current(), "stored-access-token-fixture");
+    assert.deepEqual(lost.calls.map((c) => c.operation), ["read", "rotate", "rotate", "read"]);
+    assert.deepEqual(logs, ["Patreon creator token rotation not stored"]);
 });
 
 test("a rotation that lost the generation race is reported and the current token kept", async () => {

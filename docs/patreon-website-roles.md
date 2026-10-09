@@ -246,9 +246,11 @@ pair in Supabase Vault (`patreon_creator_access_token` and
   and re-reads the store before giving up. A write that still fails leaves a
   spent refresh token in Vault and needs the manual rotation below.
 - Apply the migration before setting `PATREON_CREATOR_REFRESH_TOKEN`. With the
-  secret set but the RPC missing, every member read fails as
-  `upstream_unavailable` and the run reports `sync_incomplete`; nothing is
-  revoked, and the fixed access token keeps working once the secret is removed.
+  secret set but the RPC missing, the function logs
+  `Patreon creator token store request failed`, the first member read of each
+  run fails and the run stops with `sync_incomplete` (`sync_unavailable` when
+  only discovery was due); nothing is revoked, and the fixed access token keeps
+  working once the secret is removed.
 
 Monitor `generation`, `expires_at`, `refreshed_at` and `last_failure` on
 `patreon_roles.creator_token` without printing Vault values. `rejected` means
