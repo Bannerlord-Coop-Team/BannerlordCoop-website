@@ -45,27 +45,29 @@ test("current entitled upgrade qualifies intentionally, not proof of captured $2
 });
 test("wrong campaign/tier, pending, declined, former, missing, future and incomplete provider data fail closed", async () => {
     const cases: [string, (body: ReturnType<typeof identity>) => void, string][] = [
-        ["numeric member", b => { b.included[0].id = "2"; b.data.relationships.memberships.data[0].id = "2"; }, "review_required"],
-        ["malformed included member", b => { b.included[0].id = "not-a-uuid"; }, "review_required"],
-        ["malformed member reference", b => { b.data.relationships.memberships.data[0].id = "not-a-uuid"; }, "review_required"],
-        ["wrong member resource type", b => { b.included[0].type = "user"; }, "review_required"],
-        ["wrong member reference type", b => { b.data.relationships.memberships.data[0].type = "tier"; }, "review_required"],
-        ["UUID campaign", b => { b.included[1].id = memberId; }, "review_required"],
-        ["UUID tier", b => { b.included[2].id = memberId; }, "review_required"],
+        ["numeric member", b => { b.included[0].id = "2"; b.data.relationships.memberships.data[0].id = "2"; }, "unknown"],
+        ["malformed included member", b => { b.included[0].id = "not-a-uuid"; }, "unknown"],
+        ["malformed member reference", b => { b.data.relationships.memberships.data[0].id = "not-a-uuid"; }, "unknown"],
+        ["wrong member resource type", b => { b.included[0].type = "user"; }, "unknown"],
+        ["wrong member reference type", b => { b.data.relationships.memberships.data[0].type = "tier"; }, "unknown"],
+        ["UUID campaign", b => { b.included[1].id = memberId; }, "unknown"],
+        ["UUID tier", b => { b.included[2].id = memberId; }, "unknown"],
         ["wrong campaign", b => { b.included[0].relationships!.campaign!.data.id = "11"; }, "nonqualifying"],
         ["wrong tier", b => { b.included[0].relationships!.currently_entitled_tiers!.data[0].id = "21"; b.included[2].id = "21"; }, "nonqualifying"],
         ["declined", b => { b.included[0].attributes.last_charge_status = "Declined"; }, "nonqualifying"],
         ["pending", b => { b.included[0].attributes.last_charge_status = "Pending"; }, "review_required"],
         ["former without paid-through", b => { b.included[0].attributes.patron_status = "former_patron"; }, "review_required"],
         ["future charge", b => { b.included[0].attributes.last_charge_date = "2099-01-01T00:00:00Z"; }, "review_required"],
-        ["incomplete includes", b => { b.included.pop(); }, "review_required"],
+        ["incomplete includes", b => { b.included.pop(); }, "unknown"],
+        ["missing payment fields", b => { delete (b.included[0].attributes as { last_charge_date?: string }).last_charge_date; }, "unknown"],
+        ["gifted", b => { b.included[0].attributes.is_gifted = true; }, "review_required"],
         ["wrong member identity", b => { b.included[0].relationships!.user!.data.id = "3"; }, "review_required"],
         ["wrong currency", b => { b.included[1].attributes.currency = "EUR"; }, "review_required"],
         ["free trial", b => { b.included[0].attributes.is_free_trial = true; }, "review_required"],
     ];
     for (const [name, mutate, expected] of cases) { const body = identity(); mutate(body); assert.equal((await verifyPatreonMembership(body, policy, now)).evidence.verification, expected, name); }
-    const paged = { ...identity(), links: { next: "https://attacker.invalid/" } }; assert.equal((await verifyPatreonMembership(paged, policy, now)).evidence.verification, "review_required");
-    const duplicate = identity(); duplicate.included.push(duplicate.included[0]); assert.equal((await verifyPatreonMembership(duplicate, policy, now)).evidence.verification, "review_required");
+    const paged = { ...identity(), links: { next: "https://attacker.invalid/" } }; assert.equal((await verifyPatreonMembership(paged, policy, now)).evidence.verification, "unknown");
+    const duplicate = identity(); duplicate.included.push(duplicate.included[0]); assert.equal((await verifyPatreonMembership(duplicate, policy, now)).evidence.verification, "unknown");
 });
 test("authoritative Discord identities never fall back to metadata or merge conflicting IDs", () => {
     assert.equal(currentDiscord({ identities: [], user_metadata: { provider_id: "123456789012345678" } }), null);
@@ -143,6 +145,30 @@ test("website identity first, independent grant bypasses outage/configuration an
     assert.throws(() => parseAccountStatus(status, "bbbbbbbb-1111-4111-8111-111111111111"));
 });
 
+test("incomplete provider reads are retryable with a fixed reason; conflicts and non-paid statuses stay review cases", async () => {
+    const complete = await verifyPatreonMembership(identity(), policy, now);
+    assert.equal(complete.failure, null); assert.equal(complete.evidence.verification, "qualifying");
+    const truncated = identity(); truncated.included.pop();
+    const incomplete = await verifyPatreonMembership(truncated, policy, now);
+    assert.equal(incomplete.failure, "Missing tier amount"); assert.equal(incomplete.evidence.verification, "unknown");
+    assert.equal(incomplete.evidence.memberId, memberId); assert.match(incomplete.evidence.evidenceSha256!, /^[a-f0-9]{64}$/u);
+    const conflicting = identity(); conflicting.included[1].attributes.currency = "EUR";
+    const review = await verifyPatreonMembership(conflicting, policy, now);
+    assert.equal(review.failure, "Unsupported currency"); assert.equal(review.evidence.verification, "review_required");
+    const pending = identity(); pending.included[0].attributes.last_charge_status = "Pending";
+    const status = await verifyPatreonMembership(pending, policy, now);
+    assert.equal(status.failure, null); assert.equal(status.evidence.verification, "review_required");
+    // JSON:API may omit "included" entirely when the user has no memberships at all.
+    const nobody = { data: { type: "user", id: "1", relationships: { memberships: { data: [] } } } };
+    const none = await verifyPatreonMembership(nobody, policy, now);
+    assert.equal(none.failure, null); assert.equal(none.evidence.verification, "nonqualifying");
+    // A membership reference without resources is still incomplete, not nonqualifying.
+    const bare = await verifyPatreonMembership({ data: identity().data }, policy, now);
+    assert.equal(bare.failure, "Missing member"); assert.equal(bare.evidence.verification, "unknown");
+    // Creator-authenticated allocation reads keep the three-state contract patreon_role_sync accepts.
+    const allocation = await verifyPatreonAllocation({ data: truncated.included[0], included: truncated.included.slice(1) }, policy, now);
+    assert.equal(allocation.verification, "review_required");
+});
 test("Patreon pagination refuses cursor-only, malformed and contradictory metadata at every relevant level", async () => {
     const targets = [
         (b: ReturnType<typeof identity>) => b,
@@ -169,7 +195,7 @@ test("Patreon pagination refuses cursor-only, malformed and contradictory metada
     for (const [index, target] of targets.entries()) {
         for (const extra of bad) {
             const body = identity(); Object.assign(target(body), extra);
-            assert.equal((await verifyPatreonMembership(body, policy, now)).evidence.verification, "review_required", `${index}:${JSON.stringify(extra)}`);
+            assert.equal((await verifyPatreonMembership(body, policy, now)).evidence.verification, "unknown", `${index}:${JSON.stringify(extra)}`);
         }
         const complete = identity(); Object.assign(target(complete), { links: { next: null }, meta: { pagination: { total: 1, cursors: { next: null } } } });
         assert.equal((await verifyPatreonMembership(complete, policy, now)).evidence.verification, "qualifying");
