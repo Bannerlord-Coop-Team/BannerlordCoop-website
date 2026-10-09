@@ -4,7 +4,7 @@ import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSetting
 import { serverLogDownloadHeaders } from "./server-log-contract.ts";
 import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
-import { onboardingMutationRequest, onboardingSummaryRequest, parseOnboardingMutation, parseOnboardingResult, readOnboardingSummary, type OnboardingControlPlaneRequest, type OnboardingMutation } from "./server-onboarding-contract.ts";
+import { onboardingMutationRequest, onboardingRequestMutation, onboardingSummaryRequest, parseOnboardingMutation, parseOnboardingResult, readOnboardingSummary, type OnboardingControlPlaneRequest } from "./server-onboarding-contract.ts";
 import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, requireRunnerConfigurationPart, type RunnerConfigurationMutation, type RunnerConfigurationPart } from "./server-configuration-contract.ts";
 import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
 
@@ -47,9 +47,7 @@ type UpstreamRequest =
     | { operation: "save-configuration-file"; input: RunnerConfigurationMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
     // Onboarding sends region keys only; the control plane resolves them against its stored catalog.
-    | Extract<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>
-    // The parsed mutation is kept (never forwarded) to verify the receipt answers exactly it.
-    | (Exclude<OnboardingControlPlaneRequest, { operation: "server-onboarding" }> & { mutation: OnboardingMutation })
+    | OnboardingControlPlaneRequest
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "server-backup-status"; input: { serverId: string } }
@@ -298,13 +296,13 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     parseVisibilityResult(envelope.result, { action: "set-server-visibility", ...upstreamRequest.input });
                 }
                 if (upstreamRequest.operation === "create-server") {
-                    const result = parseOnboardingResult(envelope.result, upstreamRequest.mutation);
+                    const result = parseOnboardingResult(envelope.result, onboardingRequestMutation(upstreamRequest));
                     if (result.action === "create-server") {
                         created = { region: result.region, serverId: result.serverId, createdAt: result.createdAt, requester: requesterFromToken(token) };
                     }
                 }
                 if (upstreamRequest.operation === "request-region") {
-                    const result = parseOnboardingResult(envelope.result, upstreamRequest.mutation);
+                    const result = parseOnboardingResult(envelope.result, onboardingRequestMutation(upstreamRequest));
                     // A receipt carrying the submitted UUID is a newly accepted request (or its exact replay);
                     // any other UUID is the backend deduplicating an already outstanding request.
                     if (result.action === "request-region" && result.request.requestId.toLowerCase() === requestId) {
@@ -471,8 +469,7 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
     }
     if (value.action === "create-server" || value.action === "request-region") {
         // The browser names only a region key; any other field, including a placement, is rejected.
-        const mutation = parseOnboardingMutation(value);
-        return { ...onboardingMutationRequest(mutation), mutation };
+        return onboardingMutationRequest(parseOnboardingMutation(value));
     }
     if (typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)) {
         throw new Error("Invalid server ID");

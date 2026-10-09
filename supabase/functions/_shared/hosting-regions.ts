@@ -12,6 +12,7 @@ export type HostingPlacement = {
     readonly locationIds?: readonly string[];
 };
 
+/** One website catalog entry: its key, English label, continent tab and placement. */
 export type HostingRegionDefinition = {
     readonly key: string;
     readonly label: string;
@@ -19,8 +20,22 @@ export type HostingRegionDefinition = {
     readonly placement: HostingPlacement;
 };
 
-/** A JSON-safe catalog entry in the control plane's wire form. */
+/** A JSON-safe catalog entry in the control plane's wire form; the one wire type for definitions and placements. */
 export type HostingRegionPayload = { region: string; placement: { countryCodes: string[]; locationIds?: string[] } };
+
+// The control plane's catalog bounds, shared by every parser and test of a catalog or summary.
+/** Most regions a stored catalog (and so an owner summary) may hold. */
+export const MAXIMUM_REGIONS = 32;
+/** Most countries one placement may name. */
+export const MAXIMUM_PLACEMENT_COUNTRIES = 64;
+/** Most provider zones one placement may name. */
+export const MAXIMUM_PLACEMENT_LOCATIONS = 32;
+/** An upper-case ISO 3166-1 alpha-2 country code. */
+export const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/u;
+/** A provider zone identifier. */
+export const LOCATION_ID_PATTERN = /^[A-Za-z\d][A-Za-z\d._:-]{0,127}$/u;
+// Region keys the control plane accepts: bounded lowercase slugs.
+const REGION_KEY_PATTERN = /^[a-z][a-z0-9-]{1,47}$/u;
 
 // Coast regions name their exact zones: a US country code alone never implies a coast.
 export const HOSTING_REGIONS = [
@@ -36,9 +51,6 @@ export const HOSTING_REGIONS = [
 
 export type HostingRegionKey = typeof HOSTING_REGIONS[number]["key"];
 
-/** Region keys the control plane accepts: bounded lowercase slugs. */
-export const REGION_KEY_PATTERN = /^[a-z][a-z0-9-]{1,47}$/u;
-
 /** Whether a value is a key in this website catalog. */
 export function isHostingRegionKey(value: unknown): value is HostingRegionKey {
     return HOSTING_REGIONS.some((region) => region.key === value);
@@ -49,20 +61,26 @@ export function isRegionKey(value: unknown): value is string {
     return typeof value === "string" && REGION_KEY_PATTERN.test(value);
 }
 
-/** The catalog definition for a website region key. */
-export function hostingRegion(key: HostingRegionKey): HostingRegionDefinition {
-    return HOSTING_REGIONS.find((entry) => entry.key === key)!;
-}
-
 /** English display label for any region key: the catalog label, else the key humanized ("united-states" -> "United States"). */
 export function hostingRegionLabel(key: string): string {
-    if (isHostingRegionKey(key)) return hostingRegion(key).label;
+    const region = HOSTING_REGIONS.find((entry) => entry.key === key);
+    if (region !== undefined) return region.label;
     return key.split("-").filter(Boolean).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
 }
 
 /** The whole catalog in the control plane's wire form, in display order, as an independent copy. */
 export function hostingRegionCatalogPayload(): HostingRegionPayload[] {
     return HOSTING_REGIONS.map((region) => ({ region: region.key, placement: placementPayload(region.placement) }));
+}
+
+/** Whether a value is a plain object. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Whether an object has exactly the expected own keys. */
+export function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+    return Object.keys(value).length === expected.length && expected.every((key) => Object.hasOwn(value, key));
 }
 
 /** Copies a readonly placement into mutable JSON arrays. */

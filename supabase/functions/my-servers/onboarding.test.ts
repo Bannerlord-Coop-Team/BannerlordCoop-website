@@ -111,7 +111,7 @@ test("onboarding safe DTO parsers reject incomplete, extra, inconsistent and inv
 // The legacy summary in version-3 form: the six fixed regions, in order, without labels or other requests.
 function legacyAsVersion3() {
     const { regions, ...rest } = legacyOnboardingSummary();
-    return { ...rest, version: 3, regions: regions.map(({ label: _label, ...entry }) => entry), otherRequests: [] };
+    return { ...rest, version: 3, regions: regions.map(({ region, available, request }) => ({ region, available, request })), otherRequests: [] };
 }
 // Serves an older control plane: `{version:3}` is an invalid request, `{}` returns the version-2 summary.
 function legacyControlPlane(calls: Array<{ requestId: string; input: unknown }>, legacy: unknown = legacyOnboardingSummary()) {

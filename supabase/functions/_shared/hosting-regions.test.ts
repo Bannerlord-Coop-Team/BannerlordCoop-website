@@ -1,33 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+    COUNTRY_CODE_PATTERN,
     HOSTING_CONTINENTS,
     HOSTING_REGIONS,
-    REGION_KEY_PATTERN,
+    LOCATION_ID_PATTERN,
+    MAXIMUM_PLACEMENT_COUNTRIES,
+    MAXIMUM_PLACEMENT_LOCATIONS,
+    MAXIMUM_REGIONS,
+    hasExactKeys,
     hostingRegionCatalogPayload,
     hostingRegionLabel,
+    isRecord,
     isRegionKey,
 } from "./hosting-regions.ts";
-
-// The control plane's own bounds; a catalog outside them would be rejected when published.
-const COUNTRY = /^[A-Z]{2}$/u;
-const LOCATION = /^[A-Za-z\d][A-Za-z\d._:-]{0,127}$/u;
 
 test("every website region is a valid, unique control-plane definition on a known continent", () => {
     const keys = HOSTING_REGIONS.map((region) => region.key);
     assert.equal(new Set(keys).size, keys.length);
-    assert.ok(HOSTING_REGIONS.length >= 1 && HOSTING_REGIONS.length <= 32);
+    // The control plane's own bounds; a catalog outside them would be rejected when published.
+    assert.ok(HOSTING_REGIONS.length >= 1 && HOSTING_REGIONS.length <= MAXIMUM_REGIONS);
     for (const region of HOSTING_REGIONS) {
-        assert.match(region.key, REGION_KEY_PATTERN);
+        assert.ok(isRegionKey(region.key), region.key);
         assert.ok(region.label.length > 0);
         assert.ok(HOSTING_CONTINENTS.includes(region.continent), region.key);
         const { countryCodes } = region.placement;
         const locationIds: readonly string[] | undefined = "locationIds" in region.placement ? region.placement.locationIds : undefined;
-        assert.ok(countryCodes.length >= 1 && countryCodes.length <= 64 && new Set(countryCodes).size === countryCodes.length, region.key);
-        for (const country of countryCodes) assert.match(country, COUNTRY);
+        assert.ok(countryCodes.length >= 1 && countryCodes.length <= MAXIMUM_PLACEMENT_COUNTRIES && new Set(countryCodes).size === countryCodes.length, region.key);
+        for (const country of countryCodes) assert.match(country, COUNTRY_CODE_PATTERN);
         if (locationIds !== undefined) {
-            assert.ok(locationIds.length >= 1 && locationIds.length <= 32 && new Set(locationIds).size === locationIds.length, region.key);
-            for (const location of locationIds) assert.match(location, LOCATION);
+            assert.ok(locationIds.length >= 1 && locationIds.length <= MAXIMUM_PLACEMENT_LOCATIONS && new Set(locationIds).size === locationIds.length, region.key);
+            for (const location of locationIds) assert.match(location, LOCATION_ID_PATTERN);
         }
     }
 });
@@ -48,6 +51,14 @@ test("labels cover website keys and humanize any other key", () => {
     assert.equal(hostingRegionLabel("united-states"), "United States");
     assert.equal(hostingRegionLabel("europe-automatic"), "Europe Automatic");
     assert.equal(hostingRegionLabel("atlantis"), "Atlantis");
+});
+
+test("records must be plain objects with exactly the expected keys", () => {
+    assert.equal(hasExactKeys({ a: 1, b: 2 }, ["a", "b"]), true);
+    assert.equal(hasExactKeys({ a: 1 }, ["a", "b"]), false);
+    assert.equal(hasExactKeys({ a: 1, c: 2 }, ["a", "b"]), false);
+    for (const value of [null, [], "x", 1]) assert.equal(isRecord(value), false, String(value));
+    assert.equal(isRecord({}), true);
 });
 
 test("region keys are bounded lowercase slugs", () => {

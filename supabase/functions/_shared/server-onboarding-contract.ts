@@ -1,10 +1,9 @@
 // Shared closed, public DTOs: usable by both the Edge boundary and website facade.
 // Regions are keys only: the control plane resolves each key against its own stored catalog.
-import { isRegionKey } from "./hosting-regions.ts";
+import { hasExactKeys as keys, isRecord as record, isRegionKey, MAXIMUM_REGIONS } from "./hosting-regions.ts";
 
-/** The onboarding summary version this website requests and accepts. */
-export const ONBOARDING_SUMMARY_VERSION = 3;
-const MAXIMUM_REGIONS = 32;
+// The onboarding summary version this website requests and accepts.
+const ONBOARDING_SUMMARY_VERSION = 3;
 const MAXIMUM_OTHER_REQUESTS = 32;
 export const ONBOARDING_UNAVAILABLE_REASONS = ["provider_cannot_assign", "required_approval_missing", "pilot_only", "provisioning_paused", "validated_build_unavailable"] as const;
 export type OnboardingReleaseChannel = "stable" | "nightly";
@@ -62,11 +61,17 @@ export async function readOnboardingSummary(
     }
     return parseOnboardingSummary(result);
 }
+type OnboardingMutationRequest = Exclude<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>;
 /** Builds the key-only control-plane request for one parsed owner mutation. */
-export function onboardingMutationRequest(mutation: OnboardingMutation): Exclude<OnboardingControlPlaneRequest, { operation: "server-onboarding" }> {
+export function onboardingMutationRequest(mutation: OnboardingMutation): OnboardingMutationRequest {
     if (mutation.action === "request-region") return { operation: mutation.action, input: { region: mutation.region } };
     const { action, ...input } = mutation;
     return { operation: action, input };
+}
+/** Recovers the owner mutation a key-only control-plane request carries, so its receipt can be checked against it. */
+export function onboardingRequestMutation(request: OnboardingMutationRequest): OnboardingMutation {
+    if (request.operation === "request-region") return { action: request.operation, region: request.input.region };
+    return { action: request.operation, ...request.input };
 }
 /** Whether a value is a v1-v8 UUID in either case. */
 export function isOnboardingUuid(value: unknown): value is string {
@@ -171,6 +176,7 @@ function parseEligibility(e: unknown): OnboardingSummary["eligibility"] {
 }
 /** Parses the stored catalog: 1..32 unique keys, each request belonging to its entry; none available while blocked. */
 function parseRegionStatuses(value: unknown, blocked: boolean): OnboardingRegionStatus[] {
+    // An empty stored catalog fails closed: the summary is rejected, so owners see onboarding as unavailable.
     if (!Array.isArray(value) || value.length < 1 || value.length > MAXIMUM_REGIONS) throw invalid();
     const regions = value.map((entry: unknown) => {
         if (!record(entry) || !keys(entry, ["region", "available", "request"]) || !isRegionKey(entry.region)) throw invalid();
@@ -197,10 +203,6 @@ function parseRegionRequest(value: unknown): RegionRequest {
     if (!isOnboardingUuid(value.requestId) || !isRegionKey(value.region) || value.status !== "outstanding" || !timestamp(value.createdAt)) throw invalid();
     return { requestId: value.requestId, region: value.region, status: value.status, createdAt: value.createdAt };
 }
-/** Whether a value is a plain object. */
-function record(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
-/** Whether an object has exactly the expected own keys. */
-function keys(value: Record<string, unknown>, expected: string[]) { return Object.keys(value).length === expected.length && expected.every((key) => Object.hasOwn(value, key)); }
 /** Whether a value is a non-negative safe integer. */
 function integer(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0; }
 /** Whether a value is a canonical millisecond ISO-8601 UTC timestamp. */

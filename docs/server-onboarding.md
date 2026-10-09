@@ -47,7 +47,7 @@ The onboarding dialog offers only stored-catalog regions that the website catalo
 
 To offer a new region after onboarding a VPS in a new country:
 
-1. Add one catalog entry and its `region.<key>` translation in every `servers.json` dictionary. `src/app/lib/hosting/region-labels.test.ts` enforces that every catalog key and continent has an English translation, and dictionary parity carries it to the other locales.
+1. Add one catalog entry and its `region.<key>` translation in every `servers.json` dictionary. The entry's English `label` must equal its `region.<key>` translation in the English dictionary. `src/app/lib/hosting/region-labels.test.ts` enforces that every catalog key and continent has an English translation and that each label matches it, and dictionary parity carries the keys to the other locales. The catalog's bounds (`MAXIMUM_REGIONS`, the country and zone patterns and placement limits) are exported once from `hosting-regions.ts` and shared by every catalog and summary parser.
 2. Deploy the website.
 3. Open **Control Plane → Operations → Hosting regions** and click **Publish website regions**. Until then the control plane does not offer the new region.
 

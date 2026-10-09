@@ -1,12 +1,16 @@
 import { ControlPlaneAdminError } from "./client";
 import type { HostingAdminRegionCatalog, HostingAdminRegionDefinition, HostingAdminRegionEntry, HostingAdminRegionPlacement } from "./types";
-import { isRegionKey, type HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
-
-const MAXIMUM_REGIONS = 32;
-const MAXIMUM_COUNTRIES = 64;
-const MAXIMUM_LOCATIONS = 32;
-const COUNTRY = /^[A-Z]{2}$/u;
-const LOCATION = /^[A-Za-z\d][A-Za-z\d._:-]{0,127}$/u;
+import {
+    COUNTRY_CODE_PATTERN,
+    hasExactKeys,
+    isRecord,
+    isRegionKey,
+    LOCATION_ID_PATTERN,
+    MAXIMUM_PLACEMENT_COUNTRIES,
+    MAXIMUM_PLACEMENT_LOCATIONS,
+    MAXIMUM_REGIONS,
+    type HostingRegionPayload,
+} from "../../../../supabase/functions/_shared/hosting-regions";
 
 /** How the control plane's stored catalog differs from the website catalog; empty lists mean in sync. */
 export type HostingRegionDrift = {
@@ -44,15 +48,20 @@ export function compareHostingRegionCatalogs(
     stored: readonly HostingAdminRegionDefinition[],
     website: readonly HostingRegionPayload[],
 ): HostingRegionDrift {
-    const storedKeys = stored.map((entry) => entry.region);
-    const websiteKeys = website.map((entry) => entry.region);
-    const shared = websiteKeys.filter((key) => storedKeys.includes(key));
+    const storedPlacements = new Map(stored.map((entry) => [entry.region, entry.placement]));
+    const websitePlacements = new Map(website.map((entry) => [entry.region, entry.placement]));
+    const placementDiffers: string[] = [];
+    for (const [region, placement] of websitePlacements) {
+        const storedPlacement = storedPlacements.get(region);
+        if (storedPlacement !== undefined && !samePlacement(storedPlacement, placement)) placementDiffers.push(region);
+    }
+    const websiteOrder = [...websitePlacements.keys()].filter((key) => storedPlacements.has(key));
+    const storedOrder = [...storedPlacements.keys()].filter((key) => websitePlacements.has(key));
     return {
-        missing: websiteKeys.filter((key) => !storedKeys.includes(key)),
-        extra: storedKeys.filter((key) => !websiteKeys.includes(key)),
-        placementDiffers: shared.filter((key) => !samePlacement(
-            stored.find((entry) => entry.region === key)!.placement, website.find((entry) => entry.region === key)!.placement)),
-        orderDiffers: shared.join(",") !== storedKeys.filter((key) => websiteKeys.includes(key)).join(","),
+        missing: [...websitePlacements.keys()].filter((key) => !storedPlacements.has(key)),
+        extra: [...storedPlacements.keys()].filter((key) => !websitePlacements.has(key)),
+        placementDiffers,
+        orderDiffers: websiteOrder.join(",") !== storedOrder.join(","),
     };
 }
 
@@ -70,7 +79,7 @@ export function formatPlacement(placement: HostingAdminRegionPlacement): string 
 
 /** Validates one stored entry: its key, placement and current availability. */
 function parseDefinition(value: unknown): HostingAdminRegionEntry {
-    if (!isRecord(value) || !exactKeys(value, ["region", "placement", "available"]) || !isRegionKey(value.region)) throw invalidCatalog();
+    if (!isRecord(value) || !hasExactKeys(value, ["region", "placement", "available"]) || !isRegionKey(value.region)) throw invalidCatalog();
     if (typeof value.available !== "boolean") throw invalidCatalog();
     return { region: value.region, placement: parsePlacement(value.placement), available: value.available };
 }
@@ -79,10 +88,10 @@ function parseDefinition(value: unknown): HostingAdminRegionEntry {
 function parsePlacement(value: unknown): HostingAdminRegionPlacement {
     if (!isRecord(value)) throw invalidCatalog();
     const hasLocations = Object.hasOwn(value, "locationIds");
-    if (!exactKeys(value, hasLocations ? ["countryCodes", "locationIds"] : ["countryCodes"])) throw invalidCatalog();
-    const countryCodes = uniqueList(value.countryCodes, COUNTRY, MAXIMUM_COUNTRIES);
+    if (!hasExactKeys(value, hasLocations ? ["countryCodes", "locationIds"] : ["countryCodes"])) throw invalidCatalog();
+    const countryCodes = uniqueList(value.countryCodes, COUNTRY_CODE_PATTERN, MAXIMUM_PLACEMENT_COUNTRIES);
     if (!hasLocations) return { countryCodes };
-    return { countryCodes, locationIds: uniqueList(value.locationIds, LOCATION, MAXIMUM_LOCATIONS) };
+    return { countryCodes, locationIds: uniqueList(value.locationIds, LOCATION_ID_PATTERN, MAXIMUM_PLACEMENT_LOCATIONS) };
 }
 
 /** Validates a non-empty bounded list of unique strings matching a pattern. */
@@ -108,16 +117,6 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
 /** Whether a value is null or a bounded string. */
 function nullableText(value: unknown): value is string | null {
     return value === null || (typeof value === "string" && value.length <= 256);
-}
-
-/** Whether a value is a plain object. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** Whether an object has exactly the expected own keys. */
-function exactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
-    return Object.keys(value).length === expected.length && expected.every((key) => Object.hasOwn(value, key));
 }
 
 /** The error every rejected catalog raises. */
