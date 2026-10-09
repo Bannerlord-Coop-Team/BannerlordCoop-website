@@ -89,6 +89,7 @@ const OPERATION_EXPLANATIONS: Record<string, string> = {
     "server-operation": "Queues a lifecycle action for the selected server generation. Stop affects only the game container; provider-host actions use separate guarded paths.",
     "set-bonus-quota": "Replaces one owner's administrative bonus quota; it does not manufacture a membership entitlement.",
     "set-build-pin": "Pins one exact validated build or clears the pin so the server follows its selected release channel.",
+    "set-hosting-regions": "Replaces the control plane's stored hosting-region catalog with the website catalog's keys and placements, guarded by the revision this page read, and records an audit event. It never changes existing servers or outstanding requests.",
     "set-global-controls": "Atomically replaces all four live pause switches and records the administrator reason. Checked means that workflow is currently paused.",
     "set-manager": "Grants or revokes bounded manager access. Managers do not receive ownership, deletion, export, or administrative capabilities.",
     "suspend-server": "Places an administrative hold on the server, blocks owner operations, cancels unsafe expanding jobs, and queues a graceful stop.",

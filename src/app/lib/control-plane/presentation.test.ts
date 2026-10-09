@@ -21,6 +21,7 @@ import {
     presentControlPlaneOperationResult,
     serverLifecycleOperationHref,
 } from "./presentation";
+import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 const host = (countryCode: string | null, locationId: string, availableServers: number) => ({ countryCode, locationId, availableServers });
 
@@ -72,10 +73,15 @@ test("create-server regions never guess a coast or a country", () => {
     }
 });
 
-test("administrator create sends only the region key", () => {
+test("administrator create sends only the region key; publishing sends the whole website catalog", () => {
     const input: Record<string, unknown> = { friendlyRegion: "us-east" };
     applyControlPlaneOperationDefaults("create-server", input);
     assert.deepEqual(input, { friendlyRegion: "us-east", releaseChannel: "stable" });
+    const publish: Record<string, unknown> = { expectedRevision: 4, reason: "Add Japan" };
+    applyControlPlaneOperationDefaults("set-hosting-regions", publish);
+    assert.deepEqual(publish, { expectedRevision: 4, reason: "Add Japan", regions: hostingRegionCatalogPayload() });
+    assert.equal(presentControlPlaneOperationResult("set-hosting-regions", { revision: 5, regions: [], updatedAt: null, updatedBy: null }).message,
+        "Published the website hosting regions as catalog revision 5.");
 });
 
 test("hosts are labelled with every website region they serve, else their legacy region or none", () => {

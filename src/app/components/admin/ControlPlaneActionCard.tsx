@@ -26,7 +26,8 @@ export type AdminActionOption = {
 export type AdminActionField = {
     name: string;
     label: string;
-    kind?: "text" | "textarea" | "number" | "checkbox" | "select" | "server" | "job" | "password" | "account" | "backup";
+    // "hidden" carries a page-supplied value, such as a concurrency revision, that the administrator never edits.
+    kind?: "text" | "textarea" | "number" | "checkbox" | "select" | "server" | "job" | "password" | "account" | "backup" | "hidden";
     placeholder?: string;
     required?: boolean;
     minimum?: number;
@@ -231,6 +232,7 @@ export function ControlPlaneActionCard({
 }
 function ActionField({ field }: { field: AdminActionField }) {
     const [targetValue, setTargetValue] = useState(String(field.defaultValue ?? ""));
+    if (field.kind === "hidden") return <input type="hidden" name={field.name} value={String(field.defaultValue ?? "")} />;
     if (field.kind === "checkbox") {
         return (
             <label className="flex items-center gap-3 text-xs text-foreground-muted">

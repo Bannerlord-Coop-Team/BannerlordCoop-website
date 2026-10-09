@@ -23,6 +23,8 @@ vi.mock("@/app/components/admin/ControlPlaneReadTables", async importOriginal =>
     };
 });
 import ControlPlaneAdminPage from "./page";
+import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
+import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 beforeEach(() => {
     vi.resetAllMocks();
@@ -88,11 +90,18 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
         if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
         if (request.operation === "vps-hosts") return { availableServiceNames: ["vps-available.vps.ovh.us"],
             hosts: [{ locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }] };
+        // The stored catalog lacks Poland, so the panel reports drift and offers to publish.
+        if (request.operation === "hosting-regions") return { revision: 4, updatedAt: null, updatedBy: null,
+            regions: hostingRegionCatalogPayload().filter((entry) => entry.region !== "poland") };
         throw new Error("Unexpected read");
     });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));
     await stream.allReady;
     const html = await new Response(stream).text();
+    expect(html).toContain("Hosting regions");
+    expect(html).toContain("Missing from control plane");
+    expect(html).toContain("Publish website regions");
+    expect(html).toMatch(/<input type="hidden" name="expectedRevision" value="4"\/>/u);
     expect(html).toContain("Onboard existing OVH VPS");
     expect(html).toContain("vps-available.vps.ovh.us");
     expect(html).toContain('value="us-east"');
@@ -101,7 +110,24 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
         accessToken: "test-admin-token", operation: "vps-hosts", signal: expect.any(AbortSignal), expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function),
         input: { includeLiveData: false, includeProviderInventory: "service-names" },
     }]]);
-    expect(mocks.request).toHaveBeenCalledTimes(3);
+    expect(mocks.request.mock.calls.filter(([request]) => request.operation === "hosting-regions")).toEqual([[expect.objectContaining({ operation: "hosting-regions", input: {} })]]);
+    expect(mocks.request).toHaveBeenCalledTimes(4);
+});
+
+it("keeps Operations usable when the stored hosting-region catalog cannot be read", async () => {
+    mocks.accounts.mockResolvedValue({ users: [], truncated: false });
+    mocks.request.mockImplementation(async request => {
+        if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
+        if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
+        if (request.operation === "vps-hosts") return { availableServiceNames: [], hosts: [] };
+        throw new ControlPlaneAdminError("unsupported_operation", "The operation is not supported.");
+    });
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    expect(html).toContain("The operation is not supported.");
+    expect(html).not.toContain("Publish website regions");
+    expect(html).toContain("Onboard existing OVH VPS");
 });
 
 
@@ -151,7 +177,7 @@ it.each(["overview", "servers", "server", "vps", "jobs", "releases", "audit", "o
     expect(mocks.observations).not.toHaveBeenCalled();
     expect(mocks.request.mock.calls.length).toBeGreaterThan(0);
     for (const [request] of mocks.request.mock.calls) {
-        expect(["overview", "servers", "server-dashboard", "vps-hosts", "jobs", "release-catalog", "audit"]).toContain(request.operation);
+        expect(["overview", "servers", "server-dashboard", "vps-hosts", "jobs", "release-catalog", "audit", "hosting-regions"]).toContain(request.operation);
         expect(request.signal.aborted).toBe(true);
         expect(request.accessToken).toBe("test-admin-token");
     }

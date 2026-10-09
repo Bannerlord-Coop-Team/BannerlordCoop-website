@@ -231,6 +231,30 @@ export type OperationsData = {
     inventory: HostingAdminVpsInventory;
     vpsProviderError: string | null;
     selectedServer: ManagedServer | null;
+    // The control plane's stored region catalog; null with an error when it could not be read.
+    hostingRegions: HostingAdminRegionCatalog | null;
+    hostingRegionsError: string | null;
+};
+
+/** Hosts eligible for a region: ISO country codes, optionally narrowed to exact provider zones. */
+export type HostingAdminRegionPlacement = { countryCodes: string[]; locationIds?: string[] };
+
+/** One stored catalog entry, as `hosting-regions` returns and `set-hosting-regions` accepts it. */
+export type HostingAdminRegionDefinition = { region: string; placement: HostingAdminRegionPlacement };
+
+/** The control plane's stored region catalog (`hosting-regions`, and the result of `set-hosting-regions`). */
+export type HostingAdminRegionCatalog = {
+    revision: number;
+    regions: HostingAdminRegionDefinition[];
+    updatedAt: string | null;
+    updatedBy: string | null;
+};
+
+/** Input for `set-hosting-regions`: the full ordered catalog, guarded by the revision it replaces. */
+export type HostingAdminSetRegionsInput = {
+    expectedRevision: number;
+    regions: HostingAdminRegionDefinition[];
+    reason: string;
 };
 
 export type FleetSummary = {

@@ -15,6 +15,8 @@ import { hasAdminAccess } from "@/app/lib/auth/access";
 import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
 import { readOperationsVpsInventory } from "@/app/lib/control-plane/operations-inventory";
+import { readHostingRegionCatalog } from "@/app/lib/control-plane/hosting-region-catalog";
+import { HostingRegionsPanel } from "@/app/components/admin/HostingRegionsPanel";
 import { recordReleaseFirstObservations } from "@/app/lib/control-plane/release-observations";
 import {
     destructiveExplanation,
@@ -269,7 +271,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         case "overview":
             return readControlPlaneAdmin<OverviewSummary>({ accessToken: token, signal, ...identity, operation: "overview", input: { compact: true } });
         case "operations": {
-            const [overview, inventory, selectedDashboard, releases] = await Promise.all([
+            const [overview, inventory, selectedDashboard, releases, hostingRegions] = await Promise.all([
                 readControlPlaneAdmin<Omit<OperationsData["overview"], "stableBuilds" | "nightlyBuilds">>({
                     accessToken: token, signal, ...identity, operation: "overview", input: { operations: true },
                 }),
@@ -282,12 +284,15 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                     })
                     : Promise.resolve(null),
                 loadReleaseCatalog(token, signal, identity),
+                readHostingRegionCatalog(() => readControlPlaneAdmin<unknown>({ accessToken: token, signal, ...identity, operation: "hosting-regions", input: {} })),
             ]);
             return {
                 overview: { ...overview, stableBuilds: releases.stable, nightlyBuilds: releases.nightly },
                 inventory: inventory.inventory,
                 vpsProviderError: inventory.providerError,
                 selectedServer: selectedDashboard?.dashboard.server ?? null,
+                hostingRegions: hostingRegions.catalog,
+                hostingRegionsError: hostingRegions.error,
             } satisfies OperationsData;
         }
         case "vps":
@@ -567,7 +572,7 @@ function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nig
 }
 
 function OperationsView({ data, accounts }: { data: OperationsData; accounts: WebsiteAccountSummary[] }) {
-    const { overview, inventory, selectedServer, vpsProviderError } = data;
+    const { overview, inventory, selectedServer, vpsProviderError, hostingRegions, hostingRegionsError } = data;
     const listedServers = selectedServer !== null
         && !overview.servers.items.some((server) => server.serverId === selectedServer.serverId)
         ? [selectedServer, ...overview.servers.items]
@@ -593,7 +598,7 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
         ] },
         { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity in stopped state. New servers use Public by default; choose Nightly later with Change release settings if needed. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from an explicit administrator grant. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.", fields: [
             accountField("ownerDiscordUserId", "Owner account"),
-            { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: createRegionOptions, help: "Only regions with a prepared, currently available slot on a registered VPS are shown. The control plane revalidates capacity when you submit; no VPS is purchased automatically." },
+            { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: createRegionOptions, help: "Only website regions whose placement matches a registered VPS with a prepared, currently available slot are shown. Only the region key is sent: the control plane resolves it against its stored catalog and revalidates capacity when you submit; no VPS is purchased automatically." },
             { name: "maintenanceSlot", label: "Maintenance slot", kind: "select", required: true, options: maintenanceOptions, help: `All maintenance windows use ${MAINTENANCE_TIME_ZONE} (Central Time and its daylight-saving changes).` },
         ] },
         { group: "Fleet", operation: "set-global-controls", title: "Global controls", description: `Replace all four live pause switches as one audited update.${overview.controls.reason ? ` Last recorded reason: ${overview.controls.reason}` : " No override reason is recorded."}`, fields: [
@@ -625,7 +630,7 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     return <div className="mt-8 space-y-12">{vpsProviderError && <div role="status" className="border-l-2 border-gold bg-gold/10 px-4 py-3 text-sm text-foreground">
         <p>OVH account inventory is unavailable, so unregistered VPS products cannot be listed for onboarding. Other operations still work.</p>
         <p className="mt-1 text-xs text-foreground-muted">{vpsProviderError}</p>
-    </div>}{groups.map((group) => {
+    </div>}<HostingRegionsPanel catalog={hostingRegions} error={hostingRegionsError} />{groups.map((group) => {
         const groupCards = cards.filter((card) => card.group === group);
         const rows = operationCardRows(groupCards, group === "Fleet" ? 2 : 0);
         return <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={groupCards.length} /><div className="mt-5 space-y-5">{rows.map((row) => <div key={row.map((card) => card.operation).join(":")} className={`grid gap-5 ${operationCardRowClass(row.length)}`}>{row.map((card) => <ControlPlaneActionCard key={card.operation} {...card} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div>)}</div></section>;

@@ -2,6 +2,7 @@ import type { HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE } from "../../../../supabase/functions/_shared/server-settings-contract";
 import {
     HOSTING_REGIONS,
+    hostingRegionCatalogPayload,
     hostingRegionLabel,
     hostingRegionsForHost,
     placementMatchesHost,
@@ -70,7 +71,7 @@ export function maintenanceSlotOptions() {
     }));
 }
 
-/** Fills inputs an administrator card never asks for, such as Create's default release channel. */
+/** Fills inputs an administrator card never asks for: Create's default channel and the published region catalog. */
 export function applyControlPlaneOperationDefaults(
     operation: string,
     input: Record<string, unknown>,
@@ -78,6 +79,8 @@ export function applyControlPlaneOperationDefaults(
     if (operation === "create-server" && input.releaseChannel === undefined) {
         input.releaseChannel = "stable";
     }
+    // Publishing always sends the whole website catalog; an administrator never edits placements in a form.
+    if (operation === "set-hosting-regions") input.regions = hostingRegionCatalogPayload();
 }
 
 /** Labels a host by every website region it serves (or its legacy region), then its provider country and zone. */
@@ -171,6 +174,9 @@ export function presentControlPlaneOperationResult(
             message: `${action} job ${jobId} is ${state}${stage === null ? "." : ` at ${stage}.`} Progress refreshes automatically on its server and Jobs pages.`,
             links,
         };
+    }
+    if (operation === "set-hosting-regions" && Number.isSafeInteger(result.revision)) {
+        return { message: `Published the website hosting regions as catalog revision ${String(result.revision)}.`, links };
     }
     const onboarding = isRecord(result.onboarding) ? result.onboarding : null;
     const onboardingState = boundedText(onboarding?.state, 64);
