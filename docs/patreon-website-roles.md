@@ -158,11 +158,12 @@ access tokens and are not sufficient for unattended membership refresh.
    must be present before the function starts. The first authenticated RPC pins
    campaign and tier durably; changing them requires an explicit migration.
    `PATREON_CREATOR_REFRESH_TOKEN` is optional: without it the access token is
-   used as-is and expires after roughly a month. With it, and after
-   `20261009170000_patreon_creator_token_refresh.sql` is applied, the worker seeds
-   both tokens into Supabase Vault on first use and rotates the pair itself (see
-   [Creator token rotation](#creator-token-rotation)). The refresh exchange uses
-   the existing `PATREON_CLIENT_ID` and `PATREON_CLIENT_SECRET`.
+   used as-is and expires after roughly a month. With it, the worker seeds both
+   tokens into Supabase Vault on first use and rotates the pair itself (see
+   [Creator token rotation](#creator-token-rotation)). Apply
+   `20261009170000_patreon_creator_token_refresh.sql` before setting it. The
+   refresh exchange uses the existing `PATREON_CLIENT_ID` and
+   `PATREON_CLIENT_SECRET`.
 4. Deploy the website administrator change (which clears grant ownership on a
    manual edit) and the atomic console assignment writers before enabling role
    sync. Deploy `patreon-roles` using its
@@ -234,20 +235,26 @@ pair in Supabase Vault (`patreon_creator_access_token` and
   bootstrap values; the Vault pair is authoritative.
 - Each worker run reads the current token and refreshes it once it is within
   seven days of expiry. A `401` from Patreon triggers one refresh and one retry
-  of the same request; any other failure remains a normal retry and never
-  revokes a grant.
-- Refreshes run under a 90-second lease keyed by generation, so concurrent
-  workers cannot spend the same refresh token. A worker that loses the race
-  adopts the newer token on its next read.
-- If the RPC or migration is unavailable the worker logs a fixed message and
-  falls back to the bootstrap access token, so the function can be deployed
-  before the migration.
+  of the same request with its own deadline; any other failure remains a normal
+  retry and never revokes a grant.
+- Creator token requests happen only under the sync worker lease, so a single
+  worker refreshes at a time. The store's generation is the write fence: a
+  rotation that lost the race is reported and the newer token is adopted on the
+  next read.
+- Patreon consumes the refresh token during the exchange, so the worker writes
+  the issued pair whenever the generation still matches, retries the write once,
+  and re-reads the store before giving up. A write that still fails leaves a
+  spent refresh token in Vault and needs the manual rotation below.
+- Apply the migration before setting `PATREON_CREATOR_REFRESH_TOKEN`. With the
+  secret set but the RPC missing, every member read fails as
+  `upstream_unavailable` and the run reports `sync_incomplete`; nothing is
+  revoked, and the fixed access token keeps working once the secret is removed.
 
 Monitor `generation`, `expires_at`, `refreshed_at` and `last_failure` on
 `patreon_roles.creator_token` without printing Vault values. `rejected` means
-Patreon refused the refresh token (revoked client or token); `unavailable`
-covers network, throttling and malformed responses. Both leave the current
-access token in use until it expires.
+Patreon refused the refresh token (revoked client, revoked token, or a pair
+spent by a lost write); `unavailable` covers network, throttling and malformed
+responses. Both leave the current access token in use until it expires.
 
 To rotate manually after a revocation or client-secret change, set the new
 `PATREON_CREATOR_ACCESS_TOKEN` and `PATREON_CREATOR_REFRESH_TOKEN` secrets,

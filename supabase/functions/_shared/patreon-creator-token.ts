@@ -2,14 +2,19 @@ import { boundedJson, record } from "./membership.ts";
 
 // Creator access tokens expire roughly monthly and the refresh token rotates on every use, so the
 // current pair lives in Supabase Vault behind a service-role-only RPC rather than in function
-// secrets. Function secrets only bootstrap the store; after the first rotation they are stale.
+// secrets. Function secrets only seed the store; after the first rotation they are stale.
+//
+// Invariant: creator token requests happen only under the patreon-roles sync worker lease, so at
+// most one worker refreshes at a time. The store's generation fence catches anything else; it does
+// not by itself prevent two callers from spending the same single-use refresh token.
 
 export const PATREON_TOKEN_URL = "https://www.patreon.com/api/oauth2/token";
 const TOKEN = /^[\x21-\x7e]{16,4096}$/u;
 const MAX_EXPIRES_IN = 366 * 86_400;
 const CACHE_MS = 30_000;
+const REQUEST_TIMEOUT_MS = 8_000;
 
-export type CreatorTokenOperation = "read" | "seed" | "refresh_begin" | "refresh_commit" | "refresh_failed";
+export type CreatorTokenOperation = "read" | "seed" | "rotate" | "failed";
 export type CreatorTokenRpc = (operation: CreatorTokenOperation, input: Record<string, unknown>) => Promise<unknown>;
 
 export interface CreatorTokenProvider {
@@ -32,7 +37,7 @@ export function staticCreatorToken(token: string): CreatorTokenProvider {
 export interface CreatorTokenProviderOptions {
     clientId: string;
     clientSecret: string;
-    /** Function secrets that seed the store and serve as a last resort while the store is unreachable. */
+    /** Function secrets that seed the store on first use. */
     bootstrap: { accessToken: string; refreshToken: string };
     rpc: CreatorTokenRpc;
     fetchImplementation?: typeof fetch;
@@ -40,14 +45,15 @@ export interface CreatorTokenProviderOptions {
     log?: (message: string) => void;
 }
 
-type ReadState = { configured: false } | { configured: true; accessToken: string; generation: number; refreshDue: boolean };
+type Stored = { accessToken: string; refreshToken: string; generation: number; refreshDue: boolean };
+type ReadState = { configured: false } | ({ configured: true } & Stored);
 
 function readState(value: unknown): ReadState {
     if (!record(value) || typeof value.configured !== "boolean") throw new Error("invalid_creator_token_state");
     if (!value.configured) return { configured: false };
-    if (!isCreatorToken(value.accessToken) || !Number.isSafeInteger(value.generation) || Number(value.generation) < 1
-        || typeof value.refreshDue !== "boolean") throw new Error("invalid_creator_token_state");
-    return { configured: true, accessToken: value.accessToken, generation: Number(value.generation), refreshDue: value.refreshDue };
+    if (!isCreatorToken(value.accessToken) || !isCreatorToken(value.refreshToken) || !Number.isSafeInteger(value.generation)
+        || Number(value.generation) < 1 || typeof value.refreshDue !== "boolean") throw new Error("invalid_creator_token_state");
+    return { configured: true, accessToken: value.accessToken, refreshToken: value.refreshToken, generation: Number(value.generation), refreshDue: value.refreshDue };
 }
 
 export function createCreatorTokenProvider(options: CreatorTokenProviderOptions): CreatorTokenProvider {
@@ -62,16 +68,21 @@ export function createCreatorTokenProvider(options: CreatorTokenProviderOptions)
     const log = options.log ?? ((message: string) => console.warn(message));
     let cached: { accessToken: string; until: number } | null = null;
 
+    function remember(accessToken: string) {
+        cached = { accessToken, until: now() + CACHE_MS };
+        return accessToken;
+    }
+
     async function read(): Promise<ReadState> {
         return readState(await options.rpc("read", {}));
     }
 
-    async function seeded(): Promise<ReadState & { configured: true }> {
+    /** Current stored pair, seeding from the function secrets on first use. Store failures propagate. */
+    async function stored(): Promise<Stored> {
         let state = await read();
         if (state.configured) return state;
-        // Another worker may seed concurrently; the store keeps the first pair and the re-read decides.
-        try { await options.rpc("seed", { accessToken: bootstrap.accessToken, refreshToken: bootstrap.refreshToken }); }
-        catch { /* re-read decides */ }
+        // A concurrent seed answers `stale`, never an error; the re-read decides either way.
+        await options.rpc("seed", { accessToken: bootstrap.accessToken, refreshToken: bootstrap.refreshToken });
         state = await read();
         if (!state.configured) throw new Error("creator_token_unavailable");
         return state;
@@ -79,90 +90,97 @@ export function createCreatorTokenProvider(options: CreatorTokenProviderOptions)
 
     async function recordFailure(generation: number, reason: "rejected" | "unavailable") {
         log(reason === "rejected" ? "Patreon creator token refresh rejected" : "Patreon creator token refresh unavailable");
-        try { await options.rpc("refresh_failed", { generation, reason }); } catch { /* the lease expires on its own */ }
+        try { await options.rpc("failed", { generation, reason }); } catch { /* the failure is already logged */ }
     }
 
-    /** Rotates the stored pair under the store's short lease; returns the new access token or null. */
-    async function refresh(generation: number): Promise<string | null> {
-        const begun = await options.rpc("refresh_begin", { generation });
-        if (!record(begun) || begun.busy === true || begun.stale === true || !isCreatorToken(begun.refreshToken)
-            || begun.generation !== generation) return null;
+    /** Exchanges the refresh token; returns the new pair or null after recording the failure. */
+    async function exchange(current: Stored): Promise<{ accessToken: string; refreshToken: string; expiresIn: number } | null> {
         let response: Response;
         try {
             response = await fetcher(PATREON_TOKEN_URL, {
-                method: "POST", redirect: "error", signal: AbortSignal.timeout(8_000),
+                method: "POST", redirect: "error", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
                 headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": "BannerlordCoop - website membership sync" },
                 body: new URLSearchParams({
-                    grant_type: "refresh_token", refresh_token: begun.refreshToken,
+                    grant_type: "refresh_token", refresh_token: current.refreshToken,
                     client_id: options.clientId, client_secret: options.clientSecret,
                 }),
             });
         } catch {
-            await recordFailure(generation, "unavailable");
+            await recordFailure(current.generation, "unavailable");
             return null;
         }
         if (!response.ok) {
             await response.body?.cancel().catch(() => undefined);
-            await recordFailure(generation, response.status === 400 || response.status === 401 ? "rejected" : "unavailable");
+            await recordFailure(current.generation, response.status === 400 || response.status === 401 ? "rejected" : "unavailable");
             return null;
         }
         let tokens: unknown;
         try { tokens = await boundedJson(response, 16_384); }
-        catch { await recordFailure(generation, "unavailable"); return null; }
+        catch { await recordFailure(current.generation, "unavailable"); return null; }
         if (!record(tokens) || !isCreatorToken(tokens.access_token) || !isCreatorToken(tokens.refresh_token)
             || tokens.access_token === tokens.refresh_token || !Number.isSafeInteger(tokens.expires_in)
             || Number(tokens.expires_in) < 60 || Number(tokens.expires_in) > MAX_EXPIRES_IN) {
-            await recordFailure(generation, "unavailable");
+            await recordFailure(current.generation, "unavailable");
             return null;
         }
-        const committed = await options.rpc("refresh_commit", {
-            generation, accessToken: tokens.access_token, refreshToken: tokens.refresh_token, expiresIn: tokens.expires_in,
-        });
-        if (!record(committed) || committed.rotated !== true) return null;
-        cached = { accessToken: tokens.access_token, until: now() + CACHE_MS };
-        return tokens.access_token;
+        return { accessToken: tokens.access_token, refreshToken: tokens.refresh_token, expiresIn: Number(tokens.expires_in) };
+    }
+
+    /**
+     * Rotates the stored pair. Patreon consumes the refresh token during the exchange, so the new
+     * pair is the only valid one from then on: the store write is retried once, and a stale reply
+     * is checked against the store before giving up.
+     */
+    async function refresh(current: Stored): Promise<string | null> {
+        const issued = await exchange(current);
+        if (issued === null) return null;
+        const input = { generation: current.generation, ...issued };
+        for (let attempt = 0; attempt < 2; attempt++) {
+            let committed: unknown;
+            try { committed = await options.rpc("rotate", input); }
+            catch { continue; }
+            if (record(committed) && committed.rotated === true) return remember(issued.accessToken);
+            break;
+        }
+        // Either the write landed but its reply was lost, or another rotation won; the store decides.
+        try {
+            const state = await read();
+            if (state.configured && state.accessToken === issued.accessToken) return remember(issued.accessToken);
+        } catch { /* reported below */ }
+        log("Patreon creator token rotation not stored");
+        return null;
     }
 
     return {
         async current() {
             if (cached && cached.until > now()) return cached.accessToken;
-            let state: ReadState & { configured: true };
-            try {
-                state = await seeded();
-            } catch {
-                // Store or migration unavailable: keep working with the bootstrap secret.
-                log("Patreon creator token store unavailable; using bootstrap token");
-                return bootstrap.accessToken;
-            }
+            const state = await stored();
             if (state.refreshDue) {
-                try {
-                    const rotated = await refresh(state.generation);
-                    if (rotated !== null) return rotated;
-                } catch { log("Patreon creator token refresh unavailable"); }
+                const rotated = await refresh(state);
+                if (rotated !== null) return rotated;
             }
-            cached = { accessToken: state.accessToken, until: now() + CACHE_MS };
-            return state.accessToken;
+            return remember(state.accessToken);
         },
         async replace(rejected) {
             cached = null;
-            let state: ReadState & { configured: true };
-            try { state = await seeded(); } catch { return null; }
-            // Another worker may already have rotated; use its token before spending the refresh token.
-            if (state.accessToken !== rejected) {
-                cached = { accessToken: state.accessToken, until: now() + CACHE_MS };
-                return state.accessToken;
-            }
-            try { return await refresh(state.generation); }
-            catch { log("Patreon creator token refresh unavailable"); return null; }
+            const state = await stored();
+            // A rotation that already landed supersedes the rejected token without another exchange.
+            if (state.accessToken !== rejected) return remember(state.accessToken);
+            return refresh(state);
         },
     };
 }
 
 /** Sends a creator-authenticated request and retries exactly once with a replacement token after a 401. */
 export async function fetchWithCreatorToken(
-    provider: CreatorTokenProvider, fetcher: typeof fetch, url: URL, init: RequestInit & { headers: Record<string, string> },
+    provider: CreatorTokenProvider, fetcher: typeof fetch, url: URL,
+    init: { headers: Record<string, string>; redirect?: RequestRedirect; timeoutMs?: number },
 ): Promise<Response> {
-    const send = (token: string) => fetcher(url, { ...init, headers: { ...init.headers, authorization: `Bearer ${token}` } });
+    // Each attempt gets its own deadline; the retry must not inherit time spent on the refresh.
+    const send = (token: string) => fetcher(url, {
+        headers: { ...init.headers, authorization: `Bearer ${token}` },
+        redirect: init.redirect ?? "error", signal: AbortSignal.timeout(init.timeoutMs ?? REQUEST_TIMEOUT_MS),
+    });
     const token = await provider.current();
     const response = await send(token);
     if (response.status !== 401) return response;
@@ -182,7 +200,7 @@ export function createCreatorTokenRpc(options: { supabaseUrl: string; serviceKey
     const endpoint = new URL("/rest/v1/rpc/patreon_creator_token", origin);
     return async (operation, input) => {
         const response = await (options.fetchImplementation ?? fetch)(endpoint, {
-            method: "POST", redirect: "error", signal: AbortSignal.timeout(8_000),
+            method: "POST", redirect: "error", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
             headers: { apikey: options.serviceKey, authorization: `Bearer ${options.serviceKey}`, "content-type": "application/json" },
             body: JSON.stringify({ p_operation: operation, p_input: input }),
         });

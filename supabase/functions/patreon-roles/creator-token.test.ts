@@ -38,83 +38,72 @@ async function rpc(operation: string, input: Record<string, unknown> = {}) {
         [operation, JSON.stringify(input)])).rows[0].result as Record<string, unknown>;
 }
 async function row() {
-    return (await db.query<{ generation: number; expires_at: string | null; lease_until: string | null; last_failure: string | null; secrets: number }>(
-        "select generation, expires_at, lease_until, last_failure, (select count(*) from vault.secrets)::int as secrets from patreon_roles.creator_token")).rows[0];
+    return (await db.query<{ generation: number; expires_at: string | null; refreshed_at: string | null; last_failure: string | null; secrets: number }>(
+        "select generation, expires_at, refreshed_at, last_failure, (select count(*) from vault.secrets)::int as secrets from patreon_roles.creator_token")).rows[0];
 }
 async function secrets() {
     return (await db.query<{ name: string; secret: string }>("select name, secret from vault.secrets order by name")).rows;
 }
+const rotate = (generation: number, input: Record<string, unknown> = {}) =>
+    rpc("rotate", { generation, accessToken: rotatedAccess, refreshToken: rotatedRefresh, expiresIn: 2678400, ...input });
 
 test("unconfigured store reads as such; seeding stores both tokens in Vault and makes refresh due", async () => {
     assert.deepEqual(await rpc("read"), { configured: false, generation: 0 });
     assert.deepEqual(await rpc("seed", { accessToken: access, refreshToken: refresh }), { seeded: true, generation: 1 });
-    assert.deepEqual(await rpc("read"), { configured: true, accessToken: access, generation: 1, expiresAt: null, refreshDue: true });
+    assert.deepEqual(await rpc("read"), { configured: true, accessToken: access, refreshToken: refresh, generation: 1, refreshDue: true });
     assert.deepEqual(await secrets(), [{ name: "patreon_creator_access_token", secret: access }, { name: "patreon_creator_refresh_token", secret: refresh }]);
     // Seeding again keeps the first pair; concurrent workers never overwrite a rotated token.
     assert.deepEqual(await rpc("seed", { accessToken: "other-access-token-fixture", refreshToken: "other-refresh-token-fixture" }), { stale: true, generation: 1 });
     assert.equal((await rpc("read")).accessToken, access);
 });
 
-test("refresh rotates both secrets under a lease and advances the generation", async () => {
+test("rotate replaces both secrets under the generation fence and advances the generation", async () => {
     await rpc("seed", { accessToken: access, refreshToken: refresh });
-    assert.deepEqual(await rpc("refresh_begin", { generation: 1 }), { refreshToken: refresh, generation: 1 });
-    assert.deepEqual(await rpc("refresh_begin", { generation: 1 }), { busy: true });
-    assert.deepEqual(await rpc("refresh_commit", { generation: 1, accessToken: rotatedAccess, refreshToken: rotatedRefresh, expiresIn: 2678400 }), { rotated: true, generation: 2 });
+    assert.deepEqual(await rotate(1), { rotated: true, generation: 2 });
     const state = await rpc("read");
     assert.equal(state.accessToken, rotatedAccess);
+    assert.equal(state.refreshToken, rotatedRefresh);
     assert.equal(state.generation, 2);
     assert.equal(state.refreshDue, false);
     assert.deepEqual(await secrets(), [{ name: "patreon_creator_access_token", secret: rotatedAccess }, { name: "patreon_creator_refresh_token", secret: rotatedRefresh }]);
     const current = await row();
-    assert.equal(current.lease_until, null);
+    assert.ok(current.refreshed_at !== null && current.expires_at !== null);
     assert.equal(current.secrets, 2);
+    // A replayed write with the old generation is stale and changes nothing.
+    assert.deepEqual(await rotate(1, { accessToken: "replayed-access-token-fixture" }), { stale: true, generation: 2 });
+    assert.equal((await rpc("read")).accessToken, rotatedAccess);
     // Refresh becomes due within seven days of expiry.
     await db.exec("update patreon_roles.creator_token set expires_at = now() + interval '6 days'");
     assert.equal((await rpc("read")).refreshDue, true);
 });
 
-test("stale generations, expired leases and commits without a lease are refused", async () => {
+test("a failed refresh records only a fixed reason and clears on the next rotation", async () => {
     await rpc("seed", { accessToken: access, refreshToken: refresh });
-    assert.deepEqual(await rpc("refresh_commit", { generation: 1, accessToken: rotatedAccess, refreshToken: rotatedRefresh, expiresIn: 2678400 }), { stale: true, generation: 1 });
-    assert.deepEqual(await rpc("refresh_begin", { generation: 2 }), { stale: true, generation: 1 });
-    await rpc("refresh_begin", { generation: 1 });
-    await db.exec("update patreon_roles.creator_token set lease_until = now() - interval '1 second'");
-    assert.deepEqual(await rpc("refresh_commit", { generation: 1, accessToken: rotatedAccess, refreshToken: rotatedRefresh, expiresIn: 2678400 }), { stale: true, generation: 1 });
-    assert.equal((await rpc("read")).accessToken, access);
-    // An expired lease can be re-acquired.
-    assert.deepEqual(await rpc("refresh_begin", { generation: 1 }), { refreshToken: refresh, generation: 1 });
-});
-
-test("a failed refresh releases the lease and records only a fixed reason", async () => {
-    await rpc("seed", { accessToken: access, refreshToken: refresh });
-    await rpc("refresh_begin", { generation: 1 });
-    // Only the two fixed reasons are accepted; free text never reaches the table.
-    await assert.rejects(rpc("refresh_failed", { generation: 1, reason: "secret detail" }));
-    assert.deepEqual(await rpc("refresh_failed", { generation: 1, reason: "rejected" }), { recorded: true });
-    const current = await row();
-    assert.equal(current.lease_until, null);
+    await assert.rejects(rpc("failed", { generation: 1, reason: "secret detail" }));
+    assert.deepEqual(await rpc("failed", { generation: 1, reason: "rejected" }), { recorded: true });
+    let current = await row();
     assert.equal(current.last_failure, "rejected");
     assert.equal(current.generation, 1);
-    // Without a lease a late failure report is stale, and the lease can be taken again.
-    assert.deepEqual(await rpc("refresh_failed", { generation: 1, reason: "unavailable" }), { stale: true, generation: 1 });
-    assert.deepEqual(await rpc("refresh_begin", { generation: 1 }), { refreshToken: refresh, generation: 1 });
+    assert.deepEqual(await rpc("failed", { generation: 2, reason: "unavailable" }), { stale: true, generation: 1 });
+    assert.deepEqual(await rotate(1), { rotated: true, generation: 2 });
+    current = await row();
+    assert.equal(current.last_failure, null);
 });
 
-test("malformed tokens, expiries and operations are rejected", async () => {
+test("malformed tokens, expiries, generations and operations are rejected", async () => {
     await assert.rejects(rpc("seed", { accessToken: "short", refreshToken: refresh }));
     await assert.rejects(rpc("seed", { accessToken: "contains a space in the token", refreshToken: refresh }));
     await assert.rejects(rpc("seed", { accessToken: access, refreshToken: access }));
+    assert.deepEqual(await rotate(1), { configured: false, generation: 0 });
     await rpc("seed", { accessToken: access, refreshToken: refresh });
-    await rpc("refresh_begin", { generation: 1 });
     for (const input of [
-        { accessToken: rotatedAccess, refreshToken: rotatedRefresh, expiresIn: 10 },
-        { accessToken: rotatedAccess, refreshToken: rotatedRefresh, expiresIn: "2678400" },
-        { accessToken: rotatedAccess, refreshToken: rotatedRefresh, expiresIn: 400 * 86400 },
-        { accessToken: rotatedAccess, refreshToken: rotatedAccess, expiresIn: 2678400 },
-    ]) await assert.rejects(rpc("refresh_commit", { generation: 1, ...input }));
-    await assert.rejects(rpc("rotate", {}));
-    await assert.rejects(rpc("refresh_begin", { generation: 0 }));
+        { expiresIn: 10 }, { expiresIn: "2678400" }, { expiresIn: 400 * 86400 }, { refreshToken: rotatedAccess }, { accessToken: "short" },
+    ]) await assert.rejects(rotate(1, input));
+    await assert.rejects(rpc("refresh_begin", {}));
+    await assert.rejects(rotate(0));
+    await assert.rejects(rpc("read", { padding: "x".repeat(20000) }));
     assert.equal((await rpc("read")).accessToken, access);
+    assert.equal((await row()).generation, 1);
 });
 
 test("reset removes the Vault pair so the next worker call seeds from the function secrets again", async () => {
