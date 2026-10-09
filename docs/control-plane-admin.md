@@ -241,10 +241,12 @@ before the website rollout; older backends reject it without a fallback. The VPS
 pane's live readings and billing remain unchanged.
 
 The bottom of the VPS view also loads the pending region-request queue through
-the `region-requests` operation. Each row shows the requested region, Discord
-requester, and timestamp, with an inline **Dismiss** action. A
-successful action removes the row and records the administrator resolution;
-the browser does not collect a free-form reason.
+the `region-requests` operation. Each row shows the requested region, captured
+requester email, any current allocated friendly regions (or an empty marker
+while the owner is waiting), and timestamp, with an inline **Dismiss** action.
+Requests created before email capture was deployed may still report an unavailable
+email. A successful action removes the row and records the administrator
+resolution; the browser does not collect a free-form reason.
 
 Focused verification:
 
