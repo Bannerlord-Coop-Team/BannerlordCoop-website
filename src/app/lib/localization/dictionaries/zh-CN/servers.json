@@ -46,6 +46,7 @@
   "action.sessionUnavailable": "您的登录会话不可用。请重新登录，然后重试待处理的请求。",
   "action.signIn": "请重新登录，然后重试待处理的请求。",
   "action.noChange": "此请求未造成任何更改。容量或资格已发生变化；请刷新后重新选择。",
+  "action.regionNotOffered": "该区域已不再提供，因此未创建或申请任何内容。请刷新后选择其他区域。",
   "action.unconfirmed": "提交结果尚未确认。如受到频率限制，请稍作等待，然后重试同一个待处理请求，以免重复提交。",
   "metadata.title": "服务器",
   "metadata.description": "浏览并加入 Bannerlord Coop 服务器。",

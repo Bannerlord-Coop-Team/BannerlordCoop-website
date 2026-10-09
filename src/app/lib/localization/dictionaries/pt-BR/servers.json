@@ -47,6 +47,7 @@
   "action.sessionUnavailable": "Sua sessão autenticada está indisponível. Entre novamente e tente de novo a solicitação pendente.",
   "action.signIn": "Entre novamente e tente de novo a solicitação pendente.",
   "action.noChange": "Esta solicitação não fez nenhuma alteração. A capacidade ou a elegibilidade mudou; atualize antes de escolher novamente.",
+  "action.regionNotOffered": "Essa região não é mais oferecida, então nada foi criado nem solicitado. Atualize e escolha outra região.",
   "action.unconfirmed": "O resultado do envio não foi confirmado. Aguarde se houver um limite de requisições e tente novamente a mesma solicitação pendente para evitar duplicatas.",
   "metadata.title": "Servidores",
   "metadata.description": "Explore os servidores de Bannerlord Coop e entre para jogar.",

@@ -47,6 +47,7 @@
   "action.sessionUnavailable": "Your authenticated session is unavailable. Sign in again, then retry the pending request.",
   "action.signIn": "Sign in again, then retry the pending request.",
   "action.noChange": "No change was made by this request. Capacity or eligibility changed; refresh before choosing again.",
+  "action.regionNotOffered": "That region is no longer offered, so nothing was created or requested. Refresh and choose another region.",
   "action.unconfirmed": "The submission outcome is unconfirmed. Wait if rate limited, then retry the same pending request to avoid duplicates.",
   "metadata.title": "Servers",
   "metadata.description": "Browse and join Bannerlord Coop servers.",

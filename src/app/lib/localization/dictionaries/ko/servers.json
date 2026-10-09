@@ -46,6 +46,7 @@
   "action.sessionUnavailable": "인증된 세션을 사용할 수 없습니다. 다시 로그인한 후 대기 중인 요청을 재시도하세요.",
   "action.signIn": "다시 로그인한 후 대기 중인 요청을 재시도하세요.",
   "action.noChange": "이 요청으로 변경된 사항은 없습니다. 수용 용량 또는 자격 조건이 변경되었습니다. 새로고침한 후 다시 선택하세요.",
+  "action.regionNotOffered": "해당 지역은 더 이상 제공되지 않으므로 아무것도 생성되거나 요청되지 않았습니다. 새로 고친 뒤 다른 지역을 선택하세요.",
   "action.unconfirmed": "제출 결과가 확인되지 않았습니다. 요청 횟수가 제한된 경우 잠시 기다린 후, 중복을 방지하기 위해 대기 중인 동일한 요청을 재시도하세요.",
   "metadata.title": "서버",
   "metadata.description": "Bannerlord Coop 서버를 찾아보고 참여하세요.",

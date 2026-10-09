@@ -40,6 +40,8 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
     const [message, setMessage] = useState("");
     const [result, setResult] = useState<OnboardingResult | null>(null);
     const [staleSnapshot, setStaleSnapshot] = useState<OnboardingSummary | null>(null);
+    // Set when the retained intent's last dispatch ended without a definite outcome.
+    const [dispatchUnconfirmed, setDispatchUnconfirmed] = useState(false);
     const fallbackRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         // Each effect lifetime owns its completions, including StrictMode's repeated setup.
@@ -77,10 +79,12 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
         }
         setPending(true);
         setMessage("");
+        setDispatchUnconfirmed(false);
         try {
             const response = await submitServerOnboarding(candidate, userId);
             // Unmounted sessions leave even identical retained intents for the new session to replay.
             if (completionAuthority.current !== authority) return;
+            setDispatchUnconfirmed(!response.ok && response.retrySameRequest);
             if (response.ok || !response.retrySameRequest) {
                 try { clearOnboardingIntent(window.sessionStorage, key, candidate); }
                 catch { setStorageError(true); }
@@ -93,6 +97,7 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
             else setMessage(response.message);
         } catch {
             if (completionAuthority.current === authority) {
+                setDispatchUnconfirmed(true);
                 setMessage(t("onboarding.unconfirmed"));
             }
         } finally {
@@ -130,9 +135,12 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
         intentRef.current = null;
         setIntent(null);
         setMessage("");
+        setDispatchUnconfirmed(false);
     }
-    // A retained intent may name a region since removed from either catalog; it can still be retried or discarded.
+    // A retained intent may name a region since removed from either catalog. Retry settles it (an unknown key is a
+    // definite rejection), so Discard is offered only once a dispatch has ended without a definite outcome.
     const intentUnoffered = intent !== null && summary !== null && !offeredRegions(summary).some((region) => region === intent.region);
+    const canDiscard = intentUnoffered && dispatchUnconfirmed;
     const recovery = <>
         {storageError && <p role="alert" className="mt-4 text-sm text-red-200">{t("onboarding.storageError")}</p>}
         {intent && <div className="mt-4 border border-gold/30 bg-surface p-4 text-sm">
@@ -141,7 +149,7 @@ function OnboardingSession({ userId, summary, websiteSummary }: Props) {
             {intentUnoffered && <p className="mt-2 text-amber-200">{t("onboarding.unofferedPending", { region: localizedRegionLabel(t, intent.region) })}</p>}
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <button type="button" disabled={busy} onClick={() => { if (intentRef.current) void dispatch(intentRef.current); }} className={secondaryButton}>{pending ? t("onboarding.confirming") : t("onboarding.retry")}</button>
-                {intentUnoffered && <button type="button" disabled={busy} onClick={discardIntent} className={secondaryButton}>{t("onboarding.discardPending")}</button>}
+                {canDiscard && <button type="button" disabled={busy} onClick={discardIntent} className={secondaryButton}>{t("onboarding.discardPending")}</button>}
             </div>
         </div>}
         {message && <p role="status" className="mt-4 text-sm text-gold">{message}</p>}

@@ -47,6 +47,7 @@
   "action.sessionUnavailable": "Tu sesión autenticada no está disponible. Vuelve a iniciar sesión y luego vuelve a intentar la solicitud pendiente.",
   "action.signIn": "Vuelve a iniciar sesión y luego vuelve a intentar la solicitud pendiente.",
   "action.noChange": "Esta solicitud no realizó ningún cambio. La capacidad o el cumplimiento de los requisitos cambió; actualiza antes de volver a elegir.",
+  "action.regionNotOffered": "Esa región ya no se ofrece, así que no se creó ni se solicitó nada. Actualiza y elige otra región.",
   "action.unconfirmed": "El resultado del envío no está confirmado. Espera si se ha limitado la frecuencia de solicitudes y luego vuelve a intentar la misma solicitud pendiente para evitar duplicados.",
   "metadata.title": "Servidores",
   "metadata.description": "Explora los servidores de Bannerlord Coop y únete a ellos.",

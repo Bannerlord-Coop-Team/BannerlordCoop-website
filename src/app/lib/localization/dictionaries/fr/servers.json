@@ -48,6 +48,7 @@
   "action.sessionUnavailable": "Votre session authentifiée n’est pas disponible. Reconnectez-vous, puis relancez la demande en attente.",
   "action.signIn": "Reconnectez-vous, puis relancez la demande en attente.",
   "action.noChange": "Cette demande n’a entraîné aucune modification. La capacité ou l’éligibilité a changé ; actualisez avant de faire un nouveau choix.",
+  "action.regionNotOffered": "Cette région n'est plus proposée : rien n'a été créé ni demandé. Actualisez et choisissez une autre région.",
   "action.unconfirmed": "Le résultat de l’envoi n’est pas confirmé. Si le débit est limité, patientez, puis relancez la même demande en attente afin d’éviter les doublons.",
   "metadata.title": "Serveurs",
   "metadata.description": "Parcourez les serveurs Bannerlord Coop et rejoignez-les.",

@@ -46,6 +46,11 @@ export async function submitServerOnboarding(input: unknown, expectedPageUserId:
             revalidatePath("/servers");
             return { ok: false, retrySameRequest: false, message: t("action.noChange") };
         }
+        // The control plane rejects a key outside its stored catalog before writing anything.
+        if (code === "invalid_region") {
+            revalidatePath("/servers");
+            return { ok: false, retrySameRequest: false, message: t("action.regionNotOffered") };
+        }
         return uncertain(t("action.unconfirmed"));
     }
 }

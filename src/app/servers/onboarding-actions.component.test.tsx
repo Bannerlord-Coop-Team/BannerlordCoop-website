@@ -42,6 +42,14 @@ describe("onboarding server action authentication and replay policy", () => {
         expect(await submitServerOnboarding(intent, "account-a")).toMatchObject({ ok: false, retrySameRequest: false });
         expect(mocks.revalidate).toHaveBeenCalledWith("/servers");
     });
+    it("releases intent with a region message when the control plane rejects a key outside its catalog", async () => {
+        mocks.request.mockRejectedValue(new MyServersApiError("invalid_region", "Unknown region", false));
+        expect(await submitServerOnboarding({ ...intent, region: "spain" }, "account-a")).toEqual({
+            ok: false, retrySameRequest: false,
+            message: "That region is no longer offered, so nothing was created or requested. Refresh and choose another region.",
+        });
+        expect(mocks.revalidate).toHaveBeenCalledWith("/servers");
+    });
 });
 
 it("localizes action guidance without changing terminal rejection or exact-retry policy", async () => {

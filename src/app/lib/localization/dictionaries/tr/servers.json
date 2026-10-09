@@ -47,6 +47,7 @@
   "action.sessionUnavailable": "Kimliği doğrulanmış oturumunuz kullanılamıyor. Yeniden oturum açın, ardından bekleyen isteği yeniden deneyin.",
   "action.signIn": "Yeniden oturum açın, ardından bekleyen isteği yeniden deneyin.",
   "action.noChange": "Bu istekle hiçbir değişiklik yapılmadı. Kapasite veya uygunluk değişti; yeniden seçim yapmadan önce sayfayı yenileyin.",
+  "action.regionNotOffered": "Bu bölge artık sunulmuyor; hiçbir şey oluşturulmadı veya talep edilmedi. Yenileyin ve başka bir bölge seçin.",
   "action.unconfirmed": "Gönderimin sonucu doğrulanamadı. Hız sınırına takıldıysanız bekleyin, ardından kopya oluşmaması için aynı bekleyen isteği yeniden deneyin.",
   "metadata.title": "Sunucular",
   "metadata.description": "Bannerlord Coop sunucularına göz atın ve katılın.",

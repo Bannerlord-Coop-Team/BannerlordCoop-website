@@ -95,18 +95,28 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         await choose("germany"); await name("My Campaign"); await click("Create server");
         expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", region: "germany" });
     });
-    it("keeps a retained intent for a removed region retryable and lets the owner discard it", async () => {
+    it("offers Discard for a retained intent in a removed region only after a retry fails transiently", async () => {
         const original = { action: "request-region", region: "spain", requestId: ONBOARDING_TEST_ID } as const;
         storeOnboardingIntent(sessionStorage, onboardingIntentKey("account-a"), original);
         mocks.request.mockRejectedValueOnce(new Error("lost"));
         await render();
         expect(container.textContent).toContain("A pending region request in Spain needs confirmation.");
         expect(container.textContent).toContain("Spain is no longer offered.");
+        expect(container.textContent).not.toContain("Discard pending request");
         await click("Retry pending request");
         expect(mocks.request.mock.calls[0][1]).toEqual(original); expect(stored()).toEqual(original);
         await click("Discard pending request");
         expect(stored()).toBeNull(); expect(container.textContent).not.toContain("Retry pending request");
         expect(button("Set up server ").disabled).toBe(false);
+    });
+    it("clears a retained intent in a removed region when the control plane rejects the key", async () => {
+        storeOnboardingIntent(sessionStorage, onboardingIntentKey("account-a"), { action: "request-region", region: "spain", requestId: ONBOARDING_TEST_ID });
+        mocks.request.mockRejectedValueOnce(new MyServersApiError("invalid_region", "Unknown region", false));
+        await render();
+        await click("Retry pending request");
+        expect(stored()).toBeNull();
+        expect(container.textContent).toContain("That region is no longer offered, so nothing was created or requested.");
+        expect(container.textContent).not.toContain("Discard pending request");
     });
     it("offers no discard for a retained intent the stored catalog still offers", async () => {
         storeOnboardingIntent(sessionStorage, onboardingIntentKey("account-a"), { action: "request-region", region: "france", requestId: ONBOARDING_TEST_ID });

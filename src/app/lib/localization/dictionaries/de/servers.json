@@ -47,6 +47,7 @@
   "action.sessionUnavailable": "Deine authentifizierte Sitzung ist nicht verfügbar. Melde dich erneut an und wiederhole dann die ausstehende Anfrage.",
   "action.signIn": "Melde dich erneut an und wiederhole dann die ausstehende Anfrage.",
   "action.noChange": "Diese Anfrage hat nichts geändert. Kapazität oder Berechtigung haben sich geändert; aktualisiere, bevor du erneut wählst.",
+  "action.regionNotOffered": "Diese Region wird nicht mehr angeboten, daher wurde nichts erstellt oder angefragt. Aktualisiere und wähle eine andere Region.",
   "action.unconfirmed": "Das Ergebnis der Übermittlung ist unbestätigt. Warte bei einer Ratenbegrenzung und wiederhole dann dieselbe ausstehende Anfrage, um Duplikate zu vermeiden.",
   "metadata.title": "Server",
   "metadata.description": "Durchsuche Bannerlord Coop-Server und tritt ihnen bei.",
