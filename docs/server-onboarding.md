@@ -25,11 +25,13 @@ The backend requires active, unused allocation under `max(administrativeBase, qu
 
 | Website Edge request | Fixed backend operation | Exact backend input |
 | --- | --- | --- |
-| `GET my-servers?resource=onboarding` | `server-onboarding` | `{version:3}` |
+| `GET my-servers?resource=onboarding` | `server-onboarding` | `{version:3}`, then `{}` if rejected as `invalid_request` |
 | `POST my-servers` `{action:'create-server',displayName,region,releaseChannel?}` | `create-server` | `{displayName,region,releaseChannel?}` |
 | `POST my-servers` `{action:'request-region',region}` | `request-region` | `{region}` |
 
 The `my-servers` Edge Function and the server-rendered summary read build these requests with the same exported builders (`onboardingSummaryRequest`, `onboardingMutationRequest` in `server-onboarding-contract.ts`). Owner requests carry region **keys only**; a browser-supplied `placement` or any other extra field is rejected before dispatch.
+
+**Rollout fallback.** A control plane that predates the stored catalog rejects `{version:3}` as `invalid_request`. Every summary read (the server-rendered page, the Edge `resource=onboarding` route and the Edge region-full check) then repeats the read with the version-2 input `{}` through the shared `readOnboardingSummary`, parses the version-2 summary strictly (its six fixed regions in order with their fixed labels) and maps it to the version-3 shape with no `otherRequests`. Any other rejection or failure is not retried. Key-only Create and Request need no fallback: the older control plane accepts the same inputs for those six keys.
 
 All use existing Supabase JWT forwarding to authenticated `POST /v1/user/control-plane`, `{version:1,requestId,operation,input}`. Mutations require a caller-generated UUID in `x-request-id`, normalized to lowercase. There is no browser service secret or owner/role/host/build/slot selection. Adequate independent administrative grants bypass membership steps; an administrator role alone is not allocation authority. New membership runtime configuration is documented separately. The shared closed DTO parser is used by **both** Edge and website facade. Unknown enums, extra/private fields, missing fields, inconsistent eligibility, wrong regions/names, invalid timestamps, mismatched receipts/envelopes and inconsistent HTTP success/failure are rejected as unavailable, not displayed as safe data.
 
@@ -37,7 +39,7 @@ All use existing Supabase JWT forwarding to authenticated `POST /v1/user/control
 
 The website catalog, `supabase/functions/_shared/hosting-regions.ts`, defines each region's key, English label, continent tab (`HOSTING_CONTINENTS`), and **placement**: the ISO country codes it covers and, optionally, the exact provider zones. US-West and US-East name their exact Oregon and Virginia zones, because a US country code alone never implies a coast. The current order is **US-West, US-East, France, Germany, United Kingdom, Poland**.
 
-The control plane matches hosts only against its own **stored catalog** of keys and placements; owners can never send or influence a placement, because the owner endpoint is public. The control plane seeds that catalog with the six regions above and placements identical to the website catalog. An administrator replaces it with **Publish website regions** on the Operations page (`set-hosting-regions`, guarded by the stored revision; see [control-plane administration](control-plane-admin.md#hosting-regions)).
+The control plane matches hosts only against its own **stored catalog** of keys and placements; owners can never send or influence a placement, because the owner endpoint is public. An empty stored catalog fails closed for owners: the summary parser requires at least one region, so the website shows onboarding as unavailable rather than an empty region list. The control plane seeds that catalog with the six regions above and placements identical to the website catalog. An administrator replaces it with **Publish website regions** on the Operations page (`set-hosting-regions`, guarded by the stored revision; see [control-plane administration](control-plane-admin.md#hosting-regions)).
 
 The version-3 summary lists the stored catalog in its stored order (1–32 unique keys matching `^[a-z][a-z0-9-]{1,47}$`), each with availability and the owner's outstanding request, plus `otherRequests` for outstanding requests whose key the stored catalog no longer contains. The shared parser accepts any stored catalog within those bounds; it does not require it to equal the website catalog. It rejects extra fields, a request filed under another entry's key, an `otherRequests` key that is in the catalog, and a request ID repeated anywhere in the summary.
 
@@ -209,6 +211,8 @@ Deploy the control-plane channel contract first, then the `my-servers` Edge func
 
 Deploy order for the stored region catalog:
 
-1. Deploy the control plane with the stored catalog (`hosting-regions`/`set-hosting-regions`, the version-3 summary that accepts `{version:3}`, key-only Create/Request). Its migration 096, `20261009120000_control_plane_provider_regions.sql`, creates the catalog and seeds the six current regions; it is applied through the control plane's manual Supabase release procedure before that release starts.
-2. Deploy the `my-servers` and `control-plane-admin` Edge Functions and the website. Against an older control plane the summary and mutations fail closed as unavailable, and the Hosting regions panel reports that the catalog could not be read.
+1. The `my-servers` Edge Function and the website may deploy before or after the control plane. Against an older control plane, owner onboarding keeps working: summary reads fall back to the version-2 summary (see **Rollout fallback** above), and key-only Create and Request are accepted as before. Owner mutations do not fail closed. Administration is reduced until step 2: the Hosting regions panel reports that the catalog could not be read, and **Create server** is shown unavailable, because its region choices need the stored catalog's `available` flag from `hosting-regions`.
+2. Deploy the control plane with the stored catalog (`hosting-regions` returning `available` per entry, `set-hosting-regions`, the version-3 summary, key-only Create/Request). Its migration 096, `20261009120000_control_plane_provider_regions.sql`, creates the catalog and seeds the six current regions; it is applied through the control plane's manual Supabase release procedure before that release starts.
 3. If the website catalog differs from the seed, open **Operations → Hosting regions** and click **Publish website regions**.
+
+The `control-plane-admin` Edge Function forwards any operation name and is not changed by this work, so it needs no redeploy.

@@ -31,13 +31,36 @@ export type OnboardingResult =
     | { action: "request-region"; request: RegionRequest };
 /** The exact control-plane operations onboarding sends; owners never send placements. */
 export type OnboardingControlPlaneRequest =
-    | { operation: "server-onboarding"; input: { version: typeof ONBOARDING_SUMMARY_VERSION } }
+    | { operation: "server-onboarding"; input: { version: typeof ONBOARDING_SUMMARY_VERSION } | Record<string, never> }
     | { operation: "create-server"; input: { displayName: string; region: string; releaseChannel?: OnboardingReleaseChannel } }
     | { operation: "request-region"; input: { region: string } };
 
-/** Builds the control-plane request for the owner's onboarding summary. */
-export function onboardingSummaryRequest(): Extract<OnboardingControlPlaneRequest, { operation: "server-onboarding" }> {
+type OnboardingSummaryRequest = Extract<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>;
+// The six regions every version-2 control plane offered, in its fixed order, with the labels it echoed.
+const LEGACY_REGION_LABELS = { "us-west": "US-West", "us-east": "US-East", france: "France", germany: "Germany",
+    "united-kingdom": "United Kingdom", poland: "Poland" } as const;
+const LEGACY_REGIONS = Object.keys(LEGACY_REGION_LABELS) as (keyof typeof LEGACY_REGION_LABELS)[];
+
+/** Builds the control-plane request for the owner's version-3 onboarding summary. */
+export function onboardingSummaryRequest(): OnboardingSummaryRequest {
     return { operation: "server-onboarding", input: { version: ONBOARDING_SUMMARY_VERSION } };
+}
+/** Builds the version-2 summary request (`{}`) a control plane without the stored catalog accepts. */
+export function legacyOnboardingSummaryRequest(): OnboardingSummaryRequest {
+    return { operation: "server-onboarding", input: {} };
+}
+/** Reads the version-3 summary, or the version-2 one when `rejectsVersion` says an older control plane refused version 3. */
+export async function readOnboardingSummary(
+    read: (request: OnboardingSummaryRequest) => Promise<unknown>,
+    rejectsVersion: (error: unknown) => boolean,
+): Promise<OnboardingSummary> {
+    let result: unknown;
+    try { result = await read(onboardingSummaryRequest()); } catch (error) {
+        if (!rejectsVersion(error)) throw error;
+        // Rollout: keep onboarding working against a control plane that predates `{version:3}`.
+        return parseLegacyOnboardingSummary(await read(legacyOnboardingSummaryRequest()));
+    }
+    return parseOnboardingSummary(result);
 }
 /** Builds the key-only control-plane request for one parsed owner mutation. */
 export function onboardingMutationRequest(mutation: OnboardingMutation): Exclude<OnboardingControlPlaneRequest, { operation: "server-onboarding" }> {
@@ -86,6 +109,18 @@ export function parseOnboardingSummary(value: unknown): OnboardingSummary {
     const otherRequests = parseOtherRequests(value.otherRequests, regions);
     return { version: ONBOARDING_SUMMARY_VERSION, sources: parseSources(value.sources), membership: parseMembership(value.membership),
         eligibility: parseEligibility(value.eligibility), unavailableReason, regions, otherRequests };
+}
+/** Parses a version-2 summary (its six fixed regions with labels) into the version-3 shape, with no other requests. */
+export function parseLegacyOnboardingSummary(value: unknown): OnboardingSummary {
+    if (!record(value) || !keys(value, ["version", "sources", "membership", "eligibility", "unavailableReason", "regions"])) throw invalid();
+    if (value.version !== 2 || !Array.isArray(value.regions) || value.regions.length !== LEGACY_REGIONS.length) throw invalid();
+    const regions = value.regions.map((entry: unknown, index: number) => {
+        const region = LEGACY_REGIONS[index];
+        if (!record(entry) || !keys(entry, ["region", "label", "available", "request"])) throw invalid();
+        if (entry.region !== region || entry.label !== LEGACY_REGION_LABELS[region]) throw invalid();
+        return { region, available: entry.available, request: entry.request };
+    });
+    return parseOnboardingSummary({ ...value, version: ONBOARDING_SUMMARY_VERSION, regions, otherRequests: [] });
 }
 /** Parses a mutation receipt and requires it to answer exactly the expected mutation. */
 export function parseOnboardingResult(value: unknown, expected: OnboardingMutation): OnboardingResult {
@@ -173,5 +208,7 @@ function timestamp(value: unknown): value is string {
     return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)
         && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
+/** The single error type every rejected onboarding DTO raises. */
+export class OnboardingDtoError extends Error { constructor() { super("Invalid server onboarding DTO"); } }
 /** The single error every rejected DTO raises. */
-function invalid() { return new Error("Invalid server onboarding DTO"); }
+function invalid() { return new OnboardingDtoError(); }

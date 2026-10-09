@@ -23,3 +23,10 @@ export function onboardingCreated(): OnboardingResult & { action: "create-server
 export function onboardingRequested(): OnboardingResult & { action: "request-region" } {
     return { action: "request-region", request: { requestId: ONBOARDING_TEST_ID, region: "france", status: "outstanding", createdAt: ONBOARDING_TEST_TIME } };
 }
+/** A version-2 summary from a control plane without the stored catalog: its six fixed regions with labels; only US-West has capacity. */
+export function legacyOnboardingSummary() {
+    const { regions: _regions, otherRequests: _otherRequests, ...rest } = onboardingSummary();
+    const labels = [["us-west", "US-West"], ["us-east", "US-East"], ["france", "France"], ["germany", "Germany"],
+        ["united-kingdom", "United Kingdom"], ["poland", "Poland"]] as const;
+    return { ...rest, version: 2, regions: labels.map(([region, label]) => ({ region, label, available: region === "us-west", request: null })) };
+}

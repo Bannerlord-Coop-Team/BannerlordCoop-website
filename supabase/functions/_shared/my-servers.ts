@@ -4,7 +4,7 @@ import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSetting
 import { serverLogDownloadHeaders } from "./server-log-contract.ts";
 import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
-import { onboardingMutationRequest, onboardingSummaryRequest, parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingControlPlaneRequest, type OnboardingMutation } from "./server-onboarding-contract.ts";
+import { onboardingMutationRequest, onboardingSummaryRequest, parseOnboardingMutation, parseOnboardingResult, readOnboardingSummary, type OnboardingControlPlaneRequest, type OnboardingMutation } from "./server-onboarding-contract.ts";
 import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, requireRunnerConfigurationPart, type RunnerConfigurationMutation, type RunnerConfigurationPart } from "./server-configuration-contract.ts";
 import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
 
@@ -79,21 +79,53 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
     const fetchImplementation = options.fetchImplementation ?? fetch;
     const upstreamTimeoutMilliseconds = boundedTimeout(options.upstreamTimeoutMilliseconds ?? 30_000);
 
+    // Posts one onboarding summary request; resolves its result or throws the upstream rejection or failure.
+    async function postSummary(summaryRequest: SummaryRequest, token: string, requestId: string): Promise<unknown> {
+        let response: Response;
+        try {
+            response = await fetchImplementation(controlPlaneEndpoint, {
+                method: "POST",
+                redirect: "error",
+                headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "x-request-id": requestId },
+                body: JSON.stringify({ version: 1, requestId, ...summaryRequest }),
+                signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),
+            });
+        } catch { throw new SummaryUnavailableError(); }
+        const envelope: unknown = JSON.parse(await readBoundedText(response, MAXIMUM_OPERATION_RESPONSE_BYTES));
+        if (!isControlPlaneEnvelope(envelope, requestId) || !isRecord(envelope)) throw new Error("Invalid control-plane envelope");
+        if (envelope.ok === true && response.ok) return envelope.result;
+        if (envelope.ok !== true && !response.ok) throw new SummaryRejectedError(response.status, envelope.error as Record<string, unknown>);
+        throw new Error("Inconsistent success status");
+    }
+
+    // Reads the caller's version-3 summary, falling back to version 2 when an older control plane rejects it.
+    function readSummary(token: string, requestId: string) {
+        // The fallback is a second upstream read, so it carries its own request ID.
+        return readOnboardingSummary((summaryRequest) => postSummary(summaryRequest, token,
+            "version" in summaryRequest.input ? requestId : crypto.randomUUID()), isSummaryVersionRejection);
+    }
+
+    // Answers the summary read with a version-3 envelope, forwarding an upstream rejection unchanged.
+    async function summaryResponse(token: string, requestId: string, cors: Record<string, string>): Promise<Response> {
+        try {
+            const result = await readSummary(token, requestId);
+            return Response.json({ version: 1, requestId, ok: true, result },
+                { headers: { ...cors, "cache-control": "private, no-store", "x-request-id": requestId } });
+        } catch (error) {
+            if (error instanceof SummaryRejectedError) {
+                return Response.json({ version: 1, requestId, ok: false, error: error.error },
+                    { status: error.status, headers: { ...cors, "cache-control": "private, no-store", "x-request-id": requestId } });
+            }
+            if (error instanceof SummaryUnavailableError) {
+                return errorResponse(502, requestId, "control_plane_unavailable", "The control plane could not be reached.", true, cors);
+            }
+            return errorResponse(502, requestId, "invalid_response", "The control plane returned an invalid response.", true, cors);
+        }
+    }
+
     // Reads the caller's onboarding summary to tell whether a region has no remaining capacity.
     async function regionIsFull(region: string, token: string) {
-        const requestId = crypto.randomUUID();
-        const response = await fetchImplementation(controlPlaneEndpoint, {
-            method: "POST",
-            redirect: "error",
-            headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "x-request-id": requestId },
-            body: JSON.stringify({ version: 1, requestId, ...onboardingSummaryRequest() }),
-            signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),
-        });
-        const envelope: unknown = JSON.parse(await readBoundedText(response, MAXIMUM_OPERATION_RESPONSE_BYTES));
-        if (!response.ok || !isControlPlaneEnvelope(envelope, requestId) || !isRecord(envelope) || envelope.ok !== true) {
-            throw new Error("Onboarding summary is unavailable");
-        }
-        const summary = parseOnboardingSummary(envelope.result);
+        const summary = await readSummary(token, crypto.randomUUID());
         // Paused or blocked provisioning also reports regions unavailable, which is not a capacity signal.
         return summary.unavailableReason === null && summary.regions.some((entry) => entry.region === region && !entry.available);
     }
@@ -149,6 +181,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             return errorResponse(400, requestId, "invalid_request", "The server request is invalid.", false, cors);
         }
 
+        if (upstreamRequest.operation === "server-onboarding") return summaryResponse(token, requestId, cors);
         const isDirectCommand = upstreamRequest.operation === "server-operation";
         const isConfigurationFile = upstreamRequest.operation === "configuration-file" || upstreamRequest.operation === "save-configuration-file";
         let endpoint = controlPlaneEndpoint;
@@ -261,7 +294,6 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     && (!isRecord(envelope.result) || envelope.result.configPart !== upstreamRequest.input.configPart)) {
                     throw new Error("Configuration response belongs to another file");
                 }
-                if (upstreamRequest.operation === "server-onboarding") parseOnboardingSummary(envelope.result);
                 if (upstreamRequest.operation === "set-server-visibility") {
                     parseVisibilityResult(envelope.result, { action: "set-server-visibility", ...upstreamRequest.input });
                 }
@@ -744,6 +776,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+type SummaryRequest = Extract<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>;
+
+/** Whether an older control plane refused the version-3 summary input as an invalid request. */
+function isSummaryVersionRejection(error: unknown) {
+    return error instanceof SummaryRejectedError && error.error.code === "invalid_request";
+}
+
+/** A control-plane rejection of a summary read: its HTTP status and validated error object. */
+class SummaryRejectedError extends Error {
+    constructor(readonly status: number, readonly error: Record<string, unknown>) { super("Onboarding summary was rejected"); }
+}
+/** The control plane could not be reached for a summary read. */
+class SummaryUnavailableError extends Error {}
 class RequestTooLargeError extends Error {}
 class ContentTypeError extends Error {}
 class MethodNotAllowedError extends Error {}

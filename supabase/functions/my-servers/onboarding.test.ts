@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createMyServersHandler } from "../_shared/my-servers.ts";
-import { parseOnboardingIntent, parseOnboardingResult, parseOnboardingSummary, normalizeOnboardingName } from "../_shared/server-onboarding-contract.ts";
+import { parseLegacyOnboardingSummary, parseOnboardingIntent, parseOnboardingResult, parseOnboardingSummary, normalizeOnboardingName, readOnboardingSummary } from "../_shared/server-onboarding-contract.ts";
 import type { RegionFullEvent, RegionRequestedEvent } from "../_shared/region-alerts.ts";
-import { onboardingSummary, onboardingRegion, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID, ONBOARDING_TEST_TIME } from "../../../tests/onboarding-fixtures.ts";
+import { legacyOnboardingSummary, onboardingSummary, onboardingRegion, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID, ONBOARDING_TEST_TIME } from "../../../tests/onboarding-fixtures.ts";
 
 const token = "synthetic-jwt-for-contract-tests-only";
 function request(body?: unknown, id: string | null = ONBOARDING_TEST_ID, query = body === undefined ? "?resource=onboarding" : "") {
@@ -107,6 +107,59 @@ test("onboarding safe DTO parsers reject incomplete, extra, inconsistent and inv
     assert.deepEqual(parseOnboardingResult(onboardingRequested(), { action: "request-region", region: "france" }), onboardingRequested());
     assert.equal(normalizeOnboardingName("  Ｍy  Campaign  "), "My Campaign");
     assert.equal(parseOnboardingIntent({ ...expected, requestId: ONBOARDING_TEST_ID.toUpperCase() }).requestId, ONBOARDING_TEST_ID);
+});
+// The legacy summary in version-3 form: the six fixed regions, in order, without labels or other requests.
+function legacyAsVersion3() {
+    const { regions, ...rest } = legacyOnboardingSummary();
+    return { ...rest, version: 3, regions: regions.map(({ label: _label, ...entry }) => entry), otherRequests: [] };
+}
+// Serves an older control plane: `{version:3}` is an invalid request, `{}` returns the version-2 summary.
+function legacyControlPlane(calls: Array<{ requestId: string; input: unknown }>, legacy: unknown = legacyOnboardingSummary()) {
+    return createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
+        fetchImplementation: async (_url, init) => {
+            const body = JSON.parse(init?.body as string); calls.push(body);
+            if (body.operation !== "server-onboarding") return Response.json({ version: 1, requestId: body.requestId, ok: true, result: onboardingCreated() });
+            if (Object.keys(body.input).length === 0) return Response.json({ version: 1, requestId: body.requestId, ok: true, result: legacy });
+            return Response.json({ version: 1, requestId: body.requestId, ok: false,
+                error: { code: "invalid_request", message: "The request is invalid.", retryable: false } }, { status: 400 });
+        } });
+}
+test("version-2 summaries map their six fixed regions into the version-3 shape", async () => {
+    assert.deepEqual(parseLegacyOnboardingSummary(legacyOnboardingSummary()), legacyAsVersion3());
+    const legacy = legacyOnboardingSummary();
+    const requested = { ...legacy, regions: legacy.regions.map((entry) => entry.region === "france" ? { ...entry, request: onboardingRequested().request } : entry) };
+    assert.deepEqual(onboardingRegion(parseLegacyOnboardingSummary(requested), "france").request, onboardingRequested().request);
+    for (const variant of [{ ...legacy, version: 3 }, { ...legacy, regions: [...legacy.regions].reverse() }, { ...legacy, regions: legacy.regions.slice(1) },
+        { ...legacy, regions: legacy.regions.map((entry) => ({ ...entry, label: "Elsewhere" })) }, { ...legacy, otherRequests: [] },
+        { ...legacy, regions: legacy.regions.map((entry) => ({ ...entry, available: "yes" })) }]) {
+        assert.throws(() => parseLegacyOnboardingSummary(variant), JSON.stringify(variant).slice(0, 80));
+    }
+    // Only a version rejection falls back; any other failure propagates without a second read.
+    const reads: unknown[] = [];
+    await assert.rejects(readOnboardingSummary(async (request) => { reads.push(request.input); throw new Error("offline"); }, () => false), /offline/u);
+    assert.deepEqual(reads, [{ version: 3 }]);
+});
+test("onboarding Edge falls back to the version-2 summary when an older control plane rejects version 3", async () => {
+    const calls: Array<{ requestId: string; input: unknown }> = [];
+    const response = await legacyControlPlane(calls)(request());
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { version: 1, requestId: ONBOARDING_TEST_ID, ok: true, result: legacyAsVersion3() });
+    assert.deepEqual(calls.map((call) => call.input), [{ version: 3 }, {}]);
+    assert.equal(calls[0].requestId, ONBOARDING_TEST_ID);
+    assert.notEqual(calls[1].requestId, ONBOARDING_TEST_ID);
+    // A malformed version-2 summary is still rejected, never shown.
+    const invalid = await legacyControlPlane([], { ...legacyOnboardingSummary(), regions: [] })(request());
+    assert.equal(invalid.status, 502);
+    // Key-only Create keeps working against the older control plane.
+    const created = await legacyControlPlane(calls)(request({ action: "create-server", displayName: "My Campaign", region: "us-west" }));
+    assert.equal(created.status, 200);
+});
+test("onboarding Edge does not fall back on other summary rejections", async () => {
+    const calls: unknown[] = [];
+    const response = await handler(null, calls, 403, { code: "forbidden", message: "Current access is required.", retryable: false })(request());
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { version: 1, requestId: ONBOARDING_TEST_ID, ok: false, error: { code: "forbidden", message: "Current access is required.", retryable: false } });
+    assert.equal(calls.length, 1);
 });
 test("onboarding Edge never forwards invalid success DTOs or inconsistent envelopes/status", async () => {
     for (const result of [{ ...onboardingSummary(), hostId: "private" }, { ...onboardingSummary(), regions: [] }, { ...onboardingSummary(), version: 2 }]) {

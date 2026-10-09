@@ -1,6 +1,6 @@
 import "server-only";
 import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse, type MyServerDeletionStatus } from "./my-servers";
-import { onboardingSummaryRequest, parseOnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { OnboardingDtoError, readOnboardingSummary, type OnboardingControlPlaneRequest } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 
 /** Reads owner inventory directly; Oracle rechecks the current session and durable access on every page. */
 export async function listAllMyServers(accessToken: string, callerSignal?: AbortSignal) {
@@ -11,9 +11,17 @@ export async function listAllMyServers(accessToken: string, callerSignal?: Abort
 
 /** Called after website account synchronization; eligibility and capacity are freshly checked by Oracle. */
 export async function getServerOnboarding(accessToken: string, callerSignal?: AbortSignal) {
-    const result = await readOwner(accessToken, onboardingSummaryRequest(), ownerReadSignal(accessToken, callerSignal));
-    try { return parseOnboardingSummary(result); }
-    catch { throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid response.", true); }
+    const signal = ownerReadSignal(accessToken, callerSignal);
+    try { return await readOnboardingSummary((request) => readOwner(accessToken, request, signal), isSummaryVersionRejection); }
+    catch (error) {
+        if (!(error instanceof OnboardingDtoError)) throw error;
+        throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid response.", true);
+    }
+}
+
+/** Whether an older control plane refused the version-3 summary input as an invalid request. */
+function isSummaryVersionRejection(error: unknown) {
+    return error instanceof MyServersApiError && error.code === "invalid_request";
 }
 
 /** Reads the durable owner deletion receipt without dispatching another operation. */
@@ -81,7 +89,7 @@ function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
 
 async function readOwner(accessToken: string, request:
     | { operation: "my-servers"; input: { cursor: string | null; limit: 100 } }
-    | ReturnType<typeof onboardingSummaryRequest>
+    | Extract<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>
     | { operation: "server-deletion-status"; input: { serverId: string } }
     | { operation: "server-start-status"; input: { serverId: string; jobId: string } }, signal: AbortSignal) {
     const requestId = crypto.randomUUID();
