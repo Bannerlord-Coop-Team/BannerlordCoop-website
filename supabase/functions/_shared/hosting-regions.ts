@@ -7,7 +7,7 @@ export const HOSTING_CONTINENTS = ["north-america", "europe", "south-america", "
 export type HostingContinent = typeof HOSTING_CONTINENTS[number];
 
 /** Hosts eligible for a region: a country allowlist, optionally narrowed to exact provider zones. */
-export type HostingPlacement = {
+type HostingPlacement = {
     readonly countryCodes: readonly string[];
     readonly locationIds?: readonly string[];
 };
@@ -49,7 +49,7 @@ export const HOSTING_REGIONS = [
     { key: "poland", label: "Poland", continent: "europe", placement: { countryCodes: ["PL"] } },
 ] as const satisfies readonly HostingRegionDefinition[];
 
-export type HostingRegionKey = typeof HOSTING_REGIONS[number]["key"];
+type HostingRegionKey = typeof HOSTING_REGIONS[number]["key"];
 
 /** Whether a value is a key in this website catalog. */
 export function isHostingRegionKey(value: unknown): value is HostingRegionKey {
