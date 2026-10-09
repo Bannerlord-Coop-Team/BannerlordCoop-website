@@ -191,6 +191,8 @@ export function createPatreonHandler(config: PatreonConfig, mode: "start" | "cal
             }, { allowJsonApi: true });
             stage = "verify_identity";
             const verified = await verifyPatreonMembership(identity, config.policy ?? null);
+            // Fixed adapter reason and resulting verification only: never the provider body.
+            if (verified.failure !== null) console.warn("Patreon identity verification incomplete", { stage, reason: verified.failure, verification: verified.evidence.verification });
             // Tokens exist only in this callback; completion stores normalized evidence.
             stage = "issue_completion";
             const completionToken = await issue(context.user_id, "complete", context, verified.patreonUserId, verified.evidence);
