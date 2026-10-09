@@ -1,6 +1,6 @@
 import type { HostingAdminRegionDefinition, HostingAdminRegionEntry, HostingAdminRegionPlacement, HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE } from "../../../../supabase/functions/_shared/server-settings-contract";
-import { hostingRegionCatalogPayload, hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
+import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 
 export const MAINTENANCE_TIME_ZONE = HOSTING_TIME_ZONE;
 
@@ -60,7 +60,7 @@ export function maintenanceSlotOptions() {
     }));
 }
 
-/** Fills inputs an administrator card never asks for: Create's default channel and the published region catalog. */
+/** Fills Create's default release channel, which the administrator card never asks for. */
 export function applyControlPlaneOperationDefaults(
     operation: string,
     input: Record<string, unknown>,
@@ -68,8 +68,6 @@ export function applyControlPlaneOperationDefaults(
     if (operation === "create-server" && input.releaseChannel === undefined) {
         input.releaseChannel = "stable";
     }
-    // Publishing always sends the whole website catalog; an administrator never edits placements in a form.
-    if (operation === "set-hosting-regions") input.regions = hostingRegionCatalogPayload();
 }
 
 type HostPlacement = Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region">;

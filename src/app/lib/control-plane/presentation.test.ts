@@ -37,13 +37,13 @@ test("create-server regions are the stored-catalog entries reported available, i
     assert.deepEqual(createServerRegionOptions([]), []);
 });
 
-test("administrator create sends only the region key; publishing sends the whole website catalog", () => {
+test("administrator create sends only the region key; other operations get no defaults", () => {
     const input: Record<string, unknown> = { friendlyRegion: "us-east" };
     applyControlPlaneOperationDefaults("create-server", input);
     assert.deepEqual(input, { friendlyRegion: "us-east", releaseChannel: "stable" });
     const publish: Record<string, unknown> = { expectedRevision: 4, reason: "Add Japan" };
     applyControlPlaneOperationDefaults("set-hosting-regions", publish);
-    assert.deepEqual(publish, { expectedRevision: 4, reason: "Add Japan", regions: hostingRegionCatalogPayload() });
+    assert.deepEqual(publish, { expectedRevision: 4, reason: "Add Japan" });
     assert.equal(presentControlPlaneOperationResult("set-hosting-regions", { revision: 5, regions: [], updatedAt: null, updatedBy: null }).message,
         "Published the website hosting regions as catalog revision 5.");
 });

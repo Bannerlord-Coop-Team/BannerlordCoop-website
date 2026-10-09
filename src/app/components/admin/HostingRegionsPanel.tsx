@@ -18,9 +18,11 @@ import {
 type CatalogRow = { region: string; website: HostingRegionPayload | null; stored: HostingAdminRegionDefinition | null; status: string; drifted: boolean };
 
 /** Shows the control plane's stored region catalog beside the website catalog and offers to publish the website's. */
-export function HostingRegionsPanel({ catalog, error, website = hostingRegionCatalogPayload() }: {
+export function HostingRegionsPanel({ catalog, error, accountLabels = {}, website = hostingRegionCatalogPayload() }: {
     catalog: HostingAdminRegionCatalog | null;
     error: string | null;
+    // Website account names by account ID, used to name who last published.
+    accountLabels?: Readonly<Record<string, string>>;
     website?: readonly HostingRegionPayload[];
 }) {
     return <section aria-labelledby="hosting-regions-heading">
@@ -29,19 +31,24 @@ export function HostingRegionsPanel({ catalog, error, website = hostingRegionCat
         <p className="mt-2 max-w-3xl text-xs leading-5 text-foreground-muted">Owners choose from the control plane&apos;s stored catalog, which matches hosts by each region&apos;s placement. The website catalog supplies labels and continents; publish it after changing the website&apos;s regions.</p>
         {catalog === null
             ? <p role="alert" className="mt-5 border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">{error ?? "The stored hosting-region catalog is unavailable."}</p>
-            : <CatalogComparison catalog={catalog} website={website} />}
+            : <CatalogComparison catalog={catalog} website={website} accountLabels={accountLabels} />}
     </section>;
 }
 
-/** Renders the drift summary, the side-by-side table and, only when they differ, the publish action. */
-function CatalogComparison({ catalog, website }: { catalog: HostingAdminRegionCatalog; website: readonly HostingRegionPayload[] }) {
+/** Renders the drift summary, the side-by-side table and the publish action, which is disabled while in sync. */
+function CatalogComparison({ catalog, website, accountLabels }: {
+    catalog: HostingAdminRegionCatalog;
+    website: readonly HostingRegionPayload[];
+    accountLabels: Readonly<Record<string, string>>;
+}) {
     const drift = compareHostingRegionCatalogs(catalog.regions, website);
     const drifted = hasHostingRegionDrift(drift);
+    const updatedBy = catalog.updatedBy === null ? null : accountLabels[catalog.updatedBy] ?? catalog.updatedBy;
     return <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="border border-white/10 bg-surface">
             <div className="border-b border-white/10 px-4 py-3 text-xs text-foreground-muted">
                 <p className={drifted ? "text-amber-300" : "text-emerald-300"} role="status">{driftSummary(drift)}</p>
-                <p className="mt-1">Stored revision {catalog.revision} · updated <LocalDateTime value={catalog.updatedAt} empty="never (seeded)" />{catalog.updatedBy === null ? "" : ` by ${catalog.updatedBy}`}</p>
+                <p className="mt-1">Stored revision {catalog.revision} · updated <LocalDateTime value={catalog.updatedAt} empty="never (seeded)" />{updatedBy === null ? "" : ` by ${updatedBy}`}</p>
                 {drift.orderDiffers && <p className="mt-1">Stored order: {catalog.regions.map((entry) => entry.region).join(", ")}</p>}
             </div>
             <div className="overflow-x-auto">
@@ -56,13 +63,16 @@ function CatalogComparison({ catalog, website }: { catalog: HostingAdminRegionCa
                 </table>
             </div>
         </div>
-        {drifted && <ControlPlaneActionCard operation="set-hosting-regions" title="Publish website regions" destructive help={operationExplanation("set-hosting-regions")}
+        {/* Always mounted, so its result stays visible after the publish refreshes the page into sync. */}
+        <ControlPlaneActionCard operation="set-hosting-regions" title="Publish website regions" destructive help={operationExplanation("set-hosting-regions")}
             description={`Replace the stored catalog (revision ${catalog.revision}) with the website's ${website.length} regions, in website order. Owners can no longer create servers in, or request, a region the website catalog omits; existing servers and requests keep their keys.`}
             destructiveReason="Regions missing from the website catalog stop being offered to owners."
+            unavailableReason={drifted ? undefined : "Nothing to publish: the stored catalog matches the website catalog."}
+            // The exact website catalog compared above, guarded by the revision it replaces.
+            fixedInput={{ expectedRevision: catalog.revision, regions: website }}
             fields={[
-                { name: "expectedRevision", label: "Expected revision", kind: "hidden", valueType: "number", defaultValue: catalog.revision },
                 { name: "reason", label: "Reason", kind: "textarea", required: true, placeholder: "Why the catalog is changing (3–1000 characters)", help: "Stored in the immutable administrative audit event." },
-            ]} />}
+            ]} />
     </div>;
 }
 

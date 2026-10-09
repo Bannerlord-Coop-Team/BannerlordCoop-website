@@ -102,7 +102,7 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     expect(html).toContain("Hosting regions");
     expect(html).toContain("Missing from control plane");
     expect(html).toContain("Publish website regions");
-    expect(html).toMatch(/<input type="hidden" name="expectedRevision" value="4"\/>/u);
+    expect(html).toContain("Replace the stored catalog (revision 4)");
     expect(html).toContain("Onboard existing OVH VPS");
     expect(html).toContain("vps-available.vps.ovh.us");
     expect(html).toContain('value="us-east"');
