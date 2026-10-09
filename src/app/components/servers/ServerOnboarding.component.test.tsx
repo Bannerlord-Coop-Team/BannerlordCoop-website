@@ -81,6 +81,18 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe("us-west");
         expect(mocks.request).not.toHaveBeenCalled();
     });
+    it("shows visible pending feedback while refreshing availability", async () => {
+        await setup();
+        const refresh = button("Refresh availability");
+        await act(() => { refresh.click(); });
+        expect(mocks.refresh).toHaveBeenCalledTimes(1);
+        expect(refresh.disabled).toBe(true);
+        expect(refresh.getAttribute("aria-busy")).toBe("true");
+        expect(refresh.querySelector("svg")).not.toBeNull();
+        await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+        expect(refresh.disabled).toBe(false);
+        expect(refresh.getAttribute("aria-busy")).toBe("false");
+    });
     it("retains Nightly selection across an uncertain response and exact retry", async () => {
         mocks.request.mockRejectedValueOnce(new Error("response lost"));
         await setup(); await name("My Campaign"); await act(async () => container.querySelector<HTMLInputElement>('input[value="nightly"]')!.click()); await click("Create server");

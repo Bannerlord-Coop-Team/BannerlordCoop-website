@@ -3,10 +3,10 @@
 import { useTranslations } from "@/app/lib/localization/client";
 import { MembershipNextStep } from "./MembershipNextStep";
 import type { WebsiteOnboardingSummary } from "@/app/lib/hosting/membership-onboarding";
-import { ArrowRight, Server, ShieldCheck, X } from "lucide-react";
+import { ArrowRight, LoaderCircle, Server, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { submitServerOnboarding } from "@/app/servers/onboarding-actions";
 import { clearOnboardingIntent, onboardingIntentKey, readOnboardingIntent, storeOnboardingIntent } from "@/app/servers/onboarding-intent";
 import { normalizeOnboardingName, type OnboardingReleaseChannel, type OnboardingIntent, type OnboardingRegion, type OnboardingResult, type OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
@@ -15,6 +15,7 @@ const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible
 const primaryButton = `inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-gold px-5 py-3 font-label text-sm font-semibold uppercase tracking-[0.1em] text-background transition-colors hover:bg-[#c3b07b] disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`;
 const secondaryButton = `inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-white/15 px-4 py-2 text-sm text-foreground-muted hover:border-gold/50 hover:text-foreground disabled:opacity-60 ${focusRing}`;
 const labelStyle = "font-label text-xs font-semibold uppercase tracking-[0.16em] text-gold";
+const REFRESH_FEEDBACK_MIN_MS = 300;
 
 type Props = { userId: string; summary: OnboardingSummary | null; websiteSummary?: WebsiteOnboardingSummary };
 /** Keys request recovery to the verified account without changing retained intent ownership. */
@@ -187,9 +188,12 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
     const [releaseChannel, setReleaseChannel] = useState<OnboardingReleaseChannel>("stable");
     const [selected, setSelected] = useState<OnboardingRegion>("us-west");
     const [error, setError] = useState("");
-    const [replacement, setReplacement] = useState<OnboardingRegion | null>(null);
+    const [isRefreshing, startRefresh] = useTransition();
+    const [refreshRequested, setRefreshRequested] = useState(false);
     const continent = CONTINENTS.findIndex((continent) => continent.regions.includes(selected));
     const entry = summary?.regions.find((entry) => entry.region === selected);
+    const refreshBusy = isRefreshing || refreshRequested;
+    const [replacement, setReplacement] = useState<OnboardingRegion | null>(null);
     const priorRequest = summary?.regions.find((region) => region.request !== null && region.region !== selected)?.request ?? null;
     useEffect(() => {
         const dialog = dialogRef.current!;
@@ -211,6 +215,11 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
         if (result) resultRef.current?.focus();
         else if (pending) closeRef.current?.focus();
     }, [result, pending]);
+    useEffect(() => {
+        if (!refreshRequested || isRefreshing) return;
+        const timer = window.setTimeout(() => setRefreshRequested(false), REFRESH_FEEDBACK_MIN_MS);
+        return () => window.clearTimeout(timer);
+    }, [isRefreshing, refreshRequested]);
     /** Requests a full region, or validates the name before forwarding a create. */
     function submit(event: FormEvent) {
         event.preventDefault();
@@ -298,7 +307,10 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
                 {recovery}
                 <div className="mt-5 flex flex-col-reverse gap-3 border-t border-white/10 pt-5 sm:flex-row sm:flex-wrap sm:justify-end">
                     <button type="button" onClick={onDismiss} className={secondaryButton}>{pending ? t("onboarding.closePending") : t("onboarding.close")}</button>
-                    <button type="button" onClick={onRefresh} className={secondaryButton}>{t("onboarding.refresh")}</button>
+                    <button type="button" disabled={refreshBusy} aria-busy={refreshBusy} onClick={() => { setRefreshRequested(true); startRefresh(onRefresh); }} className={secondaryButton}>
+                        {refreshBusy && <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />}
+                        {t("onboarding.refresh")}
+                    </button>
                     <button type="submit" disabled={disabled || !canOffer || !entry || (!entry.available && entry.request !== null)} className={primaryButton}>{pending ? t("onboarding.submitting") : entry?.available !== false ? t("onboarding.create") : entry.request ? t("onboarding.requestedButton") : t("onboarding.request")}</button>
                 </div>
             </form>}
