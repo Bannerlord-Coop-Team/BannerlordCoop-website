@@ -54,12 +54,12 @@ export function VpsView({ inventory: initialInventory, accounts }: { inventory: 
                 ownerLabels={Object.fromEntries(ownerLabels)}
                 runnerTargetSourceCommit={runnerTargetSourceCommit}
             />
-            <RegionRequestsPane />
+            <RegionRequestsPane accounts={accounts} />
         </section>
     );
 }
 
-function RegionRequestsPane() {
+function RegionRequestsPane({ accounts }: { accounts: WebsiteAccountSummary[] }) {
     const [requests, setRequests] = useState<HostingPage<HostingAdminRegionRequest> | null>(null);
     const [error, setError] = useState("");
     const [pendingRequest, setPendingRequest] = useState<string | null>(null);
@@ -131,7 +131,7 @@ function RegionRequestsPane() {
                             {requests.items.map(request => (
                                 <tr key={request.requestId}>
                                     <td className="p-4 font-semibold text-foreground">{request.region}<span className="mt-1 block font-mono text-[0.62rem] font-normal text-foreground-dim">{request.requestId}</span></td>
-                                    <td className="p-4 text-xs text-foreground-muted">{request.requesterEmail ?? "Email unavailable"}</td>
+                                    <td className="p-4 text-xs text-foreground-muted">{formatRequesterEmail(request, accounts)}</td>
                                     <td className="p-4 text-xs text-foreground-muted">{formatAllocatedRegions(request.allocatedRegions)}</td>
                                     <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={request.createdAt} /></td>
                                     <td className="p-4"><div className="flex justify-end gap-2">
@@ -145,6 +145,14 @@ function RegionRequestsPane() {
             )}
         </section>
     );
+}
+
+function formatRequesterEmail(request: HostingAdminRegionRequest, accounts: readonly WebsiteAccountSummary[]) {
+    if (request.requesterEmail !== null) return request.requesterEmail;
+    const principal = request.discordUserId.toLowerCase();
+    return accounts.find(account => account.email !== null
+        && (account.accountId.toLowerCase() === principal || account.discordUserId === request.discordUserId))?.email
+        ?? "Email unavailable";
 }
 
 const regionLabels = new Map(serverRegionOptions().map(({ value, label }) => [value, label]));
