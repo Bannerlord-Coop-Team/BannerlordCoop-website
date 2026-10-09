@@ -8,10 +8,11 @@ import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
-import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminVpsInventory, HostingPage } from "@/app/lib/control-plane/types";
+import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminVpsInventory, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
-export function VpsView({ inventory: initialInventory, accounts }: { inventory: HostingAdminVpsInventory; accounts: WebsiteAccountSummary[] }) {
+/** Shows registered VPS capacity, labelled by the stored region catalog, with live readings and region requests. */
+export function VpsView({ inventory: initialInventory, regionCatalog, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
     const readings = useVpsReadings(initialInventory, "resources");
     const billing = useVpsReadings(initialInventory, "billing");
     const inventory = readings.result ?? initialInventory;
@@ -53,6 +54,7 @@ export function VpsView({ inventory: initialInventory, accounts }: { inventory: 
                 onRefresh={readings.refreshReadings}
                 ownerLabels={Object.fromEntries(ownerLabels)}
                 runnerTargetSourceCommit={runnerTargetSourceCommit}
+                regionCatalog={regionCatalog}
             />
             <RegionRequestsPane accounts={accounts} />
         </section>

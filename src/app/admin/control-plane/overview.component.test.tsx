@@ -90,9 +90,10 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
         if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
         if (request.operation === "vps-hosts") return { availableServiceNames: ["vps-available.vps.ovh.us"],
             hosts: [{ locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }] };
-        // The stored catalog lacks Poland, so the panel reports drift and offers to publish.
+        // The stored catalog lacks Poland, so the panel reports drift and offers to publish; only US-East has a free slot.
         if (request.operation === "hosting-regions") return { revision: 4, updatedAt: null, updatedBy: null,
-            regions: hostingRegionCatalogPayload().filter((entry) => entry.region !== "poland") };
+            regions: hostingRegionCatalogPayload().filter((entry) => entry.region !== "poland")
+                .map((entry) => ({ ...entry, available: entry.region === "us-east" })) };
         throw new Error("Unexpected read");
     });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));
@@ -105,6 +106,7 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     expect(html).toContain("Onboard existing OVH VPS");
     expect(html).toContain("vps-available.vps.ovh.us");
     expect(html).toContain('value="us-east"');
+    expect(html).not.toContain('value="us-west"');
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual([[{
         accessToken: "test-admin-token", operation: "vps-hosts", signal: expect.any(AbortSignal), expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function),
@@ -128,6 +130,7 @@ it("keeps Operations usable when the stored hosting-region catalog cannot be rea
     expect(html).toContain("The operation is not supported.");
     expect(html).not.toContain("Publish website regions");
     expect(html).toContain("Onboard existing OVH VPS");
+    expect(html).toContain("Regions are unavailable: The operation is not supported.");
 });
 
 

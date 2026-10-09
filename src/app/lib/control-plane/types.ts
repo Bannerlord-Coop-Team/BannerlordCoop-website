@@ -1,3 +1,5 @@
+import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
+
 export type ManagedServer = {
     serverId: string;
     ownerDiscordUserId: string;
@@ -163,8 +165,8 @@ export type HostingServerResources = {
 export type HostingAdminVpsHost = {
     name: string;
     locationId: string;
-    // Provider-reported ISO country; null only for a retained legacy host without one.
-    countryCode: string | null;
+    // Provider-reported ISO country, present for every host.
+    countryCode: string;
     // Legacy region a retained host was registered with; null for hosts registered from provider facts.
     region: string | null;
     totalSlots: number;
@@ -236,25 +238,27 @@ export type OperationsData = {
     hostingRegionsError: string | null;
 };
 
-/** Hosts eligible for a region: ISO country codes, optionally narrowed to exact provider zones. */
-export type HostingAdminRegionPlacement = { countryCodes: string[]; locationIds?: string[] };
+/** Hosts eligible for a region: the shared wire placement. */
+export type HostingAdminRegionPlacement = HostingRegionPayload["placement"];
 
-/** One stored catalog entry, as `hosting-regions` returns and `set-hosting-regions` accepts it. */
-export type HostingAdminRegionDefinition = { region: string; placement: HostingAdminRegionPlacement };
+/** One catalog entry as `set-hosting-regions` accepts it: the shared wire definition. */
+export type HostingAdminRegionDefinition = HostingRegionPayload;
+
+/** One stored entry as `hosting-regions` returns it, with whether it has a free admissible slot now. */
+export type HostingAdminRegionEntry = HostingAdminRegionDefinition & { available: boolean };
 
 /** The control plane's stored region catalog (`hosting-regions`, and the result of `set-hosting-regions`). */
 export type HostingAdminRegionCatalog = {
     revision: number;
-    regions: HostingAdminRegionDefinition[];
+    regions: HostingAdminRegionEntry[];
     updatedAt: string | null;
     updatedBy: string | null;
 };
 
-/** Input for `set-hosting-regions`: the full ordered catalog, guarded by the revision it replaces. */
-export type HostingAdminSetRegionsInput = {
-    expectedRevision: number;
-    regions: HostingAdminRegionDefinition[];
-    reason: string;
+/** The VPS view's data: registered hosts and the stored catalog placements that label them (null when unreadable). */
+export type VpsViewData = {
+    inventory: HostingAdminVpsInventory;
+    regionCatalog: HostingAdminRegionDefinition[] | null;
 };
 
 export type FleetSummary = {

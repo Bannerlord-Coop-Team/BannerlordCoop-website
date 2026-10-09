@@ -2,9 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 import { HostingRegionsPanel } from "./HostingRegionsPanel";
-import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
+import { hostingRegionCatalogPayload, type HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
-const catalog = (regions = hostingRegionCatalogPayload()) => ({ revision: 7, regions, updatedAt: null, updatedBy: null });
+const stored = (regions: HostingRegionPayload[]) => regions.map((entry) => ({ ...entry, available: true }));
+const catalog = (regions = hostingRegionCatalogPayload()) => ({ revision: 7, regions: stored(regions), updatedAt: null, updatedBy: null });
 
 it("reports a stored catalog equal to the website catalog as in sync, without a publish action", () => {
     const html = renderToStaticMarkup(<HostingRegionsPanel catalog={catalog()} error={null} />);

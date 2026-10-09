@@ -80,6 +80,20 @@ describe("compact VPS host inventory", () => {
         expect(container.querySelector('[role="table"][aria-label="VPS host inventory"]')).not.toBeNull();
     });
 
+    it("labels a host by the stored catalog regions its country and zone satisfy", async () => {
+        const stored = [
+            { region: "us-east", placement: { countryCodes: ["US"], locationIds: ["os-us-east-va-2"] } },
+            { region: "us-west", placement: { countryCodes: ["US"], locationIds: ["us-west-or"] } },
+            { region: "north-america", placement: { countryCodes: ["US", "CA"] } },
+        ];
+        await act(async () => root.render(<VpsHostInventory hosts={[host("host-a", resources(60, 40), 0)]} ownerLabels={{}}
+            runnerTargetSourceCommit={null} regionCatalog={stored} />));
+        expect(container.textContent).toContain("US-East, North America · US · os-us-east-va-2");
+        await act(async () => root.render(<VpsHostInventory hosts={[host("host-a", resources(60, 40), 0)]} ownerLabels={{}}
+            runnerTargetSourceCommit={null} regionCatalog={null} />));
+        expect(container.textContent).toContain("Regions unavailable · US · os-us-east-va-2");
+    });
+
     it("surfaces disk warning state in a collapsed row", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-warning", resources(82, 18), 0)]}

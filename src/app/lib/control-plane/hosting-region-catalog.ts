@@ -1,5 +1,5 @@
 import { ControlPlaneAdminError } from "./client";
-import type { HostingAdminRegionCatalog, HostingAdminRegionDefinition, HostingAdminRegionPlacement } from "./types";
+import type { HostingAdminRegionCatalog, HostingAdminRegionDefinition, HostingAdminRegionEntry, HostingAdminRegionPlacement } from "./types";
 import { isRegionKey, type HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 const MAXIMUM_REGIONS = 32;
@@ -28,7 +28,7 @@ export async function readHostingRegionCatalog(
     }
 }
 
-/** Validates a `hosting-regions` result: revision, 0..32 unique well-formed keys with bounded placements, audit fields. */
+/** Validates a `hosting-regions` result: revision, 0..32 unique keys with bounded placements and availability, audit fields. */
 export function parseHostingRegionCatalog(value: unknown): HostingAdminRegionCatalog {
     if (!isRecord(value) || !Number.isSafeInteger(value.revision) || (value.revision as number) < 0) throw invalidCatalog();
     if (!nullableText(value.updatedAt) || !nullableText(value.updatedBy)) throw invalidCatalog();
@@ -68,10 +68,11 @@ export function formatPlacement(placement: HostingAdminRegionPlacement): string 
     return `${countries}: ${placement.locationIds.join(", ")}`;
 }
 
-/** Validates one stored entry. */
-function parseDefinition(value: unknown): HostingAdminRegionDefinition {
-    if (!isRecord(value) || !exactKeys(value, ["region", "placement"]) || !isRegionKey(value.region)) throw invalidCatalog();
-    return { region: value.region, placement: parsePlacement(value.placement) };
+/** Validates one stored entry: its key, placement and current availability. */
+function parseDefinition(value: unknown): HostingAdminRegionEntry {
+    if (!isRecord(value) || !exactKeys(value, ["region", "placement", "available"]) || !isRegionKey(value.region)) throw invalidCatalog();
+    if (typeof value.available !== "boolean") throw invalidCatalog();
+    return { region: value.region, placement: parsePlacement(value.placement), available: value.available };
 }
 
 /** Validates one placement: unique ISO countries and, when present, unique provider zones. */

@@ -10,7 +10,7 @@ import {
 } from "./hosting-region-catalog";
 import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
-const seed = () => ({ revision: 1, regions: hostingRegionCatalogPayload(), updatedAt: null, updatedBy: null });
+const seed = () => ({ revision: 1, regions: hostingRegionCatalogPayload().map((entry) => ({ ...entry, available: true })), updatedAt: null, updatedBy: null });
 
 test("a stored catalog equal to the website catalog has no drift", () => {
     const drift = compareHostingRegionCatalogs(parseHostingRegionCatalog(seed()).regions, hostingRegionCatalogPayload());
@@ -42,7 +42,7 @@ test("an empty stored catalog parses so the panel can still publish over it", ()
 });
 
 test("malformed stored catalogs are rejected", () => {
-    const entry = { region: "france", placement: { countryCodes: ["FR"] } };
+    const entry = { region: "france", placement: { countryCodes: ["FR"] }, available: false };
     for (const value of [null, [], { ...seed(), revision: -1 }, { ...seed(), revision: "1" },
         { ...seed(), regions: Array.from({ length: 33 }, (_, index) => ({ ...entry, region: `region-${index}` })) },
         { ...seed(), regions: [entry, entry] }, { ...seed(), regions: [{ ...entry, region: "France" }] },
@@ -50,6 +50,8 @@ test("malformed stored catalogs are rejected", () => {
         { ...seed(), regions: [{ ...entry, placement: { countryCodes: [] } }] }, { ...seed(), regions: [{ ...entry, placement: { countryCodes: ["FR", "FR"] } }] },
         { ...seed(), regions: [{ ...entry, placement: { countryCodes: ["FR"], locationIds: [] } }] },
         { ...seed(), regions: [{ ...entry, placement: { countryCodes: ["FR"], hosts: ["x"] } }] },
+        { ...seed(), regions: [{ region: "france", placement: { countryCodes: ["FR"] } }] },
+        { ...seed(), regions: [{ ...entry, available: "true" }] },
         { ...seed(), updatedAt: 1 }]) {
         assert.throws(() => parseHostingRegionCatalog(value), ControlPlaneAdminError, JSON.stringify(value));
     }

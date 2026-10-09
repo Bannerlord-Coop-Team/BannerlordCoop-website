@@ -65,20 +65,6 @@ export function hostingRegionCatalogPayload(): HostingRegionPayload[] {
     return HOSTING_REGIONS.map((region) => ({ region: region.key, placement: placementPayload(region.placement) }));
 }
 
-/** Whether a host's provider country (and zone, when the placement names zones) satisfies a placement. */
-export function placementMatchesHost(
-    placement: HostingPlacement,
-    host: { countryCode: string | null; locationId: string },
-): boolean {
-    if (host.countryCode === null || !placement.countryCodes.includes(host.countryCode)) return false;
-    return placement.locationIds === undefined || placement.locationIds.includes(host.locationId);
-}
-
-/** Every website region a registered host serves, in catalog order. */
-export function hostingRegionsForHost(host: { countryCode: string | null; locationId: string }): HostingRegionDefinition[] {
-    return HOSTING_REGIONS.filter((region) => placementMatchesHost(region.placement, host));
-}
-
 /** Copies a readonly placement into mutable JSON arrays. */
 function placementPayload(placement: HostingPlacement): HostingRegionPayload["placement"] {
     if (placement.locationIds === undefined) return { countryCodes: [...placement.countryCodes] };

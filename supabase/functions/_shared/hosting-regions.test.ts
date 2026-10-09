@@ -6,9 +6,7 @@ import {
     REGION_KEY_PATTERN,
     hostingRegionCatalogPayload,
     hostingRegionLabel,
-    hostingRegionsForHost,
     isRegionKey,
-    placementMatchesHost,
 } from "./hosting-regions.ts";
 
 // The control plane's own bounds; a catalog outside them would be rejected when published.
@@ -42,19 +40,6 @@ test("the published catalog carries every region and placement in website order,
     // Mutating the payload never changes the catalog.
     usWest!.placement.countryCodes.push("CA");
     assert.deepEqual(hostingRegionCatalogPayload().find((entry) => entry.region === "us-west")!.placement.countryCodes, ["US"]);
-});
-
-test("hosts match regions by provider country and exact zone, never by guess", () => {
-    const keys = (host: { countryCode: string | null; locationId: string }) => hostingRegionsForHost(host).map((region) => region.key);
-    assert.deepEqual(keys({ countryCode: "PL", locationId: "os-waw2" }), ["poland"]);
-    assert.deepEqual(keys({ countryCode: "US", locationId: "os-us-east-va-2" }), ["us-east"]);
-    assert.deepEqual(keys({ countryCode: "US", locationId: "us-west-or" }), ["us-west"]);
-    for (const host of [
-        { countryCode: "US", locationId: "us-las" }, { countryCode: "US", locationId: "US-EAST-VA" },
-        { countryCode: null, locationId: "os-waw2" }, { countryCode: "pl", locationId: "os-waw2" },
-        { countryCode: "IT", locationId: "it-mil" },
-    ]) assert.deepEqual(keys(host), [], JSON.stringify(host));
-    assert.equal(placementMatchesHost({ countryCodes: ["PL", "CZ"] }, { countryCode: "CZ", locationId: "any" }), true);
 });
 
 test("labels cover website keys and humanize any other key", () => {

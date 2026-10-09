@@ -1,12 +1,6 @@
-import type { HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
+import type { HostingAdminRegionDefinition, HostingAdminRegionEntry, HostingAdminRegionPlacement, HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE } from "../../../../supabase/functions/_shared/server-settings-contract";
-import {
-    HOSTING_REGIONS,
-    hostingRegionCatalogPayload,
-    hostingRegionLabel,
-    hostingRegionsForHost,
-    placementMatchesHost,
-} from "../../../../supabase/functions/_shared/hosting-regions";
+import { hostingRegionCatalogPayload, hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 
 export const MAINTENANCE_TIME_ZONE = HOSTING_TIME_ZONE;
 
@@ -54,14 +48,9 @@ export function formatAccountOwner(
     return accountLabels[accountId] ?? `Account unavailable (${accountId})`;
 }
 
-/** Website regions whose placement matches a registered host with a free prepared slot (advisory; the control plane decides). */
-export function createServerRegionOptions(
-    hosts: readonly Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "availableServers">[],
-) {
-    const withCapacity = hosts.filter((host) => Number.isSafeInteger(host.availableServers) && host.availableServers > 0);
-    return HOSTING_REGIONS
-        .filter((region) => withCapacity.some((host) => placementMatchesHost(region.placement, host)))
-        .map(({ key, label }) => ({ value: key, label }));
+/** Stored-catalog regions the control plane reports as having a free admissible slot, in stored order (advisory). */
+export function createServerRegionOptions(regions: readonly Pick<HostingAdminRegionEntry, "region" | "available">[]) {
+    return regions.filter((entry) => entry.available).map(({ region }) => ({ value: region, label: hostingRegionLabel(region) }));
 }
 
 export function maintenanceSlotOptions() {
@@ -83,17 +72,26 @@ export function applyControlPlaneOperationDefaults(
     if (operation === "set-hosting-regions") input.regions = hostingRegionCatalogPayload();
 }
 
-/** Labels a host by every website region it serves (or its legacy region), then its provider country and zone. */
-export function hostPlacementLabel(host: Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region">) {
-    return `${hostRegionsLabel(host)} · ${host.countryCode ?? "Country unknown"} · ${host.locationId}`;
+type HostPlacement = Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region">;
+
+/** Labels a host by the stored-catalog regions it serves (or its legacy region), then its provider country and zone. */
+export function hostPlacementLabel(host: HostPlacement, catalog: readonly HostingAdminRegionDefinition[] | null) {
+    return `${hostRegionsLabel(host, catalog)} · ${host.countryCode} · ${host.locationId}`;
 }
 
-/** Names the website regions a host serves, falling back to its legacy region or none. */
-function hostRegionsLabel(host: Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region">) {
-    const regions = hostingRegionsForHost(host);
-    if (regions.length > 0) return regions.map((region) => region.label).join(", ");
-    if (host.region === null) return "No website region";
+/** Names the stored regions whose placement a host satisfies, else its legacy region, else none. */
+function hostRegionsLabel(host: HostPlacement, catalog: readonly HostingAdminRegionDefinition[] | null) {
+    if (catalog === null) return "Regions unavailable";
+    const regions = catalog.filter((entry) => placementMatchesHost(entry.placement, host));
+    if (regions.length > 0) return regions.map((entry) => hostingRegionLabel(entry.region)).join(", ");
+    if (host.region === null) return "No stored region";
     return `${hostingRegionLabel(host.region)} (legacy)`;
+}
+
+/** Whether a host's provider country (and zone, when the placement names zones) satisfies a placement. */
+function placementMatchesHost(placement: HostingAdminRegionPlacement, host: HostPlacement) {
+    if (!placement.countryCodes.includes(host.countryCode)) return false;
+    return placement.locationIds === undefined || placement.locationIds.includes(host.locationId);
 }
 
 export function operationTargetMatchesHash(hash: string, operation: string) {

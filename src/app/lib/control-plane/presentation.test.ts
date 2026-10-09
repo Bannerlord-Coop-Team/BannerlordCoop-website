@@ -23,54 +23,18 @@ import {
 } from "./presentation";
 import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
-const host = (countryCode: string | null, locationId: string, availableServers: number) => ({ countryCode, locationId, availableServers });
+const entry = (region: string, available: boolean) => ({ region, available });
 
-test("create-server regions come from host provider facts matched by website placements", () => {
+test("create-server regions are the stored-catalog entries reported available, in stored order, with website labels", () => {
     assert.deepEqual(createServerRegionOptions([
-        host("PL", "os-waw2", 1),
-        host("US", "os-us-east-va-2", 2),
-        host("DE", "de-fra", 1),
-        host("US", "us-west-or", 1),
-        host("FR", "fr-par", 1),
-        host("GB", "os-uk2", 1),
-        host("US", "us-east-va", 1),
+        entry("poland", true), entry("us-west", false), entry("us-east", true), entry("united-states", true),
     ]), [
-        { value: "us-west", label: "US-West" },
-        { value: "us-east", label: "US-East" },
-        { value: "france", label: "France" },
-        { value: "germany", label: "Germany" },
-        { value: "united-kingdom", label: "United Kingdom" },
         { value: "poland", label: "Poland" },
+        { value: "us-east", label: "US-East" },
+        { value: "united-states", label: "United States" },
     ]);
+    assert.deepEqual(createServerRegionOptions([entry("france", false)]), []);
     assert.deepEqual(createServerRegionOptions([]), []);
-});
-
-test("create-server regions require positive safe-integer capacity", () => {
-    for (const availableServers of [0, -1, 0.5, 1.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, -Infinity]) {
-        assert.deepEqual(createServerRegionOptions([host("PL", "os-waw2", availableServers), host("US", "us-east-va", availableServers)]),
-            [], `Invalid available capacity: ${availableServers}`);
-    }
-    assert.deepEqual(createServerRegionOptions([
-        host("PL", "os-waw2", Number.MAX_SAFE_INTEGER),
-        host("US", "us-east-va", 1),
-        host("US", "os-us-east-va-2", 0),
-        host("DE", "de-fra", 0),
-        host("GB", "os-uk2", -1),
-        host("FR", "fr-par", 0.5),
-        host("US", "us-west-or", Infinity),
-    ]), [
-        { value: "us-east", label: "US-East" },
-        { value: "poland", label: "Poland" },
-    ]);
-});
-
-test("create-server regions never guess a coast or a country", () => {
-    for (const unmatched of [
-        host("US", "us-las", 5), host("US", "US-EAST-VA", 5), host("US", "us-east-va-other", 5),
-        host(null, "os-waw2", 5), host("ES", "es-mad", 5), host("us", "us-east-va", 5), host("", "fr-par", 5),
-    ]) {
-        assert.deepEqual(createServerRegionOptions([unmatched]), [], JSON.stringify(unmatched));
-    }
 });
 
 test("administrator create sends only the region key; publishing sends the whole website catalog", () => {
@@ -84,10 +48,26 @@ test("administrator create sends only the region key; publishing sends the whole
         "Published the website hosting regions as catalog revision 5.");
 });
 
-test("hosts are labelled with every website region they serve, else their legacy region or none", () => {
-    assert.equal(hostPlacementLabel({ countryCode: "PL", locationId: "os-waw2", region: null }), "Poland · PL · os-waw2");
-    assert.equal(hostPlacementLabel({ countryCode: "US", locationId: "us-las", region: "united-states" }), "United States (legacy) · US · us-las");
-    assert.equal(hostPlacementLabel({ countryCode: null, locationId: "x-1", region: null }), "No website region · Country unknown · x-1");
+test("hosts are labelled with every stored region they serve, else their legacy region or none", () => {
+    const stored = hostingRegionCatalogPayload();
+    assert.equal(hostPlacementLabel({ countryCode: "PL", locationId: "os-waw2", region: null }, stored), "Poland · PL · os-waw2");
+    assert.equal(hostPlacementLabel({ countryCode: "US", locationId: "us-las", region: "united-states" }, stored), "United States (legacy) · US · us-las");
+    assert.equal(hostPlacementLabel({ countryCode: "IT", locationId: "it-mil", region: null }, stored), "No stored region · IT · it-mil");
+    assert.equal(hostPlacementLabel({ countryCode: "PL", locationId: "os-waw2", region: null }, null), "Regions unavailable · PL · os-waw2");
+    // The stored placements decide, not the website file.
+    const custom = [{ region: "central-europe", placement: { countryCodes: ["PL", "CZ"] } }];
+    assert.equal(hostPlacementLabel({ countryCode: "CZ", locationId: "any", region: null }, custom), "Central Europe · CZ · any");
+});
+
+test("host labels never guess a coast or a country", () => {
+    const stored = hostingRegionCatalogPayload();
+    for (const host of [
+        { countryCode: "US", locationId: "us-las" }, { countryCode: "US", locationId: "US-EAST-VA" },
+        { countryCode: "US", locationId: "us-east-va-other" }, { countryCode: "pl", locationId: "os-waw2" },
+        { countryCode: "ES", locationId: "es-mad" },
+    ]) assert.match(hostPlacementLabel({ ...host, region: null }, stored), /^No stored region · /u, JSON.stringify(host));
+    assert.match(hostPlacementLabel({ countryCode: "US", locationId: "us-east-va", region: null }, stored), /^US-East · /u);
+    assert.match(hostPlacementLabel({ countryCode: "US", locationId: "us-west-or", region: null }, stored), /^US-West · /u);
 });
 
 test("maintenance choices show their authoritative timezone without changing protocol values", () => {
