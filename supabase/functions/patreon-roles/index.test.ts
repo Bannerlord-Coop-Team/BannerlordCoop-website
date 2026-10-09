@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
+import { createCreatorTokenProvider, PATREON_TOKEN_URL, staticCreatorToken } from "../_shared/patreon-creator-token.ts";
 import { createPatreonRoleHandler, createPatreonRoleRpc, parsePatreonMembership } from "../_shared/patreon-roles.ts";
 
 const campaignId = "12345";
@@ -129,6 +130,45 @@ test("scheduler secret is distinct from webhook/creator credentials", async () =
     const { options } = setup();
     assert.throws(() => createPatreonRoleHandler({ ...options, syncSecret: webhookSecret }));
     assert.throws(() => createPatreonRoleHandler({ ...options, syncSecret: creatorAccessToken }));
+    // Exactly one creator token source: a fixed secret or the rotating provider.
+    assert.throws(() => createPatreonRoleHandler({ ...options, creatorAccessToken: undefined }));
+    assert.throws(() => createPatreonRoleHandler({ ...options, creatorToken: staticCreatorToken(creatorAccessToken) }));
+});
+
+test("an expired creator token is rotated through the stored refresh token and the member read retried", async () => {
+    const store = { generation: 1, accessToken: "expired-creator-token-fixture", refreshToken: "stored-refresh-token-fixture", lease: false };
+    const tokenOperations: string[] = [];
+    const authorizations: string[] = [];
+    const fetchImplementation: typeof fetch = async (input, init) => {
+        if (String(input) === PATREON_TOKEN_URL) {
+            assert.equal(new URLSearchParams(String(init?.body)).get("refresh_token"), "stored-refresh-token-fixture");
+            return Response.json({ access_token: "rotated-creator-token-fixture", refresh_token: "rotated-refresh-token-fixture", expires_in: 2_678_400 });
+        }
+        const authorization = new Headers(init?.headers).get("authorization") ?? "";
+        authorizations.push(authorization);
+        return authorization === "Bearer rotated-creator-token-fixture" ? Response.json(membership()) : new Response(null, { status: 401 });
+    };
+    const { options, calls } = setup(fetchImplementation);
+    const handler = createPatreonRoleHandler({ ...options, creatorAccessToken: undefined, creatorToken: createCreatorTokenProvider({
+        clientId: "client-id-fixture", clientSecret: "client-secret-fixture", fetchImplementation,
+        bootstrap: { accessToken: "bootstrap-creator-token-fixture", refreshToken: "bootstrap-refresh-token-fixture" },
+        rpc: async (operation, input) => {
+            tokenOperations.push(operation);
+            if (operation === "read") return { configured: true, accessToken: store.accessToken, generation: store.generation, refreshDue: false };
+            if (operation === "refresh_begin") { store.lease = true; return { refreshToken: store.refreshToken, generation: store.generation }; }
+            if (operation === "refresh_commit") {
+                assert.equal(input.generation, store.generation);
+                Object.assign(store, { generation: 2, accessToken: input.accessToken, refreshToken: input.refreshToken, lease: false });
+                return { rotated: true, generation: 2 };
+            }
+            throw new Error(`unexpected ${operation}`);
+        },
+    }) });
+    assert.equal((await handler(sync())).status, 200);
+    assert.deepEqual(authorizations, ["Bearer expired-creator-token-fixture", "Bearer rotated-creator-token-fixture"]);
+    assert.deepEqual(tokenOperations, ["read", "read", "refresh_begin", "refresh_commit"]);
+    assert.deepEqual(calls.map((call) => call.operation), ["acquire", "complete", "release"]);
+    assert.equal(store.refreshToken, "rotated-refresh-token-fixture");
 });
 
 test("worker fetches authoritative fixed-origin membership and completes under its generation/lease", async () => {
