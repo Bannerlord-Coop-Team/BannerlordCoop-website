@@ -50,11 +50,22 @@ paid-through deadline. No paid-through date is available in this adapter's
 supported response: `paidThroughAt` is always null. We never request or infer
 expiry from `next_charge_date`, pledge cadence, lifetime payment or last charge.
 Former/cancelled patrons without independent paid-through evidence are
-`review_required`; declined evidence is nonqualifying; missing/ambiguous fields,
-pending/unknown charge status, free trials/gifts, duplicate resources and incomplete
-pagination require review. Unexpected identity response is a failed authorization.
-The adapter deliberately refuses incomplete pages rather than following arbitrary
-provider-supplied URLs. This is safe denial, not a claim to support every account.
+`review_required`; declined evidence is nonqualifying; pending charge status,
+free trials/gifts, future charge dates, non-USD campaigns, tier/policy mapping
+disagreements and member identity conflicts require review. An incomplete or
+malformed provider read (missing or duplicate included resources, missing
+relationships or attributes, incomplete pagination) proves nothing either way: it
+is recorded as retryable `unknown` evidence, which the website presents as
+"could not be confirmed, retry" rather than "contact support". A JSON:API response
+that omits `included` for a user with no memberships is a complete nonqualifying
+read. The callback logs only the fixed adapter reason (for example `Missing tier
+amount`) and the resulting verification, never the provider body. An unexpected
+identity document is a failed authorization. The adapter deliberately refuses
+incomplete pages rather than following arbitrary provider-supplied URLs. This is
+safe denial, not a claim to support every account. Creator-authenticated allocation
+reads keep the three-state `qualifying`/`nonqualifying`/`review_required` contract
+that `patreon_role_sync` accepts; an incomplete creator read stays `review_required`
+there and is retried as a durable job.
 
 The fixed identity URL requests `identity identity.memberships`, includes
 `memberships.campaign,memberships.currently_entitled_tiers.campaign,memberships.user`,

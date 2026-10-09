@@ -1,6 +1,7 @@
 import { ALLOCATION_POLICY_VERSION, POLICY_VERSION, parsePolicy, timestamp, type Policy } from "./membership.ts";
 import { verifyPatreonAllocation } from "./patreon-membership.ts";
 import { checkDatabaseContention, DatabaseContention } from "./database-contention.ts";
+import { fetchWithCreatorToken, type CreatorTokenProvider } from "./patreon-creator-token.ts";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Buffer } from "node:buffer";
 
@@ -20,7 +21,8 @@ export interface PatreonRoleOptions {
     allocationPolicy?: Policy | null;
     campaignId: string;
     tierId: string;
-    creatorAccessToken: string;
+    /** Creator token source: `staticCreatorToken(secret)` or the rotating Vault-backed provider. */
+    creatorToken: CreatorTokenProvider;
     webhookSecret: string;
     syncSecret: string;
     rpc: Rpc;
@@ -156,10 +158,8 @@ function secretEqual(left: string, right: string) {
 
 export function createPatreonRoleHandler(options: PatreonRoleOptions) {
     if (!ID.test(options.campaignId) || !ID.test(options.tierId)) throw new Error("invalid_patreon_configuration");
-    if (new Set([options.creatorAccessToken, options.webhookSecret, options.syncSecret]).size !== 3) {
-        throw new Error("patreon_secrets_must_be_distinct");
-    }
-    for (const secret of [options.creatorAccessToken, options.webhookSecret, options.syncSecret]) {
+    if (options.webhookSecret === options.syncSecret) throw new Error("patreon_secrets_must_be_distinct");
+    for (const secret of [options.webhookSecret, options.syncSecret]) {
         if (!secret || secret.length < 16 || secret.length > 4096) throw new Error("invalid_patreon_secret");
     }
     const allocationPolicy = options.allocationPolicy ? parsePolicy(JSON.stringify(options.allocationPolicy)) : null;
@@ -170,9 +170,10 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
     async function patreon(path: string, params: Record<string, string>) {
         const url = new URL(path, PATREON);
         for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-        return json(await fetcher(url, {
-            headers: { authorization: `Bearer ${options.creatorAccessToken}`, "user-agent": "BannerlordCoop - website membership sync" },
-            redirect: "error", signal: AbortSignal.timeout(8_000),
+        // Only called under the sync worker lease, so a single worker refreshes the creator token at a
+        // time. A rejected token is replaced once from the store; any other failure stays a retry.
+        return json(await fetchWithCreatorToken(options.creatorToken, fetcher, url, {
+            headers: { "user-agent": "BannerlordCoop - website membership sync" }, redirect: "error",
         }));
     }
 
