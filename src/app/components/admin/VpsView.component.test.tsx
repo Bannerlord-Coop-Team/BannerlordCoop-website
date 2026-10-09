@@ -88,6 +88,8 @@ it("shows pending region requests and removes one after an inline resolution", a
         region: "united-kingdom",
         status: "outstanding",
         createdAt: "2026-10-08T12:00:00.000Z",
+        requesterEmail: "owner@example.com",
+        allocatedRegions: ["germany"],
     }], nextCursor: null });
     mocks.request.mockImplementation(async options => {
         if (options.operation === "region-requests") return mocks.regionRequests(options);
@@ -97,6 +99,9 @@ it("shows pending region requests and removes one after an inline resolution", a
     await act(async () => root.render(<VpsView inventory={inventory(true)} accounts={[]} />));
     expect(container.textContent).toContain("Pending region requests");
     expect(container.textContent).toContain("united-kingdom");
+    expect(container.textContent).toContain("owner@example.com");
+    expect(container.textContent).toContain("Germany");
+    expect(container.textContent).not.toContain("123456789012345678");
     expect(container.textContent).toContain("Dismiss");
     expect(container.textContent).not.toContain("Approve");
     expect(container.textContent).not.toContain("Fulfill");
@@ -109,6 +114,32 @@ it("shows pending region requests and removes one after an inline resolution", a
         input: { requestId: "11111111-1111-4111-8111-111111111111", resolution: "dismissed" },
     }));
     expect(container.textContent).not.toContain("united-kingdom");
+});
+
+it("recovers a historical requester email from the current account directory", async () => {
+    mocks.regionRequests.mockResolvedValue({ items: [{
+        requestId: "22222222-2222-4222-8222-222222222222",
+        guildId: "709516043332354119",
+        discordUserId: "33333333-3333-4333-8333-333333333333",
+        region: "germany",
+        status: "outstanding",
+        createdAt: "2026-10-08T12:00:00.000Z",
+        requesterEmail: null,
+        allocatedRegions: [],
+    }], nextCursor: null });
+    mocks.request.mockImplementation(async options => {
+        if (options.operation === "region-requests") return mocks.regionRequests(options);
+        return options.input.includeLiveData ? mocks.resources(options) : mocks.billing(options);
+    });
+    await act(async () => root.render(<VpsView inventory={inventory(true)} accounts={[{
+        accountId: "33333333-3333-4333-8333-333333333333",
+        label: "owner@example.com",
+        email: "owner@example.com",
+        discordUserId: null,
+    }]} />));
+    expect(container.textContent).toContain("owner@example.com");
+    expect(container.textContent).toContain("—");
+    expect(container.textContent).not.toContain("Email unavailable");
 });
 
 it("updates readings in place without overlapping slow requests or collapsing details", async () => {

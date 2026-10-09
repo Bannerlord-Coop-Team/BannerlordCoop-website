@@ -219,6 +219,8 @@ export type HostingAdminRegionRequest = {
     region: string;
     status: "outstanding";
     createdAt: string;
+    requesterEmail: string | null;
+    allocatedRegions: string[];
 };
 
 export type OperationsData = {

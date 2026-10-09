@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdminClient } from "@/app/lib/supabase/admin";
-import { uniqueDiscordUsers } from "@/app/lib/supabase/discord-users";
+import { discordUserSummary, uniqueDiscordUsers } from "@/app/lib/supabase/discord-users";
 import type { User } from "@supabase/supabase-js";
 
 export const AUTH_USERS_PAGE_SIZE = 1000;
@@ -35,6 +35,14 @@ export async function listDiscordUsers() {
 
 export async function listWebsiteAccounts() {
     const { users, truncated } = await listSupabaseUsers();
-    return { users: users.map(user => ({ accountId: user.id, label: user.email || user.phone || user.id })), truncated };
+    return {
+        users: users.map(user => ({
+            accountId: user.id,
+            label: user.email || user.phone || user.id,
+            email: user.email || null,
+            discordUserId: discordUserSummary(user)?.discordUserId ?? null,
+        })),
+        truncated,
+    };
 }
-export type WebsiteAccountSummary = { accountId: string; label: string };
+export type WebsiteAccountSummary = { accountId: string; label: string; email: string | null; discordUserId: string | null };

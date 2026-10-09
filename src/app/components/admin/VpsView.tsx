@@ -7,6 +7,7 @@ import { VpsHostInventory } from "./VpsHostInventory";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
+import { serverRegionOptions } from "@/app/lib/control-plane/presentation";
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminVpsInventory, HostingPage } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
@@ -53,12 +54,12 @@ export function VpsView({ inventory: initialInventory, accounts }: { inventory: 
                 ownerLabels={Object.fromEntries(ownerLabels)}
                 runnerTargetSourceCommit={runnerTargetSourceCommit}
             />
-            <RegionRequestsPane />
+            <RegionRequestsPane accounts={accounts} />
         </section>
     );
 }
 
-function RegionRequestsPane() {
+function RegionRequestsPane({ accounts }: { accounts: WebsiteAccountSummary[] }) {
     const [requests, setRequests] = useState<HostingPage<HostingAdminRegionRequest> | null>(null);
     const [error, setError] = useState("");
     const [pendingRequest, setPendingRequest] = useState<string | null>(null);
@@ -124,13 +125,14 @@ function RegionRequestsPane() {
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-190 text-left text-sm">
                         <thead className="border-b border-white/10 font-label text-[0.62rem] uppercase tracking-[0.12em] text-foreground-muted">
-                            <tr><th className="p-4">Region</th><th className="p-4">Requester</th><th className="p-4">Requested</th><th className="p-4 text-right">Clear inline</th></tr>
+                            <tr><th className="p-4">Region</th><th className="p-4">Requester email</th><th className="p-4">Current allocation</th><th className="p-4">Requested</th><th className="p-4 text-right">Clear inline</th></tr>
                         </thead>
                         <tbody className="divide-y divide-white/10">
                             {requests.items.map(request => (
                                 <tr key={request.requestId}>
                                     <td className="p-4 font-semibold text-foreground">{request.region}<span className="mt-1 block font-mono text-[0.62rem] font-normal text-foreground-dim">{request.requestId}</span></td>
-                                    <td className="p-4 text-xs text-foreground-muted">{request.discordUserId}</td>
+                                    <td className="p-4 text-xs text-foreground-muted">{formatRequesterEmail(request, accounts)}</td>
+                                    <td className="p-4 text-xs text-foreground-muted">{formatAllocatedRegions(request.allocatedRegions)}</td>
                                     <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={request.createdAt} /></td>
                                     <td className="p-4"><div className="flex justify-end gap-2">
                                         <button type="button" disabled={pendingRequest !== null} onClick={() => void resolve(request.requestId, "dismissed")} className="min-h-9 border border-white/20 px-3 font-label text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-foreground-muted hover:border-white/40 hover:text-foreground disabled:cursor-wait disabled:opacity-50">Dismiss</button>
@@ -143,6 +145,21 @@ function RegionRequestsPane() {
             )}
         </section>
     );
+}
+
+function formatRequesterEmail(request: HostingAdminRegionRequest, accounts: readonly WebsiteAccountSummary[]) {
+    if (request.requesterEmail !== null) return request.requesterEmail;
+    const principal = request.discordUserId.toLowerCase();
+    return accounts.find(account => account.email !== null
+        && (account.accountId.toLowerCase() === principal || account.discordUserId === request.discordUserId))?.email
+        ?? "Email unavailable";
+}
+
+const regionLabels = new Map(serverRegionOptions().map(({ value, label }) => [value, label]));
+
+function formatAllocatedRegions(regions: readonly string[]) {
+    if (regions.length === 0) return "—";
+    return regions.map(region => regionLabels.get(region) ?? region).join(", ");
 }
 
 function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resources" | "billing") {

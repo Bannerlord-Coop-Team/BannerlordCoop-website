@@ -193,6 +193,8 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
     const continent = CONTINENTS.findIndex((continent) => continent.regions.includes(selected));
     const entry = summary?.regions.find((entry) => entry.region === selected);
     const refreshBusy = isRefreshing || refreshRequested;
+    const [replacement, setReplacement] = useState<OnboardingRegion | null>(null);
+    const priorRequest = summary?.regions.find((region) => region.request !== null && region.region !== selected)?.request ?? null;
     useEffect(() => {
         const dialog = dialogRef.current!;
         const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -223,6 +225,10 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
         event.preventDefault();
         if (!canOffer || disabled || !entry || (!entry.available && entry.request !== null)) return;
         if (!entry.available) {
+            if (priorRequest) {
+                setReplacement(priorRequest.region);
+                return;
+            }
             onRequest(entry.region);
             return;
         }
@@ -269,12 +275,12 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
                             {CONTINENTS.map((item, index) => <button key={item.label} type="button" role="tab"
                                 id={`continent-tab-${index}`} aria-selected={continent === index} aria-controls={item.regions.length ? "continent-regions" : undefined}
                                 tabIndex={continent === index ? 0 : -1} disabled={!item.regions.length}
-                                onClick={() => { setSelected(item.regions[0]); setError(""); }}
+                                onClick={() => { setSelected(item.regions[0]); setReplacement(null); setError(""); }}
                                 onKeyDown={(event) => {
                                     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
                                     event.preventDefault();
                                     const next = event.key === "Home" ? 0 : event.key === "End" ? 1 : 1 - continent;
-                                    setSelected(CONTINENTS[next].regions[0]);
+                                    setSelected(CONTINENTS[next].regions[0]); setReplacement(null);
                                     setError("");
                                     document.getElementById(`continent-tab-${next}`)?.focus();
                                 }}
@@ -283,13 +289,20 @@ function SetupDialog({ summary, canOffer, disabled, pending, result, recovery, o
                             </button>)}
                         </div>
                         <div role="tabpanel" id="continent-regions" aria-labelledby={`continent-tab-${continent}`} className="mt-3 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">{summary?.regions.filter((region) => CONTINENTS[continent].regions.includes(region.region)).map((region) => <label key={region.region} className={`relative flex cursor-pointer items-start gap-2 rounded-sm border p-3 transition-colors hover:border-gold/60 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${selected === region.region ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
-                            <input type="radio" name="region" value={region.region} checked={selected === region.region} onChange={() => setSelected(region.region)} className="mt-1 size-3.5 shrink-0 accent-gold" />
+                            <input type="radio" name="region" value={region.region} checked={selected === region.region} onChange={() => { setSelected(region.region); setReplacement(null); }} className="mt-1 size-3.5 shrink-0 accent-gold" />
                             <span className="min-w-0"><span className="block text-sm font-medium">{t(`region.${region.region}`)}</span><span className={`mt-2 block text-xs ${region.available ? "text-emerald-200" : "text-amber-200"}`}>{region.available ? t("onboarding.available") : t("onboarding.full")}{region.request ? ` · ${t("onboarding.requested")}` : ""}</span></span>
                         </label>)}</div>
                     </fieldset>
                 </fieldset>
                 {!canOffer && <p role="status" className="mt-4 text-sm text-gold">{t("onboarding.changed")}</p>}
                 {entry && !entry.available && <p role="status" className="mt-4 text-sm text-gold">{t(entry.request ? "onboarding.alreadyRequested" : "onboarding.regionFull", { region: t(`region.${entry.region}`) })}</p>}
+                {replacement && entry && !entry.available && <div role="alert" className="mt-4 border border-amber-200/40 bg-amber-200/10 p-4 text-sm">
+                    <p>{t("onboarding.replaceWarning", { region: t(`region.${replacement}`), newRegion: t(`region.${entry.region}`) })}</p>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        <button type="button" disabled={disabled || pending} onClick={() => { setReplacement(null); onRequest(entry.region); }} className={primaryButton}>{t("onboarding.replaceConfirm", { region: t(`region.${replacement}`), newRegion: t(`region.${entry.region}`) })}</button>
+                        <button type="button" disabled={disabled || pending} onClick={() => setReplacement(null)} className={secondaryButton}>{t("onboarding.keepRequest", { region: t(`region.${replacement}`) })}</button>
+                    </div>
+                </div>}
                 {pending && <p role="status" className="mt-4 text-sm text-gold">{t("onboarding.pendingHint")}</p>}
                 {recovery}
                 <div className="mt-5 flex flex-col-reverse gap-3 border-t border-white/10 pt-5 sm:flex-row sm:flex-wrap sm:justify-end">

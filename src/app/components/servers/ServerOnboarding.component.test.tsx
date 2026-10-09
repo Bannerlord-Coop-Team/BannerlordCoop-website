@@ -135,6 +135,18 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         expect(mocks.request).toHaveBeenCalledTimes(1);
         await choose("us-east"); expect(button("Create server").disabled).toBe(false);
     });
+    it("requires explicit confirmation before replacing another pending region request", async () => {
+        const summary = onboardingSummary();
+        summary.regions[2].request = onboardingRequested().request;
+        summary.regions[3].available = false;
+        await render(summary); await click("Set up server "); await choose("germany");
+        await click("Request region");
+        expect(mocks.request).not.toHaveBeenCalled();
+        expect(container.textContent).toContain("Requesting Germany will dismiss that request and replace it with this one.");
+        expect(button("Dismiss France request and request Germany").disabled).toBe(false);
+        await click("Dismiss France request and request Germany");
+        expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "request-region", region: "germany" });
+    });
     it("allows creation after capacity returns even with an older region request", async () => {
         const summary = onboardingSummary(); summary.regions[1].available = false;
         summary.regions[1].request = { ...onboardingRequested().request, region: "us-east" };
