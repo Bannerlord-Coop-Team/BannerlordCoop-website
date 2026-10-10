@@ -8,17 +8,8 @@ import {
     MAXIMUM_PLACEMENT_COUNTRIES,
     MAXIMUM_PLACEMENT_LOCATIONS,
     MAXIMUM_REGIONS,
-    type HostingRegionPayload,
     type HostingRegionPlacementPayload,
 } from "../../../../supabase/functions/_shared/hosting-regions";
-
-/** How the control plane's stored catalog differs from the website catalog; empty lists mean in sync. */
-export type HostingRegionDrift = {
-    missing: string[];
-    extra: string[];
-    placementDiffers: string[];
-    orderDiffers: boolean;
-};
 
 /** Reads the stored catalog for the Operations page; a failure becomes a message instead of failing the page. */
 export async function readHostingRegionCatalog(
@@ -41,40 +32,6 @@ export function parseHostingRegionCatalog(value: unknown): HostingAdminRegionCat
     const regions = value.regions.map(parseDefinition);
     if (new Set(regions.map((entry) => entry.region)).size !== regions.length) throw invalidCatalog();
     return { revision: value.revision as number, regions, updatedAt: value.updatedAt, updatedBy: value.updatedBy };
-}
-
-/** Compares the stored catalog with the website catalog by key, placement (as sets) and the order of shared keys. */
-export function compareHostingRegionCatalogs(
-    stored: readonly HostingRegionPayload[],
-    website: readonly HostingRegionPayload[],
-): HostingRegionDrift {
-    const storedPlacements = new Map(stored.map((entry) => [entry.region, entry.placement]));
-    const websitePlacements = new Map(website.map((entry) => [entry.region, entry.placement]));
-    const placementDiffers: string[] = [];
-    for (const [region, placement] of websitePlacements) {
-        const storedPlacement = storedPlacements.get(region);
-        if (storedPlacement !== undefined && !samePlacement(storedPlacement, placement)) placementDiffers.push(region);
-    }
-    const websiteOrder = [...websitePlacements.keys()].filter((key) => storedPlacements.has(key));
-    const storedOrder = [...storedPlacements.keys()].filter((key) => websitePlacements.has(key));
-    return {
-        missing: [...websitePlacements.keys()].filter((key) => !storedPlacements.has(key)),
-        extra: [...storedPlacements.keys()].filter((key) => !websitePlacements.has(key)),
-        placementDiffers,
-        orderDiffers: websiteOrder.join(",") !== storedOrder.join(","),
-    };
-}
-
-/** Whether a drift report shows any difference. */
-export function hasHostingRegionDrift(drift: HostingRegionDrift): boolean {
-    return drift.missing.length > 0 || drift.extra.length > 0 || drift.placementDiffers.length > 0 || drift.orderDiffers;
-}
-
-/** Describes a placement as "US: os-us-west-or-2, us-west-or" or "FR". */
-export function formatPlacement(placement: HostingRegionPlacementPayload): string {
-    const countries = placement.countryCodes.join(", ");
-    if (placement.locationIds === undefined) return countries;
-    return `${countries}: ${placement.locationIds.join(", ")}`;
 }
 
 /** Validates one stored entry: its key, placement and current availability. */
@@ -100,18 +57,6 @@ function uniqueList(value: unknown, pattern: RegExp, maximum: number): string[] 
     if (!value.every((item) => typeof item === "string" && pattern.test(item))) throw invalidCatalog();
     if (new Set(value).size !== value.length) throw invalidCatalog();
     return value as string[];
-}
-
-/** Whether two placements name the same countries and zones, ignoring order. */
-function samePlacement(left: HostingRegionPlacementPayload, right: HostingRegionPlacementPayload): boolean {
-    if (!sameSet(left.countryCodes, right.countryCodes)) return false;
-    if (left.locationIds === undefined || right.locationIds === undefined) return left.locationIds === right.locationIds;
-    return sameSet(left.locationIds, right.locationIds);
-}
-
-/** Whether two lists hold the same distinct values. */
-function sameSet(left: readonly string[], right: readonly string[]): boolean {
-    return left.length === right.length && left.every((item) => right.includes(item));
 }
 
 /** Whether a value is null or a bounded string. */

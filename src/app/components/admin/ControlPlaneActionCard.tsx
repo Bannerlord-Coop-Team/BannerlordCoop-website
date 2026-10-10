@@ -46,7 +46,6 @@ export function ControlPlaneActionCard({
     help,
     destructiveReason,
     unavailableReason,
-    fixedInput,
 }: {
     operation: string;
     title: string;
@@ -57,8 +56,6 @@ export function ControlPlaneActionCard({
     destructiveReason?: string;
     // Page-supplied reason the action cannot run now; the card stays mounted but its submit is disabled.
     unavailableReason?: string;
-    // Page-supplied input the administrator never edits (such as a concurrency revision), merged over the form at submit.
-    fixedInput?: Record<string, unknown>;
 }) {
     const router = useRouter();
     const cardRef = useRef<HTMLElement>(null);
@@ -123,7 +120,7 @@ export function ControlPlaneActionCard({
         setPending(true);
         setResult(null);
         try {
-            const input = { ...buildInput(effectiveFields, formData), ...fixedInput };
+            const input = buildInput(effectiveFields, formData);
             applyControlPlaneOperationDefaults(operation, input);
             normalizeOperationInput(operation, input);
             const requestId = crypto.randomUUID();
@@ -133,7 +130,7 @@ export function ControlPlaneActionCard({
                 accessToken: session.access_token,
                 requestId,
                 operation,
-                ...(fields.length === 0 && fixedInput === undefined ? {} : { input }),
+                ...(fields.length === 0 ? {} : { input }),
             }, () => router.refresh());
             setResult({ ok: true, ...presentControlPlaneOperationResult(operation, response) });
             if (operation === "onboard-vps-host") router.push("/admin/control-plane?view=vps");

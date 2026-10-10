@@ -48,13 +48,6 @@ export function formatAccountOwner(
     return accountLabels[accountId] ?? `Account unavailable (${accountId})`;
 }
 
-/** Names an administrative actor (`supabase:<uuid>`) by its website account, or returns the raw actor when unresolvable. */
-export function formatAdminActor(actorId: string, accountLabels: Readonly<Record<string, string>>) {
-    const accountId = validUuid(/^supabase:(.*)$/u.exec(actorId)?.[1]);
-    if (accountId === null) return actorId;
-    return accountLabels[accountId.toLowerCase()] ?? actorId;
-}
-
 /** Stored-catalog regions the control plane reports as having a free admissible slot, in stored order (advisory). */
 export function createServerRegionOptions(regions: readonly Pick<HostingAdminRegionEntry, "region" | "available">[]) {
     return regions.filter((entry) => entry.available).map(({ region }) => ({ value: region, label: hostingRegionLabel(region) }));
@@ -178,9 +171,6 @@ export function presentControlPlaneOperationResult(
             message: `${action} job ${jobId} is ${state}${stage === null ? "." : ` at ${stage}.`} Progress refreshes automatically on its server and Jobs pages.`,
             links,
         };
-    }
-    if (operation === "set-hosting-regions" && Number.isSafeInteger(result.revision)) {
-        return { message: `Published the website hosting regions as catalog revision ${String(result.revision)}.`, links };
     }
     const onboarding = isRecord(result.onboarding) ? result.onboarding : null;
     const onboardingState = boundedText(onboarding?.state, 64);

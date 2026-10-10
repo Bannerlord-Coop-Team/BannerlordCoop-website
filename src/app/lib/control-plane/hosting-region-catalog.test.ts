@@ -2,39 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ControlPlaneAdminError } from "./client";
 import {
-    compareHostingRegionCatalogs,
-    formatPlacement,
-    hasHostingRegionDrift,
     parseHostingRegionCatalog,
     readHostingRegionCatalog,
 } from "./hosting-region-catalog";
 import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 const seed = () => ({ revision: 1, regions: hostingRegionCatalogPayload().map((entry) => ({ ...entry, available: true })), updatedAt: null, updatedBy: null });
-
-test("a stored catalog equal to the website catalog has no drift", () => {
-    const drift = compareHostingRegionCatalogs(parseHostingRegionCatalog(seed()).regions, hostingRegionCatalogPayload());
-    assert.deepEqual(drift, { missing: [], extra: [], placementDiffers: [], orderDiffers: false });
-    assert.equal(hasHostingRegionDrift(drift), false);
-});
-
-test("drift reports missing, extra, placement and order differences independently", () => {
-    const website = hostingRegionCatalogPayload();
-    const stored = website.filter((entry) => entry.region !== "poland").reverse()
-        .map((entry) => entry.region === "france" ? { ...entry, placement: { countryCodes: ["FR", "BE"] } } : entry);
-    stored.push({ region: "atlantis", placement: { countryCodes: ["JP"] } });
-    const drift = compareHostingRegionCatalogs(stored, website);
-    assert.deepEqual(drift, { missing: ["poland"], extra: ["atlantis"], placementDiffers: ["france"], orderDiffers: true });
-    assert.equal(hasHostingRegionDrift(drift), true);
-});
-
-test("placements compare as sets, and zones matter", () => {
-    const website = [{ region: "us-west", placement: { countryCodes: ["US"], locationIds: ["a-1", "b-2"] } }];
-    assert.deepEqual(compareHostingRegionCatalogs([{ region: "us-west", placement: { countryCodes: ["US"], locationIds: ["b-2", "a-1"] } }], website).placementDiffers, []);
-    assert.deepEqual(compareHostingRegionCatalogs([{ region: "us-west", placement: { countryCodes: ["US"] } }], website).placementDiffers, ["us-west"]);
-    assert.deepEqual(compareHostingRegionCatalogs([{ region: "us-west", placement: { countryCodes: ["US"], locationIds: ["a-1"] } }], website).placementDiffers, ["us-west"]);
-    assert.equal(formatPlacement(website[0].placement), "US: a-1, b-2");
-});
 
 test("malformed stored catalogs are rejected", () => {
     const entry = { region: "france", placement: { countryCodes: ["FR"] }, available: false };

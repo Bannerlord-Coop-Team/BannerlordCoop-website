@@ -241,7 +241,7 @@ export type OperationsData = {
 /** One stored entry as `hosting-regions` returns it, with whether it has a free admissible slot now. */
 export type HostingAdminRegionEntry = HostingRegionPayload & { available: boolean };
 
-/** The control plane's stored region catalog (`hosting-regions`, and the result of `set-hosting-regions`). */
+/** The control plane's stored region catalog as `hosting-regions` returns it. */
 export type HostingAdminRegionCatalog = {
     revision: number;
     regions: HostingAdminRegionEntry[];

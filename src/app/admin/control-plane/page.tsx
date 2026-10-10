@@ -16,7 +16,6 @@ import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
 import { readOperationsVpsInventory } from "@/app/lib/control-plane/operations-inventory";
 import { readHostingRegionCatalog } from "@/app/lib/control-plane/hosting-region-catalog";
-import { HostingRegionsPanel } from "@/app/components/admin/HostingRegionsPanel";
 import { recordReleaseFirstObservations } from "@/app/lib/control-plane/release-observations";
 import {
     destructiveExplanation,
@@ -645,7 +644,7 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     return <div className="mt-8 space-y-12">{vpsProviderError && <div role="status" className="border-l-2 border-gold bg-gold/10 px-4 py-3 text-sm text-foreground">
         <p>OVH account inventory is unavailable, so unregistered VPS products cannot be listed for onboarding. Other operations still work.</p>
         <p className="mt-1 text-xs text-foreground-muted">{vpsProviderError}</p>
-    </div>}<HostingRegionsPanel catalog={hostingRegions} error={hostingRegionsError} accountLabels={accountLabelMap(accounts)} />{groups.map((group) => {
+    </div>}{groups.map((group) => {
         const groupCards = cards.filter((card) => card.group === group);
         const rows = operationCardRows(groupCards, group === "Fleet" ? 2 : 0);
         return <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={groupCards.length} /><div className="mt-5 space-y-5">{rows.map((row) => <div key={row.map((card) => card.operation).join(":")} className={`grid gap-5 ${operationCardRowClass(row.length)}`}>{row.map((card) => <ControlPlaneActionCard key={card.operation} {...card} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div>)}</div></section>;
