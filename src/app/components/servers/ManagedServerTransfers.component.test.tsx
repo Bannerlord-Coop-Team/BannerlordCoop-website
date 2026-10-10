@@ -178,8 +178,8 @@ it("rejects invisible campaign names and allows corrected input after a local su
             input.dispatchEvent(new Event("input", { bubbles: true }));
         });
     }
-    async function chooseFile() {
-        const file = new File(["save"], "campaign.zip");
+    async function chooseFile(name = "campaign.zip") {
+        const file = new File(["save"], name);
         Object.defineProperty(file, "arrayBuffer", { value: async () => new Uint8Array([1, 2, 3]).buffer });
         const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
         Object.defineProperty(input, "files", { configurable: true, value: [file] });
@@ -205,9 +205,11 @@ it("rejects invisible campaign names and allows corrected input after a local su
     await render();
     for (const label of ["Import save", "Export save", "Import config", "Export config"]) expect(button(label).disabled).toBe(false);
     mocks.submit.mockResolvedValue({ ok: true, result: { ...job, action: "import-save", state: "succeeded" } });
-    await click("Import save"); await enterName("Corrected campaign"); await chooseFile();
+    // Exports downloaded before ZIP archives are legacy .blcexport files and stay importable.
+    await click("Import save"); await enterName("Corrected campaign"); await chooseFile("campaign.blcexport");
     await click("Review import"); await click("Confirm import");
     expect(mocks.submit).toHaveBeenCalledTimes(2);
+    expect((mocks.submit.mock.calls[1][0].getAll("files")[0] as File).name).toBe("campaign.blcexport");
     expect(mocks.submit.mock.calls[1][0].get("requestId")).not.toBe(rejectedId!);
     expect(mocks.submit.mock.calls[1][0].get("displayName")).toBe("Corrected campaign");
     expect(sessionStorage.getItem(key)).toBeNull();
@@ -385,8 +387,8 @@ it("shows download progress and names the export after the server and day", asyn
     await click("Export save");
     await click("Download save export");
     expect(button("Preparing download…").disabled).toBe(true);
-    await act(async () => respond({ ok: true, download: { kind: "file", fileName: "save-export-33333333-1759579200.blcexport", base64: btoa("save"), byteSize: 4 } }));
-    expect(filename).toBe("testesrver-qa-save-2026-10-04.blcexport");
+    await act(async () => respond({ ok: true, download: { kind: "file", fileName: "save-export-33333333-1759579200.zip", base64: btoa("save"), byteSize: 4 } }));
+    expect(filename).toBe("testesrver-qa-save-2026-10-04.zip");
     expect(button("Download save export").disabled).toBe(false);
 });
 
