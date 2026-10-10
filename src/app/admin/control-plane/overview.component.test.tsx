@@ -91,9 +91,10 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
         if (request.operation === "vps-hosts") return { availableServiceNames: ["vps-available.vps.ovh.us"],
             hosts: [{ locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }] };
         // Only US-East has a free slot in the stored catalog, so it is the only Create region offered.
-        if (request.operation === "hosting-regions") return { regions: hostingRegionCatalogPayload()
-            .filter((entry) => entry.region === "us-west" || entry.region === "us-east")
-            .map((entry) => ({ ...entry, available: entry.region === "us-east" })) };
+        if (request.operation === "hosting-regions") return { revision: 4, updatedAt: "2026-10-09T12:00:00.000Z", updatedBy: "supabase:admin",
+            regions: hostingRegionCatalogPayload()
+                .filter((entry) => entry.region === "us-west" || entry.region === "us-east")
+                .map((entry) => ({ ...entry, available: entry.region === "us-east" })) };
         throw new Error("Unexpected read");
     });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));

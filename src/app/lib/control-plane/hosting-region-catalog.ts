@@ -1,5 +1,5 @@
 import { ControlPlaneAdminError } from "./client";
-import type { HostingAdminRegionEntry } from "./types";
+import type { HostingAdminRegionEntry, HostingRegionCatalogRead } from "./types";
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
 import {
     COUNTRY_CODE_PATTERN,
@@ -12,9 +12,7 @@ import {
 } from "../../../../supabase/functions/_shared/hosting-regions";
 
 /** Reads the stored catalog's entries for the admin pages; a failure becomes a message instead of failing the page. */
-export async function readHostingRegionCatalog(
-    read: () => Promise<unknown>,
-): Promise<{ regions: HostingAdminRegionEntry[] | null; error: string | null }> {
+export async function readHostingRegionCatalog(read: () => Promise<unknown>): Promise<HostingRegionCatalogRead> {
     try {
         return { regions: parseHostingRegionCatalog(await read()), error: null };
     } catch (cause) {

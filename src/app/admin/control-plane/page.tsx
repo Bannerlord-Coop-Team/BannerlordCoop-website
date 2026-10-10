@@ -291,8 +291,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 inventory: inventory.inventory,
                 vpsProviderError: inventory.providerError,
                 selectedServer: selectedDashboard?.dashboard.server ?? null,
-                hostingRegions: hostingRegions.regions,
-                hostingRegionsError: hostingRegions.error,
+                hostingRegions,
             } satisfies OperationsData;
         }
         case "vps": {
@@ -584,7 +583,7 @@ function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nig
 
 /** Lays out every administrator operation card, grouped, with choices built from the loaded fleet, server and catalog state. */
 function OperationsView({ data, accounts }: { data: OperationsData; accounts: WebsiteAccountSummary[] }) {
-    const { overview, inventory, selectedServer, vpsProviderError, hostingRegions, hostingRegionsError } = data;
+    const { overview, inventory, selectedServer, vpsProviderError, hostingRegions } = data;
     const listedServers = selectedServer !== null
         && !overview.servers.items.some((server) => server.serverId === selectedServer.serverId)
         ? [selectedServer, ...overview.servers.items]
@@ -598,7 +597,7 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     const buildOptions = installableBuilds([...overview.stableBuilds.items, ...overview.nightlyBuilds.items]).map((build) => ({ label: `Pinned version: ${releaseVersion(build)} · ${releaseChannelLabel(build.channel)}${build.currentChannel ? " (current)" : ""}`, value: build.buildId, releaseChannel: build.channel }));
     const accountOptions: AdminActionOption[] = accounts.map(user => ({ label: user.label, value: user.accountId }));
     const availableVpsOptions: AdminActionOption[] = (Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : []).map((serviceName) => ({ label: serviceName, value: serviceName }));
-    const createRegionOptions: AdminActionOption[] = createServerRegionOptions(hostingRegions ?? []);
+    const createRegionOptions: AdminActionOption[] = createServerRegionOptions(hostingRegions.regions ?? []);
     const maintenanceOptions: AdminActionOption[] = maintenanceSlotOptions();
     const accountField = (name: string, label: string): AdminActionField => ({ name, label, kind: "account", required: true, options: accountOptions, help: "Choose a website account by its email or account ID." });
     const reasonField: AdminActionField = { name: "reason", label: "Reason", kind: "textarea", placeholder: "Optional context for this action", help: "Optional context stored in the immutable administrative audit event. When blank, the control plane records a fixed portal-action reason." };
@@ -610,7 +609,7 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
         ] },
         { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity in stopped state. New servers use Public by default; choose Nightly later with Change release settings if needed. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from an explicit administrator grant. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.",
             // Region choices come from the stored catalog, so without it no region can be offered.
-            ...(hostingRegions === null ? { unavailableReason: `Regions are unavailable: ${hostingRegionsError ?? "the stored hosting-region catalog could not be read."}` } : {}),
+            ...(hostingRegions.regions === null ? { unavailableReason: `Regions are unavailable: ${hostingRegions.error}` } : {}),
             fields: [
             accountField("ownerDiscordUserId", "Owner account"),
             { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: createRegionOptions, help: "Only stored-catalog regions the control plane reports as having a free admissible slot are shown. Only the region key is sent: the control plane revalidates capacity when you submit; no VPS is purchased automatically." },

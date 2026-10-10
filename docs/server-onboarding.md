@@ -53,11 +53,11 @@ To add a region (a VPS there is optional; without one the region is offered as f
 
 #### Publishing the website catalog
 
-The website has no page for this. An administrator sends the control plane's `set-hosting-regions` operation through the website's `control-plane-admin` Edge Function, which relays any operation name after reauthenticating the caller: `POST` the function URL with `Authorization: Bearer <access token>` (the Supabase session access token of a signed-in website administrator, for example copied from the browser session) and the standard envelope `{version: 1, requestId, operation, input}` with a fresh UUID `requestId`. Two calls are needed, because the website keeps nothing of the stored catalog but its entries:
+The website has no page for this. An administrator sends the control plane's `set-hosting-regions` operation through the website's `control-plane-admin` Edge Function, which relays any operation name after reauthenticating the caller: `POST` the function URL with `Content-Type: application/json`, `Authorization: Bearer <access token>` (the Supabase session access token of a signed-in website administrator, for example copied from the browser session) and the standard envelope `{version: 1, requestId, operation, input}` with a fresh UUID `requestId`. Two calls are needed, because the website keeps nothing of the stored catalog but its entries:
 
 1. `operation: "hosting-regions"`, `input: {}`: note the `revision` in the response.
-2. `operation: "set-hosting-regions"` with `input`:
-   - `regions`: the ordered `{region, placement}` list that `hostingRegionCatalogPayload()` in `supabase/functions/_shared/hosting-regions.ts` returns, unchanged;
+2. `operation: "set-hosting-regions"` with the `input` that `npx tsx scripts/hosting-regions-input.ts <revision> "<reason>"` prints:
+   - `regions`: the website catalog's ordered `{region, placement}` list, exactly as `hostingRegionCatalogPayload()` in `supabase/functions/_shared/hosting-regions.ts` returns it, so nothing is transcribed by hand;
    - `expectedRevision`: the revision from step 1, so a concurrent publish is rejected with `request_conflict` (re-read and retry);
    - `reason`: 3–1000 characters, stored in the administrative audit event.
 
