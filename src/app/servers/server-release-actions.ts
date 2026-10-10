@@ -5,7 +5,8 @@ import { getTranslations } from "@/app/lib/localization/server";
 import { getMyServerUpdateStatus, MyServersApiError, requestMyServerRelease } from "@/app/lib/hosting/my-servers";
 import { listAllMyServers } from "@/app/lib/hosting/my-servers-server";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
-import { exactKeys, isRecord, REQUEST_ID } from "../../../supabase/functions/_shared/server-visibility-contract";
+import { hasExactKeys, isRecord } from "../../../supabase/functions/_shared/dto-validation";
+import { REQUEST_ID } from "../../../supabase/functions/_shared/server-visibility-contract";
 import { parseReleaseMutation, type ReleaseMutation, type ReleaseStatus } from "../../../supabase/functions/_shared/server-release-contract";
 import { revalidatePath } from "next/cache";
 
@@ -28,8 +29,8 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
         return { ok: true, jobId, message: t("server-release.releaseChangeQueuedTheServerWillStopBackUpIts") };
     };
     try {
-        if (!isRecord(value) || !(exactKeys(value, ["serverId", "releaseChannel", "expectedUpdatedAt", "requestId"])
-            || exactKeys(value, ["serverId", "releaseChannel", "expectedUpdatedAt", "requestId", "previousChannel"]))
+        if (!isRecord(value) || !(hasExactKeys(value, ["serverId", "releaseChannel", "expectedUpdatedAt", "requestId"])
+            || hasExactKeys(value, ["serverId", "releaseChannel", "expectedUpdatedAt", "requestId", "previousChannel"]))
             || typeof value.requestId !== "string" || !REQUEST_ID.test(value.requestId)) throw new Error("Invalid request");
         input = parseReleaseMutation({ action: "set-release-channel", serverId: value.serverId,
             releaseChannel: value.releaseChannel, expectedUpdatedAt: value.expectedUpdatedAt });

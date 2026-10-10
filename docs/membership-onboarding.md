@@ -225,8 +225,8 @@ status requests still coalesce; completed status is never retained.
 `membership.ts` contains the exact private snapshot contract (all keys required,
 nullable semantics, decimal strings, provider ID bounds, UTC millisecond times).
 It matches CP `membership-contract.ts`. `server-onboarding-contract.ts` parses CP
-allocation **version 2**, including source breakdown and freshness, retaining all
-six ordered regions. No private provider IDs enter the public account status or
+allocation **version 3**, including source breakdown and freshness, keeping the
+control plane's stored region catalog in its order. No private provider IDs enter the public account status or
 website summary. `membership-onboarding.ts` owns strict authenticated status parsing
 and public summary v2 status/next-action composition.
 

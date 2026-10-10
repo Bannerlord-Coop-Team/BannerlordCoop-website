@@ -1,4 +1,5 @@
-import { exactKeys, isRecord, parsePublicServerPage, readPublicResponse, type PublicServerSummary } from "../../../../supabase/functions/_shared/server-visibility-contract";
+import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
+import { parsePublicServerPage, readPublicResponse, type PublicServerSummary } from "../../../../supabase/functions/_shared/server-visibility-contract";
 
 /** Anonymous only: never forward a session or fall back to administrative inventory. */
 export async function listPublicServers(fetcher: typeof fetch = fetch): Promise<PublicServerSummary[]> {
@@ -19,7 +20,7 @@ export async function listPublicServers(fetcher: typeof fetch = fetch): Promise<
         });
         if (!response.ok) { await response.body?.cancel(); throw new Error("Public directory unavailable"); }
         const envelope = await readPublicResponse(response);
-        if (!isRecord(envelope) || !exactKeys(envelope, ["version", "requestId", "ok", "result"])
+        if (!isRecord(envelope) || !hasExactKeys(envelope, ["version", "requestId", "ok", "result"])
             || envelope.version !== 1 || envelope.ok !== true || envelope.requestId !== requestId) throw new Error("Invalid public directory envelope");
         const result = parsePublicServerPage(envelope.result);
         for (const item of result.items) {

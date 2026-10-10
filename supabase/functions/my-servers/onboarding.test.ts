@@ -6,7 +6,7 @@ import type { RegionFullEvent, RegionRequestedEvent } from "../_shared/region-al
 import { onboardingSummary, onboardingRegion, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID, ONBOARDING_TEST_TIME } from "../../../tests/onboarding-fixtures.ts";
 
 const token = "synthetic-jwt-for-contract-tests-only";
-function request(body?: unknown, id: string | null = ONBOARDING_TEST_ID, query = body === undefined ? "?resource=onboarding" : "") {
+function request(body?: unknown, id: string | null = ONBOARDING_TEST_ID, query = "") {
     return new Request(`https://edge.example.test/${query}`, { method: body === undefined ? "GET" : "POST",
         headers: { authorization: `Bearer ${token}`, ...(id === null ? {} : { "x-request-id": id }), "content-type": "application/json" },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }) });

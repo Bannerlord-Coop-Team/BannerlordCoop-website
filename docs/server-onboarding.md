@@ -16,9 +16,10 @@ synchronization precedes allocation reads, without delaying either directory.
 The server-rendered onboarding summary uses the existing fixed Oracle user API
 directly, removing the Edge relay for this closed read only. It uses the same
 strict summary parser with a 64 KiB streamed response limit, a 30-second deadline,
-no response cache and no redirect following. It is the only owner summary read:
-the Edge has no browser summary route. All mutations retain their existing Edge
-route; failed summary reads remain unavailable.
+no response cache and no redirect following. It is the only summary read shown to
+owners: the Edge has no browser summary route and reads the summary only for its
+best-effort region-full check. All mutations retain their existing Edge route;
+failed summary reads remain unavailable.
 
 ## Authority and public contract
 
@@ -142,7 +143,7 @@ No deployment or migration was performed by this website lane. Review backend HE
 1. Obtain separate live-operation authorization and plan the exact-catalog application/schema maintenance boundary.
 2. Apply backend's pinned append-only schema migrations in order using the supported migration workflow: `202609030001_control_plane_regions.sql`, then `202609070001_control_plane_owner_onboarding.sql` (private requests/receipts/admission locks). Review RLS/runtime-only grants. Do not improvise old/new application restarts across incompatible catalog expectations.
 3. Deploy reviewed **backend** by its normal serialized workflow and verify the authenticated user boundary/explicit grant behavior. Preserve provisioning OFF, role-triggered deletion OFF and idle VM stopping OFF; existing approvals/profile/build prerequisites remain required.
-4. **Deploy the `my-servers` Supabase Edge Function and its shared modules before the UI.** Verify all three fixed operations and closed safe response/error forwarding with normal verified JWT/Discord linkage. This step is essential: a previous feature failed because the Edge function was not deployed.
+4. **Deploy the `my-servers` Supabase Edge Function and its shared modules before the UI.** Verify its two fixed operations (Create and Request region) and closed safe response/error forwarding with normal verified JWT/Discord linkage. This step is essential: a previous feature failed because the Edge function was not deployed.
 5. Deploy website UI only after the Edge contract is available. Smoke-test with separately authorized test accounts/capacity through ordinary APIs. Keep safe unavailable UI if any earlier layer is absent.
 
 No direct database edits, service-secret browser configuration or administrator role workaround are part of rollout/testing.

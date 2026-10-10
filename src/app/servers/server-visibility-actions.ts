@@ -5,7 +5,8 @@ import { getTranslations } from "@/app/lib/localization/server";
 import { MyServersApiError, requestServerVisibility } from "@/app/lib/hosting/my-servers";
 import { listAllMyServers } from "@/app/lib/hosting/my-servers-server";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
-import { exactKeys, isRecord, parseVisibilityMutation, REQUEST_ID, type VisibilityMutation } from "../../../supabase/functions/_shared/server-visibility-contract";
+import { hasExactKeys, isRecord } from "../../../supabase/functions/_shared/dto-validation";
+import { parseVisibilityMutation, REQUEST_ID, type VisibilityMutation } from "../../../supabase/functions/_shared/server-visibility-contract";
 import { revalidatePath } from "next/cache";
 
 // Authenticates directory preference changes and localizes existing outcomes.
@@ -14,7 +15,7 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
     let input: VisibilityMutation;
     let requestId: string;
     try {
-        if (!isRecord(value) || !exactKeys(value, ["serverId", "visibility", "expectedUpdatedAt", "requestId"])
+        if (!isRecord(value) || !hasExactKeys(value, ["serverId", "visibility", "expectedUpdatedAt", "requestId"])
             || typeof value.requestId !== "string" || !REQUEST_ID.test(value.requestId)) throw new Error("Invalid update");
         requestId = value.requestId;
         input = parseVisibilityMutation({ action: "set-server-visibility", serverId: value.serverId,

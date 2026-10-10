@@ -20,8 +20,10 @@ export type HostingRegionDefinition = {
     readonly placement: HostingPlacement;
 };
 
-/** A JSON-safe catalog entry in the control plane's wire form; the one wire type for definitions and placements. */
-export type HostingRegionPayload = { region: string; placement: { countryCodes: string[]; locationIds?: string[] } };
+/** A JSON-safe placement in the control plane's wire form: countries, optionally narrowed to provider zones. */
+export type HostingRegionPlacementPayload = { countryCodes: string[]; locationIds?: string[] };
+/** A JSON-safe catalog entry in the control plane's wire form; the one wire type for definitions. */
+export type HostingRegionPayload = { region: string; placement: HostingRegionPlacementPayload };
 
 // The control plane's catalog bounds, shared by every parser and test of a catalog or summary.
 /** Most regions a stored catalog (and so an owner summary) may hold. */
@@ -74,7 +76,7 @@ export function hostingRegionCatalogPayload(): HostingRegionPayload[] {
 }
 
 /** Copies a readonly placement into mutable JSON arrays. */
-function placementPayload(placement: HostingPlacement): HostingRegionPayload["placement"] {
+function placementPayload(placement: HostingPlacement): HostingRegionPlacementPayload {
     if (placement.locationIds === undefined) return { countryCodes: [...placement.countryCodes] };
     return { countryCodes: [...placement.countryCodes], locationIds: [...placement.locationIds] };
 }

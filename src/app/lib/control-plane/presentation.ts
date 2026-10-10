@@ -1,6 +1,6 @@
 import type { HostingAdminRegionEntry, HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE } from "../../../../supabase/functions/_shared/server-settings-contract";
-import { hostingRegionLabel, type HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
+import { hostingRegionLabel, type HostingRegionPayload, type HostingRegionPlacementPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 export const MAINTENANCE_TIME_ZONE = HOSTING_TIME_ZONE;
 
@@ -95,7 +95,7 @@ function hostRegionsLabel(host: HostPlacement, catalog: readonly HostingRegionPa
 
 /** Whether a host's provider country (and zone, when the placement names zones) satisfies a placement.
  *  Mirrors the control plane's `placementMatchesHost` in `src/hosting/regions.ts`, which is the source of truth. */
-function placementMatchesHost(placement: HostingRegionPayload["placement"], host: HostPlacement) {
+function placementMatchesHost(placement: HostingRegionPlacementPayload, host: HostPlacement) {
     if (!placement.countryCodes.includes(host.countryCode)) return false;
     return placement.locationIds === undefined || placement.locationIds.includes(host.locationId);
 }

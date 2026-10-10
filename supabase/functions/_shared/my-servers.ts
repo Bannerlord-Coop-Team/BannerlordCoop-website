@@ -186,9 +186,11 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         let upstream: Response;
         try {
             // The log download streams under the caller's own signal; every other request uses the upstream timeout.
-            upstream = await sendUpstream(endpoint, token, requestId, upstreamRequest.operation === "my-server-latest-log"
-                ? { method: upstreamMethod, body: upstreamBody, accept: "application/octet-stream", signal: request.signal }
-                : { method: upstreamMethod, body: upstreamBody });
+            upstream = await sendUpstream(endpoint, token, requestId, {
+                method: upstreamMethod,
+                body: upstreamBody,
+                ...(upstreamRequest.operation === "my-server-latest-log" ? { accept: "application/octet-stream", signal: request.signal } : {}),
+            });
         } catch {
             return errorResponse(
                 502,

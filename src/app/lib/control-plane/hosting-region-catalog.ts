@@ -9,6 +9,7 @@ import {
     MAXIMUM_PLACEMENT_LOCATIONS,
     MAXIMUM_REGIONS,
     type HostingRegionPayload,
+    type HostingRegionPlacementPayload,
 } from "../../../../supabase/functions/_shared/hosting-regions";
 
 /** How the control plane's stored catalog differs from the website catalog; empty lists mean in sync. */
@@ -70,7 +71,7 @@ export function hasHostingRegionDrift(drift: HostingRegionDrift): boolean {
 }
 
 /** Describes a placement as "US: os-us-west-or-2, us-west-or" or "FR". */
-export function formatPlacement(placement: HostingRegionPayload["placement"]): string {
+export function formatPlacement(placement: HostingRegionPlacementPayload): string {
     const countries = placement.countryCodes.join(", ");
     if (placement.locationIds === undefined) return countries;
     return `${countries}: ${placement.locationIds.join(", ")}`;
@@ -84,7 +85,7 @@ function parseDefinition(value: unknown): HostingAdminRegionEntry {
 }
 
 /** Validates one placement: unique ISO countries and, when present, unique provider zones. */
-function parsePlacement(value: unknown): HostingRegionPayload["placement"] {
+function parsePlacement(value: unknown): HostingRegionPlacementPayload {
     if (!isRecord(value)) throw invalidCatalog();
     const hasLocations = Object.hasOwn(value, "locationIds");
     if (!hasExactKeys(value, hasLocations ? ["countryCodes", "locationIds"] : ["countryCodes"])) throw invalidCatalog();
@@ -102,7 +103,7 @@ function uniqueList(value: unknown, pattern: RegExp, maximum: number): string[] 
 }
 
 /** Whether two placements name the same countries and zones, ignoring order. */
-function samePlacement(left: HostingRegionPayload["placement"], right: HostingRegionPayload["placement"]): boolean {
+function samePlacement(left: HostingRegionPlacementPayload, right: HostingRegionPlacementPayload): boolean {
     if (!sameSet(left.countryCodes, right.countryCodes)) return false;
     if (left.locationIds === undefined || right.locationIds === undefined) return left.locationIds === right.locationIds;
     return sameSet(left.locationIds, right.locationIds);

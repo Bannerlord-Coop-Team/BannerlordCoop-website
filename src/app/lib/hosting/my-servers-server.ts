@@ -71,6 +71,7 @@ export async function getMyServerStartStatus(accessToken: string, serverId: stri
     return value as ManagedStartStatus;
 }
 
+// Validates the owner token and bounds a read by the caller's signal and a 30-second timeout.
 function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
     if (accessToken.length < 20 || accessToken.length > 8_192) {
         throw new MyServersApiError("invalid_request", "The managed-server read request is invalid.");
@@ -80,6 +81,7 @@ function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
         : AbortSignal.timeout(30_000);
 }
 
+// Posts one owner read to the control plane and returns its result after checking the redirect, content type and length.
 async function readOwner(accessToken: string, request:
     | { operation: "my-servers"; input: { cursor: string | null; limit: 100 } }
     | OnboardingSummaryRequest
