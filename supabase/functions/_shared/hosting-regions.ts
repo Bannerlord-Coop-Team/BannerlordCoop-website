@@ -47,6 +47,11 @@ export const HOSTING_REGIONS = [
     { key: "germany", label: "Germany", continent: "europe", placement: { countryCodes: ["DE"] } },
     { key: "united-kingdom", label: "United Kingdom", continent: "europe", placement: { countryCodes: ["GB"] } },
     { key: "poland", label: "Poland", continent: "europe", placement: { countryCodes: ["PL"] } },
+    // No hosts here yet: these stay full, so owners can only request them to register demand.
+    { key: "singapore", label: "Singapore", continent: "asia", placement: { countryCodes: ["SG"] } },
+    { key: "japan", label: "Japan", continent: "asia", placement: { countryCodes: ["JP"] } },
+    { key: "south-korea", label: "South Korea", continent: "asia", placement: { countryCodes: ["KR"] } },
+    { key: "australia", label: "Australia (Sydney)", continent: "oceania", placement: { countryCodes: ["AU"] } },
 ] as const satisfies readonly HostingRegionDefinition[];
 
 type HostingRegionKey = typeof HOSTING_REGIONS[number]["key"];
