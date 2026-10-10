@@ -275,7 +275,7 @@
   "transfers.importCampaignSave": "Importar partida guardada de campaña",
   "transfers.importConfiguration": "Importar configuración",
   "transfers.closeImport": "Cerrar importación",
-  "transfers.chooseADownloadedSaveExportZipOrASavFileAndIts": "Elige una exportación de partida guardada descargada (.zip) o un archivo .sav y su archivo .json correspondiente. Máximo 20 MiB en total.",
+  "transfers.chooseADownloadedSaveExportZipOrASavFileAndIts": "Elige una exportación descargada de la partida guardada (.zip) o un archivo .sav y su archivo .json correspondiente. Máximo 20 MiB en total.",
   "transfers.importOneFileAtATimeYouDoNotNeed": "Importa un archivo a la vez. No necesitas abrirlo ni editarlo. Tu partida guardada y la contraseña del servidor seguirán siendo las mismas.",
   "transfers.1WhichFileAreYouImporting": "1. ¿Qué archivo vas a importar?",
   "transfers.recoveringAnEarlierImportOfBothSettingsFiles": "Recuperando una importación anterior de ambos archivos de configuración.",

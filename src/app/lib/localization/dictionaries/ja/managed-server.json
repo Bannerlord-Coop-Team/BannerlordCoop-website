@@ -275,7 +275,7 @@
   "transfers.importCampaignSave": "キャンペーンのセーブデータをインポート",
   "transfers.importConfiguration": "設定をインポート",
   "transfers.closeImport": "インポートを閉じる",
-  "transfers.chooseADownloadedSaveExportZipOrASavFileAndIts": "ダウンロードした、エクスポート済みのセーブデータ（.zip）、または.savファイルとそれに対応する.jsonファイルを選択してください。合計20 MiB以内です。",
+  "transfers.chooseADownloadedSaveExportZipOrASavFileAndIts": "ダウンロードしたセーブデータのエクスポート（.zip）、または.savファイルとそれに対応する.jsonファイルを選択してください。合計20 MiB以内です。",
   "transfers.importOneFileAtATimeYouDoNotNeed": "ファイルは1つずつインポートしてください。ファイルを開いたり編集したりする必要はありません。セーブデータとサーバーのパスワードは変わりません。",
   "transfers.1WhichFileAreYouImporting": "1. インポートするファイルはどれですか？",
   "transfers.recoveringAnEarlierImportOfBothSettingsFiles": "両方の設定ファイルの以前のインポートを復旧しています。",

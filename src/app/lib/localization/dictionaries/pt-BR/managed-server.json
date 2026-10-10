@@ -275,7 +275,7 @@
   "transfers.importCampaignSave": "Importar jogo salvo de campanha",
   "transfers.importConfiguration": "Importar configuração",
   "transfers.closeImport": "Fechar importação",
-  "transfers.chooseADownloadedSaveExportZipOrASavFileAndIts": "Escolha uma exportação do jogo salvo baixada (.zip) ou um arquivo .sav e seu .json correspondente. Máximo de 20 MiB no total.",
+  "transfers.chooseADownloadedSaveExportZipOrASavFileAndIts": "Escolha uma exportação baixada do jogo salvo (.zip) ou um arquivo .sav e seu .json correspondente. Máximo de 20 MiB no total.",
   "transfers.importOneFileAtATimeYouDoNotNeed": "Importe um arquivo por vez. Não é necessário abri-lo nem editá-lo. Seu jogo salvo e a senha do servidor permanecerão iguais.",
   "transfers.1WhichFileAreYouImporting": "1. Qual arquivo você está importando?",
   "transfers.recoveringAnEarlierImportOfBothSettingsFiles": "Recuperando uma importação anterior dos dois arquivos de configurações.",

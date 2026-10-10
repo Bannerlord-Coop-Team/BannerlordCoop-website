@@ -207,7 +207,8 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
             || files.reduce((total, file) => total + file.size, 0) > MAXIMUM_WEB_SAVE_BYTES) throw new Error(t("transfers.chooseASaveExportZipOrAMatchingSavAndJsonPair"));
         if (files.some((file) => !isSaveFileBasename(file.name))) throw new Error(t("transfers.useFilenamesContainingLettersNumbersSpacesUnderscoresHyphensAndA"));
         const save = files.find((file) => file.name.endsWith(".sav"));
-        if (!(files.length === 1 && isWebsiteSaveExport(files[0].name)) && (!save || !files.some((file) => file.name === save.name.slice(0, -4) + ".json"))) throw new Error(t("transfers.theSavAndJsonFilenamesMustMatch"));
+        const websiteExport = files.length === 1 && isWebsiteSaveExport(files[0].name);
+        if (!websiteExport && (!save || !files.some((file) => file.name === save.name.slice(0, -4) + ".json"))) throw new Error(t("transfers.theSavAndJsonFilenamesMustMatch"));
         if (displayName.trim().length < 3 || displayName.trim().length > 48) throw new Error(t("transfers.enterACampaignNameBetween3And48Characters"));
         if (/[\p{Cc}\p{Cf}]/u.test(displayName.trim())) throw new Error(t("transfers.theCampaignNameContainsInvisibleCharactersDeleteTheNameAnd"));
         return [t("transfers.thisAddsASeparateCampaignAfterServerValidation"), t("transfers.yourCurrentCampaignAndExistingSavesWillNotBeReplaced")];
