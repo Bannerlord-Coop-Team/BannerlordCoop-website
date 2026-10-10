@@ -1,6 +1,6 @@
 // The website's hosting-region catalog: keys, English labels, continent grouping and placements.
-// The control plane matches hosts against its own stored copy of these placements; an administrator
-// publishes this catalog to it from the Operations page (`set-hosting-regions`). Owners only send keys.
+// The control plane matches hosts against its own stored copy of these placements, replaced through its
+// `set-hosting-regions` administrative operation (not offered by the website). Owners only send keys.
 
 /** Continent tabs, in display order. */
 export const HOSTING_CONTINENTS = ["north-america", "europe", "south-america", "asia", "oceania"] as const;

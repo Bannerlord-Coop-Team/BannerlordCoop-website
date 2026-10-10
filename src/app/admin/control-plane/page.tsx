@@ -16,7 +16,6 @@ import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
 import { readOperationsVpsInventory } from "@/app/lib/control-plane/operations-inventory";
 import { readHostingRegionCatalog } from "@/app/lib/control-plane/hosting-region-catalog";
-import { HostingRegionsPanel } from "@/app/components/admin/HostingRegionsPanel";
 import { recordReleaseFirstObservations } from "@/app/lib/control-plane/release-observations";
 import {
     destructiveExplanation,
@@ -292,8 +291,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 inventory: inventory.inventory,
                 vpsProviderError: inventory.providerError,
                 selectedServer: selectedDashboard?.dashboard.server ?? null,
-                hostingRegions: hostingRegions.catalog,
-                hostingRegionsError: hostingRegions.error,
+                hostingRegions,
             } satisfies OperationsData;
         }
         case "vps": {
@@ -302,7 +300,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 loadHostingRegionCatalog(token, signal, identity),
             ]);
             // Host labels match the stored placements; an unreadable catalog leaves the hosts listed without regions.
-            return { inventory, regionCatalog: hostingRegions.catalog?.regions ?? null } satisfies VpsViewData;
+            return { inventory, regionCatalog: hostingRegions.regions } satisfies VpsViewData;
         }
         case "servers":
             return readControlPlaneAdmin<HostingPage<ManagedServer>>({
@@ -583,8 +581,9 @@ function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nig
     </div>;
 }
 
+/** Lays out every administrator operation card, grouped, with choices built from the loaded fleet, server and catalog state. */
 function OperationsView({ data, accounts }: { data: OperationsData; accounts: WebsiteAccountSummary[] }) {
-    const { overview, inventory, selectedServer, vpsProviderError, hostingRegions, hostingRegionsError } = data;
+    const { overview, inventory, selectedServer, vpsProviderError, hostingRegions } = data;
     const listedServers = selectedServer !== null
         && !overview.servers.items.some((server) => server.serverId === selectedServer.serverId)
         ? [selectedServer, ...overview.servers.items]
@@ -598,7 +597,9 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     const buildOptions = installableBuilds([...overview.stableBuilds.items, ...overview.nightlyBuilds.items]).map((build) => ({ label: `Pinned version: ${releaseVersion(build)} · ${releaseChannelLabel(build.channel)}${build.currentChannel ? " (current)" : ""}`, value: build.buildId, releaseChannel: build.channel }));
     const accountOptions: AdminActionOption[] = accounts.map(user => ({ label: user.label, value: user.accountId }));
     const availableVpsOptions: AdminActionOption[] = (Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : []).map((serviceName) => ({ label: serviceName, value: serviceName }));
-    const createRegionOptions: AdminActionOption[] = createServerRegionOptions(hostingRegions?.regions ?? []);
+    // Region choices come from the stored catalog, so without it Create server is offered as unavailable with the read error.
+    const createRegionOptions: AdminActionOption[] = hostingRegions.regions === null ? [] : createServerRegionOptions(hostingRegions.regions);
+    const createUnavailable = hostingRegions.regions === null ? { unavailableReason: `Regions are unavailable: ${hostingRegions.error}` } : {};
     const maintenanceOptions: AdminActionOption[] = maintenanceSlotOptions();
     const accountField = (name: string, label: string): AdminActionField => ({ name, label, kind: "account", required: true, options: accountOptions, help: "Choose a website account by its email or account ID." });
     const reasonField: AdminActionField = { name: "reason", label: "Reason", kind: "textarea", placeholder: "Optional context for this action", help: "Optional context stored in the immutable administrative audit event. When blank, the control plane records a fixed portal-action reason." };
@@ -609,8 +610,7 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
             { name: "serviceName", label: "Available OVH VPS", kind: "select", required: true, options: availableVpsOptions, defaultValue: availableVpsOptions.length === 1 ? availableVpsOptions[0]!.value : "", help: "Only unregistered VPS products discovered in the authenticated OVH account are shown. Select the saved bannerlord-fleet-operator key when installing the VPS; no SSH key, IP address, vCPU count, region, or audit reason is entered here." },
         ] },
         { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered OVH capacity in stopped state. New servers use Public by default; choose Nightly later with Change release settings if needed. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from an explicit administrator grant. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.",
-            // Region choices come from the stored catalog, so without it no region can be offered.
-            ...(hostingRegions === null ? { unavailableReason: `Regions are unavailable: ${hostingRegionsError ?? "the stored hosting-region catalog could not be read."}` } : {}),
+            ...createUnavailable,
             fields: [
             accountField("ownerDiscordUserId", "Owner account"),
             { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: createRegionOptions, help: "Only stored-catalog regions the control plane reports as having a free admissible slot are shown. Only the region key is sent: the control plane revalidates capacity when you submit; no VPS is purchased automatically." },
@@ -645,7 +645,7 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     return <div className="mt-8 space-y-12">{vpsProviderError && <div role="status" className="border-l-2 border-gold bg-gold/10 px-4 py-3 text-sm text-foreground">
         <p>OVH account inventory is unavailable, so unregistered VPS products cannot be listed for onboarding. Other operations still work.</p>
         <p className="mt-1 text-xs text-foreground-muted">{vpsProviderError}</p>
-    </div>}<HostingRegionsPanel catalog={hostingRegions} error={hostingRegionsError} accountLabels={accountLabelMap(accounts)} />{groups.map((group) => {
+    </div>}{groups.map((group) => {
         const groupCards = cards.filter((card) => card.group === group);
         const rows = operationCardRows(groupCards, group === "Fleet" ? 2 : 0);
         return <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={groupCards.length} /><div className="mt-5 space-y-5">{rows.map((row) => <div key={row.map((card) => card.operation).join(":")} className={`grid gap-5 ${operationCardRowClass(row.length)}`}>{row.map((card) => <ControlPlaneActionCard key={card.operation} {...card} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div>)}</div></section>;
