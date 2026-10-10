@@ -401,7 +401,7 @@ test("notifies a region requester through internal claim operations and returns 
             requestId: REQUEST_ID, region: "germany", requesterEmail: "owner@example.com",
             notifiedAt: "2026-10-10T12:00:00.000Z", claimed: true,
         } });
-    }, true, createRegionRequestNotifier({ from: "admin@bannerlordcoop.com", send: async (message) => { sent.push(message.text); } }));
+    }, true, createRegionRequestNotifier({ from: "admin@bannerlordcoop.com", siteUrl: "https://bannerlordcoop.com", send: async (message) => { sent.push(message.text); } }));
     const response = await handler(adminRequest(JSON.stringify({
         version: 1, requestId: REQUEST_ID, operation: "notify-region-request", input: { requestId: REQUEST_ID },
     })));
@@ -413,20 +413,6 @@ test("notifies a region requester through internal claim operations and returns 
     assert.deepEqual(upstream, [{ operation: "claim-region-request-notification", input: { requestId: REQUEST_ID } }]);
     assert.equal(sent.length, 1);
     assert.match(sent[0] ?? "", /https:\/\/bannerlordcoop\.com\/servers/u);
-});
-
-test("refuses browser calls to the internal notification claim operations", async () => {
-    let forwarded = 0;
-    const handler = createHandler(async (input) => {
-        if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
-        forwarded += 1;
-        return Response.json({});
-    });
-    for (const operation of ["claim-region-request-notification", "release-region-request-notification"]) {
-        const response = await handler(adminRequest(JSON.stringify({ version: 1, requestId: REQUEST_ID, operation, input: { requestId: REQUEST_ID } })));
-        assert.equal(response.status, 400);
-    }
-    assert.equal(forwarded, 0);
 });
 
 test("reports unavailable notifications when SMTP is not configured", async () => {

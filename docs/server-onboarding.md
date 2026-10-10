@@ -134,17 +134,17 @@ Alert and summary failures are logged by the function and never change the owner
 
 Each message is plain text: region, requester email/account (informational claims from the gateway-verified JWT), request or server UUID and creation time. It contains no capacity, slot, host or other private data and promises no ETA.
 
-The recipients, sender and SMTP host/port/username are committed in `supabase/functions/my-servers/alerts.ts`. This repository is public, so only addresses and account names that may be public belong there; the SMTP password is the single function secret. When `SMTP_PASS` is unset the function boots with alerting disabled and logs a warning. Invalid committed settings fail `npm test` and the function boot.
+The recipients are committed in `supabase/functions/my-servers/alerts.ts`; the sender and SMTP host/port/username are the shared site mail settings committed in `supabase/functions/_shared/mail.ts`. This repository is public, so only addresses and account names that may be public belong there; the SMTP password is the single function secret. When `SMTP_PASS` is unset the function boots with alerting disabled and logs a warning. Invalid committed settings fail `npm test` and the function boot.
 
 ```sh
 npx supabase secrets set --project-ref <project-ref> SMTP_PASS=<password>
 npx supabase functions deploy my-servers --project-ref <project-ref>
 ```
 
-| Setting in `alerts.ts` | Meaning |
+| Setting | Meaning |
 | --- | --- |
-| `recipients` | 1–20 administrator addresses. |
-| `from`, `fromName` | Sender address and optional display name. |
+| `recipients` (`alerts.ts`) | 1–20 administrator addresses. |
+| `from`, `fromName` (`_shared/mail.ts`) | Sender address and optional display name. |
 | `smtp.hostname`, `smtp.port`, `smtp.username` | SMTP host, port and username. |
 | `smtp.tls` | Optional `implicit` or `starttls`. Defaults to `implicit` for port 465 and `starttls` for any other port. Plaintext is never used and credentials are never sent before TLS. |
 

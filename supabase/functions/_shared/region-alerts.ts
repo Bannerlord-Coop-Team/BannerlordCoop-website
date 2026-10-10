@@ -1,5 +1,6 @@
 import { hostingRegionLabel } from "./hosting-regions.ts";
-import { isEmailAddress, type SmtpMessage, type SmtpOptions } from "./smtp.ts";
+import { resolveMailConfig, type MailConfig, type MailSettings } from "./mail.ts";
+import { isEmailAddress, type SmtpMessage } from "./smtp.ts";
 
 export type RegionRequester = { accountId: string | null; email: string | null };
 export type RegionRequestedEvent = {
@@ -15,22 +16,13 @@ export type RegionFullEvent = {
     requester: RegionRequester;
 };
 type AlertEnvelope = { recipients: readonly string[]; from: string; fromName?: string };
-// Delivery settings committed with the function; the SMTP password is the only runtime secret.
-export type RegionAlertSettings = {
-    recipients: readonly string[];
-    from: string;
-    fromName?: string;
-    smtp: { hostname: string; port: number; username: string; tls?: "implicit" | "starttls" };
-};
-export type RegionAlertConfig = { recipients: readonly string[]; from: string; fromName?: string; smtp: SmtpOptions };
+// Administrator recipients for region alerts plus the shared sender and SMTP account.
+export type RegionAlertSettings = MailSettings & { recipients: readonly string[] };
+export type RegionAlertConfig = MailConfig & { recipients: readonly string[] };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
-const HOSTNAME = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/u;
 const MAXIMUM_RECIPIENTS = 20;
-const MAXIMUM_NAME_LENGTH = 100;
 const MAXIMUM_TOKEN_SEGMENT_LENGTH = 16 * 1_024;
-// Supabase Edge Functions cannot open outbound connections to ports 25 and 587.
-const BLOCKED_PORTS = new Set([25, 587]);
 
 // Normalizes and validates the committed administrator recipient list.
 export function parseRecipients(values: readonly string[]): string[] {
@@ -44,33 +36,15 @@ export function parseRecipients(values: readonly string[]): string[] {
     return recipients;
 }
 
-// Validates the committed settings first, so a bad commit fails tests and boot, then returns null
-// (alerting disabled) when the SMTP_PASS secret is unset.
+// Validates the committed recipients and mail settings, then returns null (alerting disabled)
+// when the SMTP_PASS secret is unset.
 export function resolveRegionAlertConfig(
     settings: RegionAlertSettings,
     env: (name: string) => string | undefined,
 ): RegionAlertConfig | null {
     const recipients = parseRecipients(settings.recipients);
-    const hostname = settings.smtp.hostname.trim();
-    if (!HOSTNAME.test(hostname)) throw new Error("SMTP hostname is invalid");
-    const port = settings.smtp.port;
-    if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("SMTP port is invalid");
-    if (BLOCKED_PORTS.has(port)) {
-        throw new Error("SMTP ports 25 and 587 are blocked by Supabase Edge Functions; use 465 (implicit TLS) or another port the provider offers");
-    }
-    const username = settings.smtp.username.trim();
-    if (!username) throw new Error("SMTP username is required");
-    const tls = settings.smtp.tls ?? (port === 465 ? "implicit" : "starttls");
-    if (tls !== "implicit" && tls !== "starttls") throw new Error("SMTP tls must be implicit or starttls");
-    const from = settings.from.trim();
-    if (!isEmailAddress(from)) throw new Error("Alert sender is not an email address");
-    const fromName = settings.fromName?.trim();
-    if (fromName !== undefined && (fromName.length === 0 || fromName.length > MAXIMUM_NAME_LENGTH || /[\x00-\x1f\x7f]/u.test(fromName))) {
-        throw new Error("Alert sender name is invalid");
-    }
-    const password = env("SMTP_PASS")?.trim();
-    if (!password) return null;
-    return { recipients, from, ...(fromName === undefined ? {} : { fromName }), smtp: { hostname, port, tls, username, password } };
+    const mail = resolveMailConfig(settings, env);
+    return mail === null ? null : { recipients, ...mail };
 }
 
 // The Supabase gateway has already verified the JWT signature (verify_jwt = true); this only

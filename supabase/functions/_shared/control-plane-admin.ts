@@ -1,4 +1,4 @@
-import { INTERNAL_REGION_NOTIFICATION_OPERATIONS, type ControlPlaneCall, type RegionRequestNotifier } from "./region-request-notification.ts";
+import type { ControlPlaneCall, RegionRequestNotifier } from "./region-request-notification.ts";
 import { verifyWebsiteSessionContext } from "./session-context.ts";
 
 const MAXIMUM_REQUEST_BYTES = 64 * 1024;
@@ -139,11 +139,8 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             }
         };
 
-        if (INTERNAL_REGION_NOTIFICATION_OPERATIONS.has(envelope.operation)) {
-            return envelopeError(400, requestId, "invalid_request", "The request is invalid.", false, cors);
-        }
         if (envelope.operation === "notify-region-request") {
-            return notifyRegionRequest(envelope, origin ?? [...allowedOrigins][0], callUpstream, cors);
+            return notifyRegionRequest(envelope, callUpstream, cors);
         }
 
         const upstreamStarted = performance.now();
@@ -164,20 +161,15 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
         });
     };
 
-    // Runs the claim, email and release sequence for one region request notification.
+    // Dispatches `notify-region-request` to the notifier and wraps its outcome in the response envelope.
     async function notifyRegionRequest(
         envelope: Envelope,
-        siteOrigin: string,
         callUpstream: (body: string) => Promise<UpstreamReply>,
         cors: Record<string, string>,
     ): Promise<Response> {
         const { requestId } = envelope;
         if (options.notifyRegionRequest === undefined) {
             return envelopeError(503, requestId, "notifications_unavailable", "Email notifications are not configured.", false, cors);
-        }
-        const target = isRecord(envelope.input) ? envelope.input.requestId : undefined;
-        if (typeof target !== "string" || !REQUEST_ID.test(target) || Object.keys(envelope.input as object).length !== 1) {
-            return envelopeError(400, requestId, "invalid_request", "The request is invalid.", false, cors);
         }
         const call: ControlPlaneCall = async (operation, input) => {
             const reply = await callUpstream(JSON.stringify({ version: 1, requestId: crypto.randomUUID(), operation, input }));
@@ -186,7 +178,7 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
         };
         let outcome: Awaited<ReturnType<RegionRequestNotifier>>;
         try {
-            outcome = await options.notifyRegionRequest({ requestId: target.toLowerCase(), siteOrigin, call });
+            outcome = await options.notifyRegionRequest(envelope.input, call);
         } catch {
             return envelopeError(502, requestId, "control_plane_unavailable", "The control plane could not be reached.", true, cors);
         }

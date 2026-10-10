@@ -1,11 +1,9 @@
+import { SITE_MAIL } from "../_shared/mail.ts";
 import type { RegionAlertSettings } from "../_shared/region-alerts.ts";
 
-// Region request and full-region alert delivery. These values are committed on purpose (this repository is
-// public). Resend's SMTP username is the literal "resend"; the API key is the password and
-// stays in the SMTP_PASS function secret. Ports 25 and 587 are blocked for Edge Functions.
+// Region request and full-region alert recipients, committed on purpose (this repository is public).
+// The sender and SMTP account are the shared site mail settings in ../_shared/mail.ts.
 export const REGION_ALERTS: RegionAlertSettings = {
+    ...SITE_MAIL,
     recipients: ["garrett.luskey@gmail.com"],
-    from: "admin@bannerlordcoop.com",
-    fromName: "Bannerlord Coop",
-    smtp: { hostname: "smtp.resend.com", port: 465, username: "resend" },
 };
