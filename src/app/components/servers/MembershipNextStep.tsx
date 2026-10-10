@@ -15,6 +15,5 @@ export function MembershipNextStep({ summary }: { summary: WebsiteOnboardingSumm
         {["connect_patreon", "check_again", "subscribe_or_upgrade"].includes(summary.nextAction) && <form action={linkPatreonAccount}><input type="hidden" name="returnPath" value="/servers" /><button className="mt-3 underline" type="submit">{summary.nextAction === "connect_patreon" ? t("membership.connect") : t("membership.checkAgain")}</button></form>}
         {summary.nextAction === "subscribe_or_upgrade" && <a href="https://www.patreon.com/" className="mt-3 block underline" rel="noreferrer">{t("membership.openPatreon")}</a>}
         {["repair_account", "contact_support"].includes(summary.nextAction) && <Link className="mt-3 block underline" href="/account">{t("membership.repair")}</Link>}
-        <p className="mt-3 text-sm text-foreground-muted">{t("membership.independence")}</p>
     </section>;
 }

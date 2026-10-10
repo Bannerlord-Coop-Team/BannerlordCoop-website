@@ -18,7 +18,6 @@
   "membership.signIn": "ログイン / アカウント作成",
   "membership.openPatreon": "Patreon を開く",
   "membership.repair": "アカウントのステータスと修復ガイド",
-  "membership.independence": "既存のサーバーの管理、起動・停止、セーブデータの利用は、メンバーシップの再確認に依存しません。メンバーシップの確認結果の有効期限が切れても、自動的に停止や削除が始まることはありません。",
   "membership.connect": "Patreon と連携",
   "membership.checkAgain": "Patreon で再確認",
   "search.label": "公開サーバーを検索",

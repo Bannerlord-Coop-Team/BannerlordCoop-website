@@ -18,7 +18,6 @@
   "membership.signIn": "Se connecter / créer un compte",
   "membership.openPatreon": "Ouvrir Patreon",
   "membership.repair": "Statut du compte et conseils de réparation",
-  "membership.independence": "La gestion des serveurs existants, le démarrage/l’arrêt et les sauvegardes ne dépendent pas de l’actualisation de l’abonnement. Aucun arrêt ni aucune suppression automatique n’est déclenché par une preuve d’abonnement expirée.",
   "membership.connect": "Connecter Patreon",
   "membership.checkAgain": "Vérifier à nouveau avec Patreon",
   "search.label": "Rechercher des serveurs publics",
