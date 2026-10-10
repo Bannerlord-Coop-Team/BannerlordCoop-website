@@ -33,8 +33,8 @@ test("the envelope publishes exactly the website catalog against the given revis
 });
 
 test("arguments are rejected unless they are a decimal revision and a bounded quoted reason", () => {
-    for (const args of [[], ["4"], ["4", "Add", "Japan"], ["0", "Reason"], ["1e1", "Reason"], ["0xb", "Reason"], [" 4", "Reason"], ["4", "ab"], ["4", "x".repeat(1001)]]) {
+    for (const args of [[], ["4"], ["4", "Add", "Japan"], ["0", "Reason"], ["1e1", "Reason"], ["0xb", "Reason"], [" 4", "Reason"], ["4", "ab"], ["4", "   "], ["4", " ab "], ["4", "x".repeat(1001)]]) {
         assert.throws(() => parseArguments(args), UsageError, JSON.stringify(args));
     }
-    assert.deepEqual(parseArguments(["12", "abc"]), { expectedRevision: 12, reason: "abc" });
+    assert.deepEqual(parseArguments(["12", "  abc  "]), { expectedRevision: 12, reason: "abc" });
 });

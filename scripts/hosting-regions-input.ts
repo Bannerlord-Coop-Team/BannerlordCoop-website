@@ -10,15 +10,17 @@ export function publishEnvelope(args: readonly string[], requestId: string = cry
     return { version: 1, requestId, operation: "set-hosting-regions", input: { expectedRevision, regions: hostingRegionCatalogPayload(), reason } };
 }
 
-/** Validates exactly two arguments: a decimal revision of at least 1 and a 3–1000 character reason. */
+/** Validates exactly two arguments: a decimal revision of at least 1 and a reason of 3–1000 characters once trimmed. */
 export function parseArguments(args: readonly string[]): { expectedRevision: number; reason: string } {
     if (args.length !== 2) throw new UsageError("Exactly two arguments are expected; quote a reason that contains spaces.");
-    const [revisionText, reason] = args as [string, string];
-    if (!/^\d+$/u.test(revisionText) || !Number.isSafeInteger(Number(revisionText)) || Number(revisionText) < 1) {
+    const [revisionText, rawReason] = args as [string, string];
+    const expectedRevision = /^\d+$/u.test(revisionText) ? Number(revisionText) : Number.NaN;
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
         throw new UsageError("expectedRevision must be the positive decimal revision that `hosting-regions` currently returns.");
     }
-    if (reason.length < 3 || reason.length > 1000) throw new UsageError("reason must be 3–1000 characters.");
-    return { expectedRevision: Number(revisionText), reason };
+    const reason = rawReason.trim();
+    if (reason.length < 3 || reason.length > 1000) throw new UsageError("reason must be 3–1000 characters after trimming.");
+    return { expectedRevision, reason };
 }
 
 /** An argument problem, reported with the usage line. */

@@ -104,7 +104,7 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     expect(html).not.toContain("Publish website regions");
     expect(html).toContain("Onboard existing OVH VPS");
     expect(html).toContain("vps-available.vps.ovh.us");
-    expect(html.match(/<option value="us-east">US-East<\/option>/gu)).toHaveLength(1);
+    expect(html.match(/<option value="us-east">US-East<\/option>/gu) ?? []).toHaveLength(1);
     expect(html).not.toContain('value="us-west"');
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual([[{
