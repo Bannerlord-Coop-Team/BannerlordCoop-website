@@ -179,7 +179,7 @@ it("rejects invisible campaign names and allows corrected input after a local su
         });
     }
     async function chooseFile() {
-        const file = new File(["save"], "campaign.blcexport");
+        const file = new File(["save"], "campaign.zip");
         Object.defineProperty(file, "arrayBuffer", { value: async () => new Uint8Array([1, 2, 3]).buffer });
         const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
         Object.defineProperty(input, "files", { configurable: true, value: [file] });
@@ -394,7 +394,7 @@ it("derives safe export filenames without changing the server's extension", () =
     const day = new Date(2026, 0, 2);
     expect(saveExportFileName("Testesrver", "save-export-1.blcexport", day)).toBe("testesrver-save-2026-01-02.blcexport");
     expect(saveExportFileName("../../Évreux: Campaign!", "x.zip", day)).toBe("evreux-campaign-save-2026-01-02.zip");
-    expect(saveExportFileName("卡拉迪亚", "x", day)).toBe("server-save-2026-01-02.blcexport");
+    expect(saveExportFileName("卡拉迪亚", "x", day)).toBe("server-save-2026-01-02.zip");
     expect(saveExportFileName(undefined, "x.blcexport", day)).toBe("server-save-2026-01-02.blcexport");
 });
 

@@ -30,6 +30,9 @@ test("rejects forged privileges, secret config fields, unsafe file pairs and abs
     const save = { action: "import-save", serverId: requestId, expectedUpdatedAt: input.expectedUpdatedAt, displayName: "Campaign", files: [{ basename: "Campaign.sav", base64: "YQ==" }, { basename: "Campaign.json", base64: "e30=" }] };
     assert.deepEqual(parseOwnerFileMutation(save), save);
     for (const name of ["../Campaign.sav", "Campaign.zip", "Other.sav", "Campaign\\file.sav"]) assert.throws(() => parseOwnerFileMutation({ ...save, files: [{ ...save.files[0], basename: name }, save.files[1]] }));
+    // A single file must be a website export: .zip, or a legacy .blcexport.
+    for (const name of ["save-export.zip", "save-export.blcexport"]) assert.deepEqual(parseOwnerFileMutation({ ...save, files: [{ basename: name, base64: "YQ==" }] }), { ...save, files: [{ basename: name, base64: "YQ==" }] });
+    for (const name of ["save-export.7z", "Campaign.sav", "Campaign.json"]) assert.throws(() => parseOwnerFileMutation({ ...save, files: [{ basename: name, base64: "YQ==" }] }));
     assert.throws(() => parseOwnerFileMutation({ ...save, files: [{ ...save.files[0], base64: "a" }, save.files[1]] }));
     assert.throws(() => parseOwnerFileMutation({ ...save, files: [{ ...save.files[0], base64: "A".repeat(28 * 1024 * 1024) }, save.files[1]] }));
 });

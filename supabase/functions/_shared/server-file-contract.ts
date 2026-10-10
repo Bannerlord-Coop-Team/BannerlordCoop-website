@@ -54,12 +54,12 @@ export function parseOwnerFileMutation(value: unknown): OwnerFileMutation {
     || value.displayName.length < 3 || value.displayName.length > 48 || /[\p{Cc}\p{Cf}]/u.test(value.displayName)) {
     throw new Error('Use a campaign name between 3 and 48 characters');
   }
-  if (!Array.isArray(value.files) || ![1, 2].includes(value.files.length)) throw new Error('Select a .blcexport or one .sav and its matching .json companion');
+  if (!Array.isArray(value.files) || ![1, 2].includes(value.files.length)) throw new Error('Select a .zip export or one .sav and its matching .json companion');
   let total = 0;
   for (const file of value.files) {
     if (!record(file)) throw new Error('Invalid save file');
     exact(file, ['basename', 'base64']);
-    if (typeof file.basename !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,118}\.(?:sav|json|blcexport)$/u.test(file.basename)
+    if (typeof file.basename !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,118}\.(?:sav|json|zip|blcexport)$/u.test(file.basename)
       || file.basename.includes('..')) throw new Error('Invalid save filename');
     if (typeof file.base64 !== 'string' || file.base64.length === 0
       || file.base64.length > Math.ceil(MAXIMUM_WEB_SAVE_BYTES / 3) * 4
@@ -70,7 +70,8 @@ export function parseOwnerFileMutation(value: unknown): OwnerFileMutation {
   }
   if (total > MAXIMUM_WEB_SAVE_BYTES) throw new Error('Save and companion must total 20 MiB or less');
   const files = value.files as { basename: string; base64: string }[];
-  if (files.length === 1 && files[0]?.basename.endsWith('.blcexport')) return value as OwnerFileMutation;
+  // A single file is a website export: .zip now, or a legacy .blcexport downloaded before ZIP exports.
+  if (files.length === 1 && /\.(?:zip|blcexport)$/u.test(files[0]?.basename ?? '')) return value as OwnerFileMutation;
   const save = files.find((file) => file.basename.endsWith('.sav'));
   if (save === undefined || !files.some((file) => file.basename === save.basename.slice(0, -4) + '.json')) {
     throw new Error('The .sav and .json filenames must match');

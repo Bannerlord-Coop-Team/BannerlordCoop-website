@@ -44,7 +44,7 @@ export function readFileIntent(value: string | null, serverId: string): Intent |
 
 // Names a downloaded save export after the server and local day, keeping the server-supplied extension.
 export function saveExportFileName(serverName: string | undefined, serverFileName: string, now = new Date()) {
-    const extension = /\.[a-z0-9]{1,16}$/iu.exec(serverFileName)?.[0] ?? ".blcexport";
+    const extension = /\.[a-z0-9]{1,16}$/iu.exec(serverFileName)?.[0] ?? ".zip";
     const slug = (serverName ?? "").normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
         .replace(/[^a-z0-9]+/gu, "-").slice(0, 48).replace(/^-+|-+$/gu, "") || "server";
     const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()].map((part) => String(part).padStart(2, "0")).join("-");
@@ -205,9 +205,11 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
         }
         if (![1, 2].includes(files.length) || files.some((file) => file.size === 0)
             || files.reduce((total, file) => total + file.size, 0) > MAXIMUM_WEB_SAVE_BYTES) throw new Error(t("transfers.chooseABlcexportOrAMatchingSavAndJsonPair"));
-        if (files.some((file) => !/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,118}\.(?:sav|json|blcexport)$/u.test(file.name) || file.name.includes(".."))) throw new Error(t("transfers.useFilenamesContainingLettersNumbersSpacesUnderscoresHyphensAndA"));
+        if (files.some((file) => !/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,118}\.(?:sav|json|zip|blcexport)$/u.test(file.name) || file.name.includes(".."))) throw new Error(t("transfers.useFilenamesContainingLettersNumbersSpacesUnderscoresHyphensAndA"));
         const save = files.find((file) => file.name.endsWith(".sav"));
-        if (!(files.length === 1 && files[0].name.endsWith(".blcexport")) && (!save || !files.some((file) => file.name === save.name.slice(0, -4) + ".json"))) throw new Error(t("transfers.theSavAndJsonFilenamesMustMatch"));
+        // A single file is a website export: .zip now, or a legacy .blcexport downloaded before ZIP exports.
+        const websiteExport = files.length === 1 && /\.(?:zip|blcexport)$/u.test(files[0].name);
+        if (!websiteExport && (!save || !files.some((file) => file.name === save.name.slice(0, -4) + ".json"))) throw new Error(t("transfers.theSavAndJsonFilenamesMustMatch"));
         if (displayName.trim().length < 3 || displayName.trim().length > 48) throw new Error(t("transfers.enterACampaignNameBetween3And48Characters"));
         if (/[\p{Cc}\p{Cf}]/u.test(displayName.trim())) throw new Error(t("transfers.theCampaignNameContainsInvisibleCharactersDeleteTheNameAnd"));
         return [t("transfers.thisAddsASeparateCampaignAfterServerValidation"), t("transfers.yourCurrentCampaignAndExistingSavesWillNotBeReplaced")];
@@ -414,7 +416,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
                     </div>
                 </>}
                 {dialogKind === "import-save" && <label className="block text-sm">{t("transfers.campaignName")}<input className={inputClass} maxLength={48} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label>}
-                <label className="block text-sm">{dialogKind === "import-save" ? t("transfers.saveAndCompanionFiles") : t("transfers.3ChooseYourFile")}<input className={`${inputClass} file:mr-3 file:border-0 file:bg-gold/10 file:px-3 file:py-2 file:text-gold`} key={dialogKind === "import-config" ? configPart : "save"} type="file" accept={dialogKind === "import-save" ? ".sav,.json,.blcexport" : ".json"} multiple={dialogKind === "import-save"} onChange={(event) => setFiles(Array.from(event.target.files ?? []))} /></label>
+                <label className="block text-sm">{dialogKind === "import-save" ? t("transfers.saveAndCompanionFiles") : t("transfers.3ChooseYourFile")}<input className={`${inputClass} file:mr-3 file:border-0 file:bg-gold/10 file:px-3 file:py-2 file:text-gold`} key={dialogKind === "import-config" ? configPart : "save"} type="file" accept={dialogKind === "import-save" ? ".sav,.json,.zip,.blcexport" : ".json"} multiple={dialogKind === "import-save"} onChange={(event) => setFiles(Array.from(event.target.files ?? []))} /></label>
             </div> : <div className="mt-5">
                 {dialogKind === "import-config" && <p className="mb-3 text-sm font-semibold">{configPart === "server" ? t("transfers.importingServerSettingsOnly") : configPart === "mod" ? t("transfers.importingGameplaySettingsOnly") : t("transfers.importingBothSetsOfSettings")}</p>}
                 <p className="break-words text-sm text-foreground-muted">{files.map((file) => file.name).join(" + ")}</p>
