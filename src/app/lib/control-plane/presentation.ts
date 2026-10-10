@@ -38,12 +38,16 @@ export function fieldRequirementLabel(required: boolean) {
     return required ? "Required" : "Optional";
 }
 
+export function slotOwnerAccountId(owner: { ownerDiscordUserId: string; ownerAccountId?: string | null }) {
+    // Older API responses can still identify new accounts by their UUID principal.
+    return owner.ownerAccountId ?? validUuid(owner.ownerDiscordUserId);
+}
+
 export function formatAccountOwner(
     owner: { ownerDiscordUserId: string; ownerAccountId?: string | null },
     accountLabels: Readonly<Record<string, string>>,
 ) {
-    // Older API responses can still identify new accounts by their UUID principal.
-    const accountId = owner.ownerAccountId ?? validUuid(owner.ownerDiscordUserId);
+    const accountId = slotOwnerAccountId(owner);
     if (accountId === null) return `Legacy owner (${owner.ownerDiscordUserId})`;
     return accountLabels[accountId] ?? `Account unavailable (${accountId})`;
 }
