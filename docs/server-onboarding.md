@@ -39,7 +39,7 @@ All use existing Supabase JWT forwarding to authenticated `POST /v1/user/control
 
 ### Hosting regions: website catalog and stored catalog
 
-The website catalog, `supabase/functions/_shared/hosting-regions.ts`, defines each region's key, English label, continent tab (`HOSTING_CONTINENTS`), and **placement**: the ISO country codes it covers and, optionally, the exact provider zones. US-West and US-East name their exact Oregon and Virginia zones, because a US country code alone never implies a coast. The current order is **US-West, US-East, France, Germany, United Kingdom, Poland, Singapore, Japan, South Korea, Australia**. A region with no matching host is offered as full, so owners can request it; a region can therefore be listed before any VPS exists there to register demand.
+The website catalog, `supabase/functions/_shared/hosting-regions.ts`, defines each region's key, English label, continent tab (`HOSTING_CONTINENTS`), and **placement**: the ISO country codes it covers and, optionally, the exact provider zones. US-West and US-East name their exact Oregon and Virginia zones, because a US country code alone never implies a coast. Display order is the order of `HOSTING_REGIONS`.
 
 The control plane matches hosts only against its own **stored catalog** of keys and placements; owners can never send or influence a placement, because the owner endpoint is public. An empty stored catalog fails closed for owners: the summary parser requires at least one region, so the website shows onboarding as unavailable rather than an empty region list. The control plane seeds that catalog with the six original regions (US-West through Poland) and placements identical to the website catalog. An administrator replaces it with **Publish website regions** on the Operations page (`set-hosting-regions`, guarded by the stored revision; see [control-plane administration](control-plane-admin.md#hosting-regions)).
 
@@ -47,7 +47,7 @@ The version-3 summary lists the stored catalog in its stored order (1–32 uniqu
 
 The onboarding dialog offers only stored-catalog regions that the website catalog also knows, because the website supplies each region's continent and translation; other stored keys are ignored. Region names everywhere (onboarding, receipts, recovery, the owner's server page) come from one helper, `localizedRegionLabel`: `region.<key>` in the `servers` dictionary for website catalog keys, otherwise the key humanized (`united-states` → "United States").
 
-To add a region (a VPS there is optional; without one the region is offered as full and can only be requested):
+To add a region (a VPS there is optional; without one the region is offered as full, and owner requests for it register demand):
 
 1. Add one catalog entry and its `region.<key>` translation in every `servers.json` dictionary. The entry's English `label` must equal its `region.<key>` translation in the English dictionary. `src/app/lib/hosting/region-labels.test.ts` enforces that every catalog key and continent has an English translation and that each label matches it, and dictionary parity carries the keys to the other locales. The catalog's bounds (`MAXIMUM_REGIONS`, the country and zone patterns and placement limits) are exported once from `hosting-regions.ts` and shared by every catalog and summary parser.
 2. Deploy the website.
