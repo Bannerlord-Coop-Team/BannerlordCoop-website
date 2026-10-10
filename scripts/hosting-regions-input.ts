@@ -1,6 +1,7 @@
 // Prints the `set-hosting-regions` request envelope that publishes the website's hosting-region catalog to the control plane.
 // Usage: npx tsx scripts/hosting-regions-input.ts <expectedRevision> "<reason>"   (see docs/server-onboarding.md)
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { hostingRegionCatalogPayload } from "../supabase/functions/_shared/hosting-regions";
 
 /** The complete relay envelope: a fresh request ID and the website catalog as the operation's `regions`. */
@@ -34,4 +35,14 @@ function main() {
     }
 }
 
-if (process.argv[1] !== undefined && pathToFileURL(process.argv[1]).href === import.meta.url) main();
+/** Whether this module is the script Node was started with, comparing real paths so junctions and symlinks do not matter. */
+function isEntryPoint(): boolean {
+    if (process.argv[1] === undefined) return false;
+    try {
+        return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+    } catch {
+        return false;
+    }
+}
+
+if (isEntryPoint()) main();
