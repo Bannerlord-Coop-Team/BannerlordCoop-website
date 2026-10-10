@@ -116,6 +116,18 @@ export type VpsFleetSlotSummary = {
     regions: VpsRegionSlotSummary[];
 };
 
+export type RegionSlotOutline = "full" | "one-left" | "open";
+
+/** Full regions are red. A region with exactly one slot left is yellow. */
+export function regionSlotOutline(takenSlots: number, totalSlots: number): RegionSlotOutline {
+    if (!Number.isSafeInteger(totalSlots) || totalSlots <= 0) return "open";
+    const taken = Number.isSafeInteger(takenSlots) && takenSlots > 0 ? takenSlots : 0;
+    const free = totalSlots - taken;
+    if (free <= 0) return "full";
+    if (free === 1) return "one-left";
+    return "open";
+}
+
 /** Counts prepared slots and slots assigned to a server, for the whole fleet and each region it serves. */
 export function summarizeVpsSlots(hosts: readonly PlacedHost[], catalog: RegionCatalog = null): VpsFleetSlotSummary {
     const totals = new Map<string, { totalSlots: number; takenSlots: number }>();

@@ -1,4 +1,4 @@
-import { summarizeVpsSlots } from "@/app/lib/control-plane/vps-inventory-query";
+import { regionSlotOutline, summarizeVpsSlots } from "@/app/lib/control-plane/vps-inventory-query";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
@@ -18,7 +18,7 @@ export function VpsSlotSummary({ hosts, regionCatalog = null }: {
                 {summary.regions.length === 0 ? <p className="mt-3 text-xs text-foreground-muted">No registered VPS hosts.</p> : (
                     <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                         {summary.regions.map((region) => (
-                            <li key={region.region} className="border border-white/10 px-3 py-2">
+                            <li key={region.region} className={`border px-3 py-2 ${regionOutlineClass(regionSlotOutline(region.takenSlots, region.totalSlots))}`}>
                                 <p className="text-xs text-foreground-muted">{region.label}</p>
                                 <p className="mt-1 text-sm text-foreground">
                                     <span className="font-semibold">{region.takenSlots}</span>
@@ -33,6 +33,12 @@ export function VpsSlotSummary({ hosts, regionCatalog = null }: {
             </div>
         </section>
     );
+}
+
+function regionOutlineClass(outline: ReturnType<typeof regionSlotOutline>) {
+    if (outline === "full") return "border-crimson";
+    if (outline === "one-left") return "border-yellow-400";
+    return "border-white/10";
 }
 
 function SlotTotal({ label, value, help }: { label: string; value: number; help: string }) {
