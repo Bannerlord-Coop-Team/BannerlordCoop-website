@@ -36,8 +36,10 @@ foreign file parts and unsupported fields are rejected as invalid responses.
   states. Rollout requires the control plane route to be merged and deployed first;
   until then the owner card shows the load failure and the stored preview.
 
-- Import a downloaded `.blcexport` or a `.sav` and its matching `.json` companion,
-  up to 20 MiB total (including archive metadata/encoding). Both
+- Import a downloaded save export (a `.zip` holding the `.sav` and `.json`, or a
+  legacy `.blcexport` from before ZIP exports) or a `.sav` and its matching `.json`
+  companion, up to 20 MiB total (including archive metadata/encoding). Requires
+  control plane #350 or later, which reads both export forms. Both
   filenames must be simple basenames. Backend/runner limits may be stricter.
   The stopped-server workflow validates the import and adds a separate campaign
   under a unique stable basename. It does not replace existing saves or select
