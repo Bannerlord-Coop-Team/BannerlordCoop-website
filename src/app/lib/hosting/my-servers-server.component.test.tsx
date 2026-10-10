@@ -5,7 +5,7 @@ import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getMyServerStartStatus, getServerOnboarding, listAllMyServers } from "./my-servers-server";
-import { legacyOnboardingSummary, onboardingRegion, onboardingSummary } from "../../../../tests/onboarding-fixtures";
+import { onboardingRegion, onboardingSummary } from "../../../../tests/onboarding-fixtures";
 
 const TOKEN = "access-token-with-enough-characters";
 const headers = { "content-type": "application/json" };
@@ -101,34 +101,15 @@ it("rejects malformed onboarding DTOs rather than displaying eligibility", async
     }
 });
 
-it("falls back to the version-2 summary when an older control plane rejects version 3, mapping its six regions", async () => {
+it("reads the version-3 summary once and propagates any rejection without a second read", async () => {
     const inputs: unknown[] = [];
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => {
         const request = input(init); inputs.push(request.input);
-        if (Object.keys(request.input).length === 0) return accepted(request, legacyOnboardingSummary());
         return Response.json({ version: 1, requestId: request.requestId, ok: false,
             error: { code: "invalid_request", message: "The request is invalid.", retryable: false } }, { status: 400 });
     });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const summary = await getServerOnboarding(TOKEN);
-    expect(inputs).toEqual([{ version: 3 }, {}]);
-    // One structured line records the fallback, without the token.
-    expect(warn).toHaveBeenCalledOnce();
-    expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toMatchObject({ event: "onboarding_summary_legacy_fallback", surface: "website" });
-    expect(String(warn.mock.calls[0]?.[0])).not.toContain(TOKEN);
-    expect(summary.version).toBe(3);
-    expect(summary.otherRequests).toEqual([]);
-    expect(summary.regions).toEqual(legacyOnboardingSummary().regions.map(({ region, available, request }) => ({ region, available, request })));
-    // Other rejections never fall back.
-    inputs.length = 0;
-    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => {
-        const request = input(init); inputs.push(request.input);
-        return Response.json({ version: 1, requestId: request.requestId, ok: false,
-            error: { code: "forbidden", message: "Current session is required.", retryable: false } }, { status: 403 });
-    });
-    await expect(getServerOnboarding(TOKEN)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(getServerOnboarding(TOKEN)).rejects.toMatchObject({ code: "invalid_request" });
     expect(inputs).toEqual([{ version: 3 }]);
-    expect(warn).toHaveBeenCalledOnce();
 });
 
 it("keeps the onboarding response at 64 KiB including streamed bodies and cancels overflow", async () => {

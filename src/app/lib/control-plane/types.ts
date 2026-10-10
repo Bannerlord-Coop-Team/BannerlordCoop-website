@@ -238,14 +238,8 @@ export type OperationsData = {
     hostingRegionsError: string | null;
 };
 
-/** Hosts eligible for a region: the shared wire placement. */
-export type HostingAdminRegionPlacement = HostingRegionPayload["placement"];
-
-/** One catalog entry as `set-hosting-regions` accepts it: the shared wire definition. */
-export type HostingAdminRegionDefinition = HostingRegionPayload;
-
 /** One stored entry as `hosting-regions` returns it, with whether it has a free admissible slot now. */
-export type HostingAdminRegionEntry = HostingAdminRegionDefinition & { available: boolean };
+export type HostingAdminRegionEntry = HostingRegionPayload & { available: boolean };
 
 /** The control plane's stored region catalog (`hosting-regions`, and the result of `set-hosting-regions`). */
 export type HostingAdminRegionCatalog = {
@@ -258,7 +252,7 @@ export type HostingAdminRegionCatalog = {
 /** The VPS view's data: registered hosts and the stored catalog placements that label them (null when unreadable). */
 export type VpsViewData = {
     inventory: HostingAdminVpsInventory;
-    regionCatalog: HostingAdminRegionDefinition[] | null;
+    regionCatalog: HostingRegionPayload[] | null;
 };
 
 export type FleetSummary = {

@@ -1,4 +1,5 @@
-import { exactKeys, isRecord, REQUEST_ID } from "./server-visibility-contract.ts";
+import { hasExactKeys, isRecord } from "./dto-validation.ts";
+import { REQUEST_ID } from "./server-visibility-contract.ts";
 
 export type ServerDeletionInput = { serverId: string; expectedUpdatedAt: string; confirmationText: string };
 export type ServerDeletionIntent = ServerDeletionInput & { requestId: string };
@@ -6,7 +7,7 @@ export type ServerDeletionResult = { outcome: "enqueued" | "existing"; jobId: st
 
 /** No normalization: deletion requires the exact current server name. */
 export function parseServerDeletionInput(value: unknown): ServerDeletionInput {
-    if (!isRecord(value) || !exactKeys(value, ["serverId", "expectedUpdatedAt", "confirmationText"])
+    if (!isRecord(value) || !hasExactKeys(value, ["serverId", "expectedUpdatedAt", "confirmationText"])
         || typeof value.serverId !== "string" || !REQUEST_ID.test(value.serverId)
         || typeof value.expectedUpdatedAt !== "string"
         || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value.expectedUpdatedAt)
@@ -18,14 +19,14 @@ export function parseServerDeletionInput(value: unknown): ServerDeletionInput {
 }
 
 export function parseServerDeletionIntent(value: unknown): ServerDeletionIntent {
-    if (!isRecord(value) || !exactKeys(value, ["serverId", "expectedUpdatedAt", "confirmationText", "requestId"])
+    if (!isRecord(value) || !hasExactKeys(value, ["serverId", "expectedUpdatedAt", "confirmationText", "requestId"])
         || typeof value.requestId !== "string" || !REQUEST_ID.test(value.requestId)) throw new Error("Invalid deletion request ID");
     const { requestId, ...input } = value;
     return { ...parseServerDeletionInput(input), requestId };
 }
 
 export function parseServerDeletionResult(value: unknown): ServerDeletionResult {
-    if (!isRecord(value) || !exactKeys(value, ["outcome", "jobId", "action"])
+    if (!isRecord(value) || !hasExactKeys(value, ["outcome", "jobId", "action"])
         || !["enqueued", "existing"].includes(String(value.outcome)) || value.action !== "delete"
         || typeof value.jobId !== "string" || !REQUEST_ID.test(value.jobId)) throw new Error("Invalid deletion receipt");
     return value as ServerDeletionResult;

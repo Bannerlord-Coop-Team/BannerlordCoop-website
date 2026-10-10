@@ -9,7 +9,7 @@ import type {
     MyServerSummary,
 } from "@/app/lib/control-plane/types";
 
-import { parseOnboardingIntent, parseOnboardingSummary, parseOnboardingResult, type OnboardingIntent, type OnboardingResult, type OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { parseOnboardingIntent, parseOnboardingResult, type OnboardingIntent, type OnboardingResult } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 
 const MAXIMUM_RESPONSE_BYTES = 8 * 1_048_576;
 const MAXIMUM_PAGES = 10;
@@ -297,14 +297,6 @@ export async function requestMyServerBackupOperation(
         || result.action !== expectedAction
     ) throw invalidResponse();
     return result as MyServerBackupOperationResult;
-}
-
-export async function getServerOnboarding(accessToken: string): Promise<OnboardingSummary> {
-    const result = await requestMyServersApi(accessToken, {
-        method: "GET",
-        configureEndpoint(endpoint) { endpoint.searchParams.set("resource", "onboarding"); },
-    });
-    try { return parseOnboardingSummary(result); } catch { throw invalidResponse(); }
 }
 
 export async function requestServerOnboarding(accessToken: string, intent: OnboardingIntent): Promise<OnboardingResult> {

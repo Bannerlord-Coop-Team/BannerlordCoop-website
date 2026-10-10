@@ -16,24 +16,22 @@ synchronization precedes allocation reads, without delaying either directory.
 The server-rendered onboarding summary uses the existing fixed Oracle user API
 directly, removing the Edge relay for this closed read only. It uses the same
 strict summary parser with a 64 KiB streamed response limit, a 30-second deadline,
-no response cache and no redirect following. Browser reads and all mutations
-retain their existing Edge route; failed summary reads remain unavailable.
+no response cache and no redirect following. It is the only summary read shown to
+owners: the Edge has no browser summary route and reads the summary only for its
+best-effort region-full check. All mutations retain their existing Edge route;
+failed summary reads remain unavailable.
 
 ## Authority and public contract
 
 The backend requires active, unused allocation under `max(administrativeBase, qualifyingPatreonOne) + administrativeBonus`. Membership is disabled until the reviewed configuration/rollout gates in the membership document pass. Roles (including Admin, Standard and Server Owner) and historical role grants do not authorize this feature. The authenticated backend derives the guild and verified linked Discord identity; website-supplied page identity only prevents dispatch after an account switch.
 
-| Website Edge request | Fixed backend operation | Exact backend input |
+| Website request | Fixed backend operation | Exact backend input |
 | --- | --- | --- |
-| `GET my-servers?resource=onboarding` | `server-onboarding` | `{version:3}`, then `{}` if rejected as `invalid_request` |
+| Server-rendered `/servers` summary read (direct), and the Edge's best-effort region-full check after Create | `server-onboarding` | `{version:3}` |
 | `POST my-servers` `{action:'create-server',displayName,region,releaseChannel?}` | `create-server` | `{displayName,region,releaseChannel?}` |
 | `POST my-servers` `{action:'request-region',region}` | `request-region` | `{region}` |
 
 The `my-servers` Edge Function and the server-rendered summary read build these requests with the same exported builders (`onboardingSummaryRequest`, `onboardingMutationRequest` in `server-onboarding-contract.ts`). Owner requests carry region **keys only**; a browser-supplied `placement` or any other extra field is rejected before dispatch.
-
-**Rollout fallback.** A control plane that predates the stored catalog rejects `{version:3}` as `invalid_request`. Every summary read (the server-rendered page, the Edge `resource=onboarding` route and the Edge region-full check) then repeats the read with the version-2 input `{}` through the shared `readOnboardingSummary`, parses the version-2 summary strictly (its six fixed regions in order with their fixed labels) and maps it to the version-3 shape with no `otherRequests`. Any other rejection or failure is not retried. Key-only Create and Request need no fallback: the older control plane accepts the same inputs for those six keys. `readOnboardingSummary` tells each read whether it is the `"current"` or `"legacy"` attempt; the Edge gives the fallback read its own request ID, and each fallback writes one structured warning, `{"event":"onboarding_summary_legacy_fallback","surface":"edge"|"website",…}`, with no token, account or request data.
-
-**Removing the fallback.** Delete it once the control-plane release containing migration 096 (`20261009120000_control_plane_provider_regions.sql`) is live in production; a fallback log line after that means a control plane is still on an older release. The authoritative list of what to delete is the "Version-2 rollout fallback" block in `supabase/functions/_shared/server-onboarding-contract.ts`. It includes rewriting deploy-order step 1 below to "deploy the control plane first".
 
 All use existing Supabase JWT forwarding to authenticated `POST /v1/user/control-plane`, `{version:1,requestId,operation,input}`. Mutations require a caller-generated UUID in `x-request-id`, normalized to lowercase. There is no browser service secret or owner/role/host/build/slot selection. Adequate independent administrative grants bypass membership steps; an administrator role alone is not allocation authority. New membership runtime configuration is documented separately. The shared closed DTO parser is used by **both** Edge and website facade. Unknown enums, extra/private fields, missing fields, inconsistent eligibility, wrong regions/names, invalid timestamps, mismatched receipts/envelopes and inconsistent HTTP success/failure are rejected as unavailable, not displayed as safe data.
 
@@ -145,7 +143,7 @@ No deployment or migration was performed by this website lane. Review backend HE
 1. Obtain separate live-operation authorization and plan the exact-catalog application/schema maintenance boundary.
 2. Apply backend's pinned append-only schema migrations in order using the supported migration workflow: `202609030001_control_plane_regions.sql`, then `202609070001_control_plane_owner_onboarding.sql` (private requests/receipts/admission locks). Review RLS/runtime-only grants. Do not improvise old/new application restarts across incompatible catalog expectations.
 3. Deploy reviewed **backend** by its normal serialized workflow and verify the authenticated user boundary/explicit grant behavior. Preserve provisioning OFF, role-triggered deletion OFF and idle VM stopping OFF; existing approvals/profile/build prerequisites remain required.
-4. **Deploy the `my-servers` Supabase Edge Function and its shared modules before the UI.** Verify all three fixed operations and closed safe response/error forwarding with normal verified JWT/Discord linkage. This step is essential: a previous feature failed because the Edge function was not deployed.
+4. **Deploy the `my-servers` Supabase Edge Function and its shared modules before the UI.** Verify its two fixed operations (Create and Request region) and closed safe response/error forwarding with normal verified JWT/Discord linkage. This step is essential: a previous feature failed because the Edge function was not deployed.
 5. Deploy website UI only after the Edge contract is available. Smoke-test with separately authorized test accounts/capacity through ordinary APIs. Keep safe unavailable UI if any earlier layer is absent.
 
 No direct database edits, service-secret browser configuration or administrator role workaround are part of rollout/testing.
@@ -213,8 +211,8 @@ Deploy the control-plane channel contract first, then the `my-servers` Edge func
 
 Deploy order for the stored region catalog:
 
-1. The `my-servers` Edge Function and the website may deploy before or after the control plane. Against an older control plane, owner onboarding keeps working: summary reads fall back to the version-2 summary (see **Rollout fallback** above), and key-only Create and Request are accepted as before. Owner mutations do not fail closed. Administration is reduced until step 2: the Hosting regions panel reports that the catalog could not be read, and **Create server** is shown unavailable, because its region choices need the stored catalog's `available` flag from `hosting-regions`.
-2. Deploy the control plane with the stored catalog (`hosting-regions` returning `available` per entry, `set-hosting-regions`, the version-3 summary, key-only Create/Request). Its migration 096, `20261009120000_control_plane_provider_regions.sql`, creates the catalog and seeds the six original regions; it is applied through the control plane's manual Supabase release procedure before that release starts.
+1. Deploy the control plane first, with the stored catalog (`hosting-regions` returning `available` per entry, `set-hosting-regions`, the version-3 summary, key-only Create/Request). Its migration 096, `20261009120000_control_plane_provider_regions.sql`, creates the catalog and seeds the six original regions; it is applied through the control plane's manual Supabase release procedure before that release starts.
+2. Then deploy the `my-servers` Edge Function and the website. They request only the version-3 summary, so against an older control plane owner onboarding shows as unavailable, the Hosting regions panel reports that the catalog could not be read, and **Create server** is shown unavailable.
 3. If the website catalog differs from the seed, open **Operations → Hosting regions** and click **Publish website regions**.
 
 The `control-plane-admin` Edge Function forwards any operation name and is not changed by this work, so it needs no redeploy.

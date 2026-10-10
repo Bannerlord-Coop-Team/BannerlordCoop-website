@@ -4,9 +4,10 @@ import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSetting
 import { serverLogDownloadHeaders } from "./server-log-contract.ts";
 import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
-import { onboardingMutationRequest, onboardingRequestMutation, onboardingSummaryRequest, parseOnboardingMutation, parseOnboardingResult, readOnboardingSummary, logLegacySummaryFallback, type OnboardingControlPlaneRequest } from "./server-onboarding-contract.ts";
+import { onboardingMutationRequest, onboardingRequestMutation, onboardingSummaryRequest, parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingMutationRequest } from "./server-onboarding-contract.ts";
 import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, requireRunnerConfigurationPart, type RunnerConfigurationMutation, type RunnerConfigurationPart } from "./server-configuration-contract.ts";
 import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
+import { hasExactKeys, isRecord } from "./dto-validation.ts";
 
 const MAXIMUM_URL_LENGTH = 4_096;
 const MAXIMUM_REQUEST_BYTES = 16 * 1_024;
@@ -47,7 +48,7 @@ type UpstreamRequest =
     | { operation: "save-configuration-file"; input: RunnerConfigurationMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
     // Onboarding sends region keys only; the control plane resolves them against its stored catalog.
-    | OnboardingControlPlaneRequest
+    | OnboardingMutationRequest
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "server-backup-status"; input: { serverId: string } }
@@ -65,6 +66,7 @@ type UpstreamRequest =
         input: { serverId: string; backupId: string; expectedUpdatedAt: string };
     };
 
+/** Builds the owner my-servers Edge handler: validates each browser request and relays it to its fixed control-plane route. */
 export function createMyServersHandler(options: MyServersHandlerOptions) {
     const allowedOrigins = new Set(options.allowedOrigins.map(validateOrigin));
     if (allowedOrigins.size === 0 || allowedOrigins.size !== options.allowedOrigins.length) {
@@ -77,56 +79,29 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
     const fetchImplementation = options.fetchImplementation ?? fetch;
     const upstreamTimeoutMilliseconds = boundedTimeout(options.upstreamTimeoutMilliseconds ?? 30_000);
 
-    // Posts one onboarding summary request; resolves its result or throws the upstream rejection or failure.
-    async function postSummary(summaryRequest: SummaryRequest, token: string, requestId: string): Promise<unknown> {
-        let response: Response;
-        try {
-            response = await fetchImplementation(controlPlaneEndpoint, {
-                method: "POST",
-                redirect: "error",
-                headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "x-request-id": requestId },
-                body: JSON.stringify({ version: 1, requestId, ...summaryRequest }),
-                signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),
-            });
-        } catch { throw new SummaryUnavailableError(); }
-        const envelope: unknown = JSON.parse(await readBoundedText(response, MAXIMUM_OPERATION_RESPONSE_BYTES));
-        if (!isControlPlaneEnvelope(envelope, requestId) || !isRecord(envelope)) throw new Error("Invalid control-plane envelope");
-        if (envelope.ok === true && response.ok) return envelope.result;
-        if (envelope.ok !== true && !response.ok) throw new SummaryRejectedError(response.status, envelope.error as Record<string, unknown>);
-        throw new Error("Inconsistent success status");
-    }
-
-    // Reads the caller's version-3 summary, falling back to version 2 when an older control plane rejects it.
-    function readSummary(token: string, requestId: string) {
-        return readOnboardingSummary((summaryRequest, attempt) => {
-            if (attempt === "current") return postSummary(summaryRequest, token, requestId);
-            // The fallback is a second upstream read, so it carries its own request ID.
-            logLegacySummaryFallback("edge");
-            return postSummary(summaryRequest, token, crypto.randomUUID());
-        }, isSummaryVersionRejection);
-    }
-
-    // Answers the summary read with a version-3 envelope, forwarding an upstream rejection unchanged.
-    async function summaryResponse(token: string, requestId: string, cors: Record<string, string>): Promise<Response> {
-        try {
-            const result = await readSummary(token, requestId);
-            return Response.json({ version: 1, requestId, ok: true, result },
-                { headers: { ...cors, "cache-control": "private, no-store", "x-request-id": requestId } });
-        } catch (error) {
-            if (error instanceof SummaryRejectedError) {
-                return Response.json({ version: 1, requestId, ok: false, error: error.error },
-                    { status: error.status, headers: { ...cors, "cache-control": "private, no-store", "x-request-id": requestId } });
-            }
-            if (error instanceof SummaryUnavailableError) {
-                return errorResponse(502, requestId, "control_plane_unavailable", "The control plane could not be reached.", true, cors);
-            }
-            return errorResponse(502, requestId, "invalid_response", "The control plane returned an invalid response.", true, cors);
-        }
+    // Sends one request to a control-plane route with the caller's bearer and request ID, never following redirects.
+    function sendUpstream(endpoint: URL, token: string, requestId: string, upstream: { method?: "GET" | "POST"; body?: string; accept?: string; signal?: AbortSignal }) {
+        return fetchImplementation(endpoint, {
+            method: upstream.method ?? "POST",
+            redirect: "error",
+            headers: {
+                authorization: `Bearer ${token}`,
+                ...(upstream.accept === undefined ? {} : { accept: upstream.accept }),
+                ...(upstream.body === undefined ? {} : { "content-type": "application/json" }),
+                "x-request-id": requestId,
+            },
+            ...(upstream.body === undefined ? {} : { body: upstream.body }),
+            signal: upstream.signal ?? AbortSignal.timeout(upstreamTimeoutMilliseconds),
+        });
     }
 
     // Reads the caller's onboarding summary to tell whether a region has no remaining capacity.
     async function regionIsFull(region: string, token: string) {
-        const summary = await readSummary(token, crypto.randomUUID());
+        const requestId = crypto.randomUUID();
+        const response = await sendUpstream(controlPlaneEndpoint, token, requestId, { body: operationBody(requestId, onboardingSummaryRequest()) });
+        const envelope = checkedEnvelope(JSON.parse(await readBoundedText(response, MAXIMUM_OPERATION_RESPONSE_BYTES)), requestId, response.ok);
+        if (!envelope.ok) throw new Error("Onboarding summary was rejected");
+        const summary = parseOnboardingSummary(envelope.result);
         // Paused or blocked provisioning also reports regions unavailable, which is not a capacity signal.
         return summary.unavailableReason === null && summary.regions.some((entry) => entry.region === region && !entry.available);
     }
@@ -182,12 +157,11 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             return errorResponse(400, requestId, "invalid_request", "The server request is invalid.", false, cors);
         }
 
-        if (upstreamRequest.operation === "server-onboarding") return summaryResponse(token, requestId, cors);
         const isDirectCommand = upstreamRequest.operation === "server-operation";
         const isConfigurationFile = upstreamRequest.operation === "configuration-file" || upstreamRequest.operation === "save-configuration-file";
         let endpoint = controlPlaneEndpoint;
         let upstreamMethod: "GET" | "POST" = "POST";
-        let upstreamBody: string | undefined = JSON.stringify({ version: 1, requestId, operation: upstreamRequest.operation, input: upstreamRequest.input });
+        let upstreamBody: string | undefined = operationBody(requestId, upstreamRequest);
         if (upstreamRequest.operation === "file-transfer") endpoint = new URL("/v1/user/files", controlPlaneEndpoint);
         if (upstreamRequest.operation === "configuration-file") {
             endpoint = new URL("/api/v1/config", controlPlaneEndpoint);
@@ -211,17 +185,11 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         }
         let upstream: Response;
         try {
-            upstream = await fetchImplementation(endpoint, {
+            // The log download streams under the caller's own signal; every other request uses the upstream timeout.
+            upstream = await sendUpstream(endpoint, token, requestId, {
                 method: upstreamMethod,
-                redirect: "error",
-                headers: {
-                    authorization: `Bearer ${token}`,
-                    ...(upstreamRequest.operation === "my-server-latest-log" ? { accept: "application/octet-stream" } : {}),
-                    ...(upstreamBody === undefined ? {} : { "content-type": "application/json" }),
-                    "x-request-id": requestId,
-                },
-                ...(upstreamBody === undefined ? {} : { body: upstreamBody }),
-                signal: upstreamRequest.operation === "my-server-latest-log" ? request.signal : AbortSignal.timeout(upstreamTimeoutMilliseconds),
+                body: upstreamBody,
+                ...(upstreamRequest.operation === "my-server-latest-log" ? { accept: "application/octet-stream", signal: request.signal } : {}),
             });
         } catch {
             return errorResponse(
@@ -268,15 +236,12 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     : MAXIMUM_OPERATION_RESPONSE_BYTES,
             );
             const parsed: unknown = JSON.parse(responseBody);
-            const envelope = isDirectCommand ? directCommandEnvelope(parsed, requestId, upstream.status)
+            const normalized = isDirectCommand ? directCommandEnvelope(parsed, requestId, upstream.status)
                 : isConfigurationFile ? configurationEnvelope(parsed, requestId, upstream.status, upstreamRequest.operation === "save-configuration-file")
                 : parsed;
-            if (isDirectCommand || isConfigurationFile) responseBody = JSON.stringify(envelope);
-            if (!isControlPlaneEnvelope(envelope, requestId)) {
-                throw new Error("Invalid control-plane envelope");
-            }
-            if (isRecord(envelope) && envelope.ok === true) {
-                if (!upstream.ok) throw new Error("Inconsistent success status");
+            if (isDirectCommand || isConfigurationFile) responseBody = JSON.stringify(normalized);
+            const envelope = checkedEnvelope(normalized, requestId, upstream.ok);
+            if (envelope.ok) {
                 if (upstreamRequest.operation === "my-server-latest-log") {
                     throw new Error("Expected a binary log response");
                 }
@@ -312,7 +277,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                         regionRequested = { requestId, region: result.request.region, createdAt: result.request.createdAt, requester: requesterFromToken(token) };
                     }
                 }
-            } else if (upstream.ok) throw new Error("Inconsistent failure status");
+            }
         } catch {
             return errorResponse(
                 502,
@@ -349,6 +314,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
     };
 }
 
+/** Maps a GET query to its fixed upstream read; unknown resources and unexpected parameters are rejected. */
 function listRequest(request: Request): UpstreamRequest {
     if (request.body !== null) throw new Error("GET requests cannot contain a body");
     const url = new URL(request.url);
@@ -383,11 +349,6 @@ function listRequest(request: Request): UpstreamRequest {
         const transferRequestId = url.searchParams.get("transferRequestId");
         requireUuid(transferRequestId);
         return { operation: resource, input: { serverId: readServerId(url), transferRequestId } };
-    }
-
-    if (resource === "onboarding") {
-        assertQueryParameters(url, ["resource"]);
-        return onboardingSummaryRequest();
     }
 
     if (resource === "backups") {
@@ -748,7 +709,11 @@ function configurationEnvelope(value: unknown, requestId: string, status: number
     return normalized;
 }
 
-function isControlPlaneEnvelope(value: unknown, requestId: string) {
+/** A correlated control-plane envelope: a result on success, a safe error otherwise. */
+type ControlPlaneEnvelope = { version: 1; requestId: string } & ({ ok: true; result: unknown } | { ok: false; error: Record<string, unknown> });
+
+/** Whether a value is a well-formed envelope for this request ID with a safe error shape. */
+function isControlPlaneEnvelope(value: unknown, requestId: string): value is ControlPlaneEnvelope {
     if (!isRecord(value) || value.version !== 1 || value.requestId !== requestId || typeof value.ok !== "boolean") {
         return false;
     }
@@ -767,28 +732,18 @@ function isControlPlaneEnvelope(value: unknown, requestId: string) {
         && typeof value.error.retryable === "boolean";
 }
 
-function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]) {
-    const keys = Object.keys(value).sort();
-    return keys.length === expected.length && keys.every((key, index) => key === expected[index]);
+/** Serializes one versioned operation envelope for the control plane's user endpoint. */
+function operationBody(requestId: string, request: { operation: string; input: unknown }) {
+    return JSON.stringify({ version: 1, requestId, operation: request.operation, input: request.input });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
+/** Validates a correlated control-plane envelope and requires its outcome to agree with the HTTP status. */
+function checkedEnvelope(value: unknown, requestId: string, httpOk: boolean): ControlPlaneEnvelope {
+    if (!isControlPlaneEnvelope(value, requestId)) throw new Error("Invalid control-plane envelope");
+    if (value.ok !== httpOk) throw new Error("Inconsistent envelope status");
+    return value;
 }
 
-type SummaryRequest = Extract<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>;
-
-/** Whether an older control plane refused the version-3 summary input as an invalid request (version-2 fallback: delete). */
-function isSummaryVersionRejection(error: unknown) {
-    return error instanceof SummaryRejectedError && error.error.code === "invalid_request";
-}
-
-/** A control-plane rejection of a summary read: its HTTP status and validated error object. */
-class SummaryRejectedError extends Error {
-    constructor(readonly status: number, readonly error: Record<string, unknown>) { super("Onboarding summary was rejected"); }
-}
-/** The control plane could not be reached for a summary read. */
-class SummaryUnavailableError extends Error {}
 class RequestTooLargeError extends Error {}
 class ContentTypeError extends Error {}
 class MethodNotAllowedError extends Error {}

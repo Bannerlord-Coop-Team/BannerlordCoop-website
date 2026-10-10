@@ -1,6 +1,7 @@
 // Shared closed, public DTOs: usable by both the Edge boundary and website facade.
 // Regions are keys only: the control plane resolves each key against its own stored catalog.
-import { hasExactKeys as keys, isRecord as record, isRegionKey, MAXIMUM_REGIONS } from "./hosting-regions.ts";
+import { hasExactKeys, isRecord } from "./dto-validation.ts";
+import { isRegionKey, MAXIMUM_REGIONS } from "./hosting-regions.ts";
 
 // The onboarding summary version this website requests and accepts.
 const ONBOARDING_SUMMARY_VERSION = 3;
@@ -29,73 +30,20 @@ export type OnboardingResult =
     | { action: "create-server"; serverId: string; displayName: string; releaseChannel?: OnboardingReleaseChannel; region: string; state: "stopped"; createdAt: string; passwordManagement: "website-owner-controls" | "discord-owner-controls" }
     | { action: "request-region"; request: RegionRequest };
 /** The exact control-plane operations onboarding sends; owners never send placements. */
-export type OnboardingControlPlaneRequest =
-    | { operation: "server-onboarding"; input: { version: typeof ONBOARDING_SUMMARY_VERSION } | Record<string, never> /* version-2 fallback: delete */ }
+type OnboardingControlPlaneRequest =
+    | { operation: "server-onboarding"; input: { version: typeof ONBOARDING_SUMMARY_VERSION } }
     | { operation: "create-server"; input: { displayName: string; region: string; releaseChannel?: OnboardingReleaseChannel } }
     | { operation: "request-region"; input: { region: string } };
 
-type OnboardingSummaryRequest = Extract<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>;
-/** Which upstream read `readOnboardingSummary` is making: the version-3 summary or the version-2 rollout fallback. */
-type OnboardingSummaryAttempt = "current" | "legacy";
+/** The control-plane request for the owner's onboarding summary. */
+export type OnboardingSummaryRequest = Extract<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>;
 /** Builds the control-plane request for the owner's version-3 onboarding summary. */
 export function onboardingSummaryRequest(): OnboardingSummaryRequest {
     return { operation: "server-onboarding", input: { version: ONBOARDING_SUMMARY_VERSION } };
 }
-/** Reads the version-3 summary, or the version-2 one when `rejectsVersion` says an older control plane refused version 3. */
-export async function readOnboardingSummary(
-    read: (request: OnboardingSummaryRequest, attempt: OnboardingSummaryAttempt) => Promise<unknown>,
-    rejectsVersion: (error: unknown) => boolean,
-): Promise<OnboardingSummary> {
-    let result: unknown;
-    try { result = await read(onboardingSummaryRequest(), "current"); } catch (error) {
-        if (!rejectsVersion(error)) throw error;
-        // Rollout: keep onboarding working against a control plane that predates `{version:3}`.
-        return parseLegacyOnboardingSummary(await read(legacyOnboardingSummaryRequest(), "legacy"));
-    }
-    return parseOnboardingSummary(result);
-}
 
-// ---- Version-2 rollout fallback ----
-// DELETE once the control-plane release containing migration 096 (the stored hosting-region catalog) is live in
-// production, which is when every control plane accepts `{version:3}`. Delete exactly:
-// - here: the `"legacy"` attempt and its catch branch in `readOnboardingSummary` (read once, then parse), the
-//   `OnboardingSummaryAttempt` type and the `attempt` read parameter, `legacyOnboardingSummaryRequest`,
-//   `parseLegacyOnboardingSummary`, `LEGACY_REGION_LABELS`, `LEGACY_REGIONS`, `logLegacySummaryFallback`, and the
-//   `| Record<string, never>` branch of the `server-onboarding` input in `OnboardingControlPlaneRequest`;
-// - the transport predicates `isSummaryVersionRejection` in `_shared/my-servers.ts` and
-//   `src/app/lib/hosting/my-servers-server.ts`, and their `attempt` handling. `SummaryRejectedError` and
-//   `SummaryUnavailableError` stay: the Edge summary route also uses them to forward rejections and outages;
-// - `legacyOnboardingSummary` in `tests/onboarding-fixtures.ts` and the tests that use it;
-// - in `docs/server-onboarding.md`: the "Rollout fallback" and "Removing the fallback" paragraphs, the `then {}` table
-//   note, and deploy-order step 1, rewritten to "deploy the control plane first".
-// The six regions every version-2 control plane offered, in its fixed order, with the labels it echoed.
-const LEGACY_REGION_LABELS = { "us-west": "US-West", "us-east": "US-East", france: "France", germany: "Germany",
-    "united-kingdom": "United Kingdom", poland: "Poland" } as const;
-const LEGACY_REGIONS = Object.keys(LEGACY_REGION_LABELS) as (keyof typeof LEGACY_REGION_LABELS)[];
-/** Builds the version-2 summary request (`{}`) a control plane without the stored catalog accepts. */
-function legacyOnboardingSummaryRequest(): OnboardingSummaryRequest {
-    return { operation: "server-onboarding", input: {} };
-}
-/** Writes the one structured line that records a version-2 fallback read; it carries no token, account or request data. */
-export function logLegacySummaryFallback(surface: "edge" | "website", log: (line: string) => void = console.warn) {
-    log(JSON.stringify({ event: "onboarding_summary_legacy_fallback", surface, summaryVersion: 2,
-        removeWhen: "control-plane migration 096 is live in production" }));
-}
-/** Parses a version-2 summary (its six fixed regions with labels) into the version-3 shape, with no other requests. */
-export function parseLegacyOnboardingSummary(value: unknown): OnboardingSummary {
-    if (!record(value) || !keys(value, ["version", "sources", "membership", "eligibility", "unavailableReason", "regions"])) throw invalid();
-    if (value.version !== 2 || !Array.isArray(value.regions) || value.regions.length !== LEGACY_REGIONS.length) throw invalid();
-    const regions = value.regions.map((entry: unknown, index: number) => {
-        const region = LEGACY_REGIONS[index];
-        if (!record(entry) || !keys(entry, ["region", "label", "available", "request"])) throw invalid();
-        if (entry.region !== region || entry.label !== LEGACY_REGION_LABELS[region]) throw invalid();
-        return { region, available: entry.available, request: entry.request };
-    });
-    return parseOnboardingSummary({ ...value, version: ONBOARDING_SUMMARY_VERSION, regions, otherRequests: [] });
-}
-// ---- End of version-2 rollout fallback ----
-
-type OnboardingMutationRequest = Exclude<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>;
+/** The key-only control-plane requests for owner mutations. */
+export type OnboardingMutationRequest = Exclude<OnboardingControlPlaneRequest, { operation: "server-onboarding" }>;
 /** Builds the key-only control-plane request for one parsed owner mutation. */
 export function onboardingMutationRequest(mutation: OnboardingMutation): OnboardingMutationRequest {
     if (mutation.action === "request-region") return { operation: mutation.action, input: { region: mutation.region } };
@@ -119,13 +67,13 @@ export function normalizeOnboardingName(value: unknown): string | null {
 }
 /** Parses a browser mutation: a well-formed region key and, for Create, a policy-conforming name; nothing else. */
 export function parseOnboardingMutation(value: unknown): OnboardingMutation {
-    if (!record(value) || !isRegionKey(value.region)) throw invalid();
-    if (value.action === "request-region" && keys(value, ["action", "region"])) {
+    if (!isRecord(value) || !isRegionKey(value.region)) throw invalid();
+    if (value.action === "request-region" && hasExactKeys(value, ["action", "region"])) {
         return { action: value.action, region: value.region };
     }
     if (value.action !== "create-server") throw invalid();
     const hasChannel = Object.hasOwn(value, "releaseChannel");
-    if (!keys(value, ["action", "displayName", "region", ...(hasChannel ? ["releaseChannel"] : [])])) throw invalid();
+    if (!hasExactKeys(value, ["action", "displayName", "region", ...(hasChannel ? ["releaseChannel"] : [])])) throw invalid();
     if (hasChannel && value.releaseChannel !== "stable" && value.releaseChannel !== "nightly") throw invalid();
     const displayName = normalizeOnboardingName(value.displayName);
     if (displayName === null) throw invalid();
@@ -134,13 +82,13 @@ export function parseOnboardingMutation(value: unknown): OnboardingMutation {
 }
 /** Parses a retained or submitted intent: a mutation plus its lowercased idempotency UUID. */
 export function parseOnboardingIntent(value: unknown): OnboardingIntent {
-    if (!record(value) || !isOnboardingUuid(value.requestId)) throw invalid();
+    if (!isRecord(value) || !isOnboardingUuid(value.requestId)) throw invalid();
     const { requestId, ...mutation } = value;
     return { ...parseOnboardingMutation(mutation), requestId: requestId.toLowerCase() };
 }
 /** Parses the version-3 summary: the control plane's stored catalog in its order, plus requests outside it. */
 export function parseOnboardingSummary(value: unknown): OnboardingSummary {
-    if (!record(value) || !keys(value, ["version", "sources", "membership", "eligibility", "unavailableReason", "regions", "otherRequests"])) throw invalid();
+    if (!isRecord(value) || !hasExactKeys(value, ["version", "sources", "membership", "eligibility", "unavailableReason", "regions", "otherRequests"])) throw invalid();
     if (value.version !== ONBOARDING_SUMMARY_VERSION) throw invalid();
     if (value.unavailableReason !== null && !ONBOARDING_UNAVAILABLE_REASONS.includes(value.unavailableReason as never)) throw invalid();
     const unavailableReason = value.unavailableReason as OnboardingSummary["unavailableReason"];
@@ -151,9 +99,9 @@ export function parseOnboardingSummary(value: unknown): OnboardingSummary {
 }
 /** Parses a mutation receipt and requires it to answer exactly the expected mutation. */
 export function parseOnboardingResult(value: unknown, expected: OnboardingMutation): OnboardingResult {
-    if (!record(value) || value.action !== expected.action) throw invalid();
+    if (!isRecord(value) || value.action !== expected.action) throw invalid();
     if (expected.action === "create-server") return parseCreatedServer(value, expected);
-    if (!keys(value, ["action", "request"])) throw invalid();
+    if (!hasExactKeys(value, ["action", "request"])) throw invalid();
     const request = parseRegionRequest(value.request);
     // Dedupe may return another UUID for the same owner's outstanding region request.
     if (request.region !== expected.region) throw invalid();
@@ -162,7 +110,7 @@ export function parseOnboardingResult(value: unknown, expected: OnboardingMutati
 /** Parses a Create receipt that echoes the expected name, region and channel. */
 function parseCreatedServer(value: Record<string, unknown>, expected: Extract<OnboardingMutation, { action: "create-server" }>): OnboardingResult {
     const hasChannel = Object.hasOwn(value, "releaseChannel");
-    if (!keys(value, ["action", "serverId", "displayName", "region", "state", "createdAt", "passwordManagement", ...(hasChannel ? ["releaseChannel"] : [])])) throw invalid();
+    if (!hasExactKeys(value, ["action", "serverId", "displayName", "region", "state", "createdAt", "passwordManagement", ...(hasChannel ? ["releaseChannel"] : [])])) throw invalid();
     if (hasChannel && value.releaseChannel !== "stable" && value.releaseChannel !== "nightly") throw invalid();
     if ((value.releaseChannel ?? "stable") !== (expected.releaseChannel ?? "stable")) throw invalid();
     if (!isOnboardingUuid(value.serverId) || value.displayName !== expected.displayName || normalizeOnboardingName(value.displayName) !== value.displayName) throw invalid();
@@ -174,14 +122,14 @@ function parseCreatedServer(value: Record<string, unknown>, expected: Extract<On
 }
 /** Parses allocation sources without extra fields. */
 function parseSources(sources: unknown): OnboardingSummary["sources"] {
-    if (!record(sources) || !keys(sources, ["administrativeBase", "administrativeBonus", "baseSource", "membershipAllowance"])) throw invalid();
+    if (!isRecord(sources) || !hasExactKeys(sources, ["administrativeBase", "administrativeBonus", "baseSource", "membershipAllowance"])) throw invalid();
     if (!integer(sources.administrativeBase) || !integer(sources.administrativeBonus)) throw invalid();
     if (!["legacy", "administrative", "none"].includes(sources.baseSource as string) || ![0, 1].includes(sources.membershipAllowance as number)) throw invalid();
     return sources as OnboardingSummary["sources"];
 }
 /** Parses the membership state without extra fields. */
 function parseMembership(membership: unknown): OnboardingSummary["membership"] {
-    if (!record(membership) || !keys(membership, ["enabled", "verification", "verifiedAt", "validUntil", "refreshMode"])) throw invalid();
+    if (!isRecord(membership) || !hasExactKeys(membership, ["enabled", "verification", "verifiedAt", "validUntil", "refreshMode"])) throw invalid();
     if (typeof membership.enabled !== "boolean" || membership.refreshMode !== "oauth_reauthorization") throw invalid();
     if (!["qualifying", "nonqualifying", "unknown", "review_required", "unverified"].includes(membership.verification as string)) throw invalid();
     if ((membership.verifiedAt !== null && !timestamp(membership.verifiedAt)) || (membership.validUntil !== null && !timestamp(membership.validUntil))) throw invalid();
@@ -189,7 +137,7 @@ function parseMembership(membership: unknown): OnboardingSummary["membership"] {
 }
 /** Parses eligibility and requires its derived fields to be internally consistent. */
 function parseEligibility(e: unknown): OnboardingSummary["eligibility"] {
-    if (!record(e) || !keys(e, ["eligible", "reason", "granted", "used", "remaining"])) throw invalid();
+    if (!isRecord(e) || !hasExactKeys(e, ["eligible", "reason", "granted", "used", "remaining"])) throw invalid();
     if (typeof e.eligible !== "boolean" || !integer(e.granted) || !integer(e.used) || !integer(e.remaining)) throw invalid();
     const remaining = Math.max(0, e.granted - e.used);
     const reason = e.granted === 0 ? "no_grant" : remaining === 0 ? "quota_exhausted" : "eligible";
@@ -201,7 +149,7 @@ function parseRegionStatuses(value: unknown, blocked: boolean): OnboardingRegion
     // An empty stored catalog fails closed: the summary is rejected, so owners see onboarding as unavailable.
     if (!Array.isArray(value) || value.length < 1 || value.length > MAXIMUM_REGIONS) throw invalid();
     const regions = value.map((entry: unknown) => {
-        if (!record(entry) || !keys(entry, ["region", "available", "request"]) || !isRegionKey(entry.region)) throw invalid();
+        if (!isRecord(entry) || !hasExactKeys(entry, ["region", "available", "request"]) || !isRegionKey(entry.region)) throw invalid();
         if (typeof entry.available !== "boolean" || (blocked && entry.available)) throw invalid();
         const request = entry.request === null ? null : parseRegionRequest(entry.request);
         if (request !== null && request.region !== entry.region) throw invalid();
@@ -221,7 +169,7 @@ function parseOtherRequests(value: unknown, regions: readonly OnboardingRegionSt
 }
 /** Parses one outstanding region request. */
 function parseRegionRequest(value: unknown): RegionRequest {
-    if (!record(value) || !keys(value, ["requestId", "region", "status", "createdAt"])) throw invalid();
+    if (!isRecord(value) || !hasExactKeys(value, ["requestId", "region", "status", "createdAt"])) throw invalid();
     if (!isOnboardingUuid(value.requestId) || !isRegionKey(value.region) || value.status !== "outstanding" || !timestamp(value.createdAt)) throw invalid();
     return { requestId: value.requestId, region: value.region, status: value.status, createdAt: value.createdAt };
 }
@@ -232,7 +180,5 @@ function timestamp(value: unknown): value is string {
     return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)
         && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
-/** The single error type every rejected onboarding DTO raises. */
-export class OnboardingDtoError extends Error { constructor() { super("Invalid server onboarding DTO"); } }
-/** The single error every rejected DTO raises. */
-function invalid() { return new OnboardingDtoError(); }
+/** The single error every rejected onboarding DTO raises. */
+function invalid() { return new Error("Invalid server onboarding DTO"); }

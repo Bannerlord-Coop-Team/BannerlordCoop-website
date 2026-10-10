@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createMyServersHandler } from "../_shared/my-servers.ts";
-import { parseLegacyOnboardingSummary, parseOnboardingIntent, parseOnboardingResult, parseOnboardingSummary, normalizeOnboardingName, readOnboardingSummary } from "../_shared/server-onboarding-contract.ts";
+import { parseOnboardingIntent, parseOnboardingResult, parseOnboardingSummary, normalizeOnboardingName } from "../_shared/server-onboarding-contract.ts";
 import type { RegionFullEvent, RegionRequestedEvent } from "../_shared/region-alerts.ts";
-import { legacyOnboardingSummary, onboardingSummary, onboardingRegion, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID, ONBOARDING_TEST_TIME } from "../../../tests/onboarding-fixtures.ts";
+import { onboardingSummary, onboardingRegion, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID, ONBOARDING_TEST_TIME } from "../../../tests/onboarding-fixtures.ts";
 
 const token = "synthetic-jwt-for-contract-tests-only";
-function request(body?: unknown, id: string | null = ONBOARDING_TEST_ID, query = body === undefined ? "?resource=onboarding" : "") {
+function request(body?: unknown, id: string | null = ONBOARDING_TEST_ID, query = "") {
     return new Request(`https://edge.example.test/${query}`, { method: body === undefined ? "GET" : "POST",
         headers: { authorization: `Bearer ${token}`, ...(id === null ? {} : { "x-request-id": id }), "content-type": "application/json" },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -21,23 +21,21 @@ function handler(result: unknown, calls: unknown[] = [], status = 200, error?: u
                 ...(error === undefined ? { result } : { error }) }, { status });
         } });
 }
-test("onboarding Edge routes fixed summary/create/request operations and lowercases durable UUIDs", async () => {
+test("onboarding Edge routes fixed create/request operations and lowercases durable UUIDs", async () => {
     const calls: unknown[] = [];
-    assert.equal((await handler(onboardingSummary(), calls)(request())).status, 200);
     assert.equal((await handler(onboardingCreated(), calls)(request({ action: "create-server", displayName: "  My   Campaign  ", region: "us-west" }, ONBOARDING_TEST_ID.toUpperCase()))).status, 200);
     assert.equal((await handler(onboardingRequested(), calls)(request({ action: "request-region", region: "france" }))).status, 200);
     assert.deepEqual(calls, [
         // Region keys only: the control plane resolves them against its stored catalog.
-        { version: 1, requestId: ONBOARDING_TEST_ID, operation: "server-onboarding", input: { version: 3 } },
         { version: 1, requestId: ONBOARDING_TEST_ID, operation: "create-server", input: { displayName: "My Campaign", region: "us-west" } },
         { version: 1, requestId: ONBOARDING_TEST_ID, operation: "request-region", input: { region: "france" } },
     ]);
 });
 test("onboarding Edge forwards a well-formed key the website catalog does not know; the control plane decides", async () => {
     const calls: Array<{ input: unknown }> = [];
-    const receipt = { action: "request-region", request: { ...onboardingRequested().request, region: "japan" } };
-    assert.equal((await handler(receipt, calls)(request({ action: "request-region", region: "japan" }))).status, 200);
-    assert.deepEqual(calls.map((call) => call.input), [{ region: "japan" }]);
+    const receipt = { action: "request-region", request: { ...onboardingRequested().request, region: "atlantis" } };
+    assert.equal((await handler(receipt, calls)(request({ action: "request-region", region: "atlantis" }))).status, 200);
+    assert.deepEqual(calls.map((call) => call.input), [{ region: "atlantis" }]);
 });
 test("onboarding extension preserves existing backup request ID spelling", async () => {
     const calls: unknown[] = [];
@@ -58,8 +56,8 @@ test("onboarding Edge rejects authority/slot/credential fields, invalid UUIDs, r
     assert.equal((await h(request({ action: "request-region", region: "france", placement: { countryCodes: ["FR"] } }))).status, 400);
     for (const displayName of ["ab", "x".repeat(49), "@forbidden", "trailing-", "a\u200bb"]) assert.equal((await h(request({ ...create, displayName }))).status, 400);
     assert.equal((await h(request({ action: "request-region", region: "france", displayName: "My Campaign" }))).status, 400);
-    assert.equal((await h(request(undefined, ONBOARDING_TEST_ID, "?resource=onboarding&ownerId=1"))).status, 400);
-    assert.equal((await h(request(undefined, ONBOARDING_TEST_ID, "?resource=onboarding&resource=onboarding"))).status, 400);
+    // The summary is read server-side only; the Edge has no browser summary route.
+    assert.equal((await h(request(undefined, ONBOARDING_TEST_ID, "?resource=onboarding"))).status, 400);
     assert.equal(calls.length, 0);
 });
 test("onboarding safe DTO parsers reject incomplete, extra, inconsistent and invalid enums at every level", () => {
@@ -108,78 +106,7 @@ test("onboarding safe DTO parsers reject incomplete, extra, inconsistent and inv
     assert.equal(normalizeOnboardingName("  Ｍy  Campaign  "), "My Campaign");
     assert.equal(parseOnboardingIntent({ ...expected, requestId: ONBOARDING_TEST_ID.toUpperCase() }).requestId, ONBOARDING_TEST_ID);
 });
-// The legacy summary in version-3 form: the six fixed regions, in order, without labels or other requests.
-function legacyAsVersion3() {
-    const { regions, ...rest } = legacyOnboardingSummary();
-    return { ...rest, version: 3, regions: regions.map(({ region, available, request }) => ({ region, available, request })), otherRequests: [] };
-}
-// Serves an older control plane: `{version:3}` is an invalid request, `{}` returns the version-2 summary.
-function legacyControlPlane(calls: Array<{ requestId: string; input: unknown }>, legacy: unknown = legacyOnboardingSummary()) {
-    return createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
-        fetchImplementation: async (_url, init) => {
-            const body = JSON.parse(init?.body as string); calls.push(body);
-            if (body.operation !== "server-onboarding") return Response.json({ version: 1, requestId: body.requestId, ok: true, result: onboardingCreated() });
-            if (Object.keys(body.input).length === 0) return Response.json({ version: 1, requestId: body.requestId, ok: true, result: legacy });
-            return Response.json({ version: 1, requestId: body.requestId, ok: false,
-                error: { code: "invalid_request", message: "The request is invalid.", retryable: false } }, { status: 400 });
-        } });
-}
-test("version-2 summaries map their six fixed regions into the version-3 shape", async () => {
-    assert.deepEqual(parseLegacyOnboardingSummary(legacyOnboardingSummary()), legacyAsVersion3());
-    const legacy = legacyOnboardingSummary();
-    const requested = { ...legacy, regions: legacy.regions.map((entry) => entry.region === "france" ? { ...entry, request: onboardingRequested().request } : entry) };
-    assert.deepEqual(onboardingRegion(parseLegacyOnboardingSummary(requested), "france").request, onboardingRequested().request);
-    for (const variant of [{ ...legacy, version: 3 }, { ...legacy, regions: [...legacy.regions].reverse() }, { ...legacy, regions: legacy.regions.slice(1) },
-        { ...legacy, regions: legacy.regions.map((entry) => ({ ...entry, label: "Elsewhere" })) }, { ...legacy, otherRequests: [] },
-        { ...legacy, regions: legacy.regions.map((entry) => ({ ...entry, available: "yes" })) }]) {
-        assert.throws(() => parseLegacyOnboardingSummary(variant), JSON.stringify(variant).slice(0, 80));
-    }
-    // Only a version rejection falls back; any other failure propagates without a second read.
-    const reads: unknown[] = [];
-    await assert.rejects(readOnboardingSummary(async (request, attempt) => { reads.push([attempt, request.input]); throw new Error("offline"); }, () => false), /offline/u);
-    assert.deepEqual(reads, [["current", { version: 3 }]]);
-    // Each read names its attempt, so callers never inspect the request shape.
-    const attempts: unknown[] = [];
-    const summary = await readOnboardingSummary(async (request, attempt) => {
-        attempts.push([attempt, request.input]);
-        if (attempt === "current") throw new Error("version rejected");
-        return legacyOnboardingSummary();
-    }, () => true);
-    assert.deepEqual(summary, legacyAsVersion3());
-    assert.deepEqual(attempts, [["current", { version: 3 }], ["legacy", {}]]);
-});
-test("onboarding Edge falls back to the version-2 summary when an older control plane rejects version 3", async (t) => {
-    const warn = t.mock.method(console, "warn", () => undefined);
-    const calls: Array<{ requestId: string; input: unknown }> = [];
-    const response = await legacyControlPlane(calls)(request());
-    // One structured line per fallback, without the token or any request or account data.
-    assert.equal(warn.mock.callCount(), 1);
-    assert.deepEqual(JSON.parse(warn.mock.calls[0].arguments[0] as string), { event: "onboarding_summary_legacy_fallback", surface: "edge",
-        summaryVersion: 2, removeWhen: "control-plane migration 096 is live in production" });
-    assert.ok(!String(warn.mock.calls[0].arguments[0]).includes(token));
-    assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { version: 1, requestId: ONBOARDING_TEST_ID, ok: true, result: legacyAsVersion3() });
-    assert.deepEqual(calls.map((call) => call.input), [{ version: 3 }, {}]);
-    assert.equal(calls[0].requestId, ONBOARDING_TEST_ID);
-    assert.notEqual(calls[1].requestId, ONBOARDING_TEST_ID);
-    // A malformed version-2 summary is still rejected, never shown.
-    const invalid = await legacyControlPlane([], { ...legacyOnboardingSummary(), regions: [] })(request());
-    assert.equal(invalid.status, 502);
-    // Key-only Create keeps working against the older control plane.
-    const created = await legacyControlPlane(calls)(request({ action: "create-server", displayName: "My Campaign", region: "us-west" }));
-    assert.equal(created.status, 200);
-});
-test("onboarding Edge does not fall back on other summary rejections", async () => {
-    const calls: unknown[] = [];
-    const response = await handler(null, calls, 403, { code: "forbidden", message: "Current access is required.", retryable: false })(request());
-    assert.equal(response.status, 403);
-    assert.deepEqual(await response.json(), { version: 1, requestId: ONBOARDING_TEST_ID, ok: false, error: { code: "forbidden", message: "Current access is required.", retryable: false } });
-    assert.equal(calls.length, 1);
-});
 test("onboarding Edge never forwards invalid success DTOs or inconsistent envelopes/status", async () => {
-    for (const result of [{ ...onboardingSummary(), hostId: "private" }, { ...onboardingSummary(), regions: [] }, { ...onboardingSummary(), version: 2 }]) {
-        const response = await handler(result)(request()); assert.equal(response.status, 502); assert.equal((await response.json()).error.code, "invalid_response");
-    }
     const create = { action: "create-server", displayName: "My Campaign", region: "us-west" };
     assert.equal((await handler({ ...onboardingCreated(), state: "running" })(request(create))).status, 502);
     assert.equal((await handler(onboardingCreated(), [], 409)(request(create))).status, 502);
@@ -191,7 +118,7 @@ test("onboarding Edge preserves typed 400/404/409/429 errors and transport uncer
         assert.equal(response.status, status); assert.equal((await response.json()).error.code, code);
     }
     const h = createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test", fetchImplementation: async () => { throw new Error("lost"); } });
-    const response = await h(request()); assert.equal(response.status, 502); assert.equal((await response.json()).error.retryable, true);
+    const response = await h(request({ action: "request-region", region: "france" })); assert.equal(response.status, 502); assert.equal((await response.json()).error.retryable, true);
 });
 
 const JWT = `header.${Buffer.from(JSON.stringify({ sub: ONBOARDING_TEST_ID, email: "Owner@Example.test" }), "utf8").toString("base64url")}.signature`;
@@ -234,12 +161,17 @@ test("onboarding Edge returns the confirmed receipt unchanged when alerting fail
 });
 
 const CREATE_SERVER = { action: "create-server", displayName: "My Campaign", region: "us-west" };
+// A summary the control plane refuses, as the region-full check sees it.
+const REJECTED_SUMMARY = Symbol("rejected summary");
 // Serves the create receipt, then the follow-up summary (null simulates a lost summary response).
-function creating(summary: unknown, events: RegionFullEvent[], operations: string[] = []) {
+function creating(summary: unknown, events: RegionFullEvent[], calls: Array<{ operation: string; input: unknown }> = []) {
     return createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
         fetchImplementation: async (_url, init) => {
-            const body = JSON.parse(init?.body as string); operations.push(body.operation);
+            const body = JSON.parse(init?.body as string); calls.push({ operation: body.operation, input: body.input });
             if (body.operation === "server-onboarding" && summary === null) throw new Error("summary lost");
+            if (body.operation === "server-onboarding" && summary === REJECTED_SUMMARY) {
+                return Response.json({ version: 1, requestId: body.requestId, ok: false, error: { code: "forbidden", message: "No access", retryable: false } }, { status: 403 });
+            }
             return Response.json({ version: 1, requestId: body.requestId, ok: true, result: body.operation === "create-server" ? onboardingCreated() : summary });
         },
         onRegionFull: async (event) => { events.push(event); } });
@@ -249,15 +181,17 @@ function summaryWith(available: boolean, unavailableReason: "provisioning_paused
     return { ...onboardingSummary(), unavailableReason, regions: onboardingSummary().regions.map((entry) => ({ ...entry, available })) };
 }
 test("onboarding Edge alerts when a created server leaves its region full", async () => {
-    const events: RegionFullEvent[] = []; const operations: string[] = [];
-    const response = await creating(summaryWith(false), events, operations)(requestWithToken(CREATE_SERVER, JWT));
+    const events: RegionFullEvent[] = []; const calls: Array<{ operation: string; input: unknown }> = [];
+    const response = await creating(summaryWith(false), events, calls)(requestWithToken(CREATE_SERVER, JWT));
     assert.equal(response.status, 200);
     assert.deepEqual((await response.json()).result, onboardingCreated());
-    assert.deepEqual(operations, ["create-server", "server-onboarding"]);
+    assert.deepEqual(calls.map((call) => call.operation), ["create-server", "server-onboarding"]);
+    assert.deepEqual(calls[1].input, { version: 3 });
     assert.deepEqual(events, [{ region: "us-west", serverId: ONBOARDING_TEST_ID, createdAt: ONBOARDING_TEST_TIME, requester: { accountId: ONBOARDING_TEST_ID, email: "owner@example.test" } }]);
 });
 test("onboarding Edge sends no full-region alert while capacity remains, provisioning is unavailable or the summary fails", async () => {
-    for (const summary of [summaryWith(true), summaryWith(false, "provisioning_paused"), null]) {
+    // A lost, rejected or invalid summary is a failed best-effort check, never a full region.
+    for (const summary of [summaryWith(true), summaryWith(false, "provisioning_paused"), null, REJECTED_SUMMARY, { ...summaryWith(false), version: 2 }]) {
         const events: RegionFullEvent[] = [];
         const response = await creating(summary, events)(request(CREATE_SERVER));
         assert.equal(response.status, 200);

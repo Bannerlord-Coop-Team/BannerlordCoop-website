@@ -20,8 +20,10 @@ export type HostingRegionDefinition = {
     readonly placement: HostingPlacement;
 };
 
-/** A JSON-safe catalog entry in the control plane's wire form; the one wire type for definitions and placements. */
-export type HostingRegionPayload = { region: string; placement: { countryCodes: string[]; locationIds?: string[] } };
+/** A JSON-safe placement in the control plane's wire form: countries, optionally narrowed to provider zones. */
+export type HostingRegionPlacementPayload = { countryCodes: string[]; locationIds?: string[] };
+/** A JSON-safe catalog entry in the control plane's wire form; the one wire type for definitions. */
+export type HostingRegionPayload = { region: string; placement: HostingRegionPlacementPayload };
 
 // The control plane's catalog bounds, shared by every parser and test of a catalog or summary.
 /** Most regions a stored catalog (and so an owner summary) may hold. */
@@ -55,8 +57,8 @@ export const HOSTING_REGIONS = [
 
 type HostingRegionKey = typeof HOSTING_REGIONS[number]["key"];
 
-/** Whether a value is a key in this website catalog. */
-export function isHostingRegionKey(value: unknown): value is HostingRegionKey {
+/** Whether a value is a key in this website catalog (catalog membership, not the key-shape check `isRegionKey`). */
+export function isWebsiteRegionKey(value: unknown): value is HostingRegionKey {
     return HOSTING_REGIONS.some((region) => region.key === value);
 }
 
@@ -77,18 +79,8 @@ export function hostingRegionCatalogPayload(): HostingRegionPayload[] {
     return HOSTING_REGIONS.map((region) => ({ region: region.key, placement: placementPayload(region.placement) }));
 }
 
-/** Whether a value is a plain object. */
-export function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** Whether an object has exactly the expected own keys. */
-export function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
-    return Object.keys(value).length === expected.length && expected.every((key) => Object.hasOwn(value, key));
-}
-
 /** Copies a readonly placement into mutable JSON arrays. */
-function placementPayload(placement: HostingPlacement): HostingRegionPayload["placement"] {
+function placementPayload(placement: HostingPlacement): HostingRegionPlacementPayload {
     if (placement.locationIds === undefined) return { countryCodes: [...placement.countryCodes] };
     return { countryCodes: [...placement.countryCodes], locationIds: [...placement.locationIds] };
 }

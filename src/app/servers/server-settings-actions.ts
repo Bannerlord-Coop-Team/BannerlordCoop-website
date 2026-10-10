@@ -5,7 +5,8 @@ import { getTranslations } from "@/app/lib/localization/server";
 import { MyServersApiError, requestMyServerSettings } from "@/app/lib/hosting/my-servers";
 import { listAllMyServers } from "@/app/lib/hosting/my-servers-server";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
-import { exactKeys, isRecord, REQUEST_ID } from "../../../supabase/functions/_shared/server-visibility-contract";
+import { hasExactKeys, isRecord } from "../../../supabase/functions/_shared/dto-validation";
+import { REQUEST_ID } from "../../../supabase/functions/_shared/server-visibility-contract";
 import { HOSTING_MAINTENANCE_SLOTS, parseOwnerSettingsMutation, type MaintenanceSlot, type OwnerSettingsMutation } from "../../../supabase/functions/_shared/server-settings-contract";
 import { managedServerNameMessage, managedServerNameProblem } from "@/app/servers/managed-server-name-validation";
 import { revalidatePath } from "next/cache";
@@ -21,8 +22,8 @@ export async function saveServerSettings(value: unknown): Promise<{ ok: boolean;
     let requestId: string;
     let previous: ServerSettingsPrevious | null;
     try {
-        if (!isRecord(value) || !(exactKeys(value, ["serverId", "expectedUpdatedAt", "patch", "requestId"])
-            || exactKeys(value, ["serverId", "expectedUpdatedAt", "patch", "requestId", "previous"]))
+        if (!isRecord(value) || !(hasExactKeys(value, ["serverId", "expectedUpdatedAt", "patch", "requestId"])
+            || hasExactKeys(value, ["serverId", "expectedUpdatedAt", "patch", "requestId", "previous"]))
             || typeof value.requestId !== "string" || !REQUEST_ID.test(value.requestId)) throw new Error("Invalid request");
         requestId = value.requestId;
         input = parseOwnerSettingsMutation({ serverId: value.serverId, expectedUpdatedAt: value.expectedUpdatedAt, patch: value.patch });

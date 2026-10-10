@@ -8,11 +8,10 @@ import {
     MAXIMUM_PLACEMENT_COUNTRIES,
     MAXIMUM_PLACEMENT_LOCATIONS,
     MAXIMUM_REGIONS,
-    hasExactKeys,
     hostingRegionCatalogPayload,
     hostingRegionLabel,
-    isRecord,
     isRegionKey,
+    isWebsiteRegionKey,
 } from "./hosting-regions.ts";
 
 test("every website region is a valid, unique control-plane definition on a known continent", () => {
@@ -53,15 +52,12 @@ test("labels cover website keys and humanize any other key", () => {
     assert.equal(hostingRegionLabel("atlantis"), "Atlantis");
 });
 
-test("records must be plain objects with exactly the expected keys", () => {
-    assert.equal(hasExactKeys({ a: 1, b: 2 }, ["a", "b"]), true);
-    assert.equal(hasExactKeys({ a: 1 }, ["a", "b"]), false);
-    assert.equal(hasExactKeys({ a: 1, c: 2 }, ["a", "b"]), false);
-    for (const value of [null, [], "x", 1]) assert.equal(isRecord(value), false, String(value));
-    assert.equal(isRecord({}), true);
-});
-
 test("region keys are bounded lowercase slugs", () => {
     for (const key of ["us-west", "japan", "a1", "x".repeat(48)]) assert.equal(isRegionKey(key), true, key);
     for (const key of ["US-West", "a", "1a", "-a", "a_b", "x".repeat(49), "", null, 1]) assert.equal(isRegionKey(key), false, String(key));
+});
+
+test("website region keys are only the keys this catalog defines, not every well-formed key", () => {
+    for (const region of HOSTING_REGIONS) assert.equal(isWebsiteRegionKey(region.key), true, region.key);
+    for (const key of ["atlantis", "united-states", "US-West", null]) assert.equal(isWebsiteRegionKey(key), false, String(key));
 });
