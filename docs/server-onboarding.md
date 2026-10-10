@@ -37,15 +37,15 @@ All use existing Supabase JWT forwarding to authenticated `POST /v1/user/control
 
 ### Hosting regions: website catalog and stored catalog
 
-The website catalog, `supabase/functions/_shared/hosting-regions.ts`, defines each region's key, English label, continent tab (`HOSTING_CONTINENTS`), and **placement**: the ISO country codes it covers and, optionally, the exact provider zones. US-West and US-East name their exact Oregon and Virginia zones, because a US country code alone never implies a coast. The current order is **US-West, US-East, France, Germany, United Kingdom, Poland**.
+The website catalog, `supabase/functions/_shared/hosting-regions.ts`, defines each region's key, English label, continent tab (`HOSTING_CONTINENTS`), and **placement**: the ISO country codes it covers and, optionally, the exact provider zones. US-West and US-East name their exact Oregon and Virginia zones, because a US country code alone never implies a coast. Display order is the order of `HOSTING_REGIONS`.
 
-The control plane matches hosts only against its own **stored catalog** of keys and placements; owners can never send or influence a placement, because the owner endpoint is public. An empty stored catalog fails closed for owners: the summary parser requires at least one region, so the website shows onboarding as unavailable rather than an empty region list. The control plane seeds that catalog with the six regions above and placements identical to the website catalog. An administrator replaces it with **Publish website regions** on the Operations page (`set-hosting-regions`, guarded by the stored revision; see [control-plane administration](control-plane-admin.md#hosting-regions)).
+The control plane matches hosts only against its own **stored catalog** of keys and placements; owners can never send or influence a placement, because the owner endpoint is public. An empty stored catalog fails closed for owners: the summary parser requires at least one region, so the website shows onboarding as unavailable rather than an empty region list. The control plane seeds that catalog with the six original regions (US-West through Poland) and placements identical to the website catalog. An administrator replaces it with **Publish website regions** on the Operations page (`set-hosting-regions`, guarded by the stored revision; see [control-plane administration](control-plane-admin.md#hosting-regions)).
 
 The version-3 summary lists the stored catalog in its stored order (1–32 unique keys matching `^[a-z][a-z0-9-]{1,47}$`), each with availability and the owner's outstanding request, plus `otherRequests` for outstanding requests whose key the stored catalog no longer contains. The shared parser accepts any stored catalog within those bounds; it does not require it to equal the website catalog. It rejects extra fields, a request filed under another entry's key, an `otherRequests` key that is in the catalog, and a request ID repeated anywhere in the summary.
 
 The onboarding dialog offers only stored-catalog regions that the website catalog also knows, because the website supplies each region's continent and translation; other stored keys are ignored. Region names everywhere (onboarding, receipts, recovery, the owner's server page) come from one helper, `localizedRegionLabel`: `region.<key>` in the `servers` dictionary for website catalog keys, otherwise the key humanized (`united-states` → "United States").
 
-To offer a new region after onboarding a VPS in a new country:
+To add a region (a VPS there is optional; without one the region is offered as full, and owner requests for it register demand):
 
 1. Add one catalog entry and its `region.<key>` translation in every `servers.json` dictionary. The entry's English `label` must equal its `region.<key>` translation in the English dictionary. `src/app/lib/hosting/region-labels.test.ts` enforces that every catalog key and continent has an English translation and that each label matches it, and dictionary parity carries the keys to the other locales. The catalog's bounds (`MAXIMUM_REGIONS`, the country and zone patterns and placement limits) are exported once from `hosting-regions.ts` and shared by every catalog and summary parser.
 2. Deploy the website.
@@ -186,7 +186,7 @@ Known baseline full lint failures are only `src/app/cheats/CheatsDirectory.tsx:2
 
 All images below are **synthetic auth/API**, not real backend results. The banner is visible only in the eligible fixture; full regions stay selectable. On narrow screens the dialog scrolls vertically, without horizontal page overflow.
 
-1. Eligible unused quota: open setup by keyboard; inspect all six regions. Try invalid punctuation or a short name: no dispatch; correction normalizes whitespace.
+1. Eligible unused quota: open setup by keyboard; inspect every region across the continent tabs. Try invalid punctuation or a short name: no dispatch; correction normalizes whitespace.
 2. Create US-West: receipt says assigned/stopped at creation, includes a real-shaped manage URL and Discord password notice. The mock inventory refreshes Offline; it is not running evidence.
 3. Select France (full), with no name: Request region; the confirmed request shows as Requested after reload and its button is disabled. Choose an available region to create normally; refreshed capacity also re-enables Create even when an old request exists.
 4. Simulate capacity race: no-change message; stale snapshot cannot submit until refreshed.
@@ -211,7 +211,7 @@ Deploy the control-plane channel contract first, then the `my-servers` Edge func
 
 Deploy order for the stored region catalog:
 
-1. Deploy the control plane first, with the stored catalog (`hosting-regions` returning `available` per entry, `set-hosting-regions`, the version-3 summary, key-only Create/Request). Its migration 096, `20261009120000_control_plane_provider_regions.sql`, creates the catalog and seeds the six current regions; it is applied through the control plane's manual Supabase release procedure before that release starts.
+1. Deploy the control plane first, with the stored catalog (`hosting-regions` returning `available` per entry, `set-hosting-regions`, the version-3 summary, key-only Create/Request). Its migration 096, `20261009120000_control_plane_provider_regions.sql`, creates the catalog and seeds the six original regions; it is applied through the control plane's manual Supabase release procedure before that release starts.
 2. Then deploy the `my-servers` Edge Function and the website. They request only the version-3 summary, so against an older control plane owner onboarding shows as unavailable, the Hosting regions panel reports that the catalog could not be read, and **Create server** is shown unavailable.
 3. If the website catalog differs from the seed, open **Operations → Hosting regions** and click **Publish website regions**.
 
