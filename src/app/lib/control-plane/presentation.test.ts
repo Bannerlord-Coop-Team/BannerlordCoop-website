@@ -9,6 +9,7 @@ import {
     fieldRequirementLabel,
     formatAccountOwner,
     hostPlacementLabel,
+    hostServedRegionKeys,
     installableBuilds,
     releaseChannelLabel,
     releaseVersion,
@@ -49,8 +50,11 @@ test("administrator create sends only the region key; other operations get no de
 test("hosts are labelled with every stored region they serve, else their legacy region or none", () => {
     const stored = hostingRegionCatalogPayload();
     assert.equal(hostPlacementLabel({ countryCode: "PL", locationId: "os-waw2", region: null }, stored), "Poland · PL · os-waw2");
+    assert.deepEqual(hostServedRegionKeys({ countryCode: "PL", locationId: "os-waw2", region: "us-east" }, stored), ["poland"]);
     assert.equal(hostPlacementLabel({ countryCode: "US", locationId: "us-las", region: "united-states" }, stored), "United States (legacy) · US · us-las");
+    assert.deepEqual(hostServedRegionKeys({ countryCode: "US", locationId: "us-las", region: "united-states" }, stored), ["united-states"]);
     assert.equal(hostPlacementLabel({ countryCode: "IT", locationId: "it-mil", region: null }, stored), "No stored region · IT · it-mil");
+    assert.deepEqual(hostServedRegionKeys({ countryCode: "IT", locationId: "it-mil", region: null }, stored), []);
     assert.equal(hostPlacementLabel({ countryCode: "PL", locationId: "os-waw2", region: null }, null), "Regions unavailable · PL · os-waw2");
     // The stored placements decide, not the website file.
     const custom = [{ region: "central-europe", placement: { countryCodes: ["PL", "CZ"] } }];

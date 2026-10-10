@@ -1,8 +1,12 @@
 import { summarizeVpsSlots } from "@/app/lib/control-plane/vps-inventory-query";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
+import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
-export function VpsSlotSummary({ hosts }: { hosts: readonly Pick<HostingAdminVpsHost, "region" | "totalSlots" | "occupiedSlots">[] }) {
-    const summary = summarizeVpsSlots(hosts);
+export function VpsSlotSummary({ hosts, regionCatalog = null }: {
+    hosts: readonly Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region" | "totalSlots" | "occupiedSlots">[];
+    regionCatalog?: readonly HostingRegionPayload[] | null;
+}) {
+    const summary = summarizeVpsSlots(hosts, regionCatalog);
     return (
         <section aria-label="Fleet slot capacity" className="mt-6 grid border border-white/10 bg-white/10 lg:grid-cols-[18rem_minmax(0,1fr)]">
             <div className="grid grid-cols-2 bg-surface">

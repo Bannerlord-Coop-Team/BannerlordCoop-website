@@ -12,6 +12,7 @@ import {
     vpsRegionOptions,
 } from "@/app/lib/control-plane/vps-inventory-query";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
+import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 import { VpsInventoryBrowser } from "./VpsInventoryBrowser";
 
 vi.mock("@/app/components/admin/RunnerOnboardingStatus", () => ({
@@ -83,6 +84,19 @@ describe("VPS inventory filters", () => {
         expect(pageSizeSelect().value).toBe("10");
         expect(visibleNames()).toEqual(numberedNames(1, 10));
         expect([...pageSizeSelect().options].map((option) => option.value)).toEqual(["10", "25", "50", "100"]);
+    });
+
+    it("lists stored regions for hosts that have no legacy region", async () => {
+        const warsaw = { ...host("warsaw", "us-east", 1, ADA), countryCode: "PL", locationId: "os-waw2", region: null };
+        const gravelines = { ...host("gravelines", "", 2, BEA), countryCode: "FR", locationId: "gra", region: null };
+        await act(async () => root.render(
+            <VpsInventoryBrowser hosts={[warsaw, gravelines]} accounts={accounts} ownerLabels={{}} runnerTargetSourceCommit={null} regionCatalog={hostingRegionCatalogPayload()} />,
+        ));
+        expect(regionBox("us-east")).toBeNull();
+        expect(regionBox("france")).not.toBeNull();
+        expect(regionBox("poland")).not.toBeNull();
+        await act(async () => regionBox("poland")!.click());
+        expect(visibleNames()).toEqual(["warsaw"]);
     });
 
     it("filters by several regions, owner email, and empty slots", async () => {
@@ -162,7 +176,21 @@ describe("VPS inventory query", () => {
                 { region: "us-west", label: "US-West", totalSlots: 3, takenSlots: 1 },
                 { region: "us-east", label: "US-East", totalSlots: 3, takenSlots: 1 },
                 { region: "poland", label: "Poland", totalSlots: 6, takenSlots: 2 },
-                { region: "unknown", label: "unknown", totalSlots: 3, takenSlots: 0 },
+                { region: "unplaced", label: "No stored region", totalSlots: 3, takenSlots: 0 },
+            ],
+        });
+        const catalog = hostingRegionCatalogPayload();
+        const warsaw = { ...host("warsaw", "us-east", 1, ADA), countryCode: "PL", locationId: "os-waw2", region: null };
+        const gravelines = { ...host("gravelines", "", 0, null), countryCode: "FR", locationId: "gra", region: null };
+        expect(vpsRegionOptions([warsaw, gravelines], catalog).map((option) => option.label)).toEqual(["France", "Poland"]);
+        expect(filterVpsHosts([warsaw], accounts, { regions: ["us-east"], email: "", emptySlotsOnly: false }, catalog)).toEqual([]);
+        expect(filterVpsHosts([warsaw], accounts, { regions: ["poland"], email: "", emptySlotsOnly: false }, catalog).map((item) => item.name)).toEqual(["warsaw"]);
+        expect(summarizeVpsSlots([warsaw, gravelines], catalog)).toMatchObject({
+            totalSlots: 6,
+            takenSlots: 1,
+            regions: [
+                { region: "france", label: "France", totalSlots: 3, takenSlots: 0 },
+                { region: "poland", label: "Poland", totalSlots: 3, takenSlots: 1 },
             ],
         });
         expect(readVpsPageSize({ getItem: () => "100" })).toBe(100);

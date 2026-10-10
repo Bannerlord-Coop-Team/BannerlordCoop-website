@@ -81,13 +81,25 @@ export function hostPlacementLabel(host: HostPlacement, catalog: readonly Hostin
     return `${hostRegionsLabel(host, catalog)} · ${host.countryCode} · ${host.locationId}`;
 }
 
+/** Region keys a host serves: every stored placement it satisfies, else its legacy region. */
+export function hostServedRegionKeys(host: HostPlacement, catalog: readonly HostingRegionPayload[] | null): string[] {
+    const matched = matchedCatalogRegions(host, catalog).map((entry) => entry.region);
+    if (matched.length > 0) return matched;
+    return host.region !== null && host.region.length > 0 ? [host.region] : [];
+}
+
 /** Names the stored regions whose placement a host satisfies, else its legacy region, else none. */
 function hostRegionsLabel(host: HostPlacement, catalog: readonly HostingRegionPayload[] | null) {
     if (catalog === null) return "Regions unavailable";
-    const regions = catalog.filter((entry) => placementMatchesHost(entry.placement, host));
+    const regions = matchedCatalogRegions(host, catalog);
     if (regions.length > 0) return regions.map((entry) => hostingRegionLabel(entry.region)).join(", ");
     if (host.region === null) return "No stored region";
     return `${hostingRegionLabel(host.region)} (legacy)`;
+}
+
+function matchedCatalogRegions(host: HostPlacement, catalog: readonly HostingRegionPayload[] | null) {
+    if (catalog === null) return [];
+    return catalog.filter((entry) => placementMatchesHost(entry.placement, host));
 }
 
 /** Whether a host's provider country (and zone, when the placement names zones) satisfies a placement.
