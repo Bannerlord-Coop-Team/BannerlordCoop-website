@@ -33,9 +33,9 @@ test("onboarding Edge routes fixed create/request operations and lowercases dura
 });
 test("onboarding Edge forwards a well-formed key the website catalog does not know; the control plane decides", async () => {
     const calls: Array<{ input: unknown }> = [];
-    const receipt = { action: "request-region", request: { ...onboardingRequested().request, region: "japan" } };
-    assert.equal((await handler(receipt, calls)(request({ action: "request-region", region: "japan" }))).status, 200);
-    assert.deepEqual(calls.map((call) => call.input), [{ region: "japan" }]);
+    const receipt = { action: "request-region", request: { ...onboardingRequested().request, region: "atlantis" } };
+    assert.equal((await handler(receipt, calls)(request({ action: "request-region", region: "atlantis" }))).status, 200);
+    assert.deepEqual(calls.map((call) => call.input), [{ region: "atlantis" }]);
 });
 test("onboarding extension preserves existing backup request ID spelling", async () => {
     const calls: unknown[] = [];

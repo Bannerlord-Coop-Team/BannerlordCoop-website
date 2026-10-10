@@ -59,5 +59,5 @@ test("region keys are bounded lowercase slugs", () => {
 
 test("website region keys are only the keys this catalog defines, not every well-formed key", () => {
     for (const region of HOSTING_REGIONS) assert.equal(isWebsiteRegionKey(region.key), true, region.key);
-    for (const key of ["japan", "united-states", "US-West", null]) assert.equal(isWebsiteRegionKey(key), false, String(key));
+    for (const key of ["atlantis", "united-states", "US-West", null]) assert.equal(isWebsiteRegionKey(key), false, String(key));
 });
