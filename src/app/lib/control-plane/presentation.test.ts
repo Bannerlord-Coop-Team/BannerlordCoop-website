@@ -136,8 +136,10 @@ test("the VPS view presents slot occupants and resources with their owning host"
 
     assert.match(pageSource, /needsAccounts = view === "vps"/u);
     const vpsSource = await readFile(new URL("../../components/admin/VpsView.tsx", import.meta.url), "utf8");
+    const browserSource = await readFile(new URL("../../components/admin/VpsInventoryBrowser.tsx", import.meta.url), "utf8");
     assert.match(vpsSource, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\}/u);
-    assert.match(vpsSource, /<VpsHostInventory/u);
+    assert.match(vpsSource, /<VpsInventoryBrowser/u);
+    assert.match(browserSource, /<VpsHostInventory/u);
     assert.match(inventorySource, /formatAccountOwner\(slot, ownerLabels\)/u);
 
     assert.match(inventorySource, /view=server&serverId=\$\{encodeURIComponent\(slot\.serverId\)\}/u);

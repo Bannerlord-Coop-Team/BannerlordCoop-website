@@ -39,6 +39,20 @@ function deferred() {
     const promise = new Promise<HostingAdminVpsInventory>((yes, no) => { resolve = yes; reject = no; });
     return { promise, resolve, reject };
 }
+it("shows fleet slot totals above the Oracle control plane card", async () => {
+    const listed = inventory(true);
+    listed.hosts[0] = { ...listed.hosts[0], region: "us-east" };
+    await act(async () => root.render(<VpsView regionCatalog={[]} inventory={listed} accounts={[]} />));
+    const text = container.textContent ?? "";
+    const totals = text.indexOf("Total slots");
+    const oracle = text.indexOf("Oracle control plane");
+    expect(totals).toBeGreaterThan(-1);
+    expect(oracle).toBeGreaterThan(totals);
+    expect(text).toContain("Taken slots");
+    expect(text).toContain("US-East");
+    expect(text).toContain("1 taken / 3 total");
+});
+
 it("shows usable inventory before readings and preserves an expanded row when they arrive", async () => {
     const read = deferred(); mocks.resources.mockReturnValue(read.promise);
     await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory()} accounts={[]} />));
