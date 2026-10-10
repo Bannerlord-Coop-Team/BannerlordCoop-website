@@ -3,7 +3,6 @@
 import { useTranslations } from "@/app/lib/localization/client";
 
 import { LoaderCircle, Terminal } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { ServerConsoleWorkspace, coopConsoleCommands } from "./ServerManagementWorkspace";
 import { ManagedServerConsole } from "./ManagedServerConsole";
@@ -34,7 +33,6 @@ function completeCommand(draft: string) {
 export function ManagedServerCommands({ server, userId, controls }: { server: MyServerSummary; userId: string; controls: ReactNode }) {
     const { t, rich } = useTranslations("managed-server");
     const shared = useTranslations("server-common");
-    const router = useRouter();
     const id = useId();
     const inputRef = useRef<HTMLInputElement>(null);
     const sentTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -106,7 +104,7 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
                 showFeedback({ kind: "error", text: t("commands.weCouldnTConfirmCommandWasDeliveredIfNoOutput", { command: input.command }) }, UNCERTAIN_NOTICE_MILLISECONDS);
             } else {
                 showFeedback({ kind: "error", text: `${input.command}: ${response.message}` });
-                if (response.refresh) router.refresh();
+                setDraft(current => current || input.command);
             }
         } catch {
             showFeedback({ kind: "error", text: t("commands.weCouldnTConfirmCommandWasDeliveredIfNoOutput", { command: input.command }) }, UNCERTAIN_NOTICE_MILLISECONDS);

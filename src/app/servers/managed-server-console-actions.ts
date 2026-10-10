@@ -4,6 +4,7 @@ import { getTranslations } from "@/app/lib/localization/server";
 
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
+import { listAllMyServers } from "@/app/lib/hosting/my-servers-server";
 import { submitMyServerConsoleCommand, getMyServerConsoleResult, acknowledgeMyServerConsoleResult } from "@/app/lib/hosting/server-console";
 import { parseConsoleSubmission, parseConsoleReference, requireConsoleUuid } from "../../../supabase/functions/_shared/server-console-contract";
 
@@ -15,9 +16,6 @@ async function currentToken(expectedUserId: string) {
     return session.access_token;
 }
 
-/** Codes after which the page's server status is stale and should be refreshed before resending. */
-const REFRESH_CODES = new Set(["operation_unavailable", "request_conflict"]);
-
 /** Distinguishes local rejection from uncertain submissions without exposing internal errors. */
 async function failure(error: unknown, notSubmitted = false) {
     const { t } = await getTranslations("managed-server");
@@ -27,18 +25,20 @@ async function failure(error: unknown, notSubmitted = false) {
         identity_unavailable: t("action.console.linkYourDiscordAccountAndSignInAgainBeforeUsing"),
         operation_unavailable: t("action.console.theServerIsnTRunningSoTheCommandCanT"),
         request_conflict: t("action.console.theServerIsBusyWithAnotherCommandOrItsStatus"),
+        stale_interaction: t("action.console.theServerIsBusyWithAnotherCommandOrItsStatus"),
         invalid_request: t("action.console.enterOneSupportedCoopCommandWithValidArguments"),
         rate_limited: t("action.console.tooManyRequestsWaitBeforeCheckingAgain"),
     };
-    const known = Object.hasOwn(messages, code);
+    const known = Object.hasOwn(messages, code)
+        && !(error instanceof MyServersApiError && error.operationId !== undefined);
     return {
         ok: false as const,
         notSubmitted,
         uncertain: !notSubmitted && !known,
-        refresh: !notSubmitted && REFRESH_CODES.has(code),
-        message: notSubmitted
+        refresh: false,
+        message: known ? messages[code] : notSubmitted
             ? t("action.console.theCommandWasNotSentCheckYourCommandAndSign")
-            : known ? messages[code] : t("action.console.weCouldnTConfirmTheCommandWasDeliveredIfNo"),
+            : t("action.console.weCouldnTConfirmTheCommandWasDeliveredIfNo"),
     };
 }
 
@@ -50,7 +50,23 @@ export async function submitManagedConsoleCommand(input: unknown, requestId: str
         requireConsoleUuid(requestId);
         const token = await currentToken(expectedUserId);
         submissionStarted = true;
-        return { ok: true as const, result: await submitMyServerConsoleCommand(token, requestId, parsed) };
+        try {
+            return { ok: true as const, result: await submitMyServerConsoleCommand(token, requestId, parsed) };
+        } catch (error) {
+            // This rejection happens before enqueue; uncertain deliveries must never take this retry path.
+            if (!(error instanceof MyServersApiError) || error.code !== "stale_interaction" || error.operationId !== undefined) throw error;
+            submissionStarted = false;
+            const current = (await listAllMyServers(token)).find(server => server.serverId === parsed.serverId);
+            if (!current) throw new MyServersApiError("server_not_found", "Managed server is unavailable.");
+            if (current.operationState !== "running" || current.observedGameState !== "running") {
+                throw new MyServersApiError("operation_unavailable", "The server is not running.");
+            }
+            if (current.updatedAt === parsed.expectedUpdatedAt) throw error;
+            const retry = parseConsoleSubmission({ ...parsed, expectedUpdatedAt: current.updatedAt });
+            const retryToken = await currentToken(expectedUserId);
+            submissionStarted = true;
+            return { ok: true as const, result: await submitMyServerConsoleCommand(retryToken, requestId, retry) };
+        }
     } catch (error) { return await failure(error, !submissionStarted); }
 }
 

@@ -167,13 +167,27 @@ it.each(["rejected", "uncertain", "network"])("reports a late %s failure under t
     expect(mocks.submit.mock.calls[1][1]).not.toBe(mocks.submit.mock.calls[0][1]);
 });
 
-it("refreshes server status when the server reports that it changed", async () => {
+it("preserves a rejected command without refreshing the page or its console stream", async () => {
     mocks.submit.mockResolvedValueOnce({ ok: false, notSubmitted: false, uncertain: false, refresh: true, message: "The server is busy with another command or its status just changed. Wait a moment, then send it again." });
+    await mount();
+    const input = await typeDraft("coop.help");
+    await act(async () => button("Send").click());
+    expect(container.querySelector('form [role="alert"]')!.textContent).toContain("coop.help: The server is busy");
+    expect(input.value).toBe("coop.help");
+    expect(mocks.submit).toHaveBeenCalledOnce();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it("keeps a newer draft when an earlier command is rejected", async () => {
+    let reject!: (value: unknown) => void;
+    mocks.submit.mockReturnValueOnce(new Promise(resolve => { reject = resolve; }));
     await mount();
     await typeDraft("coop.help");
     await act(async () => button("Send").click());
-    expect(container.querySelector('form [role="alert"]')!.textContent).toContain("coop.help: The server is busy");
-    expect(mocks.refresh).toHaveBeenCalledOnce();
+    const input = await typeDraft("coop.debug.players.list");
+    await act(async () => reject({ ok: false, uncertain: false, refresh: false, message: "The server is busy." }));
+    expect(input.value).toBe("coop.debug.players.list");
+    expect(mocks.refresh).not.toHaveBeenCalled();
 });
 
 it("confirms a delivered command briefly under the input", async () => {
