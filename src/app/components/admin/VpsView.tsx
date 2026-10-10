@@ -9,7 +9,7 @@ import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
-import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminVpsInventory, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
+import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingAdminVpsInventory, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
 /** Shows registered VPS capacity, labelled by the stored region catalog, with live readings and region requests. */
@@ -115,6 +115,31 @@ function RegionRequestsPane({ accounts }: { accounts: WebsiteAccountSummary[] })
         }
     }
 
+    // Emails the requester that their region has capacity, then marks the row notified.
+    async function notify(requestId: string) {
+        if (pendingRequest !== null) return;
+        setPendingRequest(requestId);
+        setError("");
+        try {
+            const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+            if (!session?.access_token) throw new Error("Authentication is required.");
+            const result = await requestControlPlaneAdmin<HostingAdminRegionRequestNotification>({
+                accessToken: session.access_token,
+                requestId: crypto.randomUUID(),
+                operation: "notify-region-request",
+                input: { requestId },
+            });
+            setRequests(current => current === null ? current : {
+                ...current,
+                items: current.items.map(item => item.requestId === requestId ? { ...item, notifiedAt: result.notifiedAt } : item),
+            });
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "The requester could not be notified.");
+        } finally {
+            setPendingRequest(null);
+        }
+    }
+
     return (
         <section className="mt-8 overflow-hidden border border-gold/30 bg-surface" aria-labelledby="pending-region-requests-heading">
             <div className="flex items-end justify-between gap-4 border-b border-white/10 px-5 py-4">
@@ -130,16 +155,20 @@ function RegionRequestsPane({ accounts }: { accounts: WebsiteAccountSummary[] })
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-190 text-left text-sm">
                         <thead className="border-b border-white/10 font-label text-[0.62rem] uppercase tracking-[0.12em] text-foreground-muted">
-                            <tr><th className="p-4">Region</th><th className="p-4">Requester email</th><th className="p-4">Current allocation</th><th className="p-4">Requested</th><th className="p-4 text-right">Clear inline</th></tr>
+                            <tr><th className="p-4">Region</th><th className="p-4">Requester email</th><th className="p-4">Current allocation</th><th className="p-4">Requested</th><th className="p-4 text-right">Actions</th></tr>
                         </thead>
                         <tbody className="divide-y divide-white/10">
                             {requests.items.map(request => (
                                 <tr key={request.requestId}>
                                     <td className="p-4 font-semibold text-foreground">{hostingRegionLabel(request.region)}<span className="mt-1 block font-mono text-[0.62rem] font-normal text-foreground-dim">{request.requestId}</span></td>
-                                    <td className="p-4 text-xs text-foreground-muted">{formatRequesterEmail(request, accounts)}</td>
+                                    <td className="p-4 text-xs text-foreground-muted">
+                                        {formatRequesterEmail(request, accounts)}
+                                        {request.notifiedAt !== null && <span className="mt-1 block w-fit border border-gold/40 bg-gold/10 px-2 py-0.5 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-gold">Notified <LocalDateTime value={request.notifiedAt} /></span>}
+                                    </td>
                                     <td className="p-4 text-xs text-foreground-muted">{formatAllocatedRegions(request.allocatedRegions)}</td>
                                     <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={request.createdAt} /></td>
                                     <td className="p-4"><div className="flex justify-end gap-2">
+                                        {request.notifiedAt === null && request.requesterEmail !== null && <button type="button" disabled={pendingRequest !== null} onClick={() => void notify(request.requestId)} className="min-h-9 border border-gold/40 px-3 font-label text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-gold hover:border-gold hover:bg-gold/10 disabled:cursor-wait disabled:opacity-50">Notify</button>}
                                         <button type="button" disabled={pendingRequest !== null} onClick={() => void resolve(request.requestId, "dismissed")} className="min-h-9 border border-white/20 px-3 font-label text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-foreground-muted hover:border-white/40 hover:text-foreground disabled:cursor-wait disabled:opacity-50">Dismiss</button>
                                     </div></td>
                                 </tr>

@@ -104,6 +104,7 @@ it("shows pending region requests and removes one after an inline resolution", a
         createdAt: "2026-10-08T12:00:00.000Z",
         requesterEmail: "owner@example.com",
         allocatedRegions: ["germany"],
+        notifiedAt: null,
     }], nextCursor: null });
     mocks.request.mockImplementation(async options => {
         if (options.operation === "region-requests") return mocks.regionRequests(options);
@@ -130,6 +131,61 @@ it("shows pending region requests and removes one after an inline resolution", a
     expect(container.textContent).not.toContain("united-kingdom");
 });
 
+it("notifies a requester once and keeps the request pending with a notified badge", async () => {
+    mocks.regionRequests.mockResolvedValue({ items: [{
+        requestId: "11111111-1111-4111-8111-111111111111",
+        guildId: "709516043332354119",
+        discordUserId: "33333333-3333-4333-8333-333333333333",
+        region: "united-kingdom",
+        status: "outstanding",
+        createdAt: "2026-10-08T12:00:00.000Z",
+        requesterEmail: "owner@example.com",
+        allocatedRegions: [],
+        notifiedAt: null,
+    }], nextCursor: null });
+    mocks.request.mockImplementation(async options => {
+        if (options.operation === "region-requests") return mocks.regionRequests(options);
+        if (options.operation === "notify-region-request") {
+            return { requestId: options.input.requestId, notifiedAt: "2026-10-10T12:00:00.000Z", sent: true };
+        }
+        return options.input.includeLiveData ? mocks.resources(options) : mocks.billing(options);
+    });
+    await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory(true)} accounts={[]} />));
+    expect(container.textContent).not.toContain("Notified");
+    const notify = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Notify");
+    expect(notify).toBeDefined();
+    await act(async () => notify!.click());
+    expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({
+        operation: "notify-region-request",
+        input: { requestId: "11111111-1111-4111-8111-111111111111" },
+    }));
+    expect(container.textContent).toContain("Notified");
+    expect(container.textContent).toContain("United Kingdom");
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>("button")].map(button => button.textContent);
+    expect(buttons).not.toContain("Notify");
+    expect(buttons).toContain("Dismiss");
+});
+
+it("offers Notify only when the control plane captured the requester email", async () => {
+    mocks.regionRequests.mockResolvedValue({ items: [{
+        requestId: "22222222-2222-4222-8222-222222222222",
+        guildId: "709516043332354119",
+        discordUserId: "33333333-3333-4333-8333-333333333333",
+        region: "germany",
+        status: "outstanding",
+        createdAt: "2026-10-08T12:00:00.000Z",
+        requesterEmail: null,
+        allocatedRegions: [],
+        notifiedAt: null,
+    }], nextCursor: null });
+    mocks.request.mockImplementation(async options => options.operation === "region-requests"
+        ? mocks.regionRequests(options)
+        : options.input.includeLiveData ? mocks.resources(options) : mocks.billing(options));
+    await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory(true)} accounts={[]} />));
+    expect(container.textContent).toContain("Dismiss");
+    expect(container.textContent).not.toContain("Notify");
+});
+
 it("recovers a historical requester email from the current account directory", async () => {
     mocks.regionRequests.mockResolvedValue({ items: [{
         requestId: "22222222-2222-4222-8222-222222222222",
@@ -140,6 +196,7 @@ it("recovers a historical requester email from the current account directory", a
         createdAt: "2026-10-08T12:00:00.000Z",
         requesterEmail: null,
         allocatedRegions: [],
+        notifiedAt: null,
     }], nextCursor: null });
     mocks.request.mockImplementation(async options => {
         if (options.operation === "region-requests") return mocks.regionRequests(options);
