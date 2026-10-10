@@ -94,7 +94,7 @@ export function vpsRegionOptions(hosts: readonly Pick<HostingAdminVpsHost, "regi
     const known = HOSTING_REGIONS
         .filter((option) => present.has(option.key))
         .map((option) => ({ value: option.key, label: option.label }));
-    const knownValues = new Set(known.map((option) => option.value));
+    const knownValues = new Set<string>(known.map((option) => option.value));
     const extras = [...present]
         .filter((region) => !knownValues.has(region))
         .sort((left, right) => left.localeCompare(right))
