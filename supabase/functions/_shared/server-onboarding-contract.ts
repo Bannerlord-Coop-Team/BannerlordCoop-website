@@ -180,7 +180,5 @@ function timestamp(value: unknown): value is string {
     return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)
         && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
-/** The single error type every rejected onboarding DTO raises. */
-class OnboardingDtoError extends Error { constructor() { super("Invalid server onboarding DTO"); } }
-/** The single error every rejected DTO raises. */
-function invalid() { return new OnboardingDtoError(); }
+/** The single error every rejected onboarding DTO raises. */
+function invalid() { return new Error("Invalid server onboarding DTO"); }
