@@ -8,6 +8,7 @@ import {
     createServerRegionOptions,
     fieldRequirementLabel,
     formatAccountOwner,
+    hostPlacementLabel,
     installableBuilds,
     releaseChannelLabel,
     releaseVersion,
@@ -19,66 +20,54 @@ import {
     overviewStatRowClass,
     presentControlPlaneOperationResult,
     serverLifecycleOperationHref,
-    serverRegionOptions,
 } from "./presentation";
+import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
-test("server regions use the approved display order and protocol values", () => {
-    assert.deepEqual(serverRegionOptions(), [
-        { value: "us-west", label: "US-West" },
-        { value: "us-east", label: "US-East" },
-        { value: "france", label: "France" },
-        { value: "germany", label: "Germany" },
-        { value: "united-kingdom", label: "United Kingdom" },
-        { value: "poland", label: "Poland" },
-    ]);
-});
+const entry = (region: string, available: boolean) => ({ region, available });
 
-test("create-server regions come only from registered hosts with available prepared slots", () => {
+test("create-server regions are the stored-catalog entries reported available, in stored order, with website labels", () => {
     assert.deepEqual(createServerRegionOptions([
-        { region: "poland", availableServers: 1 },
-        { region: "us-east", availableServers: 2 },
-        { region: "germany", availableServers: 1 },
-        { region: "us-west", availableServers: 1 },
-        { region: "france", availableServers: 1 },
-        { region: "united-kingdom", availableServers: 1 },
-        { region: "us-east", availableServers: 1 },
-        { region: "spain", availableServers: 5 },
-        { region: "united-states", availableServers: 5 },
-        { region: "europe-automatic", availableServers: 5 },
-        { region: "unexpected", availableServers: 5 },
-    ]), serverRegionOptions());
+        entry("poland", true), entry("us-west", false), entry("us-east", true), entry("united-states", true),
+    ]), [
+        { value: "poland", label: "Poland" },
+        { value: "us-east", label: "US-East" },
+        { value: "united-states", label: "United States" },
+    ]);
+    assert.deepEqual(createServerRegionOptions([entry("france", false)]), []);
     assert.deepEqual(createServerRegionOptions([]), []);
 });
 
-test("create-server regions require positive safe-integer capacity", () => {
-    for (const availableServers of [0, -1, 0.5, 1.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, -Infinity]) {
-        assert.deepEqual(createServerRegionOptions(
-            serverRegionOptions().map(({ value: region }) => ({ region, availableServers })),
-        ), [], `Invalid available capacity: ${availableServers}`);
-    }
-    assert.deepEqual(createServerRegionOptions([
-        { region: "poland", availableServers: Number.MAX_SAFE_INTEGER },
-        { region: "us-east", availableServers: 1 },
-        { region: "us-east", availableServers: 0 },
-        { region: "germany", availableServers: 0 },
-        { region: "united-kingdom", availableServers: -1 },
-        { region: "france", availableServers: 0.5 },
-        { region: "us-west", availableServers: Infinity },
-        { region: "poland", availableServers: 2 },
-    ]), [
-        { value: "us-east", label: "US-East" },
-        { value: "poland", label: "Poland" },
-    ]);
+test("administrator create sends only the region key; other operations get no defaults", () => {
+    const input: Record<string, unknown> = { friendlyRegion: "us-east" };
+    applyControlPlaneOperationDefaults("create-server", input);
+    assert.deepEqual(input, { friendlyRegion: "us-east", releaseChannel: "stable" });
+    const publish: Record<string, unknown> = { expectedRevision: 4, reason: "Add Japan" };
+    applyControlPlaneOperationDefaults("set-hosting-regions", publish);
+    assert.deepEqual(publish, { expectedRevision: 4, reason: "Add Japan" });
+    assert.equal(presentControlPlaneOperationResult("set-hosting-regions", { revision: 5, regions: [], updatedAt: null, updatedBy: null }).message,
+        "Published the website hosting regions as catalog revision 5.");
 });
 
-test("create-server regions exclude legacy values, provider locations, and noncanonical spellings", () => {
-    for (const region of [
-        "united-states", "spain", "europe-automatic", "unexpected",
-        "us/las", "us/ewr", "de/fra", "US-West", "us-east ", " france",
-        "", "toString", "constructor", "__proto__",
-    ]) {
-        assert.deepEqual(createServerRegionOptions([{ region, availableServers: 5 }]), [], region);
-    }
+test("hosts are labelled with every stored region they serve, else their legacy region or none", () => {
+    const stored = hostingRegionCatalogPayload();
+    assert.equal(hostPlacementLabel({ countryCode: "PL", locationId: "os-waw2", region: null }, stored), "Poland · PL · os-waw2");
+    assert.equal(hostPlacementLabel({ countryCode: "US", locationId: "us-las", region: "united-states" }, stored), "United States (legacy) · US · us-las");
+    assert.equal(hostPlacementLabel({ countryCode: "IT", locationId: "it-mil", region: null }, stored), "No stored region · IT · it-mil");
+    assert.equal(hostPlacementLabel({ countryCode: "PL", locationId: "os-waw2", region: null }, null), "Regions unavailable · PL · os-waw2");
+    // The stored placements decide, not the website file.
+    const custom = [{ region: "central-europe", placement: { countryCodes: ["PL", "CZ"] } }];
+    assert.equal(hostPlacementLabel({ countryCode: "CZ", locationId: "any", region: null }, custom), "Central Europe · CZ · any");
+});
+
+test("host labels never guess a coast or a country", () => {
+    const stored = hostingRegionCatalogPayload();
+    for (const host of [
+        { countryCode: "US", locationId: "us-las" }, { countryCode: "US", locationId: "US-EAST-VA" },
+        { countryCode: "US", locationId: "us-east-va-other" }, { countryCode: "pl", locationId: "os-waw2" },
+        { countryCode: "ES", locationId: "es-mad" },
+    ]) assert.match(hostPlacementLabel({ ...host, region: null }, stored), /^No stored region · /u, JSON.stringify(host));
+    assert.match(hostPlacementLabel({ countryCode: "US", locationId: "us-east-va", region: null }, stored), /^US-East · /u);
+    assert.match(hostPlacementLabel({ countryCode: "US", locationId: "us-west-or", region: null }, stored), /^US-West · /u);
 });
 
 test("maintenance choices show their authoritative timezone without changing protocol values", () => {

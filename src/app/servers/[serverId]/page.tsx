@@ -1,5 +1,6 @@
 import type { Translator } from "@/app/lib/localization/types";
 import { LocalizationProvider } from "@/app/lib/localization/client";
+import { localizedRegionLabel } from "@/app/lib/hosting/region-labels";
 import { getLocale, getMessages, getTranslations } from "@/app/lib/localization/server";
 import { ManagedServerCommands } from "@/app/components/servers/ManagedServerCommands";
 import { releaseChannelLabel } from "@/app/lib/control-plane/presentation";
@@ -183,6 +184,8 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
     userId: string; accessToken: string; server: MyServerSummary; initialSection?: ServerWorkspaceSection;
 }) {
     const { t } = await getTranslations("managed-server");
+    // Region names live with onboarding in the servers namespace, so both pages share one translation.
+    const { t: tServers } = await getTranslations("servers");
     const deletionStatus = server.accessRole === "owner"
         ? await getMyServerDeletionStatus(accessToken, server.serverId, AbortSignal.timeout(5_000)).catch(() => null)
         : null;
@@ -198,7 +201,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
         initialSection={initialSection}
         address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
         visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} />}
-        summary={t("page.managedSummary", { region: formatManagedValue(server.friendlyRegion), access: managedAccessLabels[server.accessRole] })}
+        summary={t("page.managedSummary", { region: localizedRegionLabel(tServers, server.friendlyRegion), access: managedAccessLabels[server.accessRole] })}
         status={<Suspense fallback={<ManagedServerStatus accessToken={accessToken} server={server} checkBackup={false} />}>
             <ManagedServerStatus accessToken={accessToken} server={server} checkBackup={server.accessRole === "owner" || server.accessRole === "manager"} />
         </Suspense>}

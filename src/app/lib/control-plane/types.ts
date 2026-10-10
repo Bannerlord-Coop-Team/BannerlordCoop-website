@@ -1,3 +1,5 @@
+import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
+
 export type ManagedServer = {
     serverId: string;
     ownerDiscordUserId: string;
@@ -163,7 +165,10 @@ export type HostingServerResources = {
 export type HostingAdminVpsHost = {
     name: string;
     locationId: string;
-    region: string;
+    // Provider-reported ISO country, present for every host.
+    countryCode: string;
+    // Legacy region a retained host was registered with; null for hosts registered from provider facts.
+    region: string | null;
     totalSlots: number;
     runningServers: number;
     availableServers: number;
@@ -228,6 +233,32 @@ export type OperationsData = {
     inventory: HostingAdminVpsInventory;
     vpsProviderError: string | null;
     selectedServer: ManagedServer | null;
+    // The control plane's stored region catalog; null with an error when it could not be read.
+    hostingRegions: HostingAdminRegionCatalog | null;
+    hostingRegionsError: string | null;
+};
+
+/** Hosts eligible for a region: the shared wire placement. */
+export type HostingAdminRegionPlacement = HostingRegionPayload["placement"];
+
+/** One catalog entry as `set-hosting-regions` accepts it: the shared wire definition. */
+export type HostingAdminRegionDefinition = HostingRegionPayload;
+
+/** One stored entry as `hosting-regions` returns it, with whether it has a free admissible slot now. */
+export type HostingAdminRegionEntry = HostingAdminRegionDefinition & { available: boolean };
+
+/** The control plane's stored region catalog (`hosting-regions`, and the result of `set-hosting-regions`). */
+export type HostingAdminRegionCatalog = {
+    revision: number;
+    regions: HostingAdminRegionEntry[];
+    updatedAt: string | null;
+    updatedBy: string | null;
+};
+
+/** The VPS view's data: registered hosts and the stored catalog placements that label them (null when unreadable). */
+export type VpsViewData = {
+    inventory: HostingAdminVpsInventory;
+    regionCatalog: HostingAdminRegionDefinition[] | null;
 };
 
 export type FleetSummary = {

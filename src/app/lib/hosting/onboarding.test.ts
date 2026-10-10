@@ -26,6 +26,7 @@ test("real website facade → real strict Edge → synthetic upstream preserves 
     try {
         assert.deepEqual(await getServerOnboarding("synthetic-test-access-token"), onboardingSummary());
         assert.deepEqual(await requestServerOnboarding("synthetic-test-access-token", { ...intent, displayName: "  My   Campaign  ", requestId: ONBOARDING_TEST_ID.toUpperCase() }), onboardingCreated());
+        assert.deepEqual(calls[0], { version: 1, requestId: calls[0].requestId, operation: "server-onboarding", input: { version: 3 } });
         assert.deepEqual(calls[1], { version: 1, requestId: ONBOARDING_TEST_ID, operation: "create-server", input: { displayName: "My Campaign", region: "us-west" } });
         const nightly = { ...intent, releaseChannel: "nightly" as const };
         assert.deepEqual(await requestServerOnboarding("synthetic-test-access-token", nightly), { ...onboardingCreated(), releaseChannel: "nightly" });

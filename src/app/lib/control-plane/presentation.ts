@@ -1,14 +1,6 @@
-import type { HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
+import type { HostingAdminRegionDefinition, HostingAdminRegionEntry, HostingAdminRegionPlacement, HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE } from "../../../../supabase/functions/_shared/server-settings-contract";
-
-const SERVER_REGION_LABELS = {
-    "us-west": "US-West",
-    "us-east": "US-East",
-    france: "France",
-    germany: "Germany",
-    "united-kingdom": "United Kingdom",
-    poland: "Poland",
-} as const;
+import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 
 export const MAINTENANCE_TIME_ZONE = HOSTING_TIME_ZONE;
 
@@ -56,23 +48,16 @@ export function formatAccountOwner(
     return accountLabels[accountId] ?? `Account unavailable (${accountId})`;
 }
 
-export function serverRegionOptions() {
-    return Object.entries(SERVER_REGION_LABELS).map(([value, label]) => ({ value, label }));
+/** Names an administrative actor (`supabase:<uuid>`) by its website account, or returns the raw actor when unresolvable. */
+export function formatAdminActor(actorId: string, accountLabels: Readonly<Record<string, string>>) {
+    const accountId = validUuid(/^supabase:(.*)$/u.exec(actorId)?.[1]);
+    if (accountId === null) return actorId;
+    return accountLabels[accountId.toLowerCase()] ?? actorId;
 }
 
-export function createServerRegionOptions(
-    hosts: readonly Pick<HostingAdminVpsHost, "region" | "availableServers">[],
-) {
-    const regionsWithAvailableCapacity = new Set(
-        hosts
-            .filter((host) => Number.isSafeInteger(host.availableServers) && host.availableServers > 0)
-            .map((host) => host.region)
-            .filter((region): region is keyof typeof SERVER_REGION_LABELS => (
-                Object.hasOwn(SERVER_REGION_LABELS, region)
-            )),
-    );
-    return serverRegionOptions()
-        .filter(({ value }) => regionsWithAvailableCapacity.has(value as keyof typeof SERVER_REGION_LABELS));
+/** Stored-catalog regions the control plane reports as having a free admissible slot, in stored order (advisory). */
+export function createServerRegionOptions(regions: readonly Pick<HostingAdminRegionEntry, "region" | "available">[]) {
+    return regions.filter((entry) => entry.available).map(({ region }) => ({ value: region, label: hostingRegionLabel(region) }));
 }
 
 export function maintenanceSlotOptions() {
@@ -82,6 +67,7 @@ export function maintenanceSlotOptions() {
     }));
 }
 
+/** Fills Create's default release channel, which the administrator card never asks for. */
 export function applyControlPlaneOperationDefaults(
     operation: string,
     input: Record<string, unknown>,
@@ -89,6 +75,28 @@ export function applyControlPlaneOperationDefaults(
     if (operation === "create-server" && input.releaseChannel === undefined) {
         input.releaseChannel = "stable";
     }
+}
+
+type HostPlacement = Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region">;
+
+/** Labels a host by the stored-catalog regions it serves (or its legacy region), then its provider country and zone. */
+export function hostPlacementLabel(host: HostPlacement, catalog: readonly HostingAdminRegionDefinition[] | null) {
+    return `${hostRegionsLabel(host, catalog)} · ${host.countryCode} · ${host.locationId}`;
+}
+
+/** Names the stored regions whose placement a host satisfies, else its legacy region, else none. */
+function hostRegionsLabel(host: HostPlacement, catalog: readonly HostingAdminRegionDefinition[] | null) {
+    if (catalog === null) return "Regions unavailable";
+    const regions = catalog.filter((entry) => placementMatchesHost(entry.placement, host));
+    if (regions.length > 0) return regions.map((entry) => hostingRegionLabel(entry.region)).join(", ");
+    if (host.region === null) return "No stored region";
+    return `${hostingRegionLabel(host.region)} (legacy)`;
+}
+
+/** Whether a host's provider country (and zone, when the placement names zones) satisfies a placement. */
+function placementMatchesHost(placement: HostingAdminRegionPlacement, host: HostPlacement) {
+    if (!placement.countryCodes.includes(host.countryCode)) return false;
+    return placement.locationIds === undefined || placement.locationIds.includes(host.locationId);
 }
 
 export function operationTargetMatchesHash(hash: string, operation: string) {
@@ -169,6 +177,9 @@ export function presentControlPlaneOperationResult(
             message: `${action} job ${jobId} is ${state}${stage === null ? "." : ` at ${stage}.`} Progress refreshes automatically on its server and Jobs pages.`,
             links,
         };
+    }
+    if (operation === "set-hosting-regions" && Number.isSafeInteger(result.revision)) {
+        return { message: `Published the website hosting regions as catalog revision ${String(result.revision)}.`, links };
     }
     const onboarding = isRecord(result.onboarding) ? result.onboarding : null;
     const onboardingState = boundedText(onboarding?.state, 64);

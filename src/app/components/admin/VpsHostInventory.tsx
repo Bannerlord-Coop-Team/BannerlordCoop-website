@@ -2,10 +2,11 @@
 
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
-import { formatAccountOwner } from "@/app/lib/control-plane/presentation";
+import { formatAccountOwner, hostPlacementLabel } from "@/app/lib/control-plane/presentation";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import type {
     HostingAdminHostResources,
+    HostingAdminRegionDefinition,
     HostingAdminVpsHost,
     HostingServerResources,
 } from "@/app/lib/control-plane/types";
@@ -26,6 +27,8 @@ type VpsHostInventoryProps = {
     hosts: HostingAdminVpsHost[];
     ownerLabels: Record<string, string>;
     runnerTargetSourceCommit: string | null;
+    // Stored catalog placements that name each host's regions; null when the catalog could not be read.
+    regionCatalog?: readonly HostingAdminRegionDefinition[] | null;
 };
 
 const SUMMARY_GRID = "grid-cols-2 @min-[70rem]:grid-cols-[minmax(0,12fr)_minmax(0,7fr)_minmax(0,15fr)_minmax(0,12fr)_minmax(0,8fr)_minmax(0,12fr)_2.5rem] [&>*]:min-w-0 [overflow-wrap:anywhere]";
@@ -41,6 +44,7 @@ export function VpsHostInventory({
     onRefresh,
     ownerLabels,
     runnerTargetSourceCommit,
+    regionCatalog = null,
 }: VpsHostInventoryProps) {
     const [expandedHost, setExpandedHost] = useState<string | null>(null);
     const idPrefix = useId();
@@ -78,7 +82,7 @@ export function VpsHostInventory({
                                         : "border-l-2 border-transparent"}
                             >
                                 <div role="row" className={`grid ${SUMMARY_GRID} items-center gap-x-4 gap-y-4 px-4 py-3 hover:bg-white/[0.025]`}>
-                                    <div role="cell" data-label="Host" className={SUMMARY_LABEL}><HostIdentity host={host} /></div>
+                                    <div role="cell" data-label="Host" className={SUMMARY_LABEL}><HostIdentity host={host} regionCatalog={regionCatalog} /></div>
                                     <div role="cell" data-label="Capacity" className={SUMMARY_LABEL}><CapacitySummary host={host} /></div>
                                     <div role="cell" data-label="Slots" className={SUMMARY_LABEL}><SlotSummary host={host} ownerLabels={ownerLabels} /></div>
                                     <div role="cell" data-label="System" className={SUMMARY_LABEL}><SystemSummary resources={host.resources} pending={liveDataPending} /></div>
@@ -127,8 +131,10 @@ export function diskPressureLevel(resources: HostingAdminHostResources | null): 
     };
 }
 
-function HostIdentity({ host }: { host: HostingAdminVpsHost }) {
-    return <div className="min-w-0"><p className="truncate font-mono text-xs text-foreground" title={host.name}>{host.name}</p><p className="mt-1 truncate text-xs text-foreground-muted" title={`${host.region} · ${host.locationId}`}>{host.region} · {host.locationId}</p></div>;
+/** Shows a host's name and its stored-catalog regions, country and zone. */
+function HostIdentity({ host, regionCatalog }: { host: HostingAdminVpsHost; regionCatalog: readonly HostingAdminRegionDefinition[] | null }) {
+    const placement = hostPlacementLabel(host, regionCatalog);
+    return <div className="min-w-0"><p className="truncate font-mono text-xs text-foreground" title={host.name}>{host.name}</p><p className="mt-1 truncate text-xs text-foreground-muted" title={placement}>{placement}</p></div>;
 }
 
 function CapacitySummary({ host }: { host: HostingAdminVpsHost }) {
