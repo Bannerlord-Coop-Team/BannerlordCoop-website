@@ -1,8 +1,12 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { slotOwnerAccountId } from "@/app/lib/control-plane/presentation";
+import { hostServedRegionKeys, slotOwnerAccountId } from "@/app/lib/control-plane/presentation";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
-import { HOSTING_REGIONS, hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
+import { HOSTING_REGIONS, hostingRegionLabel, type HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
+
+type RegionCatalog = readonly HostingRegionPayload[] | null;
+type PlacedHost = Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region" | "totalSlots" | "occupiedSlots">;
+const UNPLACED_REGION = "unplaced";
 
 export const VPS_PAGE_SIZES = [10, 25, 50, 100] as const;
 export type VpsPageSize = (typeof VPS_PAGE_SIZES)[number];
@@ -85,21 +89,18 @@ export function hostHasEmptySlot(host: Pick<HostingAdminVpsHost, "availableServe
     return Number.isSafeInteger(host.availableServers) && host.availableServers > 0;
 }
 
-export function vpsRegionOptions(hosts: readonly Pick<HostingAdminVpsHost, "region">[]) {
+export function vpsRegionOptions(hosts: readonly PlacedHost[], catalog: RegionCatalog = null) {
     const present = new Set<string>();
+    let unplaced = false;
     for (const host of hosts) {
-        const region = namedRegion(host.region);
-        if (region !== null) present.add(region);
+        const keys = hostServedRegionKeys(host, catalog);
+        if (keys.length === 0) unplaced = true;
+        for (const key of keys) present.add(key);
     }
-    const known = HOSTING_REGIONS
-        .filter((option) => present.has(option.key))
-        .map((option) => ({ value: option.key, label: option.label }));
-    const knownValues = new Set<string>(known.map((option) => option.value));
-    const extras = [...present]
-        .filter((region) => !knownValues.has(region))
-        .sort((left, right) => left.localeCompare(right))
+    const options = [...present]
+        .sort((left, right) => compareRegionKeys(left, right, catalog))
         .map((value) => ({ value, label: hostingRegionLabel(value) }));
-    return [...known, ...extras];
+    return unplaced ? [...options, { value: UNPLACED_REGION, label: "No stored region" }] : options;
 }
 
 export type VpsRegionSlotSummary = {
@@ -115,8 +116,8 @@ export type VpsFleetSlotSummary = {
     regions: VpsRegionSlotSummary[];
 };
 
-/** Counts prepared slots and slots assigned to a server, for the whole fleet and each region. */
-export function summarizeVpsSlots(hosts: readonly Pick<HostingAdminVpsHost, "region" | "totalSlots" | "occupiedSlots">[]): VpsFleetSlotSummary {
+/** Counts prepared slots and slots assigned to a server, for the whole fleet and each region it serves. */
+export function summarizeVpsSlots(hosts: readonly PlacedHost[], catalog: RegionCatalog = null): VpsFleetSlotSummary {
     const totals = new Map<string, { totalSlots: number; takenSlots: number }>();
     let totalSlots = 0;
     let takenSlots = 0;
@@ -125,25 +126,20 @@ export function summarizeVpsSlots(hosts: readonly Pick<HostingAdminVpsHost, "reg
         const taken = Array.isArray(host.occupiedSlots) ? host.occupiedSlots.length : 0;
         totalSlots += total;
         takenSlots += taken;
-        const region = namedRegion(host.region) ?? "unknown";
-        const current = totals.get(region) ?? { totalSlots: 0, takenSlots: 0 };
-        current.totalSlots += total;
-        current.takenSlots += taken;
-        totals.set(region, current);
+        const keys = hostServedRegionKeys(host, catalog);
+        // A host that satisfies more than one placement is capacity for each of those regions.
+        for (const region of keys.length > 0 ? keys : [UNPLACED_REGION]) {
+            const current = totals.get(region) ?? { totalSlots: 0, takenSlots: 0 };
+            current.totalSlots += total;
+            current.takenSlots += taken;
+            totals.set(region, current);
+        }
     }
-    const labels = new Map<string, string>(HOSTING_REGIONS.map((option) => [option.key, option.label]));
-    const order = HOSTING_REGIONS.map((option) => option.key);
     const regions = [...totals.entries()]
-        .sort(([left], [right]) => {
-            const leftRank = order.indexOf(left as typeof order[number]);
-            const rightRank = order.indexOf(right as typeof order[number]);
-            const rankedLeft = leftRank === -1 ? order.length : leftRank;
-            const rankedRight = rightRank === -1 ? order.length : rightRank;
-            return rankedLeft - rankedRight || left.localeCompare(right);
-        })
+        .sort(([left], [right]) => compareRegionKeys(left, right, catalog))
         .map(([region, counts]) => ({
             region,
-            label: region === "unknown" ? "unknown" : labels.get(region) ?? hostingRegionLabel(region),
+            label: region === UNPLACED_REGION ? "No stored region" : hostingRegionLabel(region),
             ...counts,
         }));
     return { totalSlots, takenSlots, regions };
@@ -177,12 +173,13 @@ export function filterVpsHosts(
     hosts: readonly HostingAdminVpsHost[],
     accounts: readonly WebsiteAccountSummary[],
     filters: VpsInventoryFilters,
+    catalog: RegionCatalog = null,
 ) {
     const regions = new Set(filters.regions);
     const needle = filters.email.trim().toLowerCase();
     const lookup = needle.length > 0 ? emailLookup(accounts) : null;
     return hosts.filter((host) => {
-        if (regions.size > 0 && (host.region === null || !regions.has(host.region))) return false;
+        if (regions.size > 0 && !hostMatchesRegions(host, regions, catalog)) return false;
         if (filters.emptySlotsOnly && !hostHasEmptySlot(host)) return false;
         if (lookup !== null && !occupiedSlots(host).some((slot) => {
             const email = slotOwnerEmail(slot, lookup);
@@ -232,6 +229,23 @@ function occupiedSlots(host: HostingAdminVpsHost) {
     return Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
 }
 
-function namedRegion(region: string | null) {
-    return region !== null && region.length > 0 ? region : null;
+function hostMatchesRegions(host: PlacedHost, regions: ReadonlySet<string>, catalog: RegionCatalog) {
+    const keys = hostServedRegionKeys(host, catalog);
+    if (keys.length === 0) return regions.has(UNPLACED_REGION);
+    return keys.some((key) => regions.has(key));
+}
+
+function compareRegionKeys(left: string, right: string, catalog: RegionCatalog) {
+    return regionRank(left, catalog) - regionRank(right, catalog) || left.localeCompare(right);
+}
+
+function regionRank(region: string, catalog: RegionCatalog) {
+    if (region === UNPLACED_REGION) return 10_000;
+    const catalogOrder = (catalog ?? []).map((entry) => entry.region);
+    const catalogRank = catalogOrder.indexOf(region);
+    if (catalogRank !== -1) return catalogRank;
+    const websiteOrder: readonly string[] = HOSTING_REGIONS.map((entry) => entry.key);
+    const websiteRank = websiteOrder.indexOf(region);
+    if (websiteRank !== -1) return catalogOrder.length + websiteRank;
+    return catalogOrder.length + websiteOrder.length;
 }

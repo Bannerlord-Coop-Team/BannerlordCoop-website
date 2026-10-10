@@ -49,11 +49,11 @@ function FilteredVpsInventory({
     const [emptySlotsOnly, setEmptySlotsOnly] = useState(false);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useRememberedVpsPageSize();
-    const regionOptions = useMemo(() => vpsRegionOptions(hosts), [hosts]);
+    const regionOptions = useMemo(() => vpsRegionOptions(hosts, regionCatalog), [hosts, regionCatalog]);
     const ownerEmails = useMemo(() => vpsOwnerEmails(hosts, accounts), [hosts, accounts]);
     const filtered = useMemo(
-        () => filterVpsHosts(hosts, accounts, { regions, email, emptySlotsOnly }),
-        [hosts, accounts, regions, email, emptySlotsOnly],
+        () => filterVpsHosts(hosts, accounts, { regions, email, emptySlotsOnly }, regionCatalog),
+        [hosts, accounts, regions, email, emptySlotsOnly, regionCatalog],
     );
     const pagination = paginateVpsHosts(filtered, page, pageSize);
     const filtersActive = regions.length > 0 || email.trim().length > 0 || emptySlotsOnly;
