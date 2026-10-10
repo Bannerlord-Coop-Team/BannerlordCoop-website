@@ -285,7 +285,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                     })
                     : Promise.resolve(null),
                 loadReleaseCatalog(token, signal, identity),
-                readHostingRegionCatalog(() => readControlPlaneAdmin<unknown>({ accessToken: token, signal, ...identity, operation: "hosting-regions", input: {} })),
+                loadHostingRegionCatalog(token, signal, identity),
             ]);
             return {
                 overview: { ...overview, stableBuilds: releases.stable, nightlyBuilds: releases.nightly },
@@ -299,7 +299,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         case "vps": {
             const [inventory, hostingRegions] = await Promise.all([
                 readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
-                readHostingRegionCatalog(() => readControlPlaneAdmin<unknown>({ accessToken: token, signal, ...identity, operation: "hosting-regions", input: {} })),
+                loadHostingRegionCatalog(token, signal, identity),
             ]);
             // Host labels match the stored placements; an unreadable catalog leaves the hosts listed without regions.
             return { inventory, regionCatalog: hostingRegions.catalog?.regions ?? null } satisfies VpsViewData;
@@ -340,6 +340,11 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         case "audit":
             return readControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, signal, ...identity, operation: "audit", input: { cursor: null, limit: 100 } });
     }
+}
+
+/** Reads the stored hosting-region catalog; a failed read becomes a message so the rest of the view still loads. */
+function loadHostingRegionCatalog(token: string, signal: AbortSignal, identity: ReadIdentity) {
+    return readHostingRegionCatalog(() => readControlPlaneAdmin<unknown>({ accessToken: token, signal, ...identity, operation: "hosting-regions", input: {} }));
 }
 
 /** Reads both complete channel pages from one fresh authorized catalog observation. */

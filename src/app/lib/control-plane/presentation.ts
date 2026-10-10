@@ -1,6 +1,6 @@
-import type { HostingAdminRegionDefinition, HostingAdminRegionEntry, HostingAdminRegionPlacement, HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
+import type { HostingAdminRegionEntry, HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE } from "../../../../supabase/functions/_shared/server-settings-contract";
-import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
+import { hostingRegionLabel, type HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 export const MAINTENANCE_TIME_ZONE = HOSTING_TIME_ZONE;
 
@@ -80,12 +80,12 @@ export function applyControlPlaneOperationDefaults(
 type HostPlacement = Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region">;
 
 /** Labels a host by the stored-catalog regions it serves (or its legacy region), then its provider country and zone. */
-export function hostPlacementLabel(host: HostPlacement, catalog: readonly HostingAdminRegionDefinition[] | null) {
+export function hostPlacementLabel(host: HostPlacement, catalog: readonly HostingRegionPayload[] | null) {
     return `${hostRegionsLabel(host, catalog)} · ${host.countryCode} · ${host.locationId}`;
 }
 
 /** Names the stored regions whose placement a host satisfies, else its legacy region, else none. */
-function hostRegionsLabel(host: HostPlacement, catalog: readonly HostingAdminRegionDefinition[] | null) {
+function hostRegionsLabel(host: HostPlacement, catalog: readonly HostingRegionPayload[] | null) {
     if (catalog === null) return "Regions unavailable";
     const regions = catalog.filter((entry) => placementMatchesHost(entry.placement, host));
     if (regions.length > 0) return regions.map((entry) => hostingRegionLabel(entry.region)).join(", ");
@@ -93,8 +93,9 @@ function hostRegionsLabel(host: HostPlacement, catalog: readonly HostingAdminReg
     return `${hostingRegionLabel(host.region)} (legacy)`;
 }
 
-/** Whether a host's provider country (and zone, when the placement names zones) satisfies a placement. */
-function placementMatchesHost(placement: HostingAdminRegionPlacement, host: HostPlacement) {
+/** Whether a host's provider country (and zone, when the placement names zones) satisfies a placement.
+ *  Mirrors the control plane's `placementMatchesHost` in `src/hosting/regions.ts`, which is the source of truth. */
+function placementMatchesHost(placement: HostingRegionPayload["placement"], host: HostPlacement) {
     if (!placement.countryCodes.includes(host.countryCode)) return false;
     return placement.locationIds === undefined || placement.locationIds.includes(host.locationId);
 }

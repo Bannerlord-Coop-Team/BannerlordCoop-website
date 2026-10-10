@@ -1,9 +1,8 @@
 import { ControlPlaneAdminError } from "./client";
-import type { HostingAdminRegionCatalog, HostingAdminRegionDefinition, HostingAdminRegionEntry, HostingAdminRegionPlacement } from "./types";
+import type { HostingAdminRegionCatalog, HostingAdminRegionEntry } from "./types";
+import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
 import {
     COUNTRY_CODE_PATTERN,
-    hasExactKeys,
-    isRecord,
     isRegionKey,
     LOCATION_ID_PATTERN,
     MAXIMUM_PLACEMENT_COUNTRIES,
@@ -45,7 +44,7 @@ export function parseHostingRegionCatalog(value: unknown): HostingAdminRegionCat
 
 /** Compares the stored catalog with the website catalog by key, placement (as sets) and the order of shared keys. */
 export function compareHostingRegionCatalogs(
-    stored: readonly HostingAdminRegionDefinition[],
+    stored: readonly HostingRegionPayload[],
     website: readonly HostingRegionPayload[],
 ): HostingRegionDrift {
     const storedPlacements = new Map(stored.map((entry) => [entry.region, entry.placement]));
@@ -71,7 +70,7 @@ export function hasHostingRegionDrift(drift: HostingRegionDrift): boolean {
 }
 
 /** Describes a placement as "US: os-us-west-or-2, us-west-or" or "FR". */
-export function formatPlacement(placement: HostingAdminRegionPlacement): string {
+export function formatPlacement(placement: HostingRegionPayload["placement"]): string {
     const countries = placement.countryCodes.join(", ");
     if (placement.locationIds === undefined) return countries;
     return `${countries}: ${placement.locationIds.join(", ")}`;
@@ -85,7 +84,7 @@ function parseDefinition(value: unknown): HostingAdminRegionEntry {
 }
 
 /** Validates one placement: unique ISO countries and, when present, unique provider zones. */
-function parsePlacement(value: unknown): HostingAdminRegionPlacement {
+function parsePlacement(value: unknown): HostingRegionPayload["placement"] {
     if (!isRecord(value)) throw invalidCatalog();
     const hasLocations = Object.hasOwn(value, "locationIds");
     if (!hasExactKeys(value, hasLocations ? ["countryCodes", "locationIds"] : ["countryCodes"])) throw invalidCatalog();
@@ -103,7 +102,7 @@ function uniqueList(value: unknown, pattern: RegExp, maximum: number): string[] 
 }
 
 /** Whether two placements name the same countries and zones, ignoring order. */
-function samePlacement(left: HostingAdminRegionPlacement, right: HostingAdminRegionPlacement): boolean {
+function samePlacement(left: HostingRegionPayload["placement"], right: HostingRegionPayload["placement"]): boolean {
     if (!sameSet(left.countryCodes, right.countryCodes)) return false;
     if (left.locationIds === undefined || right.locationIds === undefined) return left.locationIds === right.locationIds;
     return sameSet(left.locationIds, right.locationIds);

@@ -6,10 +6,10 @@ import { formatAccountOwner, hostPlacementLabel } from "@/app/lib/control-plane/
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import type {
     HostingAdminHostResources,
-    HostingAdminRegionDefinition,
     HostingAdminVpsHost,
     HostingServerResources,
 } from "@/app/lib/control-plane/types";
+import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 import { AlertTriangle, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useId, useState } from "react";
@@ -28,7 +28,7 @@ type VpsHostInventoryProps = {
     ownerLabels: Record<string, string>;
     runnerTargetSourceCommit: string | null;
     // Stored catalog placements that name each host's regions; null when the catalog could not be read.
-    regionCatalog?: readonly HostingAdminRegionDefinition[] | null;
+    regionCatalog?: readonly HostingRegionPayload[] | null;
 };
 
 const SUMMARY_GRID = "grid-cols-2 @min-[70rem]:grid-cols-[minmax(0,12fr)_minmax(0,7fr)_minmax(0,15fr)_minmax(0,12fr)_minmax(0,8fr)_minmax(0,12fr)_2.5rem] [&>*]:min-w-0 [overflow-wrap:anywhere]";
@@ -132,7 +132,7 @@ export function diskPressureLevel(resources: HostingAdminHostResources | null): 
 }
 
 /** Shows a host's name and its stored-catalog regions, country and zone. */
-function HostIdentity({ host, regionCatalog }: { host: HostingAdminVpsHost; regionCatalog: readonly HostingAdminRegionDefinition[] | null }) {
+function HostIdentity({ host, regionCatalog }: { host: HostingAdminVpsHost; regionCatalog: readonly HostingRegionPayload[] | null }) {
     const placement = hostPlacementLabel(host, regionCatalog);
     return <div className="min-w-0"><p className="truncate font-mono text-xs text-foreground" title={host.name}>{host.name}</p><p className="mt-1 truncate text-xs text-foreground-muted" title={placement}>{placement}</p></div>;
 }

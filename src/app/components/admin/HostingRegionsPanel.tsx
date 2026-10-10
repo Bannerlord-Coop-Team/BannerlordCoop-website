@@ -8,7 +8,7 @@ import {
     hasHostingRegionDrift,
     type HostingRegionDrift,
 } from "@/app/lib/control-plane/hosting-region-catalog";
-import type { HostingAdminRegionCatalog, HostingAdminRegionDefinition } from "@/app/lib/control-plane/types";
+import type { HostingAdminRegionCatalog } from "@/app/lib/control-plane/types";
 import {
     hostingRegionCatalogPayload,
     hostingRegionLabel,
@@ -16,7 +16,7 @@ import {
 } from "../../../../supabase/functions/_shared/hosting-regions";
 
 /** One comparison row: a key with its website and stored definitions and status. */
-type CatalogRow = { region: string; website: HostingRegionPayload | null; stored: HostingAdminRegionDefinition | null; status: string; drifted: boolean };
+type CatalogRow = { region: string; website: HostingRegionPayload | null; stored: HostingRegionPayload | null; status: string; drifted: boolean };
 
 /** Shows the control plane's stored region catalog beside the website catalog and offers to publish the website's. */
 export function HostingRegionsPanel({ catalog, error, accountLabels = {}, website = hostingRegionCatalogPayload() }: {
@@ -78,7 +78,7 @@ function CatalogComparison({ catalog, website, accountLabels }: {
 }
 
 /** One row per key: website regions in website order, then stored regions the website does not define. */
-function catalogRows(stored: readonly HostingAdminRegionDefinition[], website: readonly HostingRegionPayload[], drift: HostingRegionDrift): CatalogRow[] {
+function catalogRows(stored: readonly HostingRegionPayload[], website: readonly HostingRegionPayload[], drift: HostingRegionDrift): CatalogRow[] {
     const websiteRows = website.map((entry) => {
         const match = stored.find((candidate) => candidate.region === entry.region) ?? null;
         return { region: entry.region, website: entry, stored: match, ...rowStatus(entry.region, match, drift) };
@@ -89,7 +89,7 @@ function catalogRows(stored: readonly HostingAdminRegionDefinition[], website: r
 }
 
 /** Status text for a website region against the stored catalog. */
-function rowStatus(region: string, stored: HostingAdminRegionDefinition | null, drift: HostingRegionDrift) {
+function rowStatus(region: string, stored: HostingRegionPayload | null, drift: HostingRegionDrift) {
     if (stored === null) return { status: "Missing from control plane", drifted: true };
     if (drift.placementDiffers.includes(region)) return { status: "Placement differs", drifted: true };
     return { status: "In sync", drifted: false };

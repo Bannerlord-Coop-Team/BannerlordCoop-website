@@ -51,8 +51,8 @@ export const HOSTING_REGIONS = [
 
 type HostingRegionKey = typeof HOSTING_REGIONS[number]["key"];
 
-/** Whether a value is a key in this website catalog. */
-export function isHostingRegionKey(value: unknown): value is HostingRegionKey {
+/** Whether a value is a key in this website catalog (catalog membership, not the key-shape check `isRegionKey`). */
+export function isWebsiteRegionKey(value: unknown): value is HostingRegionKey {
     return HOSTING_REGIONS.some((region) => region.key === value);
 }
 
@@ -71,16 +71,6 @@ export function hostingRegionLabel(key: string): string {
 /** The whole catalog in the control plane's wire form, in display order, as an independent copy. */
 export function hostingRegionCatalogPayload(): HostingRegionPayload[] {
     return HOSTING_REGIONS.map((region) => ({ region: region.key, placement: placementPayload(region.placement) }));
-}
-
-/** Whether a value is a plain object. */
-export function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** Whether an object has exactly the expected own keys. */
-export function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
-    return Object.keys(value).length === expected.length && expected.every((key) => Object.hasOwn(value, key));
 }
 
 /** Copies a readonly placement into mutable JSON arrays. */
