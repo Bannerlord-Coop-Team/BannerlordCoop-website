@@ -1,5 +1,5 @@
 import { ControlPlaneAdminError } from "./client";
-import type { HostingAdminRegionCatalog, HostingAdminRegionEntry } from "./types";
+import type { HostingAdminRegionEntry } from "./types";
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
 import {
     COUNTRY_CODE_PATTERN,
@@ -11,27 +11,27 @@ import {
     type HostingRegionPlacementPayload,
 } from "../../../../supabase/functions/_shared/hosting-regions";
 
-/** Reads the stored catalog for the Operations page; a failure becomes a message instead of failing the page. */
+/** Reads the stored catalog's entries for the admin pages; a failure becomes a message instead of failing the page. */
 export async function readHostingRegionCatalog(
     read: () => Promise<unknown>,
-): Promise<{ catalog: HostingAdminRegionCatalog | null; error: string | null }> {
+): Promise<{ regions: HostingAdminRegionEntry[] | null; error: string | null }> {
     try {
-        return { catalog: parseHostingRegionCatalog(await read()), error: null };
+        return { regions: parseHostingRegionCatalog(await read()), error: null };
     } catch (cause) {
-        if (cause instanceof ControlPlaneAdminError) return { catalog: null, error: cause.message };
-        return { catalog: null, error: "The control plane's hosting-region catalog could not be read." };
+        if (cause instanceof ControlPlaneAdminError) return { regions: null, error: cause.message };
+        return { regions: null, error: "The control plane's hosting-region catalog could not be read." };
     }
 }
 
 /** Validates the `regions` of a `hosting-regions` result: 1..32 unique keys with bounded placements and availability. */
-export function parseHostingRegionCatalog(value: unknown): HostingAdminRegionCatalog {
+export function parseHostingRegionCatalog(value: unknown): HostingAdminRegionEntry[] {
     // The website reads only the entries; the catalog's revision and audit fields are not validated so they cannot disable the views.
     if (!isRecord(value)) throw invalidCatalog();
     // The control plane never stores an empty catalog, so one is malformed.
     if (!Array.isArray(value.regions) || value.regions.length < 1 || value.regions.length > MAXIMUM_REGIONS) throw invalidCatalog();
     const regions = value.regions.map(parseDefinition);
     if (new Set(regions.map((entry) => entry.region)).size !== regions.length) throw invalidCatalog();
-    return { regions };
+    return regions;
 }
 
 /** Validates one stored entry: its key, placement and current availability. */

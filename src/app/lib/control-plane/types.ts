@@ -233,18 +233,13 @@ export type OperationsData = {
     inventory: HostingAdminVpsInventory;
     vpsProviderError: string | null;
     selectedServer: ManagedServer | null;
-    // The control plane's stored region catalog; null with an error when it could not be read.
-    hostingRegions: HostingAdminRegionCatalog | null;
+    // The control plane's stored region catalog entries; null with an error when they could not be read.
+    hostingRegions: HostingAdminRegionEntry[] | null;
     hostingRegionsError: string | null;
 };
 
 /** One stored entry as `hosting-regions` returns it, with whether it has a free admissible slot now. */
 export type HostingAdminRegionEntry = HostingRegionPayload & { available: boolean };
-
-/** The entries of the control plane's stored region catalog, as `hosting-regions` returns them. */
-export type HostingAdminRegionCatalog = {
-    regions: HostingAdminRegionEntry[];
-};
 
 /** The VPS view's data: registered hosts and the stored catalog placements that label them (null when unreadable). */
 export type VpsViewData = {

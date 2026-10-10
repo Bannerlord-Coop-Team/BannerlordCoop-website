@@ -7,31 +7,33 @@ import {
 } from "./hosting-region-catalog";
 import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
-const seed = () => ({ regions: hostingRegionCatalogPayload().map((entry) => ({ ...entry, available: true })) });
+const seed = () => hostingRegionCatalogPayload().map((entry) => ({ ...entry, available: true }));
 
 test("a catalog's revision and audit fields are ignored, so they cannot make the entries unreadable", () => {
-    assert.deepEqual(parseHostingRegionCatalog({ ...seed(), revision: 4, updatedAt: 1, updatedBy: "x".repeat(300) }), seed());
+    assert.deepEqual(parseHostingRegionCatalog({ regions: seed(), revision: 4, updatedAt: 1, updatedBy: "x".repeat(300) }), seed());
 });
 
 test("malformed stored catalogs are rejected", () => {
     const entry = { region: "france", placement: { countryCodes: ["FR"] }, available: false };
-    for (const value of [null, [], {}, { regions: null }, { ...seed(), regions: [] },
-        { ...seed(), regions: Array.from({ length: 33 }, (_, index) => ({ ...entry, region: `region-${index}` })) },
-        { ...seed(), regions: [entry, entry] }, { ...seed(), regions: [{ ...entry, region: "France" }] },
-        { ...seed(), regions: [{ ...entry, label: "France" }] }, { ...seed(), regions: [{ ...entry, placement: { countryCodes: ["fr"] } }] },
-        { ...seed(), regions: [{ ...entry, placement: { countryCodes: [] } }] }, { ...seed(), regions: [{ ...entry, placement: { countryCodes: ["FR", "FR"] } }] },
-        { ...seed(), regions: [{ ...entry, placement: { countryCodes: ["FR"], locationIds: [] } }] },
-        { ...seed(), regions: [{ ...entry, placement: { countryCodes: ["FR"], hosts: ["x"] } }] },
-        { ...seed(), regions: [{ region: "france", placement: { countryCodes: ["FR"] } }] },
-        { ...seed(), regions: [{ ...entry, available: "true" }] }]) {
-        assert.throws(() => parseHostingRegionCatalog(value), ControlPlaneAdminError, JSON.stringify(value));
+    for (const regions of [undefined, null, [],
+        Array.from({ length: 33 }, (_, index) => ({ ...entry, region: `region-${index}` })),
+        [entry, entry], [{ ...entry, region: "France" }],
+        [{ ...entry, label: "France" }], [{ ...entry, placement: { countryCodes: ["fr"] } }],
+        [{ ...entry, placement: { countryCodes: [] } }], [{ ...entry, placement: { countryCodes: ["FR", "FR"] } }],
+        [{ ...entry, placement: { countryCodes: ["FR"], locationIds: [] } }],
+        [{ ...entry, placement: { countryCodes: ["FR"], hosts: ["x"] } }],
+        [{ region: "france", placement: { countryCodes: ["FR"] } }],
+        [{ ...entry, available: "true" }]]) {
+        assert.throws(() => parseHostingRegionCatalog({ regions }), ControlPlaneAdminError, JSON.stringify(regions));
     }
+    assert.throws(() => parseHostingRegionCatalog(null), ControlPlaneAdminError);
+    assert.throws(() => parseHostingRegionCatalog([]), ControlPlaneAdminError);
 });
 
 test("reading the stored catalog degrades to a message instead of failing Operations", async () => {
-    assert.deepEqual(await readHostingRegionCatalog(async () => seed()), { catalog: seed(), error: null });
+    assert.deepEqual(await readHostingRegionCatalog(async () => ({ regions: seed() })), { regions: seed(), error: null });
     const unsupported = await readHostingRegionCatalog(async () => { throw new ControlPlaneAdminError("unsupported_operation", "Unsupported."); });
-    assert.deepEqual(unsupported, { catalog: null, error: "Unsupported." });
+    assert.deepEqual(unsupported, { regions: null, error: "Unsupported." });
     const malformed = await readHostingRegionCatalog(async () => ({ revision: 1 }));
-    assert.deepEqual(malformed, { catalog: null, error: "The control plane returned an invalid hosting-region catalog." });
+    assert.deepEqual(malformed, { regions: null, error: "The control plane returned an invalid hosting-region catalog." });
 });

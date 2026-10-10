@@ -53,11 +53,15 @@ To add a region (a VPS there is optional; without one the region is offered as f
 
 #### Publishing the website catalog
 
-The website has no page for this. An administrator sends `set-hosting-regions` to the control plane's administrator API, either directly as `POST /v1/admin/control-plane` on the control plane host or through the website's `control-plane-admin` Edge Function, which relays any operation name for a signed-in website administrator. The request is the standard envelope `{version: 1, requestId, operation: "set-hosting-regions", input}` with a fresh UUID `requestId`, and `input` is:
+The website has no page for this. An administrator sends the control plane's `set-hosting-regions` operation through the website's `control-plane-admin` Edge Function, which relays any operation name after reauthenticating the caller: `POST` the function URL with `Authorization: Bearer <access token>` (the Supabase session access token of a signed-in website administrator, for example copied from the browser session) and the standard envelope `{version: 1, requestId, operation, input}` with a fresh UUID `requestId`. Two calls are needed, because the website keeps nothing of the stored catalog but its entries:
 
-- `regions`: the ordered `{region, placement}` list that `hostingRegionCatalogPayload()` in `supabase/functions/_shared/hosting-regions.ts` returns, unchanged;
-- `expectedRevision`: the `revision` that `hosting-regions` (input `{}`) currently returns, so a concurrent publish is rejected with `request_conflict`;
-- `reason`: 3–1000 characters, stored in the administrative audit event.
+1. `operation: "hosting-regions"`, `input: {}`: note the `revision` in the response.
+2. `operation: "set-hosting-regions"` with `input`:
+   - `regions`: the ordered `{region, placement}` list that `hostingRegionCatalogPayload()` in `supabase/functions/_shared/hosting-regions.ts` returns, unchanged;
+   - `expectedRevision`: the revision from step 1, so a concurrent publish is rejected with `request_conflict` (re-read and retry);
+   - `reason`: 3–1000 characters, stored in the administrative audit event.
+
+The same envelope can be sent directly to `POST /v1/admin/control-plane` on the control plane host when calling from inside its private network with the credentials that host requires.
 
 Publishing removes any region the website catalog omits from what owners can create in or request; existing servers and outstanding requests keep their keys and are labelled from the key.
 

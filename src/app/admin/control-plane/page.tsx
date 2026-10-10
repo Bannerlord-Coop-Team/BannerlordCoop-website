@@ -291,7 +291,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 inventory: inventory.inventory,
                 vpsProviderError: inventory.providerError,
                 selectedServer: selectedDashboard?.dashboard.server ?? null,
-                hostingRegions: hostingRegions.catalog,
+                hostingRegions: hostingRegions.regions,
                 hostingRegionsError: hostingRegions.error,
             } satisfies OperationsData;
         }
@@ -301,7 +301,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 loadHostingRegionCatalog(token, signal, identity),
             ]);
             // Host labels match the stored placements; an unreadable catalog leaves the hosts listed without regions.
-            return { inventory, regionCatalog: hostingRegions.catalog?.regions ?? null } satisfies VpsViewData;
+            return { inventory, regionCatalog: hostingRegions.regions } satisfies VpsViewData;
         }
         case "servers":
             return readControlPlaneAdmin<HostingPage<ManagedServer>>({
@@ -598,7 +598,7 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     const buildOptions = installableBuilds([...overview.stableBuilds.items, ...overview.nightlyBuilds.items]).map((build) => ({ label: `Pinned version: ${releaseVersion(build)} · ${releaseChannelLabel(build.channel)}${build.currentChannel ? " (current)" : ""}`, value: build.buildId, releaseChannel: build.channel }));
     const accountOptions: AdminActionOption[] = accounts.map(user => ({ label: user.label, value: user.accountId }));
     const availableVpsOptions: AdminActionOption[] = (Array.isArray(inventory.availableServiceNames) ? inventory.availableServiceNames : []).map((serviceName) => ({ label: serviceName, value: serviceName }));
-    const createRegionOptions: AdminActionOption[] = createServerRegionOptions(hostingRegions?.regions ?? []);
+    const createRegionOptions: AdminActionOption[] = createServerRegionOptions(hostingRegions ?? []);
     const maintenanceOptions: AdminActionOption[] = maintenanceSlotOptions();
     const accountField = (name: string, label: string): AdminActionField => ({ name, label, kind: "account", required: true, options: accountOptions, help: "Choose a website account by its email or account ID." });
     const reasonField: AdminActionField = { name: "reason", label: "Reason", kind: "textarea", placeholder: "Optional context for this action", help: "Optional context stored in the immutable administrative audit event. When blank, the control plane records a fixed portal-action reason." };
