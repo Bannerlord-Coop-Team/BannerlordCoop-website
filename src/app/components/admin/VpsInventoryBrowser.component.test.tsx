@@ -7,6 +7,7 @@ import {
     filterVpsHosts,
     readVpsPageSize,
     setRememberedVpsPageSize,
+    regionSlotOutline,
     summarizeVpsSlots,
     vpsOwnerEmails,
     vpsRegionOptions,
@@ -14,6 +15,7 @@ import {
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 import { VpsInventoryBrowser } from "./VpsInventoryBrowser";
+import { VpsSlotSummary } from "./VpsSlotSummary";
 
 vi.mock("@/app/components/admin/RunnerOnboardingStatus", () => ({
     RunnerOnboardingStatus: () => <span>Runner current</span>,
@@ -45,6 +47,22 @@ afterEach(async () => {
     await act(async () => root.unmount());
     container.remove();
     localStorage.clear();
+});
+
+describe("VPS region cards", () => {
+    it("outlines a full region in red and a region with one slot left in yellow", async () => {
+        const hosts = [
+            { ...host("full", "us-west", 0, ADA), totalSlots: 5, occupiedSlots: occupied(5) },
+            { ...host("last", "france", 1, ADA), totalSlots: 4, occupiedSlots: occupied(3) },
+            { ...host("open", "poland", 2, ADA), totalSlots: 4, occupiedSlots: occupied(1) },
+        ];
+        await act(async () => root.render(<VpsSlotSummary hosts={hosts} />));
+        expect(regionCard("US-West").className).toContain("border-crimson");
+        expect(regionCard("France").className).toContain("border-yellow-400");
+        expect(regionCard("Poland").className).toContain("border-white/10");
+        expect(regionCard("Poland").className).not.toContain("border-crimson");
+        expect(regionCard("Poland").className).not.toContain("border-yellow-400");
+    });
 });
 
 describe("VPS inventory filters", () => {
@@ -193,6 +211,11 @@ describe("VPS inventory query", () => {
                 { region: "poland", label: "Poland", totalSlots: 3, takenSlots: 1 },
             ],
         });
+        expect(regionSlotOutline(5, 5)).toBe("full");
+        expect(regionSlotOutline(1, 1)).toBe("full");
+        expect(regionSlotOutline(3, 4)).toBe("one-left");
+        expect(regionSlotOutline(0, 1)).toBe("one-left");
+        expect(regionSlotOutline(13, 16)).toBe("open");
         expect(readVpsPageSize({ getItem: () => "100" })).toBe(100);
         expect(readVpsPageSize({ getItem: () => "10abc" })).toBe(10);
         expect(readVpsPageSize({ getItem: () => { throw new Error("blocked"); } })).toBe(10);
@@ -231,6 +254,23 @@ function button(label: string) {
 
 function regionBox(value: string) {
     return container.querySelector<HTMLInputElement>(`input[name="region"][value="${value}"]`);
+}
+
+function regionCard(label: string) {
+    const card = [...container.querySelectorAll("li")].find((item) => item.textContent?.includes(label));
+    if (!card) throw new Error(`Missing region card ${label}`);
+    return card;
+}
+
+function occupied(count: number): HostingAdminVpsHost["occupiedSlots"] {
+    return Array.from({ length: count }, (_, slotIndex) => ({
+        slotIndex,
+        gamePort: 4200 + slotIndex,
+        serverId: `slot-${slotIndex}`,
+        displayName: `slot-${slotIndex}`,
+        ownerDiscordUserId: "owner",
+        operationState: "stopped",
+    }));
 }
 
 function emptySlotsBox() {
