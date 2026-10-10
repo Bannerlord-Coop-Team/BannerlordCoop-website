@@ -18,7 +18,6 @@
   "membership.signIn": "Sign in / create account",
   "membership.openPatreon": "Open Patreon",
   "membership.repair": "Account status and repair guidance",
-  "membership.independence": "Existing server management, Start/Stop and saves do not depend on membership refresh. No automatic stop or deletion is started by expired membership evidence.",
   "membership.connect": "Connect Patreon",
   "membership.checkAgain": "Check again with Patreon",
   "search.label": "Search public servers",

@@ -18,7 +18,6 @@
   "membership.signIn": "登录 / 创建账户",
   "membership.openPatreon": "打开 Patreon",
   "membership.repair": "账户状态与修复指南",
-  "membership.independence": "现有服务器的管理、启动/停止和存档操作不依赖会员资格刷新。会员资格验证凭据过期不会触发自动停止或删除。",
   "membership.connect": "关联 Patreon",
   "membership.checkAgain": "通过 Patreon 再次检查",
   "search.label": "搜索公开服务器",

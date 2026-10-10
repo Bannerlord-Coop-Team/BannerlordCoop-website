@@ -18,7 +18,6 @@
   "membership.signIn": "로그인 / 계정 만들기",
   "membership.openPatreon": "Patreon 열기",
   "membership.repair": "계정 상태 및 복구 안내",
-  "membership.independence": "기존 서버 관리, 시작/중지 및 저장 파일 사용은 멤버십 갱신 여부와 무관합니다. 멤버십 인증이 만료되어도 자동으로 서버를 중지하거나 삭제하지 않습니다.",
   "membership.connect": "Patreon 연결",
   "membership.checkAgain": "Patreon으로 다시 확인",
   "search.label": "공개 서버 검색",
