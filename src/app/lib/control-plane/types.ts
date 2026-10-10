@@ -241,12 +241,9 @@ export type OperationsData = {
 /** One stored entry as `hosting-regions` returns it, with whether it has a free admissible slot now. */
 export type HostingAdminRegionEntry = HostingRegionPayload & { available: boolean };
 
-/** The control plane's stored region catalog as `hosting-regions` returns it. */
+/** The entries of the control plane's stored region catalog, as `hosting-regions` returns them. */
 export type HostingAdminRegionCatalog = {
-    revision: number;
     regions: HostingAdminRegionEntry[];
-    updatedAt: string | null;
-    updatedBy: string | null;
 };
 
 /** The VPS view's data: registered hosts and the stored catalog placements that label them (null when unreadable). */

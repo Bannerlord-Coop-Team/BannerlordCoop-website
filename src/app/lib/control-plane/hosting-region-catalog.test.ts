@@ -7,11 +7,15 @@ import {
 } from "./hosting-region-catalog";
 import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
-const seed = () => ({ revision: 1, regions: hostingRegionCatalogPayload().map((entry) => ({ ...entry, available: true })), updatedAt: null, updatedBy: null });
+const seed = () => ({ regions: hostingRegionCatalogPayload().map((entry) => ({ ...entry, available: true })) });
+
+test("a catalog's revision and audit fields are ignored, so they cannot make the entries unreadable", () => {
+    assert.deepEqual(parseHostingRegionCatalog({ ...seed(), revision: 4, updatedAt: 1, updatedBy: "x".repeat(300) }), seed());
+});
 
 test("malformed stored catalogs are rejected", () => {
     const entry = { region: "france", placement: { countryCodes: ["FR"] }, available: false };
-    for (const value of [null, [], { ...seed(), revision: -1 }, { ...seed(), revision: 0 }, { ...seed(), regions: [] }, { ...seed(), revision: "1" },
+    for (const value of [null, [], {}, { regions: null }, { ...seed(), regions: [] },
         { ...seed(), regions: Array.from({ length: 33 }, (_, index) => ({ ...entry, region: `region-${index}` })) },
         { ...seed(), regions: [entry, entry] }, { ...seed(), regions: [{ ...entry, region: "France" }] },
         { ...seed(), regions: [{ ...entry, label: "France" }] }, { ...seed(), regions: [{ ...entry, placement: { countryCodes: ["fr"] } }] },
@@ -19,8 +23,7 @@ test("malformed stored catalogs are rejected", () => {
         { ...seed(), regions: [{ ...entry, placement: { countryCodes: ["FR"], locationIds: [] } }] },
         { ...seed(), regions: [{ ...entry, placement: { countryCodes: ["FR"], hosts: ["x"] } }] },
         { ...seed(), regions: [{ region: "france", placement: { countryCodes: ["FR"] } }] },
-        { ...seed(), regions: [{ ...entry, available: "true" }] },
-        { ...seed(), updatedAt: 1 }]) {
+        { ...seed(), regions: [{ ...entry, available: "true" }] }]) {
         assert.throws(() => parseHostingRegionCatalog(value), ControlPlaneAdminError, JSON.stringify(value));
     }
 });

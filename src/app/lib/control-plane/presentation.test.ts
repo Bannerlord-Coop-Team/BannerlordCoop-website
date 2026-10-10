@@ -37,10 +37,13 @@ test("create-server regions are the stored-catalog entries reported available, i
     assert.deepEqual(createServerRegionOptions([]), []);
 });
 
-test("administrator create sends only the region key and defaults the release channel", () => {
+test("administrator create sends only the region key; other operations get no defaults", () => {
     const input: Record<string, unknown> = { friendlyRegion: "us-east" };
     applyControlPlaneOperationDefaults("create-server", input);
     assert.deepEqual(input, { friendlyRegion: "us-east", releaseChannel: "stable" });
+    const maintenance: Record<string, unknown> = { reason: "Roll the fleet" };
+    applyControlPlaneOperationDefaults("batch-maintenance", maintenance);
+    assert.deepEqual(maintenance, { reason: "Roll the fleet" });
 });
 
 test("hosts are labelled with every stored region they serve, else their legacy region or none", () => {

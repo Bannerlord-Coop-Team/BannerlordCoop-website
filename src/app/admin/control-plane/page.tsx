@@ -582,6 +582,7 @@ function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nig
     </div>;
 }
 
+/** Lays out every administrator operation card, grouped, with choices built from the loaded fleet, server and catalog state. */
 function OperationsView({ data, accounts }: { data: OperationsData; accounts: WebsiteAccountSummary[] }) {
     const { overview, inventory, selectedServer, vpsProviderError, hostingRegions, hostingRegionsError } = data;
     const listedServers = selectedServer !== null

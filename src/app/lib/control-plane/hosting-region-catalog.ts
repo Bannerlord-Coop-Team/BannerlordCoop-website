@@ -23,15 +23,15 @@ export async function readHostingRegionCatalog(
     }
 }
 
-/** Validates a `hosting-regions` result: revision >= 1, 1..32 unique keys with bounded placements and availability, audit fields. */
+/** Validates the `regions` of a `hosting-regions` result: 1..32 unique keys with bounded placements and availability. */
 export function parseHostingRegionCatalog(value: unknown): HostingAdminRegionCatalog {
-    if (!isRecord(value) || !Number.isSafeInteger(value.revision) || (value.revision as number) < 1) throw invalidCatalog();
-    if (!nullableText(value.updatedAt) || !nullableText(value.updatedBy)) throw invalidCatalog();
-    // The control plane seeds revision 1 and never stores an empty catalog, so either is malformed.
+    // The website reads only the entries; the catalog's revision and audit fields are not validated so they cannot disable the views.
+    if (!isRecord(value)) throw invalidCatalog();
+    // The control plane never stores an empty catalog, so one is malformed.
     if (!Array.isArray(value.regions) || value.regions.length < 1 || value.regions.length > MAXIMUM_REGIONS) throw invalidCatalog();
     const regions = value.regions.map(parseDefinition);
     if (new Set(regions.map((entry) => entry.region)).size !== regions.length) throw invalidCatalog();
-    return { revision: value.revision as number, regions, updatedAt: value.updatedAt, updatedBy: value.updatedBy };
+    return { regions };
 }
 
 /** Validates one stored entry: its key, placement and current availability. */
@@ -57,11 +57,6 @@ function uniqueList(value: unknown, pattern: RegExp, maximum: number): string[] 
     if (!value.every((item) => typeof item === "string" && pattern.test(item))) throw invalidCatalog();
     if (new Set(value).size !== value.length) throw invalidCatalog();
     return value as string[];
-}
-
-/** Whether a value is null or a bounded string. */
-function nullableText(value: unknown): value is string | null {
-    return value === null || (typeof value === "string" && value.length <= 256);
 }
 
 /** The error every rejected catalog raises. */

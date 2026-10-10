@@ -37,6 +37,7 @@ export type AdminActionField = {
     help?: string;
 };
 
+/** One administrator operation form: collects its fields, submits the typed request and shows the outcome. */
 export function ControlPlaneActionCard({
     operation,
     title,

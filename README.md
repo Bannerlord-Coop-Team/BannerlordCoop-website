@@ -115,7 +115,7 @@ Bootstrap administrators always retain admin access, preventing an accidental to
 
 ### Control Plane administration
 
-The protected `/admin/control-plane` page is the administrative surface for managed hosting. It reads fleet/server/job/release/audit state and submits the complete supported administrator operation set through the `control-plane-admin` Supabase Edge Function. The function reauthenticates the current Discord administrator and relays the typed request to the Oracle control-plane web adapter. The website does not query the private control-plane schema or talk directly to OVH, runners, containers, or object storage. See `docs/control-plane-admin.md` and the control-plane repository's `docs/managed-hosting/web-admin.md`.
+The protected `/admin/control-plane` page is the administrative surface for managed hosting. It reads fleet/server/job/release/audit state and submits the administrator operations it offers through the `control-plane-admin` Supabase Edge Function; publishing the hosting-region catalog (`set-hosting-regions`) is done on the control plane, not here. The function reauthenticates the current Discord administrator and relays the typed request to the Oracle control-plane web adapter. The website does not query the private control-plane schema or talk directly to OVH, runners, containers, or object storage. See `docs/control-plane-admin.md` and the control-plane repository's `docs/managed-hosting/web-admin.md`.
 
 ### Legacy server hosting preview
 

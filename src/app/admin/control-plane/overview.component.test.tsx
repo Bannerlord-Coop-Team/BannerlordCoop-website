@@ -91,9 +91,9 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
         if (request.operation === "vps-hosts") return { availableServiceNames: ["vps-available.vps.ovh.us"],
             hosts: [{ locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }] };
         // Only US-East has a free slot in the stored catalog, so it is the only Create region offered.
-        if (request.operation === "hosting-regions") return { revision: 4, updatedAt: null, updatedBy: null,
-            regions: hostingRegionCatalogPayload().filter((entry) => entry.region !== "poland")
-                .map((entry) => ({ ...entry, available: entry.region === "us-east" })) };
+        if (request.operation === "hosting-regions") return { regions: hostingRegionCatalogPayload()
+            .filter((entry) => entry.region === "us-west" || entry.region === "us-east")
+            .map((entry) => ({ ...entry, available: entry.region === "us-east" })) };
         throw new Error("Unexpected read");
     });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));
@@ -103,7 +103,7 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     expect(html).not.toContain("Publish website regions");
     expect(html).toContain("Onboard existing OVH VPS");
     expect(html).toContain("vps-available.vps.ovh.us");
-    expect(html).toContain('value="us-east"');
+    expect(html.match(/<option value="us-east">US-East<\/option>/gu)).toHaveLength(1);
     expect(html).not.toContain('value="us-west"');
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual([[{

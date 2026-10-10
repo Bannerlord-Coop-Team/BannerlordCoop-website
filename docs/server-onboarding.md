@@ -39,7 +39,7 @@ All use existing Supabase JWT forwarding to authenticated `POST /v1/user/control
 
 The website catalog, `supabase/functions/_shared/hosting-regions.ts`, defines each region's key, English label, continent tab (`HOSTING_CONTINENTS`), and **placement**: the ISO country codes it covers and, optionally, the exact provider zones. US-West and US-East name their exact Oregon and Virginia zones, because a US country code alone never implies a coast. Display order is the order of `HOSTING_REGIONS`.
 
-The control plane matches hosts only against its own **stored catalog** of keys and placements; owners can never send or influence a placement, because the owner endpoint is public. An empty stored catalog fails closed for owners: the summary parser requires at least one region, so the website shows onboarding as unavailable rather than an empty region list. The control plane seeds that catalog with the six original regions (US-West through Poland) and placements identical to the website catalog. It is replaced through the control plane's own `set-hosting-regions` administrative operation, guarded by the stored revision; the website's Operations page does not offer that operation, it only reads the stored catalog.
+The control plane matches hosts only against its own **stored catalog** of keys and placements; owners can never send or influence a placement, because the owner endpoint is public. An empty stored catalog fails closed for owners: the summary parser requires at least one region, so the website shows onboarding as unavailable rather than an empty region list. The control plane seeds that catalog with the six original regions (US-West through Poland) and placements identical to the website catalog. It is replaced with the control plane's `set-hosting-regions` administrator operation (input `{expectedRevision, regions, reason}`, where `regions` is the website catalog's ordered `{region, placement}` list and `expectedRevision` is the revision `hosting-regions` currently reports); see [publishing the catalog](#publishing-the-website-catalog). The website's Operations page only reads the stored catalog.
 
 The version-3 summary lists the stored catalog in its stored order (1–32 unique keys matching `^[a-z][a-z0-9-]{1,47}$`), each with availability and the owner's outstanding request, plus `otherRequests` for outstanding requests whose key the stored catalog no longer contains. The shared parser accepts any stored catalog within those bounds; it does not require it to equal the website catalog. It rejects extra fields, a request filed under another entry's key, an `otherRequests` key that is in the catalog, and a request ID repeated anywhere in the summary.
 
@@ -49,7 +49,17 @@ To add a region (a VPS there is optional; without one the region is offered as f
 
 1. Add one catalog entry and its `region.<key>` translation in every `servers.json` dictionary. The entry's English `label` must equal its `region.<key>` translation in the English dictionary. `src/app/lib/hosting/region-labels.test.ts` enforces that every catalog key and continent has an English translation and that each label matches it, and dictionary parity carries the keys to the other locales. The catalog's bounds (`MAXIMUM_REGIONS`, the country and zone patterns and placement limits) are exported once from `hosting-regions.ts` and shared by every catalog and summary parser.
 2. Deploy the website.
-3. Publish the website catalog to the control plane with its `set-hosting-regions` operation. Until then the control plane does not offer the new region.
+3. Publish the website catalog to the control plane as described under [publishing the website catalog](#publishing-the-website-catalog). Until then the control plane does not offer the new region.
+
+#### Publishing the website catalog
+
+The website has no page for this. An administrator sends `set-hosting-regions` to the control plane's administrator API, either directly as `POST /v1/admin/control-plane` on the control plane host or through the website's `control-plane-admin` Edge Function, which relays any operation name for a signed-in website administrator. The request is the standard envelope `{version: 1, requestId, operation: "set-hosting-regions", input}` with a fresh UUID `requestId`, and `input` is:
+
+- `regions`: the ordered `{region, placement}` list that `hostingRegionCatalogPayload()` in `supabase/functions/_shared/hosting-regions.ts` returns, unchanged;
+- `expectedRevision`: the `revision` that `hosting-regions` (input `{}`) currently returns, so a concurrent publish is rejected with `request_conflict`;
+- `reason`: 3–1000 characters, stored in the administrative audit event.
+
+Publishing removes any region the website catalog omits from what owners can create in or request; existing servers and outstanding requests keep their keys and are labelled from the key.
 
 Removing a region works the same way. An owner tab that still retains a pending intent for a removed key keeps working: retained intents are parsed by key shape rather than against the catalog, and are shown with the fallback label. Retry settles them: the control plane rejects a key outside its stored catalog with `invalid_region` before writing anything (after receipt replay), so the website clears the intent and says the region is no longer offered. **Discard pending request** appears only after a dispatch of that intent ends without a definite outcome.
 
@@ -213,6 +223,6 @@ Deploy order for the stored region catalog:
 
 1. Deploy the control plane first, with the stored catalog (`hosting-regions` returning `available` per entry, `set-hosting-regions`, the version-3 summary, key-only Create/Request). Its migration 096, `20261009120000_control_plane_provider_regions.sql`, creates the catalog and seeds the six original regions; it is applied through the control plane's manual Supabase release procedure before that release starts.
 2. Then deploy the `my-servers` Edge Function and the website. They request only the version-3 summary, so against an older control plane owner onboarding shows as unavailable and **Create server** is shown unavailable with the read error.
-3. If the website catalog differs from the seed, publish it with the control plane's `set-hosting-regions` operation.
+3. If the website catalog differs from the seed, publish it as described under [publishing the website catalog](#publishing-the-website-catalog).
 
 The `control-plane-admin` Edge Function forwards any operation name and is not changed by this work, so it needs no redeploy.
