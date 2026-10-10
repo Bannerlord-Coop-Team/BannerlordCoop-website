@@ -249,6 +249,21 @@ remains unavailable only when neither the request nor the current verified
 account directory contains one. A successful action removes the row and records the administrator
 resolution; the browser does not collect a free-form reason.
 
+Rows whose request captured a requester email also offer **Notify**, which
+emails the requester that the region now has capacity, with a link to
+`/servers`. The browser sends `notify-region-request`; the `control-plane-admin`
+Edge Function handles it instead of forwarding it. It first calls the control
+plane's `claim-region-request-notification`, which atomically stamps
+`notified_at` on the request only while it is unset, then sends the email
+through the same Resend SMTP account as the region alerts (`SMTP_PASS`). If
+delivery fails it calls `release-region-request-notification` to clear the
+stamp so the administrator can retry. A second click or tab finds the stamp
+already set and sends nothing. Notified rows stay pending with a **Notified**
+badge until dismissed. Browsers cannot call the two claim operations directly.
+Without `SMTP_PASS` the operation returns `notifications_unavailable`. This needs
+control-plane migration 097, and the control-plane rollout must come before the
+Edge Function deploy.
+
 Focused verification:
 
 ```sh

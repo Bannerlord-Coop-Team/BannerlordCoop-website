@@ -226,6 +226,14 @@ export type HostingAdminRegionRequest = {
     createdAt: string;
     requesterEmail: string | null;
     allocatedRegions: string[];
+    notifiedAt: string | null;
+};
+
+/** The outcome of emailing a region requester; `sent` is false when an earlier notification already went out. */
+export type HostingAdminRegionRequestNotification = {
+    requestId: string;
+    notifiedAt: string;
+    sent: boolean;
 };
 
 export type OperationsData = {

@@ -1,3 +1,4 @@
+import { INTERNAL_REGION_NOTIFICATION_OPERATIONS, type ControlPlaneCall, type RegionRequestNotifier } from "./region-request-notification.ts";
 import { verifyWebsiteSessionContext } from "./session-context.ts";
 
 const MAXIMUM_REQUEST_BYTES = 64 * 1024;
@@ -16,7 +17,10 @@ export type ControlPlaneAdminHandlerOptions = {
     fetchImplementation?: typeof fetch;
     authTimeoutMilliseconds?: number;
     upstreamTimeoutMilliseconds?: number;
+    /** Handles `notify-region-request`; absent when SMTP is not configured. */
+    notifyRegionRequest?: RegionRequestNotifier;
 };
+type UpstreamReply = { kind: "unreachable" } | { kind: "invalid" } | { kind: "ok"; status: number; text: string };
 
 /** Authenticates every request and forwards reads to the authoritative control plane. */
 export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandlerOptions) {
@@ -69,10 +73,11 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             }
             return errorResponse(400, "invalid_request", "The request is invalid.", false, cors);
         }
-        const requestId = validateEnvelope(raw);
-        if (requestId === null) {
+        const envelope = validateEnvelope(raw);
+        if (envelope === null) {
             return errorResponse(400, "invalid_request", "The request is invalid.", false, cors);
         }
+        const { requestId } = envelope;
 
         const authenticationStarted = performance.now();
         let user: unknown;
@@ -108,42 +113,92 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             return envelopeError(403, requestId, "forbidden", "Administrator access is required.", false, cors);
         }
 
+        // Sends one envelope to the control plane and reads its bounded JSON reply.
+        const callUpstream = async (body: string): Promise<UpstreamReply> => {
+            let upstream: Response;
+            try {
+                upstream = await fetchImplementation(upstreamEndpoint, {
+                    method: "POST",
+                    redirect: "error",
+                    headers: {
+                        authorization: `Bearer ${token}`,
+                        "content-type": "application/json",
+                    },
+                    body,
+                    signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),
+                });
+            } catch {
+                return { kind: "unreachable" };
+            }
+            try {
+                const text = await readBoundedText(upstream, MAXIMUM_UPSTREAM_RESPONSE_BYTES);
+                JSON.parse(text);
+                return { kind: "ok", status: upstream.status, text };
+            } catch {
+                return { kind: "invalid" };
+            }
+        };
+
+        if (INTERNAL_REGION_NOTIFICATION_OPERATIONS.has(envelope.operation)) {
+            return envelopeError(400, requestId, "invalid_request", "The request is invalid.", false, cors);
+        }
+        if (envelope.operation === "notify-region-request") {
+            return notifyRegionRequest(envelope, origin ?? [...allowedOrigins][0], callUpstream, cors);
+        }
+
         const upstreamStarted = performance.now();
         const authenticationMilliseconds = Math.round(upstreamStarted - authenticationStarted);
-        let upstream: Response;
-        try {
-            upstream = await fetchImplementation(upstreamEndpoint, {
-                method: "POST",
-                redirect: "error",
-                headers: {
-                    authorization: `Bearer ${token}`,
-                    "content-type": "application/json",
-                },
-                body: raw,
-                signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),
-            });
-        } catch {
+        const reply = await callUpstream(raw);
+        if (reply.kind === "unreachable") {
             return envelopeError(502, requestId, "control_plane_unavailable", "The control plane could not be reached.", true, cors);
         }
-        let upstreamBody: string;
-        try {
-            upstreamBody = await readBoundedText(upstream, MAXIMUM_UPSTREAM_RESPONSE_BYTES);
-        } catch {
+        if (reply.kind === "invalid") {
             return envelopeError(502, requestId, "invalid_response", "The control plane returned an invalid response.", true, cors);
         }
-        try {
-            JSON.parse(upstreamBody);
-        } catch {
-            return envelopeError(502, requestId, "invalid_response", "The control plane returned an invalid response.", true, cors);
-        }
-        return new Response(upstreamBody, {
-            status: upstream.status,
+        return new Response(reply.text, {
+            status: reply.status,
             headers: {
                 ...cors, "cache-control": "no-store", "content-type": "application/json",
                 "server-timing": `edge_auth;dur=${authenticationMilliseconds}, control_plane;dur=${Math.round(performance.now() - upstreamStarted)}`,
             },
         });
     };
+
+    // Runs the claim, email and release sequence for one region request notification.
+    async function notifyRegionRequest(
+        envelope: Envelope,
+        siteOrigin: string,
+        callUpstream: (body: string) => Promise<UpstreamReply>,
+        cors: Record<string, string>,
+    ): Promise<Response> {
+        const { requestId } = envelope;
+        if (options.notifyRegionRequest === undefined) {
+            return envelopeError(503, requestId, "notifications_unavailable", "Email notifications are not configured.", false, cors);
+        }
+        const target = isRecord(envelope.input) ? envelope.input.requestId : undefined;
+        if (typeof target !== "string" || !REQUEST_ID.test(target) || Object.keys(envelope.input as object).length !== 1) {
+            return envelopeError(400, requestId, "invalid_request", "The request is invalid.", false, cors);
+        }
+        const call: ControlPlaneCall = async (operation, input) => {
+            const reply = await callUpstream(JSON.stringify({ version: 1, requestId: crypto.randomUUID(), operation, input }));
+            if (reply.kind !== "ok") throw new Error("The control plane could not be reached.");
+            return { status: reply.status, body: JSON.parse(reply.text) };
+        };
+        let outcome: Awaited<ReturnType<RegionRequestNotifier>>;
+        try {
+            outcome = await options.notifyRegionRequest({ requestId: target.toLowerCase(), siteOrigin, call });
+        } catch {
+            return envelopeError(502, requestId, "control_plane_unavailable", "The control plane could not be reached.", true, cors);
+        }
+        if (!outcome.ok) {
+            const { code, message, retryable } = outcome.error;
+            return envelopeError(outcome.status, requestId, code, message, retryable, cors);
+        }
+        return Response.json(
+            { version: 1, requestId, ok: true, result: outcome.result },
+            { headers: { ...cors, "cache-control": "no-store" } },
+        );
+    }
 }
 
 function validateOrigin(raw: string): string {
@@ -165,7 +220,10 @@ function bearerToken(header: string | null) {
     return token.length >= 20 && token.length <= 8_192 && !/\s/u.test(token) ? token : null;
 }
 
-function validateEnvelope(raw: string) {
+type Envelope = { requestId: string; operation: string; input: unknown };
+
+// Reads the closed request envelope fields the proxy needs, or null when malformed.
+function validateEnvelope(raw: string): Envelope | null {
     let value: unknown;
     try {
         value = JSON.parse(raw);
@@ -174,7 +232,8 @@ function validateEnvelope(raw: string) {
     }
     if (!isRecord(value) || value.version !== 1 || typeof value.operation !== "string") return null;
     if (value.operation.length < 1 || value.operation.length > 64) return null;
-    return typeof value.requestId === "string" && REQUEST_ID.test(value.requestId) ? value.requestId : null;
+    if (typeof value.requestId !== "string" || !REQUEST_ID.test(value.requestId)) return null;
+    return { requestId: value.requestId, operation: value.operation, input: value.input };
 }
 
 function corsHeaders(origin: string) {
