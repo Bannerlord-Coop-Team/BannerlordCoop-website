@@ -1,7 +1,8 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { serverRegionOptions, slotOwnerAccountId } from "@/app/lib/control-plane/presentation";
+import { slotOwnerAccountId } from "@/app/lib/control-plane/presentation";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
+import { HOSTING_REGIONS, hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 
 export const VPS_PAGE_SIZES = [10, 25, 50, 100] as const;
 export type VpsPageSize = (typeof VPS_PAGE_SIZES)[number];
@@ -85,13 +86,19 @@ export function hostHasEmptySlot(host: Pick<HostingAdminVpsHost, "availableServe
 }
 
 export function vpsRegionOptions(hosts: readonly Pick<HostingAdminVpsHost, "region">[]) {
-    const present = new Set(hosts.map((host) => host.region).filter((region) => region.length > 0));
-    const known = serverRegionOptions().filter((option) => present.has(option.value));
-    const knownValues = new Set<string>(known.map((option) => option.value));
+    const present = new Set<string>();
+    for (const host of hosts) {
+        const region = namedRegion(host.region);
+        if (region !== null) present.add(region);
+    }
+    const known = HOSTING_REGIONS
+        .filter((option) => present.has(option.key))
+        .map((option) => ({ value: option.key, label: option.label }));
+    const knownValues = new Set(known.map((option) => option.value));
     const extras = [...present]
         .filter((region) => !knownValues.has(region))
         .sort((left, right) => left.localeCompare(right))
-        .map((value) => ({ value, label: value }));
+        .map((value) => ({ value, label: hostingRegionLabel(value) }));
     return [...known, ...extras];
 }
 
@@ -118,14 +125,14 @@ export function summarizeVpsSlots(hosts: readonly Pick<HostingAdminVpsHost, "reg
         const taken = Array.isArray(host.occupiedSlots) ? host.occupiedSlots.length : 0;
         totalSlots += total;
         takenSlots += taken;
-        const region = host.region.length > 0 ? host.region : "unknown";
+        const region = namedRegion(host.region) ?? "unknown";
         const current = totals.get(region) ?? { totalSlots: 0, takenSlots: 0 };
         current.totalSlots += total;
         current.takenSlots += taken;
         totals.set(region, current);
     }
-    const labels = new Map<string, string>(serverRegionOptions().map((option) => [option.value, option.label]));
-    const order = serverRegionOptions().map((option) => option.value);
+    const labels = new Map<string, string>(HOSTING_REGIONS.map((option) => [option.key, option.label]));
+    const order = HOSTING_REGIONS.map((option) => option.key);
     const regions = [...totals.entries()]
         .sort(([left], [right]) => {
             const leftRank = order.indexOf(left as typeof order[number]);
@@ -134,7 +141,11 @@ export function summarizeVpsSlots(hosts: readonly Pick<HostingAdminVpsHost, "reg
             const rankedRight = rightRank === -1 ? order.length : rightRank;
             return rankedLeft - rankedRight || left.localeCompare(right);
         })
-        .map(([region, counts]) => ({ region, label: labels.get(region) ?? region, ...counts }));
+        .map(([region, counts]) => ({
+            region,
+            label: region === "unknown" ? "unknown" : labels.get(region) ?? hostingRegionLabel(region),
+            ...counts,
+        }));
     return { totalSlots, takenSlots, regions };
 }
 
@@ -171,7 +182,7 @@ export function filterVpsHosts(
     const needle = filters.email.trim().toLowerCase();
     const lookup = needle.length > 0 ? emailLookup(accounts) : null;
     return hosts.filter((host) => {
-        if (regions.size > 0 && !regions.has(host.region)) return false;
+        if (regions.size > 0 && (host.region === null || !regions.has(host.region))) return false;
         if (filters.emptySlotsOnly && !hostHasEmptySlot(host)) return false;
         if (lookup !== null && !occupiedSlots(host).some((slot) => {
             const email = slotOwnerEmail(slot, lookup);
@@ -219,4 +230,8 @@ function slotOwnerEmail(slot: OccupiedSlot, lookup: EmailLookup) {
 
 function occupiedSlots(host: HostingAdminVpsHost) {
     return Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
+}
+
+function namedRegion(region: string | null) {
+    return region !== null && region.length > 0 ? region : null;
 }

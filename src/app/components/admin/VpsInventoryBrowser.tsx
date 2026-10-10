@@ -13,6 +13,7 @@ import {
 } from "@/app/lib/control-plane/vps-inventory-query";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
+import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 import { useId, useMemo, useState } from "react";
 
 type VpsInventoryBrowserProps = {
@@ -24,6 +25,7 @@ type VpsInventoryBrowserProps = {
     onRefresh?: () => void;
     ownerLabels: Record<string, string>;
     runnerTargetSourceCommit: string | null;
+    regionCatalog?: readonly HostingRegionPayload[] | null;
 };
 
 export function VpsInventoryBrowser(props: VpsInventoryBrowserProps) {
@@ -40,6 +42,7 @@ function FilteredVpsInventory({
     onRefresh,
     ownerLabels,
     runnerTargetSourceCommit,
+    regionCatalog = null,
 }: VpsInventoryBrowserProps) {
     const [regions, setRegions] = useState<string[]>([]);
     const [email, setEmail] = useState("");
@@ -87,6 +90,7 @@ function FilteredVpsInventory({
                     onRefresh={onRefresh}
                     ownerLabels={ownerLabels}
                     runnerTargetSourceCommit={runnerTargetSourceCommit}
+                    regionCatalog={regionCatalog}
                 />
             )}
             <nav aria-label="VPS pages" className="mt-4 flex flex-col gap-3 border border-white/10 bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -249,5 +253,6 @@ function inventoryProps(props: VpsInventoryBrowserProps) {
         onRefresh: props.onRefresh,
         ownerLabels: props.ownerLabels,
         runnerTargetSourceCommit: props.runnerTargetSourceCommit,
+        regionCatalog: props.regionCatalog,
     };
 }

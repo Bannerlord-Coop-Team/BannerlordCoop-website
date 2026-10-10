@@ -242,6 +242,7 @@ function host(name: string, region: string, availableServers: number, ownerAccou
     return {
         name,
         locationId: "location",
+        countryCode: "US",
         region,
         totalSlots: 3,
         runningServers: availableServers === 0 ? 1 : 0,

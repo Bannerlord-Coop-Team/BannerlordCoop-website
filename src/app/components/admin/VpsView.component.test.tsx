@@ -40,7 +40,9 @@ function deferred() {
     return { promise, resolve, reject };
 }
 it("shows fleet slot totals above the Oracle control plane card", async () => {
-    await act(async () => root.render(<VpsView inventory={inventory(true)} accounts={[]} />));
+    const listed = inventory(true);
+    listed.hosts[0] = { ...listed.hosts[0], region: "us-east" };
+    await act(async () => root.render(<VpsView regionCatalog={[]} inventory={listed} accounts={[]} />));
     const text = container.textContent ?? "";
     const totals = text.indexOf("Total slots");
     const oracle = text.indexOf("Oracle control plane");
