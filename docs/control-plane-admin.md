@@ -278,19 +278,25 @@ npx eslint supabase/functions/_shared/control-plane-admin.ts supabase/functions/
 
 The VPS tab first requests `vps-hosts` with `input: { includeLiveData: false }`.
 Registered hosts, capacity, and assignments render without live provider or runner
-reads. Two independent browser requests then load telemetry/runner details with
+reads. Independent browser requests then load Oracle's card through
+`control-plane-host-resources`, fleet telemetry/runner details with
 `{ includeLiveData: true, includeProviderInventory: false }` and provider billing
 with `{ includeLiveData: false, includeProviderInventory: true }`. Each has its own
-loading, error, retained-reading and retry state. A slow billing response cannot
+loading, error, retained-reading and retry state. Oracle's card never takes its
+reading from a later fleet response. A slow runner or billing response cannot
+delay Oracle's metrics. Deploy the control-plane operation before this website
+change; an older backend produces an explicit Oracle read error without falling
+back to the slow fleet request. A slow billing response cannot
 hold up resource readings or runner controls; a slow telemetry response cannot
 hold up billing. Provider fields merge by host name without replacing current
 capacity, assignments, runner state or telemetry.
-While visible, telemetry refreshes five seconds after each completed request;
+While visible, Oracle and fleet telemetry refresh five seconds after each completed request;
+Oracle has its own ten-second browser deadline and retry control.
 billing refreshes after 60 seconds and has a separate 15-second browser deadline.
 Each loop prevents overlapping requests. Failed refreshes label retained readings
 as old and retry automatically. A successful response with missing fields clears
-older measurements. Hidden tabs pause both loops and refresh on return. Leaving
-the tab cancels both requests; superseded responses cannot replace new inventory.
+older measurements. Hidden tabs pause all three loops and refresh on return. Leaving
+the tab cancels their requests; superseded responses cannot replace new inventory.
 Expanded host details remain open during either refresh.
 Each collapsed Billing cell shows `Renews MM/DD/YYYY` beneath the price when
 auto-renew is enabled, using the provider's expiration date in UTC to preserve

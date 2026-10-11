@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { HostingAdminHostResources, HostingAdminVpsHost, HostingAdminVpsInventory } from "@/app/lib/control-plane/types";
 import { VpsView } from "./VpsView";
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), resources: vi.fn(), billing: vi.fn(), regionRequests: vi.fn(), session: vi.fn() }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), resources: vi.fn(), billing: vi.fn(), oracle: vi.fn(), regionRequests: vi.fn(), session: vi.fn() }));
 vi.mock("@/app/lib/control-plane/client", () => ({ requestControlPlaneAdmin: mocks.request }));
 vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({ auth: { getSession: mocks.session } }) }));
 vi.mock("./RunnerOnboardingStatus", () => ({ RunnerOnboardingStatus: () => <span>Runner current</span> }));
@@ -13,11 +13,12 @@ let root: Root;
 beforeEach(() => {
     vi.resetAllMocks();
     vi.useFakeTimers();
-    mocks.request.mockImplementation(options => options.operation === "region-requests"
+    mocks.request.mockImplementation(options => options.operation === "control-plane-host-resources" ? mocks.oracle(options) : options.operation === "region-requests"
         ? mocks.regionRequests(options)
         : (options.input.includeLiveData ? mocks.resources : mocks.billing)(options));
     mocks.billing.mockResolvedValue({ ...inventory(true), liveDataIncluded: false });
     mocks.regionRequests.mockResolvedValue({ items: [], nextCursor: null });
+    mocks.oracle.mockResolvedValue(resources(60, 40));
     mocks.session.mockResolvedValue({ data: { session: { access_token: "test-token" } } });
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     container = document.createElement("div");
@@ -33,6 +34,76 @@ function inventory(liveDataIncluded = false, name = "host-a"): HostingAdminVpsIn
         controlPlaneHost: liveDataIncluded ? resources(60, 40) : null,
         availableServiceNames: [], runnerTargetSourceCommit: liveDataIncluded ? "target-source" : null };
 }
+
+function oracleCard() {
+    return [...container.querySelectorAll('h3')].find(heading => heading.textContent === 'Oracle control plane')!.closest('section')!.textContent;
+}
+
+it("loads and refreshes Oracle while fleet resources and billing remain stalled", async () => {
+    mocks.resources.mockReturnValue(new Promise(() => {}));
+    mocks.billing.mockReturnValue(new Promise(() => {}));
+    const initial = resources(60, 40);
+    const updated = { ...initial, cpuPercent: 12.3 };
+    mocks.oracle.mockResolvedValueOnce(initial).mockResolvedValueOnce(updated);
+    await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory()} accounts={[]} />));
+    expect(oracleCard()).toContain("47.7%");
+    expect(oracleCard()).not.toContain("Loading");
+    expect(container.textContent).toContain("Loading live resource");
+    expect(mocks.oracle).toHaveBeenCalledWith(expect.objectContaining({ operation: "control-plane-host-resources" }));
+    expect(mocks.oracle.mock.calls[0][0]).not.toHaveProperty("input");
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(oracleCard()).toContain("12.3%");
+    expect(mocks.resources).toHaveBeenCalledTimes(1);
+    expect(mocks.billing).toHaveBeenCalledTimes(1);
+});
+
+it("keeps Oracle readings independent when a later fleet response arrives", async () => {
+    const fleet = deferred();
+    mocks.resources.mockReturnValue(fleet.promise);
+    mocks.oracle.mockResolvedValue({ ...resources(60, 40), cpuPercent: 12.3 });
+    await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory()} accounts={[]} />));
+    await act(async () => fleet.resolve(inventory(true)));
+    expect(oracleCard()).toContain("12.3%");
+    expect(oracleCard()).not.toContain("47.7%");
+});
+
+it("retains and labels failed Oracle readings, retries only Oracle, and clears a missing observation", async () => {
+    mocks.resources.mockResolvedValue(inventory(true));
+    mocks.oracle.mockResolvedValueOnce(resources(60, 40)).mockRejectedValueOnce(new Error("Oracle unavailable"))
+        .mockResolvedValueOnce(null);
+    await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory()} accounts={[]} />));
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(oracleCard()).toContain("47.7%");
+    expect(container.textContent).toContain("Showing the last Oracle readings");
+    const fleetCalls = mocks.resources.mock.calls.length;
+    await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent === "Retry Oracle readings")!.click());
+    expect(mocks.resources).toHaveBeenCalledTimes(fleetCalls);
+    expect(oracleCard()).toContain("No current trusted resource observation");
+    expect(container.textContent).not.toContain("Showing the last Oracle readings");
+});
+
+it("bounds slow Oracle reads, pauses hidden tabs and aborts on unmount", async () => {
+    mocks.resources.mockResolvedValue(inventory(true));
+    mocks.oracle.mockImplementation(({ signal }: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }));
+    await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory()} accounts={[]} />));
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(mocks.oracle).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Oracle readings timed out");
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    try {
+        await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+        await act(async () => vi.advanceTimersByTimeAsync(30_000));
+        expect(mocks.oracle).toHaveBeenCalledTimes(1);
+        visibility.mockReturnValue("visible");
+        await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+        expect(mocks.oracle).toHaveBeenCalledTimes(2);
+        const signal = mocks.oracle.mock.calls[1][0].signal as AbortSignal;
+        await act(async () => root.render(null));
+        expect(signal.aborted).toBe(true);
+    } finally { visibility.mockRestore(); }
+});
 function deferred() {
     let resolve!: (value: HostingAdminVpsInventory) => void;
     let reject!: (error: Error) => void;
@@ -108,6 +179,7 @@ it("shows pending region requests and removes one after an inline resolution", a
     }], nextCursor: null });
     mocks.request.mockImplementation(async options => {
         if (options.operation === "region-requests") return mocks.regionRequests(options);
+        if (options.operation === "control-plane-host-resources") return mocks.oracle(options);
         if (options.operation === "resolve-region-request") return {};
         return options.input.includeLiveData ? mocks.resources(options) : mocks.billing(options);
     });
@@ -145,6 +217,7 @@ it("notifies a requester once and keeps the request pending with a notified badg
     }], nextCursor: null });
     mocks.request.mockImplementation(async options => {
         if (options.operation === "region-requests") return mocks.regionRequests(options);
+        if (options.operation === "control-plane-host-resources") return mocks.oracle(options);
         if (options.operation === "notify-region-request") {
             return { requestId: options.input.requestId, notifiedAt: "2026-10-10T12:00:00.000Z", sent: true };
         }
@@ -200,6 +273,7 @@ it("recovers a historical requester email from the current account directory", a
     }], nextCursor: null });
     mocks.request.mockImplementation(async options => {
         if (options.operation === "region-requests") return mocks.regionRequests(options);
+        if (options.operation === "control-plane-host-resources") return mocks.oracle(options);
         return options.input.includeLiveData ? mocks.resources(options) : mocks.billing(options);
     });
     await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory(true)} accounts={[{
@@ -225,7 +299,7 @@ it("updates readings in place without overlapping slow requests or collapsing de
     await act(async () => vi.advanceTimersByTimeAsync(30_000));
     expect(mocks.resources).toHaveBeenCalledTimes(2);
     const updated = inventory(true);
-    updated.controlPlaneHost!.cpuPercent = 12.3;
+    updated.hosts[0].resources!.cpuPercent = 12.3;
     await act(async () => next.resolve(updated));
     expect(container.textContent).toContain("12.3%");
     expect(container.querySelector('button[aria-label="Collapse details for host-a"]')).not.toBeNull();
@@ -241,7 +315,7 @@ it("labels retained readings on failure and recovers automatically", async () =>
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Showing the last resource readings");
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
     expect(container.querySelector('[role="alert"]')).toBeNull();
-    expect(container.textContent).toContain("No current trusted resource observation");
+    expect(oracleCard()).toContain("47.7%");
 });
 
 it("pauses hidden tabs, resumes on return, and cancels requests on unmount", async () => {
@@ -267,7 +341,7 @@ it("pauses hidden tabs, resumes on return, and cancels requests on unmount", asy
 
 it("refreshes an initially complete snapshot after the interval", async () => {
     const updated = inventory(true);
-    updated.controlPlaneHost!.cpuPercent = 12.3;
+    updated.hosts[0].resources!.cpuPercent = 12.3;
     mocks.resources.mockResolvedValue(updated);
     await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory(true)} accounts={[]} />));
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
