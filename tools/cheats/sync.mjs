@@ -14,6 +14,7 @@ export const categoryGroups = {
     party_visuals: "Party visuals", player_captivity: "Captivity", players: "Players", save: "Saves",
     settlements: "Settlements", settlement_component: "Settlements", siege: "Sieges", crafting: "Smithing",
     tournaments: "Tournaments", steam: "Steam", village: "Villages", villagers: "Villager parties", workshop: "Workshops",
+    hideout: "Hideouts",
 };
 
 export function buildCatalog(raw) {
