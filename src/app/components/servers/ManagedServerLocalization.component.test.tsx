@@ -50,6 +50,15 @@ it("reuses cheats translations in the command reference", () => {
     expect(html).not.toContain(command.summary);
 });
 
+it("falls back to catalog prose when a newly published command lacks a locale entry", () => {
+    const command = catalog.commands.find(command => command.side !== "client" && isPublishedCheat(command))!;
+    const cheats = Object.fromEntries(Object.entries(serverTestMessages.cheats).filter(([key]) => key !== `command.${command.command}.summary`));
+    const html = renderToStaticMarkup(<LocalizationProvider locale="en" messages={{ ...serverTestMessages, cheats }}>
+        <ServerConsoleWorkspace coopCommandsOnly onSelectCommand={() => {}}><p>Output</p></ServerConsoleWorkspace>
+    </LocalizationProvider>);
+    expect(html).toContain(command.summary);
+});
+
 // Matrix: every accepted backup type uses its translated label alongside locale-formatted dates and sizes.
 it.each(["daily", "weekly", "pre-update", "pre-import", "pre-restore", "manual-deletion", "role-removal", "final-deletion", "manual"])("localizes the %s backup label, dates and sizes", (backupType) => {
     const date = "2026-09-01T14:45:07.479Z";

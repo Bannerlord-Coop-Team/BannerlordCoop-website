@@ -8,6 +8,7 @@ import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, Eye
 
 import commandsData from "@/app/cheats/commands.json";
 import { isPublishedCheat } from "@/app/cheats/debugOnly";
+import { translateCheat } from "@/app/cheats/translation";
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
 import { SERVER_WORKSPACE_TAB_PARAMETER, serverWorkspaceSectionFromTab, serverWorkspaceTab, type ServerWorkspaceSection } from "./server-workspace-tabs";
 
@@ -47,7 +48,11 @@ export function ServerConsoleWorkspace({ children, onSelectCommand, coopCommands
         { group: t("managementWorkspace.players"), commands: [["say <text>", t("managementWorkspace.broadcastAMessageToAllPlayers")], ["kick <id|name>", t("managementWorkspace.disconnectAPlayerUsePlayersToFindTheirId")]] },
         { group: t("managementWorkspace.gameCommandsCheats"), commands: commandsData.commands
             .filter(command => command.side !== "client" && isPublishedCheat(command))
-            .map(command => [command.usage, cheats.t(`command.${command.command}.summary`), [command.name, cheats.t(`category.${command.category.toLowerCase().replaceAll(" ", "_")}`), ...command.aliases, ...command.arguments.map(argument => cheats.t(`command.${command.command}.argument.${argument.name}`))].join(" ")]) },
+            .map(command => [command.usage, translateCheat(cheats.t, `command.${command.command}.summary`, command.summary), [command.name,
+                translateCheat(cheats.t, `category.${command.category.toLowerCase().replaceAll(" ", "_")}`, command.category),
+                ...command.aliases,
+                ...command.arguments.map(argument => translateCheat(cheats.t, `command.${command.command}.argument.${argument.name}`, argument.description)),
+            ].join(" ")]) },
     ];
     const [query, setQuery] = useState("");
     const [expanded, setExpanded] = useState(false);
