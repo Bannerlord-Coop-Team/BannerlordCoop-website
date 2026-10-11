@@ -4,6 +4,7 @@ import commandsData from "@/app/cheats/commands.json";
 import { isPublishedCheat } from "@/app/cheats/debugOnly";
 import { getCheatsLocalization } from "@/app/cheats/localization";
 import { parseCheatsQuery } from "@/app/cheats/query";
+import { translateCheat } from "@/app/cheats/translation";
 import { Footer } from "@/app/components/layout/Footer";
 import { Navbar } from "@/app/components/layout/Navbar";
 import { LocalizationProvider } from "@/app/lib/localization/client";
@@ -54,14 +55,22 @@ export default async function CheatsPage({ searchParams }: CheatsPageProps) {
     const { locale, messages } = await getCheatsLocalization(params.lang);
     const english = await getTranslations("cheats", "en");
     // Retain English-prose searching in translated views without using catalog prose as display copy.
-    const commands = publishedCommands.map(({ summary: _summary, arguments: args, ...command }) => ({
-        ...command,
-        arguments: args.map(({ description: _description, ...argument }) => argument),
-        sourceSearch: locale === "en" ? undefined : [
-            english.t(`command.${command.command}.summary`),
-            ...args.map((argument) => english.t(`command.${command.command}.argument.${argument.name}`)),
-        ].join(" "),
-    })) as CheatCommand[];
+    const commands = publishedCommands.map((sourceCommand) => {
+        const { summary, arguments: args, ...command } = sourceCommand;
+        return {
+            ...command,
+            summary,
+            arguments: args.map((argument) => ({
+                name: argument.name,
+                required: argument.required,
+                description: argument.description,
+            })),
+            sourceSearch: locale === "en" ? undefined : [
+                translateCheat(english.t, `command.${command.command}.summary`, summary),
+                ...args.map((argument) => translateCheat(english.t, `command.${command.command}.argument.${argument.name}`, argument.description)),
+            ].join(" "),
+        };
+    }) as CheatCommand[];
 
     return (
         <>
