@@ -16,6 +16,7 @@ import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 export function VpsView({ inventory: initialInventory, regionCatalog, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
     const readings = useVpsReadings(initialInventory, "resources");
     const billing = useVpsReadings(initialInventory, "billing");
+    const oracle = useVpsReadings(initialInventory, "oracle");
     const inventory = readings.result ?? initialInventory;
     const pending = readings.pending;
     const providerHosts = new Map(billing.result?.hosts.map(host => [host.name, host]));
@@ -24,7 +25,7 @@ export function VpsView({ inventory: initialInventory, regionCatalog, accounts }
         return { ...host, cost: provider?.cost ?? null, expirationDate: provider?.expirationDate ?? null,
             autoRenew: provider?.autoRenew ?? null, providerCheckedAt: provider?.providerCheckedAt ?? null };
     });
-    const { controlPlaneHost } = inventory;
+    const controlPlaneHost = oracle.result?.controlPlaneHost ?? null;
     const ownerLabels = new Map(accounts.map(account => [account.accountId, account.label]));
     const availableServiceNames = billing.result?.availableServiceNames ?? [];
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
@@ -46,7 +47,8 @@ export function VpsView({ inventory: initialInventory, regionCatalog, accounts }
                 <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
             </div>
             <div className="mt-6">
-                <HostResourcesCard name="Oracle control plane" resources={controlPlaneHost} pending={pending} />
+                {oracle.error && <p role="alert" className="mb-3 text-xs text-red-200">Oracle readings unavailable. {oracle.error} {oracle.result?.controlPlaneHost ? "Showing the last Oracle readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={oracle.refreshReadings}>Retry Oracle readings</button></p>}
+                <HostResourcesCard name="Oracle control plane" resources={controlPlaneHost} pending={oracle.pending} />
             </div>
             <VpsInventoryBrowser
                 hosts={hosts}
@@ -194,7 +196,7 @@ function formatAllocatedRegions(regions: readonly string[]) {
     return regions.map(hostingRegionLabel).join(", ");
 }
 
-function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resources" | "billing") {
+function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resources" | "billing" | "oracle") {
     const [refresh, setRefresh] = useState<{ initial: HostingAdminVpsInventory; result?: HostingAdminVpsInventory; error?: string }>();
     const [attempt, setAttempt] = useState(0);
     const current = refresh?.initial === initialInventory ? refresh : undefined;
@@ -211,23 +213,27 @@ function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resou
             clearTimeout(timer);
             inFlight = true;
             const requestController = new AbortController();
-            const deadline = kind === "billing"
-                ? setTimeout(() => requestController.abort(), 15_000) : undefined;
+            const deadline = kind !== "resources"
+                ? setTimeout(() => requestController.abort(), kind === "oracle" ? 10_000 : 15_000) : undefined;
             try {
                 const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
                 if (cancelled) return;
                 if (!session?.access_token) throw new Error("Authentication is required.");
-                const result = await requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: session.access_token, operation: "vps-hosts",
-                    input: { includeLiveData: kind === "resources", includeProviderInventory: kind === "billing" },
-                    signal: AbortSignal.any([controller.signal, requestController.signal]) });
-                if (result.liveDataIncluded !== (kind === "resources")) throw new Error("Live VPS data is unavailable.");
+                const signal = AbortSignal.any([controller.signal, requestController.signal]);
+                const result = kind === "oracle"
+                    ? { ...initialInventory, liveDataIncluded: true, controlPlaneHost:
+                        await requestControlPlaneAdmin<HostingAdminHostResources | null>({ accessToken: session.access_token,
+                            operation: "control-plane-host-resources", signal }) }
+                    : await requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: session.access_token, operation: "vps-hosts",
+                        input: { includeLiveData: kind === "resources", includeProviderInventory: kind === "billing" }, signal });
+                if (result.liveDataIncluded !== (kind !== "billing")) throw new Error("Live VPS data is unavailable.");
                 if (!cancelled) setRefresh({ initial: initialInventory, result });
             } catch (error) {
                 if (!cancelled) setRefresh(previous => ({
                     initial: initialInventory,
                     result: previous?.initial === initialInventory ? previous.result
                         : initialInventory.liveDataIncluded !== false ? initialInventory : undefined,
-                    error: requestController.signal.aborted ? "Billing readings timed out."
+                    error: requestController.signal.aborted ? `${kind === "oracle" ? "Oracle" : "Billing"} readings timed out.`
                         : error instanceof Error ? error.message : "VPS readings could not be loaded.",
                 }));
             } finally {
