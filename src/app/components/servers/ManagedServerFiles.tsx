@@ -5,14 +5,15 @@ import { useTranslations } from "@/app/lib/localization/client";
 import { ServerSaveConfigPanels } from "./ServerSaveConfigPanels";
 import { ManagedServerBackups } from "./ManagedServerBackups";
 import { ManagedServerTransfers } from "./ManagedServerTransfers";
+import { ManagedServerSaveSelector } from "./ManagedServerSaveSelector";
 import { ServerWorkspacePanel } from "./ServerManagementWorkspace";
-import type { MyServerBackupStatus, MyServerBackupSummary, MyServerSummary } from "@/app/lib/control-plane/types";
+import type { MyServerBackupStatus, MyServerBackupSummary, MyServerSavePage, MyServerSummary } from "@/app/lib/control-plane/types";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 
 // Composes file and backup panels according to existing role permissions.
-export function ManagedServerFiles({ userId, server, files, backups, status, loadError }: {
+export function ManagedServerFiles({ userId, server, files, saves, backups, status, loadError }: {
     userId: string; server: MyServerSummary; files: OwnerFileStatus | null;
-    backups: readonly MyServerBackupSummary[]; status: MyServerBackupStatus | null; loadError?: string;
+    backups: readonly MyServerBackupSummary[]; saves: MyServerSavePage | null; status: MyServerBackupStatus | null; loadError?: string;
 }) {
     const { t } = useTranslations("managed-server");
     const canManage = server.accessRole === "owner" || server.accessRole === "manager";
@@ -21,7 +22,10 @@ export function ManagedServerFiles({ userId, server, files, backups, status, loa
         <ServerWorkspacePanel section="Save & config">
             <section id="server-files" aria-label={t("files.saveConfig")}>
                 {canManage
-                    ? <ManagedServerTransfers userId={userId} serverId={server.serverId} serverName={server.displayName} status={files} canImportConfig={server.accessRole === "owner"} canEditConfig={server.accessRole === "owner"} canExportSave={server.accessRole === "owner"} />
+                    ? <>
+                        <ManagedServerSaveSelector userId={userId} serverId={server.serverId} saves={saves} canSelect={["owner", "manager"].includes(server.accessRole) && ["stopped", "awaiting-save"].includes(server.operationState)} />
+                        <ManagedServerTransfers userId={userId} serverId={server.serverId} serverName={server.displayName} status={files} canImportConfig={server.accessRole === "owner"} canEditConfig={server.accessRole === "owner"} canExportSave={server.accessRole === "owner"} />
+                    </>
                     : <ServerSaveConfigPanels saveNotice={readOnly} configNotice={readOnly} />}
             </section>
         </ServerWorkspacePanel>
