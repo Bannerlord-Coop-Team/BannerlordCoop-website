@@ -11,6 +11,23 @@ custom password using the current server generation. A running server queues a
 warned restart. No password or secret reference is returned; refresh current
 status after an uncertain response instead of automatically resubmitting.
 
+Campaign transfers distinguish accepted queued jobs, processing, automatic retry
+waits and terminal results. Confirmed jobs are checked for up to ten minutes;
+checks pause after one minute without confirmation. A paused check does not cancel
+the accepted job. **Check status** resumes the same request. A missing later status
+does not erase prior acceptance or enable another submission. Unknown submissions
+retain their original request ID. Failed jobs display an approved reason when
+available, plus a support reference and instructions to dismiss the completed
+request before starting a new transfer.
+
+The shared file-result parser accepts older responses and an optional
+`failureReason` only on failed jobs, from `storage-unavailable`, `save-rejected`,
+`stop-required`, or `server-changed`. It rejects other fields and values. Deploy
+this website and `my-servers` Edge parser before the paired control-plane response
+extension, since older strict parsers reject that extra field. Import remains
+limited to stopped servers and preserves the current campaign. Stop explicitly
+explains when the server is already stopped.
+
 The owner's Settings tab also contains a separate **Delete server** panel. Its
 dialog requires the exact current server name and a permanent-removal acknowledgement;
 Cancel receives initial focus. Managers and read-only users do not see this control.

@@ -735,5 +735,15 @@
   "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "The deletion request is invalid.",
   "deletion.signIn": "Sign in again before deleting a server.",
-  "deletion.unavailable": "Deletion is unavailable while this server is suspended or already being deleted."
+  "deletion.unavailable": "Deletion is unavailable while this server is suspended or already being deleted.",
+  "transfers.queued": "Transfer accepted and queued. The server has not started processing it yet.",
+  "transfers.retryWaiting": "The transfer is waiting for an automatic retry. Your request is still active.",
+  "transfers.statusChecksPaused": "Automatic status checks are paused. Your accepted transfer may still be processing. Use Check status to continue.",
+  "transfers.acceptedStatusUnavailable": "The accepted transfer could not be checked. Your request is retained; use Check status again.",
+  "transfers.failure.storage-unavailable": "The transfer failed because private storage was unavailable. Dismiss this completed request and try a new transfer later.",
+  "transfers.failure.save-rejected": "The server could not validate the imported save. Dismiss this completed request and try a new import with the matching save files. Contact support if it fails again.",
+  "transfers.failure.stop-required": "The import requires a safely stopped server. Check the server status before starting a new import.",
+  "transfers.failure.server-changed": "The server or your access changed before the transfer could finish. Refresh the server before starting a new transfer.",
+  "transfers.failedRequest": "This request has finished and will not retry. Dismiss it to start a new transfer. Support reference: {requestId}",
+  "controls.alreadyStopped": "The server is already stopped. You can import a campaign or press Start when ready."
 }

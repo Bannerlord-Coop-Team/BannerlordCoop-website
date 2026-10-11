@@ -3,11 +3,29 @@ import test from "node:test";
 import { serverLogDownloadHeaders, MAXIMUM_SERVER_LOG_BYTES } from "../_shared/server-log-contract.ts";
 import { createMyServersHandler } from "../_shared/my-servers.ts";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../_shared/managed-server-configuration.ts";
-import { parseOwnerFileMutation, parseOwnerFileDownload } from "../_shared/server-file-contract.ts";
+import { parseOwnerFileMutation, parseOwnerFileDownload, parseOwnerFileResult, OWNER_FILE_FAILURE_REASONS } from "../_shared/server-file-contract.ts";
 const requestId = "aaaaaaaa-1111-4111-8111-111111111111";
 const input = { action: "import-config", serverId: requestId, expectedUpdatedAt: "2026-09-13T00:00:00.000Z", managedConfig: DEFAULT_MANAGED_SERVER_CONFIGURATION };
 const result = { kind: "configuration", outcome: "updated", updatedAt: "2026-09-13T00:00:01.000Z" };
 const token = "original-token-with-enough-characters";
+test("transfer failures accept only optional closed reasons and pass through the edge unchanged", async () => {
+    const job = { kind: "job", outcome: "existing", jobId: requestId, action: "import-save", state: "failed" };
+    assert.deepEqual(parseOwnerFileResult(job), job);
+    for (const failureReason of OWNER_FILE_FAILURE_REASONS) {
+        const failed = { ...job, failureReason };
+        assert.deepEqual(parseOwnerFileResult(failed), failed);
+        const response = await handler(async (_url, init) => {
+            const upstream = JSON.parse(String(init?.body));
+            return Response.json({ version: 1, requestId: upstream.requestId, ok: true, result: failed });
+        })(new Request(`https://edge.test/my-servers?resource=file-transfer-status&serverId=${requestId}&transferRequestId=${requestId}`, { headers: { authorization: `Bearer ${token}` } }));
+        assert.equal(response.status, 200);
+        assert.deepEqual((await response.json()).result, failed);
+    }
+    for (const invalid of [{ ...job, failureReason: "https://private-object/token" }, { ...job, failureReason: null },
+        { ...job, state: "queued", failureReason: "storage-unavailable" }, { ...job, errorCode: "secret" }]) {
+        assert.throws(() => parseOwnerFileResult(invalid));
+    }
+});
 function request(body: unknown, auth = true, id = true) { return new Request("https://edge.test/my-servers?resource=file-transfer", { method: "POST", headers: { "content-type": "application/json", ...(auth ? { authorization: `Bearer ${token}` } : {}), ...(id ? { "x-request-id": requestId } : {}) }, body: JSON.stringify(body) }); }
 function handler(fetchImplementation: typeof fetch) { return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", fetchImplementation }); }
 

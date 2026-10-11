@@ -735,5 +735,15 @@
   "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "Silme isteği geçersiz.",
   "deletion.signIn": "Sunucuyu silmeden önce yeniden giriş yapın.",
-  "deletion.unavailable": "Sunucu hazırlanırken, askıya alınmışken veya silinirken silme kullanılamaz."
+  "deletion.unavailable": "Sunucu hazırlanırken, askıya alınmışken veya silinirken silme kullanılamaz.",
+  "transfers.queued": "Aktarım kabul edildi ve sıraya alındı. Sunucu henüz işlemeye başlamadı.",
+  "transfers.retryWaiting": "Aktarım otomatik yeniden denemeyi bekliyor. İsteğiniz hâlâ etkin.",
+  "transfers.statusChecksPaused": "Otomatik durum kontrolleri duraklatıldı. Kabul edilen aktarım hâlâ işleniyor olabilir. Devam etmek için Durumu kontrol et seçeneğini kullanın.",
+  "transfers.acceptedStatusUnavailable": "Kabul edilen aktarımın durumu kontrol edilemedi. İsteğiniz saklanıyor; durumu tekrar kontrol edin.",
+  "transfers.failure.storage-unavailable": "Özel depolama kullanılamadığı için aktarım başarısız oldu. Tamamlanan isteği kapatıp daha sonra yeni bir aktarım deneyin.",
+  "transfers.failure.save-rejected": "Sunucu içe aktarılan kaydı doğrulayamadı. Tamamlanan isteği kapatıp eşleşen kayıt dosyalarıyla yeni bir içe aktarma deneyin. Yine başarısız olursa destekle iletişime geçin.",
+  "transfers.failure.stop-required": "İçe aktarma için sunucunun güvenli şekilde durdurulması gerekir. Yeni bir içe aktarma başlatmadan önce sunucu durumunu kontrol edin.",
+  "transfers.failure.server-changed": "Aktarım tamamlanmadan sunucu veya erişiminiz değişti. Yeni bir aktarım başlatmadan önce sunucuyu yenileyin.",
+  "transfers.failedRequest": "Bu istek tamamlandı ve yeniden denenmeyecek. Yeni bir aktarım başlatmak için kapatın. Destek referansı: {requestId}",
+  "controls.alreadyStopped": "Sunucu zaten durdurulmuş. Bir sefer içe aktarabilir veya hazır olduğunuzda Başlat seçeneğine basabilirsiniz."
 }

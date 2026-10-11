@@ -20,6 +20,8 @@ type Intent = {
     fingerprints: string[]; displayName: string; saveId: string | null; configPart?: ConfigurationPart;
 };
 type Scope = "save" | "config";
+const ACCEPTED_TRANSFER_POLL_MS = 10 * 60_000;
+const UNCONFIRMED_TRANSFER_POLL_MS = 60_000;
 const buttonClass = fileButtonClass;
 const inputClass = "mt-2 block w-full min-w-0 border border-white/15 bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
 
@@ -82,6 +84,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
     const [intent, setIntent] = useState<Intent | null>(null);
     const intentRef = useRef<Intent | null>(null);
     const [result, setResult] = useState<OwnerFileResult | null>(null);
+    const confirmedJob = useRef<Extract<OwnerFileResult, { kind: "job" }> | null>(null);
     const [feedback, setFeedback] = useState<{ scope: Scope; text: string } | null>(null);
     const [isPending, startTransition] = useTransition();
     const [downloading, setDownloading] = useState(false);
@@ -110,7 +113,9 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
     function remember(next: Intent | null) {
         try {
             if (next) sessionStorage.setItem(storageKey, JSON.stringify(next)); else sessionStorage.removeItem(storageKey);
-            intentRef.current = next; setIntent(next); return true;
+            intentRef.current = next; setIntent(next);
+            if (next === null) confirmedJob.current = null;
+            return true;
         } catch { setStorageError(true); return false; }
     }
 
@@ -135,8 +140,11 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
     function accept(next: OwnerFileResult | null) {
         const scope = next?.kind === "job" ? transferScope(next.action)
             : next?.kind === "configuration" ? "config" : transferScope(intentRef.current?.action ?? "export-save");
+        if (next === null) {
+            say(t(confirmedJob.current ? "transfers.acceptedStatusUnavailable" : "transfers.noAcceptedTransferWasFoundRetryTheSameRequestWith"), scope); return;
+        }
         setResult(next);
-        if (next === null) { say(t("transfers.noAcceptedTransferWasFoundRetryTheSameRequestWith"), scope); return; }
+        if (next.kind === "job") confirmedJob.current = next;
         if (next.kind === "rejected") {
             say(t("transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck"), scope); remember(null); setDeadline(null); router.refresh();
         } else if (next.kind === "configuration") {
@@ -144,24 +152,28 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
         } else if (["succeeded", "failed", "cancelled"].includes(next.state)) {
             setDeadline(null); router.refresh();
             say(next.state === "succeeded" ? next.action === "export-save" ? t("transfers.yourSaveExportIsReadyToDownload") : t("transfers.campaignAddedYourCurrentCampaignIsUnchanged")
-                : t("transfers.theTransferStateYourRequestIsRetainedForReference", { state: t(`transferState.${next.state}`) }), scope);
+                : next.state === "failed" && next.failureReason ? t(`transfers.failure.${next.failureReason}`)
+                    : t("transfers.theTransferStateYourRequestIsRetainedForReference", { state: t(`transferState.${next.state}`) }), scope);
             if (next.state === "succeeded" && next.action === "import-save") remember(null);
-        } else say(next.action === "export-save" ? t("transfers.preparingYourSaveExport") : t("transfers.validatingAndImportingYourCampaign"), scope);
+        } else say(next.state === "queued" ? t("transfers.queued") : next.state === "retry-wait" ? t("transfers.retryWaiting")
+            : next.action === "export-save" ? t("transfers.preparingYourSaveExport") : t("transfers.validatingAndImportingYourCampaign"), scope);
     }
 
     useEffect(() => {
         if (deadline === null || intent === null) return;
         let cancelled = false;
         let timer: number;
+        let lastConfirmedAt = Date.now();
         const scope = transferScope(intent.action);
         // Refreshes existing operation progress and reports localized connection feedback.
         async function poll() {
-            if (Date.now() >= deadline!) {
-                setDeadline(null); say(t("transfers.stillWaitingForConfirmationUseCheckStatusToContinue"), scope); return;
+            if (Date.now() >= deadline! || Date.now() - lastConfirmedAt >= UNCONFIRMED_TRANSFER_POLL_MS) {
+                setDeadline(null); say(t(confirmedJob.current ? "transfers.statusChecksPaused" : "transfers.stillWaitingForConfirmationUseCheckStatusToContinue"), scope); return;
             }
             const response = await checkManagedServerFile(serverId, intent!.requestId, userId).catch(() => ({ ok: false as const, message: t("transfers.connectionInterruptedYourTransferRequestIsRetained") }));
             if (cancelled || intentRef.current?.requestId !== intent!.requestId) return;
             if (response.ok) {
+                if (response.result !== null) lastConfirmedAt = Date.now();
                 accept(response.result);
                 if (response.result?.kind === "rejected" || response.result?.kind === "configuration" || response.result?.kind === "job"
                     && ["succeeded", "failed", "cancelled"].includes(response.result.state)) return;
@@ -268,7 +280,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
                 setDialogKind(null);
                 if (response.ok) {
                     accept(response.result);
-                    if (response.result.kind === "job" && !["succeeded", "failed", "cancelled"].includes(response.result.state)) setDeadline(Date.now() + 60_000);
+                    if (response.result.kind === "job" && !["succeeded", "failed", "cancelled"].includes(response.result.state)) setDeadline(Date.now() + ACCEPTED_TRANSFER_POLL_MS);
                 } else {
                     say(response.notSubmitted && previous ? t("transfers.thisAttemptWasNotSentYourPreviousRequestIsStill") : response.message, scope);
                     setDeadline(null);
@@ -291,7 +303,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
             if (intentRef.current?.requestId !== intent.requestId) return;
             if (response.ok) {
                 accept(response.result);
-                if (response.result?.kind === "job" && !["succeeded", "failed", "cancelled"].includes(response.result.state)) setDeadline(Date.now() + 60_000);
+                if (response.result?.kind === "job" && !["succeeded", "failed", "cancelled"].includes(response.result.state)) setDeadline(Date.now() + ACCEPTED_TRANSFER_POLL_MS);
             } else say(response.message, scope);
         });
     }
@@ -349,6 +361,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
             <div aria-live="polite">
                 {feedback?.scope === scope && <p className="mt-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-sm text-foreground-muted">{isPending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{feedback.text}</p>}
             </div>
+            {intent && intentScope === scope && result?.kind === "job" && result.state === "failed" && <p className="mt-2 text-xs text-foreground-muted">{t("transfers.failedRequest", { requestId: intent.requestId })}</p>}
             {intent && intentScope === scope && <div className="mt-3 flex flex-wrap gap-3">
                 <button className={buttonClass} disabled={isPending} onClick={checkStatus}>{t("transfers.checkStatus")}</button>
                 {result === null && <button className={buttonClass} disabled={isPending} onClick={retrySameRequest}>{t("transfers.retrySameRequest")}</button>}

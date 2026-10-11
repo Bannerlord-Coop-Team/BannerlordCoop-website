@@ -735,5 +735,15 @@
   "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "La demande de suppression est invalide.",
   "deletion.signIn": "Reconnectez-vous avant de supprimer un serveur.",
-  "deletion.unavailable": "Suppression indisponible pendant la préparation, la suspension ou la suppression du serveur."
+  "deletion.unavailable": "Suppression indisponible pendant la préparation, la suspension ou la suppression du serveur.",
+  "transfers.queued": "Transfert accepté et mis en attente. Le serveur ne l’a pas encore commencé.",
+  "transfers.retryWaiting": "Le transfert attend une nouvelle tentative automatique. Votre demande reste active.",
+  "transfers.statusChecksPaused": "Les vérifications automatiques sont en pause. Votre transfert accepté est peut-être encore en cours. Utilisez Vérifier le statut pour continuer.",
+  "transfers.acceptedStatusUnavailable": "Le statut du transfert accepté n’a pas pu être vérifié. Votre demande est conservée ; vérifiez à nouveau son statut.",
+  "transfers.failure.storage-unavailable": "Le transfert a échoué car le stockage privé était indisponible. Fermez cette demande terminée et réessayez un nouveau transfert plus tard.",
+  "transfers.failure.save-rejected": "Le serveur n’a pas pu valider la sauvegarde importée. Fermez cette demande terminée et lancez un nouvel import avec les fichiers correspondants. Contactez l’assistance si le problème persiste.",
+  "transfers.failure.stop-required": "L’import nécessite un serveur arrêté en toute sécurité. Vérifiez son statut avant de lancer un nouvel import.",
+  "transfers.failure.server-changed": "Le serveur ou votre accès a changé avant la fin du transfert. Actualisez le serveur avant de lancer un nouveau transfert.",
+  "transfers.failedRequest": "Cette demande est terminée et ne sera pas relancée. Fermez-la pour lancer un nouveau transfert. Référence pour l’assistance : {requestId}",
+  "controls.alreadyStopped": "Le serveur est déjà arrêté. Vous pouvez importer une campagne ou appuyer sur Démarrer quand vous êtes prêt."
 }
