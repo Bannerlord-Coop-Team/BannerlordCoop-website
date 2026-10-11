@@ -209,7 +209,7 @@ export function CheatsDirectory({
         const knownCategories = new Set(commands.map((command) => command.category));
         // Unknown category queries are user content, not missing translation keys.
         const entries = [...counts.entries()].map(([id, count]) => ({
-            id, count, label: knownCategories.has(id) ? t(categoryKey(id)) : id,
+            id, count, label: knownCategories.has(id) ? translateCheat(t, categoryKey(id), id) : id,
         }));
         return entries.sort((left, right) => {
             if (left.id === "Player") return -1;
@@ -514,7 +514,7 @@ export function CheatsDirectory({
                                         <div className="flex w-full flex-wrap items-center gap-2">
                                             {showCategoryBadge && (
                                                 <span className={`inline-flex max-w-full wrap-anywhere border border-white/10 bg-background/40 px-2 py-1 text-foreground-muted ${cheatsLabelClass("badge")}`}>
-                                                    {t(categoryKey(command.category))}
+                                                    {translateCheat(t, categoryKey(command.category), command.category)}
                                                 </span>
                                             )}
                                             <span className={`inline-flex border px-2 py-1 ${cheatsLabelClass("badge")} ${sideStyles[command.side]}`}>
