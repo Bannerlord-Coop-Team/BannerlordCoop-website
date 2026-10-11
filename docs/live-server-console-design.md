@@ -293,6 +293,15 @@ or a separately implemented authorized file-download integration.
 
 ### Console command picker
 
+Managed `coop.*` submissions recover a confirmed `stale_interaction` rejection
+without refreshing the page or reconnecting its live console. The server action
+reads current authorized inventory, rechecks the signed-in account and running
+state, and retries once with the same command and durable request UUID, replacing
+only `expectedUpdatedAt`. This is safe because the backend rejects stale state
+before accepting a job. An unavailable server, unchanged token, second conflict,
+or uncertain delivery never triggers another retry. Confirmed rejections retain
+the command draft unless the owner has already entered a newer one.
+
 The live Server page lists the dedicated server's built-in stdin commands: `help`,
 `status`, `players`, `save`, `stop`, `say <text>`, and `kick <id|name>` (see
 `DedicatedServer.Core/Server/ServerConsole.cs` in DedicatedServer). Search matches
