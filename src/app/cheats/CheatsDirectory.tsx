@@ -6,6 +6,7 @@ import {
     isFeaturedCommand,
 } from "@/app/cheats/featured";
 import { cheatsLabelClass } from "@/app/cheats/locale";
+import { translateCheat } from "@/app/cheats/translation";
 import { useTranslations } from "@/app/lib/localization/client";
 import type { Translator } from "@/app/lib/localization/types";
 import {
@@ -25,8 +26,9 @@ export type CheatCommand = {
     group: string;
     category: string;
     sourceSearch?: string;
+    summary?: string;
     usage: string;
-    arguments: { name: string; required: boolean }[];
+    arguments: { name: string; required: boolean; description?: string }[];
     side: "server" | "client" | "either";
     kind: "action" | "inspect" | "fixture" | "audit";
     aliases?: string[];
@@ -57,9 +59,9 @@ function textMatches(command: CheatCommand, query: string, { t }: Translator) {
         command.category,
         command.name,
         command.sourceSearch,
-        t(`command.${command.command}.summary`),
-        t(categoryKey(command.category)),
-        ...command.arguments.flatMap((argument) => [argument.name, t(`command.${command.command}.argument.${argument.name}`)]),
+        translateCheat(t, `command.${command.command}.summary`, command.summary ?? command.command),
+        translateCheat(t, categoryKey(command.category), command.category),
+        ...command.arguments.flatMap((argument) => [argument.name, translateCheat(t, `command.${command.command}.argument.${argument.name}`, argument.description ?? argument.name)]),
         ...(command.aliases ?? []),
     ].filter(Boolean).join(" ").toLowerCase().includes(query);
 }
@@ -480,7 +482,7 @@ export function CheatsDirectory({
                                                 {command.command}
                                             </a>
                                             <p className="mt-1 max-w-full text-sm leading-6 wrap-anywhere text-foreground-muted">
-                                                {t(`command.${command.command}.summary`)}
+                                                {translateCheat(t, `command.${command.command}.summary`, command.summary ?? command.command)}
                                             </p>
                                             <p className="mt-2 max-w-full wrap-anywhere font-mono text-xs text-foreground-dim">
                                                 {command.usage}
@@ -501,7 +503,7 @@ export function CheatsDirectory({
                                                                     </span>
                                                                 </dt>
                                                                 <dd className="mt-0.5 wrap-anywhere text-xs leading-5">
-                                                                    {t(`command.${command.command}.argument.${argument.name}`)}
+                                                                    {translateCheat(t, `command.${command.command}.argument.${argument.name}`, argument.description ?? argument.name)}
                                                                 </dd>
                                                             </div>
                                                         ))}
