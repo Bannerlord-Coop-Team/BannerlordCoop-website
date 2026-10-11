@@ -6,6 +6,8 @@ import type {
     MyServerBackupJob,
     MyServerBackupStatus,
     MyServerBackupSummary,
+    MyServerSavePage,
+    MyServerSaveSummary,
     MyServerSummary,
 } from "@/app/lib/control-plane/types";
 
@@ -13,6 +15,7 @@ import { parseOnboardingIntent, parseOnboardingResult, type OnboardingIntent, ty
 
 const MAXIMUM_RESPONSE_BYTES = 8 * 1_048_576;
 const MAXIMUM_PAGES = 10;
+const MAXIMUM_LIMIT = 100;
 const BACKUP_PAGE_LIMIT = 50;
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const RESOURCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -159,6 +162,27 @@ export async function listAllMyServerBackups(
         "response_too_large",
         "The backup inventory exceeds the supported page limit.",
     );
+}
+
+export async function listAllMyServerSaves(accessToken: string, serverId: string): Promise<MyServerSavePage> {
+    if (!RESOURCE_ID.test(serverId)) throw new MyServersApiError("invalid_request", "The managed server ID is invalid.");
+    let cursor: string | null = null;
+    const items: MyServerSaveSummary[] = [];
+    for (let pageIndex = 0; pageIndex < MAXIMUM_PAGES; pageIndex += 1) {
+        const page = parseSavePage(await requestMyServerSaves(accessToken, serverId, cursor));
+        if (page.serverId !== serverId) throw invalidResponse("The save response belongs to another server.");
+        items.push(...page.items);
+        if (page.nextCursor === null) return { ...page, items };
+        cursor = page.nextCursor;
+    }
+    throw new MyServersApiError("response_too_large", "The campaign list exceeds the supported page limit.");
+}
+
+export async function selectMyServerSave(accessToken: string, input: { serverId: string; saveId: string; expectedUpdatedAt: string }, requestId: string) {
+    if (!REQUEST_ID.test(requestId) || !RESOURCE_ID.test(input.serverId) || !RESOURCE_ID.test(input.saveId) || !ISO_TIMESTAMP.test(input.expectedUpdatedAt)) throw new MyServersApiError("invalid_request", "The campaign selection request is invalid.");
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify({ action: "select-save", ...input }), requestId });
+    if (!isRecord(result) || !hasExactKeys(result, ["activeSaveId", "serverId", "updatedAt"]) || result.serverId !== input.serverId || result.activeSaveId !== input.saveId || !isTimestamp(result.updatedAt)) throw invalidResponse();
+    return result as { serverId: string; activeSaveId: string; updatedAt: string };
 }
 
 export async function getMyServerBackupStatus(
@@ -320,6 +344,13 @@ async function requestMyServers(accessToken: string, cursor: string | null, sign
     });
 }
 
+async function requestMyServerSaves(accessToken: string, serverId: string, cursor: string | null): Promise<unknown> {
+    return requestMyServersApi(accessToken, { method: "GET", configureEndpoint(endpoint) {
+        endpoint.searchParams.set("resource", "saves"); endpoint.searchParams.set("serverId", serverId); endpoint.searchParams.set("limit", String(BACKUP_PAGE_LIMIT));
+        if (cursor !== null) endpoint.searchParams.set("cursor", cursor);
+    } });
+}
+
 async function requestMyServerBackups(
     accessToken: string,
     serverId: string,
@@ -454,6 +485,17 @@ function parseServerPage(value: unknown): HostingPage<MyServerSummary> {
         items: value.items as MyServerSummary[],
         nextCursor: value.nextCursor as string | null,
     };
+}
+
+function parseSavePage(value: unknown): MyServerSavePage {
+    if (!isRecord(value) || !hasExactKeys(value, ["activeSaveId", "items", "nextCursor", "serverId", "updatedAt"]) || typeof value.serverId !== "string" || !RESOURCE_ID.test(value.serverId) || (value.activeSaveId !== null && (typeof value.activeSaveId !== "string" || !RESOURCE_ID.test(value.activeSaveId))) || !isTimestamp(value.updatedAt) || !Array.isArray(value.items) || value.items.length > MAXIMUM_LIMIT) throw invalidResponse();
+    if (value.nextCursor !== null && (typeof value.nextCursor !== "string" || value.nextCursor.length < 1 || value.nextCursor.length > 2_048)) throw invalidResponse();
+    return { serverId: value.serverId, updatedAt: value.updatedAt, activeSaveId: value.activeSaveId, items: value.items.map(parseSave), nextCursor: value.nextCursor };
+}
+
+function parseSave(value: unknown): MyServerSaveSummary {
+    if (!isRecord(value) || !hasExactKeys(value, ["byteSize", "createdAt", "displayName", "importedBy", "lastUsedAt", "saveId"]) || typeof value.saveId !== "string" || !RESOURCE_ID.test(value.saveId) || typeof value.displayName !== "string" || value.displayName.length < 1 || value.displayName.length > 48 || typeof value.byteSize !== "number" || !Number.isSafeInteger(value.byteSize) || value.byteSize < 0 || !isTimestamp(value.createdAt) || (value.lastUsedAt !== null && !isTimestamp(value.lastUsedAt)) || (value.importedBy !== "system" && value.importedBy !== "owner")) throw invalidResponse();
+    return value as MyServerSaveSummary;
 }
 
 function parseBackupPage(value: unknown): HostingPage<MyServerBackupSummary> {

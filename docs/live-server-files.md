@@ -24,7 +24,9 @@ configuration returned by `getMyServerFiles` for the resolved UUID:
 - Only owners can export the latest completed save while running,
   stopped or awaiting a save, when an active save exists.
 - Save import requires the server to be stopped and adds a separate campaign;
-  it does not replace or select over the current campaign.
+  it does not replace the current campaign. The Campaigns list directly below
+  the transfer controls lets the owner select any imported campaign while the
+  server is stopped; the next Start loads the selected campaign.
 - Owners and managers can export configuration. Only the managed owner can
   import supported configuration after reviewing the changes.
 - Existing confirmations, file validation, state restrictions, stale-request
