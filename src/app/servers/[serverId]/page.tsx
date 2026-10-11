@@ -1,5 +1,7 @@
 import { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
 import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfigPanels";
+import { ServerModsPanel } from "@/app/components/servers/ServerModsPanel";
+import { mockServerModCatalog, type ServerModCatalog } from "@/app/lib/hosting/server-mods";
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
 import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "@/app/components/servers/ServerManagementWorkspace";
 import { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
@@ -136,6 +138,7 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     >
         <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><UnavailableServerConsole /></ServerConsoleWorkspace></ServerWorkspacePanel>
         <UnavailableFileWorkspaces />
+        <ServerModsSection serverId={server.id} canEdit={false} />
         <ServerWorkspacePanel section="Settings">
             <ServerSettingsPanel name={server.name} />
             <section className="grid gap-3 sm:grid-cols-3" aria-label="Server information">
@@ -151,6 +154,14 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
             </section>}
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
+}
+
+// Loads a server's mod list and renders the Mods workspace tab.
+async function ServerModsSection({ serverId, canEdit, catalog = mockServerModCatalog }: {
+    serverId: string; canEdit: boolean; catalog?: ServerModCatalog;
+}) {
+    const mods = await catalog.listServerMods(serverId);
+    return <ServerWorkspacePanel section="Mods"><ServerModsPanel initialMods={mods} canEdit={canEdit} /></ServerWorkspacePanel>;
 }
 
 function UnavailableFileWorkspaces() {
@@ -177,6 +188,7 @@ function ManagedServerManagementPage({ userId, accessToken, server }: {
         </section>}
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
+        <ServerModsSection serverId={server.serverId} canEdit={server.accessRole === "owner" || server.accessRole === "manager"} />
         <ServerWorkspacePanel section="Settings">
             <ServerSettingsPanel name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
         </ServerWorkspacePanel>
@@ -328,6 +340,7 @@ async function LiveServerManagementPage({
         {managedServer !== null && accessToken !== null
             ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
             : <UnavailableFileWorkspaces />}
+        <ServerModsSection serverId={server.id} canEdit />
         <ServerWorkspacePanel section="Settings">
             <ServerSettingsPanel name={server.name} renameServerId={canManageAssignments ? server.id : undefined} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} visibilityAccess={managedServer ? { serverId: managedServer.serverId, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} />
             <section className="grid gap-3 sm:grid-cols-2" aria-label="Server information">

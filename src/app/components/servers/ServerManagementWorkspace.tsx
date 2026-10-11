@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, FileJson, Play, RotateCw, Search, Settings2, Square, Terminal } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, FileJson, Play, Puzzle, RotateCw, Search, Settings2, Square, Terminal } from "lucide-react";
 
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
 
@@ -10,6 +10,7 @@ const sections = [
     { name: "Console", icon: Terminal },
     { name: "Backups", icon: Database },
     { name: "Save & config", icon: FileJson },
+    { name: "Mods", icon: Puzzle },
     { name: "Settings", icon: Settings2 },
 ] as const;
 type Section = typeof sections[number]["name"];
@@ -81,6 +82,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
             if (target === "#server-access") setSection("Settings");
             if (target === "#server-backups") setSection("Backups");
             if (target === "#server-files") setSection("Save & config");
+            if (target === "#server-mods") setSection("Mods");
             if (target === "#server-lifecycle") setSection("Console");
         }
         followHash();
@@ -108,7 +110,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
                 <p role="status" className="mt-2 text-sm text-foreground-muted">{feedback}</p>
                 {status && <div className="mt-5">{status}</div>}
             </header>
-            <nav aria-label="Server workspace" className="mb-5 grid grid-cols-4 border-b border-white/10 sm:flex sm:gap-1">
+            <nav aria-label="Server workspace" className="mb-5 grid grid-cols-5 border-b border-white/10 sm:flex sm:gap-1">
                 {sections.map(({ name: label, icon: Icon }) => <button key={label} aria-current={section === label ? "page" : undefined} onClick={() => setSection(label)} className={`inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 px-1 py-2 text-xs sm:min-h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm focus-visible:outline-2 focus-visible:outline-gold ${section === label ? "border-gold text-gold" : "border-transparent text-foreground-muted hover:text-foreground"}`}><Icon className="size-4" aria-hidden="true" />{label}</button>)}
             </nav>
             <div className="space-y-5">{children}</div>

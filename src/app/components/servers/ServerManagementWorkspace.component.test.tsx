@@ -22,7 +22,7 @@ function click(label: string) {
     target.click();
 }
 
-it("switches all four workspaces without unmounting live controls or losing drafts", async () => {
+it("switches all five workspaces without unmounting live controls or losing drafts", async () => {
     const disconnected = vi.fn();
     function Console() {
         useEffect(() => () => disconnected(), []);
@@ -33,10 +33,11 @@ it("switches all four workspaces without unmounting live controls or losing draf
         <ServerWorkspacePanel section="Console"><Console /></ServerWorkspacePanel>
         <ServerWorkspacePanel section="Backups"><div id="backup-content">Real backups</div></ServerWorkspacePanel>
         <ServerWorkspacePanel section="Save & config"><div id="file-content">Real transfers</div></ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Mods"><div id="mods-content">Load order</div></ServerWorkspacePanel>
         <ServerWorkspacePanel section="Settings"><div id="settings-content">Access manager</div></ServerWorkspacePanel>
     </ServerManagementWorkspace>));
     await act(async () => click("Draft 0"));
-    for (const [tab, id] of [["Backups", "backup-content"], ["Save & config", "file-content"], ["Settings", "settings-content"]]) {
+    for (const [tab, id] of [["Backups", "backup-content"], ["Save & config", "file-content"], ["Mods", "mods-content"], ["Settings", "settings-content"]]) {
         await act(async () => click(tab));
         expect(container.querySelector(`#${id}`)?.closest("[hidden]")).toBeNull();
         expect(container.querySelector("header #server-status")).not.toBeNull();
