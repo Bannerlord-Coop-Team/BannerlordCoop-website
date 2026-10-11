@@ -450,6 +450,7 @@ export function ManagedServerControls({
                     onClick={() => requestOperation("update-now")}
                 />
             </div>
+            {!busy && operationState === "stopped" && observedGameState === "stopped" && <p className="text-xs text-foreground-muted">{t("controls.alreadyStopped")}</p>}
             {statusArea !== null && (statusSlot === undefined ? statusArea : statusSlot ? createPortal(statusArea, statusSlot) : null)}
         </div>
     );

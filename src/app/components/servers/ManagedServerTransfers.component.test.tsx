@@ -71,6 +71,60 @@ it("keeps one pending dispatch and bounds polling after network loss", async () 
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(mocks.check).toHaveBeenCalledTimes(calls);
     expect(container.textContent).toContain("Check status"); expect(sessionStorage.getItem(key)).not.toBeNull();
+    expect(container.textContent).toContain("accepted transfer may still be processing");
+});
+it("keeps checking an accepted queued transfer past one minute and follows its automatic retry", async () => {
+    mocks.submit.mockResolvedValue({ ok: true, result: job });
+    mocks.check.mockResolvedValue({ ok: true, result: job });
+    await render(); await click("Export save");
+    expect(container.textContent).toContain("accepted and queued");
+    await act(async () => vi.advanceTimersByTimeAsync(120_000));
+    expect(mocks.check.mock.calls.length).toBeGreaterThan(15);
+    expect(container.textContent).toContain("accepted and queued");
+    mocks.check.mockResolvedValue({ ok: true, result: { ...job, state: "retry-wait" } });
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(container.textContent).toContain("automatic retry");
+    mocks.check.mockResolvedValue({ ok: true, result: { ...job, state: "succeeded" } });
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(button("Download save export").disabled).toBe(false);
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+});
+it("bounds confirmed-job polling and resumes checking the same accepted request", async () => {
+    mocks.submit.mockResolvedValue({ ok: true, result: job });
+    mocks.check.mockResolvedValue({ ok: true, result: job });
+    await render(); await click("Export save");
+    const original = JSON.parse(sessionStorage.getItem(key)!);
+    await act(async () => vi.advanceTimersByTimeAsync(604_000));
+    const checks = mocks.check.mock.calls.length;
+    expect(container.textContent).toContain("Automatic status checks are paused");
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(mocks.check).toHaveBeenCalledTimes(checks);
+    expect([...container.querySelectorAll("button")].some((el) => el.textContent === "Retry same request")).toBe(false);
+    await click("Check status");
+    expect(mocks.check).toHaveBeenLastCalledWith(status.serverId, original.requestId, "owner");
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+});
+it("retains acceptance when a later check cannot find the request", async () => {
+    mocks.submit.mockResolvedValue({ ok: true, result: job });
+    mocks.check.mockResolvedValue({ ok: true, result: null });
+    await render(); await click("Export save");
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(container.textContent).toContain("accepted transfer could not be checked");
+    expect([...container.querySelectorAll("button")].some((el) => el.textContent === "Retry same request")).toBe(false);
+});
+it.each(["storage-unavailable", "save-rejected", "stop-required", "server-changed"])("shows the safe %s failure and explains how to start a new request", async (failureReason) => {
+    // Restore a previous import to exercise its durable result without uploading fixture bytes.
+    sessionStorage.setItem(key, JSON.stringify({ requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt,
+        action: "import-save", fingerprints: ["a".repeat(64)], displayName: "Campaign", saveId: status.activeSave!.saveId }));
+    mocks.check.mockResolvedValue({ ok: true, result: { ...job, action: "import-save", state: "failed", failureReason } });
+    await render(); await click("Check status");
+    expect(container.textContent).toContain(serverTestMessages["managed-server"][`transfers.failure.${failureReason}` as keyof typeof serverTestMessages["managed-server"]]);
+    expect(container.textContent).toContain("will not retry");
+    expect(container.textContent).toContain(status.serverId);
+    expect([...container.querySelectorAll("button")].some((el) => el.textContent === "Retry same request")).toBe(false);
+    await click("Dismiss completed transfer");
+    expect(sessionStorage.getItem(key)).toBeNull();
+    expect(button("Import save").disabled).toBe(false);
 });
 it("clears a definitively rejected stale request so refreshed inputs can be used", async () => {
     mocks.submit.mockResolvedValue({ ok: false, rejected: true, message: "The server changed" });
@@ -305,7 +359,7 @@ it("refreshes a stale page and retries a save export once with the current serve
     expect(retry.get("requestId")).not.toBe(first.get("requestId"));
     expect(JSON.parse(sessionStorage.getItem(key)!).requestId).toBe(retry.get("requestId"));
     expect(container.textContent).not.toContain("The server changed");
-    expect(container.textContent).toContain("Preparing your save export");
+    expect(container.textContent).toContain("Transfer accepted and queued");
 });
 
 it("never exports a different campaign than the one shown when the active save changed", async () => {
@@ -343,9 +397,9 @@ it("keeps save feedback in the campaign card and explains why other transfers ar
     await render(); await click("Export save");
     const saveCard = container.querySelector("#campaign-save-heading")!.closest("section")!;
     const configCard = container.querySelector("#configuration-heading")!.closest("section")!;
-    expect(saveCard.textContent).toContain("Preparing your save export");
+    expect(saveCard.textContent).toContain("Transfer accepted and queued");
     expect(saveCard.textContent).toContain("Check status");
-    expect(configCard.textContent).not.toContain("Preparing your save export");
+    expect(configCard.textContent).not.toContain("Transfer accepted and queued");
     expect(button("Export config").disabled).toBe(true);
     expect(button("Import config").disabled).toBe(true);
     expect(configCard.textContent).toContain("Paused while another transfer is open. Finish or dismiss it to start a new one.");

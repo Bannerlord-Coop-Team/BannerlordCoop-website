@@ -735,5 +735,15 @@
   "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "Ungültige Löschanfrage.",
   "deletion.signIn": "Melde dich erneut an, bevor du einen Server löschst.",
-  "deletion.unavailable": "Während Vorbereitung, Sperrung oder Löschung ist die Löschung nicht verfügbar."
+  "deletion.unavailable": "Während Vorbereitung, Sperrung oder Löschung ist die Löschung nicht verfügbar.",
+  "transfers.queued": "Übertragung angenommen und eingereiht. Der Server hat noch nicht mit der Verarbeitung begonnen.",
+  "transfers.retryWaiting": "Die Übertragung wartet auf einen automatischen Wiederholungsversuch. Deine Anfrage ist weiterhin aktiv.",
+  "transfers.statusChecksPaused": "Automatische Statusprüfungen sind pausiert. Deine angenommene Übertragung wird möglicherweise noch verarbeitet. Klicke auf Status prüfen, um fortzufahren.",
+  "transfers.acceptedStatusUnavailable": "Der Status der angenommenen Übertragung konnte nicht geprüft werden. Deine Anfrage bleibt gespeichert; prüfe den Status erneut.",
+  "transfers.failure.storage-unavailable": "Die Übertragung ist fehlgeschlagen, weil der private Speicher nicht verfügbar war. Schließe diese abgeschlossene Anfrage und versuche später eine neue Übertragung.",
+  "transfers.failure.save-rejected": "Der Server konnte den importierten Spielstand nicht prüfen. Schließe diese abgeschlossene Anfrage und starte einen neuen Import mit den zusammengehörigen Dateien. Kontaktiere den Support, wenn er erneut fehlschlägt.",
+  "transfers.failure.stop-required": "Der Import erfordert einen sicher gestoppten Server. Prüfe den Serverstatus, bevor du einen neuen Import startest.",
+  "transfers.failure.server-changed": "Der Server oder dein Zugriff hat sich geändert, bevor die Übertragung abgeschlossen wurde. Aktualisiere den Server, bevor du eine neue Übertragung startest.",
+  "transfers.failedRequest": "Diese Anfrage ist abgeschlossen und wird nicht wiederholt. Schließe sie, um eine neue Übertragung zu starten. Support-Referenz: {requestId}",
+  "controls.alreadyStopped": "Der Server ist bereits gestoppt. Du kannst eine Kampagne importieren oder auf Start klicken, wenn du bereit bist."
 }

@@ -64,6 +64,14 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); vi.restoreAllMocks(); vi.useRealTimers(); });
 
+it("explains a disabled Stop when the server is already stopped", async () => {
+    await render({ operationState: "stopped", observedGameState: "stopped" });
+    expect(buttons()[1].disabled).toBe(true);
+    expect(container.textContent).toContain("The server is already stopped");
+    expect(buttons()[0].disabled).toBe(false);
+    expect(operate).not.toHaveBeenCalled();
+});
+
 it("follows Restart through live game phases without locking Stop and Restart after command success", async () => {
     await render();
     await emit({ type: "opened", serverId, connection: 1 });

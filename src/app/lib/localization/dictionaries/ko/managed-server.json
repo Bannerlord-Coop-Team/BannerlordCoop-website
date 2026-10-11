@@ -734,5 +734,15 @@
   "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "삭제 요청이 잘못되었습니다.",
   "deletion.signIn": "서버를 삭제하기 전에 다시 로그인하세요.",
-  "deletion.unavailable": "서버 준비, 일시 중지 또는 삭제 중에는 삭제할 수 없습니다."
+  "deletion.unavailable": "서버 준비, 일시 중지 또는 삭제 중에는 삭제할 수 없습니다.",
+  "transfers.queued": "전송 요청이 접수되어 대기열에 추가되었습니다. 서버가 아직 처리를 시작하지 않았습니다.",
+  "transfers.retryWaiting": "전송이 자동 재시도를 기다리고 있습니다. 요청은 계속 활성 상태입니다.",
+  "transfers.statusChecksPaused": "자동 상태 확인이 일시 중지되었습니다. 접수된 전송이 아직 처리 중일 수 있습니다. 상태 확인을 눌러 계속하세요.",
+  "transfers.acceptedStatusUnavailable": "접수된 전송 상태를 확인하지 못했습니다. 요청은 보관되어 있습니다. 상태를 다시 확인하세요.",
+  "transfers.failure.storage-unavailable": "비공개 저장소를 사용할 수 없어 전송에 실패했습니다. 완료된 요청을 닫고 나중에 새 전송을 시도하세요.",
+  "transfers.failure.save-rejected": "서버가 가져온 저장 파일을 검증하지 못했습니다. 완료된 요청을 닫고 서로 일치하는 저장 파일로 새 가져오기를 시도하세요. 다시 실패하면 지원팀에 문의하세요.",
+  "transfers.failure.stop-required": "가져오려면 서버가 안전하게 중지되어 있어야 합니다. 새 가져오기를 시작하기 전에 서버 상태를 확인하세요.",
+  "transfers.failure.server-changed": "전송이 완료되기 전에 서버 또는 접근 권한이 변경되었습니다. 새 전송을 시작하기 전에 서버를 새로고침하세요.",
+  "transfers.failedRequest": "이 요청은 완료되어 다시 시도되지 않습니다. 새 전송을 시작하려면 요청을 닫으세요. 지원 참조: {requestId}",
+  "controls.alreadyStopped": "서버가 이미 중지되어 있습니다. 캠페인을 가져오거나 준비되면 시작을 누르세요."
 }

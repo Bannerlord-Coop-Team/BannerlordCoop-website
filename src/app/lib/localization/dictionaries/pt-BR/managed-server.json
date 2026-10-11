@@ -735,5 +735,15 @@
   "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "A solicitação de exclusão é inválida.",
   "deletion.signIn": "Entre novamente antes de excluir um servidor.",
-  "deletion.unavailable": "A exclusão não está disponível durante a preparação, suspensão ou exclusão do servidor."
+  "deletion.unavailable": "A exclusão não está disponível durante a preparação, suspensão ou exclusão do servidor.",
+  "transfers.queued": "Transferência aceita e na fila. O servidor ainda não começou a processá-la.",
+  "transfers.retryWaiting": "A transferência aguarda uma nova tentativa automática. Sua solicitação continua ativa.",
+  "transfers.statusChecksPaused": "As verificações automáticas estão pausadas. A transferência aceita ainda pode estar sendo processada. Use Verificar status para continuar.",
+  "transfers.acceptedStatusUnavailable": "Não foi possível verificar a transferência aceita. Sua solicitação foi mantida; verifique o status novamente.",
+  "transfers.failure.storage-unavailable": "A transferência falhou porque o armazenamento privado estava indisponível. Feche esta solicitação concluída e tente uma nova transferência mais tarde.",
+  "transfers.failure.save-rejected": "O servidor não conseguiu validar o save importado. Feche esta solicitação concluída e tente uma nova importação com os arquivos correspondentes. Contate o suporte se falhar novamente.",
+  "transfers.failure.stop-required": "A importação exige que o servidor esteja parado com segurança. Verifique o status antes de iniciar uma nova importação.",
+  "transfers.failure.server-changed": "O servidor ou seu acesso mudou antes da conclusão da transferência. Atualize o servidor antes de iniciar uma nova transferência.",
+  "transfers.failedRequest": "Esta solicitação terminou e não será repetida. Feche-a para iniciar uma nova transferência. Referência para o suporte: {requestId}",
+  "controls.alreadyStopped": "O servidor já está parado. Você pode importar uma campanha ou pressionar Iniciar quando estiver pronto."
 }

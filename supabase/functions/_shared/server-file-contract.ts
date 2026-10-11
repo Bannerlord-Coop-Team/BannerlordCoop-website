@@ -25,10 +25,13 @@ export interface OwnerFileStatus {
   managedConfig: ManagedServerConfiguration;
 }
 
+export const OWNER_FILE_FAILURE_REASONS = ['storage-unavailable', 'save-rejected', 'stop-required', 'server-changed'] as const;
+export type OwnerFileFailureReason = typeof OWNER_FILE_FAILURE_REASONS[number];
+
 export type OwnerFileResult =
   | { kind: 'rejected' }
   | { kind: 'configuration'; outcome: 'updated' | 'existing'; updatedAt: string }
-  | { kind: 'job'; outcome: 'enqueued' | 'existing'; jobId: string; action: 'import-save' | 'export-save'; state: string };
+  | { kind: 'job'; outcome: 'enqueued' | 'existing'; jobId: string; action: 'import-save' | 'export-save'; state: string; failureReason?: OwnerFileFailureReason };
 
 export type OwnerFileDownload =
   | { kind: 'file'; fileName: string; base64: string; byteSize: number }
@@ -115,7 +118,9 @@ export function parseOwnerFileResult(value: unknown): OwnerFileResult | null {
     requireFileTimestamp(value.updatedAt);
     if (value.outcome !== 'updated' && value.outcome !== 'existing') throw new Error('Invalid transfer outcome');
   } else {
-    exact(value, ['kind', 'outcome', 'jobId', 'action', 'state']);
+    exact(value, ['kind', 'outcome', 'jobId', 'action', 'state', ...(Object.hasOwn(value, 'failureReason') ? ['failureReason'] : [])]);
+    if (Object.hasOwn(value, 'failureReason') && (value.state !== 'failed'
+      || !OWNER_FILE_FAILURE_REASONS.some((reason) => reason === value.failureReason))) throw new Error('Invalid transfer failure reason');
     requireUuid(value.jobId);
     if (value.kind !== 'job' || !['enqueued', 'existing'].includes(String(value.outcome))
       || !['import-save', 'export-save'].includes(String(value.action))
