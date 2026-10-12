@@ -451,7 +451,8 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
 
 // Resolves an approved configuration review label from its canonical key.
 function settingLabel(value: string, t: Translator["t"]) {
-    return t(`configuration.reviewField.${value}`);
+    try { return t(`configuration.reviewField.${value}`); }
+    catch { return value.replace(/([a-z])([A-Z])/gu, "$1 $2").replace(/^./u, (first) => first.toUpperCase()); }
 }
 // Formats validated setting values without altering import payloads.
 function settingValue(value: unknown, t: Translator["t"], number: Translator["number"]) {

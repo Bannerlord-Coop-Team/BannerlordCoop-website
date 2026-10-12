@@ -13,6 +13,7 @@ export type ConfigurationImportMessages = {
   expectedServer: string;
   duplicateNames: string;
   unknownSettings: string;
+  unknownSettingsWithNames?: (names: readonly string[]) => string;
   unsupportedValues: string;
   invalidObject: string;
   unsupportedSetting: string;
@@ -32,13 +33,18 @@ const defaultImportMessages: ConfigurationImportMessages = {
   "expectedServer": "This looks like server-config.json. Choose “server-config.json — server settings” above.",
   "duplicateNames": "This file contains duplicate or unrecognised setting names. Choose the original configuration file.",
   "unknownSettings": "This file contains settings this website does not recognise. Please contact support with the name of the file.",
+  "unknownSettingsWithNames": (names) => `This file contains settings this website does not recognise. Unrecognised settings: ${names.join(", ")}. Please contact support with the name of the file.`,
   "unsupportedValues": "Some settings in this file are missing or are not supported. Choose the original configuration file, or contact support. Nothing has been changed.",
   "invalidObject": "Invalid configuration object",
   "unsupportedSetting": "Unsupported configuration setting"
 };
 
 export type ServerSettings = Partial<ManagedServerConfiguration['serverConfig']>;
-export interface ModSettings { difficulty?: Partial<ManagedServerConfiguration['modConfig']['difficulty']>; modOptions?: Partial<ManagedServerConfiguration['modConfig']['modOptions']> }
+export interface ModSettings {
+  voice?: Partial<ManagedServerConfiguration['modConfig']['voice']>;
+  difficulty?: Partial<ManagedServerConfiguration['modConfig']['difficulty']>;
+  modOptions?: Partial<ManagedServerConfiguration['modConfig']['modOptions']>;
+}
 export type ConfigurationPart = 'server' | 'mod' | 'combined';
 export type ConfigurationImport = { managedConfig: ManagedServerConfiguration }
   | { configPart: 'server'; settings: ServerSettings }
@@ -61,7 +67,7 @@ export function parseConfigurationImport(value: unknown, messages: Configuration
   if (input.configPart !== 'mod') throw new Error(messages.chooseFile);
   requireKeys(settings, defaults.modConfig, messages);
   let count = 0;
-  for (const part of ['difficulty', 'modOptions'] as const) {
+  for (const part of ['voice', 'difficulty', 'modOptions'] as const) {
     if (settings[part] !== undefined) {
       const block = object(settings[part], messages);
       requireKeys(block, defaults.modConfig[part], messages);
@@ -69,6 +75,7 @@ export function parseConfigurationImport(value: unknown, messages: Configuration
     }
   }
   parseManagedServerConfiguration({ ...defaults, modConfig: {
+    voice: { ...defaults.modConfig.voice, ...object(settings.voice ?? {}, messages) },
     difficulty: { ...defaults.modConfig.difficulty, ...object(settings.difficulty ?? {}, messages) },
     modOptions: { ...defaults.modConfig.modOptions, ...object(settings.modOptions ?? {}, messages) },
   } }, messages.configuration);
@@ -82,6 +89,7 @@ export function applyConfigurationImport(current: ManagedServerConfiguration, in
   return parseManagedServerConfiguration(input.configPart === 'server'
     ? { ...current, serverConfig: { ...current.serverConfig, ...input.settings } }
     : { ...current, modConfig: {
+      voice: { ...current.modConfig.voice, ...input.settings.voice },
       difficulty: { ...current.modConfig.difficulty, ...input.settings.difficulty },
       modOptions: { ...current.modConfig.modOptions, ...input.settings.modOptions },
     } }, messages.configuration);
@@ -89,6 +97,7 @@ export function applyConfigurationImport(current: ManagedServerConfiguration, in
 
 // These native settings are intentionally outside the managed configuration contract.
 const ignoredServerKeys = ['saveName', 'password', 'port', 'mode', 'devModuleRoot', 'skipLateAi', 'replayHero', 'terrain', 'scene', 'savePath', 'userDir'];
+const ignoredModRootKeys = ['network'];
 const ignoredModKeys = ['battleSize', 'showPlayerNameplates', 'playerWoundedBattleEntry'];
 
 // Reads a native or exported configuration with detailed injected diagnostics and private ignored values.
@@ -112,27 +121,32 @@ export function readConfigurationFile(text: string, part: ConfigurationPart, mes
     throw new Error(messages.expectedServer);
   }
   // Selects supported names without exposing ignored setting values.
-  function pick(source: Record<string, unknown>, supported: object, ignored: string[], nullable = false): Record<string, unknown> {
+  function pick(source: Record<string, unknown>, supported: object, ignored: string[], nullable = false, path = ''): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     const seen = new Set<string>();
+    const unknown: string[] = [];
     for (const [key, value] of Object.entries(source)) {
       if (!/^[a-z][a-z0-9]{0,63}$/iu.test(key) || seen.has(key.toLowerCase())) throw new Error(messages.duplicateNames);
       seen.add(key.toLowerCase());
       const canonical = Object.keys(supported).find((name) => name.toLowerCase() === key.toLowerCase());
       if (canonical === undefined) {
         const skipped = ignored.find((name) => name.toLowerCase() === key.toLowerCase());
-        if (skipped === undefined) throw new Error(messages.unknownSettings);
+        if (skipped === undefined) {
+          unknown.push(path ? `${path}.${key}` : key);
+          continue;
+        }
         ignoredSettings.push(skipped); // Never include an ignored value (which may be a password/path).
       } else if (!(nullable && value === null)) {
         const expected = (supported as Record<string, unknown>)[canonical];
         result[canonical] = typeof expected === 'number' && typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
       }
     }
+    if (unknown.length) throw new Error(messages.unknownSettingsWithNames?.(unknown) ?? messages.unknownSettings);
     return result;
   }
-  const settings = part === 'server' ? pick(raw, defaults.serverConfig, ignoredServerKeys) : pick(raw, defaults.modConfig, []);
-  if (part === 'mod') for (const section of ['difficulty', 'modOptions'] as const) {
-    if (settings[section] !== undefined) settings[section] = pick(object(settings[section], messages), defaults.modConfig[section], section === 'modOptions' ? ignoredModKeys : [], true);
+  const settings = part === 'server' ? pick(raw, defaults.serverConfig, ignoredServerKeys) : pick(raw, defaults.modConfig, ignoredModRootKeys);
+  if (part === 'mod') for (const section of ['voice', 'difficulty', 'modOptions'] as const) {
+    if (settings[section] !== undefined) settings[section] = pick(object(settings[section], messages), defaults.modConfig[section], section === 'modOptions' ? ignoredModKeys : [], true, section);
   }
   try { return { input: parseConfigurationImport({ configPart: part, settings }, messages), ignoredSettings }; }
   catch { throw new Error(messages.unsupportedValues); }
