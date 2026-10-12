@@ -38,15 +38,16 @@ export function subscriptionGraceMessage(alert: SubscriptionGraceAlert & { email
         from: sender.from,
         ...(sender.fromName === undefined ? {} : { fromName: sender.fromName }),
         to: [alert.email],
-        subject: `[BannerlordCoop] Your server "${alert.serverName}" will be removed after ${deadline}`,
+        subject: `[BannerlordCoop] Your server "${alert.serverName}" has been stopped and will be removed after ${deadline}`,
         text: [
-            `Your Bannerlord Coop server "${alert.serverName}" is funded by a Patreon membership that has ended`
-                + " or is no longer linked to your account.",
+            `Your Bannerlord Coop server "${alert.serverName}" has been stopped because the Patreon membership`
+                + " funding it has ended or is no longer linked to your account. Players were warned and the campaign was saved.",
             "",
-            `It is scheduled for removal after ${deadline}.`,
+            `It is locked and scheduled for removal after ${deadline}.`,
             "",
             `To keep it, renew your membership or link a qualifying Patreon account at ${siteUrl}/account before then.`
-                + " Removal is cancelled automatically once a qualifying membership is verified.",
+                + " Once a qualifying membership is verified, removal is cancelled and the server is unlocked."
+                + " It stays stopped; press Start to run it again.",
             "",
             "A final backup is taken before the server is removed. If you think this is a mistake, contact an administrator.",
         ].join("\n"),
