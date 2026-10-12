@@ -36,7 +36,8 @@ export async function selectManagedServerSave(value: unknown, expectedUserId: st
     let input: SaveActionInput;
     try { input = parseInput(value, false); } catch { return { ok: false, message: t("campaigns.selectionFailed") }; }
     try {
-        await selectMyServerSave(await accessToken(expectedUserId), input, input.requestId);
+        const { requestId, ...selection } = input;
+        await selectMyServerSave(await accessToken(expectedUserId), selection, requestId);
         revalidatePath(`/servers/${input.serverId}`);
         return { ok: true, message: t("campaigns.selected") };
     } catch (error) {
@@ -51,7 +52,8 @@ export async function deleteManagedServerSave(value: unknown, expectedUserId: st
     let input: SaveActionInput;
     try { input = parseInput(value, true); } catch { return { ok: false, message: t("campaigns.deleteFailed") }; }
     try {
-        await deleteMyServerSave(await accessToken(expectedUserId), input as Required<SaveActionInput>, input.requestId);
+        const { requestId, ...deletion } = input;
+        await deleteMyServerSave(await accessToken(expectedUserId), deletion as Required<Omit<SaveActionInput, "requestId">>, requestId);
         revalidatePath(`/servers/${input.serverId}`);
         return { ok: true, message: t("campaigns.deleted") };
     } catch { return { ok: false, message: t("campaigns.deleteFailed") }; }
