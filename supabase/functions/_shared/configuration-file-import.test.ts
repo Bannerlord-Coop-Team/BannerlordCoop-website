@@ -38,6 +38,40 @@ test("localized import preserves the original parsed result and private ignored 
     assert.equal(applyConfigurationImport(defaults, localized.input, messages).serverConfig.autosaveMinutes, 10);
 });
 
+test("imports native Coop settings and reports the legacy network block as ignored", () => {
+    const parsed = readConfigurationFile(`{
+        "voice": { "mapFullVolumeDistance": 5, "mapMaximumDistance": 20, "sceneFullVolumeDistance": 10, "sceneMaximumDistance": 50 },
+        "network": { "movementIncomingMiBPerSecond": 1, "movementOutgoingMiBPerSecond": 1 },
+        "modOptions": {
+            "voiceEnabled": false,
+            "blockAiWarDeclarationsOnOfflinePlayers": true,
+            "ensureUnaffiliatedWanderers": false,
+            "coopClansEnabled": false,
+            "enablePlayerExecutions": true
+        }
+    }`, "mod");
+    assert.deepEqual(parsed.ignoredSettings, ["network"]);
+    const updated = applyConfigurationImport(defaults, parsed.input);
+    assert.equal(updated.modConfig.voice.sceneMaximumDistance, 50);
+    assert.deepEqual({
+        voiceEnabled: updated.modConfig.modOptions.voiceEnabled,
+        blockAiWarDeclarationsOnOfflinePlayers: updated.modConfig.modOptions.blockAiWarDeclarationsOnOfflinePlayers,
+        ensureUnaffiliatedWanderers: updated.modConfig.modOptions.ensureUnaffiliatedWanderers,
+        coopClansEnabled: updated.modConfig.modOptions.coopClansEnabled,
+        enablePlayerExecutions: updated.modConfig.modOptions.enablePlayerExecutions,
+    }, {
+        voiceEnabled: false,
+        blockAiWarDeclarationsOnOfflinePlayers: true,
+        ensureUnaffiliatedWanderers: false,
+        coopClansEnabled: false,
+        enablePlayerExecutions: true,
+    });
+});
+
+test("names unknown native settings in the import error", () => {
+    assert.throws(() => readConfigurationFile('{"modOptions":{"futureOption":true}}', "mod"), /modOptions\.futureOption/u);
+});
+
 // Confirms direct parser validation also receives the nested configuration diagnostics.
 test("injects direct import and configuration validation without changing rules", () => {
     assert.throws(() => parseConfigurationImport({}, messages), { message: messages.invalidImport });
