@@ -747,7 +747,7 @@
   "transfers.acceptedStatusUnavailable": "无法检查已接受的传输状态。您的请求已保留，请再次检查状态。",
   "transfers.failure.storage-unavailable": "私人存储不可用，传输失败。请关闭此已完成的请求，稍后尝试新的传输。",
   "transfers.failure.save-rejected": "服务器无法验证导入的存档。请关闭此已完成的请求，使用匹配的存档文件重新导入。如果再次失败，请联系支持。",,
-  "transfers.failure.campaign-limit": "This server already has 10 imported campaigns. Delete an imported campaign before adding another."
+  "transfers.failure.campaign-limit": "This server already has 10 imported campaigns. Delete an imported campaign before adding another.",
   "transfers.failure.stop-required": "导入需要服务器安全停止。开始新的导入之前，请检查服务器状态。",
   "transfers.failure.server-changed": "传输完成之前，服务器或您的访问权限已更改。开始新的传输之前，请刷新服务器。",
   "transfers.failedRequest": "此请求已完成，不会重试。请关闭它以开始新的传输。支持参考编号：{requestId}",
