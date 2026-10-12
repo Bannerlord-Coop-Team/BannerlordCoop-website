@@ -90,6 +90,20 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe(regionsOn(next)[0]);
         expect(mocks.request).not.toHaveBeenCalled();
     });
+    it("explains the release cadence when a release option is hovered or focused", async () => {
+        await setup();
+        const descriptions = {
+            stable: "Released to Steam every 1–4 weeks.",
+            nightly: "Released every night to supporters and testers.",
+        } as const;
+        for (const [channel, description] of Object.entries(descriptions)) {
+            const input = container.querySelector<HTMLInputElement>(`input[value="${channel}"]`)!;
+            const option = input.closest("label")!;
+            expect(option.title).toBe(description);
+            expect(input.getAttribute("aria-describedby")).toBe(`release-${channel}-description`);
+            expect(container.querySelector(`#release-${channel}-description`)?.textContent).toBe(description);
+        }
+    });
     it("offers only stored-catalog regions the website knows, in stored order, and disables emptied continents", async () => {
         const summary = onboardingSummary();
         summary.regions = [{ region: "atlantis", available: true, request: null }, onboardingRegion(summary, "poland"),
