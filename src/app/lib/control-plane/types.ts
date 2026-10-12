@@ -52,6 +52,23 @@ export type MyServerSummary = Pick<
     gamePorts?: number[];
 };
 
+export type MyServerSaveSummary = {
+    saveId: string;
+    displayName: string;
+    byteSize: number;
+    createdAt: string;
+    lastUsedAt: string | null;
+    importedBy: "system" | "owner";
+};
+
+export type MyServerSavePage = {
+    serverId: string;
+    updatedAt: string;
+    activeSaveId: string | null;
+    items: MyServerSaveSummary[];
+    nextCursor: string | null;
+};
+
 export type MyServerBackupSummary = {
     backupId: string;
     backupType: string;

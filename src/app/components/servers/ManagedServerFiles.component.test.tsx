@@ -21,7 +21,7 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 it.each(["owner", "manager", "admin", "support"] as const)("preserves %s file permissions while splitting backups from transfers", async accessRole => {
     const server = { serverId: "test", accessRole } as MyServerSummary;
     await act(async () => root.render(<TestLocalization>{<ServerManagementWorkspace name="Server" summary="Running" notice="Live controls" initialSection="Backups">
-        <ManagedServerFiles userId="user" server={server} files={null} backups={[]} status={null} />
+        <ManagedServerFiles userId="user" server={server} files={null} saves={null} backups={[]} status={null} />
     </ServerManagementWorkspace>} </TestLocalization>));
     if (accessRole === "owner" || accessRole === "manager") {
         expect(container.querySelector("#backups")?.closest("[hidden]")).toBeNull();

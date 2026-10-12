@@ -18,6 +18,7 @@ import { LiveServerBackupSetup, type LiveServerBackupUnavailableReason } from "@
 import { LiveServerFileSetup } from "@/app/components/servers/LiveServerFileSetup";
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
+import { listAllMyServerSaves } from "@/app/lib/hosting/my-servers";
 import { ManagedServerControls, ManagedServerPassword } from "@/app/components/servers/ManagedServerControls";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import { ManagedServerDelete } from "@/app/components/servers/ManagedServerDelete";
@@ -274,13 +275,14 @@ async function ManagedServerBackupsSection({
 }) {
     const { t } = await getTranslations("managed-server");
     if (server.accessRole === "support" || server.accessRole === "admin") {
-        return <ManagedServerFiles userId={userId} server={server} files={null} backups={[]} status={null} />;
+        return <ManagedServerFiles userId={userId} server={server} files={null} saves={null} backups={[]} status={null} />;
     }
 
-    const [initialBackups, initialStatus, filesResult] = await Promise.allSettled([
+    const [initialBackups, initialStatus, filesResult, savesResult] = await Promise.allSettled([
         listAllMyServerBackups(accessToken, server.serverId),
         getMyServerBackupStatus(accessToken, server.serverId),
         getMyServerFiles(accessToken, server.serverId),
+        listAllMyServerSaves(accessToken, server.serverId),
     ]);
     let backupsResult = initialBackups;
     let statusResult = initialStatus;
@@ -306,6 +308,7 @@ async function ManagedServerBackupsSection({
 
     return <ManagedServerFiles userId={userId} server={server}
         files={filesResult.status === "fulfilled" ? filesResult.value : null}
+        saves={savesResult.status === "fulfilled" ? savesResult.value : null}
         backups={backups} status={status} loadError={loadError} />;
 }
 
