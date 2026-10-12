@@ -25,7 +25,7 @@ export interface OwnerFileStatus {
   managedConfig: ManagedServerConfiguration;
 }
 
-export const OWNER_FILE_FAILURE_REASONS = ['storage-unavailable', 'save-rejected', 'stop-required', 'server-changed'] as const;
+export const OWNER_FILE_FAILURE_REASONS = ['storage-unavailable', 'save-rejected', 'campaign-limit', 'stop-required', 'server-changed'] as const;
 export type OwnerFileFailureReason = typeof OWNER_FILE_FAILURE_REASONS[number];
 
 export type OwnerFileResult =

@@ -53,6 +53,7 @@ type UpstreamRequest =
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "server-saves"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "select-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string } }
+    | { operation: "delete-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string; confirmationText: string } }
     | { operation: "server-backup-status"; input: { serverId: string } }
     | { operation: "server-deletion-status"; input: { serverId: string } }
     | { operation: "update-server"; input: { serverId: string; expectedUpdatedAt: string } }
@@ -258,6 +259,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
                 if (upstreamRequest.operation === "server-saves" && (!isRecord(envelope.result) || envelope.result.serverId !== upstreamRequest.input.serverId)) throw new Error("Save response belongs to another server");
                 if (upstreamRequest.operation === "select-save" && (!isRecord(envelope.result) || envelope.result.serverId !== upstreamRequest.input.serverId || envelope.result.activeSaveId !== upstreamRequest.input.saveId)) throw new Error("Save selection response is invalid");
+                if (upstreamRequest.operation === "delete-save" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["action", "jobId", "outcome"]) || envelope.result.action !== "delete-save" || !REQUEST_ID.test(String(envelope.result.jobId)) || (envelope.result.outcome !== "enqueued" && envelope.result.outcome !== "existing"))) throw new Error("Save deletion response is invalid");
                 if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
                 if (upstreamRequest.operation === "download-save-export") parseOwnerFileDownload(envelope.result);
                 if ((upstreamRequest.operation === "configuration-file" || upstreamRequest.operation === "save-configuration-file")
@@ -472,6 +474,11 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "saveId", "serverId"]) || typeof value.saveId !== "string" || !SERVER_ID.test(value.saveId)) throw new Error("Invalid save selection");
         assertExpectedUpdatedAt(value.expectedUpdatedAt);
         return { operation: "select-save", input: { serverId: value.serverId, saveId: value.saveId, expectedUpdatedAt: value.expectedUpdatedAt as string } };
+    }
+    if (value.action === "delete-save") {
+        if (!hasExactKeys(value, ["action", "confirmationText", "expectedUpdatedAt", "saveId", "serverId"]) || typeof value.saveId !== "string" || !SERVER_ID.test(value.saveId) || typeof value.confirmationText !== "string" || value.confirmationText.length < 1 || value.confirmationText.length > 48) throw new Error("Invalid save deletion");
+        assertExpectedUpdatedAt(value.expectedUpdatedAt);
+        return { operation: "delete-save", input: { serverId: value.serverId, saveId: value.saveId, expectedUpdatedAt: value.expectedUpdatedAt as string, confirmationText: value.confirmationText } };
     }
     if (value.action === "create-backup") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {

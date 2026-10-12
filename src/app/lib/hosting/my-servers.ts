@@ -185,6 +185,13 @@ export async function selectMyServerSave(accessToken: string, input: { serverId:
     return result as { serverId: string; activeSaveId: string; updatedAt: string };
 }
 
+export async function deleteMyServerSave(accessToken: string, input: { serverId: string; saveId: string; expectedUpdatedAt: string; confirmationText: string }, requestId: string) {
+    if (!REQUEST_ID.test(requestId) || !RESOURCE_ID.test(input.serverId) || !RESOURCE_ID.test(input.saveId) || !ISO_TIMESTAMP.test(input.expectedUpdatedAt) || input.confirmationText.length < 1 || input.confirmationText.length > 48) throw new MyServersApiError("invalid_request", "The campaign deletion request is invalid.");
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify({ action: "delete-save", ...input }), requestId });
+    if (!isRecord(result) || !hasExactKeys(result, ["action", "jobId", "outcome"]) || result.action !== "delete-save" || typeof result.jobId !== "string" || !RESOURCE_ID.test(result.jobId) || (result.outcome !== "enqueued" && result.outcome !== "existing")) throw invalidResponse();
+    return result as { outcome: "enqueued" | "existing"; jobId: string; action: "delete-save" };
+}
+
 export async function getMyServerBackupStatus(
     accessToken: string,
     serverId: string,
