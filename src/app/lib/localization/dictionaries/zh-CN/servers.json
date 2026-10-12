@@ -125,8 +125,8 @@
   "onboarding.unused": {
     "other": "剩余 {countLabel} 个配额"
   },
-  "onboarding.receipt": "已在{region}分配服务器 {name}。服务器创建时处于停止状态；此回执并非实时状态。请查看“我的服务器”或进入服务器管理页面以了解当前状态。",
-  "onboarding.receiptSetup": "{release} · 维护时间为 03:00–04:00（America/Chicago）。设置不会启动服务器。首次启动将使用内置的默认存档，无需导入。",
+  "onboarding.receipt": "已在{region}分配服务器 {name}。服务器会立即在网站上显示，但初始化最多可能需要15分钟。",
+  "onboarding.receiptSetup": "{release} · 维护时间为 03:00–04:00（America/Chicago）。",
   "onboarding.regionReceipt": "你对{region}的申请已保存。未创建或预留任何服务器，也未消耗额度。",
   "onboarding.regionFull": "{region}已满。申请该区域即可告诉我们你希望在那里开服，或选择一个可用区域。",
   "onboarding.alreadyRequested": "你对{region}的申请已保存。请选择可用区域或稍后再来查看。",

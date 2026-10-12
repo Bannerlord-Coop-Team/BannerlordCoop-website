@@ -133,8 +133,8 @@
     "many": "{countLabel} non utilisées",
     "other": "{countLabel} non utilisées"
   },
-  "onboarding.receipt": "Le serveur {name} a été attribué dans la région {region}. Il a été arrêté à sa création ; ce reçu n’indique pas son état en direct. Consultez Mes serveurs ou gérez le serveur pour connaître son état actuel.",
-  "onboarding.receiptSetup": "{release} · maintenance 03:00–04:00 America/Chicago. La configuration ne démarre pas le serveur. Son premier démarrage utilise la sauvegarde par défaut fournie ; aucune importation n’est nécessaire.",
+  "onboarding.receipt": "Le serveur {name} a été attribué dans la région {region}. Il sera disponible immédiatement sur le site, mais son initialisation peut prendre 15 minutes maximum.",
+  "onboarding.receiptSetup": "{release} · maintenance 03:00–04:00 America/Chicago.",
   "onboarding.regionReceipt": "Votre demande pour la région {region} est enregistrée. Aucun serveur n’a été créé ni réservé et aucune allocation n’a été utilisée.",
   "onboarding.regionFull": "La région {region} est complète. Demandez-la pour nous indiquer que vous souhaitez un serveur à cet endroit, ou choisissez une région disponible.",
   "onboarding.alreadyRequested": "Votre demande pour la région {region} est enregistrée. Choisissez une région disponible ou revenez plus tard.",

@@ -129,8 +129,8 @@
     "one": "{countLabel} kullanılmamış",
     "other": "{countLabel} kullanılmamış"
   },
-  "onboarding.receipt": "{name} adlı sunucu {region} bölgesinde atandı. Oluşturulurken durdurulmuş durumdaydı; bu makbuz canlı durum değildir. Güncel durum için Sunucularım sayfasına bakın veya sunucuyu yönetin.",
-  "onboarding.receiptSetup": "{release} · bakım 03:00–04:00 America/Chicago. Kurulum sunucuyu başlatmaz. İlk Başlat işlemi paketle gelen varsayılan kayıt dosyasını kullanır; içe aktarma gerekmez.",
+  "onboarding.receipt": "{name} adlı sunucu {region} bölgesinde atandı. Sunucunuz sitede hemen kullanılabilir olacak, ancak başlatılması 15 dakikaya kadar sürebilir.",
+  "onboarding.receiptSetup": "{release} · bakım 03:00–04:00 America/Chicago.",
   "onboarding.regionReceipt": "{region} için talebiniz kaydedildi. Hiçbir sunucu oluşturulmadı veya ayrılmadı ve hiçbir hak kullanılmadı.",
   "onboarding.regionFull": "{region} dolu. Orada sunucu istediğinizi bize bildirmek için talep edin veya uygun bir bölge seçin.",
   "onboarding.alreadyRequested": "{region} için talebiniz kayıtlı. Uygun bir bölge seçin veya daha sonra tekrar kontrol edin.",

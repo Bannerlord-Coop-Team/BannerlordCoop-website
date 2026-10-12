@@ -129,8 +129,8 @@
     "one": "{countLabel} vaga disponível",
     "other": "{countLabel} vagas disponíveis"
   },
-  "onboarding.receipt": "{name} foi atribuído na região {region}. Ele foi criado parado; este comprovante não mostra o status em tempo real. Consulte Meus servidores ou gerencie o servidor para ver seu estado atual.",
-  "onboarding.receiptSetup": "{release} · manutenção 03:00–04:00 America/Chicago. A configuração não inicia o servidor. Na primeira vez que for iniciado, ele usará o arquivo salvo padrão incluído; não é necessário importar nada.",
+  "onboarding.receipt": "{name} foi atribuído na região {region}. Seu servidor estará disponível no site imediatamente, mas a inicialização pode levar até 15 minutos.",
+  "onboarding.receiptSetup": "{release} · manutenção 03:00–04:00 America/Chicago.",
   "onboarding.regionReceipt": "Sua solicitação para a região {region} foi salva. Nenhum servidor foi criado ou reservado e nenhuma cota foi usada.",
   "onboarding.regionFull": "A região {region} está cheia. Solicite-a para nos avisar que você quer um servidor lá, ou escolha uma região disponível.",
   "onboarding.alreadyRequested": "Sua solicitação para a região {region} está salva. Escolha uma região disponível ou volte mais tarde.",

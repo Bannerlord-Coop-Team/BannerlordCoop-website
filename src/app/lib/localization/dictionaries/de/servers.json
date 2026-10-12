@@ -129,8 +129,8 @@
     "one": "{countLabel} ungenutzt",
     "other": "{countLabel} ungenutzt"
   },
-  "onboarding.receipt": "{name} wurde in {region} zugewiesen. Der Server wurde bei der Erstellung gestoppt; dieser Beleg ist kein Live-Status. Sieh unter „Meine Server“ nach oder verwalte den Server, um seinen aktuellen Zustand zu sehen.",
-  "onboarding.receiptSetup": "{release} · Wartung 03:00–04:00 America/Chicago. Die Einrichtung startet den Server nicht. Der erste Start verwendet den mitgelieferten Standard-Spielstand; ein Import ist nicht erforderlich.",
+  "onboarding.receipt": "{name} wurde in {region} zugewiesen. Ihr Server wird sofort auf der Website verfügbar sein, die Initialisierung kann jedoch bis zu 15 Minuten dauern.",
+  "onboarding.receiptSetup": "{release} · Wartung 03:00–04:00 America/Chicago.",
   "onboarding.regionReceipt": "Deine Anfrage für {region} wurde gespeichert. Es wurde kein Server erstellt oder reserviert und keine Zuteilung verbraucht.",
   "onboarding.regionFull": "{region} ist voll. Frage die Region an, damit wir wissen, dass du dort einen Server möchtest, oder wähle eine verfügbare Region.",
   "onboarding.alreadyRequested": "Deine Anfrage für {region} ist gespeichert. Wähle eine verfügbare Region oder schau später wieder vorbei.",
