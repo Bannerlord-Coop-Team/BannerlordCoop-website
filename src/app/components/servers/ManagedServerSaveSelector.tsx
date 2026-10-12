@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "@/app/lib/localization/client";
-import { selectMyServerSave } from "@/app/lib/hosting/my-servers";
+import { deleteMyServerSave, selectMyServerSave } from "@/app/lib/hosting/my-servers";
 import type { MyServerSavePage } from "@/app/lib/control-plane/types";
 import { useState, useTransition } from "react";
 
@@ -35,6 +35,17 @@ export function ManagedServerSaveSelector({ userId, serverId, saves, canSelect }
         });
     }
 
+    function remove(save: MyServerSavePage["items"][number]) {
+        if (save.importedBy !== "owner" || isPending || !window.confirm(`Delete campaign "${save.displayName}"? Type the exact campaign name in the next prompt to confirm.`)) return;
+        const confirmationText = window.prompt(`Type the exact campaign name to delete "${save.displayName}".`);
+        if (confirmationText !== save.displayName) { setError(t("campaigns.deleteConfirmationMismatch")); return; }
+        setError(null);
+        startTransition(async () => {
+            try { await deleteMyServerSave(userId, { serverId, saveId: save.saveId, expectedUpdatedAt: page.updatedAt, confirmationText }, crypto.randomUUID()); window.location.reload(); }
+            catch (cause) { setError(cause instanceof Error ? cause.message : t("campaigns.deleteFailed")); }
+        });
+    }
+
     return <section className="mb-5 rounded-lg border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="campaign-selection-heading">
         <h2 id="campaign-selection-heading" className="text-base font-semibold text-foreground">{t("campaigns.title")}</h2>
         <p className="mt-2 text-sm leading-6 text-foreground-muted">{t("campaigns.description")}</p>
@@ -43,7 +54,7 @@ export function ManagedServerSaveSelector({ userId, serverId, saves, canSelect }
                 const active = save.saveId === page.activeSaveId;
                 return <li key={save.saveId} className="flex flex-wrap items-center justify-between gap-3 border border-white/10 px-4 py-3">
                     <div className="min-w-0"><p className="break-words text-sm font-semibold">{save.displayName}</p><p className="text-xs text-foreground-muted">{number(save.byteSize)} bytes{active ? ` · ${t("campaigns.current")}` : ""}</p></div>
-                    <button type="button" className={buttonClass} disabled={!canSelect || active || isPending} onClick={() => choose(save.saveId)}>{active ? t("campaigns.current") : isPending && selected === save.saveId ? t("transfers.pleaseWait") : t("campaigns.select")}</button>
+                    <div className="flex items-center gap-2"><button type="button" className={buttonClass} disabled={!canSelect || active || isPending} onClick={() => choose(save.saveId)}>{active ? t("campaigns.current") : isPending && selected === save.saveId ? t("transfers.pleaseWait") : t("campaigns.select")}</button>{save.importedBy === "owner" && <button type="button" aria-label={`Delete ${save.displayName}`} className="inline-flex size-10 items-center justify-center rounded-md border border-crimson/50 text-xl text-red-200 hover:border-crimson disabled:opacity-50" disabled={isPending || active} onClick={() => remove(save)}>×</button>}</div>
                 </li>;
             })}
         </ul>}
