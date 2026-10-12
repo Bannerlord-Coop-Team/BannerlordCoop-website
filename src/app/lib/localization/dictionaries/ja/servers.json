@@ -125,8 +125,8 @@
   "onboarding.unused": {
     "other": "未使用：{countLabel}枠"
   },
-  "onboarding.receipt": "{region}に{name}が割り当てられました。作成時は停止状態でした。この通知は現在の稼働状況を示すものではありません。「自分のサーバー」またはサーバー管理画面で現在の状態を確認してください。",
-  "onboarding.receiptSetup": "{release} · メンテナンス時間：03:00–04:00 America/Chicago。セットアップではサーバーは起動しません。初回起動時には同梱のデフォルトのセーブデータを使用するため、インポートは不要です。",
+  "onboarding.receipt": "{region}に{name}が割り当てられました。サーバーはすぐにサイトで利用できますが、初期化の完了には最大15分かかります。",
+  "onboarding.receiptSetup": "{release} · メンテナンス時間：03:00–04:00 America/Chicago。",
   "onboarding.regionReceipt": "{region}へのリクエストを保存しました。サーバーの作成や予約は行われておらず、サーバー枠も使用されていません。",
   "onboarding.regionFull": "{region}には空きがありません。このリージョンでサーバーを希望していることを知らせるにはリクエストしてください。または空きのあるリージョンを選んでください。",
   "onboarding.alreadyRequested": "{region}へのリクエストは保存済みです。空きのあるリージョンを選ぶか、後ほど再確認してください。",

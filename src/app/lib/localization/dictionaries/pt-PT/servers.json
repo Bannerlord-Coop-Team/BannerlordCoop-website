@@ -129,8 +129,8 @@
     "one": "{countLabel} por utilizar",
     "other": "{countLabel} por utilizar"
   },
-  "onboarding.receipt": "O servidor {name} foi atribuído na região {region}. Foi criado no estado parado; este comprovativo não indica o estado em tempo real. Consulte Os meus servidores ou faça a gestão do servidor para ver o estado atual.",
-  "onboarding.receiptSetup": "{release} · manutenção 03:00–04:00 America/Chicago. A configuração não inicia o servidor. A primeira ação Iniciar utiliza o jogo guardado predefinido incluído; não é necessário importar nada.",
+  "onboarding.receipt": "O servidor {name} foi atribuído na região {region}. Ficará disponível imediatamente no site, mas a inicialização pode demorar até 15 minutos.",
+  "onboarding.receiptSetup": "{release} · manutenção 03:00–04:00 America/Chicago.",
   "onboarding.regionReceipt": "O seu pedido para a região {region} foi guardado. Nenhum servidor foi criado ou reservado e nenhuma quota foi utilizada.",
   "onboarding.regionFull": "A região {region} está cheia. Peça-a para nos informar de que pretende um servidor lá, ou escolha uma região disponível.",
   "onboarding.alreadyRequested": "O seu pedido para a região {region} está guardado. Escolha uma região disponível ou volte mais tarde.",

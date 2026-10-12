@@ -129,8 +129,8 @@
     "one": "{countLabel} sin usar",
     "other": "{countLabel} sin usar"
   },
-  "onboarding.receipt": "Se asignó {name} en {region}. Se creó detenido; este comprobante no indica su estado en tiempo real. Consulta Mis servidores o administra el servidor para ver su estado actual.",
-  "onboarding.receiptSetup": "{release} · mantenimiento de 03:00–04:00 America/Chicago. La configuración no inicia el servidor. Al iniciarlo por primera vez se usa la partida guardada predeterminada incluida; no hace falta importar ninguna.",
+  "onboarding.receipt": "Se asignó {name} en {region}. Tu servidor estará disponible en el sitio de inmediato, pero la inicialización puede tardar hasta 15 minutos.",
+  "onboarding.receiptSetup": "{release} · mantenimiento de 03:00–04:00 America/Chicago.",
   "onboarding.regionReceipt": "Se guardó tu solicitud para {region}. No se creó ni reservó ningún servidor y no se usó ninguna asignación.",
   "onboarding.regionFull": "{region} está llena. Solicítala para avisarnos de que quieres un servidor allí, o elige una región disponible.",
   "onboarding.alreadyRequested": "Tu solicitud para {region} está guardada. Elige una región disponible o vuelve a consultar más tarde.",

@@ -181,7 +181,7 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         await act(async () => { submit.click(); submit.click(); });
         expect(mocks.request).toHaveBeenCalledTimes(1);
         expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", displayName: "My Campaign", region: "us-west", releaseChannel: "stable" });
-        expect(stored()).toBeNull(); expect(container.textContent).toContain("Server assigned"); expect(container.textContent).toContain("stopped at creation");
+        expect(stored()).toBeNull(); expect(container.textContent).toContain("Server assigned"); expect(container.textContent).toContain("While your server will be available in the site immediately"); expect(container.textContent).not.toContain("Setup does not start the server");
         expect(container.textContent).not.toContain("Discord owner controls");
         expect(container.textContent).not.toContain("Refresh status and My Servers");
         expect(container.querySelector("a")?.getAttribute("href")).toBe(`/servers/${ONBOARDING_TEST_ID}`);
