@@ -750,7 +750,7 @@
   "transfers.acceptedStatusUnavailable": "The accepted transfer could not be checked. Your request is retained; use Check status again.",
   "transfers.failure.storage-unavailable": "The transfer failed because private storage was unavailable. Dismiss this completed request and try a new transfer later.",
   "transfers.failure.save-rejected": "The server could not validate the imported save. Dismiss this completed request and try a new import with the matching save files. Contact support if it fails again.",
-  "transfers.failure.campaign-limit": "This server already has 10 imported campaigns. Delete an imported campaign before adding another.",
+  "transfers.failure.campaign-limit": "This server already has 10 imported campaigns. Delete an imported campaign before adding another.",,
   "transfers.failure.stop-required": "The import requires a safely stopped server. Check the server status before starting a new import.",
   "transfers.failure.server-changed": "The server or your access changed before the transfer could finish. Refresh the server before starting a new transfer.",
   "transfers.failedRequest": "This request has finished and will not retry. Dismiss it to start a new transfer. Support reference: {requestId}",
