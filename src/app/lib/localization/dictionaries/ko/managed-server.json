@@ -231,6 +231,7 @@
   "campaigns.current": "Currently selected",
   "campaigns.select": "Select campaign",
   "campaigns.selected": "Campaign selected. Start the stopped server to load it.",
+  "campaigns.selectionFailed": "The campaign selection could not be confirmed. Refresh the page and try again.",
   "campaigns.selectionUnavailable": "Campaign selection is available to the owner or manager while the server is stopped.",
   "files.saveConfig": "저장 파일 및 설정",
   "files.backupsAndRestore": "백업 및 복원",
