@@ -308,6 +308,79 @@ backend that honors explicit provider exclusion before this website change.
 No Edge Function deployment is needed. This isolates the provider failure; it does
 not establish or repair the cause of the slow provider call.
 
+### Unused VPS renewal alert
+
+The `vps-renewal-alert` Edge Function emails the administrators about unused
+VPSes. It runs daily at 14:00 UTC from pg_cron and authenticates with the
+Patreon scheduler secret (`x-patreon-sync-key`). It reads the control plane's
+OVHcloud renewal snapshot through the service-role-only
+`vps_renewal_alert_hosts` RPC. That snapshot covers every account VPS,
+registered or not, and is refreshed every six hours. The function then lists
+each VPS whose renewal date is within five days and that has no slot assigned to
+a non-deleted server. A stopped server's slot counts as used.
+
+- Manual-renewal VPSes are included and labelled; they expire unless renewed in
+  OVHcloud. Dates that have already passed are included.
+- VPSes on the account that are not registered as control-plane hosts are
+  included and labelled.
+- The email repeats daily until the VPS renews, gains a server, or leaves the
+  account.
+- An empty snapshot, one older than 36 hours, or one that cannot be read sends a
+  "could not verify" warning instead of staying silent. A failed RPC call,
+  timeout, oversized response, or malformed row counts as unreadable; the cause
+  is logged, never emailed.
+- Only a failed email delivery returns `503`; it is logged and nothing is
+  retried until the next run.
+
+Recipients are the committed region alert recipients in
+`supabase/functions/my-servers/alerts.ts`. The sender is the shared site mail in
+`_shared/mail.ts`. `SMTP_PASS`, `PATREON_SYNC_SECRET`, `SUPABASE_URL`, and
+`SUPABASE_SERVICE_ROLE_KEY` must be set or the function fails at boot. The RPC and
+cron come from control-plane migration 098
+(`20261011120000_control_plane_ovhcloud_vps_renewals.sql`). Deploy this function
+before that migration is applied, so the first cron run finds it:
+
+```sh
+npx supabase functions deploy vps-renewal-alert --project-ref <project-ref>
+```
+
+The alert only informs. Cancelling, renewing, or resizing a VPS remains a manual
+OVHcloud operation.
+
+### Subscription removal warning
+
+The `subscription-grace-alert` Edge Function emails a server owner when the
+control plane starts the 72-hour removal grace for their membership-funded
+server. Grace starts on confirmed loss of paid benefits, or when the account
+unlinks the funding Patreon identity or replaces it with one that does not
+qualify. The function runs hourly at minute 20 from pg_cron and authenticates
+with the Patreon scheduler secret (`x-patreon-sync-key`).
+
+- It lists active graces not yet notified through the service-role-only
+  `subscription_grace_alerts` RPC. The RPC returns the server name, the deadline,
+  and the account's Auth email.
+- For each grace it calls `claim_subscription_grace_alert`, which records that
+  exact grace ID once, then sends the email. A grace another run already claimed
+  is skipped. A new grace for the same server gets its own email.
+- If delivery fails, `release_subscription_grace_alert` clears that exact claim
+  so the next run retries, and the response is `503`.
+- Accounts without an email are skipped. At most 20 emails go out per run; the
+  rest wait for the next run. Logs name the server ID, never the recipient.
+
+The sender is the shared site mail in `_shared/mail.ts`. `SMTP_PASS`,
+`PATREON_SYNC_SECRET`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` must be
+set or the function fails at boot. The RPCs, claim columns and cron come from
+control-plane migration 099
+(`20261012120000_control_plane_subscription_grace_notifications.sql`). Deploy
+this function before that migration is applied, so the first cron run finds it:
+
+```sh
+npx supabase functions deploy subscription-grace-alert --project-ref <project-ref>
+```
+
+The email only informs. Removal is decided by the control plane and is
+cancelled automatically when a qualifying membership is verified.
+
 
 
 ## Fresh gateway authentication
