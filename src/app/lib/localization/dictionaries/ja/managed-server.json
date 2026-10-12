@@ -746,7 +746,7 @@
   "transfers.statusChecksPaused": "自動ステータス確認を一時停止しました。受け付けた転送はまだ処理中の可能性があります。「ステータスを確認」で続行してください。",
   "transfers.acceptedStatusUnavailable": "受け付けた転送のステータスを確認できませんでした。リクエストは保存されています。もう一度ステータスを確認してください。",
   "transfers.failure.storage-unavailable": "プライベートストレージを利用できず、転送に失敗しました。この完了済みリクエストを閉じ、後で新しい転送を試してください。",
-  "transfers.failure.save-rejected": "サーバーがインポートしたセーブを検証できませんでした。この完了済みリクエストを閉じ、対応するセーブファイルで新しくインポートしてください。再度失敗する場合はサポートに連絡してください。",,
+  "transfers.failure.save-rejected": "サーバーがインポートしたセーブを検証できませんでした。この完了済みリクエストを閉じ、対応するセーブファイルで新しくインポートしてください。再度失敗する場合はサポートに連絡してください。",
   "transfers.failure.campaign-limit": "This server already has 10 imported campaigns. Delete an imported campaign before adding another.",
   "transfers.failure.stop-required": "インポートにはサーバーを安全に停止する必要があります。新しいインポートを開始する前にサーバーのステータスを確認してください。",
   "transfers.failure.server-changed": "転送が完了する前に、サーバーまたはアクセス権が変更されました。新しい転送を開始する前にサーバーを更新してください。",

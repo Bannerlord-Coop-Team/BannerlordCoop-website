@@ -747,7 +747,7 @@
   "transfers.statusChecksPaused": "As verificações automáticas estão pausadas. A transferência aceita ainda pode estar sendo processada. Use Verificar status para continuar.",
   "transfers.acceptedStatusUnavailable": "Não foi possível verificar a transferência aceita. Sua solicitação foi mantida; verifique o status novamente.",
   "transfers.failure.storage-unavailable": "A transferência falhou porque o armazenamento privado estava indisponível. Feche esta solicitação concluída e tente uma nova transferência mais tarde.",
-  "transfers.failure.save-rejected": "O servidor não conseguiu validar o save importado. Feche esta solicitação concluída e tente uma nova importação com os arquivos correspondentes. Contate o suporte se falhar novamente.",,
+  "transfers.failure.save-rejected": "O servidor não conseguiu validar o save importado. Feche esta solicitação concluída e tente uma nova importação com os arquivos correspondentes. Contate o suporte se falhar novamente.",
   "transfers.failure.campaign-limit": "This server already has 10 imported campaigns. Delete an imported campaign before adding another.",
   "transfers.failure.stop-required": "A importação exige que o servidor esteja parado com segurança. Verifique o status antes de iniciar uma nova importação.",
   "transfers.failure.server-changed": "O servidor ou seu acesso mudou antes da conclusão da transferência. Atualize o servidor antes de iniciar uma nova transferência.",
