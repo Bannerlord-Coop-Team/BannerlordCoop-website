@@ -325,9 +325,11 @@ a non-deleted server. A stopped server's slot counts as used.
   included and labelled.
 - The email repeats daily until the VPS renews, gains a server, or leaves the
   account.
-- An empty snapshot, or one older than 36 hours, sends a "could not verify"
-  warning instead of staying silent.
-- A malformed RPC row or failed delivery returns `503` and is logged; nothing is
+- An empty snapshot, one older than 36 hours, or one that cannot be read sends a
+  "could not verify" warning instead of staying silent. A failed RPC call,
+  timeout, oversized response, or malformed row counts as unreadable; the cause
+  is logged, never emailed.
+- Only a failed email delivery returns `503`; it is logged and nothing is
   retried until the next run.
 
 Recipients are the committed region alert recipients in
