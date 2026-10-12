@@ -3,7 +3,7 @@
 import { useTranslations } from "@/app/lib/localization/client";
 import { MembershipNextStep } from "./MembershipNextStep";
 import type { WebsiteOnboardingSummary } from "@/app/lib/hosting/membership-onboarding";
-import { ArrowRight, LoaderCircle, Server, ShieldCheck, X } from "lucide-react";
+import { ArrowRight, CircleHelp, LoaderCircle, Server, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
@@ -18,6 +18,10 @@ const primaryButton = `inline-flex min-h-11 items-center justify-center gap-2 ro
 const secondaryButton = `inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-white/15 px-4 py-2 text-sm text-foreground-muted hover:border-gold/50 hover:text-foreground disabled:opacity-60 ${focusRing}`;
 const labelStyle = "font-label text-xs font-semibold uppercase tracking-[0.16em] text-gold";
 const REFRESH_FEEDBACK_MIN_MS = 300;
+const releaseChannelInfo = {
+    stable: "Released to Steam every 1–4 weeks.",
+    nightly: "Released every night to supporters and testers.",
+} as const;
 
 type Props = {
     userId: string; summary: OnboardingSummary | null; websiteSummary?: WebsiteOnboardingSummary;
@@ -325,9 +329,10 @@ function SetupDialog({ summary, catalog, canOffer, disabled, pending, result, re
                     {error && <p id="onboarding-name-error" role="alert" className="mt-2 text-sm text-red-200">{error}</p>}
                     <fieldset className="mt-6">
                         <legend className="text-sm font-medium">{t("onboarding.release")}</legend>
-                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">{(["stable", "nightly"] as const).map((channel) => <label key={channel} className={`flex cursor-pointer items-start gap-2 rounded-sm border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${releaseChannel === channel ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
-                            <input type="radio" name="release-channel" value={channel} checked={releaseChannel === channel} onChange={() => setReleaseChannel(channel)} className="mt-1 size-3.5 shrink-0 accent-gold" />
-                            <span className="text-sm font-medium">{t(`release.${channel}`)}</span>
+                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">{(["stable", "nightly"] as const).map((channel) => <label key={channel} title={releaseChannelInfo[channel]} className={`group relative flex cursor-pointer items-start gap-2 rounded-sm border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${releaseChannel === channel ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
+                            <input type="radio" name="release-channel" value={channel} checked={releaseChannel === channel} onChange={() => setReleaseChannel(channel)} aria-describedby={`release-${channel}-description`} className="mt-1 size-3.5 shrink-0 accent-gold" />
+                            <span className="flex items-center gap-1.5 text-sm font-medium">{t(`release.${channel}`)} <CircleHelp aria-hidden="true" className="size-3.5 text-gold/70" /></span>
+                            <span id={`release-${channel}-description`} role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-64 -translate-x-1/2 border border-white/15 bg-background px-3 py-2 text-xs font-normal leading-5 text-foreground shadow-xl group-hover:block group-focus-within:block">{releaseChannelInfo[channel]}</span>
                         </label>)}</div>
                     </fieldset>
                     <fieldset className="mt-6"><legend className="text-sm font-medium">{t("onboarding.region")}</legend>
