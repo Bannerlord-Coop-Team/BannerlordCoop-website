@@ -53,3 +53,7 @@ verify_jwt = false
 # Daily pg_cron check; authenticates with the Patreon scheduler secret.
 [functions.vps-renewal-alert]
 verify_jwt = false
+
+# Hourly pg_cron owner removal warning; authenticates with the Patreon scheduler secret.
+[functions.subscription-grace-alert]
+verify_jwt = false

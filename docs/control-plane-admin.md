@@ -347,6 +347,40 @@ npx supabase functions deploy vps-renewal-alert --project-ref <project-ref>
 The alert only informs. Cancelling, renewing, or resizing a VPS remains a manual
 OVHcloud operation.
 
+### Subscription removal warning
+
+The `subscription-grace-alert` Edge Function emails a server owner when the
+control plane starts the 72-hour removal grace for their membership-funded
+server. Grace starts on confirmed loss of paid benefits, or when the account
+unlinks the funding Patreon identity or replaces it with one that does not
+qualify. The function runs hourly at minute 20 from pg_cron and authenticates
+with the Patreon scheduler secret (`x-patreon-sync-key`).
+
+- It lists active graces not yet notified through the service-role-only
+  `subscription_grace_alerts` RPC. The RPC returns the server name, the deadline,
+  and the account's Auth email.
+- For each grace it calls `claim_subscription_grace_alert`, which records that
+  exact grace ID once, then sends the email. A grace another run already claimed
+  is skipped. A new grace for the same server gets its own email.
+- If delivery fails, `release_subscription_grace_alert` clears that exact claim
+  so the next run retries, and the response is `503`.
+- Accounts without an email are skipped. At most 20 emails go out per run; the
+  rest wait for the next run. Logs name the server ID, never the recipient.
+
+The sender is the shared site mail in `_shared/mail.ts`. `SMTP_PASS`,
+`PATREON_SYNC_SECRET`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` must be
+set or the function fails at boot. The RPCs, claim columns and cron come from
+control-plane migration 099
+(`20261012120000_control_plane_subscription_grace_notifications.sql`). Deploy
+this function before that migration is applied, so the first cron run finds it:
+
+```sh
+npx supabase functions deploy subscription-grace-alert --project-ref <project-ref>
+```
+
+The email only informs. Removal is decided by the control plane and is
+cancelled automatically when a qualifying membership is verified.
+
 
 
 ## Fresh gateway authentication
