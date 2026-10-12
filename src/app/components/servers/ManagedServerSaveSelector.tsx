@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "@/app/lib/localization/client";
-import { deleteMyServerSave, selectMyServerSave } from "@/app/lib/hosting/my-servers";
+import { deleteManagedServerSave, selectManagedServerSave } from "@/app/servers/managed-server-save-actions";
 import type { MyServerSavePage } from "@/app/lib/control-plane/types";
 import { useState, useTransition } from "react";
 
@@ -26,7 +26,8 @@ export function ManagedServerSaveSelector({ userId, serverId, saves, canSelect }
         setError(null);
         startTransition(async () => {
             try {
-                await selectMyServerSave(userId, { serverId, saveId, expectedUpdatedAt: page.updatedAt }, crypto.randomUUID());
+                const result = await selectManagedServerSave({ serverId, saveId, expectedUpdatedAt: page.updatedAt, requestId: crypto.randomUUID() }, userId);
+                if (!result.ok) throw new Error(result.message);
                 setSelected(saveId);
                 window.location.reload();
             } catch (cause) {
@@ -41,8 +42,11 @@ export function ManagedServerSaveSelector({ userId, serverId, saves, canSelect }
         if (confirmationText !== save.displayName) { setError(t("campaigns.deleteConfirmationMismatch")); return; }
         setError(null);
         startTransition(async () => {
-            try { await deleteMyServerSave(userId, { serverId, saveId: save.saveId, expectedUpdatedAt: page.updatedAt, confirmationText }, crypto.randomUUID()); window.location.reload(); }
-            catch (cause) { setError(cause instanceof Error ? cause.message : t("campaigns.deleteFailed")); }
+            try {
+                const result = await deleteManagedServerSave({ serverId, saveId: save.saveId, expectedUpdatedAt: page.updatedAt, confirmationText, requestId: crypto.randomUUID() }, userId);
+                if (!result.ok) throw new Error(result.message);
+                window.location.reload();
+            } catch (cause) { setError(cause instanceof Error ? cause.message : t("campaigns.deleteFailed")); }
         });
     }
 
