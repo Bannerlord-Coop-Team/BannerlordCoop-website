@@ -23,7 +23,6 @@ import { useEffect, useMemo, useState } from "react";
 export type CheatCommand = {
     command: string;
     name: string;
-    group: string;
     category: string;
     sourceSearch?: string;
     summary?: string;

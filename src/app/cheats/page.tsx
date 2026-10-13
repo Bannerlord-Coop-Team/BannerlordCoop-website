@@ -54,20 +54,25 @@ export default async function CheatsPage({ searchParams }: CheatsPageProps) {
     const params = await searchParams;
     const { locale, messages } = await getCheatsLocalization(params.lang);
     const english = await getTranslations("cheats", "en");
-    // Retain English-prose searching in translated views without using catalog prose as display copy.
-    const commands = publishedCommands.map((sourceCommand) => {
-        const { summary, arguments: args, ...command } = sourceCommand;
+    // Keep producer provenance out of client props, retaining prose for missing translations and English search.
+    const commands = publishedCommands.map((command) => {
         return {
-            ...command,
-            summary,
-            arguments: args.map((argument) => ({
+            command: command.command,
+            name: command.name,
+            category: command.category,
+            summary: command.summary,
+            usage: command.usage,
+            side: command.side,
+            kind: command.kind,
+            aliases: command.aliases,
+            arguments: command.arguments.map((argument) => ({
                 name: argument.name,
                 required: argument.required,
                 description: argument.description,
             })),
             sourceSearch: locale === "en" ? undefined : [
-                translateCheat(english.t, `command.${command.command}.summary`, summary),
-                ...args.map((argument) => translateCheat(english.t, `command.${command.command}.argument.${argument.name}`, argument.description)),
+                translateCheat(english.t, `command.${command.command}.summary`, command.summary),
+                ...command.arguments.map((argument) => translateCheat(english.t, `command.${command.command}.argument.${argument.name}`, argument.description)),
             ].join(" "),
         };
     }) as CheatCommand[];
