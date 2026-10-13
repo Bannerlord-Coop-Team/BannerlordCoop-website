@@ -305,9 +305,10 @@ hold up resource readings or runner controls; a slow telemetry response cannot
 hold up billing. Provider fields merge by host name without replacing current
 capacity, assignments, runner state or telemetry.
 While visible, Oracle telemetry refreshes five seconds after each completed request;
-fleet telemetry refreshes fifteen seconds after each completed request and has a
-two-second browser deadline. Runner onboarding and update state remains visible from
-the initial inventory response while the resource cells refresh independently.
+fleet telemetry refreshes fifteen seconds after each completed request and uses the
+normal control-plane request horizon so complete resource readings are retained.
+Runner onboarding and update state remains visible from the initial inventory response
+while the resource cells refresh independently.
 Oracle has its own ten-second browser deadline and retry control.
 billing refreshes after 60 seconds and has a separate 15-second browser deadline.
 Each loop prevents overlapping requests. Failed refreshes label retained readings

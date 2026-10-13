@@ -141,19 +141,6 @@ it("shows usable inventory before readings and preserves an expanded row when th
     expect(mocks.resources).toHaveBeenCalledWith(expect.objectContaining({ accessToken: "test-token", operation: "vps-hosts" }));
 });
 
-it("bounds slow fleet telemetry at two seconds while retaining runner state", async () => {
-    mocks.resources.mockImplementation(({ signal }: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
-        signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
-    }));
-    await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory()} accounts={[]} />));
-    expect(container.textContent).toContain("Runner current");
-    await act(async () => vi.advanceTimersByTimeAsync(1_999));
-    expect(container.textContent).toContain("Loading live resource");
-    await act(async () => vi.advanceTimersByTimeAsync(1));
-    expect(container.textContent).toContain("Live resource readings timed out");
-    expect(container.textContent).toContain("Runner current");
-    expect(container.querySelector('[data-label="System"]')?.textContent).toContain("unavailable");
-});
 it("keeps inventory on failure and retries live readings", async () => {
     mocks.resources.mockRejectedValueOnce(new Error("Provider unavailable")).mockResolvedValueOnce(inventory(true));
     await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory()} accounts={[]} />));

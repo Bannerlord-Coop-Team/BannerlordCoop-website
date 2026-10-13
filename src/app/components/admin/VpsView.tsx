@@ -13,7 +13,6 @@ import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdmin
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
 const FLEET_RESOURCE_REFRESH_INTERVAL_MILLISECONDS = 15_000;
-const FLEET_RESOURCE_READ_TIMEOUT_MILLISECONDS = 2_000;
 
 /** Shows registered VPS capacity, labelled by the stored region catalog, with live readings and region requests. */
 export function VpsView({ inventory: initialInventory, regionCatalog, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
@@ -216,8 +215,8 @@ function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resou
             clearTimeout(timer);
             inFlight = true;
             const requestController = new AbortController();
-            const deadline = setTimeout(() => requestController.abort(), kind === "resources"
-                ? FLEET_RESOURCE_READ_TIMEOUT_MILLISECONDS : kind === "oracle" ? 10_000 : 15_000);
+            const deadline = kind !== "resources"
+                ? setTimeout(() => requestController.abort(), kind === "oracle" ? 10_000 : 15_000) : undefined;
             try {
                 const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
                 if (cancelled) return;
@@ -236,7 +235,7 @@ function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resou
                     initial: initialInventory,
                     result: previous?.initial === initialInventory ? previous.result
                         : initialInventory.liveDataIncluded !== false ? initialInventory : undefined,
-                    error: requestController.signal.aborted ? `${kind === "resources" ? "Live resource" : kind === "oracle" ? "Oracle" : "Billing"} readings timed out.`
+                    error: requestController.signal.aborted ? `${kind === "oracle" ? "Oracle" : "Billing"} readings timed out.`
                         : error instanceof Error ? error.message : "VPS readings could not be loaded.",
                 }));
             } finally {
