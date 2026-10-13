@@ -14,6 +14,7 @@ import type { ManagedStartStatus } from "@/app/lib/hosting/my-servers-server";
 import { Check, Download, LoaderCircle, Play, RotateCw, Square } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useRevealServerAddress } from "./ServerManagementWorkspace";
 
 const TRANSITIONAL_STATES = new Set([
     "provisioning",
@@ -490,10 +491,18 @@ function OperationProgress({ title, labels, current, outcome, footer }: {
 // Presents localized startup phases while preserving external progress.
 function StartProgress({ status, paused }: { status: StartProgressStatus | null; paused: boolean }) {
     const { t } = useTranslations("managed-server");
+    const revealAddress = useRevealServerAddress();
+    const revealed = useRef(false);
     const phases = ["queued", "preparing", "starting", "verifying", "ready"] as const;
     const labels = [t("controls.startRequested"), t("controls.prepareServer"), t("controls.launchGameAndLoadCampaign"), t("controls.confirmReadiness"), t("controls.readyToJoin")];
     const failed = status?.state === "failed" || status?.state === "cancelled";
     const outcome = failed ? "failed" : status?.state === "succeeded" ? "succeeded" : paused ? "paused" : "active";
+    useEffect(() => {
+        if (status?.state === "succeeded" && !revealed.current) {
+            revealed.current = true;
+            revealAddress();
+        }
+    }, [revealAddress, status?.state]);
     return <OperationProgress
         title={failed ? status.state === "cancelled" ? t("controls.startCancelled") : t("controls.serverCouldNotStart")
             : status?.state === "succeeded" ? t("controls.yourServerIsReadyToJoin") : t("controls.startingYourServer")}
@@ -502,7 +511,8 @@ function StartProgress({ status, paused }: { status: StartProgressStatus | null;
         outcome={outcome}
         footer={failed ? [status.progress, t("controls.youCanPressActionToTryAgain", { action: t("controls.start") })].filter(Boolean).join(" ")
             : status?.state === "retry-wait" ? t("controls.waitingToRetrySafelyProgress", { progress: status.progress })
-                : status?.progress ?? t("controls.waitingForTheHostingServiceToAcceptYourRequest")}
+                : status?.state === "succeeded" ? <>{status.progress ?? t("controls.yourServerIsReadyToJoin")} <span className="mt-1 block">{t("controls.connectWithIpAddress")}</span></>
+                    : status?.progress ?? t("controls.waitingForTheHostingServiceToAcceptYourRequest")}
     />;
 }
 

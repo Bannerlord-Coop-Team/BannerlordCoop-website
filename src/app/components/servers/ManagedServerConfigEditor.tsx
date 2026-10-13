@@ -60,6 +60,21 @@ function parseSettings(value: unknown, t: Translator["t"]): Settings {
 }
 // Compares serialized settings to detect unsaved changes.
 function sameSettings(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.stringify(b); }
+// Keeps the editor's layout visible while live values are being fetched.
+function ConfigLoadingSkeleton({ groups, label }: { groups: readonly { title: string; fields: readonly Field[] }[]; label: string }) {
+    return <div role="status" aria-label={label} className="space-y-6" data-config-loading-skeleton>
+        {groups.map(({ title, fields }) => <section key={title} aria-hidden="true" className="space-y-3">
+            <div className="h-4 w-36 animate-pulse rounded bg-white/10" />
+            <div className="h-3 w-72 max-w-full animate-pulse rounded bg-white/[0.06]" />
+            <div className="grid gap-4 sm:grid-cols-2">
+                {fields.map((field) => <div key={field.key} className="space-y-2">
+                    <div className="h-3 w-32 animate-pulse rounded bg-white/10" />
+                    <div className={`h-10 animate-pulse rounded-md border border-white/10 bg-white/[0.04] ${field.kind === "boolean" ? "w-64 max-w-full" : "w-full"}`} />
+                </div>)}
+            </div>
+        </section>)}
+    </div>;
+}
 // Finds a JSON syntax error's line and column from the position the browser reports, when it reports one.
 function jsonErrorLocation(text: string, error: SyntaxError) {
     const lineColumn = /line (\d+) column (\d+)/u.exec(error.message);
@@ -267,12 +282,12 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         <p id="config-help" role={loadState === "failed" ? "alert" : undefined} className="mb-4 flex items-start gap-2 text-xs leading-5 text-foreground-muted">
             {loadState === "loading" && <LoaderCircle aria-hidden className="mt-0.5 size-3.5 shrink-0 animate-spin" />}{status}
         </p>
-        {draft && mode === "json" && <>
+        {loadState === "loading" ? <ConfigLoadingSkeleton groups={GROUPS} label={t("configEditor.loadingSkeleton")} /> : draft && mode === "json" && <>
             <label htmlFor="config-json" className="mb-2 block text-xs text-foreground-muted">{t("configEditor.managedConfigurationJson")}</label>
             <textarea id="config-json" spellCheck={false} disabled={!editable} value={jsonText} onChange={(event) => editJson(event.target.value)} aria-invalid={jsonError ? true : undefined} aria-describedby={jsonError ? "config-json-error config-help" : "config-help"} className="min-h-64 w-full resize-y rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm leading-7 text-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-red-400" />
             {jsonError && <p id="config-json-error" role="alert" className="mt-2 text-sm text-red-200">{jsonError}</p>}
         </>}
-        {draft && mode === "form" && <div className="space-y-6">
+        {loadState !== "loading" && draft && mode === "form" && <div className="space-y-6">
             {GROUPS.map(({ group, title, description, fields }) => <fieldset key={group} disabled={!editable} className="min-w-0">
                 <legend className="text-sm font-semibold">{title}</legend>
                 <p className="mt-1 text-xs leading-5 text-foreground-muted">{description}</p>
