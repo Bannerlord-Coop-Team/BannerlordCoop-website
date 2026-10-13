@@ -426,6 +426,8 @@
   "page.owner": "Owner",
   "page.readOnlySupport": "Read-only support",
   "page.serverStatus": "Server status",
+  "page.serverInitializing": "Preparing your server",
+  "page.serverInitializingDescription": "Your server is being set up. This can take up to 15 minutes. Controls will become available when initialization is complete.",
   "page.gameState": "Game state",
   "page.lifecycle": "Lifecycle",
   "page.releaseChannel": "Release channel",

@@ -29,6 +29,8 @@ export type MyServersHandlerOptions = {
     controlPlaneUrl: string;
     fetchImplementation?: typeof fetch;
     upstreamTimeoutMilliseconds?: number;
+    // Keeps optional alert work alive after returning the durable receipt.
+    waitUntil: (task: Promise<void>) => void;
     // Invoked after the backend durably accepts a new region request; failures never alter the receipt.
     onRegionRequested?: (event: RegionRequestedEvent) => Promise<void>;
     // Invoked when a created server leaves its region without capacity; failures never alter the receipt.
@@ -107,6 +109,12 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         const summary = parseOnboardingSummary(envelope.result);
         // Paused or blocked provisioning also reports regions unavailable, which is not a capacity signal.
         return summary.unavailableReason === null && summary.regions.some((entry) => entry.region === region && !entry.available);
+    }
+
+    function scheduleRegionAlert(task: () => Promise<void>, failureContext: string) {
+        const report = (error: unknown) => console.error(`${failureContext}: ${error instanceof Error ? error.message : "unknown error"}`);
+        // Handle both task rejection and scheduler failure without changing an accepted receipt.
+        try { options.waitUntil(Promise.resolve().then(task).catch(report)); } catch (error) { report(error); }
     }
 
     return async (request: Request): Promise<Response> => {
@@ -296,16 +304,16 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         }
 
         if (regionRequested !== null && options.onRegionRequested !== undefined) {
-            // Best-effort: the request is already durable, so the confirmed receipt is returned regardless.
-            try { await options.onRegionRequested(regionRequested); } catch { /* reported by the hook */ }
+            const event = regionRequested;
+            const notify = options.onRegionRequested;
+            scheduleRegionAlert(() => notify(event), `Region request alert failed for ${event.requestId}`);
         }
         if (created !== null && options.onRegionFull !== undefined) {
-            // Best-effort like request alerts: the server already exists, so the receipt is returned regardless.
-            try {
-                if (await regionIsFull(created.region, token)) await options.onRegionFull(created);
-            } catch (error) {
-                console.error(`Region full check failed for ${created.region}: ${error instanceof Error ? error.message : "unknown error"}`);
-            }
+            const event = created;
+            const notify = options.onRegionFull;
+            scheduleRegionAlert(async () => {
+                if (await regionIsFull(event.region, token)) await notify(event);
+            }, `Region full check failed for ${event.region}`);
         }
 
         return new Response(responseBody, {

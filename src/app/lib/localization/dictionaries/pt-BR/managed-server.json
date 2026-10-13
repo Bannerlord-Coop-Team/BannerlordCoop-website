@@ -423,6 +423,8 @@
   "page.owner": "Proprietário",
   "page.readOnlySupport": "Suporte com acesso somente para leitura",
   "page.serverStatus": "Status do servidor",
+  "page.serverInitializing": "Preparando seu servidor",
+  "page.serverInitializingDescription": "Seu servidor está sendo configurado. Isso pode levar até 15 minutos. Os controles ficarão disponíveis quando a inicialização estiver concluída.",
   "page.gameState": "Estado do jogo",
   "page.lifecycle": "Ciclo de vida",
   "page.releaseChannel": "Canal de versões",

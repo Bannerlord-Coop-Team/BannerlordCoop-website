@@ -423,6 +423,8 @@
   "page.owner": "Propriétaire",
   "page.readOnlySupport": "Support en lecture seule",
   "page.serverStatus": "État du serveur",
+  "page.serverInitializing": "Préparation de votre serveur",
+  "page.serverInitializingDescription": "Votre serveur est en cours de configuration. Cela peut prendre jusqu’à 15 minutes. Les commandes seront disponibles une fois l’initialisation terminée.",
   "page.gameState": "État du jeu",
   "page.lifecycle": "Cycle de vie",
   "page.releaseChannel": "Canal de versions",

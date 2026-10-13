@@ -9,6 +9,8 @@ declare const Deno: {
     serve(handler: (request: Request) => Response | Promise<Response>): void;
 };
 
+declare const EdgeRuntime: { waitUntil(task: Promise<void>): void };
+
 const allowedOrigins = required("CONTROL_PLANE_WEB_ORIGINS")
     .split(",")
     .map((origin) => origin.trim())
@@ -27,6 +29,7 @@ const alerts = alertConfig === null ? undefined : createRegionAlerts({
 Deno.serve(createMyServersHandler({
     allowedOrigins,
     controlPlaneUrl: required("CONTROL_PLANE_ADMIN_URL"),
+    waitUntil: (task) => EdgeRuntime.waitUntil(task),
     onRegionRequested: alerts?.regionRequested,
     onRegionFull: alerts?.regionFull,
 }));

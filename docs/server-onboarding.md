@@ -130,7 +130,7 @@ The `my-servers` Edge Function emails administrators in two cases:
 - **Region request:** after the backend accepts a **new** region request, so demand for full regions is visible without polling the private table. The alert is sent only after the durable receipt passes the closed DTO parser and only when the returned request UUID equals the submitted one; a dedupe receipt carrying an existing request's UUID sends nothing. An exact replay of the same UUID after a lost response can send again (at-least-once).
 - **Region full:** after a website Create succeeds, the function reads the caller's onboarding summary once. If the created server's region now reports no capacity while `unavailableReason` is `null`, it emails that the region is full. Paused or blocked provisioning is not treated as full. Capacity consumed outside website Create (for example administrator assignment) is not detected. An exact Create replay while the region is still full can send again.
 
-Alert and summary failures are logged by the function and never change the owner's confirmed receipt, status code or retry policy.
+After validating the durable receipt, the handler registers the optional work with an injected `waitUntil` scheduler, backed by Supabase `EdgeRuntime.waitUntil`, and returns the receipt without awaiting capacity or email. The background capacity read still forwards the caller's bearer token to the fixed authenticated backend route, with its existing 30-second deadline and 64 KiB response bound; SMTP retains its 15-second deadline and validated administrator recipients. Alert, summary and scheduling failures are logged by the function and never change the owner's confirmed receipt, status code or retry policy. This remains best-effort notification, not a durable email queue: runtime shutdown can interrupt delivery, and UUID replay/deduplication semantics above are unchanged.
 
 Each message is plain text: region, requester email/account (informational claims from the gateway-verified JWT), request or server UUID and creation time. It contains no capacity, slot, host or other private data and promises no ETA.
 
@@ -187,6 +187,7 @@ The browser command must be separately authorized where local processes are gate
 
 Tests distinguish:
 
+- **Deferred onboarding dependencies:** the Edge tests hold capacity/email promises open, require the unchanged receipt first, then release the background work and check delivery, deduplication and failure logging. These are deterministic dependency-order checks, not production latency measurements or deployed Edge lifetime verification.
 - **Real in-process facade → real strict Edge → synthetic upstream**, including UUID, JWT forwarding, complete DTO validation and HTTP errors. This is not a real backend or Supabase JWT verification test.
 - Mounted **real UI and real server actions**, with auth/facade dependencies mocked, covering create/full-region request/request recovery/validation/eligibility, uncertain exact retries/reload, account mismatch, storage failure, terminal/transitional inventory and late response safety.
 - Real page composition with mocked external dependencies preserves mixed live-console/managed inventory, public placeholder labeling and unavailable onboarding behavior.

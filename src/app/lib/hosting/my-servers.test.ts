@@ -133,6 +133,7 @@ test("uses CP #143 connection fields through the authenticated Edge and website 
             const edge = createMyServersHandler({
                 allowedOrigins: ["https://bannerlordcoop.com"],
                 controlPlaneUrl: "https://control-plane.example.test",
+                waitUntil: () => {},
                 fetchImplementation: async (input, init) => {
                     const request = new Request(input, init);
                     assert.equal(request.url, "https://control-plane.example.test/v1/user/control-plane");
@@ -170,6 +171,7 @@ test("accepts CP #144 updated and replay receipts through the Edge and client", 
             const result = { outcome, serverId: input.serverId, visibility: input.visibility, updatedAt: "2026-09-13T12:00:01.000Z" };
             const edge = createMyServersHandler({
                 allowedOrigins: ["https://bannerlordcoop.com"], controlPlaneUrl: "https://control-plane.example.test",
+                waitUntil: () => {},
                 fetchImplementation: async (_url, init) => {
                     assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${TOKEN}`);
                     assert.deepEqual(JSON.parse(String(init?.body)), { version: 1, requestId,
@@ -193,6 +195,7 @@ test("saves hosting preferences through the Edge with the original generation an
             const result = { outcome, serverId: input.serverId, updatedAt: "2026-10-01T00:00:01.000Z" };
             const edge = createMyServersHandler({
                 allowedOrigins: ["https://bannerlordcoop.com"], controlPlaneUrl: "https://control-plane.example.test",
+                waitUntil: () => {},
                 fetchImplementation: async (_url, init) => {
                     assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${TOKEN}`);
                     assert.deepEqual(JSON.parse(String(init?.body)), { version: 1, requestId, operation: "save-server-settings", input });
@@ -531,6 +534,7 @@ test("direct commands cross the Edge boundary without lifecycle envelopes or ret
     const handler = createMyServersHandler({
         allowedOrigins: ["https://bannerlordcoop.com"],
         controlPlaneUrl: "https://control-plane.example.test",
+        waitUntil: () => {},
         fetchImplementation: async (input, init) => {
             requests.push(new Request(input, init));
             return Response.json(body, { status });
@@ -573,6 +577,7 @@ test("owner updates cross the Edge boundary as one stale-safe durable request", 
     const handler = createMyServersHandler({
         allowedOrigins: ["https://bannerlordcoop.com"],
         controlPlaneUrl: "https://control-plane.example.test",
+        waitUntil: () => {},
         fetchImplementation: async (input, init) => {
             requests.push(new Request(input, init));
             return Response.json({ version: 1, requestId: "11111111-1111-4111-8111-111111111111", ok: true, result: {
