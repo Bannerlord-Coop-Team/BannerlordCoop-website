@@ -16,9 +16,13 @@ export function AuditTable({ events }: { events: AuditEvent[] }) {
 
 /** Shows authoritative label values, without inferring compatibility for historical builds. */
 export function ReleaseMetadata({ build }: { build: ReleaseBuild }) {
+    const sourceRevision = build.sourceRevision === "registry-observed"
+        ? "Unavailable (registry-observed)"
+        : build.sourceRevision;
     return <details className="mt-3 text-xs text-foreground-muted"><summary className="cursor-pointer py-2">Release label details</summary>
         {build.registryMetadata ? <dl className="divide-y divide-white/10">
             {[
+                ["Recorded source revision", sourceRevision],
                 ["io.bannerlordcoop.client.revision", build.registryMetadata.clientRevision],
                 ["io.bannerlordcoop.client.version", build.requiredClientModVersion],
                 ["io.bannerlordcoop.dedicated-server.revision", build.registryMetadata.serverRevision],
@@ -26,7 +30,15 @@ export function ReleaseMetadata({ build }: { build: ReleaseBuild }) {
             ].map(([label, value]) => <div key={label} className="py-2 text-left">
                 <dt className="break-all">{label}</dt><dd className="mt-1 break-all font-mono text-foreground">{value ?? "Unavailable"}</dd>
             </div>)}
-        </dl> : <p className="py-2">Verified registry labels are unavailable for this historical version.</p>}
+        </dl> : <>
+            <p className="py-2">Verified registry labels are unavailable for this historical version.</p>
+            <dl className="divide-y divide-white/10">
+                <div className="py-2 text-left">
+                    <dt className="break-all">Recorded source revision</dt>
+                    <dd className="mt-1 break-all font-mono text-foreground">{sourceRevision}</dd>
+                </div>
+            </dl>
+        </>}
     </details>;
 }
 
