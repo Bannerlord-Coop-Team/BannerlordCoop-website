@@ -3,7 +3,7 @@
 import { getTranslations } from "@/app/lib/localization/server";
 
 import { getMyServerUpdateStatus, MyServersApiError, requestMyServerRelease } from "@/app/lib/hosting/my-servers";
-import { listAllMyServers } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { hasExactKeys, isRecord } from "../../../supabase/functions/_shared/dto-validation";
 import { REQUEST_ID } from "../../../supabase/functions/_shared/server-visibility-contract";
@@ -43,7 +43,7 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
         // A revision conflict from an unrelated write is retried once, only while the channel is still the one shown.
         if ((code === "request_conflict" || code === "stale_interaction") && token !== null && input !== null && previousChannel !== null) {
             try {
-                const server = (await listAllMyServers(token)).find((candidate) => candidate.serverId === input!.serverId);
+                const server = await getMyServerSummary(token, input.serverId);
                 if (server?.accessRole === "owner" && server.releaseChannel === input.releaseChannel) {
                     return { ok: false, rejected: true, message: t("server-release.thisChannelIsAlreadySelected") };
                 }

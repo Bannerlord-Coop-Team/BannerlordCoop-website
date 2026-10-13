@@ -7,7 +7,7 @@ import { setServerVisibility } from "./server-visibility-actions";
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), set: vi.fn(), list: vi.fn(), revalidate: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
 vi.mock("@/app/lib/hosting/my-servers", async original => ({ ...await original<typeof import("@/app/lib/hosting/my-servers")>(), requestServerVisibility: mocks.set }));
-vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.list }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerSummary: mocks.list }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 // Resolves real English messages without reading cookies in standalone tests.
 vi.mock("@/app/lib/localization/server", () => ({
@@ -26,7 +26,7 @@ beforeEach(() => {
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "owner" } } }),
         getSession: async () => ({ data: { session: { user: { id: "owner" }, access_token: "verified-token" } } }) } });
     mocks.set.mockResolvedValue({ outcome: "updated", serverId, visibility: "private", updatedAt: "2026-10-01T00:00:06.000Z" });
-    mocks.list.mockResolvedValue([current]);
+    mocks.list.mockResolvedValue(current);
 });
 
 it("applies the owner's choice once at the current revision when another write advanced the server", async () => {
@@ -41,7 +41,7 @@ it("applies the owner's choice once at the current revision when another write a
 
 it("acknowledges without writing when the server already has the requested visibility", async () => {
     mocks.set.mockRejectedValueOnce(new MyServersApiError("stale_interaction", "Stale"));
-    mocks.list.mockResolvedValue([{ ...current, visibility: "private" }]);
+    mocks.list.mockResolvedValue({ ...current, visibility: "private" });
     expect(await setServerVisibility(input)).toMatchObject({ ok: true, updatedAt: current.updatedAt });
     expect(mocks.set).toHaveBeenCalledTimes(1);
 });
@@ -56,7 +56,7 @@ it("explains a conflict as a changed server, never as an ownership problem, when
 
 it("does not retry for someone who is no longer the owner", async () => {
     mocks.set.mockRejectedValueOnce(new MyServersApiError("request_conflict", "Conflict"));
-    mocks.list.mockResolvedValue([{ ...current, accessRole: "manager" }]);
+    mocks.list.mockResolvedValue({ ...current, accessRole: "manager" });
     expect(await setServerVisibility(input)).toMatchObject({ ok: false, rejected: true });
     expect(mocks.set).toHaveBeenCalledTimes(1);
 });
@@ -65,4 +65,12 @@ it("keeps the ownership message for authorization failures and does not retry th
     mocks.set.mockRejectedValueOnce(new MyServersApiError("server_not_found", "Gone"));
     expect(await setServerVisibility(input)).toMatchObject({ ok: false, rejected: true });
     expect(mocks.list).not.toHaveBeenCalled();
+});
+
+it("stops recovery when the single-server read reports revoked access", async () => {
+    mocks.set.mockRejectedValueOnce(new MyServersApiError("stale_interaction", "Stale"));
+    mocks.list.mockRejectedValueOnce(new MyServersApiError("server_not_found", "Unavailable"));
+    expect(await setServerVisibility(input)).toMatchObject({ ok: false });
+    expect(mocks.list).toHaveBeenCalledExactlyOnceWith("verified-token", serverId);
+    expect(mocks.set).toHaveBeenCalledOnce();
 });

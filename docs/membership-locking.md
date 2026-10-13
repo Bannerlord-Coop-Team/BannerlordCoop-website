@@ -63,6 +63,15 @@ account ID and a SHA-256 digest of the access token; neither the token nor a
 settled result is cached. Navigation links to these dynamic routes disable
 prefetch so browser navigation does not manufacture duplicate status traffic.
 
+`/account` polls read-only status every five seconds only while status is unknown,
+verification is pending, membership synchronization is pending (including after
+unlinking), or a linked membership's synchronization is unavailable. Settled OAuth
+results such as `discord=last_identity` do not start a timer; query parameters
+provide feedback, not pending-state evidence. The twelve-attempt cap, hidden-tab
+and overlap guards, and focus/online/visibility refreshes still apply. Navbar uses
+this render's freshly verified user, with no viewer cache between renders; account
+mutations continue to authenticate independently.
+
 ## Closed backpressure
 
 Normal try-lock refusal is returned inside the private SQL protocol as the exact

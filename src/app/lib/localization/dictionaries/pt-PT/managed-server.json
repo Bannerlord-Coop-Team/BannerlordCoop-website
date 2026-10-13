@@ -755,5 +755,10 @@
   "transfers.failure.stop-required": "A importação exige que o servidor esteja parado em segurança. Verifica o estado antes de iniciar uma nova importação.",
   "transfers.failure.server-changed": "O servidor ou o teu acesso mudou antes da conclusão da transferência. Atualiza o servidor antes de iniciar uma nova transferência.",
   "transfers.failedRequest": "Este pedido terminou e não será repetido. Fecha-o para iniciar uma nova transferência. Referência para o suporte: {requestId}",
-  "controls.alreadyStopped": "O servidor já está parado. Podes importar uma campanha ou premir Iniciar quando estiveres pronto."
+  "controls.alreadyStopped": "O servidor já está parado. Podes importar uma campanha ou premir Iniciar quando estiveres pronto.",
+  "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
+  "configEditor.loadingSkeleton": "Loading configuration fields",
+  "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
+  "campaigns.deleted": "Campaign deletion queued."
 }

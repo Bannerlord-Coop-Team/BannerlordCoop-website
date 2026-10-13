@@ -755,5 +755,10 @@
   "transfers.failure.stop-required": "Der Import erfordert einen sicher gestoppten Server. Prüfe den Serverstatus, bevor du einen neuen Import startest.",
   "transfers.failure.server-changed": "Der Server oder dein Zugriff hat sich geändert, bevor die Übertragung abgeschlossen wurde. Aktualisiere den Server, bevor du eine neue Übertragung startest.",
   "transfers.failedRequest": "Diese Anfrage ist abgeschlossen und wird nicht wiederholt. Schließe sie, um eine neue Übertragung zu starten. Support-Referenz: {requestId}",
-  "controls.alreadyStopped": "Der Server ist bereits gestoppt. Du kannst eine Kampagne importieren oder auf Start klicken, wenn du bereit bist."
+  "controls.alreadyStopped": "Der Server ist bereits gestoppt. Du kannst eine Kampagne importieren oder auf Start klicken, wenn du bereit bist.",
+  "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
+  "configEditor.loadingSkeleton": "Loading configuration fields",
+  "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
+  "campaigns.deleted": "Campaign deletion queued."
 }

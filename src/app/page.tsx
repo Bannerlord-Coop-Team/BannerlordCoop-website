@@ -11,6 +11,7 @@ import { Footer } from "@/app/components/layout/Footer";
 import { Navbar } from "@/app/components/layout/Navbar";
 import { getNetworkStats } from "@/app/lib/network-stats";
 import type {Metadata} from "next";
+import { Suspense } from "react";
 
 // Resolves homepage metadata from the explicit request locale.
 export async function generateMetadata(): Promise<Metadata> {
@@ -48,28 +49,24 @@ export async function generateMetadata(): Promise<Metadata> {
     };
 }
 
+async function NetworkStatistics() {
+    const stats = await getNetworkStats();
+    return <CommunityStats {...stats} />;
+}
+
 // Delivers home messages to interactive leaves alongside server-rendered sections.
 export default async function Home() {
     const locale = await getLocale();
     const messages = await getMessages(["home"], locale);
-    const {
-        playersOnline,
-        dedicatedServersCount,
-        battlesFoughtTotal,
-        totalDownloads,
-    } = await getNetworkStats();
 
     return (
         <LocalizationProvider locale={locale} messages={messages}>
             <Navbar />
             <main>
                 <Hero />
-                <CommunityStats
-                    playersOnline={playersOnline}
-                    dedicatedServersCount={dedicatedServersCount}
-                    battlesFoughtTotal={battlesFoughtTotal}
-                    totalDownloads={totalDownloads}
-                />
+                <Suspense fallback={<CommunityStats loading playersOnline={null} dedicatedServersCount={null} battlesFoughtTotal={null} totalDownloads={null} />}>
+                    <NetworkStatistics />
+                </Suspense>
                 <CommunityMedia />
                 <CoopFeatures />
                 <Roadmap />

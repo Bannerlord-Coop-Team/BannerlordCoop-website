@@ -31,7 +31,7 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
     listAllMyServerBackups: async () => [], getMyServerBackupStatus: async () => null,
 }));
 vi.mock("@/app/lib/hosting/my-servers-server", () => ({
-    listAllMyServers: mocks.servers,
+    getMyServerSummary: mocks.servers,
     getMyServerDeletionStatus: async () => null,
 }));
 vi.mock("@/app/lib/hosting/server-files", () => ({ getMyServerFiles: mocks.files, submitMyServerFile: mocks.submit }));
@@ -51,7 +51,7 @@ beforeEach(() => {
     Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value() { this.open = true; } });
     Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
     mocks.live.mockReturnValue(live); mocks.access.mockReturnValue("operator");
-    mocks.servers.mockResolvedValue([{ serverId: managedId, accessRole: "owner" }]);
+    mocks.servers.mockResolvedValue({ serverId: managedId, accessRole: "owner" });
     mocks.files.mockResolvedValue(status);
     mocks.configFile.mockImplementation(async (_token: string, _serverId: string, part: string) => part === "server"
         ? { configPart: "server", revision: "a".repeat(64), settings: { ...status.managedConfig.serverConfig, autosaveMinutes: 30 } }
@@ -98,7 +98,7 @@ function button(label: string) {
 
 it.each(["mapping-required", "access-required", "lookup-failed"])("provides file-specific %s guidance with inert transfers", async (reason) => {
     // A different owned record cannot authorize this live server's files.
-    mocks.servers.mockResolvedValue([{ serverId: "another-server", accessRole: "owner" }]);
+    mocks.servers.mockResolvedValue(null);
     if (reason === "mapping-required") mocks.live.mockReturnValue({ ...live, managedServerId: undefined });
     if (reason === "lookup-failed") {
         mocks.servers.mockRejectedValue(Error("Unavailable"));
@@ -119,7 +119,7 @@ it.each(["mapping-required", "access-required", "lookup-failed"])("provides file
 });
 
 it.each(["owner", "manager"])("shows actual mapped save/config for managed %s and permits only owner save exports", async (accessRole) => {
-    mocks.servers.mockResolvedValue([{ serverId: managedId, accessRole }]);
+    mocks.servers.mockResolvedValue({ serverId: managedId, accessRole });
     await render();
     expect(mocks.files).toHaveBeenCalledExactlyOnceWith("token", managedId);
     expect(container.textContent).toContain(status.activeSave!.displayName);
@@ -162,7 +162,7 @@ it("keeps missing file status distinct from missing mapping and disables transfe
 });
 
 it.each(["admin", "support"])("keeps managed %s read-only even for a live owner", async (accessRole) => {
-    mocks.access.mockReturnValue("owner"); mocks.servers.mockResolvedValue([{ serverId: managedId, accessRole }]);
+    mocks.access.mockReturnValue("owner"); mocks.servers.mockResolvedValue({ serverId: managedId, accessRole });
     await render();
     expect(container.textContent).toContain("require owner or manager access");
     expect(mocks.files).not.toHaveBeenCalled();
@@ -178,7 +178,7 @@ it("opens import review without submitting or bypassing existing confirmation", 
 });
 
 it("keeps fictional previews inert without live onboarding", async () => {
-    mocks.live.mockReturnValue(null); mocks.servers.mockResolvedValue([]); mocks.preview.mockReturnValue({ name: "Preview", assignedAccount: {} });
+    mocks.live.mockReturnValue(null); mocks.servers.mockResolvedValue(null); mocks.preview.mockReturnValue({ name: "Preview", assignedAccount: {} });
     const tree = await page();
     expect(await find(tree, "LiveServerFileSetup")).toBeNull();
     expect(await find(tree, "ManagedServerFiles")).toBeNull();

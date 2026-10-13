@@ -29,10 +29,14 @@ export async function getNetworkStats(): Promise<NetworkStats> {
         return unavailableStats;
     }
 
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), 3_000);
+
     try {
         const response = await fetch(
             `${supabaseUrl}/functions/v1/network-stats-cached`,
             {
+                signal: controller.signal,
                 headers: {
                     apikey: publishableKey,
                 },
@@ -60,6 +64,8 @@ export async function getNetworkStats(): Promise<NetworkStats> {
     } catch (error) {
         console.error("Unable to retrieve network stats.", error);
         return unavailableStats;
+    } finally {
+        clearTimeout(deadline);
     }
 }
 
