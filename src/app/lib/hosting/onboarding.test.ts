@@ -14,7 +14,7 @@ test("real website facade → real strict Edge → synthetic upstream preserves 
     const calls: Record<string, unknown>[] = [];
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://supabase.example.test";
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "synthetic-publishable-key-not-a-secret";
-    const edge = createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test", fetchImplementation: async (_url, init) => {
+    const edge = createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test", waitUntil: () => {}, fetchImplementation: async (_url, init) => {
         const body = JSON.parse(init?.body as string); calls.push(body);
         assert.equal(new Headers(init?.headers).get("authorization"), "Bearer synthetic-test-access-token");
         return Response.json({ version: 1, requestId: body.requestId, ok: true, result: { ...onboardingCreated(), ...(body.input.releaseChannel ? { releaseChannel: body.input.releaseChannel } : {}) } });
