@@ -237,7 +237,7 @@
   "files.backupsAndRestore": "Copies de sauvegarde et restauration",
   "transfers.aPreviousTransferIsSavedCheckItsStatusBeforeRetrying": "Un transfert précédent est enregistré. Vérifiez son état avant de réessayer.",
   "transfers.noAcceptedTransferWasFoundRetryTheSameRequestWith": "Aucun transfert accepté n’a été trouvé. Réessayez la même demande avec les mêmes fichiers.",
-  "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck": "Le transfert a été rejeté avant l’acceptation d’une tâche. Vérifiez vos fichiers ou actualisez le serveur, puis réessayez.",
+  "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck": "Le serveur n’a pas pu accepter ce transfert. Aucune tâche d’import ou d’export n’a été lancée. Réessayez plus tard ou contactez l’assistance si le problème persiste.",
   "transfers.settingsImportedIfTheServerIsRunningStopItAnd": "Paramètres importés. Si le serveur est en cours d’exécution, arrêtez-le puis redémarrez-le pour les utiliser. S’il est arrêté, démarrez-le quand vous serez prêt.",
   "transfers.yourSaveExportIsReadyToDownload": "Votre exportation de sauvegarde est prête à être téléchargée.",
   "transfers.campaignAddedYourCurrentCampaignIsUnchanged": "Campagne ajoutée. Votre campagne actuelle est inchangée.",
@@ -744,7 +744,7 @@
   "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "La demande de suppression est invalide.",
   "deletion.signIn": "Reconnectez-vous avant de supprimer un serveur.",
-  "deletion.unavailable": "Suppression indisponible pendant la préparation, la suspension ou la suppression du serveur.",
+  "deletion.unavailable": "Suppression indisponible pendant la préparation, la suspension ou la suppression du serveur.",
   "transfers.queued": "Transfert accepté et mis en attente. Le serveur ne l’a pas encore commencé.",
   "transfers.retryWaiting": "Le transfert attend une nouvelle tentative automatique. Votre demande reste active.",
   "transfers.statusChecksPaused": "Les vérifications automatiques sont en pause. Votre transfert accepté est peut-être encore en cours. Utilisez Vérifier le statut pour continuer.",
@@ -760,5 +760,14 @@
   "configEditor.loadingSkeleton": "Loading configuration fields",
   "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
   "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
-  "campaigns.deleted": "Campaign deletion queued."
+  "campaigns.deleted": "Campaign deletion queued.",
+  "transfers.rejection.storage-unavailable": "Le stockage privé est temporairement indisponible. Aucune tâche de transfert n’a été lancée. Réessayez un nouveau transfert plus tard.",
+  "transfers.rejection.save-rejected": "Les fichiers de sauvegarde ou l’archive exportée n’ont pas passé la validation. Utilisez une paire .sav + .json correspondante ou un nouvel export de ce site, puis réessayez.",
+  "transfers.rejection.campaign-limit": "Ce serveur possède déjà 10 campagnes importées. Supprimez une campagne importée avant d’en ajouter une autre.",
+  "transfers.rejection.stop-required": "Le serveur doit être complètement arrêté avant l’import d’une sauvegarde. Attendez qu’il soit indiqué comme arrêté, puis réessayez.",
+  "transfers.rejection.server-changed": "Le serveur a changé ou une autre opération est en cours. Actualisez son état et attendez la fin des opérations en cours avant de réessayer.",
+  "transfers.rejection.invalid-companion": "Le fichier .json associé ne contient pas un objet JSON valide ou dépasse les limites JSON prises en charge. Exportez une nouvelle paire .sav + .json correspondante et réessayez.",
+  "transfers.rejection.save-too-large": "La sauvegarde ou son fichier associé dépasse les limites de taille d’import. Utilisez des fichiers plus petits et réessayez.",
+  "transfers.rejection.server-unavailable": "Le serveur n’est pas prêt à accepter ce transfert. Actualisez son état et réessayez lorsqu’il sera disponible.",
+  "transfers.rejection.reference": "Référence d’assistance : {requestId}"
 }

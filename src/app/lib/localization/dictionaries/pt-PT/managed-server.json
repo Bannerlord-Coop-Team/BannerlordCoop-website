@@ -237,7 +237,7 @@
   "files.backupsAndRestore": "Cópias de segurança e restauro",
   "transfers.aPreviousTransferIsSavedCheckItsStatusBeforeRetrying": "Existe uma transferência anterior guardada. Verifique o respetivo estado antes de tentar novamente.",
   "transfers.noAcceptedTransferWasFoundRetryTheSameRequestWith": "Não foi encontrada nenhuma transferência aceite. Repita o mesmo pedido com os mesmos ficheiros.",
-  "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck": "A transferência foi rejeitada antes de ser aceite uma tarefa. Verifique os ficheiros ou atualize o servidor e tente novamente.",
+  "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck": "O servidor não conseguiu aceitar esta transferência. Não foi iniciada nenhuma tarefa de importação ou exportação. Tenta mais tarde ou contacta o suporte se continuar a falhar.",
   "transfers.settingsImportedIfTheServerIsRunningStopItAnd": "Definições importadas. Se o servidor estiver em execução, pare-o e volte a iniciá-lo para as utilizar. Se estiver parado, inicie-o quando quiser.",
   "transfers.yourSaveExportIsReadyToDownload": "A exportação do jogo guardado está pronta para descarregar.",
   "transfers.campaignAddedYourCurrentCampaignIsUnchanged": "Campanha adicionada. A campanha atual não foi alterada.",
@@ -744,7 +744,7 @@
   "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "O pedido de eliminação é inválido.",
   "deletion.signIn": "Inicie sessão novamente antes de eliminar um servidor.",
-  "deletion.unavailable": "A eliminação não está disponível durante a preparação, suspensão ou eliminação do servidor.",
+  "deletion.unavailable": "A eliminação não está disponível durante a preparação, suspensão ou eliminação do servidor.",
   "transfers.queued": "Transferência aceite e em fila. O servidor ainda não começou a processá-la.",
   "transfers.retryWaiting": "A transferência aguarda uma nova tentativa automática. O teu pedido continua ativo.",
   "transfers.statusChecksPaused": "As verificações automáticas estão em pausa. A transferência aceite pode ainda estar a ser processada. Usa Verificar estado para continuar.",
@@ -760,5 +760,14 @@
   "configEditor.loadingSkeleton": "Loading configuration fields",
   "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
   "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
-  "campaigns.deleted": "Campaign deletion queued."
+  "campaigns.deleted": "Campaign deletion queued.",
+  "transfers.rejection.storage-unavailable": "O armazenamento privado está temporariamente indisponível. Não foi iniciada nenhuma tarefa de transferência. Tenta uma nova transferência mais tarde.",
+  "transfers.rejection.save-rejected": "Os ficheiros de jogo guardado ou o arquivo exportado não passaram na validação. Usa um par .sav + .json correspondente ou uma nova exportação deste site e tenta novamente.",
+  "transfers.rejection.campaign-limit": "Este servidor já tem 10 campanhas importadas. Elimina uma campanha importada antes de adicionar outra.",
+  "transfers.rejection.stop-required": "O servidor tem de estar completamente parado antes de importar um jogo guardado. Espera até aparecer como parado e tenta novamente.",
+  "transfers.rejection.server-changed": "O servidor mudou ou outra operação está ativa. Atualiza o estado e espera que as operações atuais terminem antes de tentar novamente.",
+  "transfers.rejection.invalid-companion": "O .json associado não contém um objeto JSON válido ou excede os limites JSON suportados. Exporta um novo par .sav + .json correspondente e tenta novamente.",
+  "transfers.rejection.save-too-large": "O jogo guardado ou o ficheiro associado excede os limites de tamanho de importação. Usa ficheiros mais pequenos e tenta novamente.",
+  "transfers.rejection.server-unavailable": "O servidor não está pronto para aceitar esta transferência. Atualiza o estado e tenta novamente quando estiver disponível.",
+  "transfers.rejection.reference": "Referência de suporte: {requestId}"
 }
