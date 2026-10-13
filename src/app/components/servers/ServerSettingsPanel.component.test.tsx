@@ -20,7 +20,7 @@ const access = { serverId, expectedUpdatedAt: updatedAt, canEdit: true };
 const props: ComponentProps<typeof ServerSettingsPanel> = {
     name: "Settings QA", visibility: "private", visibilityAccess: access,
     releaseAccess: { ...access, channel: "stable" },
-    settingsAccess: { ...access, maintenanceSlot: "03:00-04:00", timezone: "America/Chicago" },
+    settingsAccess: { ...access, maintenanceSlot: "06:00-07:00", timezone: "America/Chicago" },
 };
 let container: HTMLDivElement;
 let root: Root;
@@ -48,7 +48,7 @@ function click(text: string) { return act(async () => Array.from(container.query
 
 it("renders current maintenance preferences and discards unsaved changes without writes", async () => {
     await render();
-    expect(container.querySelector<HTMLSelectElement>("#settings-maintenance-window")!.value).toBe("03:00-04:00");
+    expect(container.querySelector<HTMLSelectElement>("#settings-maintenance-window")!.value).toBe("06:00-07:00");
     expect(container.querySelectorAll("#settings-maintenance-window option")).toHaveLength(3);
     expect(container.textContent).toContain("America/Chicago");
     expect(container.textContent).not.toContain("Nightly is experimental.");
@@ -57,7 +57,7 @@ it("renders current maintenance preferences and discards unsaved changes without
     expect(container.textContent).toContain("Unsaved changes");
     expect(mocks.settings).not.toHaveBeenCalled();
     await click("Discard");
-    expect(container.querySelector<HTMLSelectElement>("#settings-maintenance-window")!.value).toBe("03:00-04:00");
+    expect(container.querySelector<HTMLSelectElement>("#settings-maintenance-window")!.value).toBe("06:00-07:00");
     expect(container.textContent).toContain("No pending changes");
 });
 
@@ -71,7 +71,7 @@ it("saves name and maintenance once, then carries each returned generation into 
     await submit();
     expect(mocks.settings).toHaveBeenCalledExactlyOnceWith({ serverId, expectedUpdatedAt: updatedAt,
         patch: { displayName: "Renamed QA", maintenanceSlot: "18:00-19:00" }, requestId: expect.any(String),
-        previous: { displayName: "Settings QA", maintenanceSlot: "03:00-04:00" } });
+        previous: { displayName: "Settings QA", maintenanceSlot: "06:00-07:00" } });
     expect(mocks.visibility).toHaveBeenCalledWith({ serverId, visibility: "public", expectedUpdatedAt: savedAt, requestId: expect.any(String) });
     expect(mocks.release).toHaveBeenCalledWith({ serverId, releaseChannel: "nightly", expectedUpdatedAt: visibilityAt, requestId: expect.any(String), previousChannel: "stable" });
     expect(mocks.rename).not.toHaveBeenCalled();

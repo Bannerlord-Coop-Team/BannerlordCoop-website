@@ -300,14 +300,47 @@ it("publishes game phases and stream boundaries for lifecycle progress", async (
     fetchMock.mockResolvedValueOnce(stream.response).mockReturnValue(new Promise<Response>(() => {}));
     await act(async () => root.render(<TestLocalization><ManagedServerPollingProvider><Probe /><ManagedServerConsole serverId="preview" /></ManagedServerPollingProvider></TestLocalization>));
     await stream.send('@DS@{"ev":"state","phase":"loading"}', "plain output", '@DS@{"ev":"state","phase":"serving"}');
-    await stream.end("ended");
     const connection = (signals[0] as { connection: number }).connection;
     expect(signals).toEqual([
         { type: "opened", serverId: "preview", connection },
         { type: "phase", serverId: "preview", connection, phase: "loading" },
         { type: "phase", serverId: "preview", connection, phase: "serving" },
-        { type: "closed", serverId: "preview", connection, runEnded: true },
     ]);
+    await stream.end("ended");
+    expect(signals.at(-1)).toEqual({ type: "closed", serverId: "preview", connection, runEnded: true });
+});
+
+it("trims a full transcript once for a 100-event chunk, then parses it once for rendering", async () => {
+    const stream = liveStream();
+    fetchMock.mockResolvedValueOnce(stream.response);
+    await renderConsole();
+    await stream.send(...Array.from({ length: 1_999 }, () => "x".repeat(65)));
+    const split = vi.spyOn(String.prototype, "split");
+    try {
+        await stream.send(...Array.from({ length: 100 }, (_, index) => `burst-${index}`));
+        const transcriptScans = split.mock.calls.filter(([separator], index) =>
+            String(separator) === "\n" && String(split.mock.contexts[index]).length > 100_000);
+        expect(transcriptScans).toHaveLength(2);
+        expect(output()).toMatch(/burst-0\n[\s\S]*burst-99\n$/u);
+        expect(output()!.length).toBeLessThanOrEqual(128 * 1_024);
+        expect(output()!.split("\n").length).toBeLessThanOrEqual(2_000);
+    } finally {
+        split.mockRestore();
+    }
+});
+
+it("waits for a complete UTF-8 SSE frame without adding partial lines to the transcript", async () => {
+    let stream!: ReadableStreamDefaultController<Uint8Array>;
+    fetchMock.mockResolvedValue(new Response(new ReadableStream({ start(controller) { stream = controller; } })));
+    await renderConsole();
+    const frame = new TextEncoder().encode(stdoutFrame("first\n雪🙂\n"));
+    const unicodeStart = frame.indexOf(0xe9);
+    await act(async () => stream.enqueue(frame.slice(0, unicodeStart + 1)));
+    expect(output()).toContain("Connected. Waiting for output");
+    await act(async () => stream.enqueue(frame.slice(unicodeStart + 1, -1)));
+    expect(output()).toContain("Connected. Waiting for output");
+    await act(async () => stream.enqueue(frame.slice(-1)));
+    expect(output()).toBe("first\n雪🙂\n\n");
 });
 
 it("follows new output only while the reader is at the bottom and offers a jump back", async () => {
@@ -325,7 +358,7 @@ it("follows new output only while the reader is at the bottom and offers a jump 
     Object.defineProperty(pre, "scrollHeight", { configurable: true, get: () => 1_000 });
     Object.defineProperty(pre, "clientHeight", { configurable: true, get: () => 200 });
     Object.defineProperty(pre, "scrollTop", { configurable: true, get: () => scrollTop, set: (value: number) => { scrollTop = value; } });
-    await stream.send("first");
+    await stream.send("first", "first continued");
     expect(scrollTop).toBe(1_000);
     expect(button("Jump to latest")).toBeUndefined();
     scrollTop = 0;
@@ -333,14 +366,16 @@ it("follows new output only while the reader is at the bottom and offers a jump 
     expect(scrollTop).toBe(1_000);
     scrollTop = 100;
     await act(async () => pre.dispatchEvent(new Event("scroll")));
-    await stream.send("second");
+    await stream.send(...Array.from({ length: 2_100 }, (_, index) => `second-${index}`));
     expect(scrollTop).toBe(100);
+    expect(output()).not.toContain("first");
+    expect(output()).toContain("second-2099\n");
     resized();
     expect(scrollTop).toBe(100);
     await act(async () => button("Jump to latest")!.click());
     expect(scrollTop).toBe(1_000);
     expect(button("Jump to latest")).toBeUndefined();
-    await stream.send("third");
+    await stream.send("third", "third continued");
     expect(scrollTop).toBe(1_000);
 });
 

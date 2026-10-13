@@ -46,11 +46,12 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     const discordName = discordDisplayName(user);
     const discordIdentity = user.identities?.find(identity => identity.provider === "discord");
     const hasOtherSignIn = user.identities?.some(identity => identity.provider !== "discord") ?? false;
-    const needsStatusUpdates = !status || status.membership.linked && ["pending", "unavailable"].includes(status.membership.sync) || Object.values(params).some(Boolean);
+    const needsStatusUpdates = !status || status.verificationPending || status.membership.sync === "pending"
+        || status.membership.linked && status.membership.sync === "unavailable";
     const primaryButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-gold px-5 py-3 text-sm font-semibold text-background transition-colors hover:bg-gold/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background";
     const secondaryButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-white/20 px-4 py-2 text-sm text-foreground transition-colors hover:border-gold hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
 
-    return <LocalizationProvider locale={locale} messages={messages}><div className="flex min-h-svh flex-col bg-background text-foreground"><Navbar /><main className="flex-1"><section className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8 sm:py-16" aria-labelledby="account-heading">
+    return <LocalizationProvider locale={locale} messages={messages}><div className="flex min-h-svh flex-col bg-background text-foreground"><Navbar viewer={Promise.resolve({ user })} /><main className="flex-1"><section className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8 sm:py-16" aria-labelledby="account-heading">
         <AccountStatusSync key={user.id} pending={needsStatusUpdates} />
         <h1 id="account-heading" className="font-display text-4xl font-semibold">{t("heading")}</h1>
         <div className="mt-6 flex min-w-0 items-center gap-4">

@@ -3,7 +3,7 @@
 import { getTranslations } from "@/app/lib/localization/server";
 
 import { MyServersApiError, requestMyServerSettings } from "@/app/lib/hosting/my-servers";
-import { listAllMyServers } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { hasExactKeys, isRecord } from "../../../supabase/functions/_shared/dto-validation";
 import { REQUEST_ID } from "../../../supabase/functions/_shared/server-visibility-contract";
@@ -95,7 +95,7 @@ function parsePrevious(value: unknown): ServerSettingsPrevious | null {
  */
 async function retryAtCurrentRevision(accessToken: string, input: OwnerSettingsMutation, previous: ServerSettingsPrevious):
     Promise<{ outcome: "saved"; updatedAt: string } | { outcome: "changed"; field: ServerSettingsField } | { outcome: "unavailable" }> {
-    const server = (await listAllMyServers(accessToken)).find((candidate) => candidate.serverId === input.serverId);
+    const server = await getMyServerSummary(accessToken, input.serverId);
     if (!server || server.accessRole !== "owner") return { outcome: "unavailable" };
     const current: Record<ServerSettingsField, string | undefined> = { displayName: server.displayName, maintenanceSlot: server.maintenanceSlot };
     const remaining: OwnerSettingsMutation["patch"] = {};

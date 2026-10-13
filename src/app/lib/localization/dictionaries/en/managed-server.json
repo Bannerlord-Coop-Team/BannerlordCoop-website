@@ -759,6 +759,8 @@
   "transfers.failure.server-changed": "The server or your access changed before the transfer could finish. Refresh the server before starting a new transfer.",
   "transfers.failedRequest": "This request has finished and will not retry. Dismiss it to start a new transfer. Support reference: {requestId}",
   "controls.alreadyStopped": "The server is already stopped. You can import a campaign or press Start when ready.",
+  "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
+  "configEditor.loadingSkeleton": "Loading configuration fields",
   "transfers.rejection.storage-unavailable": "Private storage is temporarily unavailable. No transfer job was started. Try a new transfer later.",
   "transfers.rejection.save-rejected": "The save files or export archive failed validation. Use a matching .sav + .json pair or a fresh save export from this website, then try again.",
   "transfers.rejection.campaign-limit": "This server already has 10 imported campaigns. Delete an imported campaign before adding another.",

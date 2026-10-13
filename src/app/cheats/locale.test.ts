@@ -11,6 +11,7 @@ import chineseSource from "./locales/zh-CN.commands.json";
 import { assertDictionaryParity } from "../lib/localization/integrity";
 import { createTranslator } from "../lib/localization/translator";
 import { buildCheatsPath, parseCheatsQuery } from "./query";
+import { translateCheat } from "./translation";
 
 const commands = commandsData.commands;
 const english = createTranslator("en", en);
@@ -40,25 +41,34 @@ test("keeps bare cheats navigation and retains every explicit share locale", () 
     assert.equal(buildCheatsPath(parseCheatsQuery({ lang: "pt-PT" })), "/cheats?lang=pt-PT");
 });
 
-/** Keeps command names in source English while translating categories and explanatory prose. */
-test("preserves source command names and translates summaries, categories, and argument explanations", () => {
+/** Existing dictionary entries win; newly synced catalog entries keep their English fallback. */
+test("preserves command names, translated prose, and missing-translation catalog fallbacks", () => {
     assertDictionaryParity(en, zh, "legacy.zh-CN.cheats");
     for (const { name } of commandsData.categories) {
         const key = `category.${name.toLowerCase().replaceAll(" ", "_")}`;
-        assert.equal(english.t(key), name);
-        assert.ok(chinese.t(key).trim());
+        assert.equal(translateCheat(english.t, key, name), name);
+        assert.ok(translateCheat(chinese.t, key, name).trim());
     }
     for (const command of commands) {
         const key = `command.${command.command}`;
         assert.equal(Object.hasOwn(en, `${key}.name`), false);
         assert.equal(Object.hasOwn(zh, `${key}.name`), false);
-        assert.equal(english.t(`${key}.summary`), command.summary);
+        assert.equal(translateCheat(english.t, `${key}.summary`, command.summary),
+            (en as Record<string, unknown>)[`${key}.summary`] ?? command.summary);
         const original = chineseSource[command.command as keyof typeof chineseSource];
-        assert.equal(chinese.t(`${key}.summary`), original.summary);
+        assert.ok(original.summary.trim());
+        assert.deepEqual(Object.keys(original.arguments).sort(), command.arguments.map(argument => argument.name).sort());
+        assert.equal(translateCheat(chinese.t, `${key}.summary`, command.summary),
+            (zh as Record<string, unknown>)[`${key}.summary`] ?? command.summary);
         for (const argument of command.arguments) {
-            assert.equal(english.t(`${key}.argument.${argument.name}`), argument.description);
-            assert.equal(chinese.t(`${key}.argument.${argument.name}`), (original.arguments as Record<string, string>)[argument.name]);
-            assert.match(chinese.t(`${key}.argument.${argument.name}`), /[\u3400-\u9fff]|^(on|success|Pause|state|open)/);
+            const argumentKey = `${key}.argument.${argument.name}`;
+            assert.equal(translateCheat(english.t, argumentKey, argument.description),
+                (en as Record<string, unknown>)[argumentKey] ?? argument.description);
+            assert.equal(translateCheat(chinese.t, argumentKey, argument.description),
+                (zh as Record<string, unknown>)[argumentKey] ?? argument.description);
+            if (Object.hasOwn(zh, argumentKey)) {
+                assert.match(chinese.t(argumentKey), /[\u3400-\u9fff]|^(on|success|Pause|state|open)/);
+            }
         }
     }
     assert.equal(Object.keys(en).filter((key) => key.endsWith(".summary")).length, 400);
@@ -76,10 +86,10 @@ test("keeps featured commands publishable", () => {
     }
 });
 
-test("catalog preserves PR3538 metadata, usage and localized argument coverage", () => {
-    assert.equal(commandsData.source.commit, "4d030c26c49b271e77676179571e120698f42f52");
+test("catalog preserves the current producer metadata, usage and argument coverage", () => {
+    assert.equal(commandsData.source.commit, "2ac901f91e8a852cbe59357333a3e6a2def78c39");
     assert.equal(commandsData.count, commands.length);
-    assert.equal(commandsData.count, 400);
+    assert.equal(commandsData.count, 414);
     assert.equal(new Set(commands.map(c => c.command)).size, commandsData.count);
     assert.equal(commandsData.categories.reduce((sum, c) => sum + c.count, 0), commandsData.count);
     for (const command of commands) {

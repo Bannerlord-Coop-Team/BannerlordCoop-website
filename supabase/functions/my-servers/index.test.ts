@@ -352,6 +352,7 @@ function createHandler(fetchImplementation: typeof fetch) {
     return createMyServersHandler({
         allowedOrigins: [ORIGIN, "https://bannerlordcoop.netlify.app"],
         controlPlaneUrl: "https://control-plane.example.test",
+        waitUntil: () => {},
         fetchImplementation,
     });
 }

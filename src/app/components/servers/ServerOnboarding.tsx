@@ -323,19 +323,28 @@ function SetupDialog({ summary, catalog, canOffer, disabled, pending, result, re
             {result ? <div ref={resultRef} tabIndex={-1} className="mt-6 outline-none"><OnboardingReceipt result={result} /><button type="button" onClick={onDismiss} className={`${secondaryButton} mt-5`}>{t("onboarding.done")}</button></div> : <form noValidate onSubmit={submit} className="mt-6">
                 <fieldset disabled={disabled || !canOffer}>
                     <legend className="sr-only">{t("onboarding.details")}</legend>
-                    <label htmlFor="onboarding-server-name" className="text-sm font-medium">{t("onboarding.name")}</label>
-                    <input ref={nameRef} id="onboarding-server-name" value={name} onChange={(event) => { setName(event.target.value); setError(""); }} autoComplete="off" placeholder={t("onboarding.namePlaceholder")} aria-invalid={!!error} aria-describedby={`onboarding-name-hint${error ? " onboarding-name-error" : ""}`} className={`mt-2 block min-h-12 w-full rounded-sm border border-white/20 bg-background px-3 py-2 text-base ${focusRing}`} />
-                    <p id="onboarding-name-hint" className="mt-2 text-xs leading-5 text-foreground-muted">{t("onboarding.nameHint")}</p>
-                    {error && <p id="onboarding-name-error" role="alert" className="mt-2 text-sm text-red-200">{error}</p>}
-                    <fieldset className="mt-6">
-                        <legend className="text-sm font-medium">{t("onboarding.release")}</legend>
-                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">{(["stable", "nightly"] as const).map((channel) => <label key={channel} title={releaseChannelInfo[channel]} className={`group relative flex cursor-pointer items-start gap-2 rounded-sm border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${releaseChannel === channel ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
-                            <input type="radio" name="release-channel" value={channel} checked={releaseChannel === channel} onChange={() => setReleaseChannel(channel)} aria-describedby={`release-${channel}-description`} className="mt-1 size-3.5 shrink-0 accent-gold" />
-                            <span className="flex items-center gap-1.5 text-sm font-medium">{t(`release.${channel}`)} <CircleHelp aria-hidden="true" className="size-3.5 text-gold/70" /></span>
-                            <span id={`release-${channel}-description`} role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-64 -translate-x-1/2 border border-white/15 bg-background px-3 py-2 text-xs font-normal leading-5 text-foreground shadow-xl group-hover:block group-focus-within:block">{releaseChannelInfo[channel]}</span>
-                        </label>)}</div>
-                    </fieldset>
-                    <fieldset className="mt-6"><legend className="text-sm font-medium">{t("onboarding.region")}</legend>
+                    <ol className="space-y-4">
+                        <li className="rounded-sm border border-white/10 bg-background/30 p-4">
+                            <div className="flex items-start gap-3"><span aria-hidden="true" className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gold text-sm font-bold text-background">1</span><div className="min-w-0 flex-1"><h3 className="text-sm font-semibold">{t("onboarding.name")}</h3>
+                                <label htmlFor="onboarding-server-name" className="sr-only">{t("onboarding.name")}</label>
+                                <input ref={nameRef} id="onboarding-server-name" value={name} onChange={(event) => { setName(event.target.value); setError(""); }} autoComplete="off" placeholder={t("onboarding.namePlaceholder")} aria-invalid={!!error} aria-describedby={`onboarding-name-hint${error ? " onboarding-name-error" : ""}`} className={`mt-3 block min-h-12 w-full rounded-sm border border-white/20 bg-background px-3 py-2 text-base ${focusRing}`} />
+                                <p id="onboarding-name-hint" className="mt-2 text-xs leading-5 text-foreground-muted">{t("onboarding.nameHint")}</p>
+                                {error && <p id="onboarding-name-error" role="alert" className="mt-2 text-sm text-red-200">{error}</p>}
+                            </div></div>
+                        </li>
+                        <li className="rounded-sm border border-white/10 bg-background/30 p-4">
+                            <div className="flex items-start gap-3"><span aria-hidden="true" className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gold text-sm font-bold text-background">2</span><div className="min-w-0 flex-1"><h3 className="text-sm font-semibold">{t("onboarding.release")}</h3>
+                                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">{(["stable", "nightly"] as const).map((channel) => <label key={channel} title={releaseChannelInfo[channel]} className={`group relative flex cursor-pointer items-start gap-2 rounded-sm border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold ${releaseChannel === channel ? "border-gold bg-gold/10" : "border-white/15 bg-surface"}`}>
+                                    <input type="radio" name="release-channel" value={channel} checked={releaseChannel === channel} onChange={() => setReleaseChannel(channel)} aria-describedby={`release-${channel}-description`} className="mt-1 size-3.5 shrink-0 accent-gold" />
+                                    <span className="flex items-center gap-1.5 text-sm font-medium">{t(`release.${channel}`)} <CircleHelp aria-hidden="true" className="size-3.5 text-gold/70" /></span>
+                                    <span id={`release-${channel}-description`} role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-[min(32rem,calc(100vw-3rem))] -translate-x-1/2 border border-white/15 bg-background px-3 py-2 text-xs font-normal leading-5 text-foreground shadow-xl group-hover:block group-focus-within:block">{releaseChannelInfo[channel]}{channel === "nightly" && <>{" "}{t("onboarding.nightlyTooltipUpdate")} {t("onboarding.nightlyTooltipPrefix")}<Link className="pointer-events-auto text-gold underline" href="https://discord.com/channels/709516043332354119/1058155634702434355/1539466223916421201" target="_blank" rel="noreferrer">{t("onboarding.nightlyTooltipHere")}</Link>{t("onboarding.nightlyTooltipSuffix")}</>}</span>
+                                </label>)}</div>
+                            </div></div>
+                        </li>
+                        <li className="rounded-sm border border-white/10 bg-background/30 p-4">
+                            <div className="flex items-start gap-3"><span aria-hidden="true" className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gold text-sm font-bold text-background">3</span><div className="min-w-0 flex-1"><h3 className="text-sm font-semibold">{t("onboarding.region")}</h3>
+                    <fieldset className="mt-3">
+                        <legend className="sr-only">{t("onboarding.region")}</legend>
                         <div role="tablist" aria-label={t("onboarding.continent")} className="mt-3 flex flex-wrap gap-2">
                             {continents.map((item, index) => <button key={item.id} type="button" role="tab"
                                 id={`continent-tab-${index}`} aria-selected={continent === index} aria-controls={item.regions.length ? "continent-regions" : undefined}
@@ -358,7 +367,9 @@ function SetupDialog({ summary, catalog, canOffer, disabled, pending, result, re
                             <input type="radio" name="region" value={region.region} checked={selected === region.region} onChange={() => { setSelected(region.region); setReplacement(null); }} className="mt-1 size-3.5 shrink-0 accent-gold" />
                             <span className="min-w-0"><span className="block text-sm font-medium">{localizedRegionLabel(t, region.region)}</span><span className={`mt-2 block text-xs ${region.available ? "text-emerald-200" : "text-amber-200"}`}>{region.available ? t("onboarding.available") : t("onboarding.full")}{region.request ? ` · ${t("onboarding.requested")}` : ""}</span></span>
                         </label>)}</div>
-                    </fieldset>
+                    </fieldset></div></div>
+                        </li>
+                    </ol>
                 </fieldset>
                 {!canOffer && <p role="status" className="mt-4 text-sm text-gold">{t("onboarding.changed")}</p>}
                 {entry && !entry.available && <p role="status" className="mt-4 text-sm text-gold">{t(entry.request ? "onboarding.alreadyRequested" : "onboarding.regionFull", { region: localizedRegionLabel(t, entry.region) })}</p>}
