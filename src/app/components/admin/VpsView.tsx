@@ -12,6 +12,8 @@ import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosti
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingAdminVpsInventory, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
+const FLEET_RESOURCE_REFRESH_INTERVAL_MILLISECONDS = 15_000;
+
 /** Shows registered VPS capacity, labelled by the stored region catalog, with live readings and region requests. */
 export function VpsView({ inventory: initialInventory, regionCatalog, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
     const readings = useVpsReadings(initialInventory, "resources");
@@ -206,7 +208,7 @@ function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resou
         let cancelled = false;
         let inFlight = false;
         let timer: ReturnType<typeof setTimeout>;
-        const interval = kind === "billing" ? 60_000 : 5_000;
+        const interval = kind === "billing" ? 60_000 : kind === "oracle" ? 5_000 : FLEET_RESOURCE_REFRESH_INTERVAL_MILLISECONDS;
         const controller = new AbortController();
         async function load() {
             if (cancelled || inFlight || document.visibilityState === "hidden") return;

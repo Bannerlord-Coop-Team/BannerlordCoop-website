@@ -90,7 +90,7 @@ export function VpsHostInventory({
                                         <p className="text-xs font-semibold text-foreground">{billingPending ? "Loading…" : billingUnavailable ? "Unavailable" : formatVpsCost(host.cost)}</p>
                                         {!billingPending && !billingUnavailable && <p className="mt-1 text-xs text-foreground-muted">{formatVpsRenewal(host)}</p>}
                                     </div>
-                                    <div role="cell" data-label="Runner" className={SUMMARY_LABEL}>{liveDataPending ? <StateBadge value="loading" /> : <RunnerOnboardingStatus
+                                    <div role="cell" data-label="Runner" className={SUMMARY_LABEL}><RunnerOnboardingStatus
                                         compact
                                         onRefresh={onRefresh}
                                         serviceName={host.name}
@@ -98,7 +98,7 @@ export function VpsHostInventory({
                                         targetSourceCommit={runnerTargetSourceCommit}
                                         onboarding={host.runnerOnboarding}
                                         update={host.runnerUpdate ?? null}
-                                    />}</div>
+                                    /></div>
                                     <div role="cell" className="col-span-2 justify-self-end @min-[70rem]:col-span-1"><button
                                         type="button"
                                         aria-expanded={expanded}
