@@ -423,6 +423,8 @@
   "page.owner": "Besitzer",
   "page.readOnlySupport": "Support (nur Lesezugriff)",
   "page.serverStatus": "Serverstatus",
+  "page.serverInitializing": "Dein Server wird vorbereitet",
+  "page.serverInitializingDescription": "Dein Server wird eingerichtet. Dies kann bis zu 15 Minuten dauern. Die Steuerelemente werden verfügbar, sobald die Einrichtung abgeschlossen ist.",
   "page.gameState": "Spielstatus",
   "page.lifecycle": "Lebenszyklus",
   "page.releaseChannel": "Release-Kanal",

@@ -21,7 +21,7 @@ type PollingSession = {
     serverId: string;
     initialUpdatedAt: string;
     jobId: string | null;
-    statusSource: "server" | "backup";
+    statusSource: "server" | "backup" | "initialization";
     startedAt: number;
     deadline: number;
 };
@@ -33,7 +33,7 @@ type ManagedServerPollingContextValue = {
         serverId: string,
         initialUpdatedAt: string,
         jobId?: string,
-        statusSource?: "server" | "backup",
+        statusSource?: PollingSession["statusSource"],
     ) => void;
     attachJob: (serverId: string, jobId: string) => void;
     endPolling: (serverId: string) => void;
@@ -119,7 +119,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         serverId: string,
         initialUpdatedAt: string,
         jobId?: string,
-        statusSource: "server" | "backup" = "server",
+        statusSource: PollingSession["statusSource"] = "server",
     ) => {
         const startedAt = Date.now();
         setTimedOutSession(null);
@@ -208,10 +208,10 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         if (initialServer === undefined) return;
         const initializing = INITIALIZING_SERVER_STATES.has(initialServer.operationState);
         const trackingInitialState = session?.serverId === initialServer.serverId
-            && session.statusSource === "server" && session.jobId === null;
+            && session.statusSource === "initialization";
         let timer: ReturnType<typeof setTimeout> | undefined;
         if (initializing && !trackingInitialState) {
-            timer = setTimeout(() => beginPolling(initialServer.serverId, initialServer.updatedAt), 0);
+            timer = setTimeout(() => beginPolling(initialServer.serverId, initialServer.updatedAt, undefined, "initialization"), 0);
         } else if (!initializing && trackingInitialState) {
             timer = setTimeout(() => endPolling(initialServer.serverId), 0);
         }

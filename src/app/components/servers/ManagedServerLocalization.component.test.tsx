@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import { LocalizationProvider } from "@/app/lib/localization/client";
 import { createTranslator } from "@/app/lib/localization/translator";
+import { localeDefinitions } from "@/app/lib/localization/registry";
 import { serverTestMessages } from "./ManagedServerLocalization.test-utils";
 import { ServerConsoleWorkspace, ServerManagementWorkspace, ServerWorkspacePanel } from "./ServerManagementWorkspace";
 import { ManagedServerConfigEditor } from "./ManagedServerConfigEditor";
@@ -17,6 +18,13 @@ import { configurationImportMessages } from "@/app/servers/managed-server-messag
 import { readConfigurationFile } from "../../../../supabase/functions/_shared/configuration-file-import";
 import catalog from "@/app/cheats/commands.json";
 import { isPublishedCheat } from "@/app/cheats/debugOnly";
+
+it.each(Object.values(localeDefinitions).filter(locale => locale.enabled))("renders initialization guidance in $locale", async definition => {
+    const dictionary = (await definition.dictionaries["managed-server"]!()).default;
+    const { t } = createTranslator(definition.locale, dictionary);
+    expect(t("page.serverInitializing").length).toBeGreaterThan(0);
+    expect(t("page.serverInitializingDescription")).toContain("15");
+});
 
 // Verifies localized section labels never become tab identifiers or alter supplied user values.
 it("changes workspace presentation while retaining section state and literal names", async () => {

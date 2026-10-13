@@ -423,6 +423,8 @@
   "page.owner": "Владелец",
   "page.readOnlySupport": "Поддержка с доступом только для чтения",
   "page.serverStatus": "Состояние сервера",
+  "page.serverInitializing": "Подготовка сервера",
+  "page.serverInitializingDescription": "Ваш сервер настраивается. Это может занять до 15 минут. Управление станет доступно после завершения инициализации.",
   "page.gameState": "Состояние игры",
   "page.lifecycle": "Жизненный цикл",
   "page.releaseChannel": "Канал релизов",

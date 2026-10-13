@@ -423,6 +423,8 @@
   "page.owner": "Sahip",
   "page.readOnlySupport": "Salt okunur destek",
   "page.serverStatus": "Sunucu durumu",
+  "page.serverInitializing": "Sunucunuz hazırlanıyor",
+  "page.serverInitializingDescription": "Sunucunuz kuruluyor. Bu işlem 15 dakika kadar sürebilir. Başlatma tamamlandığında kontroller kullanılabilir hale gelecektir.",
   "page.gameState": "Oyun durumu",
   "page.lifecycle": "Yaşam döngüsü",
   "page.releaseChannel": "Sürüm kanalı",
