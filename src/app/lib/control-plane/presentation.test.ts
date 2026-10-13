@@ -75,7 +75,7 @@ test("host labels never guess a coast or a country", () => {
 test("maintenance choices show their authoritative timezone without changing protocol values", () => {
     assert.equal(MAINTENANCE_TIME_ZONE, "America/Chicago");
     assert.deepEqual(maintenanceSlotOptions(), [
-        { value: "03:00-04:00", label: "03:00–04:00 America/Chicago" },
+        { value: "06:00-07:00", label: "06:00–07:00 America/Chicago" },
         { value: "10:00-11:00", label: "10:00–11:00 America/Chicago" },
         { value: "18:00-19:00", label: "18:00–19:00 America/Chicago" },
     ]);
@@ -375,15 +375,19 @@ test("operation card rows expand to their row width", () => {
 // Ensure discovery replaces receipt import and renders backend metadata rather than legacy guesses.
 test("Builds refreshes GHCR discovery and displays exact release labels", async () => {
     const source = await readFile(new URL("../../admin/control-plane/page.tsx", import.meta.url), "utf8");
+    const details = await readFile(new URL("../../components/admin/ControlPlanePresentation.tsx", import.meta.url), "utf8");
+    const server = await readFile(new URL("../../components/admin/ControlPlaneServerView.tsx", import.meta.url), "utf8");
     assert.match(source, /<RefreshReleaseCatalog/u);
     assert.doesNotMatch(source, /import-latest-stable|LEGACY_STABLE_METADATA/u);
     for (const key of ["client.revision", "client.version", "dedicated-server.revision", "game.version"]) {
-        assert.ok(source.includes(`io.bannerlordcoop.${key}`));
+        assert.ok(details.includes(`io.bannerlordcoop.${key}`));
     }
+    assert.ok(details.includes("Recorded source revision"));
+    assert.ok(details.includes('build.sourceRevision === "registry-observed"'));
     assert.match(source, /build.currentChannel/u);
     assert.ok(source.includes('build.registryMetadata ? "First observed" : "Published"'));
     assert.match(source, /Follow channel \(remove version pin\)/u);
-    assert.match(source, /RecordedRelease build=\{result.dashboard.installedBuild\}/u);
+    assert.match(server, /RecordedRelease build=\{result.dashboard.installedBuild\}/u);
 });
 
 // Operations must offer the full discovery bound, not the overview's truncated 20-version lists.

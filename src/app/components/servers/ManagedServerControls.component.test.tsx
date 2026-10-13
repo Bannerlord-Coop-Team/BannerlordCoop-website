@@ -240,6 +240,7 @@ it("follows the accepted Start through real phases and readiness without sending
             expect(container.textContent).toContain(label);
             expect(container.querySelector('[aria-current="step"]')?.textContent).toContain(phase === "starting" ? "Launch game" : phase === "verifying" ? "Confirm readiness" : "Ready to join");
         }
+        expect(container.textContent).toContain("Connect with the IP address on the top right of this webpage.");
         expect(startStatus).toHaveBeenCalledWith("token", progressServerId, progressJobId);
         expect(request).toHaveBeenCalledTimes(1);
         const calls = startStatus.mock.calls.length;

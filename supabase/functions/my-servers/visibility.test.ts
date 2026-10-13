@@ -12,7 +12,7 @@ function request(body: unknown, token: string | null = "original-token-with-enou
     }, body: JSON.stringify(body) });
 }
 function handler(fetchImplementation: typeof fetch) {
-    return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", fetchImplementation });
+    return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", waitUntil: () => {}, fetchImplementation });
 }
 
 test("visibility update forwards original bearer, request ID and stale-generation guard, not actor claims", async () => {

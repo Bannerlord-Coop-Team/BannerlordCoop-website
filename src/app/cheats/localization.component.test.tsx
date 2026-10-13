@@ -10,6 +10,9 @@ import common from "../lib/localization/dictionaries/en/common.json";
 import english from "../lib/localization/dictionaries/en/cheats.json";
 import chinese from "./locales/zh-CN.json";
 import commandsData from "./commands.json";
+import * as cheatsView from "./CheatsView";
+import { isPublishedCheat } from "./debugOnly";
+import { translateCheat } from "./translation";
 import type { Locale } from "../lib/localization/types";
 import { LocaleSelector } from "../components/layout/LocaleSelector";
 import { getCheatsLocalization } from "./localization";
@@ -56,6 +59,54 @@ async function pageTree(params: Record<string, string> = {}, selector = false) {
         {await CheatsPage({ searchParams: Promise.resolve(params) })}
     </LocalizationProvider>;
 }
+
+it.each(["en", "zh-CN"])("projects only browser catalog fields for %s without changing published commands", async (lang) => {
+    const view = vi.spyOn(cheatsView, "CheatsView");
+    const catalogBefore = JSON.stringify(commandsData);
+    renderToStaticMarkup(await pageTree({ lang, tab: "all" }));
+    const [{ commands }] = view.mock.calls[0];
+    const published = commandsData.commands.filter(isPublishedCheat);
+    const { translator: { t } } = await getCheatsLocalization("en");
+
+    expect(commands.map(command => command.command)).toEqual(published.map(command => command.command));
+    commands.forEach((command, index) => {
+        expect(Object.keys(command).sort()).toEqual([
+            "aliases", "arguments", "category", "command", "kind", "name", "side", "sourceSearch", "summary", "usage",
+        ]);
+        const { source, group, ...browserFields } = published[index];
+        expect(source.path).toBeTruthy();
+        expect(group).toBeTruthy();
+        expect(command).toEqual({
+            ...browserFields,
+            sourceSearch: lang === "en" ? undefined : [
+                translateCheat(t, `command.${command.command}.summary`, browserFields.summary),
+                ...browserFields.arguments.map(argument => translateCheat(t, `command.${command.command}.argument.${argument.name}`, argument.description)),
+            ].join(" "),
+        });
+    });
+    expect(JSON.stringify(commandsData)).toBe(catalogBefore);
+
+    // Compare compact UTF-8 JSON representations, not compressed HTTP or production bandwidth.
+    const beforeBytes = Buffer.byteLength(JSON.stringify(published.map((command, index) => ({
+        ...command, sourceSearch: commands[index].sourceSearch,
+    }))));
+    const afterBytes = Buffer.byteLength(JSON.stringify(commands));
+    expect(beforeBytes - afterBytes).toBeGreaterThan(50_000);
+    console.info(`Cheats ${lang}: ${commands.length} commands; compact JSON ${beforeBytes} -> ${afterBytes} bytes (${beforeBytes - afterBytes} removed)`);
+});
+
+it.each(["en", "zh-CN"])("keeps missing-translation summary and argument fallbacks in %s client props", async (lang) => {
+    const command = commandsData.commands.find(command => isPublishedCheat(command)
+        && !Object.hasOwn(english, `command.${command.command}.summary`)
+        && command.arguments.some(argument => !Object.hasOwn(english, `command.${command.command}.argument.${argument.name}`)))!;
+    expect(command).toBeDefined();
+    const container = document.createElement("div");
+    container.innerHTML = renderToStaticMarkup(await pageTree({ lang, tab: "all", q: command.command }));
+    const card = container.querySelector(`[id="cheat-${command.command}"]`)!;
+    expect(card).not.toBeNull();
+    expect(card.textContent).toContain(command.summary);
+    for (const argument of command.arguments) expect(card.textContent).toContain(argument.description);
+});
 
 it("keeps all legacy Chinese aliases as content and metadata overrides while Chinese is globally disabled", async () => {
     expect(localeDefinitions["zh-CN"].enabled).toBe(false);

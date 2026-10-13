@@ -27,7 +27,7 @@ test("transfer failures accept only optional closed reasons and pass through the
     }
 });
 function request(body: unknown, auth = true, id = true) { return new Request("https://edge.test/my-servers?resource=file-transfer", { method: "POST", headers: { "content-type": "application/json", ...(auth ? { authorization: `Bearer ${token}` } : {}), ...(id ? { "x-request-id": requestId } : {}) }, body: JSON.stringify(body) }); }
-function handler(fetchImplementation: typeof fetch) { return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", fetchImplementation }); }
+function handler(fetchImplementation: typeof fetch) { return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", waitUntil: () => {}, fetchImplementation }); }
 
 test("save metadata and mod configuration reads accept the expanded live configuration", async () => {
     const managedConfig = structuredClone(DEFAULT_MANAGED_SERVER_CONFIGURATION);

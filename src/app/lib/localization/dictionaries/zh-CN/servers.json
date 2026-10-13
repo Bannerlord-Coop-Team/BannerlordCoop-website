@@ -152,5 +152,11 @@
   "continent.europe": "欧洲",
   "continent.south-america": "南美洲",
   "continent.asia": "亚洲",
-  "continent.oceania": "大洋洲"
+  "continent.oceania": "大洋洲",
+  "onboarding.stableTooltip": "Released to Steam every 1–4 weeks.",
+  "onboarding.nightlyTooltip": "Released every night to supporters and testers.",
+  "onboarding.nightlyTooltipUpdate": "Your server will be updated during your maintenance window to an experimental version that we release daily.",
+  "onboarding.nightlyTooltipPrefix": "Check ",
+  "onboarding.nightlyTooltipHere": "here",
+  "onboarding.nightlyTooltipSuffix": " in Discord for how to use the installer. You must link your Discord to your Patreon first so that you get the Patreon role in Discord to see the channel."
 }
