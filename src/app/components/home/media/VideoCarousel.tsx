@@ -169,7 +169,14 @@ function VideoCard({ video, isCarousel }: VideoCardProps) {
                         src={video.thumbnail}
                         alt={video.thumbnailAlt}
                         fill
-                        sizes="(min-width: 1024px) 50vw, 100vw"
+                        // Match .site-container gutters (including short landscape), gap-4 and card borders.
+                        sizes={[
+                            "(min-width: 1024px) and (max-height: 700px) and (orientation: landscape) calc((min(100vw - 3rem, 1280px) - 1rem) / 2 - 2px)",
+                            "(min-width: 1024px) calc((min(100vw - 6rem, 1280px) - 1rem) / 2 - 2px)",
+                            "(min-width: 640px) calc(100vw - 3rem - 2px)",
+                            "(max-height: 700px) and (orientation: landscape) calc(100vw - 3rem - 2px)",
+                            "calc(100vw - 2rem - 2px)",
+                        ].join(", ")}
                         className="object-cover opacity-80 transition-[opacity,transform] duration-500 group-hover:scale-[1.03] group-hover:opacity-100"
                     />
                     <div
