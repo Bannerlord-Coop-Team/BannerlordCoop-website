@@ -129,6 +129,7 @@ it("shows usable inventory before readings and preserves an expanded row when th
     await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory()} accounts={[]} />));
     expect(container.textContent).toContain("host-a");
     expect(container.textContent).toContain("testserver");
+    expect(container.textContent).toContain("Runner current");
     expect(container.textContent).toContain("Loading live resource");
     expect(container.textContent).not.toContain("unavailable");
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-a"]')!.click());
@@ -138,6 +139,20 @@ it("shows usable inventory before readings and preserves an expanded row when th
     expect(container.textContent).toContain("47.7%");
     expect(container.querySelector('button[aria-label="Collapse details for host-a"]')).not.toBeNull();
     expect(mocks.resources).toHaveBeenCalledWith(expect.objectContaining({ accessToken: "test-token", operation: "vps-hosts" }));
+});
+
+it("bounds slow fleet telemetry at two seconds while retaining runner state", async () => {
+    mocks.resources.mockImplementation(({ signal }: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }));
+    await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory()} accounts={[]} />));
+    expect(container.textContent).toContain("Runner current");
+    await act(async () => vi.advanceTimersByTimeAsync(1_999));
+    expect(container.textContent).toContain("Loading live resource");
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(container.textContent).toContain("Live resource readings timed out");
+    expect(container.textContent).toContain("Runner current");
+    expect(container.querySelector('[data-label="System"]')?.textContent).toContain("unavailable");
 });
 it("keeps inventory on failure and retries live readings", async () => {
     mocks.resources.mockRejectedValueOnce(new Error("Provider unavailable")).mockResolvedValueOnce(inventory(true));
@@ -292,7 +307,7 @@ it("updates readings in place without overlapping slow requests or collapsing de
     mocks.resources.mockResolvedValueOnce(inventory(true)).mockReturnValueOnce(next.promise);
     await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory()} accounts={[]} />));
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-a"]')!.click());
-    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(mocks.resources).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain("47.7%");
     expect(container.textContent).not.toContain("Loading");
@@ -310,10 +325,10 @@ it("labels retained readings on failure and recovers automatically", async () =>
         .mockRejectedValueOnce(new Error("Provider unavailable"))
         .mockResolvedValueOnce({ ...inventory(true), controlPlaneHost: null });
     await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory()} accounts={[]} />));
-    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(container.textContent).toContain("47.7%");
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Showing the last resource readings");
-    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(oracleCard()).toContain("47.7%");
 });
@@ -344,7 +359,7 @@ it("refreshes an initially complete snapshot after the interval", async () => {
     updated.hosts[0].resources!.cpuPercent = 12.3;
     mocks.resources.mockResolvedValue(updated);
     await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory(true)} accounts={[]} />));
-    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(mocks.resources).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("12.3%");
 });
@@ -381,10 +396,10 @@ it("times out billing separately, continues telemetry, and recovers on a billing
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Billing readings timed out");
     expect(container.querySelector('[data-label="Billing"]')?.textContent).toBe("Unavailable");
     expect(container.textContent).toContain("47.7%");
-    expect(mocks.resources).toHaveBeenCalledTimes(4);
+    expect(mocks.resources).toHaveBeenCalledTimes(2);
     expect(mocks.billing).toHaveBeenCalledTimes(1);
     await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent === "Retry billing")!.click());
-    expect(mocks.resources).toHaveBeenCalledTimes(4);
+    expect(mocks.resources).toHaveBeenCalledTimes(2);
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(container.querySelector('[data-label="Billing"]')?.textContent).toContain("$12.32");
 });

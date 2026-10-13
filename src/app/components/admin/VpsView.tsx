@@ -12,6 +12,9 @@ import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosti
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingAdminVpsInventory, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
+const FLEET_RESOURCE_REFRESH_INTERVAL_MILLISECONDS = 15_000;
+const FLEET_RESOURCE_READ_TIMEOUT_MILLISECONDS = 2_000;
+
 /** Shows registered VPS capacity, labelled by the stored region catalog, with live readings and region requests. */
 export function VpsView({ inventory: initialInventory, regionCatalog, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
     const readings = useVpsReadings(initialInventory, "resources");
@@ -206,15 +209,15 @@ function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resou
         let cancelled = false;
         let inFlight = false;
         let timer: ReturnType<typeof setTimeout>;
-        const interval = kind === "billing" ? 60_000 : 5_000;
+        const interval = kind === "billing" ? 60_000 : kind === "oracle" ? 5_000 : FLEET_RESOURCE_REFRESH_INTERVAL_MILLISECONDS;
         const controller = new AbortController();
         async function load() {
             if (cancelled || inFlight || document.visibilityState === "hidden") return;
             clearTimeout(timer);
             inFlight = true;
             const requestController = new AbortController();
-            const deadline = kind !== "resources"
-                ? setTimeout(() => requestController.abort(), kind === "oracle" ? 10_000 : 15_000) : undefined;
+            const deadline = setTimeout(() => requestController.abort(), kind === "resources"
+                ? FLEET_RESOURCE_READ_TIMEOUT_MILLISECONDS : kind === "oracle" ? 10_000 : 15_000);
             try {
                 const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
                 if (cancelled) return;
@@ -233,7 +236,7 @@ function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resou
                     initial: initialInventory,
                     result: previous?.initial === initialInventory ? previous.result
                         : initialInventory.liveDataIncluded !== false ? initialInventory : undefined,
-                    error: requestController.signal.aborted ? `${kind === "oracle" ? "Oracle" : "Billing"} readings timed out.`
+                    error: requestController.signal.aborted ? `${kind === "resources" ? "Live resource" : kind === "oracle" ? "Oracle" : "Billing"} readings timed out.`
                         : error instanceof Error ? error.message : "VPS readings could not be loaded.",
                 }));
             } finally {
