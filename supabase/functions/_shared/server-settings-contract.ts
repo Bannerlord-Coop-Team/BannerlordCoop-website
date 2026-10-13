@@ -2,7 +2,7 @@ import { hasExactKeys, isRecord } from "./dto-validation.ts";
 import { REQUEST_ID, timestamp } from "./server-visibility-contract.ts";
 import { normalizeOnboardingName } from "./server-onboarding-contract.ts";
 
-export const HOSTING_MAINTENANCE_SLOTS = ["03:00-04:00", "10:00-11:00", "18:00-19:00"] as const;
+export const HOSTING_MAINTENANCE_SLOTS = ["06:00-07:00", "10:00-11:00", "18:00-19:00"] as const;
 export const HOSTING_TIME_ZONE = "America/Chicago";
 export type MaintenanceSlot = (typeof HOSTING_MAINTENANCE_SLOTS)[number];
 export type OwnerSettingsPatch = { displayName?: string; maintenanceSlot?: MaintenanceSlot };
