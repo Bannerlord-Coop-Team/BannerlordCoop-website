@@ -60,8 +60,8 @@ it("names the rejected field instead of describing every rule at once", async ()
     expect(mocks.auth).not.toHaveBeenCalled(); expect(mocks.save).not.toHaveBeenCalled();
 });
 
-const previous = { maintenanceSlot: "03:00-04:00" };
-const fresh = { serverId, accessRole: "owner", displayName: "Campaign", maintenanceSlot: "03:00-04:00", updatedAt: "2026-10-01T00:00:09.000Z" };
+const previous = { maintenanceSlot: "06:00-07:00" };
+const fresh = { serverId, accessRole: "owner", displayName: "Campaign", maintenanceSlot: "06:00-07:00", updatedAt: "2026-10-01T00:00:09.000Z" };
 
 it("re-applies unchanged fields once at the current revision after an unrelated write conflicts", async () => {
     mocks.save.mockRejectedValueOnce(new MyServersApiError("request_conflict", "Stale revision"));

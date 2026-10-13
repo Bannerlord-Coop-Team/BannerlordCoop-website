@@ -258,7 +258,7 @@ it.each([
     await expect(getMyServerStartStatus(TOKEN, server.serverId, startJobId)).rejects.toMatchObject({ code: "invalid_response" });
 });
 
-const summary = { ...server, maintenanceSlot: "03:00-04:00", timezone: "America/Chicago", visibility: "private" };
+const summary = { ...server, maintenanceSlot: "06:00-07:00", timezone: "America/Chicago", visibility: "private" };
 
 it.each([0, 999])("reads fleet target %s with one request rather than ten inventory pages", async index => {
     const fleet = Array.from({ length: 1000 }, (_, row) => ({ ...summary, serverId: `00000000-0000-4000-8000-${String(row + 1).padStart(12, "0")}` }));

@@ -75,7 +75,7 @@ test("host labels never guess a coast or a country", () => {
 test("maintenance choices show their authoritative timezone without changing protocol values", () => {
     assert.equal(MAINTENANCE_TIME_ZONE, "America/Chicago");
     assert.deepEqual(maintenanceSlotOptions(), [
-        { value: "03:00-04:00", label: "03:00–04:00 America/Chicago" },
+        { value: "06:00-07:00", label: "06:00–07:00 America/Chicago" },
         { value: "10:00-11:00", label: "10:00–11:00 America/Chicago" },
         { value: "18:00-19:00", label: "18:00–19:00 America/Chicago" },
     ]);
