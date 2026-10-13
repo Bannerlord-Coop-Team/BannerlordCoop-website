@@ -425,3 +425,31 @@ header does not cache data or change authorization, forwarding, or deadlines.
 ## Applied administrator job index history
 
 `supabase/migrations/20260930142800_control_plane_admin_job_index.sql` is an exact Git-byte mirror of ControlPlane commit `142cd4bed948a6c354d2e7f1ed1bec63755a3ba0` (PR255). Its SHA-256 is `2eb71c8b41be2db7ca610964cbbccee99b9f5b5842c6e0debb9368d36c8220d0`. The shared production project already records version `20260930142800`; this mirror restores the website migration inventory expected by its Supabase integration. Do not replay, edit, or repair this applied migration history. It does not introduce a new database change. The original membership release inventory remains a frozen snapshot; this later mirror is verified separately.
+## Server and job progress
+
+Active server details and displayed jobs use the control plane's closed `server-progress`
+(`{ serverId }`) and `jobs-progress` (`{ jobIds }`, 1–100 unique IDs) reads. Every browser
+request uses the current session and the existing Edge/control-plane authorization path.
+There is no cached authority or full-page refresh timer. A single request runs at a time;
+the next is scheduled four seconds after completion, widening to 8, 16 and at most 30
+seconds when status is unchanged. Progress changes reset the interval. A 30-second
+browser deadline bounds slow reads. Hidden tabs cancel the browser read and pause the
+timer; returning to the tab reads again and ignores late cancelled responses.
+
+The table retains displayed terminal outcomes and stops when those jobs finish. Newly
+created jobs require navigation/reload. On server completion, one authorized dashboard
+read updates composition, backups and audit. A deleted server ends the view directly.
+Transient failures label retained data and back off; authority loss clears that data
+and stops. Changing views/unmounting cancels pending reads.
+
+Initial server detail resolves only its displayed owner using Auth `getUserById`; it
+never enumerates the directory, including on lookup failure. Unknown/legacy owners use
+the existing ID label. Other views retain their existing directory/selector behavior.
+Progress reads make no account-directory calls. A transferred owner's ID remains the
+fallback until the page next resolves its label.
+
+Deploy the paired ControlPlane #361 contract first. Older backends produce an explicit
+progress error without falling back to whole-page polling. The deterministic API query
+counts and website fake-timer/component checks demonstrate reduced scheduled work,
+not production timing or bandwidth savings. Linux API coverage and control-plane
+verification remain separate from native Windows website tests/builds and live evidence.

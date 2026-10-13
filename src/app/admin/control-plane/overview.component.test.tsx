@@ -1,8 +1,8 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), tables: vi.fn(), observations: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), account: vi.fn(), tables: vi.fn(), observations: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerReadSession: mocks.session, getSupabaseServerViewer: mocks.auth }));
-vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts }));
+vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts, getWebsiteAccount: mocks.account }));
 vi.mock("@/app/lib/control-plane/server-read", () => ({ readControlPlaneAdmin: mocks.request }));
 vi.mock("@/app/lib/control-plane/release-observations", () => ({ recordReleaseFirstObservations: mocks.observations }));
 vi.mock("@/app/components/admin/RefreshReleaseCatalog", () => ({ RefreshReleaseCatalog: () => null }));
@@ -55,6 +55,27 @@ it("renders Overview from its compact current response without fetching account 
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "overview", input: { compact: true }, signal: expect.any(AbortSignal), expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function) }]]);
     expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
+it.each([true, false])("server detail resolves only its displayed account, with an ID fallback: available=%s", async available => {
+    const ownerAccountId = "11111111-1111-4111-8111-111111111111";
+    mocks.request.mockImplementation(async request => {
+        request.onAuthenticated();
+        return { dashboard: { server: { serverId: "22222222-2222-4222-8222-222222222222", displayName: "Test campaign",
+            ownerAccountId, ownerDiscordUserId: ownerAccountId, operationState: "stopped", friendlyRegion: "germany",
+            desiredState: "stopped", observedVmState: "running", observedGameState: "stopped", provider: "mock", releaseChannel: "stable" },
+        activeJob: null, activeSave: null, installedBuild: null, desiredBuild: null, runtime: null },
+        backups: { items: [] }, audit: { items: [] } };
+    });
+    if (available) mocks.account.mockResolvedValue({ accountId: ownerAccountId, label: "owner@example.test" });
+    else mocks.account.mockRejectedValue(new Error("Auth account unavailable"));
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "server", serverId: "22222222-2222-4222-8222-222222222222" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    expect(html).toContain(available ? "owner@example.test" : ownerAccountId);
+    expect(mocks.account).toHaveBeenCalledExactlyOnceWith(ownerAccountId);
+    expect(mocks.accounts).not.toHaveBeenCalled();
+    expect(mocks.request).toHaveBeenCalledTimes(1);
 });
 
 it("renders both complete release groups from one catalog request without account lookups", async () => {
