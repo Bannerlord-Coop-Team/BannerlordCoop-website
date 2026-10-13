@@ -4,7 +4,7 @@ import { ServerSettingsPanel } from "./ServerSettingsPanel";
 import { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "./ServerManagementWorkspace";
+import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel, useRevealServerAddress } from "./ServerManagementWorkspace";
 
 const settingsMocks = vi.hoisted(() => ({ rename: vi.fn(), visibility: vi.fn(), refresh: vi.fn(), release: vi.fn(), releaseStatus: vi.fn() }));
 vi.mock("next/navigation", () => { const router = { refresh: settingsMocks.refresh }; return { useRouter: () => router }; });
@@ -88,6 +88,18 @@ it("hides the real address until revealed and copies it without navigation", asy
     await act(async () => reveal.click());
     expect(container.querySelector("#server-address")?.textContent).toBe("IP hidden");
     expect(reveal.getAttribute("aria-expanded")).toBe("false");
+});
+
+it("reveals and emphasizes the address when a confirmed start asks for it", async () => {
+    function RevealAddress() {
+        const reveal = useRevealServerAddress();
+        return <button onClick={reveal}>Reveal from readiness</button>;
+    }
+    await act(async () => root.render(<TestLocalization>{<ServerManagementWorkspace name="Server" address="203.0.113.8:7210" summary="Running"><RevealAddress /></ServerManagementWorkspace>} </TestLocalization>));
+    expect(container.textContent).not.toContain("203.0.113.8");
+    await act(async () => click("Reveal from readiness"));
+    expect(container.querySelector("#server-address")?.textContent).toBe("203.0.113.8:7210");
+    expect(container.querySelector("#server-address")?.className).toContain("animate-pulse");
 });
 
 it("reports clipboard failure on the Copy IP button and permits retry without helper text", async () => {

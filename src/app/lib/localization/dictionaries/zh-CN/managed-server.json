@@ -754,5 +754,10 @@
   "transfers.failure.stop-required": "导入需要服务器安全停止。开始新的导入之前，请检查服务器状态。",
   "transfers.failure.server-changed": "传输完成之前，服务器或您的访问权限已更改。开始新的传输之前，请刷新服务器。",
   "transfers.failedRequest": "此请求已完成，不会重试。请关闭它以开始新的传输。支持参考编号：{requestId}",
-  "controls.alreadyStopped": "服务器已经停止。您可以导入战役，或准备好后按“启动”。"
+  "controls.alreadyStopped": "服务器已经停止。您可以导入战役，或准备好后按“启动”。",
+  "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
+  "configEditor.loadingSkeleton": "Loading configuration fields",
+  "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
+  "campaigns.deleted": "Campaign deletion queued."
 }

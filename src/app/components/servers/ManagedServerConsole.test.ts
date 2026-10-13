@@ -129,6 +129,90 @@ test("bounds retained browser output", () => {
     assert.ok(!output.includes("line-0\n"));
 });
 
+test("batch retention preserves per-event newlines and both retention edges", () => {
+    const maximumCharacters = 128 * 1_024;
+    const scenarios = [
+        { current: "unfinished", lines: ["", "first\nsecond", "trailing\n", "雪🙂"] },
+        { current: "old\n".repeat(1_998), lines: ["", "last"] },
+        { current: "old\n".repeat(1_999), lines: ["first\nsecond", "", "last"] },
+        { current: "x".repeat(maximumCharacters - 2), lines: ["y", "z"] },
+        { current: `${"x".repeat(maximumCharacters - 4)}🙂\n`, lines: ["雪", "last"] },
+        { current: "old\n", lines: Array.from({ length: 2_100 }, (_, index) => `line-${index}`) },
+        { current: "old\n", lines: Array.from({ length: 10 }, () => "x".repeat(16_000)) },
+    ];
+    assert.equal(boundedConsoleText("unfinished", scenarios[0].lines.join("\n")), "unfinished\nfirst\nsecond\ntrailing\n\n雪🙂\n");
+    for (const { current, lines } of scenarios) {
+        const batched = boundedConsoleText(current, lines.join("\n"));
+        assert.equal(batched, lines.reduce(boundedConsoleText, current));
+        assert.ok(batched.length <= maximumCharacters);
+        assert.ok(batched.split("\n").length <= 2_000);
+    }
+});
+
+test("identical SSE events retain the same transcript across byte, frame, and burst boundaries", () => {
+    const lines = [
+        "first\nsecond", "", "雪🙂", "trailing\n",
+        '@DS@{"ev":"state","phase":"loading"}',
+        '@DS@{"ev":"state","phase":"serving"}',
+        ...Array.from({ length: 100 }, (_, index) => `burst-${index}`),
+    ];
+    const frames = [
+        ...lines.map(line => `event: line\ndata: ${JSON.stringify(line)}\n\n`),
+        "event: line\ndata: not-json\n\n", ": heartbeat\n\n",
+        "event: truncated\n\n", "event: expired\n\n", "event: ended\n\n",
+    ];
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(frames.join(""));
+    const initial = boundedConsoleText("", "old".padEnd(65, ".").concat("\n").repeat(1_999));
+    const expected = lines.reduce(boundedConsoleText, initial);
+    const chunkings = [
+        [bytes], frames.map(frame => encoder.encode(frame)),
+        Array.from(bytes, byte => Uint8Array.of(byte)),
+        Array.from({ length: Math.ceil(bytes.length / 73) }, (_, index) => bytes.slice(index * 73, (index + 1) * 73)),
+    ];
+    for (const chunks of chunkings) {
+        const decoder = new TextDecoder("utf-8", { fatal: true });
+        let pending = "";
+        let text = initial;
+        const events: ReturnType<typeof parseConsoleEvent>[] = [];
+        for (const chunk of [...chunks, undefined]) {
+            const decoded = decodeConsoleStreamChunk(pending, chunk, decoder, chunk === undefined);
+            pending = decoded.pending;
+            events.push(...decoded.events);
+            const received = decoded.events.flatMap(event => event.type === "line" ? [event.text] : []);
+            if (received.length > 0) text = boundedConsoleText(text, received.join("\n"));
+        }
+        assert.equal(pending, "");
+        assert.equal(text, expected);
+        assert.deepEqual(events, [
+            ...lines.map(text => ({ type: "line", text })),
+            { type: "ignored" }, { type: "ignored" }, { type: "truncated" }, { type: "expired" }, { type: "ended" },
+        ]);
+    }
+});
+
+test("benchmarks a full transcript plus 100 events without a timing gate", (t) => {
+    const initial = `${"x".repeat(1_201)}\n${`${"x".repeat(64)}\n`.repeat(1_998)}`;
+    const lines = Array.from({ length: 100 }, (_, index) => `burst-${index}`.padEnd(64, "."));
+    assert.equal(initial.length, 128 * 1_024);
+    assert.equal(initial.split("\n").length, 2_000);
+    const perEvent = () => lines.reduce(boundedConsoleText, initial);
+    const perChunk = () => boundedConsoleText(initial, lines.join("\n"));
+    assert.equal(perChunk(), perEvent());
+    // Warm both paths, then report medians; correctness and scan counts are the regression gates.
+    for (let index = 0; index < 10; index += 1) { perEvent(); perChunk(); }
+    const measure = (append: () => string) => {
+        const samples = Array.from({ length: 5 }, () => {
+            const started = performance.now();
+            for (let index = 0; index < 25; index += 1) append();
+            return (performance.now() - started) / 25;
+        });
+        return samples.sort((left, right) => left - right)[2];
+    };
+    t.diagnostic(JSON.stringify({ events: lines.length, initialCharacters: initial.length,
+        perEventMedianMs: measure(perEvent), perChunkMedianMs: measure(perChunk) }));
+});
+
 test("recognizes game state records, with or without a timestamp, and hides roster and command lists", () => {
     assert.deepEqual(parseConsoleControlLine('@DS@{"ev":"state","phase":"loading","save":"saveauto1","pw":false}'), { kind: "state", prefix: "", phase: "loading" });
     assert.deepEqual(parseConsoleControlLine('[12:00:01] @DS@{"ev":"state","phase":"serving"}'), { kind: "state", prefix: "[12:00:01] ", phase: "serving" });

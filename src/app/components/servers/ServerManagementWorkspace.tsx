@@ -2,7 +2,7 @@
 
 import { useTranslations } from "@/app/lib/localization/client";
 
-import { createContext, useContext, useEffect, useId, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, Eye, EyeOff, FileJson, Play, RotateCw, Search, Settings2, Square, Terminal } from "lucide-react";
 
@@ -20,7 +20,7 @@ const sections = [
 ] as const;
 type Section = ServerWorkspaceSection;
 const COPY_FEEDBACK_MILLISECONDS = 2_000;
-const WorkspaceContext = createContext<{ current: Section; initial: Section }>({ current: "Console", initial: "Console" });
+const WorkspaceContext = createContext<{ current: Section; initial: Section; revealAddress: () => void }>({ current: "Console", initial: "Console", revealAddress: () => {} });
 const subscribe = () => () => {};
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-foreground hover:border-gold/50 focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
 
@@ -31,6 +31,11 @@ export function ServerWorkspacePanel({ section, children }: { section: Section; 
     const visibleSection = useSyncExternalStore(subscribe, () => current, () => initial);
     // Preserve console connections, pending operations and transfer drafts across tabs.
     return <div hidden={visibleSection !== section} className="space-y-5">{children}</div>;
+}
+
+/** Reveals the join address when a live start has been confirmed. */
+export function useRevealServerAddress() {
+    return useContext(WorkspaceContext).revealAddress;
 }
 
 // Published command syntax is shared by completion without duplicating translated command prose.
@@ -119,6 +124,8 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
     const { t } = useTranslations("server-common");
     const [section, setSection] = useState<Section>(initialSection);
     const [showAddress, setShowAddress] = useState(false);
+    const [addressEmphasis, setAddressEmphasis] = useState(false);
+    const addressEmphasisTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [copyFeedback, setCopyFeedback] = useState<{ state: "copied" | "failed" } | null>(null);
     const copyState = copyFeedback?.state ?? "idle";
     const activeSection = interactionLocked ? "Console" : section;
@@ -142,6 +149,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
         window.addEventListener("hashchange", followHash);
         return () => window.removeEventListener("hashchange", followHash);
     }, [initialSection, interactionLocked]);
+    useEffect(() => () => { if (addressEmphasisTimer.current !== null) clearTimeout(addressEmphasisTimer.current); }, []);
     useEffect(() => {
         if (copyFeedback === null) return;
         // Copy feedback is momentary; the button returns to its normal label.
@@ -159,7 +167,14 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
         window.history.replaceState(null, "", url);
     }
 
-    return <WorkspaceContext.Provider value={{ current: activeSection, initial: initialSection }}><main className="min-h-svh bg-background">
+    function revealAddress() {
+        setShowAddress(true);
+        setAddressEmphasis(true);
+        if (addressEmphasisTimer.current !== null) clearTimeout(addressEmphasisTimer.current);
+        addressEmphasisTimer.current = setTimeout(() => setAddressEmphasis(false), 6_000);
+    }
+
+    return <WorkspaceContext.Provider value={{ current: activeSection, initial: initialSection, revealAddress }}><main className="min-h-svh bg-background">
         <div className="site-container py-5 sm:py-6">
             <Link href="/servers" className="inline-flex items-center gap-2 text-sm text-foreground-muted hover:text-gold"><ArrowLeft className="size-4" aria-hidden="true" />{t("managementWorkspace.allServers")}</Link>
             {notice && <p className="my-5 rounded-md border border-white/10 bg-surface px-4 py-3 text-sm leading-6 text-foreground-muted">{notice}</p>}
@@ -174,7 +189,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
                     </div>
                     <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2 text-sm">
-                            <span id="server-address" className="font-mono text-foreground-muted" aria-live="polite">{address ? (showAddress ? address : t("managementWorkspace.ipHidden")) : t("managementWorkspace.notAssigned")}</span>
+                            <span id="server-address" className={`font-mono ${addressEmphasis ? "animate-pulse text-gold drop-shadow-[0_0_8px_rgba(212,175,55,0.8)]" : "text-foreground-muted"}`} aria-live="polite">{address ? (showAddress ? address : t("managementWorkspace.ipHidden")) : t("managementWorkspace.notAssigned")}</span>
                             <button disabled={!address || interactionLocked} className={button} aria-controls="server-address" aria-expanded={showAddress} aria-label={showAddress ? t("managementWorkspace.hideServerIpAndPort") : t("managementWorkspace.showServerIpAndPort")} title={showAddress ? t("managementWorkspace.hideServerIpAndPort") : t("managementWorkspace.showServerIpAndPort")} onClick={() => setShowAddress(!showAddress)}>{showAddress ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}</button>
                             <button disabled={!address || interactionLocked} className={button} aria-live="polite" title={copyState === "failed" ? t("managementWorkspace.couldNotCopyRevealTheIpToCopyItManually") : t("managementWorkspace.copyServerIpAndPort")} onClick={async () => {
                                 if (!address) return;
