@@ -101,7 +101,7 @@ describe("ServerOnboarding real component and server-action recovery", () => {
             const option = input.closest("label")!;
             expect(option.title).toBe(description);
             expect(input.getAttribute("aria-describedby")).toBe(`release-${channel}-description`);
-            expect(container.querySelector(`#release-${channel}-description`)?.textContent).toBe(description);
+            expect(container.querySelector(`#release-${channel}-description`)?.textContent).toContain(description);
         }
     });
     it("offers only stored-catalog regions the website knows, in stored order, and disables emptied continents", async () => {

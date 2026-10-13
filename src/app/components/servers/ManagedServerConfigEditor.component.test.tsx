@@ -76,6 +76,22 @@ it("loads the live runner files, defaults to the form and saves only the changed
     expect(mocks.save).toHaveBeenLastCalledWith(expect.objectContaining({ expectedRevision: "c".repeat(64) }), "owner");
 });
 
+it("shows a form-shaped skeleton while the live configuration is loading", async () => {
+    let resolveServer!: (value: unknown) => void;
+    let resolveMod!: (value: unknown) => void;
+    const serverPending = new Promise((resolve) => { resolveServer = resolve; });
+    const modPending = new Promise((resolve) => { resolveMod = resolve; });
+    mocks.read.mockImplementation((_serverId: string, part: RunnerConfigurationPart) => part === "server" ? serverPending : modPending);
+    await act(async () => root.render(<TestLocalization>{<ManagedServerConfigEditor configuration={config} access={access} />} </TestLocalization>));
+    expect(container.querySelector("[data-config-loading-skeleton]")).not.toBeNull();
+    expect(container.querySelector("#config-serverConfig-autosaveMinutes")).toBeNull();
+    expect(container.textContent).toContain("Loading the server's current configuration");
+    resolveServer({ ok: true, file: file("server") }); resolveMod({ ok: true, file: file("mod") });
+    await act(async () => {});
+    expect(container.querySelector("[data-config-loading-skeleton]")).toBeNull();
+    expect(field<HTMLInputElement>("config-serverConfig-autosaveMinutes").value).toBe("15");
+});
+
 it("edits JSON, rejects invalid or unsupported settings and discards back to the loaded values", async () => {
     await render();
     await click("JSON");
