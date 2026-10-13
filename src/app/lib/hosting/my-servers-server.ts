@@ -1,4 +1,10 @@
 import "server-only";
+import { isIP } from "node:net";
+import type { MyServerSummary } from "@/app/lib/control-plane/types";
+import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
+import { isRegionKey } from "../../../../supabase/functions/_shared/hosting-regions";
+import { REQUEST_ID, timestamp } from "../../../../supabase/functions/_shared/server-visibility-contract";
+import { HOSTING_MAINTENANCE_SLOTS, type MaintenanceSlot } from "../../../../supabase/functions/_shared/server-settings-contract";
 import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse, type MyServerDeletionStatus } from "./my-servers";
 import { onboardingSummaryRequest, parseOnboardingSummary, type OnboardingSummaryRequest } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 
@@ -7,6 +13,30 @@ export async function listAllMyServers(accessToken: string, callerSignal?: Abort
     const signal = ownerReadSignal(accessToken, callerSignal);
     return collectServers(accessToken, signal, (token, cursor) => readOwner(token,
         { operation: "my-servers", input: { cursor, limit: 100 } }, signal));
+}
+
+/** Reads one freshly authorized summary without collecting inventory or hydrating a dashboard. */
+export async function getMyServerSummary(accessToken: string, serverId: string, callerSignal?: AbortSignal): Promise<MyServerSummary> {
+    if (!REQUEST_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid managed server ID.");
+    const value = await readOwner(accessToken, { operation: "server-summary", input: { serverId } }, ownerReadSignal(accessToken, callerSignal));
+    if (!isRecord(value) || !hasExactKeys(value, ["serverId", "displayName", "accessRole", "friendlyRegion", "operationState",
+        "observedGameState", "releaseChannel", "maintenanceSlot", "timezone", "visibility", "connectionIp", "gamePorts", "updatedAt"])
+        || value.serverId !== serverId || !timestamp(value.updatedAt)
+        || typeof value.displayName !== "string" || value.displayName.length < 1 || value.displayName.length > 48 || /[\p{Cc}]/u.test(value.displayName)
+        || !["owner", "manager", "support", "admin"].includes(value.accessRole as string)
+        || !isRegionKey(value.friendlyRegion)
+        || typeof value.operationState !== "string" || !/^[a-z][a-z0-9-]{0,63}$/u.test(value.operationState)
+        || !["running", "stopped", "starting", "stopping", "unknown", "awaiting-save", "failed", "degraded"].includes(value.observedGameState as string)
+        || !["stable", "nightly"].includes(value.releaseChannel as string)
+        || !HOSTING_MAINTENANCE_SLOTS.includes(value.maintenanceSlot as MaintenanceSlot)
+        || typeof value.timezone !== "string" || value.timezone.length < 1 || value.timezone.length > 100 || /[\p{Cc}\p{Cf}]/u.test(value.timezone)
+        || !["private", "public"].includes(value.visibility as string)
+        || (value.connectionIp !== null && (typeof value.connectionIp !== "string" || isIP(value.connectionIp) === 0))
+        || !Array.isArray(value.gamePorts) || value.gamePorts.length > 32
+        || value.gamePorts.some(port => !Number.isInteger(port) || port < 1 || port > 65535)) {
+        throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid summary.", true);
+    }
+    return value as MyServerSummary;
 }
 
 /** Called after website account synchronization; eligibility and capacity are freshly checked by Oracle. */
@@ -84,6 +114,7 @@ function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
 // Posts one owner read to the control plane and returns its result after checking the redirect, content type and length.
 async function readOwner(accessToken: string, request:
     | { operation: "my-servers"; input: { cursor: string | null; limit: 100 } }
+    | { operation: "server-summary"; input: { serverId: string } }
     | OnboardingSummaryRequest
     | { operation: "server-deletion-status"; input: { serverId: string } }
     | { operation: "server-start-status"; input: { serverId: string; jobId: string } }, signal: AbortSignal) {

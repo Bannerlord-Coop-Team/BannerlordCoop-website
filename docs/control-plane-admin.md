@@ -118,7 +118,7 @@ npx supabase functions deploy my-servers --project-ref <project-ref>
 
 The `my-servers` function accepts authenticated GET inventory requests and
 strict POST direct commands `{action: "start" | "stop" | "restart-game", serverId}`.
-The server-rendered directory and detail pages read inventory directly from the
+The server-rendered directory reads inventory directly from the
 fixed `https://control-plane.bannerlordcoop.com/v1/user/control-plane` endpoint,
 using only the current bearer and closed `my-servers` operation. Oracle freshly
 verifies the user, session context and durable owner/grant access on every page;
@@ -126,11 +126,25 @@ the website's existing viewer gates still apply. These reads omit cookies and
 API keys, refuse redirects, disable caching, and retain correlated owner envelopes,
 ten-page/100-item pagination and streamed 8MiB/8192-chunk response bounds. Caller
 cancellation and a 30-second overall deadline cover fetch and response bodies.
+The detail page and guarded stale-generation recovery for settings, visibility,
+release channel and console commands instead read `server-summary` with only
+`input: { serverId }` over that same authenticated route. It returns one current
+inventory projection (including access role and update generation) with a 64 KiB
+response limit, independent of fleet size or target order. The caller verifies
+server identity and the closed DTO; authorization failures and malformed responses
+never fall back to listing inventory. The directory retains its paginated read.
+Deploy the additive ControlPlane #362 contract before this website; no Edge Function
+or runner update is required. Current session checks, owner-only settings checks,
+field-conflict checks and one-retry limits remain in force. Console recovery occurs
+only after a confirmed pre-enqueue stale rejection and retains its command/request
+UUID; uncertain delivery and accepted Start use their existing recovery paths.
+The compact accepted-Start read remains `server-start-status`.
+
 The server-rendered onboarding summary also reads the closed `server-onboarding`
 operation directly after account synchronization, with its strict DTO and 64 KiB
 response bound. Browser reads, console commands and mutations retain the Edge route.
 **My Servers** links each accessible server to `/servers/[serverId]`. The route
-derives access from the authenticated inventory, never from the URL. Only current
+derives access from the freshly authenticated summary, never from the URL. Only current
 durable owner/manager access can operate; support and server-level admin remain
 read-only. The control plane rechecks durable permission immediately before dispatch.
 
