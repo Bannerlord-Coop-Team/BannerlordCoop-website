@@ -237,7 +237,7 @@
   "files.backupsAndRestore": "Copias de seguridad y restauración",
   "transfers.aPreviousTransferIsSavedCheckItsStatusBeforeRetrying": "Hay una transferencia anterior guardada. Comprueba su estado antes de reintentar.",
   "transfers.noAcceptedTransferWasFoundRetryTheSameRequestWith": "No se encontró ninguna transferencia aceptada. Reintenta la misma solicitud con los mismos archivos.",
-  "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck": "Se rechazó la transferencia antes de que se aceptara una tarea. Comprueba los archivos o actualiza el servidor e inténtalo de nuevo.",
+  "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck": "El servidor no pudo aceptar esta transferencia. No se inició ninguna importación ni exportación. Inténtalo más tarde o contacta con soporte si sigue fallando.",
   "transfers.settingsImportedIfTheServerIsRunningStopItAnd": "Configuración importada. Si el servidor está en ejecución, detenlo y vuelve a iniciarlo para usarla. Si está detenido, inícialo cuando quieras.",
   "transfers.yourSaveExportIsReadyToDownload": "La exportación de tu partida guardada está lista para descargar.",
   "transfers.campaignAddedYourCurrentCampaignIsUnchanged": "Campaña añadida. Tu campaña actual no ha cambiado.",
@@ -744,7 +744,7 @@
   "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "La solicitud de eliminación no es válida.",
   "deletion.signIn": "Vuelve a iniciar sesión antes de eliminar un servidor.",
-  "deletion.unavailable": "No se puede eliminar mientras el servidor se prepara, está suspendido o se elimina.",
+  "deletion.unavailable": "No se puede eliminar mientras el servidor se prepara, está suspendido o se elimina.",
   "transfers.queued": "Transferencia aceptada y en cola. El servidor aún no ha empezado a procesarla.",
   "transfers.retryWaiting": "La transferencia está esperando un reintento automático. Tu solicitud sigue activa.",
   "transfers.statusChecksPaused": "Las comprobaciones automáticas están en pausa. La transferencia aceptada podría seguir procesándose. Usa Comprobar estado para continuar.",
@@ -755,5 +755,14 @@
   "transfers.failure.stop-required": "La importación requiere que el servidor esté detenido de forma segura. Comprueba su estado antes de iniciar una nueva importación.",
   "transfers.failure.server-changed": "El servidor o tu acceso cambió antes de que terminara la transferencia. Actualiza el servidor antes de iniciar una nueva transferencia.",
   "transfers.failedRequest": "Esta solicitud ha terminado y no se reintentará. Ciérrala para iniciar una nueva transferencia. Referencia para soporte: {requestId}",
-  "controls.alreadyStopped": "El servidor ya está detenido. Puedes importar una campaña o pulsar Iniciar cuando quieras."
+  "controls.alreadyStopped": "El servidor ya está detenido. Puedes importar una campaña o pulsar Iniciar cuando quieras.",
+  "transfers.rejection.storage-unavailable": "El almacenamiento privado no está disponible temporalmente. No se inició ninguna transferencia. Intenta una nueva transferencia más tarde.",
+  "transfers.rejection.save-rejected": "Los archivos de guardado o el archivo exportado no superaron la validación. Usa un par .sav + .json correspondiente o una nueva exportación de esta web e inténtalo de nuevo.",
+  "transfers.rejection.campaign-limit": "Este servidor ya tiene 10 campañas importadas. Elimina una campaña importada antes de añadir otra.",
+  "transfers.rejection.stop-required": "El servidor debe estar completamente detenido antes de importar una partida. Espera a que aparezca como detenido e inténtalo de nuevo.",
+  "transfers.rejection.server-changed": "El servidor cambió o hay otra operación activa. Actualiza su estado y espera a que termine cualquier operación antes de volver a intentarlo.",
+  "transfers.rejection.invalid-companion": "El archivo .json asociado no contiene un objeto JSON válido o supera los límites JSON admitidos. Exporta un nuevo par .sav + .json correspondiente e inténtalo de nuevo.",
+  "transfers.rejection.save-too-large": "La partida o su archivo asociado supera los límites de tamaño de importación. Usa archivos más pequeños e inténtalo de nuevo.",
+  "transfers.rejection.server-unavailable": "El servidor aún no puede aceptar esta transferencia. Actualiza su estado e inténtalo de nuevo cuando esté disponible.",
+  "transfers.rejection.reference": "Referencia de soporte: {requestId}"
 }

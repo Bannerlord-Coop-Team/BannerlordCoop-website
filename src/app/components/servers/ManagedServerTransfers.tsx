@@ -146,7 +146,11 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
         setResult(next);
         if (next.kind === "job") confirmedJob.current = next;
         if (next.kind === "rejected") {
-            say(t("transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck"), scope); remember(null); setDeadline(null); router.refresh();
+            const message = next.failureReason ? t(`transfers.rejection.${next.failureReason}`)
+                : t("transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck");
+            const requestId = intentRef.current?.requestId;
+            say(requestId ? `${message} ${t("transfers.rejection.reference", { requestId })}` : message, scope);
+            remember(null); setDeadline(null); router.refresh();
         } else if (next.kind === "configuration") {
             say(t("transfers.settingsImportedIfTheServerIsRunningStopItAnd"), scope); remember(null); setDeadline(null); router.refresh();
         } else if (["succeeded", "failed", "cancelled"].includes(next.state)) {

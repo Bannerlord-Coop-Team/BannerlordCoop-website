@@ -237,7 +237,7 @@
   "files.backupsAndRestore": "Backups und Wiederherstellung",
   "transfers.aPreviousTransferIsSavedCheckItsStatusBeforeRetrying": "Eine frühere Übertragung ist gespeichert. Prüfe ihren Status, bevor du es erneut versuchst.",
   "transfers.noAcceptedTransferWasFoundRetryTheSameRequestWith": "Es wurde keine akzeptierte Übertragung gefunden. Wiederhole dieselbe Anfrage mit denselben Dateien.",
-  "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck": "Die Übertragung wurde abgelehnt, bevor ein Auftrag akzeptiert wurde. Prüfe deine Dateien oder aktualisiere den Server und versuche es erneut.",
+  "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck": "Der Server konnte diese Übertragung nicht annehmen. Es wurde kein Import- oder Exportauftrag gestartet. Versuche es später erneut oder kontaktiere bei wiederholten Fehlern den Support.",
   "transfers.settingsImportedIfTheServerIsRunningStopItAnd": "Einstellungen importiert. Läuft der Server, stoppe ihn und starte ihn erneut, um sie zu verwenden. Ist er gestoppt, starte ihn, wenn du bereit bist.",
   "transfers.yourSaveExportIsReadyToDownload": "Dein Spielstand-Export ist zum Herunterladen bereit.",
   "transfers.campaignAddedYourCurrentCampaignIsUnchanged": "Kampagne hinzugefügt. Deine aktuelle Kampagne bleibt unverändert.",
@@ -744,7 +744,7 @@
   "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "Ungültige Löschanfrage.",
   "deletion.signIn": "Melde dich erneut an, bevor du einen Server löschst.",
-  "deletion.unavailable": "Während Vorbereitung, Sperrung oder Löschung ist die Löschung nicht verfügbar.",
+  "deletion.unavailable": "Während Vorbereitung, Sperrung oder Löschung ist die Löschung nicht verfügbar.",
   "transfers.queued": "Übertragung angenommen und eingereiht. Der Server hat noch nicht mit der Verarbeitung begonnen.",
   "transfers.retryWaiting": "Die Übertragung wartet auf einen automatischen Wiederholungsversuch. Deine Anfrage ist weiterhin aktiv.",
   "transfers.statusChecksPaused": "Automatische Statusprüfungen sind pausiert. Deine angenommene Übertragung wird möglicherweise noch verarbeitet. Klicke auf Status prüfen, um fortzufahren.",
@@ -755,5 +755,14 @@
   "transfers.failure.stop-required": "Der Import erfordert einen sicher gestoppten Server. Prüfe den Serverstatus, bevor du einen neuen Import startest.",
   "transfers.failure.server-changed": "Der Server oder dein Zugriff hat sich geändert, bevor die Übertragung abgeschlossen wurde. Aktualisiere den Server, bevor du eine neue Übertragung startest.",
   "transfers.failedRequest": "Diese Anfrage ist abgeschlossen und wird nicht wiederholt. Schließe sie, um eine neue Übertragung zu starten. Support-Referenz: {requestId}",
-  "controls.alreadyStopped": "Der Server ist bereits gestoppt. Du kannst eine Kampagne importieren oder auf Start klicken, wenn du bereit bist."
+  "controls.alreadyStopped": "Der Server ist bereits gestoppt. Du kannst eine Kampagne importieren oder auf Start klicken, wenn du bereit bist.",
+  "transfers.rejection.storage-unavailable": "Der private Speicher ist vorübergehend nicht verfügbar. Es wurde kein Übertragungsauftrag gestartet. Versuche später eine neue Übertragung.",
+  "transfers.rejection.save-rejected": "Die Spielstanddateien oder das Exportarchiv konnten nicht validiert werden. Verwende ein zusammengehöriges .sav- und .json-Paar oder einen neuen Spielstandexport dieser Website und versuche es erneut.",
+  "transfers.rejection.campaign-limit": "Dieser Server hat bereits 10 importierte Kampagnen. Lösche eine importierte Kampagne, bevor du eine weitere hinzufügst.",
+  "transfers.rejection.stop-required": "Der Server muss vor dem Import vollständig gestoppt sein. Warte, bis er als gestoppt angezeigt wird, und versuche es erneut.",
+  "transfers.rejection.server-changed": "Der Server hat sich geändert oder ein anderer Vorgang läuft. Aktualisiere den Status und warte, bis laufende Vorgänge beendet sind, bevor du es erneut versuchst.",
+  "transfers.rejection.invalid-companion": "Die zugehörige .json-Datei enthält kein gültiges JSON-Objekt oder überschreitet die unterstützten JSON-Grenzen. Exportiere ein neues zusammengehöriges .sav- und .json-Paar und versuche es erneut.",
+  "transfers.rejection.save-too-large": "Der Spielstand oder die zugehörige Datei überschreitet die Importgrößenlimits. Verwende kleinere Dateien und versuche es erneut.",
+  "transfers.rejection.server-unavailable": "Der Server kann diese Übertragung noch nicht annehmen. Aktualisiere den Status und versuche es erneut, sobald er verfügbar ist.",
+  "transfers.rejection.reference": "Support-Referenz: {requestId}"
 }

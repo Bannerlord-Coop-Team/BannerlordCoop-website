@@ -21,10 +21,17 @@ available, plus a support reference and instructions to dismiss the completed
 request before starting a new transfer.
 
 The shared file-result parser accepts older responses and an optional
-`failureReason` only on failed jobs, from `storage-unavailable`, `save-rejected`,
-`stop-required`, or `server-changed`. It rejects other fields and values. Deploy
-this website and `my-servers` Edge parser before the paired control-plane response
-extension, since older strict parsers reject that extra field. Import remains
+`failureReason` on failed jobs and definitive rejections before job acceptance.
+Job reasons remain `storage-unavailable`, `save-rejected`, `campaign-limit`,
+`stop-required` and `server-changed`. Rejections also allow `invalid-companion`,
+`save-too-large` and `server-unavailable`. The transfer card displays localized
+next steps and the request UUID as a support reference, including when checking
+a retained request after reload. Confirmed rejections clear the pending intent;
+unknown submissions keep their original identity and recovery controls.
+Unknown errors and legacy receipts use generic copy without blaming the files.
+The parser rejects other fields and values. Deploy this website and its
+`my-servers` Edge parser before the paired control-plane response extension,
+since older strict parsers reject that extra field. Import remains
 limited to stopped servers and preserves the current campaign. Stop explicitly
 explains when the server is already stopped.
 

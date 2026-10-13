@@ -237,7 +237,7 @@
   "files.backupsAndRestore": "Yedekler ve geri yükleme",
   "transfers.aPreviousTransferIsSavedCheckItsStatusBeforeRetrying": "Önceki bir aktarım kayıtlı. Yeniden denemeden önce durumunu kontrol edin.",
   "transfers.noAcceptedTransferWasFoundRetryTheSameRequestWith": "Kabul edilmiş bir aktarım bulunamadı. Aynı isteği aynı dosyalarla yeniden deneyin.",
-  "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck": "Aktarım, bir iş kabul edilmeden önce reddedildi. Dosyalarınızı kontrol edin veya sunucuyu yenileyip yeniden deneyin.",
+  "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck": "Sunucu bu aktarımı kabul edemedi. İçe veya dışa aktarma işi başlatılmadı. Daha sonra tekrar deneyin veya hata sürerse destekle iletişime geçin.",
   "transfers.settingsImportedIfTheServerIsRunningStopItAnd": "Ayarlar içe aktarıldı. Sunucu çalışıyorsa, ayarları kullanmak için durdurup yeniden başlatın. Durdurulmuşsa, hazır olduğunuzda başlatın.",
   "transfers.yourSaveExportIsReadyToDownload": "Kayıt dosyası dışa aktarımınız indirilmeye hazır.",
   "transfers.campaignAddedYourCurrentCampaignIsUnchanged": "Sefer eklendi. Mevcut seferiniz değişmedi.",
@@ -744,7 +744,7 @@
   "deletion.completed": "Server deletion completed.",
   "deletion.invalid": "Silme isteği geçersiz.",
   "deletion.signIn": "Sunucuyu silmeden önce yeniden giriş yapın.",
-  "deletion.unavailable": "Sunucu hazırlanırken, askıya alınmışken veya silinirken silme kullanılamaz.",
+  "deletion.unavailable": "Sunucu hazırlanırken, askıya alınmışken veya silinirken silme kullanılamaz.",
   "transfers.queued": "Aktarım kabul edildi ve sıraya alındı. Sunucu henüz işlemeye başlamadı.",
   "transfers.retryWaiting": "Aktarım otomatik yeniden denemeyi bekliyor. İsteğiniz hâlâ etkin.",
   "transfers.statusChecksPaused": "Otomatik durum kontrolleri duraklatıldı. Kabul edilen aktarım hâlâ işleniyor olabilir. Devam etmek için Durumu kontrol et seçeneğini kullanın.",
@@ -755,5 +755,14 @@
   "transfers.failure.stop-required": "İçe aktarma için sunucunun güvenli şekilde durdurulması gerekir. Yeni bir içe aktarma başlatmadan önce sunucu durumunu kontrol edin.",
   "transfers.failure.server-changed": "Aktarım tamamlanmadan sunucu veya erişiminiz değişti. Yeni bir aktarım başlatmadan önce sunucuyu yenileyin.",
   "transfers.failedRequest": "Bu istek tamamlandı ve yeniden denenmeyecek. Yeni bir aktarım başlatmak için kapatın. Destek referansı: {requestId}",
-  "controls.alreadyStopped": "Sunucu zaten durdurulmuş. Bir sefer içe aktarabilir veya hazır olduğunuzda Başlat seçeneğine basabilirsiniz."
+  "controls.alreadyStopped": "Sunucu zaten durdurulmuş. Bir sefer içe aktarabilir veya hazır olduğunuzda Başlat seçeneğine basabilirsiniz.",
+  "transfers.rejection.storage-unavailable": "Özel depolama geçici olarak kullanılamıyor. Aktarım işi başlatılmadı. Daha sonra yeni bir aktarım deneyin.",
+  "transfers.rejection.save-rejected": "Kayıt dosyaları veya dışa aktarma arşivi doğrulamadan geçemedi. Eşleşen bir .sav + .json çifti veya bu web sitesinden yeni bir kayıt dışa aktarımı kullanıp tekrar deneyin.",
+  "transfers.rejection.campaign-limit": "Bu sunucuda zaten içe aktarılmış 10 sefer var. Başka bir sefer eklemeden önce içe aktarılmış bir seferi silin.",
+  "transfers.rejection.stop-required": "Kayıt içe aktarılmadan önce sunucu tamamen durdurulmalıdır. Durduruldu olarak görünmesini bekleyip tekrar deneyin.",
+  "transfers.rejection.server-changed": "Sunucu değişti veya başka bir işlem sürüyor. Durumu yenileyin ve tekrar denemeden önce mevcut işlemlerin bitmesini bekleyin.",
+  "transfers.rejection.invalid-companion": "Eşlik eden .json geçerli bir JSON nesnesi değil veya desteklenen JSON sınırlarını aşıyor. Eşleşen yeni bir .sav + .json çifti dışa aktarıp tekrar deneyin.",
+  "transfers.rejection.save-too-large": "Kayıt veya eşlik eden dosya içe aktarma boyutu sınırlarını aşıyor. Daha küçük dosyalarla tekrar deneyin.",
+  "transfers.rejection.server-unavailable": "Sunucu bu aktarımı kabul etmeye hazır değil. Durumu yenileyin ve kullanılabilir olduğunda tekrar deneyin.",
+  "transfers.rejection.reference": "Destek referansı: {requestId}"
 }
