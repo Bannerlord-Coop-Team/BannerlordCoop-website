@@ -15,6 +15,7 @@ import {
 const POLL_DEADLINE_MILLISECONDS = 15 * 60_000;
 /** A backup request whose job never appears releases the lifecycle controls sooner. */
 const UNATTACHED_BACKUP_DEADLINE_MILLISECONDS = 2 * 60_000;
+const INITIALIZING_SERVER_STATES = new Set(["provisioning", "configuring"]);
 
 type PollingSession = {
     serverId: string;
@@ -104,7 +105,11 @@ export function createManagedConsoleSignals(): ManagedConsoleSignals {
 export type ManagedServerStatusReader = (serverId: string) => Promise<{ ok: true; fingerprint: string } | { ok: false }>;
 
 /** Shares status polling and live console phases between the managed server's panels. */
-export function ManagedServerPollingProvider({ children, readStatus }: { children: ReactNode; readStatus?: ManagedServerStatusReader }) {
+export function ManagedServerPollingProvider({ children, readStatus, initialServer }: {
+    children: ReactNode;
+    readStatus?: ManagedServerStatusReader;
+    initialServer?: { serverId: string; updatedAt: string; operationState: string };
+}) {
     const router = useRouter();
     const [session, setSession] = useState<PollingSession | null>(null);
     const [timedOutSession, setTimedOutSession] = useState<PollingSession | null>(null);
@@ -198,6 +203,20 @@ export function ManagedServerPollingProvider({ children, readStatus }: { childre
         session,
         timedOutSession,
     ]);
+
+    useEffect(() => {
+        if (initialServer === undefined) return;
+        const initializing = INITIALIZING_SERVER_STATES.has(initialServer.operationState);
+        const trackingInitialState = session?.serverId === initialServer.serverId
+            && session.statusSource === "server" && session.jobId === null;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        if (initializing && !trackingInitialState) {
+            timer = setTimeout(() => beginPolling(initialServer.serverId, initialServer.updatedAt), 0);
+        } else if (!initializing && trackingInitialState) {
+            timer = setTimeout(() => endPolling(initialServer.serverId), 0);
+        }
+        return () => clearTimeout(timer);
+    }, [beginPolling, endPolling, initialServer, session]);
 
     return (
         <ManagedServerPollingContext.Provider value={value}>

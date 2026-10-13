@@ -173,6 +173,20 @@ it.each([["settings", "Settings"], ["unknown", undefined]] as const)("opens the 
     expect((workspace!.props as { initialSection?: string }).initialSection).toBe(section);
 });
 
+it("locks the managed workspace and explains initialization while the lifecycle is configuring", async () => {
+    mocks.liveServer.mockReturnValue(null);
+    const updatedAt = "2026-10-01T00:00:00.000Z";
+    mocks.managedServers.mockResolvedValue([{ serverId: managedId, accessRole: "owner", displayName: "Preparing", friendlyRegion: "Europe", operationState: "configuring", observedGameState: "unknown", releaseChannel: "stable", updatedAt }]);
+    const tree = await page(managedId);
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+    expect(workspace?.props).toMatchObject({ initialSection: "Console", interactionLocked: true });
+    expect(workspace?.props.visibility.props.disabled).toBe(true);
+    const status = (workspace!.props as unknown as { status: ReactElement<{ children: ReactElement }> }).status.props.children;
+    const html = renderToStaticMarkup(<>{await (status.type as (props: unknown) => Promise<ReactNode>)(status.props)}</>);
+    expect(html).toContain("Preparing your server");
+    expect(html).toContain("up to 15 minutes");
+});
+
 it.each([
     ["running", "Paused for backup", "Backing up"],
     ["queued", "Running", "Backing up"],
