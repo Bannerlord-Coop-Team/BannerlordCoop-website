@@ -1,4 +1,3 @@
-import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 import { RefreshReleaseCatalog } from "@/app/components/admin/RefreshReleaseCatalog";
 import {
     ControlPlaneActionCard,
@@ -6,13 +5,16 @@ import {
     type AdminActionOption,
 } from "@/app/components/admin/ControlPlaneActionCard";
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
-import { AuditReadTable, JobsReadTable } from "@/app/components/admin/ControlPlaneReadTables";
+import { JobsReadTable } from "@/app/components/admin/ControlPlaneReadTables";
 import { JobFailuresAcknowledgeButton } from "@/app/components/admin/JobFailuresAcknowledgeButton";
 import { VpsView } from "@/app/components/admin/VpsView";
-import { ControlPlaneLiveRefresh } from "@/app/components/admin/ControlPlaneLiveRefresh";
+import { ControlPlaneServerView } from "@/app/components/admin/ControlPlaneServerView";
+import { ControlPlaneJobsProgress } from "@/app/components/admin/ControlPlaneJobsProgress";
+import { AuditTable, Panel, Definition, SectionHeading, State, Empty, ReleaseMetadata, shortId } from "@/app/components/admin/ControlPlanePresentation";
 import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
 import { hasAdminAccess } from "@/app/lib/auth/access";
 import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
+import { serverProgressView } from "@/app/lib/control-plane/server-progress";
 import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
 import { readOperationsVpsInventory } from "@/app/lib/control-plane/operations-inventory";
 import { readHostingRegionCatalog } from "@/app/lib/control-plane/hosting-region-catalog";
@@ -38,7 +40,6 @@ import {
 } from "@/app/lib/control-plane/presentation";
 import type {
     AuditEvent,
-    Backup,
     GlobalControls,
     HostingAdminVpsInventory,
     VpsViewData,
@@ -51,7 +52,7 @@ import type {
     ServerDashboardResult,
 } from "@/app/lib/control-plane/types";
 import { getSupabaseServerReadSession, getSupabaseServerViewer } from "@/app/lib/supabase/server";
-import { listWebsiteAccounts } from "@/app/lib/supabase/users";
+import { getWebsiteAccount, listWebsiteAccounts } from "@/app/lib/supabase/users";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import {
     Activity,
@@ -221,7 +222,7 @@ async function ControlPlaneViewContent({
     let accounts: WebsiteAccountSummary[] = [];
     let error = "";
     try {
-        const needsAccounts = view === "vps" || view === "servers" || view === "server" || view === "operations";
+        const needsAccounts = view === "vps" || view === "servers" || view === "operations";
         const [viewResult, usersResult] = await Promise.allSettled([
             read.then(result => {
                 if (result.status === "rejected") throw result.reason;
@@ -231,9 +232,14 @@ async function ControlPlaneViewContent({
         ]);
         if (viewResult.status === "rejected") throw viewResult.reason;
         data = viewResult.value;
-        if (usersResult.status === "fulfilled") {
+        if (view === "server") {
+            const server = (data as ServerDashboardResult).dashboard.server;
+            const owner = await getWebsiteAccount(server.ownerAccountId ?? server.ownerDiscordUserId).catch(() => null);
+            if (owner) accounts = [owner];
+        }
+        if (needsAccounts && usersResult.status === "fulfilled") {
             accounts = usersResult.value.users;
-        } else {
+        } else if (usersResult.status === "rejected") {
             console.error("Account directory failed to load", usersResult.reason);
         }
     } catch (cause) {
@@ -254,7 +260,7 @@ async function ControlPlaneViewContent({
             {!error && view === "overview" && <OverviewView overview={data as OverviewSummary} />}
             {!error && view === "vps" && <VpsView {...data as VpsViewData} accounts={accounts} />}
             {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} accounts={accounts} />}
-            {!error && view === "server" && <ServerView result={data as ServerDashboardResult} accounts={accounts} />}
+            {!error && view === "server" && <ControlPlaneServerView key={serverId} initial={serverProgressView(data as ServerDashboardResult)} accounts={accounts} />}
             {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} state={jobState} action={jobAction} unacknowledgedOnly={unacknowledgedOnly} cursor={jobCursor} serverId={serverId} />}
             {!error && view === "releases" && <ReleasesView data={data as { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }} />}
             {!error && view === "audit" && <AuditView page={data as HostingPage<AuditEvent>} />}
@@ -460,42 +466,6 @@ function ServersView({ page, query, accounts }: { page: HostingPage<ManagedServe
     );
 }
 
-function ServerView({ result, accounts }: { result: ServerDashboardResult; accounts: WebsiteAccountSummary[] }) {
-    const { server } = result.dashboard;
-    const pinnedBuild = [result.dashboard.installedBuild, result.dashboard.desiredBuild]
-        .find(build => build?.buildId === server.pinnedBuildId) ?? null;
-    const activeJob = result.dashboard.activeJob;
-    const ownerLabels = accountLabelMap(accounts);
-    return (
-        <div className="mt-8 space-y-8">
-            <ControlPlaneLiveRefresh active={activeJob !== null} label="Refreshing server progress automatically" />
-            <section className="flex flex-col justify-between gap-5 border border-white/10 bg-surface p-5 lg:flex-row lg:items-start">
-                <div><p className="font-label text-[0.65rem] uppercase tracking-[0.14em] text-gold">Managed server</p><h2 className="mt-2 font-display text-3xl font-semibold text-foreground">{server.displayName}</h2><p className="mt-2 font-mono text-xs text-foreground-dim">{server.serverId}</p></div>
-                <State value={server.operationState} />
-            </section>
-            {activeJob && (
-                <section className="border border-gold/25 bg-gold/8 p-5" aria-live="polite">
-                    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                        <div>
-                            <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-gold">Operation in progress</p>
-                            <p className="mt-2 text-sm text-foreground"><span className="font-semibold">{activeJob.action}</span> · {activeJob.state}</p>
-                            <p className="mt-1 font-mono text-xs text-foreground-muted">{activeJob.progressStage}</p>
-                        </div>
-                        <Link href={`/admin/control-plane?view=jobs&serverId=${encodeURIComponent(server.serverId)}`} className="border border-gold/35 px-4 py-2 text-center font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-gold hover:bg-gold/10">Track job</Link>
-                    </div>
-                </section>
-            )}
-            <section className="grid gap-6 lg:grid-cols-3">
-                <Panel title="Ownership"><Definition label="Owner account" value={formatAccountOwner(server, ownerLabels)} /><Definition label="Region" value={hostingRegionLabel(server.friendlyRegion)} /><Definition label="Provider" value={server.provider} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
-                <Panel title="Desired / observed"><Definition label="Desired" value={server.desiredState} /><Definition label="VM" value={server.observedVmState} /><Definition label="Game" value={server.observedGameState} /><Definition label="Agent" value={result.dashboard.runtime?.agentHealthy ? "Healthy" : "Unavailable"} tone={result.dashboard.runtime?.agentHealthy ? "ok" : "warning"} /></Panel>
-                <Panel title="Composition"><Definition label="Channel" value={releaseChannelLabel(server.releaseChannel)} /><Definition label="Installed version" value={<RecordedRelease build={result.dashboard.installedBuild} buildId={server.installedBuildId} />} /><Definition label="Desired version" value={<RecordedRelease build={result.dashboard.desiredBuild} buildId={server.desiredBuildId} />} /><Definition label="Update policy" value={server.pinnedBuildId ? "Pinned version" : `Follow ${releaseChannelLabel(server.releaseChannel)} channel`} />{server.pinnedBuildId && <Definition label="Pinned version" value={<RecordedRelease build={pinnedBuild} buildId={server.pinnedBuildId} />} />}<Definition label="Save" value={result.dashboard.activeSave?.displayName ?? "Default bootstrap pending"} /></Panel>
-            </section>
-            <section><SectionHeading eyebrow="Recovery" title="Backups" count={result.backups.items.length} /><BackupsTable backups={result.backups.items} /></section>
-            <section><SectionHeading eyebrow="Trace" title="Server audit" count={result.audit.items.length} /><AuditTable events={result.audit.items} /></section>
-        </div>
-    );
-}
-
 function JobsView({
     page,
     state,
@@ -511,7 +481,6 @@ function JobsView({
     cursor: string | null;
     serverId: string;
 }) {
-    const hasActiveJobs = page.items.some((job) => ["queued", "running", "retry-wait"].includes(job.state));
     const filters = [
         { label: "All", href: "/admin/control-plane?view=jobs", active: state === null },
         { label: "Active", href: "/admin/control-plane?view=jobs&state=active", active: state === "active" },
@@ -528,7 +497,6 @@ function JobsView({
     if (older && page.nextCursor) older.set("cursor", page.nextCursor);
     return (
         <section className="mt-8">
-            <ControlPlaneLiveRefresh active={hasActiveJobs} label="Refreshing job progress automatically" />
             <div className="flex flex-wrap items-end justify-between gap-4">
                 <SectionHeading eyebrow="Durable queue" title={state === "failed" ? "Failed jobs" : state === "active" ? "Active jobs" : "Jobs"} count={page.items.length} />
                 <nav aria-label="Job filters" className="flex gap-2">{filters.map((filter) => <Link key={filter.label} href={filter.href} aria-current={filter.active ? "page" : undefined} className={`border px-3 py-2 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] ${filter.active ? "border-gold/40 bg-gold/10 text-gold" : "border-white/10 text-foreground-muted hover:border-white/25 hover:text-foreground"}`}>{filter.label}</Link>)}</nav>
@@ -557,7 +525,7 @@ function JobsView({
                 </div>
             )}
             {state === "failed" && <p className="mt-3 max-w-3xl text-xs leading-5 text-foreground-muted">Silencing acknowledges matching failed attempts. Jobs and audit evidence remain durable, while acknowledged attempts stop contributing to Overview failure alerts. A later failed retry creates a new alert.</p>}
-            <JobsTable jobs={page.items} allowFailureAcknowledgement={state === "failed"} />
+            <JobsTable key={`${state}:${cursor}:${serverId}:${action}:${unacknowledgedOnly}`} live jobs={page.items} allowFailureAcknowledgement={state === "failed"} />
             <nav aria-label="Job pages" className="mt-4 flex justify-end gap-2">
                 {cursor && <Link href={`/admin/control-plane?${base.toString()}`} className="border border-white/15 px-4 py-2 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-foreground-muted hover:border-gold/40 hover:text-gold">Newest jobs</Link>}
                 {older && <Link href={`/admin/control-plane?${older.toString()}`} className="border border-white/15 px-4 py-2 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-foreground-muted hover:border-gold/40 hover:text-gold">Older jobs</Link>}
@@ -652,20 +620,14 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     })}</div>;
 }
 
-function JobsTable({ jobs, allowFailureAcknowledgement = false }: { jobs: HostingJob[]; allowFailureAcknowledgement?: boolean }) {
-    return <JobsReadTable allowFailureAcknowledgement={allowFailureAcknowledgement} jobs={jobs.map(job => ({
+function JobsTable({ jobs, allowFailureAcknowledgement = false, live = false }: { jobs: HostingJob[]; allowFailureAcknowledgement?: boolean; live?: boolean }) {
+    const rows = jobs.map(job => ({
         jobId: job.jobId, action: job.action, state: job.state, serverLabel: shortId(job.serverId),
         progressStage: job.progressStage, errorCode: job.errorCode, attemptCount: job.attemptCount,
         maximumAttempts: job.maximumAttempts, updatedAt: job.updatedAt, failureAcknowledgedAt: job.failureAcknowledgedAt,
-    }))} />;
-}
-function BackupsTable({ backups }: { backups: Backup[] }) { return <div className="mt-4 overflow-x-auto border border-white/10 bg-surface"><table className="w-full min-w-200 text-left text-sm"><thead className="border-b border-white/10 font-label text-[0.65rem] uppercase tracking-[0.12em] text-foreground-muted"><tr><th className="p-4">Backup</th><th className="p-4">Type</th><th className="p-4">State</th><th className="p-4">Size</th><th className="p-4">Created</th><th className="p-4">Expires</th></tr></thead><tbody className="divide-y divide-white/10">{backups.map((backup) => <tr key={backup.backupId}><td className="p-4 font-mono text-xs text-foreground-muted">{backup.backupId}</td><td className="p-4 text-xs text-foreground-muted">{backup.backupType}</td><td className="p-4"><State value={backup.restoreState} /></td><td className="p-4 text-xs text-foreground-muted">{formatBytes(backup.byteSize)}</td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={backup.createdAt} /></td><td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={backup.retentionExpiresAt} /></td></tr>)}</tbody></table>{backups.length === 0 && <Empty>No retained backups.</Empty>}</div>; }
-function AuditTable({ events }: { events: AuditEvent[] }) {
-    return <AuditReadTable events={events.map(event => ({
-        eventId: event.eventId, occurredAt: event.occurredAt, action: event.action, actorType: event.actorType,
-        actorLabel: shortId(event.actorId), serverLabel: shortId(event.targetServerId), reason: event.reason,
-        correlationLabel: shortId(event.correlationId),
-    }))} />;
+    }));
+    return live ? <ControlPlaneJobsProgress jobs={rows} allowFailureAcknowledgement={allowFailureAcknowledgement} />
+        : <JobsReadTable jobs={rows} allowFailureAcknowledgement={allowFailureAcknowledgement} />;
 }
 /** Presents version identities and the exact compatibility metadata supplied by GHCR discovery. */
 function BuildTable({ builds }: { builds: ReleaseBuild[] }) {
@@ -679,36 +641,7 @@ function BuildTable({ builds }: { builds: ReleaseBuild[] }) {
     </article>)}{builds.length === 0 && <Empty>No verified GHCR versions available in this channel.</Empty>}</div>;
 }
 
-/** Shows authoritative label values, without inferring compatibility for historical builds. */
-function ReleaseMetadata({ build }: { build: ReleaseBuild }) {
-    return <details className="mt-3 text-xs text-foreground-muted"><summary className="cursor-pointer py-2">Release label details</summary>
-        {build.registryMetadata ? <dl className="divide-y divide-white/10">
-            {[
-                ["io.bannerlordcoop.client.revision", build.registryMetadata.clientRevision],
-                ["io.bannerlordcoop.client.version", build.requiredClientModVersion],
-                ["io.bannerlordcoop.dedicated-server.revision", build.registryMetadata.serverRevision],
-                ["io.bannerlordcoop.game.version", build.supportedGameVersion],
-            ].map(([label, value]) => <div key={label} className="py-2 text-left">
-                <dt className="break-all">{label}</dt><dd className="mt-1 break-all font-mono text-foreground">{value ?? "Unavailable"}</dd>
-            </div>)}
-        </dl> : <p className="py-2">Verified registry labels are unavailable for this historical version.</p>}
-    </details>;
-}
-
-/** Keeps the recorded installed or desired version visible even when it is absent from GHCR discovery. */
-function RecordedRelease({ build, buildId }: { build: ReleaseBuild | null; buildId: string | null }) {
-    if (!build) return <>{buildId ? `Metadata unavailable (${buildId})` : "None"}</>;
-    return <div><span>{releaseVersion(build)}</span><ReleaseMetadata build={build} /></div>;
-}
-
-function Panel({ title, children, help }: { title: string; children: React.ReactNode; help?: string }) { return <section className="border border-white/10 bg-surface p-5"><h2 className={`font-display text-2xl font-semibold text-foreground ${help ? "cursor-help" : ""}`} title={help}>{title}</h2><dl className="mt-4 divide-y divide-white/10">{children}</dl></section>; }
-function Definition({ label, value, tone, help }: { label: string; value: React.ReactNode; tone?: "ok" | "warning"; help?: string }) { return <div className="flex items-start justify-between gap-4 py-3 text-xs"><dt className={`${help ? "cursor-help underline decoration-dotted underline-offset-4" : ""} text-foreground-muted`} title={help} aria-label={help ? `${label}: ${help}` : undefined}>{label}</dt><dd className={`max-w-[65%] break-words text-right font-medium ${tone === "ok" ? "text-emerald-300" : tone === "warning" ? "text-amber-300" : "text-foreground"}`}>{value}</dd></div>; }
 function Stat({ label, value, href, destination, help }: { label: string; value: number; href: string; destination: string; help: string }) { return <Link href={href} className="group bg-surface px-5 py-4 outline-none transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-gold" title={help} aria-label={`${label}: ${value}. ${help} Open ${destination}.`}><p className="font-display text-3xl font-semibold text-foreground">{value}</p><p className="mt-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-foreground-muted group-hover:text-gold">{label}</p></Link>; }
-function SectionHeading({ eyebrow, title, count }: { eyebrow: string; title: string; count: number }) { return <div className="flex items-end justify-between gap-4"><div><p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-gold">{eyebrow}</p><h2 className="mt-1 font-display text-3xl font-semibold text-foreground">{title}</h2></div><span className="font-display text-xl text-foreground-muted">{count}</span></div>; }
-function State({ value }: { value: string }) { const good = ["running", "succeeded", "validated", "available", "healthy"].includes(value); const bad = ["failed", "degraded", "revoked", "rejected", "cancelled", "unavailable"].includes(value); const explanation = stateExplanation(value); return <span title={explanation} aria-label={`${value}: ${explanation}`} className={`inline-flex cursor-help border px-2 py-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] ${good ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : bad ? "border-crimson/30 bg-crimson/10 text-red-200" : "border-gold/25 bg-gold/8 text-gold"}`}>{value}</span>; }
-function Empty({ children }: { children: React.ReactNode }) { return <div className="px-6 py-12 text-center text-sm text-foreground-muted">{children}</div>; }
-
-
 function RuntimeObservation({ server }: { server: ManagedServer }) {
     const suspendedWhileRunning = server.operationState === "suspended" && server.observedGameState === "running";
     const runtimeHelp = `Observed VM state is ${server.observedVmState}; the shared host may remain running while a game is stopped. Observed game state is ${server.observedGameState}; this is the latest runner-confirmed game-container state.`;
@@ -733,5 +666,3 @@ function parseView(value: string | undefined): View { return ["overview", "vps",
 function parseJobState(value: string | undefined): "failed" | "active" | null { return value === "failed" || value === "active" ? value : null; }
 function parseJobAction(value: string | undefined): string | null { return JOB_ACTION_FILTERS.includes(value as typeof JOB_ACTION_FILTERS[number]) ? value ?? null : null; }
 function parseCursor(value: string | undefined): string | null { const normalized = value?.trim() ?? ""; return normalized.length > 0 && normalized.length <= 4_096 ? normalized : null; }
-function formatBytes(value: number) { return value < 1_048_576 ? `${Math.round(value / 1024)} KiB` : `${(value / 1_048_576).toFixed(1)} MiB`; }
-function shortId(value: string | null) { return value ? (value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value) : "—"; }

@@ -116,6 +116,14 @@ export type HostingJob = {
     failureAcknowledgedBy?: string | null;
 };
 
+export type HostingJobProgress = Pick<HostingJob, "jobId" | "serverId" | "action" | "state"
+    | "progressStage" | "errorCode" | "attemptCount" | "maximumAttempts" | "updatedAt">;
+export type ServerProgress = {
+    server: Pick<ManagedServer, "serverId" | "updatedAt" | "operationState" | "desiredState"
+        | "observedVmState" | "observedGameState"> & { softDeletedAt: string | null };
+    activeJob: HostingJobProgress | null;
+};
+
 export type ReleaseBuild = {
     registryMetadata?: { versionTag: string; clientRevision: string; serverRevision: string };
     container?: { manifestDigest: string } | null;
@@ -354,7 +362,7 @@ export type ServerDashboardResult = {
         installedBuild: ReleaseBuild | null;
         desiredBuild: ReleaseBuild | null;
         activeSave: { saveId: string; displayName: string; detectedVersion: string | null } | null;
-        activeJob: HostingJob | null;
+        activeJob: HostingJobProgress | null;
         nextMaintenanceAt: string;
     };
     backups: HostingPage<Backup>;

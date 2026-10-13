@@ -7,7 +7,7 @@ import { changeServerRelease } from "./server-release-actions";
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), release: vi.fn(), list: vi.fn(), revalidate: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
 vi.mock("@/app/lib/hosting/my-servers", async original => ({ ...await original<typeof import("@/app/lib/hosting/my-servers")>(), requestMyServerRelease: mocks.release }));
-vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.list }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerSummary: mocks.list }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 // Resolves real English messages without reading cookies in standalone tests.
 vi.mock("@/app/lib/localization/server", () => ({
@@ -26,7 +26,7 @@ beforeEach(() => {
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "owner" } } }),
         getSession: async () => ({ data: { session: { user: { id: "owner" }, access_token: "verified-token" } } }) } });
     mocks.release.mockResolvedValue({ action: "update", jobId, outcome: "enqueued" });
-    mocks.list.mockResolvedValue([fresh]);
+    mocks.list.mockResolvedValue(fresh);
 });
 
 it("queues the change once at the current revision when an unrelated write conflicts", async () => {
@@ -40,7 +40,7 @@ it("queues the change once at the current revision when an unrelated write confl
 
 it("does not queue a change when the channel moved elsewhere or is already selected", async () => {
     mocks.release.mockRejectedValue(new MyServersApiError("request_conflict", "Stale revision"));
-    mocks.list.mockResolvedValueOnce([{ ...fresh, releaseChannel: "nightly" }]);
+    mocks.list.mockResolvedValueOnce({ ...fresh, releaseChannel: "nightly" });
     expect(await changeServerRelease(input)).toMatchObject({ ok: false, rejected: true, message: "This channel is already selected." });
     expect(await changeServerRelease({ ...input, previousChannel: "nightly" })).toMatchObject({ ok: false });
     expect(mocks.release).toHaveBeenCalledTimes(2);
@@ -52,4 +52,12 @@ it("keeps the original contract without a shown channel", async () => {
     expect(await changeServerRelease(withoutPrevious)).toMatchObject({ ok: false, rejected: true });
     expect(mocks.list).not.toHaveBeenCalled();
     expect(await changeServerRelease({ ...input, owner: "owner" })).toMatchObject({ ok: false });
+});
+
+it("stops recovery when the single-server read reports revoked access", async () => {
+    mocks.release.mockRejectedValueOnce(new MyServersApiError("stale_interaction", "Stale"));
+    mocks.list.mockRejectedValueOnce(new MyServersApiError("server_not_found", "Unavailable"));
+    expect(await changeServerRelease(input)).toMatchObject({ ok: false });
+    expect(mocks.list).toHaveBeenCalledExactlyOnceWith("verified-token", serverId);
+    expect(mocks.release).toHaveBeenCalledOnce();
 });

@@ -3,7 +3,7 @@
 import { getTranslations } from "@/app/lib/localization/server";
 
 import { MyServersApiError, requestServerVisibility } from "@/app/lib/hosting/my-servers";
-import { listAllMyServers } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { hasExactKeys, isRecord } from "../../../supabase/functions/_shared/dto-validation";
 import { parseVisibilityMutation, REQUEST_ID, type VisibilityMutation } from "../../../supabase/functions/_shared/server-visibility-contract";
@@ -66,7 +66,7 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
  * once at the current revision. Returns the acknowledged revision, or null when the owner can no longer act.
  */
 async function retryAtCurrentRevision(accessToken: string, input: VisibilityMutation): Promise<string | null> {
-    const server = (await listAllMyServers(accessToken)).find((candidate) => candidate.serverId === input.serverId);
+    const server = await getMyServerSummary(accessToken, input.serverId);
     if (!server || server.accessRole !== "owner") return null;
     if ((server.visibility ?? "private") === input.visibility) return server.updatedAt;
     const result = await requestServerVisibility(accessToken, { ...input, expectedUpdatedAt: server.updatedAt }, crypto.randomUUID());
