@@ -197,7 +197,7 @@ function useConsoleStream(serverId: string, run: ConsoleRun) {
                             ending = "failed";
                         }
                     }
-                    if (lines.length > 0) setText((existing) => lines.reduce(boundedConsoleText, existing));
+                    if (lines.length > 0) setText((existing) => boundedConsoleText(existing, lines.join("\n")));
                     if (next.done) break;
                 }
             } catch {

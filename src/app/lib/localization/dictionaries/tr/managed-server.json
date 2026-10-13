@@ -755,5 +755,10 @@
   "transfers.failure.stop-required": "İçe aktarma için sunucunun güvenli şekilde durdurulması gerekir. Yeni bir içe aktarma başlatmadan önce sunucu durumunu kontrol edin.",
   "transfers.failure.server-changed": "Aktarım tamamlanmadan sunucu veya erişiminiz değişti. Yeni bir aktarım başlatmadan önce sunucuyu yenileyin.",
   "transfers.failedRequest": "Bu istek tamamlandı ve yeniden denenmeyecek. Yeni bir aktarım başlatmak için kapatın. Destek referansı: {requestId}",
-  "controls.alreadyStopped": "Sunucu zaten durdurulmuş. Bir sefer içe aktarabilir veya hazır olduğunuzda Başlat seçeneğine basabilirsiniz."
+  "controls.alreadyStopped": "Sunucu zaten durdurulmuş. Bir sefer içe aktarabilir veya hazır olduğunuzda Başlat seçeneğine basabilirsiniz.",
+  "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
+  "configEditor.loadingSkeleton": "Loading configuration fields",
+  "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
+  "campaigns.deleted": "Campaign deletion queued."
 }

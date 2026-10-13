@@ -44,10 +44,11 @@ import { hasServerFleetAccess } from "@/app/lib/auth/roles";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import {
     getMyServerBackupStatus,
+    MyServersApiError,
     listAllMyServerBackups,
     type MyServerDeletionStatus,
 } from "@/app/lib/hosting/my-servers";
-import { getMyServerDeletionStatus, listAllMyServers } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerDeletionStatus, getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -106,11 +107,10 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
     let managedLookupFailed = false;
     try {
         const managedServerId = liveServer?.managedServerId ?? serverId;
-        managedServer = (await listAllMyServers(accessToken))
-            .find((server) => server.serverId === managedServerId) ?? null;
+        managedServer = await getMyServerSummary(accessToken, managedServerId);
     } catch (error) {
-        managedLookupFailed = true;
-        console.error("Managed server detail failed to load", error);
+        managedLookupFailed = !(error instanceof MyServersApiError && ["invalid_request", "server_not_found", "forbidden"].includes(error.code));
+        if (managedLookupFailed) console.error("Managed server detail failed to load", error);
     }
 
     if (liveServer && liveAccessLevel) {

@@ -754,5 +754,10 @@
   "transfers.failure.stop-required": "インポートにはサーバーを安全に停止する必要があります。新しいインポートを開始する前にサーバーのステータスを確認してください。",
   "transfers.failure.server-changed": "転送が完了する前に、サーバーまたはアクセス権が変更されました。新しい転送を開始する前にサーバーを更新してください。",
   "transfers.failedRequest": "このリクエストは完了しており、再試行されません。閉じて新しい転送を開始してください。サポート参照番号: {requestId}",
-  "controls.alreadyStopped": "サーバーはすでに停止しています。キャンペーンをインポートするか、準備ができたら「開始」を押してください。"
+  "controls.alreadyStopped": "サーバーはすでに停止しています。キャンペーンをインポートするか、準備ができたら「開始」を押してください。",
+  "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
+  "configEditor.loadingSkeleton": "Loading configuration fields",
+  "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
+  "campaigns.deleted": "Campaign deletion queued."
 }

@@ -758,5 +758,7 @@
   "transfers.failure.stop-required": "The import requires a safely stopped server. Check the server status before starting a new import.",
   "transfers.failure.server-changed": "The server or your access changed before the transfer could finish. Refresh the server before starting a new transfer.",
   "transfers.failedRequest": "This request has finished and will not retry. Dismiss it to start a new transfer. Support reference: {requestId}",
-  "controls.alreadyStopped": "The server is already stopped. You can import a campaign or press Start when ready."
+  "controls.alreadyStopped": "The server is already stopped. You can import a campaign or press Start when ready.",
+  "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
+  "configEditor.loadingSkeleton": "Loading configuration fields"
 }
