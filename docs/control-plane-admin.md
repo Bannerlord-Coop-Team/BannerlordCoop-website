@@ -118,7 +118,7 @@ npx supabase functions deploy my-servers --project-ref <project-ref>
 
 The `my-servers` function accepts authenticated GET inventory requests and
 strict POST direct commands `{action: "start" | "stop" | "restart-game", serverId}`.
-The server-rendered directory and detail pages read inventory directly from the
+The server-rendered directory reads inventory directly from the
 fixed `https://control-plane.bannerlordcoop.com/v1/user/control-plane` endpoint,
 using only the current bearer and closed `my-servers` operation. Oracle freshly
 verifies the user, session context and durable owner/grant access on every page;
@@ -126,11 +126,25 @@ the website's existing viewer gates still apply. These reads omit cookies and
 API keys, refuse redirects, disable caching, and retain correlated owner envelopes,
 ten-page/100-item pagination and streamed 8MiB/8192-chunk response bounds. Caller
 cancellation and a 30-second overall deadline cover fetch and response bodies.
+The detail page and guarded stale-generation recovery for settings, visibility,
+release channel and console commands instead read `server-summary` with only
+`input: { serverId }` over that same authenticated route. It returns one current
+inventory projection (including access role and update generation) with a 64 KiB
+response limit, independent of fleet size or target order. The caller verifies
+server identity and the closed DTO; authorization failures and malformed responses
+never fall back to listing inventory. The directory retains its paginated read.
+Deploy the additive ControlPlane #362 contract before this website; no Edge Function
+or runner update is required. Current session checks, owner-only settings checks,
+field-conflict checks and one-retry limits remain in force. Console recovery occurs
+only after a confirmed pre-enqueue stale rejection and retains its command/request
+UUID; uncertain delivery and accepted Start use their existing recovery paths.
+The compact accepted-Start read remains `server-start-status`.
+
 The server-rendered onboarding summary also reads the closed `server-onboarding`
 operation directly after account synchronization, with its strict DTO and 64 KiB
 response bound. Browser reads, console commands and mutations retain the Edge route.
 **My Servers** links each accessible server to `/servers/[serverId]`. The route
-derives access from the authenticated inventory, never from the URL. Only current
+derives access from the freshly authenticated summary, never from the URL. Only current
 durable owner/manager access can operate; support and server-level admin remain
 read-only. The control plane rechecks durable permission immediately before dispatch.
 
@@ -411,3 +425,31 @@ header does not cache data or change authorization, forwarding, or deadlines.
 ## Applied administrator job index history
 
 `supabase/migrations/20260930142800_control_plane_admin_job_index.sql` is an exact Git-byte mirror of ControlPlane commit `142cd4bed948a6c354d2e7f1ed1bec63755a3ba0` (PR255). Its SHA-256 is `2eb71c8b41be2db7ca610964cbbccee99b9f5b5842c6e0debb9368d36c8220d0`. The shared production project already records version `20260930142800`; this mirror restores the website migration inventory expected by its Supabase integration. Do not replay, edit, or repair this applied migration history. It does not introduce a new database change. The original membership release inventory remains a frozen snapshot; this later mirror is verified separately.
+## Server and job progress
+
+Active server details and displayed jobs use the control plane's closed `server-progress`
+(`{ serverId }`) and `jobs-progress` (`{ jobIds }`, 1–100 unique IDs) reads. Every browser
+request uses the current session and the existing Edge/control-plane authorization path.
+There is no cached authority or full-page refresh timer. A single request runs at a time;
+the next is scheduled four seconds after completion, widening to 8, 16 and at most 30
+seconds when status is unchanged. Progress changes reset the interval. A 30-second
+browser deadline bounds slow reads. Hidden tabs cancel the browser read and pause the
+timer; returning to the tab reads again and ignores late cancelled responses.
+
+The table retains displayed terminal outcomes and stops when those jobs finish. Newly
+created jobs require navigation/reload. On server completion, one authorized dashboard
+read updates composition, backups and audit. A deleted server ends the view directly.
+Transient failures label retained data and back off; authority loss clears that data
+and stops. Changing views/unmounting cancels pending reads.
+
+Initial server detail resolves only its displayed owner using Auth `getUserById`; it
+never enumerates the directory, including on lookup failure. Unknown/legacy owners use
+the existing ID label. Other views retain their existing directory/selector behavior.
+Progress reads make no account-directory calls. A transferred owner's ID remains the
+fallback until the page next resolves its label.
+
+Deploy the paired ControlPlane #361 contract first. Older backends produce an explicit
+progress error without falling back to whole-page polling. The deterministic API query
+counts and website fake-timer/component checks demonstrate reduced scheduled work,
+not production timing or bandwidth savings. Linux API coverage and control-plane
+verification remain separate from native Windows website tests/builds and live evidence.

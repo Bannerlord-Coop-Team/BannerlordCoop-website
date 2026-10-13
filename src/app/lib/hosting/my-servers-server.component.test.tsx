@@ -4,7 +4,7 @@ import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getMyServerStartStatus, getServerOnboarding, listAllMyServers } from "./my-servers-server";
+import { getMyServerSummary, getMyServerStartStatus, getServerOnboarding, listAllMyServers } from "./my-servers-server";
 import { onboardingRegion, onboardingSummary } from "../../../../tests/onboarding-fixtures";
 
 const TOKEN = "access-token-with-enough-characters";
@@ -13,7 +13,7 @@ const server = { serverId: "11111111-1111-4111-8111-111111111111", displayName: 
     accessRole: "owner", friendlyRegion: "united-states", operationState: "running", observedGameState: "running",
     releaseChannel: "stable", updatedAt: "2026-09-30T22:00:00.000Z", connectionIp: "203.0.113.10", gamePorts: [4203] };
 const page = { items: [server], nextCursor: null };
-type Input = { requestId: string; operation: string; input: { cursor?: string | null; limit?: number } };
+type Input = { requestId: string; operation: string; input: { serverId?: string; cursor?: string | null; limit?: number } };
 const input = (init?: RequestInit) => JSON.parse(String(init?.body)) as Input;
 const accepted = (request: Input, result: unknown = page) => Response.json({ version: 1, requestId: request.requestId, ok: true, result });
 
@@ -195,10 +195,10 @@ it.each(["caller", "deadline"])("cancels stalled inventory and onboarding respon
 });
 
 it("uses the closed owner read in native workerd with fresh pages and no redirected credentials", async () => {
-    const bundled = await build({ stdin: { contents: `import { getServerOnboarding, listAllMyServers } from "./my-servers-server";
-        export default { async fetch(request) { try { return Response.json(await (request.url.endsWith("/onboarding") ? getServerOnboarding : listAllMyServers)("${TOKEN}")); }
+    const bundled = await build({ stdin: { contents: `import { getMyServerSummary, getServerOnboarding, listAllMyServers } from "./my-servers-server";
+        export default { async fetch(request) { try { return Response.json(await (request.url.endsWith("/summary") ? getMyServerSummary("${TOKEN}", "${server.serverId}") : (request.url.endsWith("/onboarding") ? getServerOnboarding : listAllMyServers)("${TOKEN}"))); }
         catch(error) { return Response.json({ error: error.code }, { status: 502 }); } } };`, resolveDir: dirname(fileURLToPath(import.meta.url)) },
-        bundle: true, format: "esm", platform: "browser", write: false,
+        bundle: true, format: "esm", platform: "browser", write: false, external: ["node:net"],
         alias: { "server-only": fileURLToPath(new URL("../../../../node_modules/next/dist/compiled/server-only/empty.js", import.meta.url)) } });
     let calls = 0, redirectStatus = 0;
     const runtime = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: "direct-owner-test", modules: true, script: bundled.outputFiles[0].text,
@@ -208,11 +208,12 @@ it("uses the closed owner read in native workerd with fresh pages and no redirec
             expect(request.headers.get("authorization")).toBe(`Bearer ${TOKEN}`);
             for (const name of ["cookie", "apikey", "x-control-plane-protected-admin"]) expect(request.headers.get(name)).toBeNull();
             const body = await request.json() as Input; expect(body.requestId).toBe(request.headers.get("x-request-id"));
-            expect(["my-servers", "server-onboarding"]).toContain(body.operation);
-            expect(body.input).toEqual(body.operation === "my-servers" ? { cursor: null, limit: 100 } : { version: 3 });
+            expect(["my-servers", "server-onboarding", "server-summary"]).toContain(body.operation);
+            expect(body.input).toEqual(body.operation === "my-servers" ? { cursor: null, limit: 100 } : body.operation === "server-summary" ? { serverId: server.serverId } : { version: 3 });
             if (redirectStatus) return new Response(null, { status: redirectStatus, headers: { location: "https://other.test/private" } });
-            const summary = onboardingSummary(); onboardingRegion(summary, "us-west").available = calls % 2 === 0;
-            return accepted(body, body.operation === "server-onboarding" ? summary
+            if (body.operation === "server-summary") return accepted(body, summary);
+            const onboarding = onboardingSummary(); onboardingRegion(onboarding, "us-west").available = calls % 2 === 0;
+            return accepted(body, body.operation === "server-onboarding" ? onboarding
                 : { items: [{ ...server, displayName: `Current ${calls} 👨‍👩‍👧‍👦` }], nextCursor: null });
         },
     }] }));
@@ -222,7 +223,8 @@ it("uses the closed owner read in native workerd with fresh pages and no redirec
             const summary = onboardingSummary(); onboardingRegion(summary, "us-west").available = revision % 2 === 0;
             expect(await (await runtime.dispatchFetch("http://localhost/onboarding")).json()).toEqual(summary);
         }
-        for (const status of [301, 302, 303, 307, 308]) for (const path of ["/", "/onboarding"]) {
+        expect(await (await runtime.dispatchFetch("http://localhost/summary")).json()).toEqual(summary);
+        for (const status of [301, 302, 303, 307, 308]) for (const path of ["/", "/onboarding", "/summary"]) {
             redirectStatus = status; const before = calls;
             expect(await (await runtime.dispatchFetch(`http://localhost${path}`)).json()).toEqual({ error: "invalid_response" }); expect(calls).toBe(before + 1); }
     } finally { await runtime.dispose(); }
@@ -254,4 +256,64 @@ it.each([
 ])("rejects malformed or mismatched Start status %j", async result => {
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
     await expect(getMyServerStartStatus(TOKEN, server.serverId, startJobId)).rejects.toMatchObject({ code: "invalid_response" });
+});
+
+const summary = { ...server, maintenanceSlot: "06:00-07:00", timezone: "America/Chicago", visibility: "private" };
+
+it.each([0, 999])("reads fleet target %s with one request rather than ten inventory pages", async index => {
+    const fleet = Array.from({ length: 1000 }, (_, row) => ({ ...summary, serverId: `00000000-0000-4000-8000-${String(row + 1).padStart(12, "0")}` }));
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = input(init);
+        if (request.operation === "server-summary") {
+            expect(request.input).toEqual({ serverId: fleet[index].serverId });
+            expect(init).toMatchObject({ cache: "no-store", redirect: "manual", credentials: "omit" });
+            expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${TOKEN}`);
+            return accepted(request, fleet[index]);
+        }
+        const offset = Number(request.input.cursor ?? 0);
+        return accepted(request, { items: fleet.slice(offset, offset + 100), nextCursor: offset < 900 ? String(offset + 100) : null });
+    });
+    vi.stubGlobal("fetch", fetch);
+    expect((await listAllMyServers(TOKEN))[index]).toEqual(fleet[index]);
+    expect(fetch).toHaveBeenCalledTimes(10);
+    fetch.mockClear();
+    expect(await getMyServerSummary(TOKEN, fleet[index].serverId)).toEqual(fleet[index]);
+    expect(fetch).toHaveBeenCalledOnce();
+});
+
+it.each(["server_not_found", "forbidden", "invalid_request"])("propagates %s without inventory fallback or reuse of an earlier summary", async code => {
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), summary));
+    vi.stubGlobal("fetch", fetch);
+    expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(summary);
+    fetch.mockImplementation(async (_url, init) => Response.json({ version: 1, requestId: input(init).requestId, ok: false,
+        error: { code, message: "Unavailable", retryable: false } }, { status: code === "forbidden" ? 403 : 404 }));
+    await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code });
+    expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+    { ...summary, serverId: "22222222-2222-4222-8222-222222222222" },
+    { ...summary, updatedAt: "yesterday" }, { ...summary, accessRole: "administrator" },
+    { ...summary, operationState: "unbounded".repeat(20) }, { ...summary, observedGameState: "invalid" },
+    { ...summary, gamePorts: [65536] }, { ...summary, connectionIp: "https://private.test" },
+    { ...summary, visibility: "unlisted" }, { ...summary, maintenanceSlot: undefined },
+    { ...summary, privatePayload: "must not enter presentation" }, null,
+])("rejects malformed or wrong-server summary %j", async result => {
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
+    vi.stubGlobal("fetch", fetch);
+    await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
+    expect(fetch).toHaveBeenCalledOnce();
+});
+
+it("validates identifiers, tokens and cancellation before one-server transport, and bounds the streamed response", async () => {
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    await expect(getMyServerSummary(TOKEN, "invalid")).rejects.toMatchObject({ code: "invalid_request" });
+    await expect(getMyServerSummary("short", server.serverId)).rejects.toMatchObject({ code: "invalid_request" });
+    const caller = new AbortController(); caller.abort();
+    await expect(getMyServerSummary(TOKEN, server.serverId, caller.signal)).rejects.toMatchObject({ code: "server_api_unavailable" });
+    expect(fetch).not.toHaveBeenCalled();
+    const cancel = vi.fn();
+    fetch.mockResolvedValue(new Response(new ReadableStream({ pull(controller) { controller.enqueue(new Uint8Array(65537)); }, cancel }), { headers }));
+    await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "response_too_large" });
+    expect(cancel).toHaveBeenCalledOnce();
 });

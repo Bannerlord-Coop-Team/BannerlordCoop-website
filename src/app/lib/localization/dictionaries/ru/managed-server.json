@@ -757,5 +757,10 @@
   "transfers.failure.stop-required": "Для импорта сервер должен быть безопасно остановлен. Проверьте его статус перед новым импортом.",
   "transfers.failure.server-changed": "Сервер или ваши права доступа изменились до завершения передачи. Обновите сервер перед новой передачей.",
   "transfers.failedRequest": "Этот запрос завершён и не будет повторён. Закройте его, чтобы начать новую передачу. Номер для поддержки: {requestId}",
-  "controls.alreadyStopped": "Сервер уже остановлен. Можно импортировать кампанию или нажать «Запустить», когда будете готовы."
+  "controls.alreadyStopped": "Сервер уже остановлен. Можно импортировать кампанию или нажать «Запустить», когда будете готовы.",
+  "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
+  "configEditor.loadingSkeleton": "Loading configuration fields",
+  "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
+  "campaigns.deleted": "Campaign deletion queued."
 }

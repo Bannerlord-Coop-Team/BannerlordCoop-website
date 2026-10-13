@@ -4,7 +4,7 @@ import { getTranslations } from "@/app/lib/localization/server";
 
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
-import { listAllMyServers } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
 import { submitMyServerConsoleCommand, getMyServerConsoleResult, acknowledgeMyServerConsoleResult } from "@/app/lib/hosting/server-console";
 import { parseConsoleSubmission, parseConsoleReference, requireConsoleUuid } from "../../../supabase/functions/_shared/server-console-contract";
 
@@ -56,7 +56,7 @@ export async function submitManagedConsoleCommand(input: unknown, requestId: str
             // This rejection happens before enqueue; uncertain deliveries must never take this retry path.
             if (!(error instanceof MyServersApiError) || error.code !== "stale_interaction" || error.operationId !== undefined) throw error;
             submissionStarted = false;
-            const current = (await listAllMyServers(token)).find(server => server.serverId === parsed.serverId);
+            const current = await getMyServerSummary(token, parsed.serverId);
             if (!current) throw new MyServersApiError("server_not_found", "Managed server is unavailable.");
             if (current.operationState !== "running" || current.observedGameState !== "running") {
                 throw new MyServersApiError("operation_unavailable", "The server is not running.");

@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({ auth: vi.fn(), save: vi.fn(), revalidate: vi.f
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
 vi.mock("@/app/lib/hosting/my-servers", async original => ({ ...await original<typeof import("@/app/lib/hosting/my-servers")>(), requestMyServerSettings: mocks.save }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
-vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.list }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerSummary: mocks.list }));
 const serverId = "11111111-1111-4111-8111-111111111111";
 const input = { serverId, expectedUpdatedAt: "2026-10-01T00:00:00.000Z", patch: { maintenanceSlot: "10:00-11:00" }, requestId: serverId };
 beforeEach(() => {
@@ -60,12 +60,12 @@ it("names the rejected field instead of describing every rule at once", async ()
     expect(mocks.auth).not.toHaveBeenCalled(); expect(mocks.save).not.toHaveBeenCalled();
 });
 
-const previous = { maintenanceSlot: "03:00-04:00" };
-const fresh = { serverId, accessRole: "owner", displayName: "Campaign", maintenanceSlot: "03:00-04:00", updatedAt: "2026-10-01T00:00:09.000Z" };
+const previous = { maintenanceSlot: "06:00-07:00" };
+const fresh = { serverId, accessRole: "owner", displayName: "Campaign", maintenanceSlot: "06:00-07:00", updatedAt: "2026-10-01T00:00:09.000Z" };
 
 it("re-applies unchanged fields once at the current revision after an unrelated write conflicts", async () => {
     mocks.save.mockRejectedValueOnce(new MyServersApiError("request_conflict", "Stale revision"));
-    mocks.list.mockResolvedValue([fresh]);
+    mocks.list.mockResolvedValue(fresh);
     expect(await saveServerSettings({ ...input, previous })).toMatchObject({ ok: true, updatedAt: "2026-10-01T00:00:01.000Z" });
     expect(mocks.save).toHaveBeenCalledTimes(2);
     const [, retried, retryId] = mocks.save.mock.calls[1];
@@ -75,7 +75,7 @@ it("re-applies unchanged fields once at the current revision after an unrelated 
 
 it("reports a field changed elsewhere instead of overwriting it", async () => {
     mocks.save.mockRejectedValueOnce(new MyServersApiError("stale_interaction", "Stale revision"));
-    mocks.list.mockResolvedValue([{ ...fresh, maintenanceSlot: "18:00-19:00" }]);
+    mocks.list.mockResolvedValue({ ...fresh, maintenanceSlot: "18:00-19:00" });
     expect(await saveServerSettings({ ...input, previous })).toEqual({ ok: false, rejected: true, field: "maintenanceSlot",
         message: "This setting was changed elsewhere while this page was open. The current value is now shown — review it and save again." });
     expect(mocks.save).toHaveBeenCalledTimes(1);
@@ -83,14 +83,14 @@ it("reports a field changed elsewhere instead of overwriting it", async () => {
 
 it("treats a conflict as saved when the server already has the requested values", async () => {
     mocks.save.mockRejectedValueOnce(new MyServersApiError("request_conflict", "Stale revision"));
-    mocks.list.mockResolvedValue([{ ...fresh, maintenanceSlot: "10:00-11:00" }]);
+    mocks.list.mockResolvedValue({ ...fresh, maintenanceSlot: "10:00-11:00" });
     expect(await saveServerSettings({ ...input, previous })).toMatchObject({ ok: true, updatedAt: fresh.updatedAt });
     expect(mocks.save).toHaveBeenCalledTimes(1);
 });
 
 it("never retries without the shown values or for someone who is no longer the owner", async () => {
     mocks.save.mockRejectedValue(new MyServersApiError("request_conflict", "Stale revision"));
-    mocks.list.mockResolvedValue([{ ...fresh, accessRole: "manager" }]);
+    mocks.list.mockResolvedValue({ ...fresh, accessRole: "manager" });
     expect(await saveServerSettings({ ...input, previous })).toMatchObject({ ok: false, rejected: true });
     expect(await saveServerSettings({ ...input, previous: { maintenanceSlot: 7 } })).toMatchObject({ ok: false, rejected: true });
     expect(mocks.save).toHaveBeenCalledTimes(2);
@@ -102,3 +102,11 @@ vi.mock("@/app/lib/localization/server", () => ({
     getMessages: async () => serverTestMessages,
     getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
 }));
+
+it("stops recovery when the single-server read reports revoked access", async () => {
+    mocks.save.mockRejectedValueOnce(new MyServersApiError("stale_interaction", "Stale"));
+    mocks.list.mockRejectedValueOnce(new MyServersApiError("server_not_found", "Unavailable"));
+    expect(await saveServerSettings({ ...input, previous })).toMatchObject({ ok: false });
+    expect(mocks.list).toHaveBeenCalledExactlyOnceWith("verified-token", serverId);
+    expect(mocks.save).toHaveBeenCalledOnce();
+});

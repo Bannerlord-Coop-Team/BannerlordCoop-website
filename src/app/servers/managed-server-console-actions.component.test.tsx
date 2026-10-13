@@ -10,7 +10,7 @@ vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: async () 
     getSession: async () => ({ data: { session: { user: { id: mocks.sessionUserId }, access_token: "token" } } }),
 } }) }));
 vi.mock("@/app/lib/hosting/server-console", () => ({ submitMyServerConsoleCommand: mocks.submit, getMyServerConsoleResult: mocks.check, acknowledgeMyServerConsoleResult: mocks.ack }));
-vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.inventory }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerSummary: mocks.inventory }));
 const serverId = "22222222-2222-4222-8222-222222222222";
 const jobId = "33333333-3333-4333-8333-333333333333";
 const requestId = "44444444-4444-4444-8444-444444444444";
@@ -57,9 +57,9 @@ const stale = () => new MyServersApiError("stale_interaction", "Refresh the host
 
 it("recovers one confirmed stale rejection in the background with the same command and request UUID", async () => {
     mocks.submit.mockRejectedValueOnce(stale()).mockResolvedValueOnce({ outcome: "enqueued", jobId });
-    mocks.inventory.mockResolvedValue([current]);
+    mocks.inventory.mockResolvedValue(current);
     expect(await submitManagedConsoleCommand(input, requestId, "owner")).toEqual({ ok: true, result: { outcome: "enqueued", jobId } });
-    expect(mocks.inventory).toHaveBeenCalledExactlyOnceWith("token");
+    expect(mocks.inventory).toHaveBeenCalledExactlyOnceWith("token", serverId);
     expect(mocks.submit.mock.calls).toEqual([
         ["token", requestId, input],
         ["token", requestId, { ...input, expectedUpdatedAt: current.updatedAt }],
@@ -68,7 +68,7 @@ it("recovers one confirmed stale rejection in the background with the same comma
 
 it("bounds stale recovery to one retry and explains another confirmed rejection without refreshing", async () => {
     mocks.submit.mockRejectedValue(stale());
-    mocks.inventory.mockResolvedValue([current]);
+    mocks.inventory.mockResolvedValue(current);
     expect(await submitManagedConsoleCommand(input, requestId, "owner")).toMatchObject({ ok: false, uncertain: false, refresh: false,
         message: "The server is busy with another command or its status just changed. Wait a moment, then send it again." });
     expect(mocks.submit).toHaveBeenCalledTimes(2);
@@ -76,11 +76,10 @@ it("bounds stale recovery to one retry and explains another confirmed rejection 
 });
 
 it.each([
-    [[], "unavailable"],
-    [[{ ...current, serverId: jobId }], "unavailable"],
-    [[{ ...current, operationState: "stopped", observedGameState: "stopped" }], "isn’t running"],
-    [[{ ...current, updatedAt: input.expectedUpdatedAt }], "status just changed"],
-])("does not retry when fresh inventory cannot supply a runnable new generation: %j", async (inventory, message) => {
+    [null, "unavailable"],
+    [{ ...current, operationState: "stopped", observedGameState: "stopped" }, "isn’t running"],
+    [{ ...current, updatedAt: input.expectedUpdatedAt }, "status just changed"],
+])("does not retry when fresh summary cannot supply a runnable new generation: %j", async (inventory, message) => {
     mocks.submit.mockRejectedValueOnce(stale());
     mocks.inventory.mockResolvedValue(inventory);
     const result = await submitManagedConsoleCommand(input, requestId, "owner");
@@ -91,14 +90,14 @@ it.each([
 
 it("rechecks the rendered account before retrying a stale command", async () => {
     mocks.submit.mockRejectedValueOnce(stale());
-    mocks.inventory.mockImplementationOnce(async () => { mocks.userId = "other"; return [current]; });
+    mocks.inventory.mockImplementationOnce(async () => { mocks.userId = "other"; return current; });
     expect(await submitManagedConsoleCommand(input, requestId, "owner")).toMatchObject({ ok: false, notSubmitted: true, uncertain: false, refresh: false });
     expect(mocks.submit).toHaveBeenCalledOnce();
 });
 
 it("does not retry again after an uncertain recovery attempt", async () => {
     mocks.submit.mockRejectedValueOnce(stale()).mockRejectedValueOnce(new MyServersApiError("server_api_unavailable", "Unavailable", true));
-    mocks.inventory.mockResolvedValue([current]);
+    mocks.inventory.mockResolvedValue(current);
     expect(await submitManagedConsoleCommand(input, requestId, "owner")).toMatchObject({ ok: false, notSubmitted: false, uncertain: true, refresh: false });
     expect(mocks.submit).toHaveBeenCalledTimes(2);
     expect(mocks.inventory).toHaveBeenCalledOnce();
@@ -117,3 +116,11 @@ vi.mock("@/app/lib/localization/server", () => ({
     getMessages: async () => serverTestMessages,
     getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
 }));
+
+it.each(["server_not_found", "forbidden", "invalid_response"])("does not retry a stale command when the current summary fails with %s", async code => {
+    mocks.submit.mockRejectedValueOnce(stale());
+    mocks.inventory.mockRejectedValueOnce(new MyServersApiError(code, "Unavailable"));
+    expect(await submitManagedConsoleCommand(input, requestId, "owner")).toMatchObject({ ok: false, notSubmitted: true, uncertain: false });
+    expect(mocks.inventory).toHaveBeenCalledExactlyOnceWith("token", serverId);
+    expect(mocks.submit).toHaveBeenCalledOnce();
+});
