@@ -3,11 +3,35 @@ import test from "node:test";
 import { serverLogDownloadHeaders, MAXIMUM_SERVER_LOG_BYTES } from "../_shared/server-log-contract.ts";
 import { createMyServersHandler } from "../_shared/my-servers.ts";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../_shared/managed-server-configuration.ts";
-import { parseOwnerFileMutation, parseOwnerFileDownload, parseOwnerFileResult, OWNER_FILE_FAILURE_REASONS } from "../_shared/server-file-contract.ts";
+import { parseOwnerFileMutation, parseOwnerFileDownload, parseOwnerFileResult, OWNER_FILE_FAILURE_REASONS, OWNER_FILE_REJECTION_REASONS } from "../_shared/server-file-contract.ts";
 const requestId = "aaaaaaaa-1111-4111-8111-111111111111";
 const input = { action: "import-config", serverId: requestId, expectedUpdatedAt: "2026-09-13T00:00:00.000Z", managedConfig: DEFAULT_MANAGED_SERVER_CONFIGURATION };
 const result = { kind: "configuration", outcome: "updated", updatedAt: "2026-09-13T00:00:01.000Z" };
 const token = "original-token-with-enough-characters";
+test("rejection reasons survive submission and status checks, accepting legacy responses without leaking private fields", async () => {
+    for (const failureReason of [undefined, ...OWNER_FILE_REJECTION_REASONS]) {
+        const rejected = { kind: "rejected", ...(failureReason === undefined ? {} : { failureReason }) };
+        assert.deepEqual(parseOwnerFileResult(rejected), rejected);
+        const run = handler(async (_url, init) => {
+            const upstream = JSON.parse(String(init?.body));
+            return Response.json({ version: 1, requestId: upstream.requestId, ok: true, result: rejected });
+        });
+        for (const req of [request(input), new Request(`https://edge.test/my-servers?resource=file-transfer-status&serverId=${requestId}&transferRequestId=${requestId}`,
+            { headers: { authorization: `Bearer ${token}` } })]) {
+            const response = await run(req);
+            assert.equal(response.status, 200);
+            assert.deepEqual((await response.json()).result, rejected);
+        }
+    }
+    for (const extra of [{ failureReason: "private-token" }, { failureReason: null }, { message: "private data" }, { errorCode: "unsafe_file" }]) {
+        const rejected = { kind: "rejected", ...extra };
+        assert.throws(() => parseOwnerFileResult(rejected));
+        const response = await handler(async (_url, init) => Response.json({ version: 1,
+            requestId: JSON.parse(String(init?.body)).requestId, ok: true, result: rejected }))(request(input));
+        assert.ok(response.status >= 400);
+        assert.doesNotMatch(await response.text(), /private-token|private data/u);
+    }
+});
 test("transfer failures accept only optional closed reasons and pass through the edge unchanged", async () => {
     const job = { kind: "job", outcome: "existing", jobId: requestId, action: "import-save", state: "failed" };
     assert.deepEqual(parseOwnerFileResult(job), job);

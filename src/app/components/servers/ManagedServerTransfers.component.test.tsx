@@ -9,7 +9,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerTransfers, readFileIntent, saveExportFileName } from "./ManagedServerTransfers";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
-import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
+import { OWNER_FILE_REJECTION_REASONS, type OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), download: vi.fn(), config: vi.fn(), refresh: vi.fn(), read: vi.fn(), save: vi.fn(), fileStatus: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/app/servers/managed-server-file-actions", () => ({ submitManagedServerFile: mocks.submit, checkManagedServerFile: mocks.check, downloadManagedServerSave: mocks.download, exportManagedServerConfig: mocks.config, readManagedServerFileStatus: mocks.fileStatus }));
@@ -126,6 +126,27 @@ it.each(["storage-unavailable", "save-rejected", "stop-required", "server-change
     expect(sessionStorage.getItem(key)).toBeNull();
     expect(button("Import save").disabled).toBe(false);
 });
+it.each([undefined, ...OWNER_FILE_REJECTION_REASONS])("shows descriptive pre-job rejection %s with a support reference and clears the finished intent", async (failureReason) => {
+    sessionStorage.setItem(key, JSON.stringify({ requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt,
+        action: "import-save", fingerprints: ["a".repeat(64)], displayName: "Campaign", saveId: status.activeSave!.saveId }));
+    mocks.check.mockResolvedValue({ ok: true, result: { kind: "rejected", ...(failureReason ? { failureReason } : {}) } });
+    await render(); await click("Check status");
+    const messageKey = failureReason ? `transfers.rejection.${failureReason}` : "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck";
+    expect(container.textContent).toContain(serverTestMessages["managed-server"][messageKey as keyof typeof serverTestMessages["managed-server"]]);
+    expect(container.textContent).toContain(`Support reference: ${status.serverId}`);
+    expect(sessionStorage.getItem(key)).toBeNull();
+    expect(button("Import save").disabled).toBe(false);
+    expect(mocks.refresh).toHaveBeenCalled();
+});
+
+it("shows a rejection reason immediately after submission", async () => {
+    mocks.submit.mockResolvedValue({ ok: true, result: { kind: "rejected", failureReason: "storage-unavailable" } });
+    await render(); await click("Export save");
+    expect(container.textContent).toContain(serverTestMessages["managed-server"]["transfers.rejection.storage-unavailable"]);
+    expect(container.textContent).toContain("Support reference:");
+    expect(sessionStorage.getItem(key)).toBeNull();
+});
+
 it("clears a definitively rejected stale request so refreshed inputs can be used", async () => {
     mocks.submit.mockResolvedValue({ ok: false, rejected: true, message: "The server changed" });
     await render(); await click("Export save");

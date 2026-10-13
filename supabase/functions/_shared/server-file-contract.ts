@@ -27,9 +27,11 @@ export interface OwnerFileStatus {
 
 export const OWNER_FILE_FAILURE_REASONS = ['storage-unavailable', 'save-rejected', 'campaign-limit', 'stop-required', 'server-changed'] as const;
 export type OwnerFileFailureReason = typeof OWNER_FILE_FAILURE_REASONS[number];
+export const OWNER_FILE_REJECTION_REASONS = [...OWNER_FILE_FAILURE_REASONS, 'invalid-companion', 'save-too-large', 'server-unavailable'] as const;
+export type OwnerFileRejectionReason = typeof OWNER_FILE_REJECTION_REASONS[number];
 
 export type OwnerFileResult =
-  | { kind: 'rejected' }
+  | { kind: 'rejected'; failureReason?: OwnerFileRejectionReason }
   | { kind: 'configuration'; outcome: 'updated' | 'existing'; updatedAt: string }
   | { kind: 'job'; outcome: 'enqueued' | 'existing'; jobId: string; action: 'import-save' | 'export-save'; state: string; failureReason?: OwnerFileFailureReason };
 
@@ -112,7 +114,9 @@ export function parseOwnerFileResult(value: unknown): OwnerFileResult | null {
   if (value === null) return null;
   if (!record(value)) throw new Error('Invalid transfer result');
   if (value.kind === 'rejected') {
-    exact(value, ['kind']);
+    exact(value, ['kind', ...(Object.hasOwn(value, 'failureReason') ? ['failureReason'] : [])]);
+    if (Object.hasOwn(value, 'failureReason')
+      && !OWNER_FILE_REJECTION_REASONS.some((reason) => reason === value.failureReason)) throw new Error('Invalid transfer rejection reason');
   } else if (value.kind === 'configuration') {
     exact(value, ['kind', 'outcome', 'updatedAt']);
     requireFileTimestamp(value.updatedAt);
