@@ -17,6 +17,7 @@ export function configurationImportMessages(t: Translator["t"]): ConfigurationIm
         noGameplaySettings: t("import.noGameplaySettings"), tooLarge: t("import.tooLarge"), unreadable: t("import.unreadable"),
         combinedBackup: t("import.combinedBackup"), olderBackup: t("import.olderBackup"), expectedMod: t("import.expectedMod"),
         expectedServer: t("import.expectedServer"), duplicateNames: t("import.duplicateNames"), unknownSettings: t("import.unknownSettings"),
+        unknownSettingsWithNames: (names) => `${t("import.unknownSettings")} (${names.join(", ")})`,
         unsupportedValues: t("import.unsupportedValues"), invalidObject: t("import.invalidObject"), unsupportedSetting: t("import.unsupportedSetting"),
         configuration: configurationMessages(t),
     };

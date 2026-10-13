@@ -35,6 +35,13 @@ export interface ManagedDifficultyConfiguration {
   autoAllocateClanMemberPerks: boolean;
 }
 
+export interface ManagedVoiceConfiguration {
+  mapFullVolumeDistance: number;
+  mapMaximumDistance: number;
+  sceneFullVolumeDistance: number;
+  sceneMaximumDistance: number;
+}
+
 export interface ManagedModOptionsConfiguration {
   fastForwardEnabled: boolean;
   autoPauseEnabled: boolean;
@@ -42,11 +49,15 @@ export interface ManagedModOptionsConfiguration {
   goldFoodInfluenceChangeInSettlements: boolean;
   goldFoodInfluenceChangeInBattles: ManagedGoldFoodChangeMode;
   goldFoodInfluenceChangeForDisconnectedPlayers: boolean;
+  voiceEnabled: boolean;
+  blockAiWarDeclarationsOnOfflinePlayers: boolean;
   playerBattleAiJoinWindowHours: number;
   speedLimitWhilePlayersInBattle: boolean;
+  ensureUnaffiliatedWanderers: boolean;
   wandererLimit: number;
   wandererLimitScalesWithPlayers: boolean;
   playerKingdomClanTierRequired: number;
+  coopClansEnabled: boolean;
   smithingStaminaRecoveryOutsideSettlements: boolean;
   smithingStaminaRecoveryMultiplier: number;
   maximumLootersMultiplier: number;
@@ -54,12 +65,14 @@ export interface ManagedModOptionsConfiguration {
   lordDefectionRetries: ManagedLordDefectionRetryMode;
   enableHeroExecutions: boolean;
   enablePlayerClanMemberExecutions: boolean;
+  enablePlayerExecutions: boolean;
 }
 
 export interface ManagedServerConfiguration {
   schemaVersion: 1;
   serverConfig: ManagedServerProcessConfiguration;
   modConfig: {
+    voice: ManagedVoiceConfiguration;
     difficulty: ManagedDifficultyConfiguration;
     modOptions: ManagedModOptionsConfiguration;
   };
@@ -77,6 +90,12 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
       traceBandits: false,
     },
     modConfig: {
+      voice: {
+        mapFullVolumeDistance: 5,
+        mapMaximumDistance: 20,
+        sceneFullVolumeDistance: 10,
+        sceneMaximumDistance: 50,
+      },
       difficulty: {
         playerReceivedDamage: 'VeryEasy',
         playerTroopsReceivedDamage: 'VeryEasy',
@@ -91,17 +110,21 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
         autoAllocateClanMemberPerks: false,
       },
       modOptions: {
+        voiceEnabled: true,
         fastForwardEnabled: true,
         autoPauseEnabled: true,
         clientsCanUseCheats: false,
         goldFoodInfluenceChangeInSettlements: true,
         goldFoodInfluenceChangeInBattles: 'OneDayMax',
         goldFoodInfluenceChangeForDisconnectedPlayers: false,
+        blockAiWarDeclarationsOnOfflinePlayers: false,
         playerBattleAiJoinWindowHours: 24,
         speedLimitWhilePlayersInBattle: true,
+        ensureUnaffiliatedWanderers: true,
         wandererLimit: 32,
         wandererLimitScalesWithPlayers: false,
         playerKingdomClanTierRequired: 4,
+        coopClansEnabled: true,
         smithingStaminaRecoveryOutsideSettlements: true,
         smithingStaminaRecoveryMultiplier: 0.1,
         maximumLootersMultiplier: 1,
@@ -109,6 +132,7 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
         lordDefectionRetries: 'Vanilla',
         enableHeroExecutions: true,
         enablePlayerClanMemberExecutions: false,
+        enablePlayerExecutions: false,
       },
     },
   });
@@ -150,7 +174,9 @@ export function parseManagedServerConfiguration(
     'tracePublish',
     'traceBandits',
   ], messages);
-  const modConfig = requireExactRecord(value.modConfig, ['difficulty', 'modOptions'], messages);
+  const modConfig = requireCompatibleRecord(value.modConfig, ['difficulty', 'modOptions'], {
+    voice: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.voice,
+  }, messages);
   const difficulty = requireExactRecord(modConfig.difficulty, [
     'playerReceivedDamage',
     'playerTroopsReceivedDamage',
@@ -164,7 +190,7 @@ export function parseManagedServerConfiguration(
     'birthAndDeath',
     'autoAllocateClanMemberPerks',
   ], messages);
-  const modOptions = requireExactRecord(modConfig.modOptions, [
+  const modOptions = requireCompatibleRecord(modConfig.modOptions, [
     'fastForwardEnabled',
     'autoPauseEnabled',
     'clientsCanUseCheats',
@@ -183,7 +209,13 @@ export function parseManagedServerConfiguration(
     'lordDefectionRetries',
     'enableHeroExecutions',
     'enablePlayerClanMemberExecutions',
-  ], messages);
+  ], {
+    voiceEnabled: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.voiceEnabled,
+    blockAiWarDeclarationsOnOfflinePlayers: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.blockAiWarDeclarationsOnOfflinePlayers,
+    ensureUnaffiliatedWanderers: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.ensureUnaffiliatedWanderers,
+    coopClansEnabled: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.coopClansEnabled,
+    enablePlayerExecutions: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.enablePlayerExecutions,
+  }, messages);
   return deepFreeze({
     schemaVersion: 1,
     serverConfig: {
@@ -195,6 +227,12 @@ export function parseManagedServerConfiguration(
       traceBandits: requireBoolean(serverConfig.traceBandits, messages),
     },
     modConfig: {
+      voice: {
+        mapFullVolumeDistance: requireVoiceDistance(modConfig.voice, 'mapFullVolumeDistance', messages),
+        mapMaximumDistance: requireVoiceDistance(modConfig.voice, 'mapMaximumDistance', messages),
+        sceneFullVolumeDistance: requireVoiceDistance(modConfig.voice, 'sceneFullVolumeDistance', messages),
+        sceneMaximumDistance: requireVoiceDistance(modConfig.voice, 'sceneMaximumDistance', messages),
+      },
       difficulty: {
         playerReceivedDamage: requireEnum(difficulty.playerReceivedDamage, MANAGED_DIFFICULTY_LEVELS, messages),
         playerTroopsReceivedDamage: requireEnum(difficulty.playerTroopsReceivedDamage, MANAGED_DIFFICULTY_LEVELS, messages),
@@ -209,6 +247,7 @@ export function parseManagedServerConfiguration(
         autoAllocateClanMemberPerks: requireBoolean(difficulty.autoAllocateClanMemberPerks, messages),
       },
       modOptions: {
+        voiceEnabled: requireBoolean(modOptions.voiceEnabled, messages),
         fastForwardEnabled: requireBoolean(modOptions.fastForwardEnabled, messages),
         autoPauseEnabled: requireBoolean(modOptions.autoPauseEnabled, messages),
         clientsCanUseCheats: requireBoolean(modOptions.clientsCanUseCheats, messages),
@@ -222,12 +261,16 @@ export function parseManagedServerConfiguration(
         goldFoodInfluenceChangeForDisconnectedPlayers: requireBoolean(
           modOptions.goldFoodInfluenceChangeForDisconnectedPlayers, messages,
         ),
+        blockAiWarDeclarationsOnOfflinePlayers: requireBoolean(
+          modOptions.blockAiWarDeclarationsOnOfflinePlayers, messages,
+        ),
         playerBattleAiJoinWindowHours: requireInteger(
           modOptions.playerBattleAiJoinWindowHours,
           0,
           8_760, messages,
         ),
         speedLimitWhilePlayersInBattle: requireBoolean(modOptions.speedLimitWhilePlayersInBattle, messages),
+        ensureUnaffiliatedWanderers: requireBoolean(modOptions.ensureUnaffiliatedWanderers, messages),
         wandererLimit: requireInteger(modOptions.wandererLimit, 0, 1_000, messages),
         wandererLimitScalesWithPlayers: requireBoolean(modOptions.wandererLimitScalesWithPlayers, messages),
         playerKingdomClanTierRequired: requireInteger(
@@ -235,6 +278,7 @@ export function parseManagedServerConfiguration(
           0,
           6, messages,
         ),
+        coopClansEnabled: requireBoolean(modOptions.coopClansEnabled, messages),
         smithingStaminaRecoveryOutsideSettlements: requireBoolean(
           modOptions.smithingStaminaRecoveryOutsideSettlements, messages,
         ),
@@ -253,6 +297,7 @@ export function parseManagedServerConfiguration(
         enablePlayerClanMemberExecutions: requireBoolean(
           modOptions.enablePlayerClanMemberExecutions, messages,
         ),
+        enablePlayerExecutions: requireBoolean(modOptions.enablePlayerExecutions, messages),
       },
     },
   });
@@ -278,6 +323,32 @@ function requireExactRecord(
   return value;
 }
 
+function requireCompatibleRecord(
+  value: unknown,
+  requiredKeys: readonly string[],
+  optionalDefaults: Readonly<Record<string, unknown>>,
+  messages: ManagedConfigurationMessages,
+): Record<string, unknown> {
+  if (!isPlainRecord(value)) throw new Error(messages.shape);
+  const allowed = new Set([...requiredKeys, ...Object.keys(optionalDefaults)]);
+  const actual = Object.keys(value);
+  if (actual.some((key) => !allowed.has(key)) || requiredKeys.some((key) => !Object.hasOwn(value, key))) {
+    throw new Error(messages.shape);
+  }
+  return { ...optionalDefaults, ...value };
+}
+
+function requireVoiceDistance(value: unknown, key: string, messages: ManagedConfigurationMessages): number {
+  if (!isPlainRecord(value)) throw new Error(messages.shape);
+  const distance = requireNumber(value[key], 0, 100_000, messages);
+  const pair = key.startsWith('map')
+    ? (key === 'mapFullVolumeDistance' ? value.mapMaximumDistance : value.mapFullVolumeDistance)
+    : (key === 'sceneFullVolumeDistance' ? value.sceneMaximumDistance : value.sceneFullVolumeDistance);
+  if (key.endsWith('MaximumDistance') && distance <= Number(pair)) throw new Error(messages.number);
+  if (key.endsWith('FullVolumeDistance') && Number(pair) <= distance) throw new Error(messages.number);
+  return distance;
+}
+
 function isExactRecord(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
   if (
     typeof value !== 'object'
@@ -287,6 +358,11 @@ function isExactRecord(value: unknown, keys: readonly string[]): value is Record
   ) return false;
   const actual = Object.keys(value);
   return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    && Object.getPrototypeOf(value) === Object.prototype;
 }
 
 // Requires a boolean without coercion, using the selected diagnostic.
