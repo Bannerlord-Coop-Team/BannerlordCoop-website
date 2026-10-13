@@ -375,15 +375,17 @@ test("operation card rows expand to their row width", () => {
 // Ensure discovery replaces receipt import and renders backend metadata rather than legacy guesses.
 test("Builds refreshes GHCR discovery and displays exact release labels", async () => {
     const source = await readFile(new URL("../../admin/control-plane/page.tsx", import.meta.url), "utf8");
+    const details = await readFile(new URL("../../components/admin/ControlPlanePresentation.tsx", import.meta.url), "utf8");
+    const server = await readFile(new URL("../../components/admin/ControlPlaneServerView.tsx", import.meta.url), "utf8");
     assert.match(source, /<RefreshReleaseCatalog/u);
     assert.doesNotMatch(source, /import-latest-stable|LEGACY_STABLE_METADATA/u);
     for (const key of ["client.revision", "client.version", "dedicated-server.revision", "game.version"]) {
-        assert.ok(source.includes(`io.bannerlordcoop.${key}`));
+        assert.ok(details.includes(`io.bannerlordcoop.${key}`));
     }
     assert.match(source, /build.currentChannel/u);
     assert.ok(source.includes('build.registryMetadata ? "First observed" : "Published"'));
     assert.match(source, /Follow channel \(remove version pin\)/u);
-    assert.match(source, /RecordedRelease build=\{result.dashboard.installedBuild\}/u);
+    assert.match(server, /RecordedRelease build=\{result.dashboard.installedBuild\}/u);
 });
 
 // Operations must offer the full discovery bound, not the overview's truncated 20-version lists.

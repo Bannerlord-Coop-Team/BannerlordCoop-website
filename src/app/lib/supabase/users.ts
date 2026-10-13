@@ -46,3 +46,13 @@ export async function listWebsiteAccounts() {
     };
 }
 export type WebsiteAccountSummary = { accountId: string; label: string; email: string | null; discordUserId: string | null };
+
+/** Resolves one displayed owner without enumerating the Auth directory. */
+export async function getWebsiteAccount(accountId: string): Promise<WebsiteAccountSummary | null> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(accountId)) return null;
+    const { data, error } = await getSupabaseAdminClient().auth.admin.getUserById(accountId);
+    if (error) throw error;
+    const user = data.user;
+    return user ? { accountId: user.id, label: user.email || user.phone || user.id,
+        email: user.email || null, discordUserId: discordUserSummary(user)?.discordUserId ?? null } : null;
+}
