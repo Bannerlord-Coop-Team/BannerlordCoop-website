@@ -15,9 +15,10 @@ type Props = {
     visibility?: "public" | "private";
     accessRole: "owner" | "manager" | "support" | "admin";
     expectedUpdatedAt: string;
+    disabled?: boolean;
 };
 // Presents and confirms the existing owner-only directory preference.
-export function ServerVisibilitySetting({ serverId, visibility, accessRole, expectedUpdatedAt }: Props) {
+export function ServerVisibilitySetting({ serverId, visibility, accessRole, expectedUpdatedAt, disabled = false }: Props) {
     const { t } = useTranslations("managed-server");
     const router = useRouter();
     const picker = useRef<HTMLDetailsElement>(null);
@@ -51,7 +52,7 @@ export function ServerVisibilitySetting({ serverId, visibility, accessRole, expe
     }, []);
     // Confirms publishing before dispatching the retained visibility request.
     function changeVisibility(target: "private" | "public") {
-        if (accessRole !== "owner" || pending || target === current) return;
+        if (disabled || accessRole !== "owner" || pending || target === current) return;
         if (target === "public" && !window.confirm(t("visibilitySetting.makeThisServerDiscoverableInThePublicDirectoryWithIts"))) return;
         if (!request.current || request.current.serverId !== serverId || request.current.visibility !== target
             || request.current.expectedUpdatedAt !== expectedUpdatedAt) {
@@ -90,7 +91,7 @@ export function ServerVisibilitySetting({ serverId, visibility, accessRole, expe
                 picker.current.querySelector("summary")?.focus();
             }
         }}>
-            <summary aria-label={t("visibilitySetting.directoryVisibilityLabelEditVisibility", { label: label })} className="inline-flex min-h-10 cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-foreground hover:border-gold/50 focus-visible:outline-2 focus-visible:outline-gold [&::-webkit-details-marker]:hidden">
+            <summary aria-disabled={disabled || undefined} aria-label={t("visibilitySetting.directoryVisibilityLabelEditVisibility", { label: label })} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-gold [&::-webkit-details-marker]:hidden ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:border-gold/50"}`} onClick={event => { if (disabled) { event.preventDefault(); } }}>
                 <Icon className="size-4" aria-hidden="true" />{pending || acknowledged !== null ? t("visibilitySetting.saving") : label}<ChevronDown className="size-3" aria-hidden="true" />
             </summary>
             <div className="absolute right-0 z-20 mt-2 w-64 max-w-[calc(100vw-3rem)] rounded-lg border border-white/15 bg-surface-raised p-1 shadow-xl">

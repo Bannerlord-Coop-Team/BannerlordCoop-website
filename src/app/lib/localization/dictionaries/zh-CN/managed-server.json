@@ -423,6 +423,8 @@
   "page.owner": "所有者",
   "page.readOnlySupport": "支持人员（只读）",
   "page.serverStatus": "服务器状态",
+  "page.serverInitializing": "正在准备服务器",
+  "page.serverInitializingDescription": "服务器正在设置中，可能需要最多 15 分钟。初始化完成后，控制项会自动启用。",
   "page.gameState": "游戏状态",
   "page.lifecycle": "生命周期",
   "page.releaseChannel": "版本通道",

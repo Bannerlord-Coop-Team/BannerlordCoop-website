@@ -72,6 +72,7 @@ function firstValue(value: string | string[] | undefined) {
 }
 
 export const dynamic = "force-dynamic";
+const INITIALIZING_SERVER_STATES = new Set(["provisioning", "configuring"]);
 
 // Resolves metadata from the explicit website locale.
 export async function generateMetadata(): Promise<Metadata> {
@@ -190,6 +191,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
     const deletionStatus = server.accessRole === "owner"
         ? await getMyServerDeletionStatus(accessToken, server.serverId, AbortSignal.timeout(5_000)).catch(() => null)
         : null;
+    const initializing = INITIALIZING_SERVER_STATES.has(server.operationState);
     const managedAccessLabels: Record<MyServerSummary["accessRole"], string> = {
         admin: t("page.readOnlyAdministrator"),
         manager: t("page.manager"),
@@ -199,9 +201,10 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
 
     return <ServerManagementWorkspace
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.displayName}</h1>}
-        initialSection={initialSection}
+        initialSection={initializing ? "Console" : initialSection}
+        interactionLocked={initializing}
         address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
-        visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} />}
+        visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} disabled={initializing} />}
         summary={t("page.managedSummary", { region: localizedRegionLabel(tServers, server.friendlyRegion), access: managedAccessLabels[server.accessRole] })}
         status={<Suspense fallback={<ManagedServerStatus accessToken={accessToken} server={server} checkBackup={false} />}>
             <ManagedServerStatus accessToken={accessToken} server={server} checkBackup={server.accessRole === "owner" || server.accessRole === "manager"} />
@@ -229,7 +232,7 @@ function ManagedServerSections({
     deletionStatus?: MyServerDeletionStatus | null;
 }) {
     return (
-        <ManagedServerPollingProvider readStatus={readManagedServerStatusFingerprint}>
+        <ManagedServerPollingProvider readStatus={readManagedServerStatusFingerprint} initialServer={{ serverId: server.serverId, updatedAt: server.updatedAt, operationState: server.operationState }}>
             <ServerWorkspacePanel section="Console">
                 {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : server.accessRole === "owner" || server.accessRole === "manager"
                     ? <ManagedServerCommands key={`${userId}:${server.serverId}`} server={server} userId={userId} controls={<ManagedServerLifecycleSection server={server} />} />
@@ -466,9 +469,16 @@ async function ManagedServerStatus({ accessToken, server, checkBackup }: { acces
         [t("page.lifecycle"), backup !== null ? t("page.backingUp") : formatManagedValue(server.operationState, t)],
         [t("page.releaseChannel"), releaseChannelLabel(server.releaseChannel, { stable: t("page.releaseStable"), nightly: t("page.releaseNightly") })],
     ];
-    return <dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs" aria-label={t("page.serverStatus")}>
-        {entries.map(([label, value]) => <div key={label} className="flex items-center gap-2"><dt className="text-foreground-muted">{label}</dt><dd className="font-medium text-foreground">{value}</dd></div>)}
-    </dl>;
+    const initializing = INITIALIZING_SERVER_STATES.has(server.operationState);
+    return <div className="space-y-3">
+        <dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs" aria-label={t("page.serverStatus")}>
+            {entries.map(([label, value]) => <div key={label} className="flex items-center gap-2"><dt className="text-foreground-muted">{label}</dt><dd className="font-medium text-foreground">{value}</dd></div>)}
+        </dl>
+        {initializing && <div role="status" aria-live="polite" className="flex max-w-2xl items-start gap-3 rounded-md border border-gold/30 bg-gold/[0.06] px-4 py-3 text-sm">
+            <span aria-hidden="true" className="mt-0.5 size-3 shrink-0 animate-pulse rounded-full bg-gold motion-reduce:animate-none" />
+            <div><p className="font-medium text-foreground">{t("page.serverInitializing")}</p><p className="mt-1 leading-6 text-foreground-muted">{t("page.serverInitializingDescription")}</p></div>
+        </div>}
+    </div>;
 }
 
 // Localizes known operational states while preserving the existing external-value display.

@@ -52,6 +52,22 @@ it("switches all four workspaces without unmounting live controls or losing draf
     expect(disconnected).not.toHaveBeenCalled();
 });
 
+it("keeps the workspace on Console and disables server interactions while initializing", async () => {
+    await act(async () => root.render(<TestLocalization>{<ServerManagementWorkspace name="Preparing server" address="203.0.113.8:7210" summary="Configuring" interactionLocked>
+        <ServerWorkspacePanel section="Console"><div id="console-content">Console</div></ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Backups"><div id="backup-content">Backups</div></ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Settings"><div id="settings-content">Settings</div></ServerWorkspacePanel>
+    </ServerManagementWorkspace>} </TestLocalization>));
+    expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Console");
+    expect(container.querySelector("#console-content")?.closest("[hidden]")).toBeNull();
+    expect(container.querySelector("#backup-content")?.closest("[hidden]")).not.toBeNull();
+    expect(container.querySelector("#settings-content")?.closest("[hidden]")).not.toBeNull();
+    for (const button of [...container.querySelectorAll<HTMLButtonElement>("nav button")]) {
+        expect(button.disabled).toBe(button.textContent !== "Console");
+    }
+    expect(container.querySelector<HTMLButtonElement>('[aria-controls="server-address"]')?.disabled).toBe(true);
+});
+
 it("hides the real address until revealed and copies it without navigation", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });

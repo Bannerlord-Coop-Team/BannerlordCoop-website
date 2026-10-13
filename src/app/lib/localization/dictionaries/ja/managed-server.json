@@ -423,6 +423,8 @@
   "page.owner": "所有者",
   "page.readOnlySupport": "読み取り専用のサポート",
   "page.serverStatus": "サーバーの状態",
+  "page.serverInitializing": "サーバーを準備しています",
+  "page.serverInitializingDescription": "サーバーをセットアップしています。最大15分かかる場合があります。初期化が完了すると、操作できるようになります。",
   "page.gameState": "ゲームの状態",
   "page.lifecycle": "ライフサイクル",
   "page.releaseChannel": "リリースチャンネル",

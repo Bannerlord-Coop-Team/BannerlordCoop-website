@@ -128,11 +128,29 @@ function PollingProbe() {
 }
 
 /** Mounts the provider with a probe and the lifecycle controls. */
-async function renderWithProbe(readStatus?: ManagedServerStatusReader) {
+async function renderWithProbe(readStatus?: ManagedServerStatusReader, operationState?: string) {
     await act(async () => root.render(
-        <TestLocalization><ManagedServerPollingProvider readStatus={readStatus}><PollingProbe /><ManagedServerControls {...server} /></ManagedServerPollingProvider></TestLocalization>,
+        <TestLocalization><ManagedServerPollingProvider readStatus={readStatus} initialServer={operationState === undefined ? undefined : { serverId: server.serverId, updatedAt: server.expectedUpdatedAt, operationState }}><PollingProbe /><ManagedServerControls {...server} /></ManagedServerPollingProvider></TestLocalization>,
     ));
 }
+
+it.each(["provisioning", "configuring"])("automatically follows %s until initialization settles, then preserves normal lifecycle polling", async operationState => {
+    await renderWithProbe(undefined, operationState);
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(polling.session).toMatchObject({ serverId: server.serverId, statusSource: "initialization" });
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(router.refresh).toHaveBeenCalledTimes(2);
+    await renderWithProbe(undefined, "stopped");
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(polling.session).toBeNull();
+    const refreshes = router.refresh.mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(router.refresh).toHaveBeenCalledTimes(refreshes);
+    await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt));
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(polling.session).toMatchObject({ statusSource: "server" });
+    expect(router.refresh).toHaveBeenCalledTimes(refreshes + 2);
+});
 
 it("spaces refreshes from 4 s to 8 s to 15 s as an operation runs longer", () => {
     expect([0, 59_999, 60_000, 179_999, 180_000, 14 * 60_000].map(managedServerPollDelay)).toEqual([4_000, 4_000, 8_000, 8_000, 15_000, 15_000]);

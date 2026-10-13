@@ -61,7 +61,7 @@ export function ServerDeletionPanel({ onDelete, deletionJob = null, ...props }: 
     const [target, setTarget] = useState<Props | null>(null);
     const [pending, setPending] = useState(false);
     const [result, setResult] = useState<ServerDeletionActionResult | null>(null);
-    const unavailable = ["suspended", "deletion-pending", "deleting", "deleted"].includes(props.operationState);
+    const unavailable = ["provisioning", "configuring", "suspended", "deletion-pending", "deleting", "deleted"].includes(props.operationState);
     const changed = target !== null && (target.serverId !== props.serverId || target.displayName !== props.displayName || target.expectedUpdatedAt !== props.expectedUpdatedAt);
 
     async function submit(confirmationText: string) {
