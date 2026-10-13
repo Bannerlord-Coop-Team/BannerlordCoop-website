@@ -9,6 +9,7 @@ type CommunityStatsProps = {
     dedicatedServersCount: number | null;
     battlesFoughtTotal: number | null;
     totalDownloads: number | null;
+    loading?: boolean;
 };
 
 type Stat = {
@@ -26,6 +27,7 @@ export async function CommunityStats({
     dedicatedServersCount,
     battlesFoughtTotal,
     totalDownloads,
+    loading = false,
 }: CommunityStatsProps) {
     const { t } = await getTranslations("home");
     const stats: Stat[] = [
@@ -64,7 +66,7 @@ export async function CommunityStats({
     ];
 
     return (
-        <section className="relative overflow-hidden border-b border-white/10 bg-surface py-16 sm:py-20 lg:py-24 2xl:py-28" aria-labelledby="community-stats-heading">
+        <section className="relative overflow-hidden border-b border-white/10 bg-surface py-16 sm:py-20 lg:py-24 2xl:py-28" aria-labelledby="community-stats-heading" aria-busy={loading}>
             <div className="site-container relative">
                 <ScrollReveal className="max-w-3xl" amount={0.35}>
                     <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:text-sm sm:tracking-[0.24em]">
@@ -81,7 +83,7 @@ export async function CommunityStats({
                 <div className="mt-10 grid overflow-hidden border border-white/10 bg-surface-raised sm:mt-12 sm:grid-cols-2 xl:grid-cols-4">
                     {stats.map((stat, index) => (
                         <div key={stat.label} className="border-b border-white/10 sm:odd:border-r sm:nth-3:border-b-0 xl:border-r xl:border-b-0 xl:last:border-r-0">
-                            <StatCard {...stat} animationDelay={index * 0.12} />
+                            <StatCard {...stat} loading={loading} animationDelay={index * 0.12} />
                         </div>
                     ))}
                 </div>
