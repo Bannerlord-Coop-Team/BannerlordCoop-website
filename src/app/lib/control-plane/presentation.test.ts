@@ -382,6 +382,8 @@ test("Builds refreshes GHCR discovery and displays exact release labels", async 
     for (const key of ["client.revision", "client.version", "dedicated-server.revision", "game.version"]) {
         assert.ok(details.includes(`io.bannerlordcoop.${key}`));
     }
+    assert.ok(details.includes("Recorded source revision"));
+    assert.ok(details.includes('build.sourceRevision === "registry-observed"'));
     assert.match(source, /build.currentChannel/u);
     assert.ok(source.includes('build.registryMetadata ? "First observed" : "Published"'));
     assert.match(source, /Follow channel \(remove version pin\)/u);

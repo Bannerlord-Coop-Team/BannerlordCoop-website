@@ -139,7 +139,7 @@ The placeholder design is documented in `docs/server-hosting-design.md`.
 
 The current `/servers` page loads authenticated managed assignments from the control plane alongside the existing live-console list. New setup uses **unused explicitly granted quota**, not membership or role claims. Available regions create an assigned stopped server; full regions accept private durable requests through the existing authenticated `my-servers` Edge Function. The public directory remains labeled placeholder data.
 
-See [website server onboarding](docs/server-onboarding.md) for the strict contract, exact-request recovery, Discord password controls, mock-only screenshots/tests and required **schema → backend → my-servers Edge → UI** rollout order. Nothing in this implementation deploys those layers automatically.
+See [website server onboarding](docs/server-onboarding.md) for the strict contract, exact-request recovery, Discord password controls, mock-only screenshots/tests and required **schema → backend → my-servers Edge → UI** rollout order. The [Supabase hosting deployment workflow](docs/supabase-hosting-deployment.md) deploys affected managed-hosting APIs from main; schema and backend prerequisites retain their separate rollout gates.
 
 ### Live server console
 
