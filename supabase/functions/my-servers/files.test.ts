@@ -29,6 +29,25 @@ test("transfer failures accept only optional closed reasons and pass through the
 function request(body: unknown, auth = true, id = true) { return new Request("https://edge.test/my-servers?resource=file-transfer", { method: "POST", headers: { "content-type": "application/json", ...(auth ? { authorization: `Bearer ${token}` } : {}), ...(id ? { "x-request-id": requestId } : {}) }, body: JSON.stringify(body) }); }
 function handler(fetchImplementation: typeof fetch) { return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", waitUntil: () => {}, fetchImplementation }); }
 
+test("save metadata and mod configuration reads accept the expanded live configuration", async () => {
+    const managedConfig = structuredClone(DEFAULT_MANAGED_SERVER_CONFIGURATION);
+    managedConfig.modConfig.voice.sceneMaximumDistance = 75;
+    managedConfig.modConfig.modOptions.coopClansEnabled = false;
+    const files = { serverId: requestId, updatedAt: input.expectedUpdatedAt, operationState: "running",
+        observedGameState: "running", activeSave: { saveId: requestId, displayName: "Default New Game" }, managedConfig };
+    const response = await handler(async (_url, init) => {
+        const upstream = JSON.parse(String(init?.body));
+        return Response.json({ version: 1, requestId: upstream.requestId, ok: true, result: files });
+    })(new Request(`https://edge.test/my-servers?resource=files&serverId=${requestId}`, { headers: { authorization: `Bearer ${token}` } }));
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).result, files);
+    const mod = { configPart: "mod", revision: "a".repeat(64), settings: managedConfig.modConfig };
+    const config = await handler(async () => Response.json({ requestId, ok: true, result: mod }))(
+        new Request(`https://edge.test/my-servers?resource=config&serverId=${requestId}&configPart=mod`, { headers: { authorization: `Bearer ${token}` } }));
+    assert.equal(config.status, 200);
+    assert.deepEqual((await config.json()).result, mod);
+});
+
 test("configuration transfer preserves verified bearer, exact input and durable request ID", async () => {
     const response = await handler(async (url, init) => {
         assert.equal(String(url), "https://cp.test/v1/user/files");
