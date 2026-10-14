@@ -212,7 +212,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} deletionStatus={deletionStatus} />
         <ServerWorkspacePanel section="Settings">
-            <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
+            <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} managerAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
 }

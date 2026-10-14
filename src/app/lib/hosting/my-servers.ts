@@ -231,6 +231,19 @@ export async function requestMyServerSettings(accessToken: string, input: OwnerS
     try { return parseOwnerSettingsResult(result, parsed.serverId); } catch { throw invalidResponse(); }
 }
 
+export async function requestMyServerManager(accessToken: string, input: { serverId: string; managerAccountId: string; enabled: boolean; expectedUpdatedAt: string }, requestId: string) {
+    if (!REQUEST_ID.test(requestId) || !RESOURCE_ID.test(input.serverId) || !RESOURCE_ID.test(input.managerAccountId) || !ISO_TIMESTAMP.test(input.expectedUpdatedAt)) {
+        throw new MyServersApiError("invalid_request", "The manager access request is invalid.");
+    }
+    const result = await requestMyServersApi(accessToken, {
+        method: "POST",
+        body: JSON.stringify({ action: "set-server-manager", ...input }),
+        requestId,
+    });
+    if (!isRecord(result) || !hasExactKeys(result, ["changed"]) || typeof result.changed !== "boolean") throw invalidResponse();
+    return result as { changed: boolean };
+}
+
 export async function requestServerVisibility(accessToken: string, input: VisibilityMutation, requestId: string) {
     if (!REQUEST_ID.test(requestId)) throw new MyServersApiError("invalid_request", "The visibility request ID is invalid.");
     const parsed = parseVisibilityMutation(input);

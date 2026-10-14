@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowUpRight, Check, ChevronDown, ChevronRight, Copy, Databa
 import Link from "next/link";
 import { useTranslations } from "@/app/lib/localization/client";
 import { ServerDeletionPanel } from "@/app/components/servers/ManagedServerDelete";
+import { ManagedServerManagerAccess } from "@/app/components/servers/ManagedServerManagerAccess";
 
 const sections = [
     { name: "Console", labelKey: "workspace.console", icon: Terminal },
@@ -484,6 +485,7 @@ export default function ServerWireframe() {
                     </SaveBar>
                 </form>
             </Panel>}
+            {section === "Settings" && <ManagedServerManagerAccess serverId="aaaaaaaa-1111-4111-8111-111111111111" expectedUpdatedAt="2026-10-07T12:00:00.000Z" canEdit />}
             {section === "Settings" && <ServerDeletionPanel key={name} serverId="aaaaaaaa-1111-4111-8111-111111111111" displayName={name} expectedUpdatedAt="2026-10-07T12:00:00.000Z" operationState="running"
                 onDelete={async () => ({ ok: true, message: managedT("deletion.queued") })} />}
         </div>

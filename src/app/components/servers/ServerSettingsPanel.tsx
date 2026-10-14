@@ -13,6 +13,7 @@ import { saveServerSettings, type ServerSettingsField, type ServerSettingsPrevio
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE, type MaintenanceSlot, type OwnerSettingsMutation } from "../../../../supabase/functions/_shared/server-settings-contract";
 import type { ReleaseChannel, ReleaseStatus } from "../../../../supabase/functions/_shared/server-release-contract";
 import { CircleAlert, Globe2, LockKeyhole, Search } from "lucide-react";
+import { ManagedServerManagerAccess } from "./ManagedServerManagerAccess";
 
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-40";
 const ACTIVE_RELEASE_JOB_STATES = new Set(["queued", "running", "retry-wait"]);
@@ -26,9 +27,10 @@ type Visibility = "private" | "public";
 type VisibilityAccess = { serverId: string; expectedUpdatedAt: string; canEdit: boolean };
 
 // Presents authorized settings drafts and localized mutation feedback.
-export function ServerSettingsPanel({ name, visibility, renameServerId, visibilityAccess, releaseAccess, settingsAccess }: {
+export function ServerSettingsPanel({ name, visibility, renameServerId, visibilityAccess, releaseAccess, settingsAccess, managerAccess }: {
     settingsAccess?: VisibilityAccess & { maintenanceSlot?: string; timezone?: string };
     releaseAccess?: VisibilityAccess & { channel: ReleaseChannel };
+    managerAccess?: { serverId: string; expectedUpdatedAt: string; canEdit: boolean };
     name: string; visibility?: Visibility; renameServerId?: string; visibilityAccess?: VisibilityAccess;
 }) {
     const { t } = useTranslations("managed-server");
@@ -236,7 +238,8 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
         setMessage("");
     }
 
-    return <section aria-labelledby="server-settings-heading" className="min-w-0 rounded-lg border border-white/10 bg-surface">
+    return <>
+    <section aria-labelledby="server-settings-heading" className="min-w-0 rounded-lg border border-white/10 bg-surface">
         <div className="border-b border-white/10 p-5">
             <h2 id="server-settings-heading" className="text-base font-semibold">{t("settingsPanel.serverSettings")}</h2>
             <p className="mt-1 text-sm leading-6 text-foreground-muted">{t("settingsPanel.changesApplyOnlyWhenYouSave")}</p>
@@ -314,5 +317,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
             </div>
         </div>
         </form>
-    </section>;
+    </section>
+    {managerAccess && <div className="mt-5"><ManagedServerManagerAccess {...managerAccess} /></div>}
+    </>;
 }

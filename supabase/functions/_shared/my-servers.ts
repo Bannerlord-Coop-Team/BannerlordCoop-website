@@ -49,6 +49,7 @@ type UpstreamRequest =
     | { operation: "configuration-file"; input: { serverId: string; configPart: RunnerConfigurationPart } }
     | { operation: "save-configuration-file"; input: RunnerConfigurationMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
+    | { operation: "set-server-manager"; input: { serverId: string; managerAccountId: string; enabled: boolean; expectedUpdatedAt: string } }
     // Onboarding sends region keys only; the control plane resolves them against its stored catalog.
     | OnboardingMutationRequest
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
@@ -149,7 +150,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // Durable mutations must retain the caller's UUID for exactly-once handling.
-            if (upstreamRequest.operation === "delete-server" || upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server") {
+            if (upstreamRequest.operation === "delete-server" || upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "set-server-manager" || upstreamRequest.operation === "update-server") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -277,6 +278,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "set-server-visibility") {
                     parseVisibilityResult(envelope.result, { action: "set-server-visibility", ...upstreamRequest.input });
                 }
+                if (upstreamRequest.operation === "set-server-manager" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["changed"]) || typeof envelope.result.changed !== "boolean")) throw new Error("Invalid manager response");
                 if (upstreamRequest.operation === "create-server") {
                     const result = parseOnboardingResult(envelope.result, onboardingRequestMutation(upstreamRequest));
                     if (result.action === "create-server") {
@@ -448,6 +450,11 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
         return { operation: "set-server-visibility", input: {
             serverId: parsed.serverId, visibility: parsed.visibility, expectedUpdatedAt: parsed.expectedUpdatedAt,
         } };
+    }
+    if (value.action === "set-server-manager") {
+        if (!hasExactKeys(value, ["action", "enabled", "expectedUpdatedAt", "managerAccountId", "serverId"]) || typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId) || typeof value.managerAccountId !== "string" || !SERVER_ID.test(value.managerAccountId) || typeof value.enabled !== "boolean" || typeof value.expectedUpdatedAt !== "string") throw new Error("Invalid manager access request");
+        assertExpectedUpdatedAt(value.expectedUpdatedAt);
+        return { operation: "set-server-manager", input: { serverId: value.serverId, managerAccountId: value.managerAccountId, enabled: value.enabled, expectedUpdatedAt: value.expectedUpdatedAt as string } };
     }
     if (value.action === "create-server" || value.action === "request-region") {
         // The browser names only a region key; any other field, including a placement, is rejected.
