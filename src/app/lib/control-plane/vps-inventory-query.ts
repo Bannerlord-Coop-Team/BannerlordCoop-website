@@ -201,6 +201,14 @@ export function filterVpsHosts(
     });
 }
 
+/** Keeps VPS hosts with a terminal runner error ahead of healthy or in-progress hosts. */
+export function sortVpsHosts(hosts: readonly HostingAdminVpsHost[]) {
+    return hosts
+        .map((host, index) => ({ host, index }))
+        .sort((left, right) => runnerErrorRank(right.host) - runnerErrorRank(left.host) || left.index - right.index)
+        .map(({ host }) => host);
+}
+
 export function paginateVpsHosts<T>(items: readonly T[], page: number, pageSize: number) {
     const safeSize = Number.isSafeInteger(pageSize) && pageSize > 0 ? pageSize : DEFAULT_VPS_PAGE_SIZE;
     const pageCount = Math.max(1, Math.ceil(items.length / safeSize));
@@ -239,6 +247,10 @@ function slotOwnerEmail(slot: OccupiedSlot, lookup: EmailLookup) {
 
 function occupiedSlots(host: HostingAdminVpsHost) {
     return Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
+}
+
+function runnerErrorRank(host: HostingAdminVpsHost) {
+    return host.runnerOnboarding?.state === "failed" || host.runnerUpdate?.state === "failed" ? 1 : 0;
 }
 
 function hostMatchesRegions(host: PlacedHost, regions: ReadonlySet<string>, catalog: RegionCatalog) {

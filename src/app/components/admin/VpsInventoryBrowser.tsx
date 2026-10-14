@@ -7,6 +7,7 @@ import {
     filterVpsHosts,
     isVpsPageSize,
     paginateVpsHosts,
+    sortVpsHosts,
     useRememberedVpsPageSize,
     vpsOwnerEmails,
     vpsRegionOptions,
@@ -55,7 +56,7 @@ function FilteredVpsInventory({
         () => filterVpsHosts(hosts, accounts, { regions, email, emptySlotsOnly }, regionCatalog),
         [hosts, accounts, regions, email, emptySlotsOnly, regionCatalog],
     );
-    const pagination = paginateVpsHosts(filtered, page, pageSize);
+    const pagination = paginateVpsHosts(sortVpsHosts(filtered), page, pageSize);
     const filtersActive = regions.length > 0 || email.trim().length > 0 || emptySlotsOnly;
     const pageSizeId = useId();
 
