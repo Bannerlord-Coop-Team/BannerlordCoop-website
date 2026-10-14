@@ -39,6 +39,7 @@ it("preserves the original request UUID and treats transport errors as uncertain
 it.each([
     ["operation_unavailable", "The server isn’t running, so the command can’t be delivered. Send it again once the server is running.", false],
     ["request_conflict", "The server is busy with another command or its status just changed. Wait a moment, then send it again.", false],
+    ["operation_in_progress", "The server is busy with another command or its status just changed. Wait a moment, then send it again.", false],
     ["rate_limited", "Too many requests. Wait before checking again.", false],
 ])("explains a definitive %s rejection without pointing the owner to Discord", async (code, message, refresh) => {
     mocks.submit.mockRejectedValue(new MyServersApiError(code, "Private details"));
