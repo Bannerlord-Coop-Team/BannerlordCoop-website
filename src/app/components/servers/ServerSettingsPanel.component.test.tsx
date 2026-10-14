@@ -61,6 +61,17 @@ it("renders current maintenance preferences and discards unsaved changes without
     expect(container.textContent).toContain("No pending changes");
 });
 
+it("filters the settings controls by their labels and shows an empty state when nothing matches", async () => {
+    await render();
+    await change("#settings-search", "visibility");
+    expect(container.querySelector("#settings-server-name")).toBeNull();
+    expect(container.querySelector("#settings-maintenance-window")).toBeNull();
+    expect(container.querySelector("#settings-release-channel")).toBeNull();
+    expect(container.querySelector('input[name="settings-visibility"]')).not.toBeNull();
+    await change("#settings-search", "does not exist");
+    expect(container.querySelector('input[name="settings-visibility"]')).toBeNull();
+    expect(container.textContent).toContain("No settings match your search.");
+});
 it("saves name and maintenance once, then carries each returned generation into visibility and release", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     await render();

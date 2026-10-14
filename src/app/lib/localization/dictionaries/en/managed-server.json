@@ -769,5 +769,8 @@
   "transfers.rejection.invalid-companion": "The companion .json is not a valid JSON object or exceeds the supported JSON limits. Export a fresh matching .sav + .json pair and try again.",
   "transfers.rejection.save-too-large": "The save or companion exceeds the import size limits. Use smaller files and try again.",
   "transfers.rejection.server-unavailable": "The server is not ready to accept this transfer. Refresh its status and try again once it is available.",
-  "transfers.rejection.reference": "Support reference: {requestId}"
+  "transfers.rejection.reference": "Support reference: {requestId}",
+  "settingsPanel.searchSettings": "Search settings",
+  "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
+  "settingsPanel.noSettingsMatchSearch": "No settings match your search."
 }

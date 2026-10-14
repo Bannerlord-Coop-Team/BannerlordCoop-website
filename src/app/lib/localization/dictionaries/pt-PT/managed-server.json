@@ -769,5 +769,8 @@
   "transfers.rejection.invalid-companion": "O .json associado não contém um objeto JSON válido ou excede os limites JSON suportados. Exporta um novo par .sav + .json correspondente e tenta novamente.",
   "transfers.rejection.save-too-large": "O jogo guardado ou o ficheiro associado excede os limites de tamanho de importação. Usa ficheiros mais pequenos e tenta novamente.",
   "transfers.rejection.server-unavailable": "O servidor não está pronto para aceitar esta transferência. Atualiza o estado e tenta novamente quando estiver disponível.",
-  "transfers.rejection.reference": "Referência de suporte: {requestId}"
+  "transfers.rejection.reference": "Referência de suporte: {requestId}",
+  "settingsPanel.searchSettings": "Search settings",
+  "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
+  "settingsPanel.noSettingsMatchSearch": "No settings match your search."
 }

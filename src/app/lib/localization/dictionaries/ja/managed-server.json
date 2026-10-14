@@ -768,5 +768,8 @@
   "transfers.rejection.invalid-companion": "対応する .json が有効なJSONオブジェクトではないか、対応しているJSONの制限を超えています。対応する .sav + .json を新しくエクスポートして再試行してください。",
   "transfers.rejection.save-too-large": "セーブまたは対応するファイルがインポートのサイズ制限を超えています。より小さいファイルを使用して再試行してください。",
   "transfers.rejection.server-unavailable": "サーバーはこの転送を受け付ける準備ができていません。状態を更新し、利用可能になってから再試行してください。",
-  "transfers.rejection.reference": "サポート参照番号: {requestId}"
+  "transfers.rejection.reference": "サポート参照番号: {requestId}",
+  "settingsPanel.searchSettings": "Search settings",
+  "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
+  "settingsPanel.noSettingsMatchSearch": "No settings match your search."
 }
