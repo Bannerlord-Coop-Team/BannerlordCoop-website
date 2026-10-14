@@ -56,3 +56,13 @@ export async function getWebsiteAccount(accountId: string): Promise<WebsiteAccou
     return user ? { accountId: user.id, label: user.email || user.phone || user.id,
         email: user.email || null, discordUserId: discordUserSummary(user)?.discordUserId ?? null } : null;
 }
+
+/** Resolves one exact email on the server; callers never receive an account directory. */
+export async function findWebsiteAccountByEmail(email: string): Promise<WebsiteAccountSummary | null> {
+    const normalized = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalized) || normalized.length > 320) return null;
+    const { users } = await listSupabaseUsers();
+    const user = users.find(candidate => candidate.email?.trim().toLowerCase() === normalized);
+    return user ? { accountId: user.id, label: user.email || user.phone || user.id,
+        email: user.email || null, discordUserId: discordUserSummary(user)?.discordUserId ?? null } : null;
+}

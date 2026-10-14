@@ -11,6 +11,14 @@ custom password using the current server generation. A running server queues a
 warned restart. No password or secret reference is returned; refresh current
 status after an uncertain response instead of automatically resubmitting.
 
+The owner-only **Manager access** panel lives in the server's **Settings** tab.
+It accepts one manually entered Bannerlord Coop account email and never renders
+an account directory or autocomplete list. The website resolves that exact email
+server-side, then the control plane rechecks current ownership and the displayed
+server generation before granting the manager ACL. Managers can view, operate and
+manage saves; they cannot change settings, manage access, export data or delete
+the server.
+
 Campaign transfers distinguish accepted queued jobs, processing, automatic retry
 waits and terminal results. Confirmed jobs are checked for up to ten minutes;
 checks pause after one minute without confirmation. A paused check does not cancel

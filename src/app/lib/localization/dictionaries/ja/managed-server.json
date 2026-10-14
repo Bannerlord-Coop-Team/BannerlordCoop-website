@@ -771,5 +771,20 @@
   "transfers.rejection.reference": "サポート参照番号: {requestId}",
   "settingsPanel.searchSettings": "Search settings",
   "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
-  "settingsPanel.noSettingsMatchSearch": "No settings match your search."
+  "settingsPanel.noSettingsMatchSearch": "No settings match your search.",
+
+  "managerAccess.granting": "Granting access...",
+  "managerAccess.description": "Add someone as a manager for this server. Enter their exact Bannerlord Coop account email. No account directory is shown.",
+  "managerAccess.ownerOnly": "Only the server owner can change manager access.",
+  "managerAccess.emailLabel": "Bannerlord Coop account email",
+  "managerAccess.emailHelp": "Ask your friend to use the email address on their Bannerlord Coop account. Do not enter a Discord display name.",
+  "managerAccess.grant": "Grant manager access",
+  "managerAccess.accessAlreadyGranted": "That account already has manager access.",
+  "managerAccess.enterValidAccountEmail": "Enter a valid Bannerlord Coop account email.",
+  "managerAccess.signInAgain": "Sign in again before changing manager access.",
+  "managerAccess.accessGranted": "Manager access granted. The account will now see this server under Associated servers.",
+  "managerAccess.heading": "Manager access",
+  "managerAccess.emailPlaceholder": "friend@example.com",
+  "managerAccess.accountCouldNotBeFound": "That account could not be found. Check the exact email and try again.",
+  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again."
 }

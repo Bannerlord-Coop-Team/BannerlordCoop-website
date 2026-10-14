@@ -5,12 +5,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ServerSettingsPanel } from "./ServerSettingsPanel";
 
-const mocks = vi.hoisted(() => ({ router: { refresh: vi.fn() }, settings: vi.fn(), visibility: vi.fn(), release: vi.fn(), status: vi.fn(), rename: vi.fn() }));
+const mocks = vi.hoisted(() => ({ router: { refresh: vi.fn() }, settings: vi.fn(), visibility: vi.fn(), release: vi.fn(), status: vi.fn(), rename: vi.fn(), manager: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => mocks.router }));
 vi.mock("@/app/servers/server-settings-actions", () => ({ saveServerSettings: mocks.settings }));
 vi.mock("@/app/servers/server-visibility-actions", () => ({ setServerVisibility: mocks.visibility }));
 vi.mock("@/app/servers/server-release-actions", () => ({ changeServerRelease: mocks.release, readServerReleaseStatus: mocks.status }));
 vi.mock("@/app/servers/name-actions", () => ({ renameLiveServer: mocks.rename }));
+vi.mock("@/app/servers/server-manager-actions", () => ({ setServerManager: mocks.manager }));
 
 const serverId = "11111111-1111-4111-8111-111111111111";
 const updatedAt = "2026-10-01T00:00:00.000Z";
@@ -21,6 +22,7 @@ const props: ComponentProps<typeof ServerSettingsPanel> = {
     name: "Settings QA", visibility: "private", visibilityAccess: access,
     releaseAccess: { ...access, channel: "stable" },
     settingsAccess: { ...access, maintenanceSlot: "06:00-07:00", timezone: "America/Chicago" },
+    managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true },
 };
 let container: HTMLDivElement;
 let root: Root;
@@ -31,6 +33,7 @@ beforeEach(() => {
     mocks.visibility.mockResolvedValue({ ok: true, updatedAt: visibilityAt, message: "Visibility saved." });
     mocks.release.mockResolvedValue({ ok: true, jobId: serverId, message: "Release queued." });
     mocks.status.mockResolvedValue(null);
+    mocks.manager.mockResolvedValue({ ok: true, message: "Manager access granted." });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
@@ -71,6 +74,20 @@ it("filters the settings controls by their labels and shows an empty state when 
     await change("#settings-search", "does not exist");
     expect(container.querySelector('input[name="settings-visibility"]')).toBeNull();
     expect(container.textContent).toContain("No settings match your search.");
+});
+
+it("offers owner manager access through exact email entry without rendering an account directory", async () => {
+    await render();
+    expect(container.textContent).toContain("Bannerlord Coop account email");
+    expect(container.querySelector("datalist")).toBeNull();
+    expect(container.querySelectorAll('input[type="email"]')).toHaveLength(1);
+    await change("#manager-account-email", "friend@example.com");
+    await act(async () => container.querySelector<HTMLFormElement>('form:has(#manager-account-email)')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(mocks.manager).toHaveBeenCalledExactlyOnceWith(expect.any(FormData));
+    const submitted = mocks.manager.mock.calls[0]![0] as FormData;
+    expect(submitted.get("serverId")).toBe(serverId);
+    expect(submitted.get("expectedUpdatedAt")).toBe(updatedAt);
+    expect(submitted.get("managerEmail")).toBe("friend@example.com");
 });
 it("saves name and maintenance once, then carries each returned generation into visibility and release", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
