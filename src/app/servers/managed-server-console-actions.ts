@@ -25,6 +25,8 @@ async function failure(error: unknown, notSubmitted = false) {
         identity_unavailable: t("action.console.linkYourDiscordAccountAndSignInAgainBeforeUsing"),
         operation_unavailable: t("action.console.theServerIsnTRunningSoTheCommandCanT"),
         request_conflict: t("action.console.theServerIsBusyWithAnotherCommandOrItsStatus"),
+        // Background status checks reject before enqueue, so nothing was delivered.
+        operation_in_progress: t("action.console.theServerIsBusyWithAnotherCommandOrItsStatus"),
         stale_interaction: t("action.console.theServerIsBusyWithAnotherCommandOrItsStatus"),
         invalid_request: t("action.console.enterOneSupportedCoopCommandWithValidArguments"),
         rate_limited: t("action.console.tooManyRequestsWaitBeforeCheckingAgain"),
