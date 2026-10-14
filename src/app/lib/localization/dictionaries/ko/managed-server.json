@@ -768,5 +768,8 @@
   "transfers.rejection.invalid-companion": "동반 .json 파일이 유효한 JSON 객체가 아니거나 지원되는 JSON 제한을 초과했습니다. 서로 일치하는 .sav + .json 파일을 새로 내보내 다시 시도하세요.",
   "transfers.rejection.save-too-large": "저장 파일 또는 동반 파일이 가져오기 크기 제한을 초과했습니다. 더 작은 파일로 다시 시도하세요.",
   "transfers.rejection.server-unavailable": "서버가 이 전송을 수락할 준비가 되지 않았습니다. 상태를 새로고침하고 사용 가능해지면 다시 시도하세요.",
-  "transfers.rejection.reference": "지원 참조 번호: {requestId}"
+  "transfers.rejection.reference": "지원 참조 번호: {requestId}",
+  "settingsPanel.searchSettings": "Search settings",
+  "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
+  "settingsPanel.noSettingsMatchSearch": "No settings match your search."
 }

@@ -771,5 +771,8 @@
   "transfers.rejection.invalid-companion": "Сопутствующий файл .json не содержит допустимый объект JSON или превышает поддерживаемые ограничения JSON. Экспортируйте новую соответствующую пару .sav + .json и повторите попытку.",
   "transfers.rejection.save-too-large": "Сохранение или сопутствующий файл превышает ограничения размера импорта. Используйте файлы меньшего размера и повторите попытку.",
   "transfers.rejection.server-unavailable": "Сервер не готов принять эту передачу. Обновите статус и повторите попытку, когда он станет доступен.",
-  "transfers.rejection.reference": "Код обращения в поддержку: {requestId}"
+  "transfers.rejection.reference": "Код обращения в поддержку: {requestId}",
+  "settingsPanel.searchSettings": "Search settings",
+  "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
+  "settingsPanel.noSettingsMatchSearch": "No settings match your search."
 }

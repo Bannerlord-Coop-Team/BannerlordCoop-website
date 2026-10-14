@@ -769,5 +769,8 @@
   "transfers.rejection.invalid-companion": "Eşlik eden .json geçerli bir JSON nesnesi değil veya desteklenen JSON sınırlarını aşıyor. Eşleşen yeni bir .sav + .json çifti dışa aktarıp tekrar deneyin.",
   "transfers.rejection.save-too-large": "Kayıt veya eşlik eden dosya içe aktarma boyutu sınırlarını aşıyor. Daha küçük dosyalarla tekrar deneyin.",
   "transfers.rejection.server-unavailable": "Sunucu bu aktarımı kabul etmeye hazır değil. Durumu yenileyin ve kullanılabilir olduğunda tekrar deneyin.",
-  "transfers.rejection.reference": "Destek referansı: {requestId}"
+  "transfers.rejection.reference": "Destek referansı: {requestId}",
+  "settingsPanel.searchSettings": "Search settings",
+  "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
+  "settingsPanel.noSettingsMatchSearch": "No settings match your search."
 }

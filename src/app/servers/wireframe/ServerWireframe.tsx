@@ -105,6 +105,7 @@ export default function ServerWireframe() {
     const [logs, setLogs] = useState(initialLogs);
     const [command, setCommand] = useState("");
     const [search, setSearch] = useState("");
+    const [settingsSearch, setSettingsSearch] = useState("");
     const commandInput = useRef<HTMLInputElement>(null);
     const [backups, setBackups] = useState<DemoBackup[]>([
         { id: 2, nameKey: "backups.beforeSession", hour: 14, size: 24.8, kind: "manual" },
@@ -126,6 +127,10 @@ export default function ServerWireframe() {
     const [activeSave, setActiveSave] = useState("northern-march.sav");
     const configDirty = config !== savedConfig;
     const settingsDirty = draftName.trim() !== name || draftVisibility !== visibility;
+    const settingsSearchTerm = settingsSearch.trim().toLocaleLowerCase();
+    const matchesSettings = (text: string) => !settingsSearchTerm || text.toLocaleLowerCase().includes(settingsSearchTerm);
+    const showNameSetting = matchesSettings(`${t("server.name")} ${t("settings.nameHelp")}`);
+    const showVisibilitySetting = matchesSettings(`${t("visibility.label")} ${t("visibility.help")} ${t("visibility.private")} ${t("visibility.public")}`);
 
     useEffect(() => {
         const viewport = logViewport.current;
@@ -462,11 +467,16 @@ export default function ServerWireframe() {
 
             {section === "Settings" && <Panel title={t("settings.title")} description={t("draft.help")}>
                 <form onSubmit={(event) => { event.preventDefault(); if (!draftName.trim()) return; setName(draftName.trim()); setDraftName(draftName.trim()); setVisibility(draftVisibility); setSettingsNotice("settings.saved"); settingsName.current?.focus({ preventScroll: true }); }}>
+                    <div className="border-b border-white/10 p-5">
+                        <label htmlFor="wireframe-settings-search" className="sr-only">{managedT("settingsPanel.searchSettings")}</label>
+                        <div className="relative max-w-xl"><Search aria-hidden="true" className="pointer-events-none absolute top-3 left-3 size-4 text-foreground-muted" /><input id="wireframe-settings-search" type="search" value={settingsSearch} onChange={(event) => setSettingsSearch(event.target.value)} placeholder={managedT("settingsPanel.searchSettingsPlaceholder")} className={`${input} pl-9`} /></div>
+                    </div>
                     <div className="max-w-3xl space-y-5 p-5">
-                    <div><label htmlFor="server-name" className="text-sm font-medium">{t("server.name")}</label><input ref={settingsName} id="server-name" required maxLength={80} value={draftName} onChange={(event) => { setDraftName(event.target.value); setSettingsNotice(""); }} className={`${input} mt-2`} /><p className="mt-2 text-xs leading-5 text-foreground-muted">{t("settings.nameHelp")}</p></div>
-                    <fieldset><legend className="text-sm font-medium">{t("visibility.label")}</legend><p className="mt-2 text-sm leading-6 text-foreground-muted">{t("visibility.help")}</p><div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {showNameSetting && <div><label htmlFor="server-name" className="text-sm font-medium">{t("server.name")}</label><input ref={settingsName} id="server-name" required maxLength={80} value={draftName} onChange={(event) => { setDraftName(event.target.value); setSettingsNotice(""); }} className={`${input} mt-2`} /><p className="mt-2 text-xs leading-5 text-foreground-muted">{t("settings.nameHelp")}</p></div>}
+                    {showVisibilitySetting && <fieldset><legend className="text-sm font-medium">{t("visibility.label")}</legend><p className="mt-2 text-sm leading-6 text-foreground-muted">{t("visibility.help")}</p><div className="mt-4 grid gap-3 sm:grid-cols-2">
                         {[{ value: "private", title: t("visibility.private"), description: t("visibility.privateHelp"), icon: LockKeyhole }, { value: "public", title: t("visibility.public"), description: t("visibility.publicHelp"), icon: Globe2 }].map(({ value, title, description, icon: Icon }) => <label key={value} className={`flex cursor-pointer items-start gap-3 rounded-md border p-4 ${draftVisibility === value ? "border-gold/50 bg-gold/5" : "border-white/10"}`}><input type="radio" name="visibility" value={value} checked={draftVisibility === value} onChange={() => { setDraftVisibility(value); setSettingsNotice(""); }} className="mt-1 accent-gold" /><span><span className="flex items-center gap-2 text-sm font-medium"><Icon className={`size-4 ${draftVisibility === value ? "text-gold" : "text-foreground-muted"}`} aria-hidden="true" />{title}</span><span className="mt-2 block text-xs leading-5 text-foreground-muted">{description}</span></span></label>)}
-                    </div></fieldset>
+                    </div></fieldset>}
+                    {!showNameSetting && !showVisibilitySetting && <p role="status" className="rounded-md border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-foreground-muted">{managedT("settingsPanel.noSettingsMatchSearch")}</p>}
                     </div>
                     <SaveBar dirty={settingsDirty} message={settingsNotice}>
                         <button type="button" className={button} onClick={() => { setDraftName(name); setDraftVisibility(visibility); setSettingsNotice("draft.discarded"); settingsName.current?.focus(); }}>{t("action.discard")}</button>

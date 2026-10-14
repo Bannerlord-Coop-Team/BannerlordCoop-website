@@ -768,5 +768,8 @@
   "transfers.rejection.invalid-companion": "配套的 .json 不是有效的 JSON 对象，或超出了支持的 JSON 限制。请重新导出匹配的 .sav + .json 文件对后重试。",
   "transfers.rejection.save-too-large": "存档或配套文件超出了导入大小限制。请使用较小的文件后重试。",
   "transfers.rejection.server-unavailable": "服务器尚未准备好接受此传输。请刷新状态，在服务器可用后重试。",
-  "transfers.rejection.reference": "支持参考编号：{requestId}"
+  "transfers.rejection.reference": "支持参考编号：{requestId}",
+  "settingsPanel.searchSettings": "Search settings",
+  "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
+  "settingsPanel.noSettingsMatchSearch": "No settings match your search."
 }

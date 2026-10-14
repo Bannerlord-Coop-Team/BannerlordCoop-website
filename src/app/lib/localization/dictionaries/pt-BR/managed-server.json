@@ -769,5 +769,8 @@
   "transfers.rejection.invalid-companion": "O .json associado não contém um objeto JSON válido ou excede os limites JSON suportados. Exporte um novo par .sav + .json correspondente e tente novamente.",
   "transfers.rejection.save-too-large": "O save ou o arquivo associado excede os limites de tamanho de importação. Use arquivos menores e tente novamente.",
   "transfers.rejection.server-unavailable": "O servidor não está pronto para aceitar esta transferência. Atualize o status e tente novamente quando estiver disponível.",
-  "transfers.rejection.reference": "Referência de suporte: {requestId}"
+  "transfers.rejection.reference": "Referência de suporte: {requestId}",
+  "settingsPanel.searchSettings": "Search settings",
+  "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
+  "settingsPanel.noSettingsMatchSearch": "No settings match your search."
 }

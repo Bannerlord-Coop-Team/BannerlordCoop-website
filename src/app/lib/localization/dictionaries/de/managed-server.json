@@ -769,5 +769,8 @@
   "transfers.rejection.invalid-companion": "Die zugehörige .json-Datei enthält kein gültiges JSON-Objekt oder überschreitet die unterstützten JSON-Grenzen. Exportiere ein neues zusammengehöriges .sav- und .json-Paar und versuche es erneut.",
   "transfers.rejection.save-too-large": "Der Spielstand oder die zugehörige Datei überschreitet die Importgrößenlimits. Verwende kleinere Dateien und versuche es erneut.",
   "transfers.rejection.server-unavailable": "Der Server kann diese Übertragung noch nicht annehmen. Aktualisiere den Status und versuche es erneut, sobald er verfügbar ist.",
-  "transfers.rejection.reference": "Support-Referenz: {requestId}"
+  "transfers.rejection.reference": "Support-Referenz: {requestId}",
+  "settingsPanel.searchSettings": "Search settings",
+  "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
+  "settingsPanel.noSettingsMatchSearch": "No settings match your search."
 }
