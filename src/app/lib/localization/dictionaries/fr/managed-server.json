@@ -161,6 +161,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Un objet contenant serverConfig et modConfig est attendu.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Seuls serverConfig et modConfig sont attendus.",
   "configEditor.0TurnsAutosaveOff": "0 désactive l’enregistrement automatique.",
+  "configEditor.battleSizeHelp": "Nombre total de troupes des deux camps lors d’une bataille, de {min} à {max}.",
   "configEditor.serverSettings": "Paramètres du serveur",
   "configEditor.savedToServerConfigJsonPasswordsPortsAndCampaignSelection": "Enregistré dans server-config.json. Les mots de passe, les ports et la sélection de campagne sont gérés séparément.",
   "configEditor.difficulty": "Difficulté",

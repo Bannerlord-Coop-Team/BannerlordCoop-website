@@ -161,6 +161,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Era esperado um objeto com serverConfig e modConfig.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Eram esperados exatamente serverConfig e modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 desativa a gravação automática.",
+  "configEditor.battleSizeHelp": "Total de tropas de ambos os lados de uma batalha, de {min} a {max}.",
   "configEditor.serverSettings": "Definições do servidor",
   "configEditor.savedToServerConfigJsonPasswordsPortsAndCampaignSelection": "Guardadas em server-config.json. As palavras-passe, as portas e a seleção da campanha são geridas separadamente.",
   "configEditor.difficulty": "Dificuldade",

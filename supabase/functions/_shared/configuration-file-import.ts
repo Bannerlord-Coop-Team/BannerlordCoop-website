@@ -98,7 +98,7 @@ export function applyConfigurationImport(current: ManagedServerConfiguration, in
 // These native settings are intentionally outside the managed configuration contract.
 const ignoredServerKeys = ['saveName', 'password', 'port', 'mode', 'devModuleRoot', 'skipLateAi', 'replayHero', 'terrain', 'scene', 'savePath', 'userDir'];
 const ignoredModRootKeys = ['network'];
-const ignoredModKeys = ['battleSize', 'showPlayerNameplates', 'playerWoundedBattleEntry'];
+const ignoredModKeys = ['showPlayerNameplates', 'playerWoundedBattleEntry'];
 
 // Reads a native or exported configuration with detailed injected diagnostics and private ignored values.
 export function readConfigurationFile(text: string, part: ConfigurationPart, messages: ConfigurationImportMessages = defaultImportMessages): { input: ConfigurationImport; ignoredSettings: string[] } {

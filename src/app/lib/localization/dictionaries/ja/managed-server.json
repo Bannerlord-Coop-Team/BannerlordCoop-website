@@ -161,6 +161,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "serverConfigとmodConfigを含むオブジェクトが必要です。",
   "configEditor.expectedExactlyServerconfigAndModconfig": "serverConfigとmodConfigのみを指定してください。",
   "configEditor.0TurnsAutosaveOff": "0にすると自動保存が無効になります。",
+  "configEditor.battleSizeHelp": "戦闘に参加する両陣営の合計兵数（{min}~{max}）。",
   "configEditor.serverSettings": "サーバー設定",
   "configEditor.savedToServerConfigJsonPasswordsPortsAndCampaignSelection": "server-config.jsonに保存されます。パスワード、ポート、キャンペーンの選択は別途管理されます。",
   "configEditor.difficulty": "難易度",

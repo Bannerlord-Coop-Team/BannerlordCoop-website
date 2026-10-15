@@ -44,3 +44,19 @@ test('injected messages preserve accepted values and recursive freezing', () => 
   assert.equal(Object.isFrozen(result.modConfig.modOptions), true);
   assert.equal(Object.isFrozen(input), false);
 });
+
+test('battle size defaults when omitted and accepts only whole sizes the game applies', () => {
+  const omitted = configuration() as { modConfig: { modOptions: Partial<typeof DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions> } };
+  delete omitted.modConfig.modOptions.battleSize;
+  assert.equal(parseManagedServerConfiguration(omitted).modConfig.modOptions.battleSize, 1000);
+  for (const accepted of [200, 1000]) {
+    const value = configuration();
+    value.modConfig.modOptions.battleSize = accepted;
+    assert.equal(parseManagedServerConfiguration(value).modConfig.modOptions.battleSize, accepted);
+  }
+  for (const rejected of [199, 1001, 500.5]) {
+    const value = configuration();
+    value.modConfig.modOptions.battleSize = rejected;
+    assert.throws(() => parseManagedServerConfiguration(value, messages), { message: messages.integer });
+  }
+});

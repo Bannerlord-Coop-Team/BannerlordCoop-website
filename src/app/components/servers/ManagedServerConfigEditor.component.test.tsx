@@ -247,3 +247,17 @@ vi.mock("@/app/lib/localization/server", () => ({
     getMessages: async () => serverTestMessages,
     getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
 }));
+
+it("edits the battle size within the range the game applies and saves it to the gameplay file", async () => {
+    await render();
+    expect(field<HTMLInputElement>("config-modOptions-battleSize").value).toBe("1000");
+    expect(container.textContent).toContain("Total troops across both sides of a battle, from 200 to 1,000.");
+    await type("config-modOptions-battleSize", "1500");
+    expect(container.textContent).toContain("Enter a value from 200 to 1,000.");
+    expect(button("Save config").disabled).toBe(true);
+    await type("config-modOptions-battleSize", "600");
+    const saved = { ...config.modConfig, modOptions: { ...config.modConfig.modOptions, battleSize: 600 } };
+    mocks.save.mockResolvedValue({ ok: true, file: { configPart: "mod", revision: "c".repeat(64), settings: saved } });
+    await click("Save config");
+    expect(mocks.save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ configPart: "mod", expectedRevision: revisions.mod, settings: saved }), "owner");
+});

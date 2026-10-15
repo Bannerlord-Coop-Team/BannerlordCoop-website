@@ -161,6 +161,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "serverConfig ve modConfig içeren bir nesne bekleniyordu.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Yalnızca serverConfig ve modConfig bekleniyordu.",
   "configEditor.0TurnsAutosaveOff": "0, otomatik kaydetmeyi kapatır.",
+  "configEditor.battleSizeHelp": "Bir savaşta iki taraftaki toplam asker sayısı, {min} ile {max} arası.",
   "configEditor.serverSettings": "Sunucu ayarları",
   "configEditor.savedToServerConfigJsonPasswordsPortsAndCampaignSelection": "server-config.json dosyasına kaydedilir. Parolalar, bağlantı noktaları ve sefer seçimi ayrıca yönetilir.",
   "configEditor.difficulty": "Zorluk",
