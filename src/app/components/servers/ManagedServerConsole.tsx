@@ -8,7 +8,8 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type UIEvent } 
 
 const MAXIMUM_TEXT_CHARACTERS = 128 * 1_024;
 const MAXIMUM_LINES = 2_000;
-const MAXIMUM_SSE_FRAME_BYTES = 16 * 1_024;
+// A full 8 KiB console line can roughly double when the control plane JSON-escapes it into an event.
+const MAXIMUM_SSE_FRAME_BYTES = 64 * 1_024;
 const MAXIMUM_STATE_DETAIL_CHARACTERS = 500;
 /** Waits between failed reconnects; once these run out the console offers a manual Reconnect. */
 export const CONSOLE_RECONNECT_DELAYS = [2_000, 5_000, 10_000, 30_000, 60_000] as const;
@@ -28,6 +29,14 @@ type StreamHandle = { reconnect: () => void; activate: () => void; deactivate: (
 
 /** Monotonic across console instances so lifecycle progress can order streams. */
 let consoleConnections = 0;
+
+/** Shared with the command composer: counts streamed command results and shows a fetched one the stream missed. */
+export type CommandOutputChannel = { framesSeen: number; show: ((output: string) => void) | null };
+
+/** Creates the channel a composer passes to its console. */
+export function createCommandOutputChannel(): CommandOutputChannel {
+    return { framesSeen: 0, show: null };
+}
 
 export type ConsoleControlLine =
     | { kind: "managed-command"; ok: boolean; output: string }
@@ -121,12 +130,22 @@ function ConsoleLines({ text }: { text: string }) {
 }
 
 /** Keeps one bounded stream open, renewing expired sessions and retrying failures with a capped backoff. */
-function useConsoleStream(serverId: string, run: ConsoleRun) {
+function useConsoleStream(serverId: string, run: ConsoleRun, outputChannel?: CommandOutputChannel) {
     const signals = useManagedConsoleSignals();
     const [state, setState] = useState<ConsoleState>("connecting");
     const [text, setText] = useState("");
     const runRef = useRef(run);
     const handleRef = useRef<StreamHandle | null>(null);
+    const channelRef = useRef(outputChannel);
+
+    useEffect(() => {
+        channelRef.current = outputChannel;
+        if (!outputChannel) return;
+        // Renders a fetched result through the same envelope as a streamed one.
+        outputChannel.show = (output) => setText((existing) => boundedConsoleText(existing,
+            `@DS@${JSON.stringify({ ev: "managed-command", id: "fetched-result", ok: true, output })}`));
+        return () => { outputChannel.show = null; };
+    }, [outputChannel]);
 
     useEffect(() => {
         runRef.current = run;
@@ -188,6 +207,7 @@ function useConsoleStream(serverId: string, run: ConsoleRun) {
                             lines.push(event.text);
                             const control = parseConsoleControlLine(event.text);
                             if (control?.kind === "state") signals?.publish({ type: "phase", serverId, connection, phase: control.phase, ...(control.detail ? { detail: control.detail } : {}) });
+                            if (control?.kind === "managed-command" && channelRef.current) channelRef.current.framesSeen += 1;
                         } else if (event.type === "expired") {
                             ending = "expired";
                         } else if (event.type === "ended") {
@@ -301,13 +321,14 @@ function useConsoleStream(serverId: string, run: ConsoleRun) {
 }
 
 /** Streams bounded current-run output, following the newest line unless the reader has scrolled back. */
-export function ManagedServerConsole({ serverId, operationState = "running", observedGameState = "running" }: {
+export function ManagedServerConsole({ serverId, operationState = "running", observedGameState = "running", outputChannel }: {
     serverId: string;
     operationState?: string;
     observedGameState?: string;
+    outputChannel?: CommandOutputChannel;
 }) {
     const { t } = useTranslations("managed-server");
-    const { state, text, reconnect } = useConsoleStream(serverId, consoleRun(operationState, observedGameState));
+    const { state, text, reconnect } = useConsoleStream(serverId, consoleRun(operationState, observedGameState), outputChannel);
     const outputRef = useRef<HTMLPreElement>(null);
     const followingRef = useRef(true);
     const [following, setFollowing] = useState(true);

@@ -235,8 +235,40 @@ it("allows multiple pending submissions and preserves the new draft when respons
     expect(button("Sending…")).toBeUndefined();
     expect(button("Send")!.getAttribute("aria-busy")).toBeNull();
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
-    expect(mocks.check).not.toHaveBeenCalled();
     expect(mocks.ack).not.toHaveBeenCalled();
+});
+
+it("fetches and shows a result the live stream never rendered", async () => {
+    const output = "ID: 'town_comp_EN2'\nName: 'Diathma'";
+    mocks.check.mockResolvedValueOnce({ ok: true, result: { status: "pending" } })
+        .mockResolvedValueOnce({ ok: true, result: { status: "succeeded", output, outputTruncated: false, outputWithheld: false, completedAt: "2026-10-15T14:00:19.639Z" } });
+    await mount();
+    await typeDraft("coop.debug.town.list_towns");
+    await act(async () => button("Send").click());
+    await act(async () => vi.advanceTimersByTimeAsync(3_999));
+    expect(mocks.check).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(mocks.check).toHaveBeenCalledWith({ serverId: server.serverId, jobId, commandRequestId: mocks.submit.mock.calls[0][1] }, "owner-id");
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(mocks.check).toHaveBeenCalledTimes(2);
+    const block = container.querySelector('[role="group"][aria-label="Command output"]');
+    expect(block?.textContent).toContain("Name: 'Diathma'");
+    expect(container.querySelector("pre")!.textContent).not.toContain("@DS@");
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(mocks.check).toHaveBeenCalledTimes(2);
+});
+
+it("does not fetch a result the live stream already showed", async () => {
+    let stream!: ReadableStreamDefaultController<Uint8Array>;
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new ReadableStream<Uint8Array>({ start(controller) { stream = controller; } }))));
+    await mount();
+    await typeDraft("coop.debug.players.list");
+    await act(async () => button("Send").click());
+    const frame = `@DS@${JSON.stringify({ ev: "managed-command", id: "608721b5db6e6025f5af4261078e888c", ok: true, output: "No players" })}`;
+    await act(async () => stream.enqueue(new TextEncoder().encode(`event: line\ndata: ${JSON.stringify(frame)}\n\n`)));
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(container.querySelector('[role="group"][aria-label="Command output"]')?.textContent).toContain("No players");
+    expect(mocks.check).not.toHaveBeenCalled();
 });
 
 it("explains a non-coop command directly under the input and points to the command browser", async () => {
