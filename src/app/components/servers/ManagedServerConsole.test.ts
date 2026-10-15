@@ -25,9 +25,17 @@ test("parses only typed bounded line events", () => {
 
 test("bounds incomplete and malformed SSE input before retaining it", () => {
     const decoder = new TextDecoder("utf-8", { fatal: true });
-    assert.throws(() => decodeConsoleStreamChunk("", new Uint8Array(16 * 1_024 + 1), decoder));
+    assert.throws(() => decodeConsoleStreamChunk("", new Uint8Array(64 * 1_024 + 1), decoder));
     assert.throws(() => decodeConsoleStreamChunk("event: line", undefined, new TextDecoder("utf-8", { fatal: true }), true));
     assert.throws(() => decodeConsoleStreamChunk("", Uint8Array.of(0xff), new TextDecoder("utf-8", { fatal: true })));
+});
+
+test("accepts a full 8 KiB console line after JSON escaping doubles it", () => {
+    const line = `@DS@{"ev":"managed-command","output":"${'\\"'.repeat(4_080)}"}`;
+    const frame = `event: line\ndata: ${JSON.stringify(line)}\n\n`;
+    assert.ok(new TextEncoder().encode(frame).byteLength > 16 * 1_024);
+    const decoded = decodeConsoleStreamChunk("", new TextEncoder().encode(frame), new TextDecoder("utf-8", { fatal: true }));
+    assert.deepEqual(decoded.events, [{ type: "line", text: line }]);
 });
 
 test("allows only the configured HTTPS Oracle origin", () => {
