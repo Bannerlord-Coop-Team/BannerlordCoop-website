@@ -127,6 +127,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         { key: "autoAllocateClanMemberPerks", label: t("configuration.field.autoAllocateClanMemberPerks"), kind: "boolean" },
     ];
     const MOD_OPTION_FIELDS: Field[] = [
+        { key: "battleSize", label: t("configuration.field.battleSize"), kind: "integer", min: 200, max: 1000, help: t("configEditor.battleSizeHelp", { min: number(200), max: number(1000) }) },
         { key: "fastForwardEnabled", label: t("configuration.field.fastForwardEnabled"), kind: "boolean" },
         { key: "autoPauseEnabled", label: t("configuration.field.autoPauseEnabled"), kind: "boolean" },
         { key: "clientsCanUseCheats", label: t("configuration.field.clientsCanUseCheats"), kind: "boolean" },

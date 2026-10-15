@@ -50,6 +50,7 @@ export interface ManagedModOptionsConfiguration {
   goldFoodInfluenceChangeInBattles: ManagedGoldFoodChangeMode;
   goldFoodInfluenceChangeForDisconnectedPlayers: boolean;
   voiceEnabled: boolean;
+  battleSize: number;
   blockAiWarDeclarationsOnOfflinePlayers: boolean;
   playerBattleAiJoinWindowHours: number;
   speedLimitWhilePlayersInBattle: boolean;
@@ -111,6 +112,7 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
       },
       modOptions: {
         voiceEnabled: true,
+        battleSize: 1000,
         fastForwardEnabled: true,
         autoPauseEnabled: true,
         clientsCanUseCheats: false,
@@ -215,6 +217,7 @@ export function parseManagedServerConfiguration(
     ensureUnaffiliatedWanderers: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.ensureUnaffiliatedWanderers,
     coopClansEnabled: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.coopClansEnabled,
     enablePlayerExecutions: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.enablePlayerExecutions,
+    battleSize: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.battleSize,
   }, messages);
   return deepFreeze({
     schemaVersion: 1,
@@ -248,6 +251,8 @@ export function parseManagedServerConfiguration(
       },
       modOptions: {
         voiceEnabled: requireBoolean(modOptions.voiceEnabled, messages),
+        // The game clamps battle size to this range.
+        battleSize: requireInteger(modOptions.battleSize, 200, 1_000, messages),
         fastForwardEnabled: requireBoolean(modOptions.fastForwardEnabled, messages),
         autoPauseEnabled: requireBoolean(modOptions.autoPauseEnabled, messages),
         clientsCanUseCheats: requireBoolean(modOptions.clientsCanUseCheats, messages),

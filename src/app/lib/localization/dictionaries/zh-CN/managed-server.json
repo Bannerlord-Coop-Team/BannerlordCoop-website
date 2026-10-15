@@ -161,6 +161,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "需要包含 serverConfig 和 modConfig 的对象。",
   "configEditor.expectedExactlyServerconfigAndModconfig": "对象必须且只能包含 serverConfig 和 modConfig。",
   "configEditor.0TurnsAutosaveOff": "设为 0 可关闭自动保存。",
+  "configEditor.battleSizeHelp": "一场战斗中双方的部队总数，范围为 {min} 到 {max}。",
   "configEditor.serverSettings": "服务器设置",
   "configEditor.savedToServerConfigJsonPasswordsPortsAndCampaignSelection": "保存至 server-config.json。密码、端口和战役选择单独管理。",
   "configEditor.difficulty": "难度",

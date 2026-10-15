@@ -161,6 +161,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Erwartet wurde ein Objekt mit serverConfig und modConfig.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Erwartet wurden genau serverConfig und modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 schaltet das automatische Speichern aus.",
+  "configEditor.battleSizeHelp": "Gesamtzahl der Truppen beider Seiten einer Schlacht, von {min} bis {max}.",
   "configEditor.serverSettings": "Servereinstellungen",
   "configEditor.savedToServerConfigJsonPasswordsPortsAndCampaignSelection": "Wird in server-config.json gespeichert. Passwörter, Ports und die Kampagnenauswahl werden separat verwaltet.",
   "configEditor.difficulty": "Schwierigkeit",
