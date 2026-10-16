@@ -787,5 +787,20 @@
   "managerAccess.heading": "Manager access",
   "managerAccess.emailPlaceholder": "friend@example.com",
   "managerAccess.accountCouldNotBeFound": "That account could not be found. Check the exact email and try again.",
-  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again."
+  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again.",
+
+  "autosaves.recentAutosaves": "最近の自動セーブ",
+  "autosaves.recentAutosavesCampaign": "最近の自動セーブ · {campaign}",
+  "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "サーバーは現在のセーブデータとは別に、直近2回分の自動セーブを保持します。保存のたびに置き換えられます。",
+  "autosaves.currentSave": "現在のセーブデータ",
+  "autosaves.inUse": "使用中",
+  "autosaves.earlierAutosave1": "以前の自動セーブ 1",
+  "autosaves.earlierAutosave2": "以前の自動セーブ 2",
+  "autosaves.loadAutosave": "自動セーブを読み込む",
+  "autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave": "以前の自動セーブを読み込む前に、ゲームサーバーを停止してください。",
+  "autosaves.loadTheAutosaveFromDate": "{date}の自動セーブを読み込みますか？",
+  "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "最初に現在のセーブデータの安全用バックアップが作成されるため、「バックアップ」から元に戻せます。",
+  "autosaves.noEarlierAutosavesYet": "以前の自動セーブはまだありません。サーバーが何度か自動セーブすると表示されます。",
+  "page.recentAutosavesCouldNotBeLoaded": "現在、最近の自動セーブを読み込めません。保存済みバックアップには影響ありません。ページを再読み込みして再試行してください。",
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "その自動セーブを読み込めませんでした。ゲームサーバーが停止していることを確認してから再読み込みし、まだ一覧にある自動セーブを選んでください。"
 }

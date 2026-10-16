@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
     liveAccess: vi.fn(), managedServers: vi.fn(), displayNames: vi.fn(),
     preview: vi.fn(), users: vi.fn(),
     backups: vi.fn(), backupStatus: vi.fn(), files: vi.fn(), requestBackup: vi.fn(), requestVisibility: vi.fn(), refresh: vi.fn(),
+    saves: vi.fn(), generations: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
     // Model Next's terminal redirect without rendering a denied page.
@@ -53,6 +54,8 @@ vi.mock("@/app/lib/hosting/my-servers", async (importOriginal) => ({
     getMyServerBackupStatus: mocks.backupStatus,
     requestMyServerBackupOperation: mocks.requestBackup,
     requestServerVisibility: mocks.requestVisibility,
+    listAllMyServerSaves: mocks.saves,
+    getMyServerSaveGenerations: mocks.generations,
 }));
 vi.mock("@/app/lib/hosting/my-servers-server", () => ({
     getMyServerSummary: mocks.managedServers,
@@ -87,6 +90,8 @@ beforeEach(() => {
     mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "manager" });
     mocks.displayNames.mockResolvedValue(new Map());
     mocks.users.mockResolvedValue({ users: [], truncated: false });
+    // Unconfigured test environments cannot list saves, so most page tests have no active campaign.
+    mocks.saves.mockRejectedValue(new MyServersApiError("server_api_not_configured", "Not configured"));
 });
 
 it("redirects anonymous visitors to login", async () => {
@@ -502,4 +507,37 @@ it.each(["server_not_found", "forbidden"])("keeps managed controls unavailable w
     expect(result.props.logDownload).toBeUndefined();
     expect(mocks.backups).not.toHaveBeenCalled();
     expect(mocks.files).not.toHaveBeenCalled();
+});
+
+it("reads the active campaign's autosaves for Backups and reports a failed read without pausing backups", async () => {
+    const saveId = "77777777-7777-4777-8777-777777777777";
+    const updatedAt = "2026-10-16T10:00:00.000Z";
+    const items = [{ generation: "current", byteSize: 4_096, lastModifiedAt: "2026-10-16T09:56:00.000Z", observedAt: "2026-10-16T09:58:00.000Z" }];
+    const savePage = (activeSaveId: string | null) => ({ serverId: managedId, updatedAt, activeSaveId, nextCursor: null, items: [
+        { saveId: "88888888-8888-4888-8888-888888888888", displayName: "Older campaign", byteSize: 1, createdAt: updatedAt, lastUsedAt: null, importedBy: "owner" },
+        { saveId, displayName: "Northern March", byteSize: 4_096, createdAt: updatedAt, lastUsedAt: updatedAt, importedBy: "owner" },
+    ] });
+    mocks.backups.mockResolvedValue([]);
+    mocks.backupStatus.mockResolvedValue({ serverId: managedId, updatedAt, operationState: "stopped", observedGameState: "stopped", job: null });
+    mocks.files.mockResolvedValue(null);
+    mocks.saves.mockResolvedValue(savePage(saveId));
+    mocks.generations.mockResolvedValue({ serverId: managedId, saveId, items });
+    let files = await findServerElement(await page(), "ManagedServerFiles");
+    expect(mocks.generations).toHaveBeenCalledExactlyOnceWith("token", managedId, saveId);
+    expect(files?.props).toMatchObject({ autosaves: { saveId, campaignName: "Northern March", items }, autosaveLoadError: undefined, loadError: undefined });
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+        mocks.generations.mockRejectedValue(new MyServersApiError("invalid_response", "Invalid"));
+        files = await findServerElement(await page(), "ManagedServerFiles");
+        expect(files?.props).toMatchObject({ autosaves: null, autosaveLoadError: expect.stringContaining("Recent autosaves couldn’t be loaded"), loadError: undefined });
+        expect(error).toHaveBeenCalledWith("Managed server autosaves failed to load");
+    } finally { error.mockRestore(); }
+
+    // Without an active campaign there are no autosaves to read or report.
+    mocks.generations.mockClear();
+    mocks.saves.mockResolvedValue(savePage(null));
+    files = await findServerElement(await page(), "ManagedServerFiles");
+    expect(mocks.generations).not.toHaveBeenCalled();
+    expect(files?.props).toMatchObject({ autosaves: null, autosaveLoadError: undefined });
 });

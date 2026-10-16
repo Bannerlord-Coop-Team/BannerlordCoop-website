@@ -788,5 +788,20 @@
   "managerAccess.heading": "Manager access",
   "managerAccess.emailPlaceholder": "friend@example.com",
   "managerAccess.accountCouldNotBeFound": "That account could not be found. Check the exact email and try again.",
-  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again."
+  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again.",
+
+  "autosaves.recentAutosaves": "Recent autosaves",
+  "autosaves.recentAutosavesCampaign": "Recent autosaves · {campaign}",
+  "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "The server keeps the last two autosaves next to the current save. They are replaced every time it saves.",
+  "autosaves.currentSave": "Current save",
+  "autosaves.inUse": "In use",
+  "autosaves.earlierAutosave1": "Earlier autosave 1",
+  "autosaves.earlierAutosave2": "Earlier autosave 2",
+  "autosaves.loadAutosave": "Load autosave",
+  "autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave": "Stop the game server before loading an earlier autosave.",
+  "autosaves.loadTheAutosaveFromDate": "Load the autosave from {date}?",
+  "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "A safety backup of the current save is taken first, so you can undo this from Backups.",
+  "autosaves.noEarlierAutosavesYet": "No earlier autosaves yet. They appear after the server has autosaved a few times.",
+  "page.recentAutosavesCouldNotBeLoaded": "Recent autosaves couldn’t be loaded just now. Retained backups are unaffected; refresh the page to try again.",
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "That autosave couldn’t be loaded. Make sure the game server is stopped, then refresh and choose an autosave that is still listed."
 }

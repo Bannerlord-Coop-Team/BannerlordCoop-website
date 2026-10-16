@@ -788,5 +788,20 @@
   "managerAccess.heading": "Manager access",
   "managerAccess.emailPlaceholder": "friend@example.com",
   "managerAccess.accountCouldNotBeFound": "That account could not be found. Check the exact email and try again.",
-  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again."
+  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again.",
+
+  "autosaves.recentAutosaves": "Sauvegardes automatiques récentes",
+  "autosaves.recentAutosavesCampaign": "Sauvegardes automatiques récentes · {campaign}",
+  "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "Le serveur conserve les deux dernières sauvegardes automatiques à côté de la sauvegarde actuelle. Elles sont remplacées à chaque enregistrement.",
+  "autosaves.currentSave": "Sauvegarde actuelle",
+  "autosaves.inUse": "Utilisée",
+  "autosaves.earlierAutosave1": "Sauvegarde automatique précédente 1",
+  "autosaves.earlierAutosave2": "Sauvegarde automatique précédente 2",
+  "autosaves.loadAutosave": "Charger la sauvegarde automatique",
+  "autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave": "Arrêtez le serveur de jeu avant de charger une sauvegarde automatique précédente.",
+  "autosaves.loadTheAutosaveFromDate": "Charger la sauvegarde automatique du {date} ?",
+  "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "Une copie de sauvegarde de sécurité de la sauvegarde actuelle est d’abord créée : vous pourrez donc annuler cette opération depuis Copies de sauvegarde.",
+  "autosaves.noEarlierAutosavesYet": "Aucune sauvegarde automatique précédente pour l’instant. Elles apparaissent une fois que le serveur a enregistré automatiquement plusieurs fois.",
+  "page.recentAutosavesCouldNotBeLoaded": "Les sauvegardes automatiques récentes n’ont pas pu être chargées pour le moment. Les copies de sauvegarde conservées ne sont pas concernées ; actualisez la page pour réessayer.",
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Cette sauvegarde automatique n’a pas pu être chargée. Vérifiez que le serveur de jeu est arrêté, puis actualisez et choisissez une sauvegarde automatique encore listée."
 }

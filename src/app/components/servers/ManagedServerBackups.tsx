@@ -18,6 +18,8 @@ import type {
     MyServerBackupJob,
     MyServerBackupStatus,
     MyServerBackupSummary,
+    MyServerRestorableSaveGeneration,
+    MyServerSaveGenerationSummary,
     MyServerSummary,
 } from "@/app/lib/control-plane/types";
 import { manageServerBackup } from "@/app/servers/managed-server-backup-actions";
@@ -61,6 +63,19 @@ const BACKUP_TIME_FORMAT: Intl.DateTimeFormatOptions = {
     timeZoneName: "short",
 };
 const subscribeToTimeZone = () => () => undefined;
+// Relative ages ("4 minutes ago") follow the clock while the page stays open.
+const subscribeToClock = (onChange: () => void) => {
+    const interval = window.setInterval(onChange, 30_000);
+    return () => window.clearInterval(interval);
+};
+const currentMinute = () => Math.floor(Date.now() / 60_000) * 60_000;
+
+/** The active campaign's current save and earlier autosaves, as read for this page. */
+export type ManagedServerAutosaves = {
+    saveId: string;
+    campaignName: string | null;
+    items: readonly MyServerSaveGenerationSummary[];
+};
 
 type ManagedServerBackupsProps = {
     userId: string;
@@ -68,6 +83,8 @@ type ManagedServerBackupsProps = {
     backups: readonly MyServerBackupSummary[];
     status: MyServerBackupStatus | null;
     loadError?: string;
+    autosaves?: ManagedServerAutosaves | null;
+    autosaveLoadError?: string;
 };
 
 // Keys backup state to the current account and server.
@@ -86,6 +103,22 @@ function useViewerTimeZone() {
     return useSyncExternalStore(subscribeToTimeZone, browserTimeZone, () => "UTC");
 }
 
+// Omits relative ages from server HTML and hydration, then reads the viewer's clock once a minute.
+function useCurrentMinute() {
+    return useSyncExternalStore(subscribeToClock, currentMinute, () => null);
+}
+
+// Identifies an autosave row as a request and feedback target, distinct from backup IDs.
+function autosaveTarget(generation: MyServerRestorableSaveGeneration) {
+    return `autosave:${generation}`;
+}
+
+// Identifies the control that sent a retained request.
+function intentTarget(intent: ManagedServerBackupInput) {
+    if (intent.action === "create-backup") return "create";
+    return intent.action === "restore-backup" ? intent.backupId : autosaveTarget(intent.generation);
+}
+
 // Presents durable backup operations and localized restore confirmations.
 function ManagedServerBackupsSession({
     userId,
@@ -94,10 +127,14 @@ function ManagedServerBackupsSession({
     backups,
     status,
     loadError,
+    autosaves,
+    autosaveLoadError,
 }: ManagedServerBackupsProps & { intentKey: string }) {
-    const { t, number, date } = useTranslations("managed-server");
+    const { t, number, date, locale } = useTranslations("managed-server");
     const timeZone = useViewerTimeZone();
+    const now = useCurrentMinute();
     const expiredListId = useId();
+    const autosaveHeadingId = useId();
     const restoreMessages = { expired: t("backupReason.expired"), inProgress: t("backupReason.inProgress"), installedBuildUnknown: t("backupReason.installedBuildUnknown"), backupBuildUnknown: t("backupReason.backupBuildUnknown"), buildMismatch: t("backupReason.buildMismatch"), unknown: t("backupReason.unknown") };
     const [intentReady, setIntentReady] = useState(false);
     const [storageError, setStorageError] = useState(false);
@@ -110,6 +147,7 @@ function ManagedServerBackupsSession({
     const [showExpired, setShowExpired] = useState(false);
     const retainedIntentRef = useRef<ManagedServerBackupInput | null>(null);
     const polledJobIds = useRef(new Set<string>());
+    const autosaveJobIds = useRef(new Set<string>());
     const router = useRouter();
     const loadRetries = useRef(0);
     const {
@@ -145,6 +183,9 @@ function ManagedServerBackupsSession({
     };
     const serverIsRunning = currentServer.observedGameState === "running"
         || currentServer.operationState === "running";
+    // Earlier autosaves are swapped in only while the server is both meant to be and seen to be stopped.
+    const serverIsStopped = currentServer.operationState === "stopped"
+        && currentServer.observedGameState === "stopped";
     const canManage = canManageServerBackups(server.accessRole);
     const statusIsStale = timedOutSession?.serverId === server.serverId
         && timedOutSession.statusSource === "backup"
@@ -207,6 +248,14 @@ function ManagedServerBackupsSession({
         return () => window.clearTimeout(timeout);
     }, [endPolling, pollingSession, server.serverId, status?.job]);
 
+    useEffect(() => {
+        const job = status?.job;
+        if (job?.state !== "succeeded" || !autosaveJobIds.current.has(job.jobId)) return;
+        // A loaded autosave reshuffles the autosave slots and adds a safety backup; read both lists again.
+        autosaveJobIds.current.delete(job.jobId);
+        router.refresh();
+    }, [router, status?.job]);
+
     const busy = !intentReady || storageError || isPending
         || (pollingSession !== null && retainedIntent === null)
         || activeJob !== null
@@ -264,6 +313,7 @@ function ManagedServerBackupsSession({
                 if (result.ok) {
                     rememberIntent(null, intent);
                     watchJob(result.jobId);
+                    if (intent.action === "restore-save-generation") autosaveJobIds.current.add(result.jobId);
                     if (interruptsPlayers) setInterruptingJobIds((current) => new Set(current).add(result.jobId));
                     polledJobIds.current.add(result.jobId);
                     beginPolling(server.serverId, intent.expectedUpdatedAt, result.jobId, "backup");
@@ -327,16 +377,41 @@ function ManagedServerBackupsSession({
         );
     }
 
+    // Confirms replacing the current save with an earlier autosave before retaining its request.
+    function submitAutosaveRestore(item: EarlierAutosave) {
+        if (retainedIntentRef.current !== null || !autosaves) return;
+        if (!window.confirm([
+            t("autosaves.loadTheAutosaveFromDate", { date: formatTime(item.lastModifiedAt) }),
+            t("autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst"),
+        ].join("\n\n"))) return;
+
+        const candidate: ManagedServerBackupInput = {
+            serverId: server.serverId,
+            saveId: autosaves.saveId,
+            generation: item.generation,
+            action: "restore-save-generation",
+            expectedUpdatedAt: currentServer.updatedAt,
+            requestId: crypto.randomUUID(),
+        };
+        submitIntent(
+            retainManagedServerBackupIntent(retainedIntentRef.current, candidate),
+            autosaveTarget(item.generation),
+        );
+    }
+
     // Retries the exact retained backup request without creating a new identity.
     function retryPendingRequest() {
         const intent = retainedIntentRef.current;
         if (intent === null) return;
-        submitIntent(intent, intent.action === "create-backup" ? "create" : intent.backupId, { retry: true });
+        submitIntent(intent, intentTarget(intent), { retry: true });
     }
 
     const { current: currentBackups, expired: expiredBackups } = partitionServerBackups(backups);
+    const currentAutosave = autosaves?.items.find((item) => item.generation === "current") ?? null;
+    const earlierAutosaves = (autosaves?.items ?? []).filter(isEarlierAutosave);
     const renderedBackupIds = new Set([...currentBackups, ...(showExpired ? expiredBackups : [])]
-        .map((backup) => backup.backupId));
+        .map((backup) => backup.backupId)
+        .concat(earlierAutosaves.map((item) => autosaveTarget(item.generation))));
     // An acceptance note is superseded once that job's own outcome is shown.
     const currentFeedback = feedback?.jobId !== undefined && shownJob?.jobId === feedback.jobId && TERMINAL_JOB_STATES.has(shownJob.state)
         ? null : feedback;
@@ -345,6 +420,61 @@ function ManagedServerBackupsSession({
         ? currentFeedback : null;
     const controlFeedback = currentFeedback !== null && rowFeedback === null ? currentFeedback : null;
     const lastBackupAt = latestServerBackupAt(backups);
+
+    // Formats an autosave's save time, age and size on one line.
+    function renderAutosaveDetails(item: MyServerSaveGenerationSummary) {
+        return (
+            <p className="mt-2 text-sm text-foreground-muted">
+                <time dateTime={item.lastModifiedAt}>{formatTime(item.lastModifiedAt)}</time>
+                {now !== null && <>
+                    <span aria-hidden="true"> · </span>
+                    {formatRelativeTime(item.lastModifiedAt, now, locale)}
+                </>}
+                <span aria-hidden="true"> · </span>
+                {formatByteCount(item.byteSize, number, t)}
+            </p>
+        );
+    }
+
+    // Renders one earlier autosave with its load control and any result for that row.
+    function renderEarlierAutosave(item: EarlierAutosave) {
+        const target = autosaveTarget(item.generation);
+        const isRestoring = pendingBackupId === target;
+        return (
+            <li key={item.generation} className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                    <p className="font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
+                        {item.generation === "backup1" ? t("autosaves.earlierAutosave1") : t("autosaves.earlierAutosave2")}
+                    </p>
+                    {renderAutosaveDetails(item)}
+                    {rowFeedback?.target === target && (
+                        <p role="status" className="mt-2 max-w-2xl text-xs leading-5 text-foreground">
+                            {rowFeedback.text}
+                        </p>
+                    )}
+                </div>
+                {canManage && (
+                    <button
+                        type="button"
+                        disabled={
+                            busy
+                            || Boolean(loadError)
+                            || retainedIntent !== null
+                            || !serverIsStopped
+                        }
+                        onClick={() => submitAutosaveRestore(item)}
+                        title={retainedIntent !== null
+                            ? t("backups.reconcileThePendingBackupRequestFirst")
+                            : serverIsStopped ? undefined : t("autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave")}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 border border-red-400/40 bg-red-500/[0.06] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-red-200 transition-colors hover:border-red-300/60 hover:bg-red-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
+                    >
+                        <RotateCcw aria-hidden="true" className={`size-3.5 ${isRestoring ? "animate-pulse" : ""}`} />
+                        {isRestoring ? t("backups.submitting") : t("autosaves.loadAutosave")}
+                    </button>
+                )}
+            </li>
+        );
+    }
 
     // Renders one retained backup with its restore control and any result for that row.
     function renderBackup(backup: MyServerBackupSummary) {
@@ -436,6 +566,48 @@ function ManagedServerBackupsSession({
                 </div>
             )}
 
+            {(autosaves || autosaveLoadError) && (
+                <section aria-labelledby={autosaveHeadingId}>
+                    <h3 id={autosaveHeadingId} className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
+                        {autosaves?.campaignName
+                            ? t("autosaves.recentAutosavesCampaign", { campaign: autosaves.campaignName })
+                            : t("autosaves.recentAutosaves")}
+                    </h3>
+                    <p className="mt-1 text-xs text-foreground-dim">{t("autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave")}</p>
+                    {autosaveLoadError && (
+                        <p role="status" className="mt-3 border-l-2 border-gold/50 bg-gold/5 px-4 py-3 text-sm text-foreground-muted">
+                            {autosaveLoadError}
+                        </p>
+                    )}
+                    {(currentAutosave !== null || earlierAutosaves.length > 0) && (
+                        <ul className="mt-3 divide-y divide-white/10 border border-white/10" aria-label={t("autosaves.recentAutosaves")}>
+                            {currentAutosave !== null && (
+                                <li className="p-4">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <p className="font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
+                                            {t("autosaves.currentSave")}
+                                        </p>
+                                        <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-emerald-200">
+                                            {t("autosaves.inUse")}
+                                        </span>
+                                    </div>
+                                    {renderAutosaveDetails(currentAutosave)}
+                                </li>
+                            )}
+                            {earlierAutosaves.map(renderEarlierAutosave)}
+                        </ul>
+                    )}
+                    {autosaves && earlierAutosaves.length === 0 && (
+                        <div className="mt-3 border border-dashed border-white/10 px-4 py-6 text-center text-sm text-foreground-muted">
+                            {t("autosaves.noEarlierAutosavesYet")}
+                        </div>
+                    )}
+                    {canManage && earlierAutosaves.length > 0 && !serverIsStopped && (
+                        <p className="mt-2 text-xs text-foreground-dim">{t("autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave")}</p>
+                    )}
+                </section>
+            )}
+
             <div>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     {canManage ? (
@@ -514,6 +686,24 @@ function ManagedServerBackupsSession({
             ))}
         </div>
     );
+}
+
+type EarlierAutosave = MyServerSaveGenerationSummary & { generation: MyServerRestorableSaveGeneration };
+
+// Narrows an autosave to one that can replace the current save.
+function isEarlierAutosave(item: MyServerSaveGenerationSummary): item is EarlierAutosave {
+    return item.generation !== "current";
+}
+
+// Describes how long ago an autosave was written, in the selected locale's own wording.
+function formatRelativeTime(value: string, now: number, locale: string) {
+    const format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    // Clock skew can place a fresh save slightly ahead of the viewer; it still reads as "now".
+    const seconds = Math.max(0, Math.floor((now - Date.parse(value)) / 1_000));
+    if (seconds < 60) return format.format(0, "second");
+    if (seconds < 3_600) return format.format(-Math.floor(seconds / 60), "minute");
+    if (seconds < 86_400) return format.format(-Math.floor(seconds / 3_600), "hour");
+    return format.format(-Math.floor(seconds / 86_400), "day");
 }
 
 // Presents durable backup progress without translating external job output.

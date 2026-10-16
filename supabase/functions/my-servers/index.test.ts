@@ -473,3 +473,79 @@ test("website password controls preserve actor, generation and request ID withou
     assert.equal(rejected.status, 502);
     assert.ok(!(await rejected.text()).includes(input.password));
 });
+
+test("routes autosave generations and earlier-autosave restores through closed operations", async () => {
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    const saveId = "77777777-7777-4777-8777-777777777777";
+    const current = { generation: "current", byteSize: 4_096, lastModifiedAt: "2026-10-16T09:56:00.000Z", observedAt: "2026-10-16T09:58:00.000Z" };
+    let generations: unknown = { serverId, saveId, items: [current, { ...current, generation: "backup1" }] };
+    let receipt: unknown = { outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "restore" };
+    const upstreamBodies: { operation: string }[] = [];
+    const handler = createHandler(async (input, init) => {
+        const body = JSON.parse(await new Request(input, init).text());
+        upstreamBodies.push(body);
+        return successEnvelope(body.operation === "server-save-generations" ? generations : receipt);
+    });
+    const restore = { action: "restore-save-generation", serverId, saveId, generation: "backup1", expectedUpdatedAt: "2026-10-16T09:58:00.000Z" };
+
+    const read = await handler(listRequest(`?resource=save-generations&serverId=${serverId}&saveId=${saveId}`));
+    assert.equal(read.status, 200);
+    assert.deepEqual((await read.json()).result, generations);
+    const restored = await handler(operationRequest(restore));
+    assert.equal(restored.status, 200);
+    assert.deepEqual((await restored.json()).result, receipt);
+    assert.deepEqual(upstreamBodies, [
+        { version: 1, requestId: REQUEST_ID, operation: "server-save-generations", input: { serverId, saveId } },
+        { version: 1, requestId: REQUEST_ID, operation: "restore-save-generation",
+            input: { serverId, saveId, generation: "backup1", expectedUpdatedAt: restore.expectedUpdatedAt } },
+    ]);
+
+    // Requests outside the closed shapes never reach the control plane.
+    const missingId = operationRequest(restore);
+    missingId.headers.delete("x-request-id");
+    for (const request of [
+        listRequest(`?resource=save-generations&serverId=${serverId}`),
+        listRequest(`?resource=save-generations&serverId=${serverId}&saveId=not-a-save`),
+        listRequest(`?resource=save-generations&serverId=${serverId}&saveId=${saveId}&saveId=${saveId}`),
+        listRequest(`?resource=save-generations&serverId=${serverId}&saveId=${saveId}&generation=backup1`),
+        listRequest(`?resource=save-generations&saveId=${saveId}`),
+        operationRequest({ ...restore, generation: "current" }),
+        operationRequest({ ...restore, generation: "backup3" }),
+        operationRequest({ ...restore, generation: undefined }),
+        operationRequest({ ...restore, saveId: "not-a-save" }),
+        operationRequest({ ...restore, expectedUpdatedAt: "2026-10-16T11:58:00.000+02:00" }),
+        operationRequest({ ...restore, backupId: "33333333-3333-4333-8333-333333333333" }),
+        operationRequest({ ...restore, actorDiscordUserId: "192469416892432384" }),
+        missingId,
+    ]) assert.equal((await handler(request)).status, 400);
+    assert.equal(upstreamBodies.length, 2);
+
+    // Responses that do not match the requested campaign or the closed receipt are withheld.
+    for (const invalid of [
+        { serverId, saveId: "88888888-8888-4888-8888-888888888888", items: [] },
+        { serverId, saveId, items: [{ ...current, generation: "backup2" }, { ...current, generation: "backup1" }] },
+        { serverId, saveId, items: [current, current] },
+        { serverId, saveId, items: [{ ...current, objectKey: "private/save" }] },
+    ]) {
+        generations = invalid;
+        assert.equal((await handler(listRequest(`?resource=save-generations&serverId=${serverId}&saveId=${saveId}`))).status, 502);
+    }
+    for (const invalid of [
+        { outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "backup" },
+        { outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "restore", saveId },
+    ]) {
+        receipt = invalid;
+        assert.equal((await handler(operationRequest(restore))).status, 502);
+    }
+});
+
+test("relays an autosave precondition failure unchanged", async () => {
+    const error = { code: "operation_failed", message: "Stop the game server before restoring an earlier autosave.", retryable: false };
+    const handler = createHandler(async () => Response.json({ version: 1, requestId: REQUEST_ID, ok: false, error }, { status: 409 }));
+    const response = await handler(operationRequest({
+        action: "restore-save-generation", serverId: "22222222-2222-4222-8222-222222222222",
+        saveId: "77777777-7777-4777-8777-777777777777", generation: "backup2", expectedUpdatedAt: "2026-10-16T09:58:00.000Z",
+    }));
+    assert.equal(response.status, 409);
+    assert.deepEqual((await response.json()).error, error);
+});

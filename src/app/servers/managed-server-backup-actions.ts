@@ -113,6 +113,11 @@ export async function manageServerBackup(input: unknown, expectedPageUserId: unk
             revalidatePath(`/servers/${parsed.serverId}`);
             return rejected(t("action.backup.thatBackupOperationIsNotAvailableInTheServerS"));
         }
+        if (code === "operation_failed" && parsed.action === "restore-save-generation") {
+            // Autosave preconditions (server not stopped, autosave since replaced) fail this way before any job exists.
+            revalidatePath(`/servers/${parsed.serverId}`);
+            return rejected(t("action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh"));
+        }
         if (code === "rate_limited" || code === "busy") {
             return uncertain(t("action.backup.tooManyRequestsWereSubmittedPleaseWaitAndRetryThe"));
         }

@@ -18,7 +18,7 @@ import { LiveServerBackupSetup, type LiveServerBackupUnavailableReason } from "@
 import { LiveServerFileSetup } from "@/app/components/servers/LiveServerFileSetup";
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
-import { listAllMyServerSaves } from "@/app/lib/hosting/my-servers";
+import { getMyServerSaveGenerations, listAllMyServerSaves } from "@/app/lib/hosting/my-servers";
 import { ManagedServerControls, ManagedServerPassword } from "@/app/components/servers/ManagedServerControls";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import { ManagedServerDelete } from "@/app/components/servers/ManagedServerDelete";
@@ -281,11 +281,23 @@ async function ManagedServerBackupsSection({
         return <ManagedServerFiles userId={userId} server={server} files={null} saves={null} backups={[]} status={null} />;
     }
 
-    const [initialBackups, initialStatus, filesResult, savesResult] = await Promise.allSettled([
+    const savesRequest = listAllMyServerSaves(accessToken, server.serverId);
+    // Earlier autosaves belong to the active campaign, so they are read once the save list names it.
+    const autosavesRequest = savesRequest.then(async (saves) => {
+        if (saves.activeSaveId === null) return null;
+        const generations = await getMyServerSaveGenerations(accessToken, server.serverId, saves.activeSaveId);
+        return {
+            saveId: generations.saveId,
+            campaignName: saves.items.find((save) => save.saveId === generations.saveId)?.displayName ?? null,
+            items: generations.items,
+        };
+    });
+    const [initialBackups, initialStatus, filesResult, savesResult, autosavesResult] = await Promise.allSettled([
         listAllMyServerBackups(accessToken, server.serverId),
         getMyServerBackupStatus(accessToken, server.serverId),
         getMyServerFiles(accessToken, server.serverId),
-        listAllMyServerSaves(accessToken, server.serverId),
+        savesRequest,
+        autosavesRequest,
     ]);
     let backupsResult = initialBackups;
     let statusResult = initialStatus;
@@ -308,11 +320,17 @@ async function ManagedServerBackupsSection({
     if (statusResult.status === "rejected") {
         console.error("Managed server backup status failed to load");
     }
+    // Autosave failures are reported on their own and never pause retained backups.
+    if (autosavesResult.status === "rejected" && savesResult.status === "fulfilled") {
+        console.error("Managed server autosaves failed to load");
+    }
 
     return <ManagedServerFiles userId={userId} server={server}
         files={filesResult.status === "fulfilled" ? filesResult.value : null}
         saves={savesResult.status === "fulfilled" ? savesResult.value : null}
-        backups={backups} status={status} loadError={loadError} />;
+        backups={backups} status={status} loadError={loadError}
+        autosaves={autosavesResult.status === "fulfilled" ? autosavesResult.value : null}
+        autosaveLoadError={autosavesResult.status === "rejected" ? t("page.recentAutosavesCouldNotBeLoaded") : undefined} />;
 }
 
 // Renders the accessible loading state for streamed backup and file data.

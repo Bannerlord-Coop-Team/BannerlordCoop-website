@@ -788,5 +788,20 @@
   "managerAccess.heading": "Manager access",
   "managerAccess.emailPlaceholder": "friend@example.com",
   "managerAccess.accountCouldNotBeFound": "That account could not be found. Check the exact email and try again.",
-  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again."
+  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again.",
+
+  "autosaves.recentAutosaves": "Salvamentos automáticos recentes",
+  "autosaves.recentAutosavesCampaign": "Salvamentos automáticos recentes · {campaign}",
+  "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "O servidor mantém os dois últimos salvamentos automáticos junto ao jogo salvo atual. Eles são substituídos sempre que o servidor salva.",
+  "autosaves.currentSave": "Jogo salvo atual",
+  "autosaves.inUse": "Em uso",
+  "autosaves.earlierAutosave1": "Salvamento automático anterior 1",
+  "autosaves.earlierAutosave2": "Salvamento automático anterior 2",
+  "autosaves.loadAutosave": "Carregar salvamento automático",
+  "autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave": "Pare o servidor de jogo antes de carregar um salvamento automático anterior.",
+  "autosaves.loadTheAutosaveFromDate": "Carregar o salvamento automático de {date}?",
+  "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "Primeiro é feito um backup de segurança do jogo salvo atual, então você pode desfazer isso em Backups.",
+  "autosaves.noEarlierAutosavesYet": "Ainda não há salvamentos automáticos anteriores. Eles aparecem depois que o servidor salvar automaticamente algumas vezes.",
+  "page.recentAutosavesCouldNotBeLoaded": "Não foi possível carregar os salvamentos automáticos recentes agora. Os backups armazenados não são afetados; atualize a página para tentar novamente.",
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Não foi possível carregar esse salvamento automático. Verifique se o servidor de jogo está parado, depois atualize e escolha um salvamento automático que ainda esteja na lista."
 }
