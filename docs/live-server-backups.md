@@ -78,3 +78,21 @@ Deploy this compatible website reader before the control-plane reason field:
 older website readers reject additional backup fields. This reader accepts old
 responses without the field, explicitly says the server supplied no reason, and
 keeps restore disabled. It does not guess a mismatch from `canRestore: false`.
+
+## Earlier autosaves
+
+Above the retained backups, the tab lists the active campaign's current save and
+the two earlier autosave copies the runner keeps beside it (`backup1`, `backup2`),
+read through `resource=save-generations` (control-plane `server-save-generations`).
+The list can be a few minutes stale. Owners and managers can load an earlier
+autosave only while the server is stopped; the request is
+`restore-save-generation` with the save, generation and generation check, and it
+reuses the backup tab's retained-request recovery and `server-backup-status`
+polling because the control plane runs it as a `restore` job that first takes a
+`pre-restore` safety backup. A failed autosave read is reported beside the list
+and never pauses retained backups.
+
+Deploy the control plane's two operations and the `my-servers` Edge Function
+before this website reader. Older websites never call the new resource, so the
+Edge Function can ship with the control plane. A website deployed first shows
+the autosave read failure on every Backups tab until both are live.

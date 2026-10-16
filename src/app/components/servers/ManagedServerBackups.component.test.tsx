@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ManagedServerBackups } from "@/app/components/servers/ManagedServerBackups";
+import { ManagedServerBackups, type ManagedServerAutosaves } from "@/app/components/servers/ManagedServerBackups";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import { managedServerBackupIntentKey } from "@/app/servers/managed-server-backup-intent";
 import { manageServerBackup } from "@/app/servers/managed-server-backup-actions";
@@ -603,4 +603,201 @@ it("re-reads backup history that failed to load, a bounded number of times, inst
         await advance(10_000);
     }
     expect(router.refresh).toHaveBeenCalledTimes(5);
+});
+
+const campaignSaveId = "77777777-7777-4777-8777-777777777777";
+const autosaves: ManagedServerAutosaves = {
+    saveId: campaignSaveId,
+    campaignName: "Northern March",
+    items: [
+        { generation: "current", byteSize: 12_582_912, lastModifiedAt: "2026-09-02T14:56:00.000Z", observedAt: "2026-09-02T14:58:00.000Z" },
+        { generation: "backup1", byteSize: 12_058_624, lastModifiedAt: "2026-09-02T14:41:00.000Z", observedAt: "2026-09-02T14:58:00.000Z" },
+        { generation: "backup2", byteSize: 11_534_336, lastModifiedAt: "2026-09-02T14:26:00.000Z", observedAt: "2026-09-02T14:58:00.000Z" },
+    ],
+};
+
+// Renders the Backups tab with the active campaign's autosaves above retained backups.
+async function renderAutosaves({ currentServer = stopped, items = autosaves.items, autosaveLoadError, status = null, withAutosaves = true }: {
+    currentServer?: MyServerSummary; items?: ManagedServerAutosaves["items"]; autosaveLoadError?: string;
+    status?: MyServerBackupStatus | null; withAutosaves?: boolean;
+} = {}) {
+    await act(async () => root.render(
+        <TestLocalization>{<ManagedServerPollingProvider>
+            <ManagedServerBackups userId="user" server={currentServer} backups={[backup]} status={status}
+                autosaves={withAutosaves ? { ...autosaves, items } : null} autosaveLoadError={autosaveLoadError} />
+        </ManagedServerPollingProvider>} </TestLocalization>,
+    ));
+    await advance(0);
+}
+
+function loadButtons() {
+    return Array.from(container.querySelectorAll("button")).filter((candidate) => candidate.textContent === "Load autosave");
+}
+
+describe("ManagedServerBackups recent autosaves", () => {
+    it("lists the current save and both earlier autosaves above the retained backups", async () => {
+        await renderAutosaves();
+        const section = container.querySelector("section")!;
+        expect(section.querySelector("h3")!.textContent).toBe("Recent autosaves · Northern March");
+        expect(section.textContent).toContain("They are replaced every time it saves.");
+        const rows = [...section.querySelectorAll("li")];
+        expect(rows.map((row) => row.querySelector("p")!.textContent)).toEqual(["Current save", "Earlier autosave 1", "Earlier autosave 2"]);
+        expect(rows[0].textContent).toContain("In use");
+        // Absolute times follow the viewer's zone; the age and size follow them on the same line.
+        expect(rows[0].querySelector("time")!.dateTime).toBe("2026-09-02T14:56:00.000Z");
+        expect(text(rows[0].querySelector("time")!.parentElement!.textContent)).toBe(`${text(rows[0].querySelector("time")!.textContent)} · 4 minutes ago · 12.0 MB`);
+        expect(text(rows[1].querySelector("time")!.parentElement!.textContent)).toBe(`${text(rows[1].querySelector("time")!.textContent)} · 19 minutes ago · 11.5 MB`);
+        expect(text(rows[2].querySelector("time")!.parentElement!.textContent)).toContain("34 minutes ago");
+        expect(rows[0].querySelector("button")).toBeNull();
+        expect(loadButtons()).toHaveLength(2);
+        expect(loadButtons().every((candidate) => !candidate.disabled)).toBe(true);
+        const retained = container.querySelector('ul[aria-label="Retained save backups"]')!;
+        expect(section.compareDocumentPosition(retained) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(button("Restore save").disabled).toBe(false);
+    });
+
+    it("renders absolute times on the server and adds relative ages only after hydration", async () => {
+        const errors: unknown[] = [];
+        const element = <TestLocalization>{<ManagedServerPollingProvider>
+            <ManagedServerBackups userId="user" server={stopped} backups={[backup]} status={null} autosaves={autosaves} />
+        </ManagedServerPollingProvider>} </TestLocalization>;
+        const html = renderToStaticMarkup(element);
+        expect(text(html)).toContain("Sep 2, 2026, 2:56 PM UTC");
+        expect(html).not.toContain("minutes ago");
+        const hydrated = document.createElement("div");
+        hydrated.innerHTML = html;
+        document.body.append(hydrated);
+        const hydratedRoot = await act(async () => hydrateRoot(hydrated, element, { onRecoverableError: (error) => errors.push(error) }));
+        await advance(0);
+        expect(errors).toEqual([]);
+        expect(hydrated.textContent).toContain("4 minutes ago");
+        await act(async () => hydratedRoot.unmount());
+        hydrated.remove();
+    });
+
+    it.each([
+        ["running", { ...server, operationState: "running", observedGameState: "running" }, null],
+        ["stopping", { ...stopped, operationState: "stopping", observedGameState: "running" }, null],
+        ["still observed running", stopped, { serverId: server.serverId, updatedAt: server.updatedAt, operationState: "stopped", observedGameState: "running", job: null }],
+    ] as const)("disables loading while the server is %s and says why", async (_state, currentServer, status) => {
+        await renderAutosaves({ currentServer, status });
+        expect(loadButtons()).toHaveLength(2);
+        for (const candidate of loadButtons()) {
+            expect(candidate.disabled).toBe(true);
+            expect(candidate.title).toBe("Stop the game server before loading an earlier autosave.");
+        }
+        expect(container.querySelector("section")!.textContent).toContain("Stop the game server before loading an earlier autosave.");
+    });
+
+    it("confirms with the autosave time and submits the exact campaign, generation and generation check", async () => {
+        const confirm = vi.mocked(window.confirm);
+        confirm.mockReturnValueOnce(false);
+        await renderAutosaves();
+        await act(async () => loadButtons()[1].click());
+        await advance(0);
+        const savedAt = text(container.querySelectorAll("section li")[2].querySelector("time")!.textContent);
+        expect(savedAt).toMatch(/^Sep 2, 2026, /u);
+        expect(text(confirm.mock.calls[0][0])).toContain(`Load the autosave from ${savedAt}?`);
+        expect(confirm.mock.calls[0][0]).toContain("A safety backup of the current save is taken first, so you can undo this from Backups.");
+        expect(request).not.toHaveBeenCalled();
+        expect(window.sessionStorage.getItem(intentKey)).toBeNull();
+
+        request.mockResolvedValueOnce({ outcome: "enqueued", jobId: activeStatus.job!.jobId, action: "restore" });
+        await act(async () => loadButtons()[1].click());
+        await advance(0);
+        expect(request).toHaveBeenCalledExactlyOnceWith("test-only", {
+            serverId: server.serverId,
+            saveId: campaignSaveId,
+            generation: "backup2",
+            action: "restore-save-generation",
+            expectedUpdatedAt: stopped.updatedAt,
+        }, expect.stringMatching(/^[0-9a-f-]{36}$/u));
+        expect(container.querySelectorAll("section li")[2].textContent).toContain("Save restore request accepted.");
+        expect(window.sessionStorage.getItem(intentKey)).toBeNull();
+
+        // The existing backup-status polling reports the restore; its success reloads both lists once more.
+        await renderAutosaves({ status: { ...activeStatus, operationState: "maintenance", observedGameState: "stopped" } });
+        expect(container.textContent).toContain("Verifying restored save");
+        expect(loadButtons().every((candidate) => candidate.disabled)).toBe(true);
+        expect(button("Restore save").disabled).toBe(true);
+        router.refresh.mockClear();
+        await renderAutosaves({ status: { ...activeStatus, operationState: "stopped", observedGameState: "stopped",
+            updatedAt: "2026-09-02T15:01:00.000Z", job: { ...activeStatus.job!, state: "succeeded" } } });
+        expect(container.textContent).toContain("Save restore completed.");
+        expect(router.refresh).toHaveBeenCalled();
+        const refreshes = router.refresh.mock.calls.length;
+        await renderAutosaves({ status: { ...activeStatus, operationState: "stopped", observedGameState: "stopped",
+            updatedAt: "2026-09-02T15:01:00.000Z", job: { ...activeStatus.job!, state: "succeeded" } } });
+        expect(router.refresh).toHaveBeenCalledTimes(refreshes);
+    });
+
+    it("reports a precondition failure beside the autosave and forgets the request", async () => {
+        request.mockRejectedValueOnce(new MyServersApiError("operation_failed", "That autosave is no longer available. Refresh Saves and choose another one."));
+        await renderAutosaves();
+        await act(async () => loadButtons()[0].click());
+        await advance(0);
+        const row = container.querySelectorAll("section li")[1];
+        expect(row.textContent).toContain("That autosave couldn’t be loaded. Make sure the game server is stopped, then refresh and choose an autosave that is still listed.");
+        expect(container.textContent).not.toContain("Retry pending request");
+        expect(window.sessionStorage.getItem(intentKey)).toBeNull();
+        expect(revalidatePath).toHaveBeenCalledWith(`/servers/${server.serverId}`);
+        expect(loadButtons()[0].disabled).toBe(false);
+    });
+
+    it("retains an unconfirmed autosave restore and blocks other restores until the same request is reconciled", async () => {
+        request.mockRejectedValueOnce(new Error("Accepted response was lost"));
+        await renderAutosaves();
+        await act(async () => loadButtons()[0].click());
+        await advance(0);
+        const original = request.mock.calls[0];
+        expect(original[1]).toMatchObject({ generation: "backup1", saveId: campaignSaveId, action: "restore-save-generation" });
+        expect(container.textContent).toContain("We're confirming your restore request.");
+        // Past any bounded polling window, so only the retained intent blocks mutations.
+        await advance(16 * 60_000);
+        for (const candidate of [...loadButtons(), button("Restore save")]) {
+            expect(candidate.disabled).toBe(true);
+            expect(candidate.title).toBe("Reconcile the pending backup request first.");
+        }
+        request.mockResolvedValueOnce({ outcome: "existing", jobId: activeStatus.job!.jobId, action: "restore" });
+        await click("Retry pending request");
+        expect(request.mock.calls[1]).toEqual(original);
+        expect(window.sessionStorage.getItem(intentKey)).toBeNull();
+        expect(container.textContent).toContain("That restore request was already accepted.");
+    });
+
+    it.each([
+        ["only the current save", [autosaves.items[0]]],
+        ["nothing yet", []],
+    ] as const)("shows the empty state when the server has %s", async (_case, items) => {
+        await renderAutosaves({ items });
+        expect(container.textContent).toContain("No earlier autosaves yet. They appear after the server has autosaved a few times.");
+        expect(loadButtons()).toHaveLength(0);
+        expect(container.querySelectorAll("section li")).toHaveLength(items.length);
+        expect(container.textContent).not.toContain("Stop the game server before loading");
+    });
+
+    it("keeps retained backups usable when the autosaves could not be read", async () => {
+        const notice = "Recent autosaves couldn’t be loaded just now. Retained backups are unaffected; refresh the page to try again.";
+        await renderAutosaves({ withAutosaves: false, autosaveLoadError: notice });
+        const section = container.querySelector("section")!;
+        expect(section.querySelector("h3")!.textContent).toBe("Recent autosaves");
+        expect(section.querySelector('[role="status"]')!.textContent).toBe(notice);
+        expect(container.textContent).not.toContain("No earlier autosaves yet");
+        expect(loadButtons()).toHaveLength(0);
+        expect(button("Restore save").disabled).toBe(false);
+        expect(button("Create backup").disabled).toBe(false);
+    });
+
+    it("omits the section when no campaign autosaves were provided", async () => {
+        await renderAutosaves({ withAutosaves: false });
+        expect(container.querySelector("section")).toBeNull();
+        expect(container.textContent).not.toContain("Recent autosaves");
+    });
+
+    it.each(["support", "admin"] as const)("lists autosaves without a load control for %s access", async (accessRole) => {
+        await renderAutosaves({ currentServer: { ...stopped, accessRole } });
+        expect(container.textContent).toContain("Earlier autosave 1");
+        expect(loadButtons()).toHaveLength(0);
+        expect(container.textContent).not.toContain("Stop the game server before loading");
+    });
 });

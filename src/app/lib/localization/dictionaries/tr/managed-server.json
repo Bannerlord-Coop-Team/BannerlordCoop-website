@@ -788,5 +788,20 @@
   "managerAccess.heading": "Manager access",
   "managerAccess.emailPlaceholder": "friend@example.com",
   "managerAccess.accountCouldNotBeFound": "That account could not be found. Check the exact email and try again.",
-  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again."
+  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again.",
+
+  "autosaves.recentAutosaves": "Son otomatik kayıtlar",
+  "autosaves.recentAutosavesCampaign": "Son otomatik kayıtlar · {campaign}",
+  "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "Sunucu, geçerli kayıt dosyasının yanında son iki otomatik kaydı saklar. Bunlar her kayıtta değiştirilir.",
+  "autosaves.currentSave": "Geçerli kayıt dosyası",
+  "autosaves.inUse": "Kullanımda",
+  "autosaves.earlierAutosave1": "Önceki otomatik kayıt 1",
+  "autosaves.earlierAutosave2": "Önceki otomatik kayıt 2",
+  "autosaves.loadAutosave": "Otomatik kaydı yükle",
+  "autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave": "Önceki bir otomatik kaydı yüklemeden önce oyun sunucusunu durdurun.",
+  "autosaves.loadTheAutosaveFromDate": "{date} tarihli otomatik kayıt yüklensin mi?",
+  "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "Önce geçerli kayıt dosyasının güvenlik yedeği alınır; böylece bu işlemi Yedekler bölümünden geri alabilirsiniz.",
+  "autosaves.noEarlierAutosavesYet": "Henüz önceki otomatik kayıt yok. Sunucu birkaç kez otomatik kayıt yaptıktan sonra görünürler.",
+  "page.recentAutosavesCouldNotBeLoaded": "Son otomatik kayıtlar şu anda yüklenemedi. Saklanan yedekler etkilenmez; yeniden denemek için sayfayı yenileyin.",
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Bu otomatik kayıt yüklenemedi. Oyun sunucusunun durdurulduğundan emin olun, ardından sayfayı yenileyip hâlâ listede olan bir otomatik kaydı seçin."
 }

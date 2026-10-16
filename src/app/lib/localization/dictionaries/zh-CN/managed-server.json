@@ -787,5 +787,20 @@
   "managerAccess.heading": "Manager access",
   "managerAccess.emailPlaceholder": "friend@example.com",
   "managerAccess.accountCouldNotBeFound": "That account could not be found. Check the exact email and try again.",
-  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again."
+  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again.",
+
+  "autosaves.recentAutosaves": "最近的自动存档",
+  "autosaves.recentAutosavesCampaign": "最近的自动存档 · {campaign}",
+  "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "服务器会在当前存档之外保留最近两个自动存档。每次保存时都会替换它们。",
+  "autosaves.currentSave": "当前存档",
+  "autosaves.inUse": "使用中",
+  "autosaves.earlierAutosave1": "较早的自动存档 1",
+  "autosaves.earlierAutosave2": "较早的自动存档 2",
+  "autosaves.loadAutosave": "加载自动存档",
+  "autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave": "请先停止游戏服务器，再加载较早的自动存档。",
+  "autosaves.loadTheAutosaveFromDate": "要加载 {date} 的自动存档吗？",
+  "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "系统会先为当前存档创建安全备份，因此你可以在“备份”中撤销此操作。",
+  "autosaves.noEarlierAutosavesYet": "暂无较早的自动存档。服务器自动保存几次后就会显示。",
+  "page.recentAutosavesCouldNotBeLoaded": "暂时无法加载最近的自动存档。保留的备份不受影响；请刷新页面重试。",
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "无法加载该自动存档。请确认游戏服务器已停止，然后刷新并选择仍在列表中的自动存档。"
 }

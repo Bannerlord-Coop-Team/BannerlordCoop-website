@@ -788,5 +788,20 @@
   "managerAccess.heading": "Manager access",
   "managerAccess.emailPlaceholder": "friend@example.com",
   "managerAccess.accountCouldNotBeFound": "That account could not be found. Check the exact email and try again.",
-  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again."
+  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again.",
+
+  "autosaves.recentAutosaves": "Guardados automáticos recientes",
+  "autosaves.recentAutosavesCampaign": "Guardados automáticos recientes · {campaign}",
+  "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "El servidor conserva los dos últimos guardados automáticos junto a la partida guardada actual. Se reemplazan cada vez que guarda.",
+  "autosaves.currentSave": "Partida guardada actual",
+  "autosaves.inUse": "En uso",
+  "autosaves.earlierAutosave1": "Guardado automático anterior 1",
+  "autosaves.earlierAutosave2": "Guardado automático anterior 2",
+  "autosaves.loadAutosave": "Cargar guardado automático",
+  "autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave": "Detén el servidor de juego antes de cargar un guardado automático anterior.",
+  "autosaves.loadTheAutosaveFromDate": "¿Cargar el guardado automático del {date}?",
+  "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "Primero se crea una copia de seguridad de la partida guardada actual, así que puedes deshacer esto desde Copias de seguridad.",
+  "autosaves.noEarlierAutosavesYet": "Aún no hay guardados automáticos anteriores. Aparecerán cuando el servidor haya guardado automáticamente algunas veces.",
+  "page.recentAutosavesCouldNotBeLoaded": "No se pudieron cargar los guardados automáticos recientes en este momento. Las copias de seguridad conservadas no se ven afectadas; actualiza la página para volver a intentarlo.",
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "No se pudo cargar ese guardado automático. Asegúrate de que el servidor de juego esté detenido, luego actualiza y elige un guardado automático que siga en la lista."
 }

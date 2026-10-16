@@ -23,6 +23,7 @@ const SAFE_ERROR_CODE = /^[a-z][a-z0-9_-]{0,63}$/u;
 const SAFE_STATUS_VALUE = /^[a-z][a-z0-9-]{0,63}$/u;
 
 import { parseServerDeletionInput, parseServerDeletionResult, type ServerDeletionInput } from "./server-deletion-contract.ts";
+import { parseSaveGenerationList, parseSaveGenerationRestoreMutation, parseSaveGenerationRestoreResult, type SaveGenerationRestoreMutation } from "./server-save-generation-contract.ts";
 
 export type MyServersHandlerOptions = {
     allowedOrigins: readonly string[];
@@ -55,6 +56,8 @@ type UpstreamRequest =
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "server-saves"; input: { serverId: string; cursor: string | null; limit: number } }
+    | { operation: "server-save-generations"; input: { serverId: string; saveId: string } }
+    | { operation: "restore-save-generation"; input: Omit<SaveGenerationRestoreMutation, "action"> }
     | { operation: "select-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string } }
     | { operation: "delete-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string; confirmationText: string } }
     | { operation: "server-backup-status"; input: { serverId: string } }
@@ -150,7 +153,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // Durable mutations must retain the caller's UUID for exactly-once handling.
-            if (upstreamRequest.operation === "delete-server" || upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "set-server-manager" || upstreamRequest.operation === "update-server") {
+            if (upstreamRequest.operation === "delete-server" || upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "set-server-manager" || upstreamRequest.operation === "update-server" || upstreamRequest.operation === "restore-save-generation") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -267,6 +270,8 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "save-server-settings") parseOwnerSettingsResult(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
                 if (upstreamRequest.operation === "server-saves" && (!isRecord(envelope.result) || envelope.result.serverId !== upstreamRequest.input.serverId)) throw new Error("Save response belongs to another server");
+                if (upstreamRequest.operation === "server-save-generations") parseSaveGenerationList(envelope.result, upstreamRequest.input.serverId, upstreamRequest.input.saveId);
+                if (upstreamRequest.operation === "restore-save-generation") parseSaveGenerationRestoreResult(envelope.result);
                 if (upstreamRequest.operation === "select-save" && (!isRecord(envelope.result) || envelope.result.serverId !== upstreamRequest.input.serverId || envelope.result.activeSaveId !== upstreamRequest.input.saveId)) throw new Error("Save selection response is invalid");
                 if (upstreamRequest.operation === "delete-save" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["action", "jobId", "outcome"]) || envelope.result.action !== "delete-save" || !REQUEST_ID.test(String(envelope.result.jobId)) || (envelope.result.outcome !== "enqueued" && envelope.result.outcome !== "existing"))) throw new Error("Save deletion response is invalid");
                 if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
@@ -370,6 +375,12 @@ function listRequest(request: Request): UpstreamRequest {
     if (resource === "saves") {
         assertQueryParameters(url, ["cursor", "limit", "resource", "serverId"]);
         return { operation: "server-saves", input: { serverId: readServerId(url), ...readPageInput(url, MAXIMUM_LIMIT) } };
+    }
+    if (resource === "save-generations") {
+        assertQueryParameters(url, ["resource", "saveId", "serverId"]);
+        const saveId = url.searchParams.get("saveId");
+        if (saveId === null || !SERVER_ID.test(saveId)) throw new Error("Invalid save ID");
+        return { operation: "server-save-generations", input: { serverId: readServerId(url), saveId } };
     }
     if (resource === "backups") {
         assertQueryParameters(url, ["cursor", "limit", "resource", "serverId"]);
@@ -523,6 +534,13 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
                 expectedUpdatedAt: value.expectedUpdatedAt as string,
             },
         };
+    }
+    if (value.action === "restore-save-generation") {
+        // Only an earlier autosave of the named campaign can be chosen; the control plane checks it is the active save.
+        const parsed = parseSaveGenerationRestoreMutation(value);
+        return { operation: "restore-save-generation", input: {
+            serverId: parsed.serverId, saveId: parsed.saveId, generation: parsed.generation, expectedUpdatedAt: parsed.expectedUpdatedAt,
+        } };
     }
     if (value.action === "update-now") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {

@@ -788,5 +788,20 @@
   "managerAccess.heading": "Manager access",
   "managerAccess.emailPlaceholder": "friend@example.com",
   "managerAccess.accountCouldNotBeFound": "That account could not be found. Check the exact email and try again.",
-  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again."
+  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again.",
+
+  "autosaves.recentAutosaves": "Gravações automáticas recentes",
+  "autosaves.recentAutosavesCampaign": "Gravações automáticas recentes · {campaign}",
+  "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "O servidor mantém as duas últimas gravações automáticas junto ao jogo guardado atual. São substituídas sempre que o servidor grava.",
+  "autosaves.currentSave": "Jogo guardado atual",
+  "autosaves.inUse": "Em utilização",
+  "autosaves.earlierAutosave1": "Gravação automática anterior 1",
+  "autosaves.earlierAutosave2": "Gravação automática anterior 2",
+  "autosaves.loadAutosave": "Carregar gravação automática",
+  "autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave": "Pare o servidor de jogo antes de carregar uma gravação automática anterior.",
+  "autosaves.loadTheAutosaveFromDate": "Carregar a gravação automática de {date}?",
+  "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "Primeiro é criada uma cópia de segurança do jogo guardado atual, por isso pode anular esta ação em Cópias de segurança.",
+  "autosaves.noEarlierAutosavesYet": "Ainda não existem gravações automáticas anteriores. Aparecem depois de o servidor ter gravado automaticamente algumas vezes.",
+  "page.recentAutosavesCouldNotBeLoaded": "Não foi possível carregar as gravações automáticas recentes neste momento. As cópias de segurança conservadas não são afetadas; atualize a página para tentar novamente.",
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Não foi possível carregar essa gravação automática. Confirme que o servidor de jogo está parado, depois atualize e escolha uma gravação automática que ainda esteja na lista."
 }

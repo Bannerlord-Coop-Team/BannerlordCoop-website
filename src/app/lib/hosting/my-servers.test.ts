@@ -5,6 +5,7 @@ import { connectionAddress } from "./connection-address";
 import {
     getMyServerBackupStatus,
     getMyServerDeletionStatus,
+    getMyServerSaveGenerations,
     listAllMyServerBackups,
     listAllMyServers,
     MyServersApiError,
@@ -616,5 +617,139 @@ test("accepts allowlisted restore reasons and legacy backup responses", async ()
             };
             assert.deepEqual(await listAllMyServerBackups(TOKEN, FIRST_SERVER.serverId), [item]);
         }
+    } finally { restoreEnvironment(); }
+});
+
+const SAVE_ID = "77777777-7777-4777-8777-777777777777";
+const CURRENT_AUTOSAVE = { generation: "current", byteSize: 12_582_912, lastModifiedAt: "2026-10-16T09:56:00.000Z", observedAt: "2026-10-16T09:58:00.000Z" };
+const FIRST_AUTOSAVE = { ...CURRENT_AUTOSAVE, generation: "backup1", lastModifiedAt: "2026-10-16T09:41:00.000Z" };
+const SECOND_AUTOSAVE = { ...CURRENT_AUTOSAVE, generation: "backup2", lastModifiedAt: "2026-10-16T09:26:00.000Z" };
+
+test("reads the active campaign's autosave generations through the Edge and validates every item", async () => {
+    configureEnvironment();
+    let result: unknown = { serverId: FIRST_SERVER.serverId, saveId: SAVE_ID, items: [CURRENT_AUTOSAVE, FIRST_AUTOSAVE, SECOND_AUTOSAVE] };
+    const requests: Request[] = [];
+    const handler = createMyServersHandler({
+        allowedOrigins: ["https://bannerlordcoop.com"],
+        controlPlaneUrl: "https://control-plane.example.test",
+        waitUntil: () => {},
+        fetchImplementation: async (input, init) => {
+            const request = new Request(input, init);
+            requests.push(request);
+            return Response.json({ version: 1, requestId: request.headers.get("x-request-id"), ok: true, result });
+        },
+    });
+    const edgeUrls: string[] = [];
+    globalThis.fetch = async (input, init) => { edgeUrls.push(String(input)); return handler(new Request(input, init)); };
+    try {
+        assert.deepEqual(await getMyServerSaveGenerations(TOKEN, FIRST_SERVER.serverId, SAVE_ID), result);
+        const edge = new URL(edgeUrls[0]!);
+        assert.equal(edge.pathname, "/functions/v1/my-servers");
+        assert.deepEqual([...edge.searchParams].sort(), [["resource", "save-generations"], ["saveId", SAVE_ID], ["serverId", FIRST_SERVER.serverId]]);
+        const upstream = await requests[0]!.json();
+        assert.deepEqual({ ...upstream, requestId: undefined }, {
+            version: 1, requestId: undefined, operation: "server-save-generations", input: { serverId: FIRST_SERVER.serverId, saveId: SAVE_ID },
+        });
+
+        // Absent generations are simply missing; an empty list is valid.
+        for (const items of [[], [CURRENT_AUTOSAVE], [CURRENT_AUTOSAVE, SECOND_AUTOSAVE], [FIRST_AUTOSAVE]]) {
+            result = { serverId: FIRST_SERVER.serverId, saveId: SAVE_ID, items };
+            assert.deepEqual((await getMyServerSaveGenerations(TOKEN, FIRST_SERVER.serverId, SAVE_ID)).items, items);
+        }
+    } finally { restoreEnvironment(); }
+});
+
+test("rejects autosave generations that are malformed, unordered, duplicated or for another campaign", async () => {
+    configureEnvironment();
+    const page = (items: unknown[], fields: Record<string, unknown> = {}) => ({ serverId: FIRST_SERVER.serverId, saveId: SAVE_ID, items, ...fields });
+    const invalidResults = [
+        null,
+        [],
+        page([], { saveId: "88888888-8888-4888-8888-888888888888" }),
+        page([], { serverId: SECOND_SERVER.serverId }),
+        page([], { nextCursor: null }),
+        { serverId: FIRST_SERVER.serverId, saveId: SAVE_ID },
+        page([{ ...FIRST_AUTOSAVE, generation: "backup3" }]),
+        page([{ ...FIRST_AUTOSAVE, generation: "Backup1" }]),
+        page([FIRST_AUTOSAVE, FIRST_AUTOSAVE]),
+        page([CURRENT_AUTOSAVE, CURRENT_AUTOSAVE]),
+        page([FIRST_AUTOSAVE, CURRENT_AUTOSAVE]),
+        page([SECOND_AUTOSAVE, FIRST_AUTOSAVE]),
+        page([CURRENT_AUTOSAVE, FIRST_AUTOSAVE, SECOND_AUTOSAVE, { ...SECOND_AUTOSAVE, lastModifiedAt: "2026-10-16T09:11:00.000Z" }]),
+        page([{ ...FIRST_AUTOSAVE, path: "/srv/saves/backup1.sav" }]),
+        page([{ generation: "backup1", byteSize: 1, lastModifiedAt: FIRST_AUTOSAVE.lastModifiedAt }]),
+        page([{ ...FIRST_AUTOSAVE, byteSize: 0 }]),
+        page([{ ...FIRST_AUTOSAVE, byteSize: -1 }]),
+        page([{ ...FIRST_AUTOSAVE, byteSize: 1.5 }]),
+        page([{ ...FIRST_AUTOSAVE, byteSize: "1024" }]),
+        page([{ ...FIRST_AUTOSAVE, lastModifiedAt: "2026-10-16T11:41:00.000+02:00" }]),
+        page([{ ...FIRST_AUTOSAVE, observedAt: "yesterday" }]),
+        page([{ ...FIRST_AUTOSAVE, observedAt: null }]),
+    ];
+    try {
+        for (const result of invalidResults) {
+            globalThis.fetch = async (input, init) => {
+                const request = new Request(input, init);
+                return Response.json({ version: 1, requestId: request.headers.get("x-request-id"), ok: true, result });
+            };
+            await assert.rejects(getMyServerSaveGenerations(TOKEN, FIRST_SERVER.serverId, SAVE_ID), { code: "invalid_response" }, JSON.stringify(result));
+        }
+        let called = false;
+        globalThis.fetch = async () => { called = true; return new Response(); };
+        await assert.rejects(getMyServerSaveGenerations(TOKEN, FIRST_SERVER.serverId, "not-a-save"), { code: "invalid_request" });
+        await assert.rejects(getMyServerSaveGenerations(TOKEN, "not-a-server", SAVE_ID), { code: "invalid_request" });
+        assert.equal(called, false);
+    } finally { restoreEnvironment(); }
+});
+
+test("restores an earlier autosave across the Edge as one durable, request-scoped restore", async () => {
+    configureEnvironment();
+    const requestId = "11111111-1111-4111-8111-111111111111";
+    let result: unknown = { outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "restore" };
+    let failure: { status: number; error: Record<string, unknown> } | null = null;
+    const requests: Request[] = [];
+    const handler = createMyServersHandler({
+        allowedOrigins: ["https://bannerlordcoop.com"],
+        controlPlaneUrl: "https://control-plane.example.test",
+        waitUntil: () => {},
+        fetchImplementation: async (input, init) => {
+            requests.push(new Request(input, init));
+            return failure === null
+                ? Response.json({ version: 1, requestId, ok: true, result })
+                : Response.json({ version: 1, requestId, ok: false, error: failure.error }, { status: failure.status });
+        },
+    });
+    globalThis.fetch = async (input, init) => handler(new Request(input, init));
+    const input = { serverId: FIRST_SERVER.serverId, saveId: SAVE_ID, generation: "backup2" as const, action: "restore-save-generation" as const, expectedUpdatedAt: "2026-10-16T09:58:00.000Z" };
+    try {
+        assert.deepEqual(await requestMyServerBackupOperation(TOKEN, input, requestId), result);
+        assert.equal(requests[0]!.url, "https://control-plane.example.test/v1/user/control-plane");
+        assert.equal(requests[0]!.headers.get("x-request-id"), requestId);
+        assert.deepEqual(await requests[0]!.json(), {
+            version: 1, requestId, operation: "restore-save-generation",
+            input: { serverId: input.serverId, saveId: SAVE_ID, generation: "backup2", expectedUpdatedAt: input.expectedUpdatedAt },
+        });
+        result = { outcome: "existing", jobId: "55555555-5555-4555-8555-555555555555", action: "restore" };
+        assert.equal((await requestMyServerBackupOperation(TOKEN, input, requestId)).outcome, "existing");
+
+        for (const invalid of [
+            { outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "backup" },
+            { outcome: "accepted", jobId: "55555555-5555-4555-8555-555555555555", action: "restore" },
+            { outcome: "enqueued", jobId: "job-1", action: "restore" },
+            { outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "restore", generation: "backup2" },
+        ]) {
+            result = invalid;
+            await assert.rejects(requestMyServerBackupOperation(TOKEN, input, requestId), { code: "invalid_response" });
+        }
+
+        failure = { status: 409, error: { code: "operation_failed", message: "Stop the game server before restoring an earlier autosave.", retryable: false } };
+        await assert.rejects(requestMyServerBackupOperation(TOKEN, input, requestId), { code: "operation_failed", retryable: false });
+
+        const sent = requests.length;
+        for (const invalid of [{ ...input, generation: "current" }, { ...input, generation: "backup3" }, { ...input, saveId: "not-a-save" },
+            { ...input, expectedUpdatedAt: "2026-10-16T11:58:00.000+02:00" }]) {
+            await assert.rejects(requestMyServerBackupOperation(TOKEN, invalid as typeof input, requestId), { code: "invalid_request" });
+        }
+        assert.equal(requests.length, sent);
     } finally { restoreEnvironment(); }
 });

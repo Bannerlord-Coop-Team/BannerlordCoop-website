@@ -790,5 +790,20 @@
   "managerAccess.heading": "Manager access",
   "managerAccess.emailPlaceholder": "friend@example.com",
   "managerAccess.accountCouldNotBeFound": "That account could not be found. Check the exact email and try again.",
-  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again."
+  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again.",
+
+  "autosaves.recentAutosaves": "Недавние автосохранения",
+  "autosaves.recentAutosavesCampaign": "Недавние автосохранения · {campaign}",
+  "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "Сервер хранит два последних автосохранения рядом с текущим сохранением. Они заменяются при каждом сохранении.",
+  "autosaves.currentSave": "Текущее сохранение",
+  "autosaves.inUse": "Используется",
+  "autosaves.earlierAutosave1": "Предыдущее автосохранение 1",
+  "autosaves.earlierAutosave2": "Предыдущее автосохранение 2",
+  "autosaves.loadAutosave": "Загрузить автосохранение",
+  "autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave": "Остановите игровой сервер перед загрузкой предыдущего автосохранения.",
+  "autosaves.loadTheAutosaveFromDate": "Загрузить автосохранение от {date}?",
+  "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "Сначала создаётся страховочная резервная копия текущего сохранения, поэтому это действие можно отменить в разделе «Резервные копии».",
+  "autosaves.noEarlierAutosavesYet": "Предыдущих автосохранений пока нет. Они появятся после того, как сервер несколько раз сохранит игру автоматически.",
+  "page.recentAutosavesCouldNotBeLoaded": "Сейчас не удалось загрузить недавние автосохранения. Сохранённые резервные копии это не затрагивает; обновите страницу, чтобы повторить попытку.",
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Не удалось загрузить это автосохранение. Убедитесь, что игровой сервер остановлен, затем обновите страницу и выберите автосохранение, которое всё ещё есть в списке."
 }

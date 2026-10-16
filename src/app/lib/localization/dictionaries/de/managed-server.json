@@ -788,5 +788,20 @@
   "managerAccess.heading": "Manager access",
   "managerAccess.emailPlaceholder": "friend@example.com",
   "managerAccess.accountCouldNotBeFound": "That account could not be found. Check the exact email and try again.",
-  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again."
+  "managerAccess.requestCouldNotBeConfirmed": "The manager access change could not be confirmed. Refresh and try again.",
+
+  "autosaves.recentAutosaves": "Letzte automatische Spielstände",
+  "autosaves.recentAutosavesCampaign": "Letzte automatische Spielstände · {campaign}",
+  "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "Der Server bewahrt die letzten zwei automatischen Spielstände neben dem aktuellen Spielstand auf. Sie werden bei jedem Speichern ersetzt.",
+  "autosaves.currentSave": "Aktueller Spielstand",
+  "autosaves.inUse": "In Verwendung",
+  "autosaves.earlierAutosave1": "Früherer automatischer Spielstand 1",
+  "autosaves.earlierAutosave2": "Früherer automatischer Spielstand 2",
+  "autosaves.loadAutosave": "Automatischen Spielstand laden",
+  "autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave": "Stoppe den Spielserver, bevor du einen früheren automatischen Spielstand lädst.",
+  "autosaves.loadTheAutosaveFromDate": "Den automatischen Spielstand vom {date} laden?",
+  "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "Zuerst wird ein Sicherheits-Backup des aktuellen Spielstands erstellt, sodass du dies unter „Backups“ rückgängig machen kannst.",
+  "autosaves.noEarlierAutosavesYet": "Noch keine früheren automatischen Spielstände. Sie erscheinen, nachdem der Server einige Male automatisch gespeichert hat.",
+  "page.recentAutosavesCouldNotBeLoaded": "Die letzten automatischen Spielstände konnten gerade nicht geladen werden. Aufbewahrte Backups sind nicht betroffen; lade die Seite neu, um es erneut zu versuchen.",
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Dieser automatische Spielstand konnte nicht geladen werden. Stelle sicher, dass der Spielserver gestoppt ist, lade dann neu und wähle einen automatischen Spielstand, der noch aufgeführt ist."
 }

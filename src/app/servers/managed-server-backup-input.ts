@@ -1,4 +1,5 @@
 import type { MyServerBackupOperation } from "@/app/lib/hosting/my-servers";
+import type { MyServerRestorableSaveGeneration } from "@/app/lib/control-plane/types";
 
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -15,6 +16,14 @@ export type ManagedServerBackupInput =
         serverId: string;
         backupId: string;
         action: "restore-backup";
+        expectedUpdatedAt: string;
+        requestId: string;
+    }
+    | {
+        serverId: string;
+        saveId: string;
+        generation: MyServerRestorableSaveGeneration;
+        action: "restore-save-generation";
         expectedUpdatedAt: string;
         requestId: string;
     };
@@ -41,6 +50,20 @@ export function parseManagedServerBackupInput(value: unknown): ManagedServerBack
         return {
             serverId: value.serverId,
             backupId: value.backupId,
+            action,
+            expectedUpdatedAt: value.expectedUpdatedAt,
+            requestId: value.requestId,
+        };
+    }
+    if (action === "restore-save-generation") {
+        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "generation", "requestId", "saveId", "serverId"])) return null;
+        if (typeof value.saveId !== "string" || !SERVER_ID.test(value.saveId)) return null;
+        // The current save is what an earlier autosave replaces, so it is never a restore target.
+        if (value.generation !== "backup1" && value.generation !== "backup2") return null;
+        return {
+            serverId: value.serverId,
+            saveId: value.saveId,
+            generation: value.generation,
             action,
             expectedUpdatedAt: value.expectedUpdatedAt,
             requestId: value.requestId,

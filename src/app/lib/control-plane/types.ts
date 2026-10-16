@@ -69,6 +69,14 @@ export type MyServerSavePage = {
     nextCursor: string | null;
 };
 
+/** The active campaign's current save and earlier autosave copies; may be a few minutes stale. */
+export type {
+    RestorableSaveGeneration as MyServerRestorableSaveGeneration,
+    SaveGeneration as MyServerSaveGeneration,
+    SaveGenerationList as MyServerSaveGenerationList,
+    SaveGenerationSummary as MyServerSaveGenerationSummary,
+} from "../../../../supabase/functions/_shared/server-save-generation-contract";
+
 export type MyServerBackupSummary = {
     backupId: string;
     backupType: string;

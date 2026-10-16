@@ -1,11 +1,13 @@
 import { parseReleaseMutation, parseReleaseStatus, type ReleaseMutation } from "../../../../supabase/functions/_shared/server-release-contract";
 import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSettingsMutation } from "../../../../supabase/functions/_shared/server-settings-contract";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "../../../../supabase/functions/_shared/server-visibility-contract";
+import { parseSaveGenerationList, parseSaveGenerationRestoreMutation, parseSaveGenerationRestoreResult, type RestorableSaveGeneration } from "../../../../supabase/functions/_shared/server-save-generation-contract";
 import type {
     HostingPage,
     MyServerBackupJob,
     MyServerBackupStatus,
     MyServerBackupSummary,
+    MyServerSaveGenerationList,
     MyServerSavePage,
     MyServerSaveSummary,
     MyServerSummary,
@@ -60,7 +62,7 @@ export async function requestMyServerDeletion(accessToken: string, intent: Serve
 }
 
 export type MyServerOperation = "start" | "stop" | "restart-game";
-export type MyServerBackupOperation = "create-backup" | "restore-backup";
+export type MyServerBackupOperation = "create-backup" | "restore-backup" | "restore-save-generation";
 
 export type MyServerOperationResult = { exitCode: 0 };
 
@@ -192,6 +194,17 @@ export async function deleteMyServerSave(accessToken: string, input: { serverId:
     return result as { outcome: "enqueued" | "existing"; jobId: string; action: "delete-save" };
 }
 
+/** Reads the active campaign's current save and earlier autosaves; the response must name the same server and save. */
+export async function getMyServerSaveGenerations(accessToken: string, serverId: string, saveId: string): Promise<MyServerSaveGenerationList> {
+    if (!RESOURCE_ID.test(serverId) || !RESOURCE_ID.test(saveId)) throw new MyServersApiError("invalid_request", "The campaign autosave request is invalid.");
+    const result = await requestMyServersApi(accessToken, { method: "GET", configureEndpoint(endpoint) {
+        endpoint.searchParams.set("resource", "save-generations");
+        endpoint.searchParams.set("serverId", serverId);
+        endpoint.searchParams.set("saveId", saveId);
+    } });
+    try { return parseSaveGenerationList(result, serverId, saveId); } catch { throw invalidResponse(); }
+}
+
 export async function getMyServerBackupStatus(
     accessToken: string,
     serverId: string,
@@ -320,11 +333,20 @@ export async function requestMyServerBackupOperation(
     accessToken: string,
     input:
         | { serverId: string; action: "create-backup"; expectedUpdatedAt: string }
-        | { serverId: string; backupId: string; action: "restore-backup"; expectedUpdatedAt: string },
+        | { serverId: string; backupId: string; action: "restore-backup"; expectedUpdatedAt: string }
+        | { serverId: string; saveId: string; generation: RestorableSaveGeneration; action: "restore-save-generation"; expectedUpdatedAt: string },
     requestId: string,
 ): Promise<MyServerBackupOperationResult> {
     if (!REQUEST_ID.test(requestId)) {
         throw new MyServersApiError("invalid_request", "The backup operation request ID is invalid.");
+    }
+    if (input.action === "restore-save-generation") {
+        let mutation;
+        try { mutation = parseSaveGenerationRestoreMutation(input); } catch {
+            throw new MyServersApiError("invalid_request", "The autosave restore request is invalid.");
+        }
+        const receipt = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify(mutation), requestId });
+        try { return parseSaveGenerationRestoreResult(receipt); } catch { throw invalidResponse(); }
     }
     const result = await requestMyServersApi(accessToken, {
         method: "POST",

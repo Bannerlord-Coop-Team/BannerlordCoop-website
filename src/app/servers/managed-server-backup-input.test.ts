@@ -40,3 +40,21 @@ test("rejects forged authority, unsupported actions, and stale input formats", (
         assert.equal(parseManagedServerBackupInput(value), null);
     }
 });
+
+test("accepts only an earlier autosave of a named campaign as an autosave restore input", () => {
+    const autosave = { ...base, saveId: "77777777-7777-4777-8777-777777777777", generation: "backup1", action: "restore-save-generation" };
+    assert.deepEqual(parseManagedServerBackupInput(autosave), autosave);
+    assert.deepEqual(parseManagedServerBackupInput({ ...autosave, generation: "backup2" }), { ...autosave, generation: "backup2" });
+    for (const value of [
+        { ...autosave, generation: "current" },
+        { ...autosave, generation: "backup3" },
+        { ...autosave, generation: undefined },
+        { ...autosave, saveId: "not-a-save" },
+        { ...autosave, saveId: undefined },
+        { ...autosave, backupId: "33333333-3333-4333-8333-333333333333" },
+        { ...autosave, ownerDiscordUserId: "192469416892432384" },
+        { ...autosave, expectedUpdatedAt: "2026-09-02T16:45:07.479+02:00" },
+    ]) {
+        assert.equal(parseManagedServerBackupInput(value), null);
+    }
+});
