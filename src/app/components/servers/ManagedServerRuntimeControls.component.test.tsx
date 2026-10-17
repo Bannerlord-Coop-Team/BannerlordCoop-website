@@ -101,8 +101,21 @@ it("shows only CPU and memory percentages of the server's own allocation and kee
     expect(container.querySelector('[aria-label="Resource usage"]')).toBeNull();
 });
 
-it("reduces a sample to shares only, capping CPU at the allocation", () => {
-    expect(serverResourceUsage({ ...sample, cpuVcpus: 2.1 })).toEqual({ cpu: 1, memory: 1 / 3 });
+it("reduces a sample to shares only, letting CPU burst past its two-vCPU share", () => {
+    expect(serverResourceUsage({ ...sample, cpuVcpus: 3.3 })).toEqual({ cpu: 1.65, memory: 1 / 3 });
+    expect(serverResourceUsage({ ...sample, memoryUsedBytes: sample.memoryLimitBytes * 2 }).memory).toBe(1);
+});
+
+it("marks the allocation on the CPU bar and shows a burst past it", async () => {
+    mocks.resources.mockResolvedValue({ ok: true, usage: serverResourceUsage({ ...sample, cpuVcpus: 3.3 }) });
+    await mount();
+    const usage = container.querySelector('[aria-label="Resource usage"]')!;
+    expect(usage.textContent).toBe("CPU165%Memory33%");
+    const cpu = usage.querySelector<HTMLElement>('[role="meter"][aria-label="CPU"]')!;
+    expect(cpu.getAttribute("aria-valuenow")).toBe("165");
+    expect(cpu.getAttribute("aria-valuemax")).toBe("165");
+    expect(parseFloat(cpu.querySelector<HTMLElement>("[data-burst]")!.style.width)).toBeCloseTo((0.65 / 1.65) * 100);
+    expect(usage.querySelector('[role="meter"][aria-label="Memory"] [data-burst]')).toBeNull();
 });
 
 const jobId = "33333333-3333-4333-8333-333333333333";
