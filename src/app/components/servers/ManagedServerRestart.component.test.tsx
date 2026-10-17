@@ -72,6 +72,22 @@ it("explains a disabled Stop when the server is already stopped", async () => {
     expect(operate).not.toHaveBeenCalled();
 });
 
+it("asks the owner to retry Restart after a save without following progress or checking status", async () => {
+    const message = "The game is saving right now. Wait a few seconds for the save to finish, then try Restart again.";
+    await render();
+    const response = await requestRestart();
+    await act(async () => response.resolve({ ok: false, message }));
+    expect(container.textContent).toContain(message);
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(buttons().slice(1, 3).map(button => button.disabled)).toEqual([false, false]);
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(router.refresh).not.toHaveBeenCalled();
+    expect(polling.session).toBeNull();
+    operate.mockResolvedValueOnce(accepted);
+    await act(async () => buttons()[2].click());
+    expect(operate).toHaveBeenCalledTimes(2);
+});
+
 it("follows Restart through live game phases without locking Stop and Restart after command success", async () => {
     await render();
     await emit({ type: "opened", serverId, connection: 1 });

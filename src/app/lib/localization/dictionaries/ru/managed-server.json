@@ -26,6 +26,7 @@
   "action.actions.signInAgainToFollowServerProgress": "Войдите снова, чтобы отслеживать запуск сервера.",
   "action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain": "Не удалось подтвердить ваш доступ к серверу. Войдите снова, чтобы возобновить обновление сведений о ходе запуска.",
   "action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing": "Восстанавливаем получение сведений о ходе запуска… Ваш запрос на запуск по-прежнему отслеживается.",
+  "action.actions.theGameIsSavingRightNowWaitThenTryActionAgain": "Игра сейчас сохраняется. Подождите несколько секунд, пока сохранение завершится, и нажмите «{action}» ещё раз.",
   "operation.start": "Запуск",
   "operation.stop": "Остановка",
   "operation.restart": "Перезапуск",

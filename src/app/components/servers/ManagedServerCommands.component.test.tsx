@@ -4,6 +4,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { ManagedServerCommands } from "./ManagedServerCommands";
+import { ManagedServerControls } from "./ManagedServerControls";
+import { ManagedServerPollingProvider } from "./ManagedServerPollingProvider";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 
 const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn(), refresh: vi.fn() }));
@@ -385,4 +387,39 @@ it("keeps history per account and server across reloads, and editing a recalled 
     const other = container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!;
     expect(await arrow(other, "ArrowUp")).toBe(false);
     expect(other.value).toBe("");
+});
+
+/** Mounts the console with the real lifecycle controls inside the shared provider, as the manage page does. */
+async function mountWithLifecycle() {
+    await act(async () => root.render(<TestLocalization><ManagedServerPollingProvider>
+        <ManagedServerCommands server={server} userId="owner-id" controls={<ManagedServerControls serverId={server.serverId} displayName="Campaign"
+            accessRole="owner" operationState="running" observedGameState="running" expectedUpdatedAt={server.updatedAt} />} />
+    </ManagedServerPollingProvider></TestLocalization>));
+}
+const stopAndRestart = () => [button("Stop").disabled, button("Restart").disabled];
+
+it("disables Stop and Restart while a typed save runs, until its stored result arrives", async () => {
+    mocks.check.mockResolvedValueOnce({ ok: true, result: { status: "pending" } }).mockResolvedValue({ ok: true, result: {
+        status: "succeeded", output: "[DedicatedServer] operator save: world saved to 'default_new_game.sav' (900 ms)",
+        outputTruncated: false, outputWithheld: false, completedAt: "2026-10-17T02:35:02.734Z" } });
+    await mountWithLifecycle();
+    await sendDraft("coop.help");
+    expect(stopAndRestart()).toEqual([false, false]);
+    await sendDraft("  save ");
+    expect(mocks.submit).toHaveBeenLastCalledWith({ serverId: server.serverId, command: "save", expectedUpdatedAt: server.updatedAt }, expect.any(String), "owner-id");
+    expect(stopAndRestart()).toEqual([true, true]);
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(stopAndRestart()).toEqual([true, true]);
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(stopAndRestart()).toEqual([false, false]);
+    // A typed command's result is shown in the console, not acknowledged as a Save button notice.
+    expect(mocks.ack).not.toHaveBeenCalled();
+});
+
+it("re-enables Stop and Restart when a typed save is refused", async () => {
+    mocks.submit.mockResolvedValue({ ok: false, notSubmitted: true, uncertain: false, refresh: false, message: "The server is busy with another command." });
+    await mountWithLifecycle();
+    await sendDraft("save");
+    expect(container.textContent).toContain("save: The server is busy with another command.");
+    expect(stopAndRestart()).toEqual([false, false]);
 });

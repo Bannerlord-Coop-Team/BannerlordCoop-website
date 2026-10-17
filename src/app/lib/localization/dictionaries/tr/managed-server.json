@@ -26,6 +26,7 @@
   "action.actions.signInAgainToFollowServerProgress": "Sunucu ilerleyişini izlemek için yeniden oturum açın.",
   "action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain": "Sunucu erişiminiz doğrulanamadı. İlerleme güncellemelerini sürdürmek için yeniden oturum açın.",
   "action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing": "Sunucu ilerleyişine yeniden bağlanılıyor… Başlatma isteğiniz hâlâ izleniyor.",
+  "action.actions.theGameIsSavingRightNowWaitThenTryActionAgain": "Oyun şu anda kaydediliyor. Kaydın bitmesi için birkaç saniye bekleyin, ardından “{action}” düğmesine yeniden basın.",
   "operation.start": "Başlat",
   "operation.stop": "Durdur",
   "operation.restart": "Yeniden başlat",

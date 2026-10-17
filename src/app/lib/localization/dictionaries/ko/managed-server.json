@@ -26,6 +26,7 @@
   "action.actions.signInAgainToFollowServerProgress": "서버 진행 상황을 확인하려면 다시 로그인하세요.",
   "action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain": "서버 접근 권한을 확인하지 못했습니다. 진행 상황 업데이트를 재개하려면 다시 로그인하세요.",
   "action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing": "서버 진행 상황에 다시 연결하는 중입니다… 시작 요청은 계속 추적되고 있습니다.",
+  "action.actions.theGameIsSavingRightNowWaitThenTryActionAgain": "게임이 지금 저장 중입니다. 저장이 끝날 때까지 몇 초 기다린 다음 {action} 버튼을 다시 누르세요.",
   "operation.start": "시작",
   "operation.stop": "중지",
   "operation.restart": "재시작",

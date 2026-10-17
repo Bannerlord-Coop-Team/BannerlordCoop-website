@@ -5,6 +5,7 @@ import { useTranslations } from "@/app/lib/localization/client";
 import {
     useManagedConsoleSignals,
     useManagedServerPolling,
+    useManagedServerSaves,
     useManagedServerStatusSlot,
     type ManagedConsoleSignal,
 } from "@/app/components/servers/ManagedServerPollingProvider";
@@ -138,6 +139,8 @@ export function ManagedServerControls({
     const { session: pollingSession, timedOutSession, beginPolling, endPolling } = useManagedServerPolling();
     const consoleSignals = useManagedConsoleSignals();
     const statusSlot = useManagedServerStatusSlot();
+    // Stopping or restarting mid-save would cut the owner's save short, so both wait for it.
+    const saving = useManagedServerSaves()?.isSaving(serverId) ?? false;
     const canOperate = accessRole === "owner" || accessRole === "manager";
     const displayedState = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision ? "running" : operationState;
     const stateIsTransitional = TRANSITIONAL_STATES.has(displayedState);
@@ -329,7 +332,7 @@ export function ManagedServerControls({
 
     /** Confirms disruptive operations and reports the existing action result. */
     function requestOperation(operation: Operation) {
-        if (busy) return;
+        if (busy || (saving && (operation === "stop" || operation === "restart-game"))) return;
         if (operation === "stop" && !window.confirm(
             t("controls.stopDisplaynameEveryoneConnectedWillBeDisconnectedTheServerSaves", { displayName: displayName }),
         )) return;
@@ -436,7 +439,7 @@ export function ManagedServerControls({
                         segmented
                         label={t("controls.stop")}
                         icon={Square}
-                        disabled={busy || !canStop}
+                        disabled={busy || saving || !canStop}
                         pending={pendingOperation === "stop" || (trackingStop && !stopCheckPaused)}
                         onClick={() => requestOperation("stop")}
                     />
@@ -444,7 +447,7 @@ export function ManagedServerControls({
                         segmented
                         label={t("controls.restart")}
                         icon={RotateCw}
-                        disabled={busy || !canRestart}
+                        disabled={busy || saving || !canRestart}
                         pending={pendingOperation === "restart-game"}
                         onClick={() => requestOperation("restart-game")}
                     />

@@ -66,6 +66,34 @@ test("routes a direct restart with only serverId and verified bearer identity", 
     assert.deepEqual(await response.json(), { version: 1, requestId: REQUEST_ID, ok: true, result: { exitCode: 0 } });
 });
 
+test("passes a save-in-progress refusal of direct Stop and Restart through unchanged", async () => {
+    const error = { code: "save_in_progress", message: "The game is saving right now. Wait a few seconds for the save to finish, then try again.", retryable: true };
+    const handler = createHandler(async () => Response.json({ ok: false, error }, { status: 409 }));
+    for (const action of ["stop", "restart-game"]) {
+        const response = await handler(operationRequest({ serverId: "22222222-2222-4222-8222-222222222222", action }));
+        assert.equal(response.status, 409);
+        assert.deepEqual(await response.json(), { version: 1, requestId: REQUEST_ID, ok: false, error });
+    }
+});
+
+test("rejects malformed save-in-progress refusals as invalid responses", async () => {
+    const error = { code: "save_in_progress", message: "The game is saving right now.", retryable: true };
+    for (const [body, status] of [
+        [{ ok: false, error }, 200],
+        [{ ok: false, error: { ...error, detail: "private" } }, 409],
+        [{ ok: false, error: { ...error, retryable: "yes" } }, 409],
+        [{ ok: false, error: { ...error, message: "" } }, 409],
+        [{ ok: false, error: { ...error, message: "Saving\u0000" } }, 409],
+        [{ ok: false, error, stage: "save" }, 409],
+        [{ ok: false, result: { exitCode: 1 }, error }, 409],
+    ] as const) {
+        const handler = createHandler(async () => Response.json(body, { status }));
+        const response = await handler(operationRequest({ serverId: "22222222-2222-4222-8222-222222222222", action: "stop" }));
+        assert.equal(response.status, 502);
+        assert.equal((await response.json()).error.code, "invalid_response");
+    }
+});
+
 test("routes update now through the stale-safe owner update operation", async () => {
     let upstreamBody: unknown;
     const handler = createHandler(async (input, init) => {

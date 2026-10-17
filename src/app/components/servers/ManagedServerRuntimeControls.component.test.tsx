@@ -6,16 +6,19 @@ import { ManagedServerCommands } from "./ManagedServerCommands";
 import { SAVE_RESULT_TIMEOUT_MILLISECONDS, readSaveOutcome } from "./ManagedServerRuntimeControls";
 import { serverResourceUsage } from "@/app/lib/hosting/server-resource-usage";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
-import { createManagedConsoleSignals, type ManagedConsoleSignals } from "./ManagedServerPollingProvider";
+import { ManagedServerControls } from "./ManagedServerControls";
+import { ManagedServerPollingProvider, createManagedConsoleSignals, type ManagedConsoleSignals } from "./ManagedServerPollingProvider";
 
-const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn(), resources: vi.fn(), signals: null as ManagedConsoleSignals | null }));
+const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn(), resources: vi.fn(), operate: vi.fn(), signals: null as ManagedConsoleSignals | null }));
 vi.mock("./ManagedServerPollingProvider", async (original) => ({
     ...await original<typeof import("./ManagedServerPollingProvider")>(),
     useManagedConsoleSignals: () => mocks.signals,
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/app/servers/managed-server-console-actions", () => ({ submitManagedConsoleCommand: mocks.submit, checkManagedConsoleCommand: mocks.check, acknowledgeManagedConsoleCommand: mocks.ack }));
-vi.mock("@/app/servers/managed-server-actions", () => ({ readManagedServerResources: mocks.resources }));
+vi.mock("@/app/servers/managed-server-actions", () => ({
+    readManagedServerResources: mocks.resources, operateManagedServer: mocks.operate, readManagedServerStartStatus: vi.fn(), setManagedServerPassword: vi.fn(),
+}));
 vi.mock("./DownloadServerLogButton", () => ({ DownloadServerLogButton: () => <span>Download logs</span> }));
 const server: MyServerSummary = { serverId: "22222222-2222-4222-8222-222222222222", displayName: "Campaign", accessRole: "owner", operationState: "running", observedGameState: "running", friendlyRegion: "germany", releaseChannel: "stable", updatedAt: "2026-09-20T12:00:00.000Z" };
 const sample = { observedAt: "2026-10-16T12:00:00.000Z", cpuVcpus: 1.25, cpuLimitVcpus: 2, memoryUsedBytes: 1_073_741_824, memoryLimitBytes: 3_221_225_472 };
@@ -150,6 +153,39 @@ it("explains a runner that cannot save yet, and a save it never confirms", async
     await act(async () => vi.advanceTimersByTimeAsync(6_000));
     expect(container.querySelector('[role="alert"]')?.textContent).toBe("We couldn't confirm the save. Check the console output before trying again.");
     expect(mocks.ack).toHaveBeenCalledTimes(1); // only the terminal "cannot save yet" result
+});
+
+/** Mounts the console with the real lifecycle controls inside the shared provider, as the manage page does. */
+async function mountWithLifecycle() {
+    await act(async () => root.render(<TestLocalization><ManagedServerPollingProvider>
+        <ManagedServerCommands server={server} userId="owner-id" controls={<ManagedServerControls serverId={server.serverId} displayName="Campaign"
+            accessRole="owner" operationState="running" observedGameState="running" expectedUpdatedAt={server.updatedAt} />} />
+    </ManagedServerPollingProvider></TestLocalization>));
+}
+
+it("disables Stop and Restart while the Save button's save runs and re-enables them with its result", async () => {
+    mocks.check.mockResolvedValueOnce({ ok: true, result: { status: "pending" } })
+        .mockResolvedValue(succeeded("[DedicatedServer] operator save: world saved to 'default_new_game.sav' (2710 ms)"));
+    await mountWithLifecycle();
+    expect([control("Stop").disabled, control("Restart").disabled]).toEqual([false, false]);
+    await act(async () => control("Save").click());
+    expect([control("Stop").disabled, control("Restart").disabled]).toEqual([true, true]);
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect([control("Stop").disabled, control("Restart").disabled]).toEqual([true, true]);
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(container.textContent).toContain("World saved in 2.7 s.");
+    expect([control("Stop").disabled, control("Restart").disabled]).toEqual([false, false]);
+    expect(mocks.operate).not.toHaveBeenCalled();
+});
+
+it("re-enables Stop and Restart when the save request itself is refused", async () => {
+    const response = Promise.withResolvers<unknown>();
+    mocks.submit.mockReturnValue(response.promise);
+    await mountWithLifecycle();
+    await act(async () => control("Save").click());
+    expect([control("Stop").disabled, control("Restart").disabled]).toEqual([true, true]);
+    await act(async () => response.resolve({ ok: false, notSubmitted: true, uncertain: false, refresh: false, message: "The server is busy with another command." }));
+    expect([control("Stop").disabled, control("Restart").disabled]).toEqual([false, false]);
 });
 
 it("reads the dedicated server's save outcome lines", () => {

@@ -27,6 +27,7 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
 vi.mock("./ManagedServerPollingProvider", () => ({
     useManagedServerPolling: () => ({ session: null, timedOutSession: null, beginPolling, endPolling: vi.fn() }),
     useManagedConsoleSignals: () => null,
+    useManagedServerSaves: () => null,
     useManagedServerStatusSlot: () => statusSlot.current,
 }));
 
@@ -80,6 +81,18 @@ it("refreshes after a lifecycle conflict without pretending this tab submitted S
     request.mockReset().mockRejectedValue(new MyServersApiError("operation_in_progress", "Another server operation is already in progress."));
     const result = await serverActions.operateManagedServer({ serverId: "22222222-2222-4222-8222-222222222222", action: "stop" });
     expect(result).toEqual({ ok: false, refresh: true, message: "Another server operation is active. Wait for its status to finish, then try again." });
+});
+
+it.each([
+    ["stop", "Stop"],
+    ["restart-game", "Restart"],
+] as const)("asks the owner to retry %s after the save, without checking status", async (action, label) => {
+    request.mockReset().mockRejectedValue(new MyServersApiError("save_in_progress",
+        "The game is saving right now. Wait a few seconds for the save to finish, then try again.", true));
+    const result = await serverActions.operateManagedServer({ serverId: "22222222-2222-4222-8222-222222222222", action });
+    expect(result).toEqual({ ok: false,
+        message: `The game is saving right now. Wait a few seconds for the save to finish, then try ${label} again.` });
+    expect(request).toHaveBeenCalledTimes(1);
 });
 
 it("reports an accepted Restart honestly instead of an exit code", async () => {

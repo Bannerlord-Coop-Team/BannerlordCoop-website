@@ -26,6 +26,7 @@
   "action.actions.signInAgainToFollowServerProgress": "请重新登录以跟踪服务器进度。",
   "action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain": "无法确认您的服务器访问权限。请重新登录以恢复进度更新。",
   "action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing": "正在重新连接服务器进度…仍在跟踪您的启动请求。",
+  "action.actions.theGameIsSavingRightNowWaitThenTryActionAgain": "游戏正在保存。请等待几秒钟，待保存完成后再次点击“{action}”。",
   "operation.start": "启动",
   "operation.stop": "停止",
   "operation.restart": "重启",

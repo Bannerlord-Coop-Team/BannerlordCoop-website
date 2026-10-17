@@ -26,6 +26,7 @@
   "action.actions.signInAgainToFollowServerProgress": "Sign in again to follow server progress.",
   "action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain": "Your server access could not be confirmed. Sign in again to resume progress updates.",
   "action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing": "Reconnecting to server progress… Your Start request is still being tracked.",
+  "action.actions.theGameIsSavingRightNowWaitThenTryActionAgain": "The game is saving right now. Wait a few seconds for the save to finish, then try {action} again.",
   "operation.start": "Start",
   "operation.stop": "Stop",
   "operation.restart": "Restart",

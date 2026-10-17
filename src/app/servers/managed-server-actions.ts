@@ -75,6 +75,12 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             && error instanceof MyServersApiError && error.operationId !== undefined) {
             return { ok: true, operationId: error.operationId, message: t("action.actions.startAcceptedFollowingYourServerSProgress") };
         }
+        // The control plane refused because the game is writing a save; nothing changed, so the owner can simply retry.
+        if (code === "save_in_progress" && (parsed.action === "stop" || parsed.action === "restart-game")) {
+            return { ok: false, message: t("action.actions.theGameIsSavingRightNowWaitThenTryActionAgain", {
+                action: t(parsed.action === "stop" ? "controls.stop" : "controls.restart"),
+            }) };
+        }
         if (code === "operation_in_progress") {
             return { ok: false, refresh: true, message: t("action.backup.anotherServerOperationIsActiveWaitForItsStatusTo") };
         }
