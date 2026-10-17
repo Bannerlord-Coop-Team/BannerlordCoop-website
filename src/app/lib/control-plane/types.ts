@@ -291,6 +291,14 @@ export type VpsViewData = {
     regionCatalog: HostingRegionPayload[] | null;
 };
 
+/** The Relocate view's data: servers, the slots they occupy, the catalog that places hosts in regions, and active jobs. */
+export type RelocateViewData = {
+    servers: HostingPage<ManagedServer>;
+    inventory: HostingAdminVpsInventory;
+    regionCatalog: HostingRegionPayload[] | null;
+    activeJobs: HostingJob[];
+};
+
 export type FleetSummary = {
     entitledUsers: number;
     totalEffectiveQuota: number;
