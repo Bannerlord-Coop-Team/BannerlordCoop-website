@@ -215,8 +215,6 @@
   "resources.resourceUsage": "Использование ресурсов",
   "resources.cpu": "ЦП",
   "resources.memory": "Память",
-  "resources.cpuOfAllocated": "{used} из {limit} выделенных vCPU",
-  "resources.memoryOfAllocated": "{used} из {limit} ГБ выделено",
   "controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed": "Автоматическое обновление сведений о ходе запуска приостановлено. Готовность не подтверждена.",
   "controls.resumeProgressUpdates": "Возобновить отслеживание запуска",
   "controls.startRequested": "Запрос на запуск отправлен",

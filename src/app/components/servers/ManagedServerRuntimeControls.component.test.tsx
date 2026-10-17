@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerCommands } from "./ManagedServerCommands";
-import { resourceShares } from "./ManagedServerResources";
+import { serverResourceUsage } from "@/app/lib/hosting/server-resource-usage";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 
 const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn(), resources: vi.fn() }));
@@ -22,7 +22,7 @@ beforeEach(() => {
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
     mocks.submit.mockResolvedValue({ ok: true, result: { outcome: "enqueued", jobId: "33333333-3333-4333-8333-333333333333" } });
     mocks.check.mockResolvedValue({ ok: true, result: { status: "pending" } });
-    mocks.resources.mockResolvedValue({ ok: true, resources: sample });
+    mocks.resources.mockResolvedValue({ ok: true, usage: serverResourceUsage(sample) });
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -65,20 +65,18 @@ it("disables speed and save and hides usage until the game is running", async ()
     expect(container.querySelector('[aria-label="Resource usage"]')).toBeNull();
 });
 
-it("shows CPU and memory as shares of the server's own allocation and keeps reading them", async () => {
+it("shows only CPU and memory percentages of the server's own allocation and keeps reading them", async () => {
     await mount();
     const usage = container.querySelector('[aria-label="Resource usage"]')!;
-    expect(usage.textContent).toContain("63%");
-    expect(usage.textContent).toContain("1.25 of 2 vCPU allocated");
-    expect(usage.textContent).toContain("33%");
-    expect(usage.textContent).toContain("1.0 of 3.0 GB allocated");
+    expect(usage.textContent).toBe("CPU63%Memory33%");
+    expect(usage.textContent).not.toMatch(/vCPU|GB|allocated/u);
     expect(mocks.resources).toHaveBeenCalledWith(server.serverId);
-    mocks.resources.mockResolvedValue({ ok: true, resources: null });
+    mocks.resources.mockResolvedValue({ ok: true, usage: null });
     await act(async () => vi.advanceTimersByTimeAsync(10_000));
     expect(mocks.resources).toHaveBeenCalledTimes(2);
     expect(container.querySelector('[aria-label="Resource usage"]')).toBeNull();
 });
 
-it("caps CPU at the allocation and never reads past full memory", () => {
-    expect(resourceShares({ ...sample, cpuVcpus: 2.1 })).toEqual({ cpu: 1, memory: 1 / 3 });
+it("reduces a sample to shares only, capping CPU at the allocation", () => {
+    expect(serverResourceUsage({ ...sample, cpuVcpus: 2.1 })).toEqual({ cpu: 1, memory: 1 / 3 });
 });

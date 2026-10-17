@@ -215,8 +215,6 @@
   "resources.resourceUsage": "资源使用情况",
   "resources.cpu": "CPU",
   "resources.memory": "内存",
-  "resources.cpuOfAllocated": "已分配 {limit} vCPU，使用 {used}",
-  "resources.memoryOfAllocated": "已分配 {limit} GB，使用 {used}",
   "controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed": "自动进度更新已暂停。尚未确认游戏就绪。",
   "controls.resumeProgressUpdates": "恢复进度更新",
   "controls.startRequested": "已请求启动",

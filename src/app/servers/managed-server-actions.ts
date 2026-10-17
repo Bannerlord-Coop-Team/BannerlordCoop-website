@@ -10,7 +10,8 @@ import {
     requestMyServerPassword,
     type MyServerOperation,
 } from "@/app/lib/hosting/my-servers";
-import { getMyServerDeletionStatus, getMyServerResources, getMyServerStartStatus, type ManagedServerResources } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerDeletionStatus, getMyServerResources, getMyServerStartStatus } from "@/app/lib/hosting/my-servers-server";
+import { serverResourceUsage, type ServerResourceUsage } from "@/app/lib/hosting/server-resource-usage";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -173,14 +174,18 @@ export async function readManagedServerStartStatus(serverId: string, jobId: stri
     }
 }
 
-/** Reauthenticates each usage read; failures are quiet because the meters simply hide until the next read. */
-export async function readManagedServerResources(serverId: string): Promise<{ ok: true; resources: ManagedServerResources | null } | { ok: false }> {
+/**
+ * Reauthenticates each usage read and returns only percentages: the server's CPU and memory allocation stays
+ * on this side. Failures are quiet because the meters simply hide until the next read.
+ */
+export async function readManagedServerResources(serverId: string): Promise<{ ok: true; usage: ServerResourceUsage | null } | { ok: false }> {
     if (typeof serverId !== "string" || !SERVER_ID.test(serverId)) return { ok: false };
     try {
         const supabase = await getSupabaseServerClient();
         const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
         if (!user || !session) return { ok: false };
-        return { ok: true, resources: await getMyServerResources(session.access_token, serverId) };
+        const resources = await getMyServerResources(session.access_token, serverId);
+        return { ok: true, usage: resources === null ? null : serverResourceUsage(resources) };
     } catch {
         return { ok: false };
     }
