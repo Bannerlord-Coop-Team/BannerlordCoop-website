@@ -26,6 +26,7 @@
   "action.actions.signInAgainToFollowServerProgress": "Melde dich erneut an, um den Serverfortschritt zu verfolgen.",
   "action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain": "Dein Serverzugriff konnte nicht bestätigt werden. Melde dich erneut an, um die Fortschrittsmeldungen fortzusetzen.",
   "action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing": "Verbindung zum Serverfortschritt wird wiederhergestellt … Deine Start-Anfrage wird weiterhin verfolgt.",
+  "action.actions.theGameIsSavingRightNowWaitThenTryActionAgain": "Das Spiel speichert gerade. Warte ein paar Sekunden, bis das Speichern abgeschlossen ist, und klicke dann erneut auf „{action}“.",
   "operation.start": "Start",
   "operation.stop": "Stopp",
   "operation.restart": "Neustart",

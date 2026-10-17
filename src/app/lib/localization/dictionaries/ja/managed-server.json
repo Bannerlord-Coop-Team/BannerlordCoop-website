@@ -26,6 +26,7 @@
   "action.actions.signInAgainToFollowServerProgress": "サーバーの進行状況を確認するには、再度ログインしてください。",
   "action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain": "サーバーへのアクセス権を確認できませんでした。進行状況の更新を再開するには、再度ログインしてください。",
   "action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing": "サーバーの進行状況に再接続しています… 起動リクエストの追跡は継続しています。",
+  "action.actions.theGameIsSavingRightNowWaitThenTryActionAgain": "ゲームは現在保存中です。保存が終わるまで数秒待ってから、もう一度「{action}」を押してください。",
   "operation.start": "起動",
   "operation.stop": "停止",
   "operation.restart": "再起動",

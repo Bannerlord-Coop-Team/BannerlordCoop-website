@@ -9,11 +9,11 @@ import { ManagedServerConsole, createCommandOutputChannel } from "./ManagedServe
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
 import { IDLE_HISTORY_CURSOR, appendConsoleHistory, consoleHistoryKey, readConsoleHistory, stepConsoleHistory, writeConsoleHistory, type ConsoleHistoryCursor } from "./console-history";
 import { ManagedServerResources } from "./ManagedServerResources";
-import { ManagedServerRuntimeControls } from "./ManagedServerRuntimeControls";
-import { ManagedServerStatusSlotContext } from "./ManagedServerPollingProvider";
+import { ManagedServerRuntimeControls, awaitSaveCommandResult } from "./ManagedServerRuntimeControls";
+import { ManagedServerStatusSlotContext, useManagedServerSaves } from "./ManagedServerPollingProvider";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { checkManagedConsoleCommand, submitManagedConsoleCommand } from "@/app/servers/managed-server-console-actions";
-import { MAXIMUM_CONSOLE_COMMAND_LENGTH, parseConsoleSubmission, type ConsoleReference, type ConsoleSubmission } from "../../../../supabase/functions/_shared/server-console-contract";
+import { MAXIMUM_CONSOLE_COMMAND_LENGTH, SAVE_CONSOLE_COMMAND, parseConsoleSubmission, type ConsoleReference, type ConsoleSubmission } from "../../../../supabase/functions/_shared/server-console-contract";
 
 const button = "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-gold/40 bg-gold/10 px-4 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
 const commandNames = coopConsoleCommands.map(([usage]) => usage.split(/\s/u, 1)[0]);
@@ -51,6 +51,7 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
     const [sending, setSending] = useState(0);
     const [statusSlot, setStatusSlot] = useState<HTMLDivElement | null>(null);
     const [outputChannel] = useState(createCommandOutputChannel);
+    const saves = useManagedServerSaves();
     const historyKey = consoleHistoryKey(userId, server.serverId);
     // Read on first render in the browser only, so server and client markup agree.
     const [history, setHistory] = useState<{ key: string; entries: string[] } | null>(null);
@@ -178,12 +179,20 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
         // One command runs per server, so any streamed result after this point belongs to this submission.
         const framesBefore = outputChannel.framesSeen;
         const requestId = crypto.randomUUID();
+        // A typed save holds Stop and Restart like the Save button does, until its result arrives.
+        let releaseSave = input.command === SAVE_CONSOLE_COMMAND ? saves?.beginSave(server.serverId) : undefined;
         try {
             const response = await submitManagedConsoleCommand(input, requestId, userId);
             if (response.ok) {
+                const reference = { serverId: input.serverId, jobId: response.result.jobId, commandRequestId: requestId };
                 showFeedback({ kind: "sent", text: t("commands.sentCommandOutputAppearsAbove", { command: input.command }) });
-                void recoverMissedOutput({ serverId: input.serverId, jobId: response.result.jobId, commandRequestId: requestId }, framesBefore)
+                void recoverMissedOutput(reference, framesBefore)
                     .catch(() => undefined);
+                if (releaseSave) {
+                    const release = releaseSave;
+                    releaseSave = undefined;
+                    void awaitSaveCommandResult(reference, userId, () => mounted.current).catch(() => null).finally(release);
+                }
             } else if (response.uncertain) {
                 showFeedback({ kind: "error", text: t("commands.weCouldnTConfirmCommandWasDeliveredIfNoOutput", { command: input.command }) }, UNCERTAIN_NOTICE_MILLISECONDS);
             } else {
@@ -193,6 +202,7 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
         } catch {
             showFeedback({ kind: "error", text: t("commands.weCouldnTConfirmCommandWasDeliveredIfNoOutput", { command: input.command }) }, UNCERTAIN_NOTICE_MILLISECONDS);
         } finally {
+            releaseSave?.();
             setSending(count => count - 1);
         }
     }

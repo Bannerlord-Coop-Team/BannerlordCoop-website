@@ -26,6 +26,7 @@
   "action.actions.signInAgainToFollowServerProgress": "Reconnectez-vous pour suivre la progression du serveur.",
   "action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain": "Votre accès au serveur n’a pas pu être confirmé. Reconnectez-vous pour reprendre les mises à jour de progression.",
   "action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing": "Reconnexion au suivi de la progression du serveur… Votre demande de démarrage est toujours suivie.",
+  "action.actions.theGameIsSavingRightNowWaitThenTryActionAgain": "Le jeu est en train de sauvegarder. Attendez quelques secondes la fin de la sauvegarde, puis appuyez à nouveau sur « {action} ».",
   "operation.start": "Démarrer",
   "operation.stop": "Arrêter",
   "operation.restart": "Redémarrer",

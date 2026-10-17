@@ -26,6 +26,7 @@
   "action.actions.signInAgainToFollowServerProgress": "Inicie sessão novamente para acompanhar o progresso do servidor.",
   "action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain": "Não foi possível confirmar o seu acesso ao servidor. Inicie sessão novamente para retomar as atualizações de progresso.",
   "action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing": "A restabelecer a ligação ao progresso do servidor… O seu pedido de início continua a ser acompanhado.",
+  "action.actions.theGameIsSavingRightNowWaitThenTryActionAgain": "O jogo está a guardar neste momento. Aguarde alguns segundos até a gravação terminar e prima «{action}» novamente.",
   "operation.start": "Iniciar",
   "operation.stop": "Parar",
   "operation.restart": "Reiniciar",

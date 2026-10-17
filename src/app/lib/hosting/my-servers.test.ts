@@ -559,6 +559,11 @@ test("direct commands cross the Edge boundary without lifecycle envelopes or ret
         assert.equal(requests.length, 4);
         body = { ok: false, error: { code: "container_command_unavailable", message: "Not confirmed.", retryable: false } };
         await assert.rejects(submit("start"), { code: "container_command_unavailable", retryable: false });
+        const saving = "The game is saving right now. Wait a few seconds for the save to finish, then try again.";
+        body = { ok: false, error: { code: "save_in_progress", message: saving, retryable: true } };
+        for (const action of ["stop", "restart-game"] as const) {
+            await assert.rejects(submit(action), { code: "save_in_progress", message: saving, retryable: true });
+        }
         for (const invalid of [
             { ok: true, result: { exitCode: 1 } },
             { ok: true, result: { exitCode: 0, stdout: "private" } },

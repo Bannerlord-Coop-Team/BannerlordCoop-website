@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { acknowledgeManagedConsoleCommand, checkManagedConsoleCommand, submitManagedConsoleCommand } from "@/app/servers/managed-server-console-actions";
 import { SAVE_CONSOLE_COMMAND, parseConsoleSubmission, type ConsoleReference, type ConsoleResult } from "../../../../supabase/functions/_shared/server-console-contract";
-import { useManagedConsoleSignals, useManagedServerStatusSlot, type CampaignSpeed } from "./ManagedServerPollingProvider";
+import { useManagedConsoleSignals, useManagedServerSaves, useManagedServerStatusSlot, type CampaignSpeed } from "./ManagedServerPollingProvider";
 import { segmentedButtonClass, segmentedGroupClass, toolbarButtonClass } from "./segmented-controls";
 
 /** The game's set_time_mode arguments for each speed. */
@@ -49,20 +49,25 @@ export function readSaveOutcome(result: ConsoleResult): SaveOutcome | null {
     return { kind: "unconfirmed" };
 }
 
-/** Waits for the save's own result, then acknowledges it once shown so no later recovery notice repeats it. */
-async function awaitSaveResult(reference: ConsoleReference, userId: string, isMounted: () => boolean): Promise<SaveOutcome> {
+/** Waits for a save command's terminal result; null once the save deadline passes or the panel goes away. */
+export async function awaitSaveCommandResult(reference: ConsoleReference, userId: string, isMounted: () => boolean): Promise<ConsoleResult | null> {
     const deadline = Date.now() + SAVE_RESULT_TIMEOUT_MILLISECONDS;
     while (isMounted() && Date.now() < deadline) {
         await new Promise(resolve => setTimeout(resolve, SAVE_RESULT_POLL_MILLISECONDS));
         // A failed read is retried: the save itself may still finish and be readable a moment later.
         const response = await checkManagedConsoleCommand(reference, userId).catch(() => null);
-        if (!response?.ok) continue;
-        const outcome = readSaveOutcome(response.result);
-        if (outcome === null) continue;
-        void acknowledgeManagedConsoleCommand(reference, userId).catch(() => undefined);
-        return outcome;
+        if (response?.ok && response.result.status !== "pending") return response.result;
     }
-    return { kind: "unconfirmed" };
+    return null;
+}
+
+/** Waits for the save's own result, then acknowledges it once shown so no later recovery notice repeats it. */
+async function awaitSaveResult(reference: ConsoleReference, userId: string, isMounted: () => boolean): Promise<SaveOutcome> {
+    const result = await awaitSaveCommandResult(reference, userId, isMounted);
+    const outcome = result === null ? null : readSaveOutcome(result);
+    if (outcome === null) return { kind: "unconfirmed" };
+    void acknowledgeManagedConsoleCommand(reference, userId).catch(() => undefined);
+    return outcome;
 }
 
 /**
@@ -72,6 +77,7 @@ async function awaitSaveResult(reference: ConsoleReference, userId: string, isMo
 export function ManagedServerRuntimeControls({ server, userId, ready }: { server: MyServerSummary; userId: string; ready: boolean }) {
     const { t, number } = useTranslations("managed-server");
     const signals = useManagedConsoleSignals();
+    const saves = useManagedServerSaves();
     const statusSlot = useManagedServerStatusSlot();
     const [reportedSpeed, setReportedSpeed] = useState<CampaignSpeed | null>(null);
     const [pending, setPending] = useState<CampaignSpeed | "save" | null>(null);
@@ -123,6 +129,8 @@ export function ManagedServerRuntimeControls({ server, userId, ready }: { server
         const command = action === "save" ? SAVE_COMMAND : SPEED_COMMANDS[action];
         setPending(action);
         setNotice(null);
+        // Stop and Restart wait while the world is written, so they cannot cut the save short.
+        const releaseSave = action === "save" ? saves?.beginSave(server.serverId) : undefined;
         try {
             const input = parseConsoleSubmission({ serverId: server.serverId, command, expectedUpdatedAt: server.updatedAt });
             const requestId = crypto.randomUUID();
@@ -143,6 +151,7 @@ export function ManagedServerRuntimeControls({ server, userId, ready }: { server
         } catch {
             setNotice({ kind: "error", text: t("commands.weCouldnTConfirmCommandWasDeliveredIfNoOutput", { command }) });
         } finally {
+            releaseSave?.();
             setPending(null);
         }
     }

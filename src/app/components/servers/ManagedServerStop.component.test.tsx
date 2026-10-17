@@ -2,7 +2,7 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerControls } from "./ManagedServerControls";
-import { ManagedServerPollingProvider, managedServerPollDelay, useManagedServerPolling, type ManagedServerStatusReader } from "./ManagedServerPollingProvider";
+import { ManagedServerPollingProvider, managedServerPollDelay, useManagedServerPolling, useManagedServerSaves, type ManagedServerStatusReader } from "./ManagedServerPollingProvider";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 
 const { operate, router } = vi.hoisted(() => ({ operate: vi.fn(), router: { refresh: vi.fn() } }));
@@ -108,6 +108,45 @@ it("keeps a definitive rejection visible without polling or retrying", async () 
     expect(container.textContent).toContain("your access was removed");
     expect(router.refresh).not.toHaveBeenCalled();
     expect(operate).toHaveBeenCalledTimes(1);
+});
+
+it("asks the owner to retry Stop after a save without checking status, and keeps Stop usable", async () => {
+    const message = "The game is saving right now. Wait a few seconds for the save to finish, then try Stop again.";
+    operate.mockResolvedValue({ ok: false, message });
+    await render(); await act(async () => buttons()[1].click());
+    expect(container.textContent).toContain(message);
+    expect(container.textContent).not.toContain("Checking whether your server has stopped");
+    expect(buttons().slice(1, 3).map(button => button.disabled)).toEqual([false, false]);
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(router.refresh).not.toHaveBeenCalled();
+    await act(async () => buttons()[1].click());
+    expect(operate).toHaveBeenCalledTimes(2);
+});
+
+let saves: ReturnType<typeof useManagedServerSaves>;
+/** Exposes the shared save tracker, standing in for the Save button or a typed save. */
+function SavesProbe() {
+    const value = useManagedServerSaves();
+    useEffect(() => { saves = value; });
+    return null;
+}
+
+it("disables Stop and Restart only while a save of this server is in flight", async () => {
+    await act(async () => root.render(<TestLocalization><ManagedServerPollingProvider><SavesProbe /><ManagedServerControls {...server} /></ManagedServerPollingProvider></TestLocalization>));
+    const powerButtons = () => buttons().slice(0, 4).map(button => button.disabled);
+    expect(powerButtons()).toEqual([true, false, false, false]);
+    let release = () => {};
+    let second = () => {};
+    await act(async () => { saves!.beginSave("44444444-4444-4444-8444-444444444444"); });
+    expect(powerButtons()).toEqual([true, false, false, false]);
+    await act(async () => { release = saves!.beginSave(server.serverId); second = saves!.beginSave(server.serverId); });
+    expect(powerButtons()).toEqual([true, true, true, false]);
+    await act(async () => buttons()[1].click());
+    expect(operate).not.toHaveBeenCalled();
+    await act(async () => { release(); release(); });
+    expect(powerButtons()).toEqual([true, true, true, false]);
+    await act(async () => second());
+    expect(powerButtons()).toEqual([true, false, false, false]);
 });
 
 it("stops refreshing when the controls unmount", async () => {

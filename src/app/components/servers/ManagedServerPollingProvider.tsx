@@ -61,8 +61,16 @@ export type ManagedConsoleSignals = {
     subscribe: (listener: (signal: ManagedConsoleSignal) => void) => () => void;
 };
 
+/** Owner saves in flight per server, so Stop and Restart wait instead of interrupting the game's save. */
+export type ManagedServerSaves = {
+    isSaving: (serverId: string) => boolean;
+    /** Marks one save as in flight until the returned release runs; releasing twice has no effect. */
+    beginSave: (serverId: string) => () => void;
+};
+
 const ManagedServerPollingContext = createContext<ManagedServerPollingContextValue | null>(null);
 const ManagedConsoleSignalsContext = createContext<ManagedConsoleSignals | null>(null);
+const ManagedServerSavesContext = createContext<ManagedServerSaves | null>(null);
 /** Undefined outside the console toolbar; null until the toolbar's status row has mounted. */
 export const ManagedServerStatusSlotContext = createContext<HTMLElement | null | undefined>(undefined);
 
@@ -118,6 +126,29 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
     const [session, setSession] = useState<PollingSession | null>(null);
     const [timedOutSession, setTimedOutSession] = useState<PollingSession | null>(null);
     const [consoleSignals] = useState(createManagedConsoleSignals);
+    const [savesInFlight, setSavesInFlight] = useState<ReadonlyMap<string, number>>(() => new Map());
+
+    const beginSave = useCallback((serverId: string) => {
+        const adjust = (change: number) => setSavesInFlight((current) => {
+            const next = new Map(current);
+            const count = (current.get(serverId) ?? 0) + change;
+            if (count > 0) next.set(serverId, count);
+            else next.delete(serverId);
+            return next;
+        });
+        adjust(1);
+        let released = false;
+        return () => {
+            if (released) return;
+            released = true;
+            adjust(-1);
+        };
+    }, []);
+
+    const saves = useMemo<ManagedServerSaves>(() => ({
+        isSaving: (serverId) => (savesInFlight.get(serverId) ?? 0) > 0,
+        beginSave,
+    }), [beginSave, savesInFlight]);
 
     const beginPolling = useCallback((
         serverId: string,
@@ -225,7 +256,9 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
     return (
         <ManagedServerPollingContext.Provider value={value}>
             <ManagedConsoleSignalsContext.Provider value={consoleSignals}>
-                {children}
+                <ManagedServerSavesContext.Provider value={saves}>
+                    {children}
+                </ManagedServerSavesContext.Provider>
             </ManagedConsoleSignalsContext.Provider>
         </ManagedServerPollingContext.Provider>
     );
@@ -246,6 +279,11 @@ export function useOptionalManagedServerPolling() {
 /** Returns the console signal channel, or null when the console is rendered on its own. */
 export function useManagedConsoleSignals() {
     return useContext(ManagedConsoleSignalsContext);
+}
+
+/** Returns the shared save tracker, or null when a panel is rendered without the provider. */
+export function useManagedServerSaves() {
+    return useContext(ManagedServerSavesContext);
 }
 
 /** Returns the console toolbar's status row, or undefined when controls render outside it. */
