@@ -16,6 +16,8 @@
   "managementWorkspace.searchCommands": "Befehle suchen …",
   "managementWorkspace.selectToInsertThenEditAnyLtArgumentsGtBefore": "Wähle einen Befehl aus, um ihn einzufügen, und bearbeite dann alle <arguments>, bevor du ihn sendest. Die verfügbaren Befehle hängen vom installierten Build ab.",
   "managementWorkspace.noCommandsMatchYourSearch": "Keine Befehle entsprechen deiner Suche.",
+  "managementWorkspace.idLookups": "ID-Abfragen",
+  "managementWorkspace.returnsIds": "Liefert",
   "managementWorkspace.console": "Konsole",
   "managementWorkspace.serverControls": "Serversteuerung",
   "managementWorkspace.start": "Starten",

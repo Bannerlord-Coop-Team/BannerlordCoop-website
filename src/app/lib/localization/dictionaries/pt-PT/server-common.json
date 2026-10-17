@@ -16,6 +16,8 @@
   "managementWorkspace.searchCommands": "Pesquisar comandos…",
   "managementWorkspace.selectToInsertThenEditAnyLtArgumentsGtBefore": "Selecione para inserir e depois edite os <arguments> antes de enviar. Os comandos disponíveis dependem da compilação instalada.",
   "managementWorkspace.noCommandsMatchYourSearch": "Nenhum comando corresponde à pesquisa.",
+  "managementWorkspace.idLookups": "Consultas de ID",
+  "managementWorkspace.returnsIds": "Devolve",
   "managementWorkspace.console": "Consola",
   "managementWorkspace.serverControls": "Controlos do servidor",
   "managementWorkspace.start": "Iniciar",
