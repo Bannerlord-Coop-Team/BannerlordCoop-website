@@ -802,6 +802,7 @@
   "autosaves.loadTheAutosaveFromDate": "Carregar o salvamento automático de {date}?",
   "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "Primeiro é feito um backup de segurança do jogo salvo atual, então você pode desfazer isso em Backups.",
   "autosaves.noEarlierAutosavesYet": "Ainda não há salvamentos automáticos anteriores. Eles aparecem depois que o servidor salvar automaticamente algumas vezes.",
+  "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "O salvamento automático não foi carregado. A lista agora mostra os salvamentos automáticos atuais do servidor; confira os horários de salvamento antes de tentar novamente.",
   "page.recentAutosavesCouldNotBeLoaded": "Não foi possível carregar os salvamentos automáticos recentes agora. Os backups armazenados não são afetados; atualize a página para tentar novamente.",
   "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Não foi possível carregar esse salvamento automático. Verifique se o servidor de jogo está parado, depois atualize e escolha um salvamento automático que ainda esteja na lista."
 }

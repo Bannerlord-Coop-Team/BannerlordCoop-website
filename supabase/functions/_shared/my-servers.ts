@@ -539,7 +539,9 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
         // Only an earlier autosave of the named campaign can be chosen; the control plane checks it is the active save.
         const parsed = parseSaveGenerationRestoreMutation(value);
         return { operation: "restore-save-generation", input: {
-            serverId: parsed.serverId, saveId: parsed.saveId, generation: parsed.generation, expectedUpdatedAt: parsed.expectedUpdatedAt,
+            serverId: parsed.serverId, saveId: parsed.saveId, generation: parsed.generation,
+            ...(parsed.expectedLastModifiedAt === undefined ? {} : { expectedLastModifiedAt: parsed.expectedLastModifiedAt }),
+            expectedUpdatedAt: parsed.expectedUpdatedAt,
         } };
     }
     if (value.action === "update-now") {

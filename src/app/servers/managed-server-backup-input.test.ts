@@ -45,6 +45,13 @@ test("accepts only an earlier autosave of a named campaign as an autosave restor
     const autosave = { ...base, saveId: "77777777-7777-4777-8777-777777777777", generation: "backup1", action: "restore-save-generation" };
     assert.deepEqual(parseManagedServerBackupInput(autosave), autosave);
     assert.deepEqual(parseManagedServerBackupInput({ ...autosave, generation: "backup2" }), { ...autosave, generation: "backup2" });
+    // The confirmed save time travels with the request; requests retained before it existed still parse.
+    const confirmed = { ...autosave, expectedLastModifiedAt: "2026-09-02T14:41:00.000Z" };
+    assert.deepEqual(parseManagedServerBackupInput(confirmed), confirmed);
+    for (const expectedLastModifiedAt of ["2026-09-02T14:41:00Z", "2026-09-02T16:41:00.000+02:00", "yesterday", null, 1_788_000_000_000]) {
+        assert.equal(parseManagedServerBackupInput({ ...autosave, expectedLastModifiedAt }), null);
+    }
+    assert.equal(parseManagedServerBackupInput({ ...confirmed, action: "restore-backup", backupId: "33333333-3333-4333-8333-333333333333" }), null);
     for (const value of [
         { ...autosave, generation: "current" },
         { ...autosave, generation: "backup3" },

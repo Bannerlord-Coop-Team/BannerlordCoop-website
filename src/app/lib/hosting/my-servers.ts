@@ -334,7 +334,10 @@ export async function requestMyServerBackupOperation(
     input:
         | { serverId: string; action: "create-backup"; expectedUpdatedAt: string }
         | { serverId: string; backupId: string; action: "restore-backup"; expectedUpdatedAt: string }
-        | { serverId: string; saveId: string; generation: RestorableSaveGeneration; action: "restore-save-generation"; expectedUpdatedAt: string },
+        | {
+            serverId: string; saveId: string; generation: RestorableSaveGeneration; action: "restore-save-generation";
+            expectedLastModifiedAt?: string; expectedUpdatedAt: string;
+        },
     requestId: string,
 ): Promise<MyServerBackupOperationResult> {
     if (!REQUEST_ID.test(requestId)) {

@@ -147,7 +147,7 @@ function ManagedServerBackupsSession({
     const [showExpired, setShowExpired] = useState(false);
     const retainedIntentRef = useRef<ManagedServerBackupInput | null>(null);
     const polledJobIds = useRef(new Set<string>());
-    const autosaveJobIds = useRef(new Set<string>());
+    const autosaveJobs = useRef(new Map<string, MyServerRestorableSaveGeneration>());
     const router = useRouter();
     const loadRetries = useRef(0);
     const {
@@ -250,11 +250,27 @@ function ManagedServerBackupsSession({
 
     useEffect(() => {
         const job = status?.job;
-        if (job?.state !== "succeeded" || !autosaveJobIds.current.has(job.jobId)) return;
-        // A loaded autosave reshuffles the autosave slots and adds a safety backup; read both lists again.
-        autosaveJobIds.current.delete(job.jobId);
+        const generation = job ? autosaveJobs.current.get(job.jobId) : undefined;
+        if (!job || generation === undefined || !TERMINAL_JOB_STATES.has(job.state)) return;
+        // A loaded autosave reshuffles the autosave slots and adds a safety backup. A refused one
+        // re-read the server's autosaves first. Either way, read both lists again.
+        autosaveJobs.current.delete(job.jobId);
         router.refresh();
-    }, [router, status?.job]);
+        if (job.state === "succeeded") return;
+        const timeout = window.setTimeout(() => setFeedback({
+            target: autosaveTarget(generation),
+            text: t("autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS"),
+        }), 0);
+        return () => window.clearTimeout(timeout);
+    }, [router, status?.job, t]);
+
+    const wasStopped = useRef(serverIsStopped);
+    useEffect(() => {
+        const becameStopped = serverIsStopped && !wasStopped.current;
+        wasStopped.current = serverIsStopped;
+        // The game autosaves while shutting down; show those autosaves before one can be loaded.
+        if (becameStopped && autosaves) router.refresh();
+    }, [autosaves, router, serverIsStopped]);
 
     const busy = !intentReady || storageError || isPending
         || (pollingSession !== null && retainedIntent === null)
@@ -313,7 +329,7 @@ function ManagedServerBackupsSession({
                 if (result.ok) {
                     rememberIntent(null, intent);
                     watchJob(result.jobId);
-                    if (intent.action === "restore-save-generation") autosaveJobIds.current.add(result.jobId);
+                    if (intent.action === "restore-save-generation") autosaveJobs.current.set(result.jobId, intent.generation);
                     if (interruptsPlayers) setInterruptingJobIds((current) => new Set(current).add(result.jobId));
                     polledJobIds.current.add(result.jobId);
                     beginPolling(server.serverId, intent.expectedUpdatedAt, result.jobId, "backup");
@@ -390,6 +406,8 @@ function ManagedServerBackupsSession({
             saveId: autosaves.saveId,
             generation: item.generation,
             action: "restore-save-generation",
+            // The load is refused if this slot no longer holds the autosave named in the confirmation.
+            expectedLastModifiedAt: item.lastModifiedAt,
             expectedUpdatedAt: currentServer.updatedAt,
             requestId: crypto.randomUUID(),
         };

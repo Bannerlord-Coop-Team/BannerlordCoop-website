@@ -729,6 +729,10 @@ test("restores an earlier autosave across the Edge as one durable, request-scope
             version: 1, requestId, operation: "restore-save-generation",
             input: { serverId: input.serverId, saveId: SAVE_ID, generation: "backup2", expectedUpdatedAt: input.expectedUpdatedAt },
         });
+        await requestMyServerBackupOperation(TOKEN, { ...input, expectedLastModifiedAt: "2026-10-16T09:55:00.000Z" }, requestId);
+        assert.deepEqual((await requests[1]!.json()).input, {
+            serverId: input.serverId, saveId: SAVE_ID, generation: "backup2", expectedLastModifiedAt: "2026-10-16T09:55:00.000Z", expectedUpdatedAt: input.expectedUpdatedAt,
+        });
         result = { outcome: "existing", jobId: "55555555-5555-4555-8555-555555555555", action: "restore" };
         assert.equal((await requestMyServerBackupOperation(TOKEN, input, requestId)).outcome, "existing");
 

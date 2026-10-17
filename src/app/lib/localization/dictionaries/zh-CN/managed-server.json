@@ -801,6 +801,7 @@
   "autosaves.loadTheAutosaveFromDate": "要加载 {date} 的自动存档吗？",
   "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "系统会先为当前存档创建安全备份，因此你可以在“备份”中撤销此操作。",
   "autosaves.noEarlierAutosavesYet": "暂无较早的自动存档。服务器自动保存几次后就会显示。",
+  "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "未加载该自动存档。列表现在显示服务器当前的自动存档，请先核对保存时间再重试。",
   "page.recentAutosavesCouldNotBeLoaded": "暂时无法加载最近的自动存档。保留的备份不受影响；请刷新页面重试。",
   "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "无法加载该自动存档。请确认游戏服务器已停止，然后刷新并选择仍在列表中的自动存档。"
 }

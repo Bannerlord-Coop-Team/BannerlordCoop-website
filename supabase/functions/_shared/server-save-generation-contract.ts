@@ -11,7 +11,10 @@ export type RestorableSaveGeneration = Exclude<SaveGeneration, "current">;
 export type SaveGenerationSummary = { generation: SaveGeneration; byteSize: number; lastModifiedAt: string; observedAt: string };
 export type SaveGenerationList = { serverId: string; saveId: string; items: SaveGenerationSummary[] };
 export type SaveGenerationRestoreMutation = {
-    action: "restore-save-generation"; serverId: string; saveId: string; generation: RestorableSaveGeneration; expectedUpdatedAt: string;
+    action: "restore-save-generation"; serverId: string; saveId: string; generation: RestorableSaveGeneration;
+    /** The save time the owner confirmed; the control plane refuses to load a slot that no longer holds it. */
+    expectedLastModifiedAt?: string;
+    expectedUpdatedAt: string;
 };
 export type SaveGenerationRestoreResult = { outcome: "enqueued" | "existing"; jobId: string; action: "restore" };
 
@@ -37,7 +40,9 @@ export function parseSaveGenerationList(value: unknown, serverId: string, saveId
 }
 
 export function parseSaveGenerationRestoreMutation(value: unknown): SaveGenerationRestoreMutation {
-    if (!isRecord(value) || !hasExactKeys(value, ["action", "serverId", "saveId", "generation", "expectedUpdatedAt"])
+    const keys = ["action", "serverId", "saveId", "generation", "expectedUpdatedAt"];
+    if (!isRecord(value) || !hasExactKeys(value, value.expectedLastModifiedAt === undefined ? keys : [...keys, "expectedLastModifiedAt"])
+        || (value.expectedLastModifiedAt !== undefined && !isTimestamp(value.expectedLastModifiedAt))
         || value.action !== "restore-save-generation"
         || typeof value.serverId !== "string" || !REQUEST_ID.test(value.serverId)
         || typeof value.saveId !== "string" || !REQUEST_ID.test(value.saveId)
@@ -45,7 +50,9 @@ export function parseSaveGenerationRestoreMutation(value: unknown): SaveGenerati
         || !isTimestamp(value.expectedUpdatedAt)) throw new Error("Invalid save generation restore");
     return {
         action: "restore-save-generation", serverId: value.serverId, saveId: value.saveId,
-        generation: value.generation, expectedUpdatedAt: value.expectedUpdatedAt,
+        generation: value.generation,
+        ...(value.expectedLastModifiedAt === undefined ? {} : { expectedLastModifiedAt: value.expectedLastModifiedAt }),
+        expectedUpdatedAt: value.expectedUpdatedAt,
     };
 }
 
