@@ -802,6 +802,7 @@
   "autosaves.loadTheAutosaveFromDate": "¿Cargar el guardado automático del {date}?",
   "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "Primero se crea una copia de seguridad de la partida guardada actual, así que puedes deshacer esto desde Copias de seguridad.",
   "autosaves.noEarlierAutosavesYet": "Aún no hay guardados automáticos anteriores. Aparecerán cuando el servidor haya guardado automáticamente algunas veces.",
+  "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "No se cargó el guardado automático. La lista ahora muestra los guardados automáticos actuales del servidor; comprueba las horas de guardado antes de volver a intentarlo.",
   "page.recentAutosavesCouldNotBeLoaded": "No se pudieron cargar los guardados automáticos recientes en este momento. Las copias de seguridad conservadas no se ven afectadas; actualiza la página para volver a intentarlo.",
   "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "No se pudo cargar ese guardado automático. Asegúrate de que el servidor de juego esté detenido, luego actualiza y elige un guardado automático que siga en la lista."
 }

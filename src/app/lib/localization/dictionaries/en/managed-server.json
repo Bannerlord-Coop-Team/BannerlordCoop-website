@@ -802,6 +802,7 @@
   "autosaves.loadTheAutosaveFromDate": "Load the autosave from {date}?",
   "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "A safety backup of the current save is taken first, so you can undo this from Backups.",
   "autosaves.noEarlierAutosavesYet": "No earlier autosaves yet. They appear after the server has autosaved a few times.",
+  "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "The autosave wasn’t loaded. The list now shows the server’s current autosaves, so check the save times before trying again.",
   "page.recentAutosavesCouldNotBeLoaded": "Recent autosaves couldn’t be loaded just now. Retained backups are unaffected; refresh the page to try again.",
   "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "That autosave couldn’t be loaded. Make sure the game server is stopped, then refresh and choose an autosave that is still listed."
 }

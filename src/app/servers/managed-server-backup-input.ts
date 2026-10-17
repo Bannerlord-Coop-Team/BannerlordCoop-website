@@ -24,6 +24,8 @@ export type ManagedServerBackupInput =
         saveId: string;
         generation: MyServerRestorableSaveGeneration;
         action: "restore-save-generation";
+        /** The autosave time the owner confirmed. Absent only in requests retained before it was sent. */
+        expectedLastModifiedAt?: string;
         expectedUpdatedAt: string;
         requestId: string;
     };
@@ -56,7 +58,12 @@ export function parseManagedServerBackupInput(value: unknown): ManagedServerBack
         };
     }
     if (action === "restore-save-generation") {
-        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "generation", "requestId", "saveId", "serverId"])) return null;
+        // Keys are compared sorted; requests retained before the confirmed time was sent omit it.
+        const keys = value.expectedLastModifiedAt === undefined
+            ? ["action", "expectedUpdatedAt", "generation", "requestId", "saveId", "serverId"]
+            : ["action", "expectedLastModifiedAt", "expectedUpdatedAt", "generation", "requestId", "saveId", "serverId"];
+        if (!hasExactKeys(value, keys)) return null;
+        if (value.expectedLastModifiedAt !== undefined && !isTimestamp(value.expectedLastModifiedAt)) return null;
         if (typeof value.saveId !== "string" || !SERVER_ID.test(value.saveId)) return null;
         // The current save is what an earlier autosave replaces, so it is never a restore target.
         if (value.generation !== "backup1" && value.generation !== "backup2") return null;
@@ -65,6 +72,7 @@ export function parseManagedServerBackupInput(value: unknown): ManagedServerBack
             saveId: value.saveId,
             generation: value.generation,
             action,
+            ...(value.expectedLastModifiedAt === undefined ? {} : { expectedLastModifiedAt: value.expectedLastModifiedAt }),
             expectedUpdatedAt: value.expectedUpdatedAt,
             requestId: value.requestId,
         };

@@ -802,6 +802,7 @@
   "autosaves.loadTheAutosaveFromDate": "Charger la sauvegarde automatique du {date} ?",
   "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "Une copie de sauvegarde de sécurité de la sauvegarde actuelle est d’abord créée : vous pourrez donc annuler cette opération depuis Copies de sauvegarde.",
   "autosaves.noEarlierAutosavesYet": "Aucune sauvegarde automatique précédente pour l’instant. Elles apparaissent une fois que le serveur a enregistré automatiquement plusieurs fois.",
+  "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "La sauvegarde automatique n’a pas été chargée. La liste affiche maintenant les sauvegardes automatiques actuelles du serveur ; vérifiez les heures d’enregistrement avant de réessayer.",
   "page.recentAutosavesCouldNotBeLoaded": "Les sauvegardes automatiques récentes n’ont pas pu être chargées pour le moment. Les copies de sauvegarde conservées ne sont pas concernées ; actualisez la page pour réessayer.",
   "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Cette sauvegarde automatique n’a pas pu être chargée. Vérifiez que le serveur de jeu est arrêté, puis actualisez et choisissez une sauvegarde automatique encore listée."
 }

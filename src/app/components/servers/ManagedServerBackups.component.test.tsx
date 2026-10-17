@@ -710,6 +710,7 @@ describe("ManagedServerBackups recent autosaves", () => {
             saveId: campaignSaveId,
             generation: "backup2",
             action: "restore-save-generation",
+            expectedLastModifiedAt: "2026-09-02T14:26:00.000Z",
             expectedUpdatedAt: stopped.updatedAt,
         }, expect.stringMatching(/^[0-9a-f-]{36}$/u));
         expect(container.querySelectorAll("section li")[2].textContent).toContain("Save restore request accepted.");
@@ -729,6 +730,45 @@ describe("ManagedServerBackups recent autosaves", () => {
         await renderAutosaves({ status: { ...activeStatus, operationState: "stopped", observedGameState: "stopped",
             updatedAt: "2026-09-02T15:01:00.000Z", job: { ...activeStatus.job!, state: "succeeded" } } });
         expect(router.refresh).toHaveBeenCalledTimes(refreshes);
+    });
+
+    it("reloads the autosaves and explains a load the server refused because its autosaves changed", async () => {
+        request.mockResolvedValueOnce({ outcome: "enqueued", jobId: activeStatus.job!.jobId, action: "restore" });
+        await renderAutosaves();
+        await act(async () => loadButtons()[0].click());
+        await advance(0);
+        expect(request.mock.calls[0][1]).toMatchObject({ generation: "backup1", expectedLastModifiedAt: "2026-09-02T14:41:00.000Z" });
+        router.refresh.mockClear();
+        await renderAutosaves({ status: { ...activeStatus, operationState: "stopped", observedGameState: "stopped",
+            updatedAt: "2026-09-02T15:01:00.000Z", job: { ...activeStatus.job!, state: "failed" } } });
+        await advance(0);
+        expect(router.refresh).toHaveBeenCalledOnce();
+        const row = container.querySelectorAll("section li")[1];
+        expect(row.textContent).toContain("The autosave wasn’t loaded. The list now shows the server’s current autosaves, so check the save times before trying again.");
+        expect(row.textContent).not.toContain("Save restore request accepted.");
+        // The outcome is reported once, not on every later status read.
+        await renderAutosaves({ status: { ...activeStatus, operationState: "stopped", observedGameState: "stopped",
+            updatedAt: "2026-09-02T15:01:00.000Z", job: { ...activeStatus.job!, state: "failed" } } });
+        expect(router.refresh).toHaveBeenCalledOnce();
+    });
+
+    it("reloads the autosaves once when it sees the server stop, so the list includes the shutdown autosave", async () => {
+        const running = { serverId: server.serverId, updatedAt: server.updatedAt, operationState: "running", observedGameState: "running", job: null } as const;
+        await renderAutosaves({ status: running });
+        router.refresh.mockClear();
+        await renderAutosaves({ status: { ...running, operationState: "stopping" } });
+        expect(router.refresh).not.toHaveBeenCalled();
+        await renderAutosaves({ status: { ...running, operationState: "stopped", observedGameState: "stopped", updatedAt: "2026-09-02T15:01:00.000Z" } });
+        expect(router.refresh).toHaveBeenCalledOnce();
+        await renderAutosaves({ status: { ...running, operationState: "stopped", observedGameState: "stopped", updatedAt: "2026-09-02T15:02:00.000Z" } });
+        expect(router.refresh).toHaveBeenCalledOnce();
+    });
+
+    it("does not reload a page that opened with the server already stopped", async () => {
+        router.refresh.mockClear();
+        await renderAutosaves();
+        await advance(1_000);
+        expect(router.refresh).not.toHaveBeenCalled();
     });
 
     it("reports a precondition failure beside the autosave and forgets the request", async () => {

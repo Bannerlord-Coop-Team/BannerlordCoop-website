@@ -494,10 +494,14 @@ test("routes autosave generations and earlier-autosave restores through closed o
     const restored = await handler(operationRequest(restore));
     assert.equal(restored.status, 200);
     assert.deepEqual((await restored.json()).result, receipt);
+    const confirmedAt = "2026-10-16T09:55:00.000Z";
+    assert.equal((await handler(operationRequest({ ...restore, expectedLastModifiedAt: confirmedAt }))).status, 200);
     assert.deepEqual(upstreamBodies, [
         { version: 1, requestId: REQUEST_ID, operation: "server-save-generations", input: { serverId, saveId } },
         { version: 1, requestId: REQUEST_ID, operation: "restore-save-generation",
             input: { serverId, saveId, generation: "backup1", expectedUpdatedAt: restore.expectedUpdatedAt } },
+        { version: 1, requestId: REQUEST_ID, operation: "restore-save-generation",
+            input: { serverId, saveId, generation: "backup1", expectedLastModifiedAt: confirmedAt, expectedUpdatedAt: restore.expectedUpdatedAt } },
     ]);
 
     // Requests outside the closed shapes never reach the control plane.
@@ -516,9 +520,12 @@ test("routes autosave generations and earlier-autosave restores through closed o
         operationRequest({ ...restore, expectedUpdatedAt: "2026-10-16T11:58:00.000+02:00" }),
         operationRequest({ ...restore, backupId: "33333333-3333-4333-8333-333333333333" }),
         operationRequest({ ...restore, actorDiscordUserId: "192469416892432384" }),
+        operationRequest({ ...restore, expectedLastModifiedAt: "2026-10-16T09:55:00Z" }),
+        operationRequest({ ...restore, expectedLastModifiedAt: null }),
+        operationRequest({ ...restore, expectedLastModifiedAt: "yesterday" }),
         missingId,
     ]) assert.equal((await handler(request)).status, 400);
-    assert.equal(upstreamBodies.length, 2);
+    assert.equal(upstreamBodies.length, 3);
 
     // Responses that do not match the requested campaign or the closed receipt are withheld.
     for (const invalid of [

@@ -92,6 +92,18 @@ polling because the control plane runs it as a `restore` job that first takes a
 `pre-restore` safety backup. A failed autosave read is reported beside the list
 and never pauses retained backups.
 
+A restore names a slot, not a file, and the game rotates the slots every time it
+autosaves, including while shutting down. The request therefore also carries
+`expectedLastModifiedAt`, the save time shown in the confirmation. The control
+plane refuses the request, or fails the job before its safety backup, when that
+slot no longer holds that autosave, and re-reads the runner's autosaves as it
+does. The tab reloads both lists whenever an autosave load finishes, fails or is
+refused, and once whenever it sees the server become stopped, so the list
+includes the autosave written during shutdown. A failed load says the list was
+refreshed and asks the owner to check the times. The field is optional in the
+Edge Function so a page loaded before this release keeps working; deploy the
+control plane that accepts it first.
+
 Deploy the control plane's two operations and the `my-servers` Edge Function
 before this website reader. Older websites never call the new resource, so the
 Edge Function can ship with the control plane. A website deployed first shows

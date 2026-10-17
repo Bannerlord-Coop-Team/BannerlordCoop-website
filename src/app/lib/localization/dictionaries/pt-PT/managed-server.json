@@ -802,6 +802,7 @@
   "autosaves.loadTheAutosaveFromDate": "Carregar a gravação automática de {date}?",
   "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "Primeiro é criada uma cópia de segurança do jogo guardado atual, por isso pode anular esta ação em Cópias de segurança.",
   "autosaves.noEarlierAutosavesYet": "Ainda não existem gravações automáticas anteriores. Aparecem depois de o servidor ter gravado automaticamente algumas vezes.",
+  "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "A gravação automática não foi carregada. A lista mostra agora as gravações automáticas atuais do servidor; verifique as horas de gravação antes de tentar novamente.",
   "page.recentAutosavesCouldNotBeLoaded": "Não foi possível carregar as gravações automáticas recentes neste momento. As cópias de segurança conservadas não são afetadas; atualize a página para tentar novamente.",
   "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Não foi possível carregar essa gravação automática. Confirme que o servidor de jogo está parado, depois atualize e escolha uma gravação automática que ainda esteja na lista."
 }

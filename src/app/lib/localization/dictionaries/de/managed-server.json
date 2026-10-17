@@ -802,6 +802,7 @@
   "autosaves.loadTheAutosaveFromDate": "Den automatischen Spielstand vom {date} laden?",
   "autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst": "Zuerst wird ein Sicherheits-Backup des aktuellen Spielstands erstellt, sodass du dies unter „Backups“ rückgängig machen kannst.",
   "autosaves.noEarlierAutosavesYet": "Noch keine früheren automatischen Spielstände. Sie erscheinen, nachdem der Server einige Male automatisch gespeichert hat.",
+  "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "Der automatische Spielstand wurde nicht geladen. Die Liste zeigt jetzt die aktuellen automatischen Spielstände des Servers. Prüfe die Speicherzeiten, bevor du es erneut versuchst.",
   "page.recentAutosavesCouldNotBeLoaded": "Die letzten automatischen Spielstände konnten gerade nicht geladen werden. Aufbewahrte Backups sind nicht betroffen; lade die Seite neu, um es erneut zu versuchen.",
   "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Dieser automatische Spielstand konnte nicht geladen werden. Stelle sicher, dass der Spielserver gestoppt ist, lade dann neu und wähle einen automatischen Spielstand, der noch aufgeführt ist."
 }
