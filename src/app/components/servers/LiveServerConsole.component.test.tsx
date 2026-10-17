@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import commandsData from "@/app/cheats/commands.json";
 import { isPublishedCheat } from "@/app/cheats/debugOnly";
+import { idLookupOutputs } from "@/app/cheats/idLookups";
 import { LiveServerConsole } from "./LiveServerConsole";
 import { LocalizationProvider } from "@/app/lib/localization/client";
 import liveMessages from "@/app/lib/localization/dictionaries/en/live-server.json";
@@ -87,6 +88,33 @@ it("searches names, groups and descriptions and inserts a focused draft without 
     expect(button("kick <id|name>")).toBeDefined();
     await search("no-such-command");
     expect(container.textContent).toContain("No commands match your search.");
+});
+it("names only published console commands as ID lookups", () => {
+    const offered = commandsData.commands.filter(command => command.side !== "client" && isPublishedCheat(command)).map(command => command.command);
+    expect(Object.keys(idLookupOutputs).filter(command => !offered.includes(command))).toEqual([]);
+});
+it("narrows the picker to ID lookups with the ids each one returns, combined with search and category", async () => {
+    await attach();
+    await search("");
+    expect(button("ID lookups").textContent).toBe(`ID lookups${Object.keys(idLookupOutputs).length + 1}`);
+    await act(async () => button("ID lookups").click());
+    expect(button("ID lookups").getAttribute("aria-pressed")).toBe("true");
+    const listed = () => [...container.querySelectorAll("aside li code")].map(node => node.textContent);
+    expect(listed().sort()).toEqual(["players", ...commandsData.commands.filter(command => command.command in idLookupOutputs).map(command => command.usage)].sort());
+    expect(button("coop.debug.town.list_towns").textContent).toBe("coop.debug.town.list_townsLists towns for co-op debugging.Returns → townId");
+    expect(button("coop.debug.players.list").textContent).toContain("→ controller_id · hero_id · party_id · clan_id");
+    await search("kingdom");
+    expect(listed()).toEqual(["coop.debug.kingdom.list"]);
+    await search("");
+    await act(async () => {
+        const select = container.querySelector<HTMLSelectElement>("aside select")!;
+        select.value = "Heroes";
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(listed()).toEqual(["coop.debug.hero.id <heroName>", "coop.debug.hero.list [<name_prefix>]"]);
+    await act(async () => button("All").click());
+    expect(listed().length).toBeGreaterThan(2);
+    expect(listed().every(command => command!.startsWith("coop.debug.hero"))).toBe(true);
 });
 it("expands command browsing, closes after selection, and disables all picker controls on disconnect", async () => {
     await attach();

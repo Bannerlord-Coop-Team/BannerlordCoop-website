@@ -8,6 +8,7 @@ import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, Eye
 
 import commandsData from "@/app/cheats/commands.json";
 import { isPublishedCheat } from "@/app/cheats/debugOnly";
+import { idLookupOutputs } from "@/app/cheats/idLookups";
 import { translateCheat } from "@/app/cheats/translation";
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
 import { SERVER_WORKSPACE_TAB_PARAMETER, serverWorkspaceSectionFromTab, serverWorkspaceTab, type ServerWorkspaceSection } from "./server-workspace-tabs";
@@ -43,30 +44,69 @@ export const coopConsoleCommands = commandsData.commands
     .filter(command => command.side !== "client" && isPublishedCheat(command))
     .map(command => [command.usage]).filter(([usage]) => usage.startsWith("coop."));
 
+type ConsoleCommand = { usage: string; description: string; search?: string; kind: "inspect" | "gameplay"; category?: string; returns?: readonly string[] };
+type ConsoleCommandFilter = "all" | "ids" | "inspect" | "gameplay";
+
+/** Matches a type chip; ID lookups are commands whose output feeds other commands' id arguments. */
+function matchesConsoleFilter(command: ConsoleCommand, filter: ConsoleCommandFilter) {
+    return filter === "all" || (filter === "ids" ? !!command.returns : command.kind === filter);
+}
+
 /** Keeps the console primary and exposes its supported command reference only on request. */
 export function ServerConsoleWorkspace({ children, onSelectCommand, coopCommandsOnly = false }: { children: ReactNode; onSelectCommand?: (command: string) => void; coopCommandsOnly?: boolean }) {
     const { t } = useTranslations("server-common");
     const cheats = useTranslations("cheats");
-    const consoleCommands = [
-        { group: t("managementWorkspace.information"), commands: [["help", t("managementWorkspace.listAvailableConsoleCommands")], ["status", t("managementWorkspace.showCampaignTimePartiesAndPlayers")], ["players", t("managementWorkspace.listConnectedPlayersAndTheirIds")]] },
-        { group: t("managementWorkspace.campaign"), commands: [["save", t("managementWorkspace.saveTheCurrentCampaign")], ["stop", t("managementWorkspace.saveTheWorldAndShutDownTheServer")]] },
-        { group: t("managementWorkspace.players"), commands: [["say <text>", t("managementWorkspace.broadcastAMessageToAllPlayers")], ["kick <id|name>", t("managementWorkspace.disconnectAPlayerUsePlayersToFindTheirId")]] },
+    const consoleCommands: { group: string; commands: ConsoleCommand[] }[] = [
+        { group: t("managementWorkspace.information"), commands: [
+            { usage: "help", description: t("managementWorkspace.listAvailableConsoleCommands"), kind: "inspect" },
+            { usage: "status", description: t("managementWorkspace.showCampaignTimePartiesAndPlayers"), kind: "inspect" },
+            { usage: "players", description: t("managementWorkspace.listConnectedPlayersAndTheirIds"), kind: "inspect", returns: ["id"] },
+        ] },
+        { group: t("managementWorkspace.campaign"), commands: [
+            { usage: "save", description: t("managementWorkspace.saveTheCurrentCampaign"), kind: "gameplay" },
+            { usage: "stop", description: t("managementWorkspace.saveTheWorldAndShutDownTheServer"), kind: "gameplay" },
+        ] },
+        { group: t("managementWorkspace.players"), commands: [
+            { usage: "say <text>", description: t("managementWorkspace.broadcastAMessageToAllPlayers"), kind: "gameplay" },
+            { usage: "kick <id|name>", description: t("managementWorkspace.disconnectAPlayerUsePlayersToFindTheirId"), kind: "gameplay" },
+        ] },
         { group: t("managementWorkspace.gameCommandsCheats"), commands: commandsData.commands
             .filter(command => command.side !== "client" && isPublishedCheat(command))
-            .map(command => [command.usage, translateCheat(cheats.t, `command.${command.command}.summary`, command.summary), [command.name,
-                translateCheat(cheats.t, `category.${command.category.toLowerCase().replaceAll(" ", "_")}`, command.category),
-                ...command.aliases,
-                ...command.arguments.map(argument => translateCheat(cheats.t, `command.${command.command}.argument.${argument.name}`, argument.description)),
-            ].join(" ")]) },
+            .map(command => {
+                const category = translateCheat(cheats.t, `category.${command.category.toLowerCase().replaceAll(" ", "_")}`, command.category);
+                return {
+                    usage: command.usage,
+                    description: translateCheat(cheats.t, `command.${command.command}.summary`, command.summary),
+                    search: [command.name, category, ...command.aliases,
+                        ...command.arguments.map(argument => translateCheat(cheats.t, `command.${command.command}.argument.${argument.name}`, argument.description)),
+                    ].join(" "),
+                    kind: command.kind === "inspect" ? "inspect" : "gameplay",
+                    category,
+                    returns: idLookupOutputs[command.command],
+                };
+            }) },
+    ];
+    const typeFilters: { id: ConsoleCommandFilter; label: string }[] = [
+        { id: "all", label: cheats.t("ui.kindAll") },
+        { id: "ids", label: t("managementWorkspace.idLookups") },
+        { id: "inspect", label: cheats.t("ui.kindInspect") },
+        { id: "gameplay", label: cheats.t("ui.kindGameplay") },
     ];
     const [query, setQuery] = useState("");
+    const [typeFilter, setTypeFilter] = useState<ConsoleCommandFilter>("all");
+    const [category, setCategory] = useState("");
     const [expanded, setExpanded] = useState(false);
     const id = useId();
     const available = !!onSelectCommand;
     const search = query.trim().toLowerCase();
-    const groups = consoleCommands.map(({ group, commands }) => ({
-        group, commands: commands.filter(command => (!coopCommandsOnly || command[0].startsWith("coop.")) && `${group} ${command.join(" ")}`.toLowerCase().includes(search)),
-    })).filter(({ commands }) => commands.length > 0);
+    const offered = consoleCommands.map(({ group, commands }) => ({ group, commands: commands.filter(command => !coopCommandsOnly || command.usage.startsWith("coop.")) }));
+    const categories = [...new Set(offered.flatMap(({ commands }) => commands.flatMap(command => command.category ? [command.category] : [])))].sort((a, b) => a.localeCompare(b));
+    // Chip counts follow search and category, so each reports what selecting it would show.
+    const searched = offered.map(({ group, commands }) => ({
+        group, commands: commands.filter(command => (!category || command.category === category)
+            && `${group} ${command.usage} ${command.description} ${command.search ?? ""}`.toLowerCase().includes(search)),
+    }));
+    const groups = searched.map(({ group, commands }) => ({ group, commands: commands.filter(command => matchesConsoleFilter(command, typeFilter)) })).filter(({ commands }) => commands.length > 0);
     return <div className="space-y-3">
         <div className="min-w-0 space-y-5">{children}</div>
         <aside className="min-w-0 rounded-lg border border-white/10 bg-surface" aria-label={t("managementWorkspace.consoleCommands")}>
@@ -74,11 +114,15 @@ export function ServerConsoleWorkspace({ children, onSelectCommand, coopCommands
             <div id={`${id}-commands`} hidden={!expanded || !available} className="border-t border-white/10 p-4">
                 <label htmlFor={`${id}-search`} className="sr-only">{t("managementWorkspace.searchConsoleCommands")}</label>
                 <div className="relative"><Search className="absolute top-3 left-3 size-4 text-foreground-muted" aria-hidden="true" /><input id={`${id}-search`} type="search" value={query} onChange={event => setQuery(event.target.value)} disabled={!available} className="w-full rounded-md border border-white/15 bg-background py-2.5 pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40" placeholder={t("managementWorkspace.searchCommands")} /></div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div role="group" aria-label={cheats.t("ui.type")} className="flex flex-wrap gap-2">{typeFilters.map(option => <button key={option.id} type="button" aria-pressed={typeFilter === option.id} disabled={!available} onClick={() => setTypeFilter(option.id)} className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-xs focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 ${typeFilter === option.id ? "border-gold/50 bg-gold/15 text-gold" : "border-white/15 text-foreground-muted hover:text-foreground"}`}>{option.label}<span className="tabular-nums opacity-70">{searched.reduce((total, { commands }) => total + commands.filter(command => matchesConsoleFilter(command, option.id)).length, 0)}</span></button>)}</div>
+                    {categories.length > 0 && <><label htmlFor={`${id}-category`} className="sr-only">{cheats.t("ui.categories")}</label><select id={`${id}-category`} value={category} onChange={event => setCategory(event.target.value)} disabled={!available} className="min-h-8 rounded-full border border-white/15 bg-background px-3 text-xs text-foreground-muted focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40"><option value="">{cheats.t("ui.categories")}</option>{categories.map(name => <option key={name} value={name}>{name}</option>)}</select></>}
+                </div>
                 <p className="mt-3 text-xs leading-5 text-foreground-muted">{t("managementWorkspace.selectToInsertThenEditAnyLtArgumentsGtBefore")}</p>
                 <div className="mt-4 max-h-96 space-y-4 overflow-y-auto overscroll-contain pr-1">
                     {groups.map(({ group, commands }) => <section key={group}>
                         <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-foreground-muted">{group}</h3>
-                        <ul className="grid gap-x-6 divide-y divide-white/10 md:grid-cols-2">{commands.map(([command, description]) => <li key={command}><button type="button" disabled={!available} onClick={() => { onSelectCommand?.(command); setExpanded(false); }} className="flex w-full items-center justify-between gap-3 rounded px-1 py-3 text-left hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40"><span className="min-w-0"><code className="block break-words text-sm text-foreground [overflow-wrap:anywhere]">{command}</code><span className="mt-1 block text-[13px] leading-5 text-foreground-muted">{description}</span></span><ChevronRight className="size-4 shrink-0 text-foreground-muted" aria-hidden="true" /></button></li>)}</ul>
+                        <ul className="grid gap-x-6 divide-y divide-white/10 md:grid-cols-2">{commands.map(({ usage, description, returns }) => <li key={usage}><button type="button" disabled={!available} onClick={() => { onSelectCommand?.(usage); setExpanded(false); }} className="flex w-full items-center justify-between gap-3 rounded px-1 py-3 text-left hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40"><span className="min-w-0"><code className="block break-words text-sm text-foreground [overflow-wrap:anywhere]">{usage}</code><span className="mt-1 block text-[13px] leading-5 text-foreground-muted">{description}</span>{returns && <span className="mt-1.5 inline-block rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 font-mono text-[11px] leading-5 text-emerald-300"><span className="sr-only">{t("managementWorkspace.returnsIds")} </span><span aria-hidden="true">→ </span>{returns.join(" · ")}</span>}</span><ChevronRight className="size-4 shrink-0 text-foreground-muted" aria-hidden="true" /></button></li>)}</ul>
                     </section>)}
                     {groups.length === 0 && <p role="status" className="text-sm text-foreground-muted">{t("managementWorkspace.noCommandsMatchYourSearch")}</p>}
                 </div>

@@ -16,6 +16,8 @@
   "managementWorkspace.searchCommands": "搜索命令…",
   "managementWorkspace.selectToInsertThenEditAnyLtArgumentsGtBefore": "选择命令以插入，发送前请修改其中的 <arguments> 参数。可用命令取决于已安装的版本。",
   "managementWorkspace.noCommandsMatchYourSearch": "没有符合搜索条件的命令。",
+  "managementWorkspace.idLookups": "ID 查询",
+  "managementWorkspace.returnsIds": "返回",
   "managementWorkspace.console": "控制台",
   "managementWorkspace.serverControls": "服务器控制",
   "managementWorkspace.start": "启动",
