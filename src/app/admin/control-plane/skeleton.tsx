@@ -8,9 +8,10 @@ export type ControlPlaneView =
     | "jobs"
     | "releases"
     | "audit"
-    | "operations";
+    | "operations"
+    | "relocate";
 
-const TAB_WIDTHS = ["w-24", "w-15", "w-22", "w-18", "w-24", "w-19", "w-28"];
+const TAB_WIDTHS = ["w-24", "w-15", "w-22", "w-18", "w-24", "w-19", "w-28", "w-24"];
 
 export function ControlPlanePageSkeleton() {
     return (
@@ -57,7 +58,7 @@ export function ControlPlaneViewSkeleton({ view }: { view: ControlPlaneView }) {
                 {view === "server" && <ServerSkeleton />}
                 {view === "operations" && <OperationsSkeleton />}
                 {view === "releases" && <ReleaseSkeleton />}
-                {["vps", "servers", "jobs", "audit"].includes(view) && <TableSkeleton view={view} />}
+                {["vps", "servers", "jobs", "audit", "relocate"].includes(view) && <TableSkeleton view={view} />}
             </div>
         </section>
     );
@@ -142,10 +143,10 @@ function ReleaseSkeleton() {
 }
 
 function TableSkeleton({ view }: { view: ControlPlaneView }) {
-    const columns = view === "vps" ? 6 : view === "servers" ? 7 : 6;
+    const columns = view === "vps" ? 6 : view === "servers" ? 7 : view === "relocate" ? 5 : 6;
     return (
         <div>
-            {view === "servers" && <Skeleton className="mb-6 h-11 w-xl max-w-full" />}
+            {(view === "servers" || view === "relocate") && <Skeleton className="mb-6 h-11 w-xl max-w-full" />}
             <HeadingSkeleton />
             <TableRowsSkeleton columns={columns} rows={7} />
         </div>

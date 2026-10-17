@@ -3,7 +3,7 @@ import { ControlPlaneAdminError, requestControlPlaneAdmin } from "./client";
 // These workflows reject stale generations before accepting a job. Do not add
 // direct commands or exact-attempt job mutations to this list.
 const REPLAYABLE_SERVER_OPERATIONS = new Set([
-    "server-operation", "update-server", "rollback-server", "restore-backup", "collect-diagnostics",
+    "server-operation", "update-server", "rollback-server", "restore-backup", "collect-diagnostics", "relocate-server",
 ]);
 
 export async function requestControlPlaneAdminWithRefresh(

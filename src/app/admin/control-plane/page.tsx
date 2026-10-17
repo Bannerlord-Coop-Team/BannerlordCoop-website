@@ -10,6 +10,7 @@ import { JobFailuresAcknowledgeButton } from "@/app/components/admin/JobFailures
 import { VpsView } from "@/app/components/admin/VpsView";
 import { ControlPlaneServerView } from "@/app/components/admin/ControlPlaneServerView";
 import { ControlPlaneJobsProgress } from "@/app/components/admin/ControlPlaneJobsProgress";
+import { RelocateView } from "@/app/components/admin/RelocateView";
 import { AuditTable, Panel, Definition, SectionHeading, State, Empty, ReleaseMetadata, shortId } from "@/app/components/admin/ControlPlanePresentation";
 import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
 import { hasAdminAccess } from "@/app/lib/auth/access";
@@ -48,6 +49,7 @@ import type {
     ManagedServer,
     OperationsData,
     OverviewSummary,
+    RelocateViewData,
     ReleaseBuild,
     ServerDashboardResult,
 } from "@/app/lib/control-plane/types";
@@ -57,6 +59,7 @@ import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import {
     Activity,
     ArrowLeft,
+    ArrowLeftRight,
     BriefcaseBusiness,
     Cloud,
     CloudCog,
@@ -222,7 +225,7 @@ async function ControlPlaneViewContent({
     let accounts: WebsiteAccountSummary[] = [];
     let error = "";
     try {
-        const needsAccounts = view === "vps" || view === "servers" || view === "operations";
+        const needsAccounts = view === "vps" || view === "servers" || view === "operations" || view === "relocate";
         const [viewResult, usersResult] = await Promise.allSettled([
             read.then(result => {
                 if (result.status === "rejected") throw result.reason;
@@ -265,6 +268,7 @@ async function ControlPlaneViewContent({
             {!error && view === "releases" && <ReleasesView data={data as { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }} />}
             {!error && view === "audit" && <AuditView page={data as HostingPage<AuditEvent>} />}
             {!error && view === "operations" && <OperationsView data={data as OperationsData} accounts={accounts} />}
+            {!error && view === "relocate" && <RelocateView data={data as RelocateViewData} query={query} accounts={accounts} />}
         </>
     );
 }
@@ -343,6 +347,20 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         }
         case "audit":
             return readControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, signal, ...identity, operation: "audit", input: { cursor: null, limit: 100 } });
+        case "relocate": {
+            const [servers, inventory, hostingRegions, activeJobs] = await Promise.all([
+                readControlPlaneAdmin<HostingPage<ManagedServer>>({
+                    accessToken: token, signal, ...identity,
+                    operation: "servers",
+                    input: { filter: query ? { query } : {}, cursor: null, limit: 100 },
+                }),
+                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
+                loadHostingRegionCatalog(token, signal, identity),
+                readControlPlaneAdmin<HostingPage<HostingJob>>({ accessToken: token, signal, ...identity, operation: "jobs", input: { filter: { activeOnly: true }, cursor: null, limit: 100 } }),
+            ]);
+            // Without the catalog, hosts are placed by their legacy region only.
+            return { servers, inventory, regionCatalog: hostingRegions.regions, activeJobs: activeJobs.items } satisfies RelocateViewData;
+        }
     }
 }
 
@@ -368,6 +386,7 @@ function ViewTabs({ active }: { active: View }) {
         { view: "releases", label: "Releases", icon: PackageCheck },
         { view: "audit", label: "Audit", icon: History },
         { view: "operations", label: "Operations", icon: ListChecks },
+        { view: "relocate", label: "Relocate", icon: ArrowLeftRight },
     ];
     return (
         <nav aria-label="Control plane" className="mt-9 flex gap-2 overflow-x-auto border-b border-white/10 pb-3">
@@ -662,7 +681,7 @@ function chunk<T>(items: readonly T[], size: number): T[][] { const rows: T[][] 
 function enumOptions(values: readonly string[]): AdminActionOption[] { return values.map((value) => ({ label: value, value })); }
 function accountLabelMap(users: readonly WebsiteAccountSummary[]) { return Object.fromEntries(users.map(user => [user.accountId, user.label])); }
 function first(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
-function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations"].includes(value ?? "") ? value as View : "overview"; }
+function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations", "relocate"].includes(value ?? "") ? value as View : "overview"; }
 function parseJobState(value: string | undefined): "failed" | "active" | null { return value === "failed" || value === "active" ? value : null; }
 function parseJobAction(value: string | undefined): string | null { return JOB_ACTION_FILTERS.includes(value as typeof JOB_ACTION_FILTERS[number]) ? value ?? null : null; }
 function parseCursor(value: string | undefined): string | null { const normalized = value?.trim() ?? ""; return normalized.length > 0 && normalized.length <= 4_096 ? normalized : null; }
