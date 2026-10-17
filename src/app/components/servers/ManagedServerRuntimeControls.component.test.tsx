@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerCommands } from "./ManagedServerCommands";
+import { SAVE_RESULT_TIMEOUT_MILLISECONDS, readSaveOutcome } from "./ManagedServerRuntimeControls";
 import { serverResourceUsage } from "@/app/lib/hosting/server-resource-usage";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { createManagedConsoleSignals, type ManagedConsoleSignals } from "./ManagedServerPollingProvider";
@@ -27,6 +28,7 @@ beforeEach(() => {
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
     mocks.submit.mockResolvedValue({ ok: true, result: { outcome: "enqueued", jobId: "33333333-3333-4333-8333-333333333333" } });
     mocks.check.mockResolvedValue({ ok: true, result: { status: "pending" } });
+    mocks.ack.mockResolvedValue({ ok: true, result: { acknowledged: true } });
     mocks.resources.mockResolvedValue({ ok: true, usage: serverResourceUsage(sample) });
     mocks.signals = null;
 });
@@ -98,4 +100,63 @@ it("shows only CPU and memory percentages of the server's own allocation and kee
 
 it("reduces a sample to shares only, capping CPU at the allocation", () => {
     expect(serverResourceUsage({ ...sample, cpuVcpus: 2.1 })).toEqual({ cpu: 1, memory: 1 / 3 });
+});
+
+const jobId = "33333333-3333-4333-8333-333333333333";
+const succeeded = (output: string) => ({ ok: true, result: { status: "succeeded", output, outputTruncated: false, outputWithheld: false, completedAt: "2026-10-17T02:35:02.734Z" } });
+/** Clicks Save and lets the result polling run for the given time. */
+async function saveAndWait(milliseconds: number) {
+    await act(async () => control("Save").click());
+    await act(async () => vi.advanceTimersByTimeAsync(milliseconds));
+}
+
+it("waits for the save result, reports success and acknowledges it", async () => {
+    mocks.check.mockResolvedValueOnce({ ok: true, result: { status: "pending" } })
+        .mockResolvedValue(succeeded("[DedicatedServer] operator save: world saved to 'default_new_game.sav' (2710 ms)"));
+    await mount();
+    await act(async () => control("Save").click());
+    expect(container.textContent).toContain("Saving the world…");
+    expect(control("Save…").disabled).toBe(true);
+    await act(async () => vi.advanceTimersByTimeAsync(2_000));
+    const reference = { serverId: server.serverId, jobId, commandRequestId: mocks.submit.mock.calls[0][1] };
+    expect(mocks.check).toHaveBeenCalledWith(reference, "owner-id");
+    expect(mocks.ack).toHaveBeenCalledWith(reference, "owner-id");
+    expect(container.querySelector('p[aria-live="polite"]')?.textContent).toBe("World saved in 2.7 s.");
+    expect(control("Save").disabled).toBe(false);
+});
+
+it.each([
+    ["[DedicatedServer] operator save skipped: a world save is already in progress", "Save skipped: a world save is already in progress"],
+    ["[DedicatedServer] operator save FAILED (IOError; world keeps running)", "Save failed: IOError"],
+])("reports a save the server did not complete: %s", async (output, message) => {
+    mocks.check.mockResolvedValue(succeeded(output));
+    await mount();
+    await saveAndWait(1_000);
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(message);
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(message);
+});
+
+it("explains a runner that cannot save yet, and a save it never confirms", async () => {
+    mocks.check.mockResolvedValue({ ok: true, result: { status: "failed", errorCode: "invalid_request" } });
+    await mount();
+    await saveAndWait(1_000);
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("This server can't save on demand yet. Try again after its next update.");
+
+    mocks.check.mockReset();
+    mocks.check.mockResolvedValue({ ok: false, notSubmitted: false, uncertain: true, refresh: false, message: "offline" });
+    await saveAndWait(SAVE_RESULT_TIMEOUT_MILLISECONDS - 5_000);
+    expect(container.textContent).toContain("Saving the world…");
+    await act(async () => vi.advanceTimersByTimeAsync(6_000));
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("We couldn't confirm the save. Check the console output before trying again.");
+    expect(mocks.ack).toHaveBeenCalledTimes(1); // only the terminal "cannot save yet" result
+});
+
+it("reads the dedicated server's save outcome lines", () => {
+    expect(readSaveOutcome({ status: "pending" })).toBeNull();
+    expect(readSaveOutcome({ status: "cancelled" })).toEqual({ kind: "unconfirmed" });
+    expect(readSaveOutcome({ status: "failed", errorCode: "game_unavailable" })).toEqual({ kind: "unconfirmed" });
+    const result = (output: string) => ({ status: "succeeded" as const, output, outputTruncated: false, outputWithheld: false, completedAt: "2026-10-17T02:35:02.734Z" });
+    expect(readSaveOutcome(result("[DedicatedServer] operator save FAILED (world keeps running): System.IO.IOException"))).toEqual({ kind: "failed", reason: null });
+    expect(readSaveOutcome(result("something else"))).toEqual({ kind: "unconfirmed" });
 });
