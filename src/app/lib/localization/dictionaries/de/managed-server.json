@@ -480,6 +480,7 @@
   "configuration.option.NeverExpire": "Läuft nie ab",
   "configuration.option.AlwaysRetry": "Immer wiederholen",
   "commands.sendShortcut": "{key} zum Senden",
+  "commands.historyShortcut": "{up} {down} für letzte Befehle",
   "settingsPanel.maintenanceSlot": "{slot} Uhr Central Time",
   "settingsPanel.maintenanceHelp": "Tägliche automatische Updates verwenden Central Time ({timezone}) und folgen den Sommerzeitwechseln. Die Wartung beginnt innerhalb der ersten 15 Minuten des ausgewählten Fensters. Das Speichern dieser Einstellung startet den Server nicht neu.",
   "transfers.fileImportReview": "Dateiimport · Prüfen",

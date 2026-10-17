@@ -480,6 +480,7 @@
   "configuration.option.NeverExpire": "Без ограничения срока",
   "configuration.option.AlwaysRetry": "Всегда повторять попытку",
   "commands.sendShortcut": "{key} — отправить",
+  "commands.historyShortcut": "{up} {down} — недавние команды",
   "settingsPanel.maintenanceSlot": "{slot} по центральному времени США",
   "settingsPanel.maintenanceHelp": "Ежедневные автоматические обновления выполняются по центральному времени США ({timezone}) с учётом перехода на летнее время. Обслуживание начинается в первые 15 минут выбранного периода. Сохранение этой настройки не перезапускает сервер.",
   "transfers.fileImportReview": "Импорт файла · Проверка",

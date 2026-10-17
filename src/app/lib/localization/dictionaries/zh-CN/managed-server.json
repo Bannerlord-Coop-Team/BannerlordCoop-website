@@ -480,6 +480,7 @@
   "configuration.option.NeverExpire": "永不过期",
   "configuration.option.AlwaysRetry": "始终重试",
   "commands.sendShortcut": "按 {key} 发送",
+  "commands.historyShortcut": "按 {up} {down} 查看最近的命令",
   "settingsPanel.maintenanceSlot": "{slot} 美国中部时间",
   "settingsPanel.maintenanceHelp": "每日自动更新使用美国中部时间（{timezone}），并随夏令时调整。维护将在所选时段开始后的 15 分钟内启动。保存此偏好不会重启服务器。",
   "transfers.fileImportReview": "文件导入 · 检查",

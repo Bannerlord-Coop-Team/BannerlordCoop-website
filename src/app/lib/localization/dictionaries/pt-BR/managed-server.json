@@ -480,6 +480,7 @@
   "configuration.option.NeverExpire": "Nunca expirar",
   "configuration.option.AlwaysRetry": "Sempre tentar novamente",
   "commands.sendShortcut": "{key} para enviar",
+  "commands.historyShortcut": "{up} {down} para comandos recentes",
   "settingsPanel.maintenanceSlot": "{slot} no Horário Central dos EUA",
   "settingsPanel.maintenanceHelp": "As atualizações automáticas diárias usam o Horário Central dos EUA ({timezone}) e acompanham as mudanças do horário de verão. A manutenção começa nos primeiros 15 minutos da janela selecionada. Salvar esta preferência não reinicia o servidor.",
   "transfers.fileImportReview": "Importação de arquivo · Revisão",

@@ -480,6 +480,7 @@
   "configuration.option.NeverExpire": "만료 없음",
   "configuration.option.AlwaysRetry": "항상 재시도",
   "commands.sendShortcut": "{key} 키로 전송",
+  "commands.historyShortcut": "{up} {down} 키로 최근 명령",
   "settingsPanel.maintenanceSlot": "미국 중부 시간 {slot}",
   "settingsPanel.maintenanceHelp": "매일 자동 업데이트는 미국 중부 시간({timezone})을 기준으로 하며 서머타임 변경을 따릅니다. 유지보수는 선택한 시간대가 시작된 후 첫 15분 이내에 시작됩니다. 이 설정을 저장해도 서버는 재시작되지 않습니다.",
   "transfers.fileImportReview": "파일 가져오기 · 검토",

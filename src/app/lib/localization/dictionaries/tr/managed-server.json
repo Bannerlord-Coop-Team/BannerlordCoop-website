@@ -480,6 +480,7 @@
   "configuration.option.NeverExpire": "Asla sona ermez",
   "configuration.option.AlwaysRetry": "Her zaman yeniden dene",
   "commands.sendShortcut": "{key} ile gönder",
+  "commands.historyShortcut": "Son komutlar için {up} {down}",
   "settingsPanel.maintenanceSlot": "{slot} ABD Merkezi Saati",
   "settingsPanel.maintenanceHelp": "Günlük otomatik güncellemeler ABD Merkezi Saati ({timezone}) esas alınarak yapılır ve yaz saati değişikliklerini izler. Bakım, seçilen pencerenin ilk 15 dakikası içinde başlar. Bu tercihi kaydetmek sunucuyu yeniden başlatmaz.",
   "transfers.fileImportReview": "Dosya içe aktarma · Gözden geçirme",

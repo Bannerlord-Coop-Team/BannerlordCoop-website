@@ -483,6 +483,7 @@
   "configuration.option.NeverExpire": "Never expire",
   "configuration.option.AlwaysRetry": "Always retry",
   "commands.sendShortcut": "{key} to send",
+  "commands.historyShortcut": "{up} {down} for recent commands",
   "settingsPanel.maintenanceSlot": "{slot} Central Time",
   "settingsPanel.maintenanceHelp": "Daily automatic updates use Central Time ({timezone}) and follow daylight-saving changes. Maintenance starts within the first 15 minutes of the selected window. Saving this preference does not restart the server.",
   "transfers.fileImportReview": "File import · Review",
