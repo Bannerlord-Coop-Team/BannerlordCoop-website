@@ -15,6 +15,7 @@ import { Check, Download, LoaderCircle, Play, RotateCw, Square } from "lucide-re
 import { useEffect, useEffectEvent, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRevealServerAddress } from "./ServerManagementWorkspace";
+import { segmentedButtonClass, segmentedGroupClass, toolbarButtonClass } from "./segmented-controls";
 
 const TRANSITIONAL_STATES = new Set([
     "provisioning",
@@ -422,27 +423,32 @@ export function ManagedServerControls({
     return (
         <div className="flex flex-col items-start gap-2">
             <div className="flex flex-wrap gap-2">
-                <ControlButton
-                    label={t("controls.start")}
-                    icon={Play}
-                    disabled={busy || !canStart}
-                    pending={pendingOperation === "start" || trackingStart}
-                    onClick={() => requestOperation("start")}
-                />
-                <ControlButton
-                    label={t("controls.stop")}
-                    icon={Square}
-                    disabled={busy || !canStop}
-                    pending={pendingOperation === "stop" || (trackingStop && !stopCheckPaused)}
-                    onClick={() => requestOperation("stop")}
-                />
-                <ControlButton
-                    label={t("controls.restart")}
-                    icon={RotateCw}
-                    disabled={busy || !canRestart}
-                    pending={pendingOperation === "restart-game"}
-                    onClick={() => requestOperation("restart-game")}
-                />
+                <div role="group" aria-label={t("controls.serverPower")} className={segmentedGroupClass}>
+                    <ControlButton
+                        segmented
+                        label={t("controls.start")}
+                        icon={Play}
+                        disabled={busy || !canStart}
+                        pending={pendingOperation === "start" || trackingStart}
+                        onClick={() => requestOperation("start")}
+                    />
+                    <ControlButton
+                        segmented
+                        label={t("controls.stop")}
+                        icon={Square}
+                        disabled={busy || !canStop}
+                        pending={pendingOperation === "stop" || (trackingStop && !stopCheckPaused)}
+                        onClick={() => requestOperation("stop")}
+                    />
+                    <ControlButton
+                        segmented
+                        label={t("controls.restart")}
+                        icon={RotateCw}
+                        disabled={busy || !canRestart}
+                        pending={pendingOperation === "restart-game"}
+                        onClick={() => requestOperation("restart-game")}
+                    />
+                </div>
                 <ControlButton
                     label={t("controls.updateNow")}
                     icon={Download}
@@ -451,7 +457,7 @@ export function ManagedServerControls({
                     onClick={() => requestOperation("update-now")}
                 />
             </div>
-            {!busy && operationState === "stopped" && observedGameState === "stopped" && <p className="text-xs text-foreground-muted">{t("controls.alreadyStopped")}</p>}
+            {!busy && operationState === "stopped" && observedGameState === "stopped" && <p className="max-w-sm text-xs text-foreground-muted">{t("controls.alreadyStopped")}</p>}
             {statusArea !== null && (statusSlot === undefined ? statusArea : statusSlot ? createPortal(statusArea, statusSlot) : null)}
         </div>
     );
@@ -576,26 +582,28 @@ export function ManagedServerPassword({ serverId, accessRole, operationState, ex
     </section>;
 }
 
-/** Renders a lifecycle action with consistent target size and pending feedback. */
+/** Renders a lifecycle action with consistent target size and pending feedback, alone or inside a segmented group. */
 function ControlButton({
     label,
     icon: Icon,
     disabled,
     pending,
     onClick,
+    segmented = false,
 }: {
     label: string;
     icon: typeof Play;
     disabled: boolean;
     pending: boolean;
     onClick: () => void;
+    segmented?: boolean;
 }) {
     return (
         <button
             type="button"
             disabled={disabled}
             onClick={onClick}
-            className="inline-flex min-h-10 items-center justify-center gap-1 rounded-md border border-white/15 bg-white/[0.03] px-2 py-2 text-xs font-medium text-foreground transition hover:border-gold/50 hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 sm:gap-2 sm:px-3 sm:text-sm"
+            className={segmented ? segmentedButtonClass : toolbarButtonClass}
         >
             <Icon aria-hidden="true" className={`size-3.5 ${pending ? "animate-pulse" : ""}`} />
             {pending ? `${label}…` : label}

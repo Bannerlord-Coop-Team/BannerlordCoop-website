@@ -42,10 +42,14 @@ type ManagedServerPollingContextValue = {
 /** Game phases announced by the dedicated server's "@DS@" state records. */
 export type ManagedGamePhase = "boot" | "loading" | "serving" | "stopping" | "fatal";
 
+/** Campaign speeds an owner can choose; every game time mode reads as one of these. */
+export type CampaignSpeed = "pause" | "play-1x" | "play-2x";
+
 /** Live console evidence shared with lifecycle progress; connection numbers only ever increase. */
 export type ManagedConsoleSignal =
     | { type: "opened"; serverId: string; connection: number }
     | { type: "phase"; serverId: string; connection: number; phase: ManagedGamePhase; detail?: string }
+    | { type: "speed"; serverId: string; connection: number; speed: CampaignSpeed }
     | { type: "closed"; serverId: string; connection: number; runEnded: boolean }
     | { type: "unavailable"; serverId: string };
 

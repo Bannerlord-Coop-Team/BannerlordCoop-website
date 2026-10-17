@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "@/app/lib/localization/client";
-import { useManagedConsoleSignals, type ManagedGamePhase } from "./ManagedServerPollingProvider";
+import { useManagedConsoleSignals, type CampaignSpeed, type ManagedGamePhase } from "./ManagedServerPollingProvider";
 
 import { ArrowDown, RotateCw } from "lucide-react";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from "react";
@@ -72,6 +72,20 @@ export function parseConsoleControlLine(line: string): ConsoleControlLine | null
         default:
             return null;
     }
+}
+
+/**
+ * Reads the campaign speed from the dedicated server's periodic pulse ("timeMode=StoppablePlay") or from a
+ * set_time_mode result ("Time control set to Play_2x"). Stopped modes are paused; fast-forward modes are 2x.
+ */
+export function parseCampaignSpeed(text: string): CampaignSpeed | null {
+    const result = /\bTime control (?:force-)?set (?:for live testing )?to (Pause|Play_1x|Play_2x)\b/u.exec(text)?.[1];
+    if (result) return result === "Pause" ? "pause" : result === "Play_1x" ? "play-1x" : "play-2x";
+    const mode = /\[DedicatedServer\] pulse: .*\btimeMode=([A-Za-z]+)\b/u.exec(text)?.[1];
+    if (!mode) return null;
+    if (mode.endsWith("Stop")) return "pause";
+    if (mode.includes("FastForward")) return "play-2x";
+    return mode.includes("Play") ? "play-1x" : null;
 }
 
 /** Hides container-host logging and control records that are incomplete, such as a truncated command list. */
@@ -208,6 +222,8 @@ function useConsoleStream(serverId: string, run: ConsoleRun, outputChannel?: Com
                             const control = parseConsoleControlLine(event.text);
                             if (control?.kind === "state") signals?.publish({ type: "phase", serverId, connection, phase: control.phase, ...(control.detail ? { detail: control.detail } : {}) });
                             if (control?.kind === "managed-command" && channelRef.current) channelRef.current.framesSeen += 1;
+                            const speed = parseCampaignSpeed(control?.kind === "managed-command" ? control.output : event.text);
+                            if (speed) signals?.publish({ type: "speed", serverId, connection, speed });
                         } else if (event.type === "expired") {
                             ending = "expired";
                         } else if (event.type === "ended") {
