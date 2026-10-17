@@ -212,6 +212,8 @@
   "runtime.save": "Kaydet",
   "runtime.startTheServerToChangeSpeedOrSave": "Sefer hızını değiştirmek veya kaydetmek için sunucuyu başlatın.",
   "runtime.sentCommandOutputAppearsBelow": "{command} gönderildi. Çıktı aşağıdaki konsolda görünür.",
+  "runtime.theCampaignStaysPausedUntilAPlayerJoins": "Bir oyuncu katılana kadar sefer duraklatılmış kalır.",
+  "runtime.theServerIsHoldingTheCampaignAtThisSpeed": "Sunucu seferi bu hızda tutuyor.",
   "resources.resourceUsage": "Kaynak kullanımı",
   "resources.cpu": "CPU",
   "resources.memory": "Bellek",

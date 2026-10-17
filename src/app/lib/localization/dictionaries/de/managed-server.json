@@ -212,6 +212,8 @@
   "runtime.save": "Speichern",
   "runtime.startTheServerToChangeSpeedOrSave": "Starte den Server, um die Kampagnengeschwindigkeit zu ändern oder zu speichern.",
   "runtime.sentCommandOutputAppearsBelow": "{command} gesendet. Die Ausgabe erscheint unten in der Konsole.",
+  "runtime.theCampaignStaysPausedUntilAPlayerJoins": "Die Kampagne bleibt pausiert, bis ein Spieler beitritt.",
+  "runtime.theServerIsHoldingTheCampaignAtThisSpeed": "Der Server hält die Kampagne bei dieser Geschwindigkeit.",
   "resources.resourceUsage": "Ressourcennutzung",
   "resources.cpu": "CPU",
   "resources.memory": "Arbeitsspeicher",

@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { submitManagedConsoleCommand } from "@/app/servers/managed-server-console-actions";
-import { parseConsoleSubmission } from "../../../../supabase/functions/_shared/server-console-contract";
+import { SAVE_CONSOLE_COMMAND, parseConsoleSubmission } from "../../../../supabase/functions/_shared/server-console-contract";
 import { useManagedConsoleSignals, useManagedServerStatusSlot, type CampaignSpeed } from "./ManagedServerPollingProvider";
 import { segmentedButtonClass, segmentedGroupClass, toolbarButtonClass } from "./segmented-controls";
 
@@ -17,7 +17,8 @@ const SPEED_COMMANDS: Record<CampaignSpeed, string> = {
     "play-1x": "coop.debug.set_time_mode Play_1x",
     "play-2x": "coop.debug.set_time_mode Play_2x",
 };
-const SAVE_COMMAND = "coop.debug.save.force_autosave";
+/** The dedicated server's own world save; the game's native save commands are suppressed on this host. */
+const SAVE_COMMAND = SAVE_CONSOLE_COMMAND;
 const NOTICE_MILLISECONDS = 6_000;
 
 type Notice = { kind: "sent" | "error"; text: string };
@@ -38,9 +39,14 @@ export function ManagedServerRuntimeControls({ server, userId, ready }: { server
     useEffect(() => {
         if (signals === null) return;
         return signals.subscribe((signal) => {
-            if (signal.type === "speed" && signal.serverId === server.serverId) setReportedSpeed(signal.speed);
+            if (signal.type !== "speed" || signal.serverId !== server.serverId) return;
+            setReportedSpeed(signal.speed);
+            // The game can refuse a speed, most often keeping the campaign paused until a player joins.
+            if (signal.heldBy) setNotice({ kind: "sent", text: signal.heldBy === "no-players"
+                ? t("runtime.theCampaignStaysPausedUntilAPlayerJoins")
+                : t("runtime.theServerIsHoldingTheCampaignAtThisSpeed") });
         });
-    }, [signals, server.serverId]);
+    }, [signals, server.serverId, t]);
 
     useEffect(() => {
         if (notice === null) return;

@@ -13,7 +13,9 @@ const success = { status: "succeeded", output: "<script>not HTML</script>", outp
 
 test("normalizes commands and rejects separators, non-coop commands, extra fields and oversized input/output", () => {
     assert.equal(parseConsoleSubmission({ ...input, command: "  ｃｏｏｐ.help  " }).command, "coop.help");
-    for (const command of ["save", "coop.help; stop", "coop.help\ncoop.help", "coop.help\u2028foo", `coop.${"a".repeat(4092)}`]) {
+    // The dedicated server's built-in world save is the one bare command accepted.
+    assert.equal(parseConsoleSubmission({ ...input, command: "  save " }).command, "save");
+    for (const command of ["SAVE", "save now", "save;stop", "stop", "say hi", "coop.help; stop", "coop.help\ncoop.help", "coop.help\u2028foo", `coop.${"a".repeat(4092)}`]) {
         assert.throws(() => parseConsoleSubmission({ ...input, command }));
     }
     assert.throws(() => parseConsoleSubmission({ ...input, admin: true }));

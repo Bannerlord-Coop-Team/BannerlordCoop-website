@@ -5,8 +5,13 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerCommands } from "./ManagedServerCommands";
 import { serverResourceUsage } from "@/app/lib/hosting/server-resource-usage";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
+import { createManagedConsoleSignals, type ManagedConsoleSignals } from "./ManagedServerPollingProvider";
 
-const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn(), resources: vi.fn() }));
+const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn(), resources: vi.fn(), signals: null as ManagedConsoleSignals | null }));
+vi.mock("./ManagedServerPollingProvider", async (original) => ({
+    ...await original<typeof import("./ManagedServerPollingProvider")>(),
+    useManagedConsoleSignals: () => mocks.signals,
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/app/servers/managed-server-console-actions", () => ({ submitManagedConsoleCommand: mocks.submit, checkManagedConsoleCommand: mocks.check, acknowledgeManagedConsoleCommand: mocks.ack }));
 vi.mock("@/app/servers/managed-server-actions", () => ({ readManagedServerResources: mocks.resources }));
@@ -23,6 +28,7 @@ beforeEach(() => {
     mocks.submit.mockResolvedValue({ ok: true, result: { outcome: "enqueued", jobId: "33333333-3333-4333-8333-333333333333" } });
     mocks.check.mockResolvedValue({ ok: true, result: { status: "pending" } });
     mocks.resources.mockResolvedValue({ ok: true, usage: serverResourceUsage(sample) });
+    mocks.signals = null;
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -46,7 +52,20 @@ it("sends campaign speed and save as console commands and marks the chosen speed
     expect(container.textContent).toContain("Sent coop.debug.set_time_mode Play_2x. Output appears in the console below.");
     await act(async () => control("Save").click());
     expect(mocks.submit).toHaveBeenLastCalledWith(
-        { serverId: server.serverId, command: "coop.debug.save.force_autosave", expectedUpdatedAt: server.updatedAt }, expect.any(String), "owner-id");
+        { serverId: server.serverId, command: "save", expectedUpdatedAt: server.updatedAt }, expect.any(String), "owner-id");
+});
+
+it("follows the speed the server reports and explains when it holds the campaign paused", async () => {
+    const signals = createManagedConsoleSignals();
+    mocks.signals = signals;
+    await mount();
+    await act(async () => signals.publish({ type: "speed", serverId: server.serverId, connection: 1, speed: "play-2x" }));
+    expect(control("Play at double speed").getAttribute("aria-pressed")).toBe("true");
+    await act(async () => signals.publish({ type: "speed", serverId: "44444444-4444-4444-8444-444444444444", connection: 1, speed: "pause" }));
+    expect(control("Play at double speed").getAttribute("aria-pressed")).toBe("true");
+    await act(async () => signals.publish({ type: "speed", serverId: server.serverId, connection: 1, speed: "pause", heldBy: "no-players" }));
+    expect(control("Pause").getAttribute("aria-pressed")).toBe("true");
+    expect(container.textContent).toContain("The campaign stays paused until a player joins.");
 });
 
 it("reports a rejected command without changing the selected speed", async () => {

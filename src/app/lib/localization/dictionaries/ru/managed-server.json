@@ -212,6 +212,8 @@
   "runtime.save": "Сохранить",
   "runtime.startTheServerToChangeSpeedOrSave": "Запустите сервер, чтобы изменить скорость кампании или сохранить игру.",
   "runtime.sentCommandOutputAppearsBelow": "Команда {command} отправлена. Вывод появится в консоли ниже.",
+  "runtime.theCampaignStaysPausedUntilAPlayerJoins": "Кампания остаётся на паузе, пока не подключится игрок.",
+  "runtime.theServerIsHoldingTheCampaignAtThisSpeed": "Сервер удерживает кампанию на этой скорости.",
   "resources.resourceUsage": "Использование ресурсов",
   "resources.cpu": "ЦП",
   "resources.memory": "Память",

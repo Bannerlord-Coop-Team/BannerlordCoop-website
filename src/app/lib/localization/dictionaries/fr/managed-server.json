@@ -212,6 +212,8 @@
   "runtime.save": "Sauvegarder",
   "runtime.startTheServerToChangeSpeedOrSave": "Démarrez le serveur pour changer la vitesse de la campagne ou sauvegarder.",
   "runtime.sentCommandOutputAppearsBelow": "Commande {command} envoyée. La sortie s’affiche dans la console ci-dessous.",
+  "runtime.theCampaignStaysPausedUntilAPlayerJoins": "La campagne reste en pause jusqu’à ce qu’un joueur se connecte.",
+  "runtime.theServerIsHoldingTheCampaignAtThisSpeed": "Le serveur maintient la campagne à cette vitesse.",
   "resources.resourceUsage": "Utilisation des ressources",
   "resources.cpu": "CPU",
   "resources.memory": "Mémoire",

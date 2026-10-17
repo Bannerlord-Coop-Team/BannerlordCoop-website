@@ -7,6 +7,7 @@ import {
     decodeConsoleStreamChunk,
     isScrolledToBottom,
     parseCampaignSpeed,
+    parseCampaignSpeedLimit,
     parseConsoleControlLine,
     parseConsoleEvent,
 } from "./ManagedServerConsole";
@@ -31,6 +32,14 @@ test("reads campaign speed from the server pulse and set_time_mode results only"
     assert.equal(parseCampaignSpeed("Time control set to Pause"), "pause");
     assert.equal(parseCampaignSpeed("Time control force-set for live testing to Play_1x"), "play-1x");
     assert.equal(parseCampaignSpeed("player said timeMode=Stop"), null);
+});
+
+test("reads speed requests the game held back and why", () => {
+    assert.deepEqual(parseCampaignSpeedLimit('[Coop] Time control request Play_1x limited to Pause by "DisconnectedPlayersServerHandler.PlayersConnectedPolicy"'),
+        { speed: "pause", heldBy: "no-players" });
+    assert.deepEqual(parseCampaignSpeedLimit('[Coop] Time control request Play_2x limited to Play_1x by "BattlePolicy"'),
+        { speed: "play-1x", heldBy: "policy" });
+    assert.equal(parseCampaignSpeedLimit("[Coop] Applying server time control: current=\"Pause\" requested=Play_1x effective=Pause"), null);
 });
 
 test("parses only typed bounded line events", () => {
