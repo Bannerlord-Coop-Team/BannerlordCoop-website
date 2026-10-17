@@ -215,8 +215,6 @@
   "resources.resourceUsage": "Kaynak kullanımı",
   "resources.cpu": "CPU",
   "resources.memory": "Bellek",
-  "resources.cpuOfAllocated": "Ayrılan {limit} vCPU'nun {used} kadarı",
-  "resources.memoryOfAllocated": "Ayrılan {limit} GB'ın {used} kadarı",
   "controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed": "Otomatik ilerleme güncellemeleri duraklatıldı. Hazır olma durumu doğrulanmadı.",
   "controls.resumeProgressUpdates": "İlerleme güncellemelerini sürdür",
   "controls.startRequested": "Başlatma istendi",

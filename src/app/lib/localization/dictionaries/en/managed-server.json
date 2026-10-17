@@ -215,8 +215,6 @@
   "resources.resourceUsage": "Resource usage",
   "resources.cpu": "CPU",
   "resources.memory": "Memory",
-  "resources.cpuOfAllocated": "{used} of {limit} vCPU allocated",
-  "resources.memoryOfAllocated": "{used} of {limit} GB allocated",
   "controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed": "Automatic progress updates are paused. Readiness has not been confirmed.",
   "controls.resumeProgressUpdates": "Resume progress updates",
   "controls.startRequested": "Start requested",

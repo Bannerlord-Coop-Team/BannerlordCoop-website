@@ -215,8 +215,6 @@
   "resources.resourceUsage": "Utilisation des ressources",
   "resources.cpu": "CPU",
   "resources.memory": "Mémoire",
-  "resources.cpuOfAllocated": "{used} sur {limit} vCPU alloués",
-  "resources.memoryOfAllocated": "{used} sur {limit} Go alloués",
   "controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed": "Les mises à jour automatiques de la progression sont suspendues. La disponibilité n’a pas été confirmée.",
   "controls.resumeProgressUpdates": "Reprendre les mises à jour de la progression",
   "controls.startRequested": "Démarrage demandé",

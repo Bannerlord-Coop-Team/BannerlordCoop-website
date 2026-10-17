@@ -215,8 +215,6 @@
   "resources.resourceUsage": "리소스 사용량",
   "resources.cpu": "CPU",
   "resources.memory": "메모리",
-  "resources.cpuOfAllocated": "할당된 {limit} vCPU 중 {used}",
-  "resources.memoryOfAllocated": "할당된 {limit}GB 중 {used}",
   "controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed": "자동 진행 상황 업데이트가 일시 중지되었습니다. 준비 상태는 아직 확인되지 않았습니다.",
   "controls.resumeProgressUpdates": "진행 상황 업데이트 재개",
   "controls.startRequested": "시작 요청됨",

@@ -215,8 +215,6 @@
   "resources.resourceUsage": "Uso de recursos",
   "resources.cpu": "CPU",
   "resources.memory": "Memória",
-  "resources.cpuOfAllocated": "{used} de {limit} vCPU alocadas",
-  "resources.memoryOfAllocated": "{used} de {limit} GB alocados",
   "controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed": "As atualizações automáticas de progresso estão pausadas. Ainda não foi confirmado se o servidor está pronto.",
   "controls.resumeProgressUpdates": "Retomar atualizações de progresso",
   "controls.startRequested": "Inicialização solicitada",
