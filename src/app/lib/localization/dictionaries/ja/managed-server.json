@@ -480,6 +480,7 @@
   "configuration.option.NeverExpire": "無期限",
   "configuration.option.AlwaysRetry": "常に再試行",
   "commands.sendShortcut": "{key}で送信",
+  "commands.historyShortcut": "{up} {down} で最近のコマンド",
   "settingsPanel.maintenanceSlot": "{slot} 米国中部時間",
   "settingsPanel.maintenanceHelp": "毎日の自動更新は米国中部時間（{timezone}）を使用し、夏時間の切り替えに対応します。メンテナンスは選択した時間帯の最初の15分以内に開始されます。この設定を保存しても、サーバーは再起動されません。",
   "transfers.fileImportReview": "ファイルのインポート · 確認",

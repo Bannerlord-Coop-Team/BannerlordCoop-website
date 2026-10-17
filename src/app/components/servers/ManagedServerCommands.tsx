@@ -7,6 +7,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent,
 import { ServerConsoleWorkspace, coopConsoleCommands } from "./ServerManagementWorkspace";
 import { ManagedServerConsole, createCommandOutputChannel } from "./ManagedServerConsole";
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
+import { IDLE_HISTORY_CURSOR, appendConsoleHistory, consoleHistoryKey, readConsoleHistory, stepConsoleHistory, writeConsoleHistory, type ConsoleHistoryCursor } from "./console-history";
 import { ManagedServerResources } from "./ManagedServerResources";
 import { ManagedServerRuntimeControls } from "./ManagedServerRuntimeControls";
 import { ManagedServerStatusSlotContext } from "./ManagedServerPollingProvider";
@@ -50,6 +51,11 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
     const [sending, setSending] = useState(0);
     const [statusSlot, setStatusSlot] = useState<HTMLDivElement | null>(null);
     const [outputChannel] = useState(createCommandOutputChannel);
+    const historyKey = consoleHistoryKey(userId, server.serverId);
+    // Read on first render in the browser only, so server and client markup agree.
+    const [history, setHistory] = useState<{ key: string; entries: string[] } | null>(null);
+    const historyEntries = history?.key === historyKey ? history.entries : [];
+    const [historyCursor, setHistoryCursor] = useState<ConsoleHistoryCursor>(IDLE_HISTORY_CURSOR);
     const mounted = useRef(true);
     const canOperate = server.accessRole === "owner" || server.accessRole === "manager";
     const ready = canOperate && server.operationState === "running" && server.observedGameState === "running";
@@ -59,6 +65,42 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
         mounted.current = true;
         return () => { mounted.current = false; clearTimeout(sentTimer.current); };
     }, []);
+
+    useEffect(() => {
+        if (history?.key === historyKey) return;
+        const timeout = setTimeout(() => {
+            setHistory({ key: historyKey, entries: readConsoleHistory(window.localStorage, historyKey) });
+            setHistoryCursor(IDLE_HISTORY_CURSOR);
+        }, 0);
+        return () => clearTimeout(timeout);
+    }, [history, historyKey]);
+
+    /** Records a sent command as the newest history entry and leaves history navigation. */
+    function remember(command: string) {
+        const entries = appendConsoleHistory(readConsoleHistory(window.localStorage, historyKey), command);
+        writeConsoleHistory(window.localStorage, historyKey, entries);
+        setHistory({ key: historyKey, entries });
+        setHistoryCursor(IDLE_HISTORY_CURSOR);
+    }
+
+    /** Recalls older or newer sent commands with Up and Down, keeping the caret at the end. */
+    function browseHistory(event: KeyboardEvent<HTMLInputElement>) {
+        if ((event.key !== "ArrowUp" && event.key !== "ArrowDown") || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey
+            || event.nativeEvent.isComposing) return false;
+        const step = stepConsoleHistory(historyEntries, historyCursor, draft, event.key === "ArrowUp" ? "older" : "newer");
+        if (step === null) return false;
+        event.preventDefault();
+        setHistoryCursor(step.cursor);
+        setDraft(step.draft);
+        setAtEnd(true);
+        setFeedback(current => current?.kind === "invalid" ? null : current);
+        const input = event.currentTarget;
+        requestAnimationFrame(() => {
+            input.setSelectionRange(step.draft.length, step.draft.length);
+            input.scrollLeft = input.scrollWidth;
+        });
+        return true;
+    }
 
     /** Shows the stored result when the live stream never rendered one, such as an overlong or missed line. */
     async function recoverMissedOutput(reference: ConsoleReference, framesBefore: number) {
@@ -82,8 +124,14 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
     /** Inserts a supported cheat template without sending it to the server. */
     function selectCommand(command: string) {
         setDraft(command);
+        setHistoryCursor(IDLE_HISTORY_CURSOR);
         setFeedback(current => current?.kind === "invalid" ? null : current);
         inputRef.current?.focus();
+    }
+
+    /** Handles composer shortcuts: Up and Down for history, Tab to accept the completion ghost. */
+    function handleComposerKey(event: KeyboardEvent<HTMLInputElement>) {
+        if (!browseHistory(event)) completeWithTab(event);
     }
 
     /** Accepts the visible ghost with Tab without sending or interrupting normal focus navigation. */
@@ -121,6 +169,7 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
             inputRef.current?.focus();
             return;
         }
+        remember(input.command);
         setDraft("");
         clearTimeout(sentTimer.current);
         setFeedback(null);
@@ -176,6 +225,7 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
                                 onChange={event => {
                                     const input = event.currentTarget;
                                     setDraft(input.value);
+                                    setHistoryCursor(IDLE_HISTORY_CURSOR);
                                     setAtEnd(input.selectionStart === input.value.length && input.selectionEnd === input.value.length);
                                     setFeedback(current => current?.kind === "invalid" ? null : current);
                                 }}
@@ -184,7 +234,7 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
                                     const input = event.currentTarget;
                                     setAtEnd(input.selectionStart === input.value.length && input.selectionEnd === input.value.length);
                                 }}
-                                onScroll={event => setScrollLeft(event.currentTarget.scrollLeft)} onKeyDown={completeWithTab}
+                                onScroll={event => setScrollLeft(event.currentTarget.scrollLeft)} onKeyDown={handleComposerKey}
                                 disabled={!ready} maxLength={MAXIMUM_CONSOLE_COMMAND_LENGTH} title={ready ? t("commands.enterOneCoopCommand") : t("commands.commandsRequireOwnerOrManagerAccessAndARunningHealthy")}
                                 autoComplete="off" aria-autocomplete="inline" aria-describedby={describedBy} aria-invalid={feedback?.kind === "invalid" ? true : undefined} spellCheck={false} placeholder="coop.…"
                                 className="min-h-11 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold disabled:opacity-40 aria-[invalid=true]:border-red-400/70"
@@ -202,7 +252,8 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
                             : <p role="alert" className="text-sm leading-6 text-red-300">{feedback.text}</p>)}
                     </div>
                 </form>
-                <p id={`${id}-shortcuts`} className="text-xs text-foreground-muted">{rich("commands.sendShortcut", { key: <kbd className="font-mono">{t("commands.enter")}</kbd> })}</p>
+                <p id={`${id}-shortcuts`} className="text-xs text-foreground-muted">{rich("commands.sendShortcut", { key: <kbd className="font-mono">{t("commands.enter")}</kbd> })}
+                    {" · "}{rich("commands.historyShortcut", { up: <kbd className="font-mono">↑</kbd>, down: <kbd className="font-mono">↓</kbd> })}</p>
             </div>
         </section>
     </ServerConsoleWorkspace>;

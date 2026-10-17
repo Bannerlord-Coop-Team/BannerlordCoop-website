@@ -131,7 +131,7 @@ it("places only the input and Send below live output in the same card while idle
     expect(form.closest("section")).toBe(output.closest("section"));
     expect(output.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(container.querySelector('[aria-label="Command result"]')).toBeNull();
-    expect(form.nextElementSibling!.textContent).toBe("Enter to send");
+    expect(form.nextElementSibling!.textContent).toBe("Enter to send · ↑ ↓ for recent commands");
     expect(form.nextElementSibling!.nextElementSibling).toBeNull();
     expect(form.querySelectorAll("input")).toHaveLength(1);
     expect(form.querySelectorAll("button")).toHaveLength(1);
@@ -284,7 +284,7 @@ it("explains a non-coop command directly under the input and points to the comma
     expect(input.getAttribute("aria-describedby")!.split(" ")).toContain(alert.parentElement!.id);
     expect(input.value).toBe("status");
     expect(document.activeElement).toBe(input);
-    expect(input.form!.nextElementSibling!.textContent).toBe("Enter to send");
+    expect(input.form!.nextElementSibling!.textContent).toBe("Enter to send · ↑ ↓ for recent commands");
     expect(input.form!.nextElementSibling!.nextElementSibling).toBeNull();
     await typeDraft("coop.help");
     expect(input.form!.querySelector('[role="alert"]')).toBeNull();
@@ -323,3 +323,66 @@ vi.mock("@/app/lib/localization/server", () => ({
     getMessages: async () => serverTestMessages,
     getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
 }));
+
+/** Dispatches an arrow key and reports whether history navigation consumed it. */
+async function arrow(input: HTMLInputElement, key: "ArrowUp" | "ArrowDown") {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    await act(async () => { input.dispatchEvent(event); });
+    return event.defaultPrevented;
+}
+/** Sends a typed command through the composer and lets the stored history load. */
+async function sendDraft(value: string) {
+    await typeDraft(value);
+    await act(async () => button("Send").click());
+}
+
+it("recalls sent commands with Up and Down like a terminal, restoring the unsent draft", async () => {
+    window.localStorage.clear();
+    await mount();
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!;
+    expect(await arrow(input, "ArrowUp")).toBe(false);
+    await sendDraft("coop.help");
+    await sendDraft("coop.debug.get_time_mode");
+    await sendDraft("coop.debug.get_time_mode");
+    await typeDraft("coop.unsent");
+    expect(await arrow(input, "ArrowUp")).toBe(true);
+    expect(input.value).toBe("coop.debug.get_time_mode");
+    expect(await arrow(input, "ArrowUp")).toBe(true);
+    expect(input.value).toBe("coop.help");
+    expect(await arrow(input, "ArrowUp")).toBe(true);
+    expect(input.value).toBe("coop.help");
+    expect(await arrow(input, "ArrowDown")).toBe(true);
+    expect(input.value).toBe("coop.debug.get_time_mode");
+    expect(await arrow(input, "ArrowDown")).toBe(true);
+    expect(input.value).toBe("coop.unsent");
+    expect(await arrow(input, "ArrowDown")).toBe(false);
+    expect(mocks.submit).toHaveBeenCalledTimes(3);
+});
+
+it("keeps history per account and server across reloads, and editing a recalled command starts a new draft", async () => {
+    window.localStorage.clear();
+    await mount();
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    await sendDraft("coop.help");
+    await sendDraft("coop.debug.get_time_mode");
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await mount();
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!;
+    expect(await arrow(input, "ArrowUp")).toBe(true);
+    expect(input.value).toBe("coop.debug.get_time_mode");
+    await typeDraft("coop.debug.get_time_mode extra");
+    expect(await arrow(input, "ArrowDown")).toBe(false);
+    expect(await arrow(input, "ArrowUp")).toBe(true);
+    expect(input.value).toBe("coop.debug.get_time_mode");
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await mount({ serverId: "44444444-4444-4444-8444-444444444444" });
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    const other = container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!;
+    expect(await arrow(other, "ArrowUp")).toBe(false);
+    expect(other.value).toBe("");
+});
