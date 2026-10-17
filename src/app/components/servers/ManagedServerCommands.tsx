@@ -7,6 +7,8 @@ import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent,
 import { ServerConsoleWorkspace, coopConsoleCommands } from "./ServerManagementWorkspace";
 import { ManagedServerConsole, createCommandOutputChannel } from "./ManagedServerConsole";
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
+import { ManagedServerResources } from "./ManagedServerResources";
+import { ManagedServerRuntimeControls } from "./ManagedServerRuntimeControls";
 import { ManagedServerStatusSlotContext } from "./ManagedServerPollingProvider";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { checkManagedConsoleCommand, submitManagedConsoleCommand } from "@/app/servers/managed-server-console-actions";
@@ -153,10 +155,14 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
                 <div className="border-b border-white/10">
                     <div className="flex flex-wrap items-center gap-3 p-3 sm:px-4">
                         <h2 id={`${id}-heading`} className="mr-auto flex items-center gap-2 text-sm font-semibold"><Terminal className="size-4 text-gold" aria-hidden="true" />{t("commands.gameConsole")}</h2>
-                        <div className="order-last basis-full sm:order-none sm:basis-auto">{controls}</div>
+                        <div className="order-last flex basis-full flex-wrap items-start gap-2 sm:order-none sm:basis-auto">
+                            {canOperate && <div className="flex flex-wrap gap-2"><ManagedServerRuntimeControls server={server} userId={userId} ready={ready} /></div>}
+                            {controls}
+                        </div>
                         <DownloadServerLogButton serverId={server.serverId} userId={userId} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm text-foreground-muted hover:bg-white/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40" />
                     </div>
-                    <div ref={setStatusSlot} className="px-3 pb-3 empty:hidden sm:px-4" />
+                    <ManagedServerResources serverId={server.serverId} running={server.operationState === "running" && server.observedGameState === "running"} />
+                    <div ref={setStatusSlot} className="flex flex-col items-start gap-2 px-3 pb-3 empty:hidden sm:px-4" />
                 </div>
             </ManagedServerStatusSlotContext.Provider>
             <ManagedServerConsole serverId={server.serverId} operationState={server.operationState} observedGameState={server.observedGameState} outputChannel={outputChannel} />

@@ -6,6 +6,7 @@ import {
     consoleReconnectDelay,
     decodeConsoleStreamChunk,
     isScrolledToBottom,
+    parseCampaignSpeed,
     parseConsoleControlLine,
     parseConsoleEvent,
 } from "./ManagedServerConsole";
@@ -16,6 +17,21 @@ import {
 } from "../../lib/console/stream-handler";
 
 const SERVER_ID = "11111111-1111-4111-8111-111111111111";
+
+test("reads campaign speed from the server pulse and set_time_mode results only", () => {
+    const pulse = (mode: string) => `[DedicatedServer] pulse: time=Summer 1, 1084 timeMode=${mode} players=0 parties=1161`;
+    assert.equal(parseCampaignSpeed(pulse("Stop")), "pause");
+    assert.equal(parseCampaignSpeed(pulse("FastForwardStop")), "pause");
+    assert.equal(parseCampaignSpeed(pulse("StoppablePlay")), "play-1x");
+    assert.equal(parseCampaignSpeed(pulse("UnstoppablePlay")), "play-1x");
+    assert.equal(parseCampaignSpeed(pulse("StoppableFastForward")), "play-2x");
+    assert.equal(parseCampaignSpeed(pulse("UnstoppableFastForwardForPartyWaitTime")), "play-2x");
+    assert.equal(parseCampaignSpeed(`[DedicatedServer] pulse: time=? timeMode= players=0`), null);
+    assert.equal(parseCampaignSpeed("Time control set to Play_2x"), "play-2x");
+    assert.equal(parseCampaignSpeed("Time control set to Pause"), "pause");
+    assert.equal(parseCampaignSpeed("Time control force-set for live testing to Play_1x"), "play-1x");
+    assert.equal(parseCampaignSpeed("player said timeMode=Stop"), null);
+});
 
 test("parses only typed bounded line events", () => {
     assert.deepEqual(parseConsoleEvent('event: line\ndata: "hello"'), { type: "line", text: "hello" });

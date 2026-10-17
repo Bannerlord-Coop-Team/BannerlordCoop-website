@@ -101,6 +101,37 @@ export async function getMyServerStartStatus(accessToken: string, serverId: stri
     return value as ManagedStartStatus;
 }
 
+/** CPU and memory of one running server's own allocation (its cgroup), not the whole VPS it shares. */
+export type ManagedServerResources = {
+    observedAt: string;
+    cpuVcpus: number;
+    cpuLimitVcpus: number;
+    memoryUsedBytes: number;
+    memoryLimitBytes: number;
+};
+
+/** Reads current usage, or null when the server is not running or its runner could not be sampled. */
+export async function getMyServerResources(accessToken: string, serverId: string): Promise<ManagedServerResources | null> {
+    if (!REQUEST_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid managed server ID.");
+    const value = await readOwner(accessToken, { operation: "server-resources", input: { serverId } },
+        ownerReadSignal(accessToken, AbortSignal.timeout(10_000)));
+    if (!isRecord(value) || !hasExactKeys(value, ["serverId", "resources"]) || value.serverId !== serverId) {
+        throw new MyServersApiError("invalid_response", "Invalid server resources.");
+    }
+    if (value.resources === null) return null;
+    const resources = value.resources;
+    const finite = (number: unknown, maximum: number) => typeof number === "number" && Number.isFinite(number) && number >= 0 && number <= maximum;
+    if (!isRecord(resources) || !hasExactKeys(resources, ["observedAt", "cpuVcpus", "cpuLimitVcpus", "memoryUsedBytes", "memoryLimitBytes"])
+        || typeof resources.observedAt !== "string" || Number.isNaN(Date.parse(resources.observedAt))
+        || !finite(resources.cpuVcpus, 1_024) || !finite(resources.cpuLimitVcpus, 1_024) || resources.cpuLimitVcpus === 0
+        || !Number.isSafeInteger(resources.memoryUsedBytes) || !Number.isSafeInteger(resources.memoryLimitBytes)
+        || (resources.memoryUsedBytes as number) < 0 || (resources.memoryLimitBytes as number) < 1
+        || (resources.memoryUsedBytes as number) > (resources.memoryLimitBytes as number)) {
+        throw new MyServersApiError("invalid_response", "Invalid server resources.");
+    }
+    return resources as ManagedServerResources;
+}
+
 // Validates the owner token and bounds a read by the caller's signal and a 30-second timeout.
 function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
     if (accessToken.length < 20 || accessToken.length > 8_192) {
@@ -117,7 +148,8 @@ async function readOwner(accessToken: string, request:
     | { operation: "server-summary"; input: { serverId: string } }
     | OnboardingSummaryRequest
     | { operation: "server-deletion-status"; input: { serverId: string } }
-    | { operation: "server-start-status"; input: { serverId: string; jobId: string } }, signal: AbortSignal) {
+    | { operation: "server-start-status"; input: { serverId: string; jobId: string } }
+    | { operation: "server-resources"; input: { serverId: string } }, signal: AbortSignal) {
     const requestId = crypto.randomUUID();
     let response: Response;
     try {

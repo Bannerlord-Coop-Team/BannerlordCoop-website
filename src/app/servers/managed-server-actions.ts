@@ -10,7 +10,7 @@ import {
     requestMyServerPassword,
     type MyServerOperation,
 } from "@/app/lib/hosting/my-servers";
-import { getMyServerDeletionStatus, getMyServerStartStatus } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerDeletionStatus, getMyServerResources, getMyServerStartStatus, type ManagedServerResources } from "@/app/lib/hosting/my-servers-server";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -170,6 +170,19 @@ export async function readManagedServerStartStatus(serverId: string, jobId: stri
             return { ok: false as const, retryable: false, message: t("action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain") };
         }
         return { ok: false as const, retryable: true, message: t("action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing") };
+    }
+}
+
+/** Reauthenticates each usage read; failures are quiet because the meters simply hide until the next read. */
+export async function readManagedServerResources(serverId: string): Promise<{ ok: true; resources: ManagedServerResources | null } | { ok: false }> {
+    if (typeof serverId !== "string" || !SERVER_ID.test(serverId)) return { ok: false };
+    try {
+        const supabase = await getSupabaseServerClient();
+        const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
+        if (!user || !session) return { ok: false };
+        return { ok: true, resources: await getMyServerResources(session.access_token, serverId) };
+    } catch {
+        return { ok: false };
     }
 }
 
