@@ -51,17 +51,24 @@ export function ManagedServerResources({ serverId, running }: { serverId: string
     );
 }
 
-// Renders one labelled usage bar with its percentage.
+// Renders one labelled usage bar with its percentage. Past 100% the bar rescales so the allocation becomes a
+// marked point and the burst beyond it shows in its own colour.
 function Meter({ label, share, percent }: { label: string; share: number; percent: string }) {
+    const scale = Math.max(1, share);
+    const bursting = share > 1;
     return (
         <div className="flex min-w-44 flex-1 flex-col gap-1.5">
             <div className="flex items-baseline justify-between text-xs text-foreground-muted">
                 <span>{label}</span>
                 <span className="text-sm font-semibold tabular-nums text-foreground">{percent}</span>
             </div>
-            <div role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(share * 100)} aria-valuetext={percent}
-                className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div className={`h-full rounded-full ${share >= 0.9 ? "bg-red-400" : "bg-gold"}`} style={{ width: `${share * 100}%` }} />
+            <div role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={Math.round(scale * 100)} aria-valuenow={Math.round(share * 100)} aria-valuetext={percent}
+                className="relative flex h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div className={`h-full ${bursting ? "" : "rounded-full"} ${share >= 0.9 ? "bg-red-400" : "bg-gold"}`} style={{ width: `${(Math.min(share, 1) / scale) * 100}%` }} />
+                {bursting && <>
+                    <div data-burst className="h-full rounded-r-full bg-sky-400" style={{ width: `${((share - 1) / scale) * 100}%` }} />
+                    <div aria-hidden className="absolute inset-y-0 w-0.5 bg-background" style={{ left: `${(1 / scale) * 100}%` }} />
+                </>}
             </div>
         </div>
     );
