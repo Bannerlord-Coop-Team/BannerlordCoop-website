@@ -212,6 +212,8 @@
   "runtime.save": "저장",
   "runtime.startTheServerToChangeSpeedOrSave": "캠페인 속도를 바꾸거나 저장하려면 서버를 시작하세요.",
   "runtime.sentCommandOutputAppearsBelow": "{command}을(를) 보냈습니다. 출력은 아래 콘솔에 표시됩니다.",
+  "runtime.theCampaignStaysPausedUntilAPlayerJoins": "플레이어가 참가할 때까지 캠페인은 일시 정지 상태로 유지됩니다.",
+  "runtime.theServerIsHoldingTheCampaignAtThisSpeed": "서버가 캠페인을 이 속도로 유지하고 있습니다.",
   "resources.resourceUsage": "리소스 사용량",
   "resources.cpu": "CPU",
   "resources.memory": "메모리",

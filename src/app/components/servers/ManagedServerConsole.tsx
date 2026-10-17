@@ -88,6 +88,17 @@ export function parseCampaignSpeed(text: string): CampaignSpeed | null {
     return mode.includes("Play") ? "play-1x" : null;
 }
 
+/**
+ * Reads a speed request the game held back, such as "Time control request Play_1x limited to Pause by
+ * \"DisconnectedPlayersServerHandler.PlayersConnectedPolicy\"" while nobody is connected.
+ */
+export function parseCampaignSpeedLimit(text: string): { speed: CampaignSpeed; heldBy: "no-players" | "policy" } | null {
+    const match = /\bTime control request (?:Pause|Play_1x|Play_2x) limited to (Pause|Play_1x|Play_2x) by "([^"]*)"/u.exec(text);
+    if (!match) return null;
+    const speed = match[1] === "Pause" ? "pause" : match[1] === "Play_1x" ? "play-1x" : "play-2x";
+    return { speed, heldBy: match[2].endsWith("PlayersConnectedPolicy") ? "no-players" : "policy" };
+}
+
 /** Hides container-host logging and control records that are incomplete, such as a truncated command list. */
 export function isHiddenConsoleLine(line: string) {
     if (HOST_LOG_LINE.test(line)) return true;
@@ -224,6 +235,8 @@ function useConsoleStream(serverId: string, run: ConsoleRun, outputChannel?: Com
                             if (control?.kind === "managed-command" && channelRef.current) channelRef.current.framesSeen += 1;
                             const speed = parseCampaignSpeed(control?.kind === "managed-command" ? control.output : event.text);
                             if (speed) signals?.publish({ type: "speed", serverId, connection, speed });
+                            const limit = parseCampaignSpeedLimit(event.text);
+                            if (limit) signals?.publish({ type: "speed", serverId, connection, ...limit });
                         } else if (event.type === "expired") {
                             ending = "expired";
                         } else if (event.type === "ended") {

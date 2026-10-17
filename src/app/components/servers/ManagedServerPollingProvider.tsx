@@ -49,7 +49,7 @@ export type CampaignSpeed = "pause" | "play-1x" | "play-2x";
 export type ManagedConsoleSignal =
     | { type: "opened"; serverId: string; connection: number }
     | { type: "phase"; serverId: string; connection: number; phase: ManagedGamePhase; detail?: string }
-    | { type: "speed"; serverId: string; connection: number; speed: CampaignSpeed }
+    | { type: "speed"; serverId: string; connection: number; speed: CampaignSpeed; heldBy?: "no-players" | "policy" }
     | { type: "closed"; serverId: string; connection: number; runEnded: boolean }
     | { type: "unavailable"; serverId: string };
 

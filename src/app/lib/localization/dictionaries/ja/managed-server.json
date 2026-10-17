@@ -212,6 +212,8 @@
   "runtime.save": "保存",
   "runtime.startTheServerToChangeSpeedOrSave": "キャンペーン速度の変更や保存を行うにはサーバーを起動してください。",
   "runtime.sentCommandOutputAppearsBelow": "{command} を送信しました。出力は下のコンソールに表示されます。",
+  "runtime.theCampaignStaysPausedUntilAPlayerJoins": "プレイヤーが参加するまでキャンペーンは一時停止したままです。",
+  "runtime.theServerIsHoldingTheCampaignAtThisSpeed": "サーバーがキャンペーンをこの速度に保っています。",
   "resources.resourceUsage": "リソース使用状況",
   "resources.cpu": "CPU",
   "resources.memory": "メモリ",
