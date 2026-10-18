@@ -99,7 +99,8 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         for (const [channel, description] of Object.entries(descriptions)) {
             const input = container.querySelector<HTMLInputElement>(`input[value="${channel}"]`)!;
             const option = input.closest("label")!;
-            expect(option.title).toBe(description);
+            // A native title would show a second, browser-drawn tooltip under the styled one.
+            expect(option.hasAttribute("title")).toBe(false);
             expect(input.getAttribute("aria-describedby")).toBe(`release-${channel}-description`);
             expect(container.querySelector(`#release-${channel}-description`)?.textContent).toContain(description);
         }
