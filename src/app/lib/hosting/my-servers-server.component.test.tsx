@@ -354,6 +354,7 @@ it.each([
     { serverId: server.serverId, notices: [{ ...notice, title: "x".repeat(121) }] },
     { serverId: server.serverId, notices: [{ ...notice, body: "" }] },
     { serverId: server.serverId, notices: [{ ...notice, body: "bell" + String.fromCharCode(7) }] },
+    { serverId: server.serverId, notices: [{ ...notice, title: "delete" + String.fromCharCode(127) }] },
     { serverId: server.serverId, notices: [{ ...notice, parameters: { nested: { value: 1 } } }] },
     { serverId: server.serverId, notices: [{ ...notice, parameters: [] }] },
     { serverId: server.serverId, notices: [{ ...notice, createdAt: "yesterday" }] },
@@ -362,6 +363,13 @@ it.each([
 ])("rejects malformed or wrong-server notices %j", async result => {
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
     await expect(getMyServerNotices(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
+});
+
+it("reads notices whose text has characters the control plane accepts, such as a pasted next-line", async () => {
+    // U+0085 and the other C1 characters pass the control plane's validation, so they must not hide the banner.
+    const pasted = { ...notice, title: "Maintenance\u0085tonight", body: "Line one\u0085line two\n\tindented" };
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { serverId: server.serverId, notices: [pasted] }));
+    expect(await getMyServerNotices(TOKEN, server.serverId)).toEqual([pasted]);
 });
 
 it("validates the server ID and token before reading notices", async () => {

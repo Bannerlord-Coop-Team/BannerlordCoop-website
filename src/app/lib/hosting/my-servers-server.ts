@@ -154,12 +154,21 @@ function isMyServerNotice(value: unknown): value is MyServerNotice {
     const parameters = value.parameters;
     return typeof value.noticeId === "string" && NOTICE_ID.test(value.noticeId)
         && NOTICE_KINDS.has(value.kind as string) && (value.severity === "info" || value.severity === "warning")
-        && typeof value.title === "string" && value.title.length >= 1 && value.title.length <= 120 && !/[\p{Cc}]/u.test(value.title)
-        && typeof value.body === "string" && value.body.length >= 1 && value.body.length <= 2_000 && !/[^\P{Cc}\t\n]/u.test(value.body)
+        && typeof value.title === "string" && value.title.length >= 1 && value.title.length <= 120 && !hasNoticeControlCharacter(value.title, false)
+        && typeof value.body === "string" && value.body.length >= 1 && value.body.length <= 2_000 && !hasNoticeControlCharacter(value.body, true)
         && isRecord(parameters) && Object.keys(parameters).length <= 16 && Object.entries(parameters).every(([name, parameter]) => NOTICE_PARAMETER_NAME.test(name)
             && (parameter === null || typeof parameter === "boolean" || (typeof parameter === "number" && Number.isFinite(parameter))
-                || (typeof parameter === "string" && parameter.length <= 256 && !/[\p{Cc}]/u.test(parameter))))
+                || (typeof parameter === "string" && parameter.length <= 256 && !hasNoticeControlCharacter(parameter, false))))
         && timestamp(value.createdAt) && (value.expiresAt === null || timestamp(value.expiresAt));
+}
+
+/** The control plane's rule, so every notice it stores is readable: no C0 control or DEL, except tab and newline in a message. */
+function hasNoticeControlCharacter(value: string, allowWhitespace: boolean) {
+    for (const character of value) {
+        const code = character.codePointAt(0)!;
+        if (code === 127 || (code < 32 && !(allowWhitespace && (code === 9 || code === 10)))) return true;
+    }
+    return false;
 }
 
 // Validates the owner token and bounds a read by the caller's signal and a 30-second timeout.
