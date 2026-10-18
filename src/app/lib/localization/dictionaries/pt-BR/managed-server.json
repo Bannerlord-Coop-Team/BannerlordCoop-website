@@ -828,5 +828,19 @@
   "autosaves.noEarlierAutosavesYet": "Ainda não há salvamentos automáticos anteriores. Eles aparecem depois que o servidor salvar automaticamente algumas vezes.",
   "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "O salvamento automático não foi carregado. A lista agora mostra os salvamentos automáticos atuais do servidor; confira os horários de salvamento antes de tentar novamente.",
   "page.recentAutosavesCouldNotBeLoaded": "Não foi possível carregar os salvamentos automáticos recentes agora. Os backups armazenados não são afetados; atualize a página para tentar novamente.",
-  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Não foi possível carregar esse salvamento automático. Verifique se o servidor de jogo está parado, depois atualize e escolha um salvamento automático que ainda esteja na lista."
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Não foi possível carregar esse salvamento automático. Verifique se o servidor de jogo está parado, depois atualize e escolha um salvamento automático que ainda esteja na lista.",
+  "notices.regionLabel": "Avisos do servidor",
+  "notices.info": "Aviso",
+  "notices.warning": "Alerta",
+  "notices.dismiss": "Dispensar",
+  "notices.dismissNamed": "Dispensar aviso: {title}",
+  "notices.dismissReadOnly": "Você está vendo este servidor como outro usuário, então não pode dispensar os avisos dele.",
+  "notices.dismissFailed": "Não foi possível dispensar este aviso. Tente novamente em instantes.",
+  "notices.signInAgain": "Entre novamente para dispensar este aviso.",
+  "notices.placementScheduledTitle": "Mudança programada para outra máquina",
+  "notices.placementScheduledBody": "Este servidor vai mudar para outra máquina entre {start} e {end}. Os jogadores recebem um aviso no jogo, a partida para por alguns minutos e o endereço e a porta do servidor mudam.",
+  "notices.placementScheduledBodyAround": "Este servidor vai mudar para outra máquina por volta de {time}. Os jogadores recebem um aviso no jogo, a partida para por alguns minutos e o endereço e a porta do servidor mudam.",
+  "notices.placementCompletedTitle": "Mudou para outra máquina",
+  "notices.placementCompletedBody": "Este servidor mudou para outra máquina para reduzir a lentidão. O novo endereço é {address}; os jogadores precisam dele para entrar.",
+  "notices.placementCompletedBodyNoAddress": "Este servidor mudou para outra máquina para reduzir a lentidão. O endereço mudou, então os jogadores precisam do novo para entrar."
 }

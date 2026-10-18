@@ -827,5 +827,19 @@
   "autosaves.noEarlierAutosavesYet": "아직 이전 자동 저장이 없습니다. 서버가 몇 번 자동 저장한 후에 표시됩니다.",
   "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "자동 저장을 불러오지 않았습니다. 이제 목록에 서버의 현재 자동 저장이 표시됩니다. 저장 시간을 확인한 후 다시 시도하세요.",
   "page.recentAutosavesCouldNotBeLoaded": "지금은 최근 자동 저장을 불러올 수 없습니다. 보관된 백업에는 영향이 없습니다. 페이지를 새로 고쳐 다시 시도하세요.",
-  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "해당 자동 저장을 불러올 수 없습니다. 게임 서버가 중지되었는지 확인한 다음 새로 고치고 아직 목록에 있는 자동 저장을 선택하세요."
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "해당 자동 저장을 불러올 수 없습니다. 게임 서버가 중지되었는지 확인한 다음 새로 고치고 아직 목록에 있는 자동 저장을 선택하세요.",
+  "notices.regionLabel": "서버 공지",
+  "notices.info": "공지",
+  "notices.warning": "경고",
+  "notices.dismiss": "닫기",
+  "notices.dismissNamed": "공지 닫기: {title}",
+  "notices.dismissReadOnly": "다른 사용자로 이 서버를 보고 있으므로 공지를 닫을 수 없습니다.",
+  "notices.dismissFailed": "이 공지를 닫지 못했습니다. 잠시 후 다시 시도하세요.",
+  "notices.signInAgain": "이 공지를 닫으려면 다시 로그인하세요.",
+  "notices.placementScheduledTitle": "새 머신으로 이전 예정",
+  "notices.placementScheduledBody": "이 서버는 {start}부터 {end} 사이에 새 머신으로 이전됩니다. 플레이어에게 게임 내 경고가 표시되고, 게임이 몇 분간 중지되며, 서버 주소와 포트가 바뀝니다.",
+  "notices.placementScheduledBodyAround": "이 서버는 {time}쯤 새 머신으로 이전됩니다. 플레이어에게 게임 내 경고가 표시되고, 게임이 몇 분간 중지되며, 서버 주소와 포트가 바뀝니다.",
+  "notices.placementCompletedTitle": "새 머신으로 이전됨",
+  "notices.placementCompletedBody": "느려짐을 줄이기 위해 이 서버를 새 머신으로 이전했습니다. 새 주소는 {address}이며, 플레이어가 접속하려면 이 주소가 필요합니다.",
+  "notices.placementCompletedBodyNoAddress": "느려짐을 줄이기 위해 이 서버를 새 머신으로 이전했습니다. 주소가 바뀌었으므로 플레이어가 접속하려면 새 주소가 필요합니다."
 }

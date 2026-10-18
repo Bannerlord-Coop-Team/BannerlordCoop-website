@@ -33,6 +33,15 @@ test("gives destructive cards a concrete warning", () => {
     assert.match(destructiveExplanation("relocate-server"), /address and game port/iu);
 });
 
+test("explains server notices and the automatic executor instead of retired owner announcements", () => {
+    assert.match(operationExplanation("create-notice"), /until each person dismisses it/iu);
+    assert.match(operationExplanation("create-notice"), /not an email or a Discord message/iu);
+    assert.match(operationExplanation("withdraw-notice"), /for everyone/iu);
+    assert.match(operationExplanation("set-placement-executor"), /by itself/iu);
+    assert.match(destructiveExplanation("set-placement-executor"), /address/iu);
+    assert.doesNotMatch(operationExplanation("announce-owners"), /notification campaign/iu);
+});
+
 test("explains that a placement plan relocates nothing by itself", () => {
     assert.match(operationExplanation("placement-plan"), /dry run/iu);
     assert.match(operationExplanation("placement-plan"), /nothing is reserved, queued or relocated/iu);

@@ -10,9 +10,10 @@ export type ControlPlaneView =
     | "audit"
     | "operations"
     | "relocate"
-    | "placement";
+    | "placement"
+    | "notices";
 
-const TAB_WIDTHS = ["w-24", "w-15", "w-22", "w-18", "w-24", "w-19", "w-28", "w-24", "w-26"];
+const TAB_WIDTHS = ["w-24", "w-15", "w-22", "w-18", "w-24", "w-19", "w-28", "w-24", "w-26", "w-22"];
 
 export function ControlPlanePageSkeleton() {
     return (
@@ -60,7 +61,7 @@ export function ControlPlaneViewSkeleton({ view }: { view: ControlPlaneView }) {
                 {view === "operations" && <OperationsSkeleton />}
                 {view === "releases" && <ReleaseSkeleton />}
                 {view === "placement" && <PlacementSkeleton />}
-                {["vps", "servers", "jobs", "audit", "relocate"].includes(view) && <TableSkeleton view={view} />}
+                {["vps", "servers", "jobs", "audit", "relocate", "notices"].includes(view) && <TableSkeleton view={view} />}
             </div>
         </section>
     );

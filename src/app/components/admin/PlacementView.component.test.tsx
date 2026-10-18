@@ -125,6 +125,20 @@ const data: PlacementViewData = {
     activeJobs: [],
 };
 
+const executor = {
+    settings: { enabled: false, maximumRelocationsPerDay: 2, minimumGainHours: 20, alwaysOnPolicy: "single-slot", noticeLeadHours: 24, updatedBy: null, reason: null, updatedAt: null },
+    relocations: [],
+};
+
+// Requests the view sent for one operation; the executor panel also reads its settings on mount.
+function calls(operation: string) {
+    return mocks.request.mock.calls.map(([request]) => request as { operation: string; input: Record<string, unknown> }).filter((request) => request.operation === operation);
+}
+
+function status(prefix: string) {
+    return [...container.querySelectorAll('[role="status"]')].find((item) => item.textContent?.startsWith(prefix)) ?? null;
+}
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -134,6 +148,7 @@ beforeEach(() => {
     Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value() { this.open = true; } });
     mocks.session.mockResolvedValue({ data: { session: { access_token: "test-only" } } });
     mocks.request.mockImplementation(async ({ operation, input }: { operation: string; input: { serverId?: string } }) => {
+        if (operation === "placement-executor") return executor;
         if (operation === "placement-plan") return plan;
         if (operation === "server-dashboard") return { dashboard: { server: managedServer(input.serverId!, "The Gang"), activeJob: null } };
         return { outcome: "enqueued", job: job("gang", "migrate-region") };
@@ -237,27 +252,30 @@ it("runs steps in order and follows a staging hop through the server's later ste
 
 it("runs the dry run only when asked, with progress, and renders the plan", async () => {
     let resolvePlan: (value: unknown) => void = () => undefined;
-    mocks.request.mockImplementationOnce(() => new Promise((resolve) => { resolvePlan = resolve; }));
+    const respond = mocks.request.getMockImplementation()!;
+    mocks.request.mockImplementation((request: { operation: string }) => request.operation === "placement-plan"
+        ? new Promise((resolve) => { resolvePlan = resolve; })
+        : respond(request));
     await act(async () => root.render(<PlacementView data={data} />));
-    expect(mocks.request).not.toHaveBeenCalled();
+    expect(calls("placement-plan")).toHaveLength(0);
     expect(container.textContent).toContain("Run a dry run to see the proposed placement.");
 
     await type(container.querySelector<HTMLInputElement>('input[name="maximumMoves"]')!, "8");
     await select(container.querySelector<HTMLSelectElement>('select[name="alwaysOnTargets"]')!, "none");
     await runPlan();
 
-    expect(mocks.request).toHaveBeenCalledOnce();
-    expect(mocks.request.mock.calls[0]?.[0]).toMatchObject({
+    expect(calls("placement-plan")).toHaveLength(1);
+    expect(calls("placement-plan")[0]).toMatchObject({
         accessToken: "test-only",
         operation: "placement-plan",
         input: { historyDays: 28, halfLifeDays: 14, maximumMoves: 8, minimumGainHours: 1, alwaysOnTargets: "none" },
     });
-    expect(container.querySelector('[role="status"]')?.textContent).toBe("Planning from reconcile history… 0 s");
+    expect(status("Planning")?.textContent).toBe("Planning from reconcile history… 0 s");
     expect(button(container, "Running").disabled).toBe(true);
 
     await act(async () => resolvePlan(plan));
 
-    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(status("Planning")).toBeNull();
     expect(row("Co-online pair-hours").textContent).toContain("30.5");
     expect(row("Co-online pair-hours").textContent).toContain("12.3");
     expect(row("Co-online pair-hours").textContent).toContain("−18.2");
@@ -289,7 +307,11 @@ it("runs the dry run only when asked, with progress, and renders the plan", asyn
 });
 
 it("explains a rate-limited dry run and keeps the form usable", async () => {
-    mocks.request.mockRejectedValueOnce(new ControlPlaneAdminError("rate_limited", "Too many requests.", true));
+    const respond = mocks.request.getMockImplementation()!;
+    mocks.request.mockImplementation(async (request: { operation: string }) => {
+        if (request.operation === "placement-plan") throw new ControlPlaneAdminError("rate_limited", "Too many requests.", true);
+        return respond(request);
+    });
     await act(async () => root.render(<PlacementView data={data} />));
     await runPlan();
 
@@ -302,7 +324,7 @@ it("opens a step's relocation on the planned VPS with the server's current gener
     await runPlan();
     await act(async () => button(moveRow(1), "Relocate").click());
 
-    expect(mocks.request.mock.calls[1]?.[0]).toMatchObject({ operation: "server-dashboard", input: { serverId: "gang" } });
+    expect(calls("server-dashboard")).toEqual([expect.objectContaining({ input: { serverId: "gang" } })]);
     const dialog = container.querySelector("dialog")!;
     expect(dialog.open).toBe(true);
     expect(dialog.textContent).toContain("Step 1 of the dry run: vps-uk-a → vps-uk-b.");
@@ -313,7 +335,7 @@ it("opens a step's relocation on the planned VPS with the server's current gener
 
     await act(async () => button(dialog, "Relocate").click());
 
-    expect(mocks.request.mock.calls[2]?.[0]).toMatchObject({
+    expect(calls("relocate-server")[0]).toMatchObject({
         operation: "relocate-server",
         input: { serverId: "gang", expectedUpdatedAt: "2026-10-18T12:30:00.000Z", targetRegion: "united-kingdom", targetServiceName: "vps-uk-b", reason: "Placement plan step 1" },
     });
@@ -330,9 +352,9 @@ it("opens a step's relocation on the planned VPS with the server's current gener
 });
 
 it("does not open a step while the server has another active job", async () => {
-    mocks.request.mockImplementation(async ({ operation, input }: { operation: string; input: { serverId?: string } }) => operation === "placement-plan"
-        ? plan
-        : { dashboard: { server: managedServer(input.serverId!, "The Gang"), activeJob: { ...job("gang", "backup") } } });
+    mocks.request.mockImplementation(async ({ operation, input }: { operation: string; input: { serverId?: string } }) => operation === "placement-executor"
+        ? executor
+        : operation === "placement-plan" ? plan : { dashboard: { server: managedServer(input.serverId!, "The Gang"), activeJob: { ...job("gang", "backup") } } });
     await act(async () => root.render(<PlacementView data={data} />));
     await runPlan();
     await act(async () => button(moveRow(1), "Relocate").click());

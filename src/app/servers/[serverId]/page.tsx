@@ -41,14 +41,15 @@ import {
     type LiveConsoleServer,
 } from "@/app/lib/console/servers";
 import { hasServerFleetAccess } from "@/app/lib/auth/roles";
-import type { MyServerSummary } from "@/app/lib/control-plane/types";
+import type { MyServerNotice, MyServerSummary } from "@/app/lib/control-plane/types";
 import {
     getMyServerBackupStatus,
     MyServersApiError,
     listAllMyServerBackups,
     type MyServerDeletionStatus,
 } from "@/app/lib/hosting/my-servers";
-import { getMyServerDeletionStatus, getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerDeletionStatus, getMyServerNotices, getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
+import { ManagedServerNoticeBanner } from "@/app/components/servers/ManagedServerNoticeBanner";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -188,9 +189,12 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
     const { t } = await getTranslations("managed-server");
     // Region names live with onboarding in the servers namespace, so both pages share one translation.
     const { t: tServers } = await getTranslations("servers");
-    const deletionStatus = server.accessRole === "owner"
-        ? await getMyServerDeletionStatus(accessToken, server.serverId, AbortSignal.timeout(5_000)).catch(() => null)
-        : null;
+    const [deletionStatus, notices] = await Promise.all([
+        server.accessRole === "owner"
+            ? getMyServerDeletionStatus(accessToken, server.serverId, AbortSignal.timeout(5_000)).catch(() => null)
+            : null,
+        readServerNotices(accessToken, server.serverId),
+    ]);
     const initializing = INITIALIZING_SERVER_STATES.has(server.operationState);
     const managedAccessLabels: Record<MyServerSummary["accessRole"], string> = {
         admin: t("page.readOnlyAdministrator"),
@@ -201,6 +205,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
 
     return <ServerManagementWorkspace
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.displayName}</h1>}
+        banner={noticeBanner(server.serverId, notices)}
         initialSection={initializing ? "Console" : initialSection}
         interactionLocked={initializing}
         address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
@@ -408,11 +413,15 @@ async function LiveServerManagementPage({
         }
     }
 
-    const deletionStatus = managedServer?.accessRole === "owner"
-        ? await getMyServerDeletionStatus(accessToken, managedServer.serverId, AbortSignal.timeout(5_000)).catch(() => null)
-        : null;
+    const [deletionStatus, notices] = await Promise.all([
+        managedServer?.accessRole === "owner"
+            ? getMyServerDeletionStatus(accessToken, managedServer.serverId, AbortSignal.timeout(5_000)).catch(() => null)
+            : null,
+        managedServer !== null ? readServerNotices(accessToken, managedServer.serverId) : null,
+    ]);
 
     return <ServerManagementWorkspace
+        banner={managedServer !== null ? noticeBanner(managedServer.serverId, notices) : undefined}
         name={<EditableServerName key={server.name} canEdit={canManageAssignments && managedServer === null} initialName={server.name} serverId={server.id} />}
         address={server.address}
         visibility={managedServer !== null
@@ -469,6 +478,15 @@ async function LiveServerManagementPage({
                 )}
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
+}
+
+// Notices are optional page content: a failed read, a slow one or an older control plane never blocks the page.
+function readServerNotices(accessToken: string, serverId: string) {
+    return getMyServerNotices(accessToken, serverId, AbortSignal.timeout(5_000)).catch(() => null);
+}
+
+function noticeBanner(serverId: string, notices: MyServerNotice[] | null) {
+    return notices !== null && notices.length > 0 ? <ManagedServerNoticeBanner serverId={serverId} notices={notices} /> : undefined;
 }
 
 const ACTIVE_BACKUP_STATES = new Set(["queued", "running", "retry-wait"]);

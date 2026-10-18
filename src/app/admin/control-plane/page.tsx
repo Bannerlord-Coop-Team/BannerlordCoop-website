@@ -12,6 +12,7 @@ import { ControlPlaneServerView } from "@/app/components/admin/ControlPlaneServe
 import { ControlPlaneJobsProgress } from "@/app/components/admin/ControlPlaneJobsProgress";
 import { RelocateView } from "@/app/components/admin/RelocateView";
 import { PlacementView } from "@/app/components/admin/PlacementView";
+import { NoticesView } from "@/app/components/admin/NoticesView";
 import { AuditTable, Panel, Definition, SectionHeading, State, Empty, ReleaseMetadata, shortId } from "@/app/components/admin/ControlPlanePresentation";
 import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
 import { hasAdminAccess } from "@/app/lib/auth/access";
@@ -50,6 +51,7 @@ import type {
     HostingPage,
     ManagedServer,
     OperationsData,
+    NoticesViewData,
     OverviewSummary,
     PlacementViewData,
     RelocateViewData,
@@ -69,6 +71,7 @@ import {
     CloudCog,
     History,
     ListChecks,
+    Megaphone,
     PackageCheck,
     ServerCog,
     ShieldCheck,
@@ -275,6 +278,7 @@ async function ControlPlaneViewContent({
             {!error && view === "operations" && <OperationsView data={data as OperationsData} accounts={accounts} />}
             {!error && view === "relocate" && <RelocateView data={data as RelocateViewData} query={query} accounts={accounts} />}
             {!error && view === "placement" && <PlacementView data={data as PlacementViewData} />}
+            {!error && view === "notices" && <NoticesView data={data as NoticesViewData} />}
         </>
     );
 }
@@ -377,6 +381,15 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             ]);
             return { inventory, regionCatalog: hostingRegions.regions, activeJobs: activeJobs.items } satisfies PlacementViewData;
         }
+        case "notices": {
+            // The first page of servers a notice can target; searching and the notice list load in the browser.
+            const servers = await readControlPlaneAdmin<HostingPage<ManagedServer>>({
+                accessToken: token, signal, ...identity,
+                operation: "servers",
+                input: { filter: {}, cursor: null, limit: 100 },
+            });
+            return { servers } satisfies NoticesViewData;
+        }
     }
 }
 
@@ -404,6 +417,7 @@ function ViewTabs({ active }: { active: View }) {
         { view: "operations", label: "Operations", icon: ListChecks },
         { view: "relocate", label: "Relocate", icon: ArrowLeftRight },
         { view: "placement", label: "Placement", icon: ChartNetwork },
+        { view: "notices", label: "Notices", icon: Megaphone },
     ];
     return (
         <nav aria-label="Control plane" className="mt-9 flex gap-2 overflow-x-auto border-b border-white/10 pb-3">
@@ -698,7 +712,7 @@ function chunk<T>(items: readonly T[], size: number): T[][] { const rows: T[][] 
 function enumOptions(values: readonly string[]): AdminActionOption[] { return values.map((value) => ({ label: value, value })); }
 function accountLabelMap(users: readonly WebsiteAccountSummary[]) { return Object.fromEntries(users.map(user => [user.accountId, user.label])); }
 function first(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
-function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations", "relocate", "placement"].includes(value ?? "") ? value as View : "overview"; }
+function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations", "relocate", "placement", "notices"].includes(value ?? "") ? value as View : "overview"; }
 function parseJobState(value: string | undefined): "failed" | "active" | null { return value === "failed" || value === "active" ? value : null; }
 function parseJobAction(value: string | undefined): string | null { return JOB_ACTION_FILTERS.includes(value as typeof JOB_ACTION_FILTERS[number]) ? value ?? null : null; }
 function parseCursor(value: string | undefined): string | null { const normalized = value?.trim() ?? ""; return normalized.length > 0 && normalized.length <= 4_096 ? normalized : null; }

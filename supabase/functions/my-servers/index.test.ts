@@ -584,3 +584,51 @@ test("relays an autosave precondition failure unchanged", async () => {
     assert.equal(response.status, 409);
     assert.deepEqual((await response.json()).error, error);
 });
+
+test("routes a notice dismissal through the closed owner operation with the caller's request ID", async () => {
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    const noticeId = "66666666-6666-4666-8666-666666666666";
+    const upstream: unknown[] = [];
+    let result: unknown = { dismissed: true };
+    const handler = createHandler(async (_url, init) => {
+        upstream.push(JSON.parse(String(init?.body)));
+        return successEnvelope(result);
+    });
+    const dismissal = { action: "dismiss-server-notice", serverId, noticeId };
+
+    const response = await handler(operationRequest(dismissal));
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).result, { dismissed: true });
+    assert.deepEqual(upstream, [{ version: 1, requestId: REQUEST_ID, operation: "dismiss-server-notice", input: { serverId, noticeId } }]);
+
+    // Requests outside the closed shape never reach the control plane.
+    const missingId = operationRequest(dismissal);
+    missingId.headers.delete("x-request-id");
+    for (const request of [
+        operationRequest({ ...dismissal, noticeId: "not-a-notice" }),
+        operationRequest({ ...dismissal, serverId: "not-a-server" }),
+        operationRequest({ action: "dismiss-server-notice", serverId }),
+        operationRequest({ ...dismissal, viewerAccountId: "33333333-3333-4333-8333-333333333333" }),
+        missingId,
+    ]) assert.equal((await handler(request)).status, 400);
+    assert.equal(upstream.length, 1);
+
+    // Anything but the exact acknowledgement is withheld.
+    for (const invalid of [{ dismissed: false }, { dismissed: true, noticeId }, null]) {
+        result = invalid;
+        assert.equal((await handler(operationRequest(dismissal))).status, 502);
+    }
+});
+
+test("relays an impersonated dismissal refusal and an unknown notice unchanged", async () => {
+    const dismissal = { action: "dismiss-server-notice", serverId: "22222222-2222-4222-8222-222222222222", noticeId: "66666666-6666-4666-8666-666666666666" };
+    for (const [status, error] of [
+        [403, { code: "impersonation_read_only", message: "An impersonated session cannot dismiss notices.", retryable: false }],
+        [409, { code: "notice_not_found", message: "The notice does not exist.", retryable: false }],
+    ] as const) {
+        const handler = createHandler(async () => Response.json({ version: 1, requestId: REQUEST_ID, ok: false, error }, { status }));
+        const response = await handler(operationRequest(dismissal));
+        assert.equal(response.status, status);
+        assert.deepEqual((await response.json()).error, error);
+    }
+});

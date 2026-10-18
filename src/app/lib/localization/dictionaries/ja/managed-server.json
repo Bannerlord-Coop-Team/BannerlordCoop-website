@@ -827,5 +827,19 @@
   "autosaves.noEarlierAutosavesYet": "以前の自動セーブはまだありません。サーバーが何度か自動セーブすると表示されます。",
   "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "自動セーブは読み込まれませんでした。リストにはサーバーの現在の自動セーブが表示されています。保存時刻を確認してから、もう一度お試しください。",
   "page.recentAutosavesCouldNotBeLoaded": "現在、最近の自動セーブを読み込めません。保存済みバックアップには影響ありません。ページを再読み込みして再試行してください。",
-  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "その自動セーブを読み込めませんでした。ゲームサーバーが停止していることを確認してから再読み込みし、まだ一覧にある自動セーブを選んでください。"
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "その自動セーブを読み込めませんでした。ゲームサーバーが停止していることを確認してから再読み込みし、まだ一覧にある自動セーブを選んでください。",
+  "notices.regionLabel": "サーバーのお知らせ",
+  "notices.info": "お知らせ",
+  "notices.warning": "警告",
+  "notices.dismiss": "閉じる",
+  "notices.dismissNamed": "お知らせを閉じる: {title}",
+  "notices.dismissReadOnly": "別のユーザーとしてこのサーバーを表示しているため、お知らせを閉じることはできません。",
+  "notices.dismissFailed": "このお知らせを閉じられませんでした。しばらくしてからもう一度お試しください。",
+  "notices.signInAgain": "このお知らせを閉じるには、再度ログインしてください。",
+  "notices.placementScheduledTitle": "新しいマシンへの移転予定",
+  "notices.placementScheduledBody": "このサーバーは {start} から {end} の間に新しいマシンへ移転します。プレイヤーにはゲーム内で警告が表示され、ゲームは数分間停止し、サーバーのアドレスとポートが変わります。",
+  "notices.placementScheduledBodyAround": "このサーバーは {time} ごろに新しいマシンへ移転します。プレイヤーにはゲーム内で警告が表示され、ゲームは数分間停止し、サーバーのアドレスとポートが変わります。",
+  "notices.placementCompletedTitle": "新しいマシンへ移転しました",
+  "notices.placementCompletedBody": "動作の遅れを減らすため、このサーバーは新しいマシンへ移転しました。新しいアドレスは {address} です。参加するにはプレイヤーにこのアドレスが必要です。",
+  "notices.placementCompletedBodyNoAddress": "動作の遅れを減らすため、このサーバーは新しいマシンへ移転しました。アドレスが変わったため、参加するにはプレイヤーに新しいアドレスが必要です。"
 }

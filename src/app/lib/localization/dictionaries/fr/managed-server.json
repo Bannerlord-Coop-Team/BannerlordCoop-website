@@ -828,5 +828,19 @@
   "autosaves.noEarlierAutosavesYet": "Aucune sauvegarde automatique précédente pour l’instant. Elles apparaissent une fois que le serveur a enregistré automatiquement plusieurs fois.",
   "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "La sauvegarde automatique n’a pas été chargée. La liste affiche maintenant les sauvegardes automatiques actuelles du serveur ; vérifiez les heures d’enregistrement avant de réessayer.",
   "page.recentAutosavesCouldNotBeLoaded": "Les sauvegardes automatiques récentes n’ont pas pu être chargées pour le moment. Les copies de sauvegarde conservées ne sont pas concernées ; actualisez la page pour réessayer.",
-  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Cette sauvegarde automatique n’a pas pu être chargée. Vérifiez que le serveur de jeu est arrêté, puis actualisez et choisissez une sauvegarde automatique encore listée."
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Cette sauvegarde automatique n’a pas pu être chargée. Vérifiez que le serveur de jeu est arrêté, puis actualisez et choisissez une sauvegarde automatique encore listée.",
+  "notices.regionLabel": "Avis du serveur",
+  "notices.info": "Avis",
+  "notices.warning": "Avertissement",
+  "notices.dismiss": "Masquer",
+  "notices.dismissNamed": "Masquer l’avis : {title}",
+  "notices.dismissReadOnly": "Vous consultez ce serveur en tant qu’un autre utilisateur ; vous ne pouvez donc pas masquer ses avis.",
+  "notices.dismissFailed": "Cet avis n’a pas pu être masqué. Réessayez dans un instant.",
+  "notices.signInAgain": "Reconnectez-vous pour masquer cet avis.",
+  "notices.placementScheduledTitle": "Transfert prévu vers une nouvelle machine",
+  "notices.placementScheduledBody": "Ce serveur sera transféré vers une nouvelle machine entre {start} et {end}. Les joueurs reçoivent un avertissement en jeu, la partie s’arrête quelques minutes, et son adresse et son port changent.",
+  "notices.placementScheduledBodyAround": "Ce serveur sera transféré vers une nouvelle machine vers {time}. Les joueurs reçoivent un avertissement en jeu, la partie s’arrête quelques minutes, et son adresse et son port changent.",
+  "notices.placementCompletedTitle": "Transféré vers une nouvelle machine",
+  "notices.placementCompletedBody": "Ce serveur a été transféré vers une nouvelle machine pour réduire les ralentissements. Sa nouvelle adresse est {address} ; les joueurs en ont besoin pour le rejoindre.",
+  "notices.placementCompletedBodyNoAddress": "Ce serveur a été transféré vers une nouvelle machine pour réduire les ralentissements. Son adresse a changé ; les joueurs ont besoin de la nouvelle pour le rejoindre."
 }

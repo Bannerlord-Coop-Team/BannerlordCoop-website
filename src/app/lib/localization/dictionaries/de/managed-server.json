@@ -828,5 +828,19 @@
   "autosaves.noEarlierAutosavesYet": "Noch keine früheren automatischen Spielstände. Sie erscheinen, nachdem der Server einige Male automatisch gespeichert hat.",
   "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "Der automatische Spielstand wurde nicht geladen. Die Liste zeigt jetzt die aktuellen automatischen Spielstände des Servers. Prüfe die Speicherzeiten, bevor du es erneut versuchst.",
   "page.recentAutosavesCouldNotBeLoaded": "Die letzten automatischen Spielstände konnten gerade nicht geladen werden. Aufbewahrte Backups sind nicht betroffen; lade die Seite neu, um es erneut zu versuchen.",
-  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Dieser automatische Spielstand konnte nicht geladen werden. Stelle sicher, dass der Spielserver gestoppt ist, lade dann neu und wähle einen automatischen Spielstand, der noch aufgeführt ist."
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "Dieser automatische Spielstand konnte nicht geladen werden. Stelle sicher, dass der Spielserver gestoppt ist, lade dann neu und wähle einen automatischen Spielstand, der noch aufgeführt ist.",
+  "notices.regionLabel": "Serverhinweise",
+  "notices.info": "Hinweis",
+  "notices.warning": "Warnung",
+  "notices.dismiss": "Ausblenden",
+  "notices.dismissNamed": "Hinweis ausblenden: {title}",
+  "notices.dismissReadOnly": "Du siehst diesen Server als anderer Benutzer und kannst seine Hinweise deshalb nicht ausblenden.",
+  "notices.dismissFailed": "Dieser Hinweis konnte nicht ausgeblendet werden. Versuche es gleich noch einmal.",
+  "notices.signInAgain": "Melde dich erneut an, um diesen Hinweis auszublenden.",
+  "notices.placementScheduledTitle": "Geplanter Umzug auf einen neuen Rechner",
+  "notices.placementScheduledBody": "Dieser Server zieht zwischen {start} und {end} auf einen neuen Rechner um. Die Spieler werden im Spiel gewarnt, das Spiel hält für einige Minuten an, und Adresse und Port des Servers ändern sich.",
+  "notices.placementScheduledBodyAround": "Dieser Server zieht gegen {time} auf einen neuen Rechner um. Die Spieler werden im Spiel gewarnt, das Spiel hält für einige Minuten an, und Adresse und Port des Servers ändern sich.",
+  "notices.placementCompletedTitle": "Auf einen neuen Rechner umgezogen",
+  "notices.placementCompletedBody": "Dieser Server ist auf einen neuen Rechner umgezogen, damit es weniger Verzögerungen gibt. Seine neue Adresse lautet {address}; die Spieler brauchen sie zum Beitreten.",
+  "notices.placementCompletedBodyNoAddress": "Dieser Server ist auf einen neuen Rechner umgezogen, damit es weniger Verzögerungen gibt. Seine Adresse hat sich geändert, deshalb brauchen die Spieler die neue zum Beitreten."
 }

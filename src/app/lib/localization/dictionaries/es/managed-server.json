@@ -828,5 +828,19 @@
   "autosaves.noEarlierAutosavesYet": "Aún no hay guardados automáticos anteriores. Aparecerán cuando el servidor haya guardado automáticamente algunas veces.",
   "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "No se cargó el guardado automático. La lista ahora muestra los guardados automáticos actuales del servidor; comprueba las horas de guardado antes de volver a intentarlo.",
   "page.recentAutosavesCouldNotBeLoaded": "No se pudieron cargar los guardados automáticos recientes en este momento. Las copias de seguridad conservadas no se ven afectadas; actualiza la página para volver a intentarlo.",
-  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "No se pudo cargar ese guardado automático. Asegúrate de que el servidor de juego esté detenido, luego actualiza y elige un guardado automático que siga en la lista."
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "No se pudo cargar ese guardado automático. Asegúrate de que el servidor de juego esté detenido, luego actualiza y elige un guardado automático que siga en la lista.",
+  "notices.regionLabel": "Avisos del servidor",
+  "notices.info": "Aviso",
+  "notices.warning": "Advertencia",
+  "notices.dismiss": "Descartar",
+  "notices.dismissNamed": "Descartar aviso: {title}",
+  "notices.dismissReadOnly": "Estás viendo este servidor como otro usuario, así que no puedes descartar sus avisos.",
+  "notices.dismissFailed": "No se pudo descartar este aviso. Inténtalo de nuevo en un momento.",
+  "notices.signInAgain": "Vuelve a iniciar sesión para descartar este aviso.",
+  "notices.placementScheduledTitle": "Traslado previsto a otra máquina",
+  "notices.placementScheduledBody": "Este servidor se trasladará a otra máquina entre {start} y {end}. Los jugadores recibirán un aviso en el juego, la partida se detendrá unos minutos y cambiarán su dirección y su puerto.",
+  "notices.placementScheduledBodyAround": "Este servidor se trasladará a otra máquina alrededor de {time}. Los jugadores recibirán un aviso en el juego, la partida se detendrá unos minutos y cambiarán su dirección y su puerto.",
+  "notices.placementCompletedTitle": "Trasladado a otra máquina",
+  "notices.placementCompletedBody": "Este servidor se trasladó a otra máquina para reducir la lentitud. Su nueva dirección es {address}; los jugadores la necesitan para unirse.",
+  "notices.placementCompletedBodyNoAddress": "Este servidor se trasladó a otra máquina para reducir la lentitud. Su dirección cambió, así que los jugadores necesitan la nueva para unirse."
 }

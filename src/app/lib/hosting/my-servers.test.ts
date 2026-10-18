@@ -3,6 +3,7 @@ import test from "node:test";
 import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
 import { connectionAddress } from "./connection-address";
 import {
+    dismissServerNotice,
     getMyServerBackupStatus,
     getMyServerDeletionStatus,
     getMyServerSaveGenerations,
@@ -759,6 +760,45 @@ test("restores an earlier autosave across the Edge as one durable, request-scope
             { ...input, expectedUpdatedAt: "2026-10-16T11:58:00.000+02:00" }]) {
             await assert.rejects(requestMyServerBackupOperation(TOKEN, invalid as typeof input, requestId), { code: "invalid_request" });
         }
+        assert.equal(requests.length, sent);
+    } finally { restoreEnvironment(); }
+});
+
+test("dismisses one notice across the Edge as a closed owner request and accepts only the exact acknowledgement", async () => {
+    configureEnvironment();
+    const requests: Request[] = [];
+    const requestId = "11111111-1111-4111-8111-111111111111";
+    let result: unknown = { dismissed: true };
+    let failure: { status: number; error: unknown } | null = null;
+    const handler = createMyServersHandler({
+        allowedOrigins: ["https://bannerlordcoop.com"],
+        controlPlaneUrl: "https://control-plane.example.test",
+        waitUntil: () => {},
+        fetchImplementation: async (input, init) => {
+            requests.push(new Request(input, init));
+            return failure === null
+                ? Response.json({ version: 1, requestId, ok: true, result })
+                : Response.json({ version: 1, requestId, ok: false, error: failure.error }, { status: failure.status });
+        },
+    });
+    globalThis.fetch = async (input, init) => handler(new Request(input, init));
+    const input = { serverId: FIRST_SERVER.serverId, noticeId: "66666666-6666-4666-8666-666666666666" };
+    try {
+        assert.deepEqual(await dismissServerNotice(TOKEN, input, requestId), { dismissed: true });
+        assert.equal(requests[0]!.url, "https://control-plane.example.test/v1/user/control-plane");
+        assert.equal(requests[0]!.headers.get("x-request-id"), requestId);
+        assert.deepEqual(await requests[0]!.json(), { version: 1, requestId, operation: "dismiss-server-notice", input });
+
+        result = { dismissed: false };
+        await assert.rejects(dismissServerNotice(TOKEN, input, requestId), { code: "invalid_response" });
+        failure = { status: 403, error: { code: "impersonation_read_only", message: "An impersonated session cannot dismiss notices.", retryable: false } };
+        await assert.rejects(dismissServerNotice(TOKEN, input, requestId), { code: "impersonation_read_only", retryable: false });
+
+        const sent = requests.length;
+        for (const invalid of [{ ...input, noticeId: "notice" }, { ...input, serverId: "server" }]) {
+            await assert.rejects(dismissServerNotice(TOKEN, invalid, requestId), { code: "invalid_request" });
+        }
+        await assert.rejects(dismissServerNotice(TOKEN, input, "request"), { code: "invalid_request" });
         assert.equal(requests.length, sent);
     } finally { restoreEnvironment(); }
 });

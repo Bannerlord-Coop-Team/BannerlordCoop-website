@@ -4,7 +4,7 @@ import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getMyServerSummary, getMyServerStartStatus, getServerOnboarding, listAllMyServers } from "./my-servers-server";
+import { getMyServerNotices, getMyServerSummary, getMyServerStartStatus, getServerOnboarding, listAllMyServers } from "./my-servers-server";
 import { onboardingRegion, onboardingSummary } from "../../../../tests/onboarding-fixtures";
 
 const TOKEN = "access-token-with-enough-characters";
@@ -316,4 +316,65 @@ it("validates identifiers, tokens and cancellation before one-server transport, 
     fetch.mockResolvedValue(new Response(new ReadableStream({ pull(controller) { controller.enqueue(new Uint8Array(65537)); }, cancel }), { headers }));
     await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "response_too_large" });
     expect(cancel).toHaveBeenCalledOnce();
+});
+
+const notice = {
+    noticeId: "66666666-6666-4666-8666-666666666666", kind: "administrator", severity: "warning", title: "Maintenance tonight",
+    body: "The host restarts at 22:00 UTC.\nExpect a short outage.", parameters: {}, createdAt: "2026-10-18T09:00:00.000Z", expiresAt: null,
+};
+const scheduled = {
+    ...notice, noticeId: "77777777-7777-4777-8777-777777777777", kind: "placement-scheduled",
+    parameters: { scheduledAt: "2026-10-19T03:00:00.000Z", windowMinutes: 120 }, expiresAt: "2026-10-19T05:00:00.000Z",
+};
+
+it("reads this viewer's undismissed server notices through the closed owner read", async () => {
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = input(init);
+        expect(request).toEqual({ version: 1, requestId: expect.any(String), operation: "server-notices", input: { serverId: server.serverId } });
+        expect(init).toMatchObject({ cache: "no-store", redirect: "manual", credentials: "omit" });
+        expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${TOKEN}`);
+        return accepted(request, { serverId: server.serverId, notices: [notice, scheduled] });
+    });
+    vi.stubGlobal("fetch", fetch);
+    expect(await getMyServerNotices(TOKEN, server.serverId)).toEqual([notice, scheduled]);
+    fetch.mockImplementation(async (_url, init) => Response.json({ version: 1, requestId: input(init).requestId, ok: false,
+        error: { code: "server_not_found", message: "Unavailable", retryable: false } }, { status: 404 }));
+    await expect(getMyServerNotices(TOKEN, server.serverId)).rejects.toMatchObject({ code: "server_not_found" });
+    expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+    { serverId: "22222222-2222-4222-8222-222222222222", notices: [] },
+    { serverId: server.serverId, notices: [notice], extra: true },
+    { serverId: server.serverId, notices: Array.from({ length: 11 }, (_, index) => ({ ...notice, noticeId: `66666666-6666-4666-8666-${String(index).padStart(12, "0")}` })) },
+    { serverId: server.serverId, notices: [notice, notice] },
+    { serverId: server.serverId, notices: [{ ...notice, kind: "email" }] },
+    { serverId: server.serverId, notices: [{ ...notice, severity: "critical" }] },
+    { serverId: server.serverId, notices: [{ ...notice, title: "Two\nlines" }] },
+    { serverId: server.serverId, notices: [{ ...notice, title: "x".repeat(121) }] },
+    { serverId: server.serverId, notices: [{ ...notice, body: "" }] },
+    { serverId: server.serverId, notices: [{ ...notice, body: "bell" + String.fromCharCode(7) }] },
+    { serverId: server.serverId, notices: [{ ...notice, title: "delete" + String.fromCharCode(127) }] },
+    { serverId: server.serverId, notices: [{ ...notice, parameters: { nested: { value: 1 } } }] },
+    { serverId: server.serverId, notices: [{ ...notice, parameters: [] }] },
+    { serverId: server.serverId, notices: [{ ...notice, createdAt: "yesterday" }] },
+    { serverId: server.serverId, notices: [{ ...notice, html: "<b>bold</b>" }] },
+    { serverId: server.serverId, notices: null },
+])("rejects malformed or wrong-server notices %j", async result => {
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
+    await expect(getMyServerNotices(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
+});
+
+it("reads notices whose text has characters the control plane accepts, such as a pasted next-line", async () => {
+    // U+0085 and the other C1 characters pass the control plane's validation, so they must not hide the banner.
+    const pasted = { ...notice, title: "Maintenance\u0085tonight", body: "Line one\u0085line two\n\tindented" };
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { serverId: server.serverId, notices: [pasted] }));
+    expect(await getMyServerNotices(TOKEN, server.serverId)).toEqual([pasted]);
+});
+
+it("validates the server ID and token before reading notices", async () => {
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    await expect(getMyServerNotices(TOKEN, "invalid")).rejects.toMatchObject({ code: "invalid_request" });
+    await expect(getMyServerNotices("short", server.serverId)).rejects.toMatchObject({ code: "invalid_request" });
+    expect(fetch).not.toHaveBeenCalled();
 });

@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
     liveAccess: vi.fn(), managedServers: vi.fn(), displayNames: vi.fn(),
     preview: vi.fn(), users: vi.fn(),
     backups: vi.fn(), backupStatus: vi.fn(), files: vi.fn(), requestBackup: vi.fn(), requestVisibility: vi.fn(), refresh: vi.fn(),
-    saves: vi.fn(), generations: vi.fn(),
+    saves: vi.fn(), generations: vi.fn(), notices: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
     // Model Next's terminal redirect without rendering a denied page.
@@ -60,6 +60,7 @@ vi.mock("@/app/lib/hosting/my-servers", async (importOriginal) => ({
 vi.mock("@/app/lib/hosting/my-servers-server", () => ({
     getMyServerSummary: mocks.managedServers,
     getMyServerDeletionStatus: async () => null,
+    getMyServerNotices: mocks.notices,
 }));
 vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: mocks.displayNames }));
 vi.mock("@/app/lib/hosting/servers", () => ({ getServerForRole: mocks.preview }));
@@ -92,6 +93,7 @@ beforeEach(() => {
     mocks.users.mockResolvedValue({ users: [], truncated: false });
     // Unconfigured test environments cannot list saves, so most page tests have no active campaign.
     mocks.saves.mockRejectedValue(new MyServersApiError("server_api_not_configured", "Not configured"));
+    mocks.notices.mockResolvedValue([]);
 });
 
 it("redirects anonymous visitors to login", async () => {
@@ -540,4 +542,41 @@ it("reads the active campaign's autosaves for Backups and reports a failed read 
     files = await findServerElement(await page(), "ManagedServerFiles");
     expect(mocks.generations).not.toHaveBeenCalled();
     expect(files?.props).toMatchObject({ autosaves: null, autosaveLoadError: undefined });
+});
+
+const pageNotice = {
+    noticeId: "66666666-6666-4666-8666-666666666666", kind: "administrator", severity: "info", title: "Maintenance tonight",
+    body: "Expect a short outage.", parameters: {}, createdAt: "2026-10-18T09:00:00.000Z", expiresAt: null,
+} as const;
+
+it.each([
+    ["managed", false, managedId],
+    ["live", true, liveId],
+] as const)("shows this viewer's notices at the top of the %s page", async (_kind, live, serverId) => {
+    if (!live) mocks.liveServer.mockReturnValue(null);
+    mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "owner", displayName: "Managed", friendlyRegion: "Europe", operationState: "running", observedGameState: "running", releaseChannel: "stable", updatedAt: "2026-10-01T00:00:00.000Z" });
+    mocks.notices.mockResolvedValue([pageNotice]);
+    const workspace = await findServerElement(await page(serverId), "ServerManagementWorkspace" as string);
+    const banner = (workspace!.props as { banner?: ReactElement<{ serverId: string; notices: unknown[] }> }).banner;
+    expect(banner?.props).toEqual({ serverId: managedId, notices: [pageNotice] });
+    expect(mocks.notices).toHaveBeenCalledWith("token", managedId, expect.any(AbortSignal));
+});
+
+it.each([
+    ["fails", () => { mocks.notices.mockRejectedValue(new MyServersApiError("invalid_request", "Unknown operation")); }],
+    ["is empty", () => { mocks.notices.mockResolvedValue([]); }],
+])("renders the page without a banner when the notice read %s", async (_case, arrange) => {
+    arrange();
+    mocks.liveServer.mockReturnValue(null);
+    mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "manager", displayName: "Managed", friendlyRegion: "Europe", operationState: "running", observedGameState: "running", releaseChannel: "stable", updatedAt: "2026-10-01T00:00:00.000Z" });
+    const workspace = await findServerElement(await page(managedId), "ServerManagementWorkspace" as string);
+    expect(workspace).not.toBeNull();
+    expect((workspace!.props as { banner?: unknown }).banner).toBeUndefined();
+});
+
+it("does not read notices for a live server without a managed server", async () => {
+    mocks.managedServers.mockRejectedValue(new MyServersApiError("server_not_found", "Gone"));
+    const workspace = await findServerElement(await page(liveId), "ServerManagementWorkspace" as string);
+    expect((workspace!.props as { banner?: unknown }).banner).toBeUndefined();
+    expect(mocks.notices).not.toHaveBeenCalled();
 });

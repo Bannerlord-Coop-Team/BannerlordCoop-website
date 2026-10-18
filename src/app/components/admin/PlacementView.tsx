@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Definition, Empty, Panel, SectionHeading } from "@/app/components/admin/ControlPlanePresentation";
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
+import { PlacementExecutorPanel } from "@/app/components/admin/PlacementExecutorPanel";
 import { RelocateDialog } from "@/app/components/admin/RelocateView";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { operationExplanation } from "@/app/lib/control-plane/explanations";
@@ -131,6 +132,7 @@ export function PlacementView({ data }: { data: PlacementViewData }) {
     const running = startedAt !== null;
     return (
         <section className="mt-8 space-y-8">
+            <PlacementExecutorPanel />
             <form onSubmit={(event) => void run(event)} className="border border-white/10 bg-surface p-5" aria-labelledby="placement-plan-heading">
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div className="max-w-3xl">
