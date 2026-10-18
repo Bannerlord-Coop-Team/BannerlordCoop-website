@@ -165,6 +165,10 @@ Server-only Supabase secret key used by protected member-role and live-server as
 
 Comma-separated bootstrap administrator emails. These users always have admin access and cannot be demoted through the member administration page.
 
+### `CONTROL_PLANE_ORIGIN`
+
+Optional server-only origin for the website's direct control-plane reads: the administrator pane reads (`/v1/admin/control-plane`), owner inventory reads (`/v1/user/control-plane`) and the public directory (`/v1/public/control-plane`). Unset or empty uses the reviewed production origin `https://control-plane.bannerlordcoop.com`. An override must be a bare absolute `https://` origin with no credentials, path, query or fragment, for example `https://localhost:9443` for a local stack behind a trusted TLS proxy. Any other value fails closed: the read throws before a request is sent. The routes stay fixed in code; this value only selects the origin. It does not affect `CONTROL_PLANE_CONSOLE_ORIGIN` or the Edge Functions' `CONTROL_PLANE_WEB_ORIGINS`. Never use a `NEXT_PUBLIC_` variable for it.
+
 ### `CONSOLE_GATEWAY_URL`
 
 Server-only WSS browser endpoint for the external live console, including `/v1/browser`. Production values must use `wss://`; only localhost development may use `ws://`. `CONSOLE_SERVER_CATALOG` optionally supplies the live multi-server catalog. Administrators see the complete catalog; owners and operators see only assigned entries. Node-agent credentials and per-server Docker resource allowlists are configured separately under `services/` and must never use a `NEXT_PUBLIC_` variable.

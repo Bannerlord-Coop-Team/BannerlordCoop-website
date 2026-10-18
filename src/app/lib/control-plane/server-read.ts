@@ -5,6 +5,7 @@ import {
     ControlPlaneAdminError,
     decodeControlPlaneAdminResponse,
 } from "./client";
+import { controlPlaneEndpoint } from "./origin";
 
 const READ_OPERATIONS = ["overview", "vps-hosts", "servers", "server-dashboard", "jobs", "audit", "release-catalog", "hosting-regions"] as const;
 
@@ -40,7 +41,7 @@ export async function readControlPlaneAdmin<T>(options: {
     let response: Response;
     try {
         signal.throwIfAborted();
-        response = await fetch("https://control-plane.bannerlordcoop.com/v1/admin/control-plane", {
+        response = await fetch(controlPlaneEndpoint("/v1/admin/control-plane"), {
             method: "POST", headers: { authorization: `Bearer ${options.accessToken}`, "content-type": "application/json",
                 "x-request-id": requestId, "x-control-plane-protected-admin": "1",
                 ...(options.requireOrdinarySession ? { "x-control-plane-ordinary-session": "1" } : {}) },

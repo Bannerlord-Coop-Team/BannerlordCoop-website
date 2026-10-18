@@ -1,9 +1,10 @@
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
+import { controlPlaneEndpoint } from "../control-plane/origin";
 import { parsePublicServerPage, readPublicResponse, type PublicServerSummary } from "../../../../supabase/functions/_shared/server-visibility-contract";
 
 /** Anonymous only: never forward a session or fall back to administrative inventory. */
 export async function listPublicServers(fetcher: typeof fetch = fetch): Promise<PublicServerSummary[]> {
-    const endpoint = "https://control-plane.bannerlordcoop.com/v1/public/control-plane";
+    const endpoint = controlPlaneEndpoint("/v1/public/control-plane");
     const items: PublicServerSummary[] = [];
     const ids = new Set<string>();
     const cursors = new Set<string>();

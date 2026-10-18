@@ -7,7 +7,8 @@ it has a refreshed session token. Successful reads reuse Oracle's fresh authorit
 instead of repeating the user and session-context calls in the website.
 The seven server-rendered reads (`overview`, `vps-hosts`, `servers`,
 `server-dashboard`, `jobs`, `audit`, `release-catalog`) use a server-only helper to call
-`https://control-plane.bannerlordcoop.com/v1/admin/control-plane` directly.
+`https://control-plane.bannerlordcoop.com/v1/admin/control-plane` directly. The server-only
+`CONTROL_PLANE_ORIGIN` setting can replace that origin (see the README); an invalid value fails closed.
 Each sends the current Bearer token and `x-control-plane-protected-admin: 1`.
 Oracle freshly verifies the Supabase user and durable session context and requires
 the protected `Admin` role, regardless of bootstrap email admission. The reader
@@ -112,7 +113,8 @@ npx supabase functions deploy my-servers --project-ref <project-ref>
 The `my-servers` function accepts authenticated GET inventory requests and
 strict POST direct commands `{action: "start" | "stop" | "restart-game", serverId}`.
 The server-rendered directory reads inventory directly from the
-fixed `https://control-plane.bannerlordcoop.com/v1/user/control-plane` endpoint,
+fixed `https://control-plane.bannerlordcoop.com/v1/user/control-plane` endpoint (origin overridable
+only through the validated server-only `CONTROL_PLANE_ORIGIN`),
 using only the current bearer and closed `my-servers` operation. Oracle freshly
 verifies the user, session context and durable owner/grant access on every page;
 the website's existing viewer gates still apply. These reads omit cookies and
