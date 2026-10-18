@@ -52,6 +52,7 @@ type UpstreamRequest =
     | { operation: "save-configuration-file"; input: RunnerConfigurationMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
     | { operation: "set-server-manager"; input: { serverId: string; managerAccountId: string; enabled: boolean; expectedUpdatedAt: string } }
+    | { operation: "dismiss-server-notice"; input: { serverId: string; noticeId: string } }
     // Onboarding sends region keys only; the control plane resolves them against its stored catalog.
     | OnboardingMutationRequest
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
@@ -155,7 +156,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // Durable mutations must retain the caller's UUID for exactly-once handling.
-            if (upstreamRequest.operation === "delete-server" || upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "set-server-manager" || upstreamRequest.operation === "update-server" || upstreamRequest.operation === "restore-save-generation" || upstreamRequest.operation === "select-save" || upstreamRequest.operation === "reset-campaign") {
+            if (upstreamRequest.operation === "delete-server" || upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "set-server-manager" || upstreamRequest.operation === "update-server" || upstreamRequest.operation === "restore-save-generation" || upstreamRequest.operation === "select-save" || upstreamRequest.operation === "reset-campaign" || upstreamRequest.operation === "dismiss-server-notice") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -289,6 +290,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "set-server-visibility") {
                     parseVisibilityResult(envelope.result, { action: "set-server-visibility", ...upstreamRequest.input });
                 }
+                if (upstreamRequest.operation === "dismiss-server-notice" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["dismissed"]) || envelope.result.dismissed !== true)) throw new Error("Invalid notice dismissal response");
                 if (upstreamRequest.operation === "set-server-manager" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["changed"]) || typeof envelope.result.changed !== "boolean")) throw new Error("Invalid manager response");
                 if (upstreamRequest.operation === "create-server") {
                     const result = parseOnboardingResult(envelope.result, onboardingRequestMutation(upstreamRequest));
@@ -491,6 +493,13 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
                 action: value.action,
             },
         };
+    }
+    if (value.action === "dismiss-server-notice") {
+        // Dismissal hides one notice for the verified viewer only; the control plane checks current view access.
+        if (!hasExactKeys(value, ["action", "noticeId", "serverId"]) || typeof value.noticeId !== "string" || !REQUEST_ID.test(value.noticeId)) {
+            throw new Error("Invalid notice dismissal");
+        }
+        return { operation: "dismiss-server-notice", input: { serverId: value.serverId, noticeId: value.noticeId } };
     }
     if (value.action === "delete-server") {
         const { action, ...input } = value;
