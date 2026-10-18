@@ -251,15 +251,15 @@ function PlacementMoves({ plan, data }: { plan: HostingAdminPlacementPlan; data:
     const router = useRouter();
     const hosts = useMemo(() => Array.isArray(data.inventory.hosts) ? data.inventory.hosts : [], [data.inventory.hosts]);
     const moves = useMemo(() => sortPlacementMoves(plan.moves), [plan.moves]);
-    // Steps this page queued; they read as relocating until refreshed inventory and jobs arrive.
-    const [queued, setQueued] = useState<{ data: PlacementViewData; steps: ReadonlySet<number> }>({ data, steps: new Set() });
+    // Steps this page queued from this plan; they read as relocating until refreshed inventory and jobs arrive.
+    const [queued, setQueued] = useState<{ data: PlacementViewData; plan: HostingAdminPlacementPlan; steps: ReadonlySet<number> }>({ data, plan, steps: new Set() });
     const [opening, setOpening] = useState<number | null>(null);
     const [openError, setOpenError] = useState<{ step: number; message: string } | null>(null);
     const [dialog, setDialog] = useState<{ move: HostingPlacementMove; row: RelocationRow } | null>(null);
     const statuses = useMemo(() => {
         const currentHosts = new Map([...occupiedSlotsByServer(hosts)].map(([serverId, slot]) => [serverId, slot.hostName]));
-        return placementMoveStatuses(moves, plan.servers, currentHosts, activeJobsByServer(data.activeJobs), queued.data === data ? queued.steps : new Set());
-    }, [moves, plan.servers, hosts, data, queued]);
+        return placementMoveStatuses(moves, plan.servers, currentHosts, activeJobsByServer(data.activeJobs), queued.data === data && queued.plan === plan ? queued.steps : new Set());
+    }, [moves, plan, hosts, data, queued]);
 
     // Reads the server's current generation so the relocation carries a fresh expectedUpdatedAt.
     async function open(move: HostingPlacementMove) {
@@ -352,7 +352,7 @@ function PlacementMoves({ plan, data }: { plan: HostingAdminPlacementPlan; data:
                     reason={`Placement plan step ${dialog.move.step}`}
                     onClose={() => setDialog(null)}
                     onQueued={() => {
-                        setQueued((current) => ({ data, steps: new Set(current.data === data ? current.steps : []).add(dialog.move.step) }));
+                        setQueued((current) => ({ data, plan, steps: new Set(current.data === data && current.plan === plan ? current.steps : []).add(dialog.move.step) }));
                         setDialog(null);
                     }}
                 >

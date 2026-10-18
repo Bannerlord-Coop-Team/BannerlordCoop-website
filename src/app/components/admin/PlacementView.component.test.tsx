@@ -321,6 +321,12 @@ it("opens a step's relocation on the planned VPS with the server's current gener
     expect(moveRow(1).textContent).toContain("Relocating");
     expect(button(moveRow(1), "Relocate").disabled).toBe(true);
     expect(mocks.refresh).toHaveBeenCalled();
+
+    // A fresh dry run starts from its own steps; what was queued from the last one no longer applies.
+    mocks.request.mockResolvedValueOnce(structuredClone(plan));
+    await runPlan();
+    expect(moveRow(1).textContent).not.toContain("Relocating");
+    expect(button(moveRow(1), "Relocate").disabled).toBe(false);
 });
 
 it("does not open a step while the server has another active job", async () => {
