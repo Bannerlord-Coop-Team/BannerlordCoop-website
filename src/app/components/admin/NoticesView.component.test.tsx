@@ -99,6 +99,10 @@ it("checks notice content the way the control plane does", () => {
     expect(noticeInput(form, Array.from({ length: 501 }, (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`))).toEqual({ error: "A notice can target at most 500 servers." });
     expect(noticeInput({ ...form, title: "Two\nlines" }, [gang.serverId])).toEqual({ error: "The title must be one line of 1 to 120 characters." });
     expect(noticeInput({ ...form, body: "x".repeat(2_001) }, [gang.serverId])).toEqual({ error: "The message must be 1 to 2000 characters of plain text." });
+    // The control plane refuses any control or format character in a reason, C1 and zero-width ones included.
+    for (const character of ["\u0085", "\u200b"]) {
+        expect(noticeInput({ ...form, reason: `Planned${character}work` }, [gang.serverId])).toEqual({ error: "The reason must be one line of at most 1000 characters." });
+    }
     const now = Date.parse("2026-10-18T12:00:00.000Z");
     const expiry = localDateTimeToUtc("2026-10-20T08:30")!;
     expect(expiry).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.000Z$/u);

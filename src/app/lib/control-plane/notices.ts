@@ -45,7 +45,8 @@ export function noticeInput(form: NoticeForm, serverIds: readonly string[], now 
         if (!(remaining > 0) || remaining > MAXIMUM_LIFETIME_MILLISECONDS) return { error: "The expiry must be in the future and within a year." };
     }
     const reason = form.reason.trim();
-    if (reason.length > NOTICE_LIMITS.reason || hasControlCharacter(reason, false)) {
+    // An audit reason follows the control plane's administrator reason rule, stricter than notice text.
+    if (reason.length > NOTICE_LIMITS.reason || /[\p{Cc}\p{Cf}]/u.test(reason)) {
         return { error: `The reason must be one line of at most ${NOTICE_LIMITS.reason} characters.` };
     }
     return { input: { serverIds: unique, title, body, severity: form.severity, expiresAt, ...(reason === "" ? {} : { reason }) } };
