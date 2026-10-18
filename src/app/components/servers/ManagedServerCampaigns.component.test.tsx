@@ -101,4 +101,3 @@ it("deletes only an inactive imported campaign after exact-name confirmation", a
     await act(async () => deleteButton.click());
     expect(mocks.deleteSave).toHaveBeenCalledWith({ serverId, saveId: importedId, expectedUpdatedAt: stopped.updatedAt, confirmationText: "Imported Campaign", requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) }, "owner");
 });
-
