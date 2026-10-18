@@ -12,6 +12,9 @@ control plane's `server-saves` owner operation (`my-servers` `GET ?resource=save
 marks the selected one, and lets owners and managers switch with `select-save`
 (`POST { action: "select-save", serverId, saveId, expectedUpdatedAt }`). Imported
 campaigns appear in this list; selecting one makes the next Start load it.
+Owners can delete inactive imported campaigns from the same list after entering
+the exact campaign name; the packaged default and the selected campaign stay
+protected, so the server always retains at least one campaign.
 
 **New campaign** (`POST { action: "reset-campaign", serverId, expectedUpdatedAt }`)
 queues the control plane's `reset-campaign` job after an explicit confirmation

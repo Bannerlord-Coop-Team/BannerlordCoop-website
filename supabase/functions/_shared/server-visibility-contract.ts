@@ -1,3 +1,4 @@
+import { hasExactKeys, isRecord } from "./dto-validation.ts";
 export type ServerVisibility = "private" | "public";
 export type PublicServerSummary = {
     serverId: string;
@@ -16,12 +17,6 @@ export type VisibilityMutation = {
 };
 export const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-export function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-export function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-    return Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
-}
 function text(value: unknown, max: number): value is string {
     return typeof value === "string" && value.length > 0 && value.length <= max && !/[\p{Cc}\p{Cf}]/u.test(value);
 }
@@ -43,13 +38,13 @@ export function isGamePorts(value: unknown): value is number[] {
         && value.every(port => Number.isInteger(port) && port >= 1 && port <= 65_535);
 }
 export function parsePublicServerPage(value: unknown): PublicServerPage {
-    if (!isRecord(value) || !exactKeys(value, ["items", "nextCursor"]) || !Array.isArray(value.items)
+    if (!isRecord(value) || !hasExactKeys(value, ["items", "nextCursor"]) || !Array.isArray(value.items)
         || value.items.length > 100 || (value.nextCursor !== null && !text(value.nextCursor, 2_048))) {
         throw new Error("Invalid public server page");
     }
     const ids = new Set<string>();
     const items = value.items.map(item => {
-        if (!isRecord(item) || !exactKeys(item, ["serverId", "displayName", "friendlyRegion", "observedGameState", "connectionIp", "gamePorts"])
+        if (!isRecord(item) || !hasExactKeys(item, ["serverId", "displayName", "friendlyRegion", "observedGameState", "connectionIp", "gamePorts"])
             || typeof item.serverId !== "string" || !SERVER_ID.test(item.serverId)
             || !isDisplayName(item.displayName) || (item.friendlyRegion !== null && !text(item.friendlyRegion, 128))
             || (item.observedGameState !== null && !text(item.observedGameState, 64))
@@ -65,7 +60,7 @@ export function timestamp(value: unknown): value is string {
         && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
 export function parseVisibilityMutation(value: unknown): VisibilityMutation {
-    if (!isRecord(value) || !exactKeys(value, ["action", "serverId", "visibility", "expectedUpdatedAt"])
+    if (!isRecord(value) || !hasExactKeys(value, ["action", "serverId", "visibility", "expectedUpdatedAt"])
         || value.action !== "set-server-visibility" || typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)
         || !["public", "private"].includes(String(value.visibility)) || !timestamp(value.expectedUpdatedAt)) {
         throw new Error("Invalid visibility update");
@@ -74,7 +69,7 @@ export function parseVisibilityMutation(value: unknown): VisibilityMutation {
 }
 export type VisibilityResult = { outcome: "updated" | "existing"; serverId: string; visibility: ServerVisibility; updatedAt: string };
 export function parseVisibilityResult(value: unknown, input: VisibilityMutation): VisibilityResult {
-    if (!isRecord(value) || !exactKeys(value, ["outcome", "serverId", "visibility", "updatedAt"])
+    if (!isRecord(value) || !hasExactKeys(value, ["outcome", "serverId", "visibility", "updatedAt"])
         || (value.outcome !== "updated" && value.outcome !== "existing")
         || value.serverId !== input.serverId || value.visibility !== input.visibility || !timestamp(value.updatedAt)) {
         throw new Error("Invalid visibility result");

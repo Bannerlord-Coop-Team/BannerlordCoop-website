@@ -1,9 +1,10 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), tables: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), account: vi.fn(), tables: vi.fn(), observations: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerReadSession: mocks.session, getSupabaseServerViewer: mocks.auth }));
-vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts }));
+vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts, getWebsiteAccount: mocks.account }));
 vi.mock("@/app/lib/control-plane/server-read", () => ({ readControlPlaneAdmin: mocks.request }));
+vi.mock("@/app/lib/control-plane/release-observations", () => ({ recordReleaseFirstObservations: mocks.observations }));
 vi.mock("@/app/components/admin/RefreshReleaseCatalog", () => ({ RefreshReleaseCatalog: () => null }));
 vi.mock("next/navigation", async importOriginal => ({
     ...await importOriginal<typeof import("next/navigation")>(), useRouter: () => ({ refresh: vi.fn() }),
@@ -22,9 +23,12 @@ vi.mock("@/app/components/admin/ControlPlaneReadTables", async importOriginal =>
     };
 });
 import ControlPlaneAdminPage from "./page";
+import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
+import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 beforeEach(() => {
     vi.resetAllMocks();
+    mocks.observations.mockImplementation(async builds => builds.map((build: object) => ({ ...build, firstObservedAt: "2026-09-28T12:00:00.000Z" })));
     mocks.session.mockResolvedValue({ impersonating: false, session: { access_token: "test-admin-token", user: { id: "admin", app_metadata: { role: "Member" } } } });
     mocks.auth.mockResolvedValue({ user: { id: "admin", app_metadata: { role: "Admin" } }, accessToken: "test-admin-token" });
     mocks.request.mockImplementation(async request => {
@@ -53,6 +57,27 @@ it("renders Overview from its compact current response without fetching account 
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
+it.each([true, false])("server detail resolves only its displayed account, with an ID fallback: available=%s", async available => {
+    const ownerAccountId = "11111111-1111-4111-8111-111111111111";
+    mocks.request.mockImplementation(async request => {
+        request.onAuthenticated();
+        return { dashboard: { server: { serverId: "22222222-2222-4222-8222-222222222222", displayName: "Test campaign",
+            ownerAccountId, ownerDiscordUserId: ownerAccountId, operationState: "stopped", friendlyRegion: "germany",
+            desiredState: "stopped", observedVmState: "running", observedGameState: "stopped", provider: "mock", releaseChannel: "stable" },
+        activeJob: null, activeSave: null, installedBuild: null, desiredBuild: null, runtime: null },
+        backups: { items: [] }, audit: { items: [] } };
+    });
+    if (available) mocks.account.mockResolvedValue({ accountId: ownerAccountId, label: "owner@example.test" });
+    else mocks.account.mockRejectedValue(new Error("Auth account unavailable"));
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "server", serverId: "22222222-2222-4222-8222-222222222222" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    expect(html).toContain(available ? "owner@example.test" : ownerAccountId);
+    expect(mocks.account).toHaveBeenCalledExactlyOnceWith(ownerAccountId);
+    expect(mocks.accounts).not.toHaveBeenCalled();
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+});
+
 it("renders both complete release groups from one catalog request without account lookups", async () => {
     const build = { buildId: "stable-v0.1.10", channel: "stable", version: "v0.1.10", sourceRevision: "registry-observed",
         supportedGameVersion: "v1.4.8", validationState: "validated", publishedAt: "2026-09-30T00:00:00.000Z",
@@ -69,6 +94,10 @@ it("renders both complete release groups from one catalog request without accoun
     expect(html).toContain("v0.1.10"); expect(html).toContain("v0.1.11");
     expect(html.replaceAll("<!-- -->", "")).toContain("Current Public");
     expect(html.replaceAll("<!-- -->", "")).toContain("Current Nightly");
+    expect(html).toContain("First observed");
+    expect(html).toContain('dateTime="2026-09-28T12:00:00.000Z"');
+    expect(html).not.toContain('dateTime="2026-09-30T00:00:00.000Z"');
+    expect(mocks.observations).toHaveBeenCalledTimes(1);
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls).toEqual([[{ accessToken: "test-admin-token", operation: "release-catalog",
         input: { stableCursor: null, nightlyCursor: null, limit: 100 }, signal: expect.any(AbortSignal), expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function) }]]);
@@ -81,21 +110,47 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
         if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
         if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
         if (request.operation === "vps-hosts") return { availableServiceNames: ["vps-available.vps.ovh.us"],
-            hosts: [{ region: "us-east", availableServers: 1, totalSlots: 2 }] };
+            hosts: [{ locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }] };
+        // Only US-East has a free slot in the stored catalog, so it is the only Create region offered.
+        if (request.operation === "hosting-regions") return { revision: 4, updatedAt: "2026-10-09T12:00:00.000Z", updatedBy: "supabase:admin",
+            regions: hostingRegionCatalogPayload()
+                .filter((entry) => entry.region === "us-west" || entry.region === "us-east")
+                .map((entry) => ({ ...entry, available: entry.region === "us-east" })) };
         throw new Error("Unexpected read");
     });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));
     await stream.allReady;
     const html = await new Response(stream).text();
+    expect(html).not.toContain("Hosting regions");
+    expect(html).not.toContain("Publish website regions");
     expect(html).toContain("Onboard existing OVH VPS");
     expect(html).toContain("vps-available.vps.ovh.us");
-    expect(html).toContain('value="us-east"');
+    expect(html.match(/<option value="us-east">US-East<\/option>/gu) ?? []).toHaveLength(1);
+    expect(html).not.toContain('value="us-west"');
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual([[{
         accessToken: "test-admin-token", operation: "vps-hosts", signal: expect.any(AbortSignal), expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function),
         input: { includeLiveData: false, includeProviderInventory: "service-names" },
     }]]);
-    expect(mocks.request).toHaveBeenCalledTimes(3);
+    expect(mocks.request.mock.calls.filter(([request]) => request.operation === "hosting-regions")).toEqual([[expect.objectContaining({ operation: "hosting-regions", input: {} })]]);
+    expect(mocks.request).toHaveBeenCalledTimes(4);
+});
+
+it("keeps Operations usable when the stored hosting-region catalog cannot be read", async () => {
+    mocks.accounts.mockResolvedValue({ users: [], truncated: false });
+    mocks.request.mockImplementation(async request => {
+        if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
+        if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
+        if (request.operation === "vps-hosts") return { availableServiceNames: [], hosts: [] };
+        throw new ControlPlaneAdminError("unsupported_operation", "The operation is not supported.");
+    });
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    expect(html).toContain("The operation is not supported.");
+    expect(html).not.toContain("Publish website regions");
+    expect(html).toContain("Onboard existing OVH VPS");
+    expect(html).toContain("Regions are unavailable: The operation is not supported.");
 });
 
 
@@ -142,9 +197,10 @@ it.each(["overview", "servers", "server", "vps", "jobs", "releases", "audit", "o
     mocks.request.mockRejectedValue(new Error("Oracle did not confirm authority"));
     mocks.auth.mockRejectedValue(new Error("session context unavailable"));
     await expect(ControlPlaneAdminPage({ searchParams: Promise.resolve({ view, serverId: "test-server" }) })).rejects.toThrow("session context unavailable");
+    expect(mocks.observations).not.toHaveBeenCalled();
     expect(mocks.request.mock.calls.length).toBeGreaterThan(0);
     for (const [request] of mocks.request.mock.calls) {
-        expect(["overview", "servers", "server-dashboard", "vps-hosts", "jobs", "release-catalog", "audit"]).toContain(request.operation);
+        expect(["overview", "servers", "server-dashboard", "vps-hosts", "jobs", "release-catalog", "audit", "hosting-regions"]).toContain(request.operation);
         expect(request.signal.aborted).toBe(true);
         expect(request.accessToken).toBe("test-admin-token");
     }

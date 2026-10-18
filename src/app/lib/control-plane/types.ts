@@ -1,3 +1,5 @@
+import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
+
 export type ManagedServer = {
     serverId: string;
     ownerDiscordUserId: string;
@@ -50,6 +52,31 @@ export type MyServerSummary = Pick<
     gamePorts?: number[];
 };
 
+export type MyServerSaveSummary = {
+    saveId: string;
+    displayName: string;
+    byteSize: number;
+    createdAt: string;
+    lastUsedAt: string | null;
+    importedBy: "system" | "owner";
+};
+
+export type MyServerSavePage = {
+    serverId: string;
+    updatedAt: string;
+    activeSaveId: string | null;
+    items: MyServerSaveSummary[];
+    nextCursor: string | null;
+};
+
+/** The active campaign's current save and earlier autosave copies; may be a few minutes stale. */
+export type {
+    RestorableSaveGeneration as MyServerRestorableSaveGeneration,
+    SaveGeneration as MyServerSaveGeneration,
+    SaveGenerationList as MyServerSaveGenerationList,
+    SaveGenerationSummary as MyServerSaveGenerationSummary,
+} from "../../../../supabase/functions/_shared/server-save-generation-contract";
+
 export type MyServerBackupSummary = {
     backupId: string;
     backupType: string;
@@ -97,8 +124,18 @@ export type HostingJob = {
     failureAcknowledgedBy?: string | null;
 };
 
+export type HostingJobProgress = Pick<HostingJob, "jobId" | "serverId" | "action" | "state"
+    | "progressStage" | "errorCode" | "attemptCount" | "maximumAttempts" | "updatedAt">;
+export type ServerProgress = {
+    server: Pick<ManagedServer, "serverId" | "updatedAt" | "operationState" | "desiredState"
+        | "observedVmState" | "observedGameState"> & { softDeletedAt: string | null };
+    activeJob: HostingJobProgress | null;
+};
+
 export type ReleaseBuild = {
     registryMetadata?: { versionTag: string; clientRevision: string; serverRevision: string };
+    container?: { manifestDigest: string } | null;
+    firstObservedAt?: string;
     currentChannel?: boolean;
     requiredClientModVersion?: string;
     buildId: string;
@@ -161,7 +198,10 @@ export type HostingServerResources = {
 export type HostingAdminVpsHost = {
     name: string;
     locationId: string;
-    region: string;
+    // Provider-reported ISO country, present for every host.
+    countryCode: string;
+    // Legacy region a retained host was registered with; null for hosts registered from provider facts.
+    region: string | null;
     totalSlots: number;
     runningServers: number;
     availableServers: number;
@@ -210,10 +250,167 @@ export type HostingAdminVpsInventory = {
     runnerTargetSourceCommit?: string | null;
 };
 
+export type HostingAdminRegionRequest = {
+    requestId: string;
+    guildId: string;
+    discordUserId: string;
+    region: string;
+    status: "outstanding";
+    createdAt: string;
+    requesterEmail: string | null;
+    allocatedRegions: string[];
+    notifiedAt: string | null;
+};
+
+/** The outcome of emailing a region requester; `sent` is false when an earlier notification already went out. */
+export type HostingAdminRegionRequestNotification = {
+    requestId: string;
+    notifiedAt: string;
+    sent: boolean;
+};
+
 export type OperationsData = {
     overview: Pick<Overview, "controls" | "servers" | "jobs" | "stableBuilds" | "nightlyBuilds">;
     inventory: HostingAdminVpsInventory;
+    vpsProviderError: string | null;
     selectedServer: ManagedServer | null;
+    hostingRegions: HostingRegionCatalogRead;
+};
+
+/** One stored entry as `hosting-regions` returns it, with whether it has a free admissible slot now. */
+export type HostingAdminRegionEntry = HostingRegionPayload & { available: boolean };
+
+/** The outcome of reading the stored region catalog: its entries, or the message explaining why they are unavailable. */
+export type HostingRegionCatalogRead =
+    | { regions: HostingAdminRegionEntry[]; error: null }
+    | { regions: null; error: string };
+
+/** The VPS view's data: registered hosts and the stored catalog placements that label them (null when unreadable). */
+export type VpsViewData = {
+    inventory: HostingAdminVpsInventory;
+    regionCatalog: HostingRegionPayload[] | null;
+};
+
+/** The Relocate view's data: servers, the slots they occupy, the catalog that places hosts in regions, and active jobs. */
+export type RelocateViewData = {
+    servers: HostingPage<ManagedServer>;
+    inventory: HostingAdminVpsInventory;
+    regionCatalog: HostingRegionPayload[] | null;
+    activeJobs: HostingJob[];
+};
+
+export type HostingPlacementWeekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+export type HostingPlacementAlwaysOnTargets = "any" | "single-slot" | "none";
+export type HostingPlacementPinReason =
+    | "unavailable-state"
+    | "no-provider-resource"
+    | "no-installed-build"
+    | "insufficient-history"
+    | "always-on"
+    | "no-compatible-host";
+
+/** A recurring weekly UTC window, with its next occurrence. */
+export type HostingPlacementWindow = {
+    weekday: HostingPlacementWeekday;
+    /** `HH:MM` UTC. */
+    startsAtUtc: string;
+    durationMinutes: number;
+    onlineProbability: number;
+    nextStartsAt: string;
+};
+
+/** Modelled co-tenancy totals; every value is hours per week. */
+export type HostingPlacementContention = {
+    pairHoursPerWeek: number;
+    /** Hours with at least two servers on one VPS online. */
+    contendedHoursPerWeek: number;
+    /** Hours with at least three servers on one VPS online. */
+    saturatedHoursPerWeek: number;
+    /** The history window replayed onto the placement, as pair-hours per week. */
+    observedPairHoursPerWeek: number;
+};
+
+export type HostingPlacementHostSide = HostingPlacementContention & {
+    serverIds: string[];
+    peakExpectedOnline: number;
+};
+
+export type HostingPlacementServer = {
+    serverId: string;
+    displayName: string;
+    region: string;
+    serviceName: string;
+    proposedServiceName: string;
+    pinnedReason: HostingPlacementPinReason | null;
+    /** Older control planes omit it; treat a missing value as false. */
+    alwaysOn?: boolean;
+    observedDays: number;
+    weeklyOnlineHours: number;
+    /** 168 hourly digits from Monday 00:00 UTC; digit d means online probability in [d/10, (d+1)/10). */
+    heatmap: string;
+    quietWindow: HostingPlacementWindow;
+};
+
+export type HostingPlacementHost = {
+    serviceName: string;
+    regionKeys: string[];
+    vCpu: number;
+    slots: number;
+    freeSlots: number;
+    acceptsRelocations: boolean;
+    current: HostingPlacementHostSide;
+    proposed: HostingPlacementHostSide;
+};
+
+export type HostingPlacementMove = {
+    step: number;
+    serverId: string;
+    displayName: string;
+    fromServiceName: string;
+    toServiceName: string;
+    /** The region to pass to `relocate-server` with this target VPS. */
+    targetRegion: string;
+    /** A temporary hop into a spare slot that unblocks a cycle of full VPSs. */
+    staging: boolean;
+    /** Depends on step order; one leg of a swap can save nothing on its own. */
+    gainPairHoursPerWeek: number;
+    window: HostingPlacementWindow;
+};
+
+/** The control plane's read-only `placement-plan` proposal. Nothing is relocated. */
+export type HostingAdminPlacementPlan = {
+    dryRun: true;
+    generatedAt: string;
+    options: {
+        historyDays: number;
+        halfLifeDays: number;
+        maximumMoves: number;
+        minimumGainHours: number;
+        /** Older control planes omit it; they plan as `any`. */
+        alwaysOnTargets?: HostingPlacementAlwaysOnTargets;
+    };
+    model: {
+        historyStartedAt: string;
+        binMinutes: number;
+        timeZone: "UTC";
+        minimumObservedDays: number;
+        samples: number;
+        searchEvaluations: number;
+    };
+    current: HostingPlacementContention;
+    proposed: HostingPlacementContention;
+    relocations: number;
+    servers: HostingPlacementServer[];
+    hosts: HostingPlacementHost[];
+    moves: HostingPlacementMove[];
+    unsequencedServerIds: string[];
+};
+
+/** The Placement view's data: the slots servers occupy, the catalog that places hosts in regions, and active jobs. The plan itself loads on demand. */
+export type PlacementViewData = {
+    inventory: HostingAdminVpsInventory;
+    regionCatalog: HostingRegionPayload[] | null;
+    activeJobs: HostingJob[];
 };
 
 export type FleetSummary = {
@@ -295,7 +492,7 @@ export type ServerDashboardResult = {
         installedBuild: ReleaseBuild | null;
         desiredBuild: ReleaseBuild | null;
         activeSave: { saveId: string; displayName: string; detectedVersion: string | null } | null;
-        activeJob: HostingJob | null;
+        activeJob: HostingJobProgress | null;
         nextMaintenanceAt: string;
     };
     backups: HostingPage<Backup>;

@@ -37,6 +37,7 @@ export type AdminActionField = {
     help?: string;
 };
 
+/** One administrator operation form: collects its fields, submits the typed request and shows the outcome. */
 export function ControlPlaneActionCard({
     operation,
     title,
@@ -45,6 +46,7 @@ export function ControlPlaneActionCard({
     destructive = false,
     help,
     destructiveReason,
+    unavailableReason,
 }: {
     operation: string;
     title: string;
@@ -53,6 +55,8 @@ export function ControlPlaneActionCard({
     destructive?: boolean;
     help?: string;
     destructiveReason?: string;
+    // Page-supplied reason the action cannot run now; the card stays mounted but its submit is disabled.
+    unavailableReason?: string;
 }) {
     const router = useRouter();
     const cardRef = useRef<HTMLElement>(null);
@@ -77,6 +81,8 @@ export function ControlPlaneActionCard({
         && ["select", "server", "job"].includes(field.kind ?? "")
         && (field.options?.length ?? 0) === 0
     ));
+    const blockedReason = unavailableReason
+        ?? (unavailableField ? `No eligible ${unavailableField.label.toLowerCase()} is currently available.` : null);
 
     useEffect(() => {
         let animationFrame: number | null = null;
@@ -187,17 +193,17 @@ export function ControlPlaneActionCard({
                         ? <ControlPlaneBackupPicker key={`${serverValue}:${formRevision}`} serverId={selectedServer?.value ?? null} onReady={setBackupReady} />
                         : <ActionField key={field.name === "buildId" ? `${field.name}:${serverValue}` : `${field.name}:${formRevision}`} field={field} />)}
                 </div>
-                {unavailableField && <p className="mt-3 text-xs leading-5 text-amber-300">No eligible {unavailableField.label.toLowerCase()} is currently available.</p>}
+                {blockedReason !== null && <p className="mt-3 text-xs leading-5 text-amber-300">{blockedReason}</p>}
                 <div className="mt-auto pt-4">
                     <button
                         type="submit"
-                        disabled={pending || unavailableField !== undefined || (needsBackup && !backupReady)}
+                        disabled={pending || blockedReason !== null || (needsBackup && !backupReady)}
                         className="inline-flex min-h-10 w-full items-center justify-center gap-2 border border-crimson bg-crimson px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:bg-crimson-hover disabled:cursor-wait disabled:opacity-60"
                     >
                         {pending ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <Play aria-hidden="true" className="size-3.5" />}
                         {pending
                             ? "Working"
-                            : unavailableField
+                            : blockedReason !== null
                                 ? "Unavailable"
                                 : operation === "onboard-vps-host"
                                     ? "Onboard VPS"
@@ -229,6 +235,7 @@ export function ControlPlaneActionCard({
         </article>
     );
 }
+/** Renders one administrator-editable form control for a field definition. */
 function ActionField({ field }: { field: AdminActionField }) {
     const [targetValue, setTargetValue] = useState(String(field.defaultValue ?? ""));
     if (field.kind === "checkbox") {

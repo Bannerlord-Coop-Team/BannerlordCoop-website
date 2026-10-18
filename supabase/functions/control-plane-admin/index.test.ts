@@ -4,6 +4,7 @@ import {
     CONTROL_PLANE_ADMIN_UPSTREAM_TIMEOUT_MILLISECONDS,
     createControlPlaneAdminHandler,
 } from "../_shared/control-plane-admin.ts";
+import { createRegionRequestNotifier, type RegionRequestNotifier } from "../_shared/region-request-notification.ts";
 
 const REQUEST_ID = "11111111-1111-4111-8111-111111111111";
 const TOKEN = "access-token-with-enough-characters";
@@ -118,13 +119,14 @@ test("accepts authenticated server-side calls without emitting CORS", async () =
 });
 
 /** Creates an isolated Edge handler with injected network. */
-function createHandler(fetchImplementation: typeof fetch, defaultContext = true) {
+function createHandler(fetchImplementation: typeof fetch, defaultContext = true, notifyRegionRequest?: RegionRequestNotifier) {
     return createControlPlaneAdminHandler({
         allowedOrigins: [ORIGIN, "https://bannerlordcoop.netlify.app"],
         supabaseUrl: "https://project.supabase.co",
         supabasePublishableKey: "publishable-key-with-enough-characters",
         controlPlaneAdminUrl: "https://control-plane.example.test",
         fetchImplementation: (input, init) => defaultContext && String(input).endsWith("/rpc/website_session_context") ? Promise.resolve(Response.json({ impersonationId: null })) : fetchImplementation(input, init),
+        notifyRegionRequest,
     });
 }
 
@@ -386,4 +388,38 @@ test("a completed context is not expired by its fetch timer while the verified u
         finishUser(Response.json(ADMIN));
         assert.equal((await pending).status, 200);
     } finally { AbortSignal.timeout = originalTimeout; }
+});
+
+test("notifies a region requester through internal claim operations and returns the browser envelope", async () => {
+    const upstream: Array<{ operation: string; input: unknown }> = [];
+    const sent: string[] = [];
+    const handler = createHandler(async (input, init) => {
+        if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
+        const body = JSON.parse(String(init?.body)) as { requestId: string; operation: string; input: unknown };
+        upstream.push({ operation: body.operation, input: body.input });
+        return Response.json({ version: 1, requestId: body.requestId, ok: true, result: {
+            requestId: REQUEST_ID, region: "germany", requesterEmail: "owner@example.com",
+            notifiedAt: "2026-10-10T12:00:00.000Z", claimed: true,
+        } });
+    }, true, createRegionRequestNotifier({ from: "admin@bannerlordcoop.com", siteUrl: "https://bannerlordcoop.com", send: async (message) => { sent.push(message.text); } }));
+    const response = await handler(adminRequest(JSON.stringify({
+        version: 1, requestId: REQUEST_ID, operation: "notify-region-request", input: { requestId: REQUEST_ID },
+    })));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("access-control-allow-origin"), ORIGIN);
+    assert.deepEqual(await response.json(), { version: 1, requestId: REQUEST_ID, ok: true, result: {
+        requestId: REQUEST_ID, notifiedAt: "2026-10-10T12:00:00.000Z", sent: true,
+    } });
+    assert.deepEqual(upstream, [{ operation: "claim-region-request-notification", input: { requestId: REQUEST_ID } }]);
+    assert.equal(sent.length, 1);
+    assert.match(sent[0] ?? "", /https:\/\/bannerlordcoop\.com\/servers/u);
+});
+
+test("reports unavailable notifications when SMTP is not configured", async () => {
+    const handler = createHandler(async (input) => String(input).endsWith("/auth/v1/user") ? Response.json(ADMIN) : Response.json({}));
+    const response = await handler(adminRequest(JSON.stringify({
+        version: 1, requestId: REQUEST_ID, operation: "notify-region-request", input: { requestId: REQUEST_ID },
+    })));
+    assert.equal(response.status, 503);
+    assert.equal(((await response.json()) as { error: { code: string } }).error.code, "notifications_unavailable");
 });

@@ -1,14 +1,8 @@
 "use client";
 
 import { CheatsDirectory, type CheatCommand } from "@/app/cheats/CheatsDirectory";
-import {
-    CHEATS_LOCALE_COOKIE,
-    CHEATS_LOCALE_STORAGE_KEY,
-    cheatsLabelClass,
-    parseCheatsLocale,
-    type CheatsLocale,
-} from "@/app/cheats/locale";
-import { getCheatsMessages } from "@/app/cheats/locales";
+import { cheatsLabelClass } from "@/app/cheats/locale";
+import { useTranslations } from "@/app/lib/localization/client";
 import type { CheatsQuery } from "@/app/cheats/query";
 import {
     CircleAlert,
@@ -16,8 +10,8 @@ import {
     Monitor,
     Server,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
 
+/** Renders localized cheats content without maintaining a second language preference. */
 export function CheatsView({
     commands,
     initialQuery,
@@ -25,38 +19,9 @@ export function CheatsView({
     commands: readonly CheatCommand[];
     initialQuery: CheatsQuery;
 }) {
-    const [locale, setLocale] = useState<CheatsLocale>(initialQuery.lang);
-    const [localeReady, setLocaleReady] = useState(false);
-    const messages = useMemo(() => getCheatsMessages(locale), [locale]);
-    const { ui } = messages;
+    const { t, rich, number, locale } = useTranslations("cheats");
     const serverCount = commands.filter((command) => command.side === "server").length;
     const clientCount = commands.filter((command) => command.side === "client").length;
-
-    useEffect(() => {
-        const urlHasLang = new URLSearchParams(window.location.search).has("lang");
-        if (!urlHasLang) {
-            const cookie = document.cookie.match(new RegExp(`(?:^|; )${CHEATS_LOCALE_COOKIE}=([^;]*)`))?.[1];
-            const stored = cookie || window.localStorage.getItem(CHEATS_LOCALE_STORAGE_KEY);
-            if (stored) setLocale(parseCheatsLocale(decodeURIComponent(stored)));
-        }
-        setLocaleReady(true);
-    }, []);
-
-    useEffect(() => {
-        if (!localeReady) return;
-        window.localStorage.setItem(CHEATS_LOCALE_STORAGE_KEY, locale);
-        document.cookie = `${CHEATS_LOCALE_COOKIE}=${locale}; path=/; max-age=31536000; samesite=lax`;
-    }, [locale, localeReady]);
-
-    useEffect(() => {
-        function onPopState() {
-            const params = Object.fromEntries(new URLSearchParams(window.location.search));
-            setLocale(parseCheatsLocale(params.lang));
-        }
-
-        window.addEventListener("popstate", onPopState);
-        return () => window.removeEventListener("popstate", onPopState);
-    }, []);
 
     return (
         <main className="min-h-svh bg-background" lang={locale}>
@@ -64,29 +29,22 @@ export function CheatsView({
                 <section className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end" aria-labelledby="cheats-heading">
                     <div>
                         <div className="flex flex-wrap items-center gap-3">
-                            <p className={cheatsLabelClass(locale, "eyebrow")}>
-                                {ui.eyebrow}
+                            <p className={cheatsLabelClass("eyebrow")}>
+                                {t("ui.eyebrow")}
                             </p>
-                            <CheatsLocaleSwitcher
-                                locale={locale}
-                                languageLabel={ui.language}
-                                englishLabel={ui.languageEnglish}
-                                chineseLabel={ui.languageChinese}
-                                onChange={setLocale}
-                            />
                         </div>
-                        <h1 id="cheats-heading" className={`mt-3 text-4xl font-semibold text-foreground sm:text-5xl ${locale === "zh-CN" ? "font-sans" : "font-display"}`}>
-                            {ui.title}
+                        <h1 id="cheats-heading" className={`mt-3 text-4xl font-semibold text-foreground sm:text-5xl font-display [&:lang(zh-CN)]:font-sans`}>
+                            {t("ui.title")}
                         </h1>
                         <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground-muted sm:text-base">
-                            {ui.intro}
+                            {t("ui.intro")}
                         </p>
                     </div>
 
                     <dl className="grid grid-cols-3 border border-white/10 bg-surface">
-                        <DirectoryStat locale={locale} icon={Keyboard} label={ui.commandsStat} value={commands.length} />
-                        <DirectoryStat locale={locale} icon={Server} label={ui.serverStat} value={serverCount} />
-                        <DirectoryStat locale={locale} icon={Monitor} label={ui.clientStat} value={clientCount} />
+                        <DirectoryStat icon={Keyboard} label={t("ui.commandsStat")} value={number(commands.length)} />
+                        <DirectoryStat icon={Server} label={t("ui.serverStat")} value={number(serverCount)} />
+                        <DirectoryStat icon={Monitor} label={t("ui.clientStat")} value={number(clientCount)} />
                     </dl>
                 </section>
 
@@ -96,37 +54,31 @@ export function CheatsView({
                 >
                     <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-crimson-hover" />
                     <p>
-                        {ui.vanillaCampaignWarning.map((part, index) => (
-                            "code" in part ? (
-                                <code key={index} className="font-semibold text-red-100">{part.code}</code>
-                            ) : (
-                                <span key={index}>{part.text}</span>
-                            )
-                        ))}
+                        {rich("ui.vanillaCampaignWarning", {
+                            prefix: <code className="font-semibold text-red-100">campaign.</code>,
+                        })}
                     </p>
                 </div>
 
                 <div className="mt-3 flex gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3.5 text-sm text-foreground-muted">
                     <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
                     <p>
-                        <strong className="font-semibold text-foreground">{ui.consoleTip}</strong>
+                        <strong className="font-semibold text-foreground">{t("ui.consoleTip")}</strong>
                     </p>
                 </div>
 
                 <section className="mt-12 min-w-0 overflow-x-clip" aria-labelledby="cheat-directory-heading">
                     <div className="mb-5">
-                        <p className={`${cheatsLabelClass(locale, "eyebrow")} text-[0.65rem]`}>
-                            {ui.directoryEyebrow}
+                        <p className={`${cheatsLabelClass("eyebrow")} text-[0.65rem]`}>
+                            {t("ui.directoryEyebrow")}
                         </p>
-                        <h2 id="cheat-directory-heading" className={`mt-2 text-3xl font-semibold text-foreground sm:text-4xl ${locale === "zh-CN" ? "font-sans" : "font-display"}`}>
-                            {ui.directoryTitle}
+                        <h2 id="cheat-directory-heading" className={`mt-2 text-3xl font-semibold text-foreground sm:text-4xl font-display [&:lang(zh-CN)]:font-sans`}>
+                            {t("ui.directoryTitle")}
                         </h2>
                     </div>
                     <CheatsDirectory
                         commands={commands}
                         initialQuery={initialQuery}
-                        locale={locale}
-                        messages={messages}
                     />
                 </section>
             </div>
@@ -134,61 +86,19 @@ export function CheatsView({
     );
 }
 
-function CheatsLocaleSwitcher({
-    locale,
-    languageLabel,
-    englishLabel,
-    chineseLabel,
-    onChange,
-}: {
-    locale: CheatsLocale;
-    languageLabel: string;
-    englishLabel: string;
-    chineseLabel: string;
-    onChange: (locale: CheatsLocale) => void;
-}) {
-    const options = [
-        { id: "en" as const, label: englishLabel },
-        { id: "zh-CN" as const, label: chineseLabel },
-    ];
-
-    return (
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label={languageLabel}>
-            {options.map((option) => {
-                const isActive = option.id === locale;
-                return (
-                    <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => onChange(option.id)}
-                        className={
-                            isActive
-                                ? "inline-flex min-h-8 items-center border border-gold/60 bg-gold/15 px-3 font-label text-[0.75rem] font-semibold text-gold"
-                                : "inline-flex min-h-8 items-center border border-white/10 bg-background px-3 font-label text-[0.75rem] font-semibold text-foreground-muted transition-colors hover:border-gold/40 hover:text-gold"
-                        }
-                    >
-                        {option.label}
-                    </button>
-                );
-            })}
-        </div>
-    );
-}
-
+/** Displays a localized directory count alongside its presentation label. */
 function DirectoryStat({
-    locale,
     icon: Icon,
     label,
     value,
 }: {
-    locale: CheatsLocale;
     icon: typeof Server;
     label: string;
-    value: number;
+    value: string;
 }) {
     return (
         <div className="min-w-24 border-r border-white/10 px-4 py-3 sm:min-w-32 sm:px-5">
-            <dt className={`flex items-center gap-1.5 text-foreground-muted ${cheatsLabelClass(locale, "badge")}`}>
+            <dt className={`flex items-center gap-1.5 text-foreground-muted ${cheatsLabelClass("badge")}`}>
                 <Icon aria-hidden="true" className="size-3.5 text-gold-muted" />
                 {label}
             </dt>

@@ -1,9 +1,19 @@
-import { act, Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
+import { act, Children, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 import ServerPage from "./page";
+import { createTranslator } from "@/app/lib/localization/translator";
+import { LiveServerFileSetup } from "@/app/components/servers/LiveServerFileSetup";
+
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    // Selects the requested server namespace without reading request state in file-flow tests.
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 
 const mocks = vi.hoisted(() => ({ live: vi.fn(), access: vi.fn(), servers: vi.fn(), files: vi.fn(), submit: vi.fn(), preview: vi.fn(), configFile: vi.fn() }));
@@ -20,7 +30,10 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
     ...await original<typeof import("@/app/lib/hosting/my-servers")>(),
     listAllMyServerBackups: async () => [], getMyServerBackupStatus: async () => null,
 }));
-vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.servers }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({
+    getMyServerSummary: mocks.servers,
+    getMyServerDeletionStatus: async () => null,
+}));
 vi.mock("@/app/lib/hosting/server-files", () => ({ getMyServerFiles: mocks.files, submitMyServerFile: mocks.submit }));
 vi.mock("@/app/lib/hosting/server-configuration", () => ({ getMyServerConfiguration: mocks.configFile, saveMyServerConfiguration: vi.fn() }));
 vi.mock("@/app/lib/hosting/server-campaigns", () => ({ listMyServerCampaigns: async () => ({ serverId: managedId, updatedAt: "2026-09-26T00:00:00.000Z", activeSaveId: null, items: [] }), selectMyServerCampaign: vi.fn(), resetMyServerCampaign: vi.fn() }));
@@ -39,7 +52,7 @@ beforeEach(() => {
     Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value() { this.open = true; } });
     Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
     mocks.live.mockReturnValue(live); mocks.access.mockReturnValue("operator");
-    mocks.servers.mockResolvedValue([{ serverId: managedId, accessRole: "owner" }]);
+    mocks.servers.mockResolvedValue({ serverId: managedId, accessRole: "owner" });
     mocks.files.mockResolvedValue(status);
     mocks.configFile.mockImplementation(async (_token: string, _serverId: string, part: string) => part === "server"
         ? { configPart: "server", revision: "a".repeat(64), settings: { ...status.managedConfig.serverConfig, autosaveMinutes: 30 } }
@@ -68,10 +81,14 @@ async function find(node: ReactNode, name: string): Promise<ReactElement | null>
     return null;
 }
 async function page() { return ServerPage({ params: Promise.resolve({ serverId: live.id }), searchParams: Promise.resolve({}) }); }
+// Resolves real async file setup output before mounting the client-side file workspace.
 async function render(name = "ManagedServerFiles") {
     const element = await find(await page(), name);
     expect(element).not.toBeNull();
-    await act(async () => root.render(<ManagedServerPollingProvider>{element}</ManagedServerPollingProvider>));
+    const content = element!.type === LiveServerFileSetup
+        ? await LiveServerFileSetup(element!.props as ComponentProps<typeof LiveServerFileSetup>)
+        : element;
+    await act(async () => root.render(<TestLocalization>{<ManagedServerPollingProvider>{content}</ManagedServerPollingProvider>} </TestLocalization>));
     await act(async () => vi.advanceTimersByTimeAsync(0));
 }
 function button(label: string) {
@@ -82,7 +99,7 @@ function button(label: string) {
 
 it.each(["mapping-required", "access-required", "lookup-failed"])("provides file-specific %s guidance with inert transfers", async (reason) => {
     // A different owned record cannot authorize this live server's files.
-    mocks.servers.mockResolvedValue([{ serverId: "another-server", accessRole: "owner" }]);
+    mocks.servers.mockResolvedValue(null);
     if (reason === "mapping-required") mocks.live.mockReturnValue({ ...live, managedServerId: undefined });
     if (reason === "lookup-failed") {
         mocks.servers.mockRejectedValue(Error("Unavailable"));
@@ -103,7 +120,7 @@ it.each(["mapping-required", "access-required", "lookup-failed"])("provides file
 });
 
 it.each(["owner", "manager"])("shows actual mapped save/config for managed %s and permits only owner save exports", async (accessRole) => {
-    mocks.servers.mockResolvedValue([{ serverId: managedId, accessRole }]);
+    mocks.servers.mockResolvedValue({ serverId: managedId, accessRole });
     await render();
     expect(mocks.files).toHaveBeenCalledExactlyOnceWith("token", managedId);
     expect(container.textContent).toContain(status.activeSave!.displayName);
@@ -146,7 +163,7 @@ it("keeps missing file status distinct from missing mapping and disables transfe
 });
 
 it.each(["admin", "support"])("keeps managed %s read-only even for a live owner", async (accessRole) => {
-    mocks.access.mockReturnValue("owner"); mocks.servers.mockResolvedValue([{ serverId: managedId, accessRole }]);
+    mocks.access.mockReturnValue("owner"); mocks.servers.mockResolvedValue({ serverId: managedId, accessRole });
     await render();
     expect(container.textContent).toContain("require owner or manager access");
     expect(mocks.files).not.toHaveBeenCalled();
@@ -162,7 +179,7 @@ it("opens import review without submitting or bypassing existing confirmation", 
 });
 
 it("keeps fictional previews inert without live onboarding", async () => {
-    mocks.live.mockReturnValue(null); mocks.servers.mockResolvedValue([]); mocks.preview.mockReturnValue({ name: "Preview", assignedAccount: {} });
+    mocks.live.mockReturnValue(null); mocks.servers.mockResolvedValue(null); mocks.preview.mockReturnValue({ name: "Preview", assignedAccount: {} });
     const tree = await page();
     expect(await find(tree, "LiveServerFileSetup")).toBeNull();
     expect(await find(tree, "ManagedServerFiles")).toBeNull();

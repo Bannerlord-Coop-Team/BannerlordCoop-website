@@ -7,10 +7,10 @@ function firstName(...values: unknown[]): string | null {
     return null;
 }
 
-/** Display metadata only; never use these values for authorization. */
-export function accountDisplayName(user: Pick<User, "user_metadata">): string {
+/** Selects display metadata or the caller's fallback; never use these values for authorization. */
+export function accountDisplayName(user: Pick<User, "user_metadata">, fallback: string = "Your account"): string {
     const metadata = user.user_metadata ?? {};
-    return firstName(metadata.display_name, metadata.full_name, metadata.name, metadata.preferred_username, metadata.user_name) ?? "Your account";
+    return firstName(metadata.display_name, metadata.full_name, metadata.name, metadata.preferred_username, metadata.user_name) ?? fallback;
 }
 
 export function discordDisplayName(user: Pick<User, "identities">): string | null {

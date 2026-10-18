@@ -5,6 +5,12 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    // Deno Edge Functions may import npm: specifiers that the Node type program cannot resolve; such a file may opt
+    // out of type checking only with a stated reason.
+    files: ["supabase/functions/**/*.ts"],
+    rules: { "@typescript-eslint/ban-ts-comment": ["error", { "ts-nocheck": "allow-with-description" }] },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

@@ -1,15 +1,17 @@
+import { getTranslations } from "@/app/lib/localization/server";
 import { Navbar } from "@/app/components/layout/Navbar";
 import { Skeleton } from "@/app/components/ui/Skeleton";
 
-export default function ServerLoading() {
+// Renders the accessible loading skeleton for server management.
+export default async function ServerLoading() {
+    const { t } = await getTranslations("managed-server");
     return (
-        <div className="min-h-svh bg-background text-foreground" aria-busy="true" aria-label="Loading server management">
+        <div className="min-h-svh bg-background text-foreground" aria-busy="true" aria-label={t("page.loadingServerManagement")}>
             <Navbar />
 
             <main className="site-container py-8 sm:py-10">
                 <span className="sr-only" role="status">
-                    Loading server management…
-                </span>
+                    {t("page.loadingServerManagement2")}</span>
 
                 <Skeleton className="h-4 w-32" />
 

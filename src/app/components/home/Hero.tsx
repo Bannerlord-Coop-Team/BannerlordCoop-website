@@ -1,8 +1,11 @@
+import { getTranslations } from "@/app/lib/localization/server";
 import Image from "next/image";
 import { ChessKnight } from "lucide-react";
 import { HeroTrailer } from "@/app/components/home/HeroTrailer";
 
-export function Hero() {
+// Renders localized Hero presentation while preserving source values.
+export async function Hero() {
+    const { t } = await getTranslations("home");
     return (
         <section
             className="relative isolate flex min-h-[calc(100svh-60px)] overflow-hidden"
@@ -26,24 +29,20 @@ export function Hero() {
                 <div className="flex justify-center">
                     <div className="w-full max-w-sm text-left sm:max-w-2xl lg:max-w-xl">
                         <p className="max-w-xs font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:max-w-none sm:text-sm sm:tracking-[0.24em]">
-                            A Mount &amp; Blade II: Bannerlord Coop Mod
+                            {t("hero.eyebrow")}
                         </p>
 
                         <h1
                             id="hero-heading"
                             className="mt-5 font-display text-4xl font-semibold leading-[0.8] tracking-tight text-foreground min-[380px]:text-5xl sm:mt-6 sm:text-6xl md:text-7xl lg:text-6xl xl:text-7xl"
                         >
-                            Rally The Warband
-                            <br />
-                            Raise The Banner
-                            <br />
-                            <span className="text-crimson">Conquer Calradia</span>
+                            {t("hero.heading").split("\n").map((line, index, lines) => (
+                                <span key={index} className={index === lines.length - 1 ? "block text-crimson" : "block"}>{line}</span>
+                            ))}
                         </h1>
 
                         <p className="mt-6 max-w-2xl font-sans text-sm leading-6 text-foreground-muted sm:mt-8 sm:text-lg sm:leading-8">
-                            Experience the Bannerlord campaign with friends. Build
-                            armies, manage kingdoms, trade, raid, and fight together
-                            in one shared world.
+                            {t("hero.description")}
                         </p>
 
                         <div className="mt-8 flex flex-col items-start gap-3 sm:mt-10 sm:flex-row sm:flex-wrap sm:justify-start sm:gap-4">
@@ -52,7 +51,7 @@ export function Hero() {
                                 className="inline-flex gap-2 min-h-12 items-center justify-center rounded-sm border border-crimson/40 bg-crimson/40 px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors duration-300 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
                             >
                                 <ChessKnight aria-hidden="true" className="size-4.5 text-foreground" strokeWidth={3}/>
-                                Ride To Conquest
+                                {t("hero.download")}
                             </a>
                             <a
                                 href="https://discord.gg/bannerlordcoop"
@@ -75,7 +74,7 @@ export function Hero() {
                                         }}
                                     />
 
-                                <span>Join the Discord</span>
+                                <span>{t("hero.discord")}</span>
                             </a>
                         </div>
                     </div>
@@ -83,7 +82,7 @@ export function Hero() {
 
                 <div className="mx-auto w-full max-w-2xl lg:max-w-none">
                     <p className="mb-3 font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
-                        Official Trailer
+                        {t("hero.trailer")}
                     </p>
                     <div className="overflow-hidden rounded-sm border border-white/15 bg-background/90 p-1 shadow-2xl shadow-black/40">
                         <div className="relative aspect-video overflow-hidden bg-black">

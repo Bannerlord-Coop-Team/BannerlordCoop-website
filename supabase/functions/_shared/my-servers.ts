@@ -4,9 +4,11 @@ import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSetting
 import { serverLogDownloadHeaders } from "./server-log-contract.ts";
 import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
-import { parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingRegion } from "./server-onboarding-contract.ts";
+import { onboardingMutationRequest, onboardingRequestMutation, onboardingSummaryRequest, parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingMutationRequest } from "./server-onboarding-contract.ts";
 import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, requireRunnerConfigurationPart, type RunnerConfigurationMutation, type RunnerConfigurationPart } from "./server-configuration-contract.ts";
 import { MAXIMUM_CAMPAIGN_LIMIT, parseCampaignMutation, parseCampaignPage, parseCampaignResetResult, parseCampaignSelection } from "./server-campaign-contract.ts";
+import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
+import { hasExactKeys, isRecord } from "./dto-validation.ts";
 
 const MAXIMUM_URL_LENGTH = 4_096;
 const MAXIMUM_REQUEST_BYTES = 16 * 1_024;
@@ -19,12 +21,22 @@ const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const SERVER_OPERATIONS = new Set(["start", "stop", "restart-game"]);
 const SAFE_ERROR_CODE = /^[a-z][a-z0-9_-]{0,63}$/u;
+const SAFE_STATUS_VALUE = /^[a-z][a-z0-9-]{0,63}$/u;
+
+import { parseServerDeletionInput, parseServerDeletionResult, type ServerDeletionInput } from "./server-deletion-contract.ts";
+import { parseSaveGenerationList, parseSaveGenerationRestoreMutation, parseSaveGenerationRestoreResult, type SaveGenerationRestoreMutation } from "./server-save-generation-contract.ts";
 
 export type MyServersHandlerOptions = {
     allowedOrigins: readonly string[];
     controlPlaneUrl: string;
     fetchImplementation?: typeof fetch;
     upstreamTimeoutMilliseconds?: number;
+    // Keeps optional alert work alive after returning the durable receipt.
+    waitUntil: (task: Promise<void>) => void;
+    // Invoked after the backend durably accepts a new region request; failures never alter the receipt.
+    onRegionRequested?: (event: RegionRequestedEvent) => Promise<void>;
+    // Invoked when a created server leaves its region without capacity; failures never alter the receipt.
+    onRegionFull?: (event: RegionFullEvent) => Promise<void>;
 };
 
 type UpstreamRequest =
@@ -39,16 +51,21 @@ type UpstreamRequest =
     | { operation: "configuration-file"; input: { serverId: string; configPart: RunnerConfigurationPart } }
     | { operation: "save-configuration-file"; input: RunnerConfigurationMutation }
     | { operation: "set-server-visibility"; input: Omit<VisibilityMutation, "action"> }
-    | { operation: "server-onboarding"; input: Record<string, never> }
-    | { operation: "create-server"; input: { displayName: string; region: OnboardingRegion; releaseChannel?: "stable" | "nightly" } }
-    | { operation: "request-region"; input: { region: OnboardingRegion } }
+    | { operation: "set-server-manager"; input: { serverId: string; managerAccountId: string; enabled: boolean; expectedUpdatedAt: string } }
+    // Onboarding sends region keys only; the control plane resolves them against its stored catalog.
+    | OnboardingMutationRequest
     | { operation: "my-servers"; input: { cursor: string | null; limit: number } }
     | { operation: "server-backups"; input: { serverId: string; cursor: string | null; limit: number } }
     | { operation: "server-saves"; input: { serverId: string; cursor: string | null; limit: number } }
+    | { operation: "server-save-generations"; input: { serverId: string; saveId: string } }
+    | { operation: "restore-save-generation"; input: Omit<SaveGenerationRestoreMutation, "action"> }
     | { operation: "select-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string } }
+    | { operation: "delete-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string; confirmationText: string } }
     | { operation: "reset-campaign"; input: { serverId: string; expectedUpdatedAt: string } }
     | { operation: "server-backup-status"; input: { serverId: string } }
+    | { operation: "server-deletion-status"; input: { serverId: string } }
     | { operation: "update-server"; input: { serverId: string; expectedUpdatedAt: string } }
+    | { operation: "delete-server"; input: ServerDeletionInput }
     | {
         operation: "server-operation";
         input: { serverId: string; action: string };
@@ -60,6 +77,7 @@ type UpstreamRequest =
         input: { serverId: string; backupId: string; expectedUpdatedAt: string };
     };
 
+/** Builds the owner my-servers Edge handler: validates each browser request and relays it to its fixed control-plane route. */
 export function createMyServersHandler(options: MyServersHandlerOptions) {
     const allowedOrigins = new Set(options.allowedOrigins.map(validateOrigin));
     if (allowedOrigins.size === 0 || allowedOrigins.size !== options.allowedOrigins.length) {
@@ -71,6 +89,39 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
     );
     const fetchImplementation = options.fetchImplementation ?? fetch;
     const upstreamTimeoutMilliseconds = boundedTimeout(options.upstreamTimeoutMilliseconds ?? 30_000);
+
+    // Sends one request to a control-plane route with the caller's bearer and request ID, never following redirects.
+    function sendUpstream(endpoint: URL, token: string, requestId: string, upstream: { method?: "GET" | "POST"; body?: string; accept?: string; signal?: AbortSignal }) {
+        return fetchImplementation(endpoint, {
+            method: upstream.method ?? "POST",
+            redirect: "error",
+            headers: {
+                authorization: `Bearer ${token}`,
+                ...(upstream.accept === undefined ? {} : { accept: upstream.accept }),
+                ...(upstream.body === undefined ? {} : { "content-type": "application/json" }),
+                "x-request-id": requestId,
+            },
+            ...(upstream.body === undefined ? {} : { body: upstream.body }),
+            signal: upstream.signal ?? AbortSignal.timeout(upstreamTimeoutMilliseconds),
+        });
+    }
+
+    // Reads the caller's onboarding summary to tell whether a region has no remaining capacity.
+    async function regionIsFull(region: string, token: string) {
+        const requestId = crypto.randomUUID();
+        const response = await sendUpstream(controlPlaneEndpoint, token, requestId, { body: operationBody(requestId, onboardingSummaryRequest()) });
+        const envelope = checkedEnvelope(JSON.parse(await readBoundedText(response, MAXIMUM_OPERATION_RESPONSE_BYTES)), requestId, response.ok);
+        if (!envelope.ok) throw new Error("Onboarding summary was rejected");
+        const summary = parseOnboardingSummary(envelope.result);
+        // Paused or blocked provisioning also reports regions unavailable, which is not a capacity signal.
+        return summary.unavailableReason === null && summary.regions.some((entry) => entry.region === region && !entry.available);
+    }
+
+    function scheduleRegionAlert(task: () => Promise<void>, failureContext: string) {
+        const report = (error: unknown) => console.error(`${failureContext}: ${error instanceof Error ? error.message : "unknown error"}`);
+        // Handle both task rejection and scheduler failure without changing an accepted receipt.
+        try { options.waitUntil(Promise.resolve().then(task).catch(report)); } catch (error) { report(error); }
+    }
 
     return async (request: Request): Promise<Response> => {
         const origin = request.headers.get("origin");
@@ -104,7 +155,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // Durable mutations must retain the caller's UUID for exactly-once handling.
-            if (upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "update-server" || upstreamRequest.operation === "select-save" || upstreamRequest.operation === "reset-campaign") {
+            if (upstreamRequest.operation === "delete-server" || upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "set-server-manager" || upstreamRequest.operation === "update-server" || upstreamRequest.operation === "restore-save-generation" || upstreamRequest.operation === "select-save" || upstreamRequest.operation === "reset-campaign") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -127,7 +178,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         const isConfigurationFile = upstreamRequest.operation === "configuration-file" || upstreamRequest.operation === "save-configuration-file";
         let endpoint = controlPlaneEndpoint;
         let upstreamMethod: "GET" | "POST" = "POST";
-        let upstreamBody: string | undefined = JSON.stringify({ version: 1, requestId, ...upstreamRequest });
+        let upstreamBody: string | undefined = operationBody(requestId, upstreamRequest);
         if (upstreamRequest.operation === "file-transfer") endpoint = new URL("/v1/user/files", controlPlaneEndpoint);
         if (upstreamRequest.operation === "configuration-file") {
             endpoint = new URL("/api/v1/config", controlPlaneEndpoint);
@@ -151,17 +202,11 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         }
         let upstream: Response;
         try {
-            upstream = await fetchImplementation(endpoint, {
+            // The log download streams under the caller's own signal; every other request uses the upstream timeout.
+            upstream = await sendUpstream(endpoint, token, requestId, {
                 method: upstreamMethod,
-                redirect: "error",
-                headers: {
-                    authorization: `Bearer ${token}`,
-                    ...(upstreamRequest.operation === "my-server-latest-log" ? { accept: "application/octet-stream" } : {}),
-                    ...(upstreamBody === undefined ? {} : { "content-type": "application/json" }),
-                    "x-request-id": requestId,
-                },
-                ...(upstreamBody === undefined ? {} : { body: upstreamBody }),
-                signal: upstreamRequest.operation === "my-server-latest-log" ? request.signal : AbortSignal.timeout(upstreamTimeoutMilliseconds),
+                body: upstreamBody,
+                ...(upstreamRequest.operation === "my-server-latest-log" ? { accept: "application/octet-stream", signal: request.signal } : {}),
             });
         } catch {
             return errorResponse(
@@ -196,55 +241,70 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         }
 
         let responseBody: string;
+        let regionRequested: RegionRequestedEvent | null = null;
+        let created: RegionFullEvent | null = null;
         try {
             responseBody = await readBoundedText(
                 upstream,
                 upstreamRequest.operation === "console-command-result" ? MAXIMUM_CONSOLE_RESPONSE_BYTES
                     : upstreamRequest.operation === "download-save-export" ? MAXIMUM_WEB_FILE_RESPONSE_BYTES
-                    : upstreamRequest.operation === "my-servers" || upstreamRequest.operation === "server-backups"
+                    : upstreamRequest.operation === "my-servers" || upstreamRequest.operation === "server-backups" || upstreamRequest.operation === "server-saves"
                     ? MAXIMUM_LIST_RESPONSE_BYTES
                     : MAXIMUM_OPERATION_RESPONSE_BYTES,
             );
             const parsed: unknown = JSON.parse(responseBody);
-            const envelope = isDirectCommand ? directCommandEnvelope(parsed, requestId, upstream.status)
+            const normalized = isDirectCommand ? directCommandEnvelope(parsed, requestId, upstream.status)
                 : isConfigurationFile ? configurationEnvelope(parsed, requestId, upstream.status, upstreamRequest.operation === "save-configuration-file")
                 : parsed;
-            if (isDirectCommand || isConfigurationFile) responseBody = JSON.stringify(envelope);
-            if (!isControlPlaneEnvelope(envelope, requestId)) {
-                throw new Error("Invalid control-plane envelope");
-            }
-            if (isRecord(envelope) && envelope.ok === true) {
-                if (!upstream.ok) throw new Error("Inconsistent success status");
+            if (isDirectCommand || isConfigurationFile) responseBody = JSON.stringify(normalized);
+            const envelope = checkedEnvelope(normalized, requestId, upstream.ok);
+            if (envelope.ok) {
                 if (upstreamRequest.operation === "my-server-latest-log") {
                     throw new Error("Expected a binary log response");
                 }
                 if (upstreamRequest.operation === "console-command") parseConsoleReceipt(envelope.result);
                 if (upstreamRequest.operation === "console-command-result") parseConsoleResult(envelope.result);
                 if (upstreamRequest.operation === "acknowledge-console-command") parseConsoleAcknowledgement(envelope.result);
+                if (upstreamRequest.operation === "delete-server") parseServerDeletionResult(envelope.result);
                 if (upstreamRequest.operation === "set-password" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["changed", "restartQueued"]) || envelope.result.changed !== true || typeof envelope.result.restartQueued !== "boolean")) throw new Error("Invalid password response");
                 if (upstreamRequest.operation === "server-update-status") parseReleaseStatus(envelope.result, upstreamRequest.input.serverId);
+                if (upstreamRequest.operation === "server-deletion-status") parseServerDeletionStatus(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "save-server-settings") parseOwnerSettingsResult(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
+                if (upstreamRequest.operation === "server-saves" && parseCampaignPage(envelope.result).serverId !== upstreamRequest.input.serverId) throw new Error("Campaign page belongs to another server");
+                if (upstreamRequest.operation === "server-save-generations") parseSaveGenerationList(envelope.result, upstreamRequest.input.serverId, upstreamRequest.input.saveId);
+                if (upstreamRequest.operation === "restore-save-generation") parseSaveGenerationRestoreResult(envelope.result);
+                if (upstreamRequest.operation === "select-save") {
+                    const selection = parseCampaignSelection(envelope.result);
+                    if (selection.serverId !== upstreamRequest.input.serverId || selection.activeSaveId !== upstreamRequest.input.saveId) throw new Error("Save selection response is invalid");
+                }
+                if (upstreamRequest.operation === "delete-save" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["action", "jobId", "outcome"]) || envelope.result.action !== "delete-save" || !REQUEST_ID.test(String(envelope.result.jobId)) || (envelope.result.outcome !== "enqueued" && envelope.result.outcome !== "existing"))) throw new Error("Save deletion response is invalid");
+                if (upstreamRequest.operation === "reset-campaign") parseCampaignResetResult(envelope.result);
                 if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
                 if (upstreamRequest.operation === "download-save-export") parseOwnerFileDownload(envelope.result);
-                if (upstreamRequest.operation === "server-saves" && parseCampaignPage(envelope.result).serverId !== upstreamRequest.input.serverId) throw new Error("Campaign page belongs to another server");
-                if (upstreamRequest.operation === "select-save" && parseCampaignSelection(envelope.result).serverId !== upstreamRequest.input.serverId) throw new Error("Campaign selection belongs to another server");
-                if (upstreamRequest.operation === "reset-campaign") parseCampaignResetResult(envelope.result);
                 if ((upstreamRequest.operation === "configuration-file" || upstreamRequest.operation === "save-configuration-file")
                     && (!isRecord(envelope.result) || envelope.result.configPart !== upstreamRequest.input.configPart)) {
                     throw new Error("Configuration response belongs to another file");
                 }
-                if (upstreamRequest.operation === "server-onboarding") parseOnboardingSummary(envelope.result);
                 if (upstreamRequest.operation === "set-server-visibility") {
                     parseVisibilityResult(envelope.result, { action: "set-server-visibility", ...upstreamRequest.input });
                 }
+                if (upstreamRequest.operation === "set-server-manager" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["changed"]) || typeof envelope.result.changed !== "boolean")) throw new Error("Invalid manager response");
                 if (upstreamRequest.operation === "create-server") {
-                    parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, ...upstreamRequest.input });
+                    const result = parseOnboardingResult(envelope.result, onboardingRequestMutation(upstreamRequest));
+                    if (result.action === "create-server") {
+                        created = { region: result.region, serverId: result.serverId, createdAt: result.createdAt, requester: requesterFromToken(token) };
+                    }
                 }
                 if (upstreamRequest.operation === "request-region") {
-                    parseOnboardingResult(envelope.result, { action: upstreamRequest.operation, ...upstreamRequest.input });
+                    const result = parseOnboardingResult(envelope.result, onboardingRequestMutation(upstreamRequest));
+                    // A receipt carrying the submitted UUID is a newly accepted request (or its exact replay);
+                    // any other UUID is the backend deduplicating an already outstanding request.
+                    if (result.action === "request-region" && result.request.requestId.toLowerCase() === requestId) {
+                        regionRequested = { requestId, region: result.request.region, createdAt: result.request.createdAt, requester: requesterFromToken(token) };
+                    }
                 }
-            } else if (upstream.ok) throw new Error("Inconsistent failure status");
+            }
         } catch {
             return errorResponse(
                 502,
@@ -254,6 +314,19 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 true,
                 cors,
             );
+        }
+
+        if (regionRequested !== null && options.onRegionRequested !== undefined) {
+            const event = regionRequested;
+            const notify = options.onRegionRequested;
+            scheduleRegionAlert(() => notify(event), `Region request alert failed for ${event.requestId}`);
+        }
+        if (created !== null && options.onRegionFull !== undefined) {
+            const event = created;
+            const notify = options.onRegionFull;
+            scheduleRegionAlert(async () => {
+                if (await regionIsFull(event.region, token)) await notify(event);
+            }, `Region full check failed for ${event.region}`);
         }
 
         return new Response(responseBody, {
@@ -268,6 +341,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
     };
 }
 
+/** Maps a GET query to its fixed upstream read; unknown resources and unexpected parameters are rejected. */
 function listRequest(request: Request): UpstreamRequest {
     if (request.body !== null) throw new Error("GET requests cannot contain a body");
     const url = new URL(request.url);
@@ -304,11 +378,16 @@ function listRequest(request: Request): UpstreamRequest {
         return { operation: resource, input: { serverId: readServerId(url), transferRequestId } };
     }
 
-    if (resource === "onboarding") {
-        assertQueryParameters(url, ["resource"]);
-        return { operation: "server-onboarding", input: {} };
+    if (resource === "saves") {
+        assertQueryParameters(url, ["cursor", "limit", "resource", "serverId"]);
+        return { operation: "server-saves", input: { serverId: readServerId(url), ...readPageInput(url, MAXIMUM_CAMPAIGN_LIMIT) } };
     }
-
+    if (resource === "save-generations") {
+        assertQueryParameters(url, ["resource", "saveId", "serverId"]);
+        const saveId = url.searchParams.get("saveId");
+        if (saveId === null || !SERVER_ID.test(saveId)) throw new Error("Invalid save ID");
+        return { operation: "server-save-generations", input: { serverId: readServerId(url), saveId } };
+    }
     if (resource === "backups") {
         assertQueryParameters(url, ["cursor", "limit", "resource", "serverId"]);
         return {
@@ -320,11 +399,6 @@ function listRequest(request: Request): UpstreamRequest {
         };
     }
 
-    if (resource === "saves") {
-        assertQueryParameters(url, ["cursor", "limit", "resource", "serverId"]);
-        return { operation: "server-saves", input: { serverId: readServerId(url), ...readPageInput(url, MAXIMUM_CAMPAIGN_LIMIT) } };
-    }
-
     if (resource === "update-status") {
         assertQueryParameters(url, ["resource", "serverId"]);
         return { operation: "server-update-status", input: { serverId: readServerId(url) } };
@@ -334,6 +408,14 @@ function listRequest(request: Request): UpstreamRequest {
         assertQueryParameters(url, ["resource", "serverId"]);
         return {
             operation: "server-backup-status",
+            input: { serverId: readServerId(url) },
+        };
+    }
+
+    if (resource === "deletion-status") {
+        assertQueryParameters(url, ["resource", "serverId"]);
+        return {
+            operation: "server-deletion-status",
             input: { serverId: readServerId(url) },
         };
     }
@@ -386,11 +468,14 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
             serverId: parsed.serverId, visibility: parsed.visibility, expectedUpdatedAt: parsed.expectedUpdatedAt,
         } };
     }
+    if (value.action === "set-server-manager") {
+        if (!hasExactKeys(value, ["action", "enabled", "expectedUpdatedAt", "managerAccountId", "serverId"]) || typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId) || typeof value.managerAccountId !== "string" || !SERVER_ID.test(value.managerAccountId) || typeof value.enabled !== "boolean" || typeof value.expectedUpdatedAt !== "string") throw new Error("Invalid manager access request");
+        assertExpectedUpdatedAt(value.expectedUpdatedAt);
+        return { operation: "set-server-manager", input: { serverId: value.serverId, managerAccountId: value.managerAccountId, enabled: value.enabled, expectedUpdatedAt: value.expectedUpdatedAt as string } };
+    }
     if (value.action === "create-server" || value.action === "request-region") {
-        const parsed = parseOnboardingMutation(value);
-        return parsed.action === "create-server"
-            ? { operation: parsed.action, input: { displayName: parsed.displayName, region: parsed.region, ...(parsed.releaseChannel !== undefined ? { releaseChannel: parsed.releaseChannel } : {}) } }
-            : { operation: parsed.action, input: { region: parsed.region } };
+        // The browser names only a region key; any other field, including a placement, is rejected.
+        return onboardingMutationRequest(parseOnboardingMutation(value));
     }
     if (typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)) {
         throw new Error("Invalid server ID");
@@ -407,16 +492,29 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
             },
         };
     }
+    if (value.action === "delete-server") {
+        const { action, ...input } = value;
+        return { operation: action, input: parseServerDeletionInput(input) };
+    }
+
     if (value.action === "set-password") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "password", "serverId"]) || typeof value.password !== "string" || value.password.length < 1 || value.password.length > 128) throw new Error("Invalid password request");
         assertExpectedUpdatedAt(value.expectedUpdatedAt);
         return { operation: "set-password", input: { serverId: value.serverId as string, expectedUpdatedAt: value.expectedUpdatedAt as string, password: value.password } };
     }
-    if (value.action === "select-save" || value.action === "reset-campaign") {
+    if (value.action === "select-save") {
+        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "saveId", "serverId"]) || typeof value.saveId !== "string" || !SERVER_ID.test(value.saveId)) throw new Error("Invalid save selection");
+        assertExpectedUpdatedAt(value.expectedUpdatedAt);
+        return { operation: "select-save", input: { serverId: value.serverId, saveId: value.saveId, expectedUpdatedAt: value.expectedUpdatedAt as string } };
+    }
+    if (value.action === "delete-save") {
+        if (!hasExactKeys(value, ["action", "confirmationText", "expectedUpdatedAt", "saveId", "serverId"]) || typeof value.saveId !== "string" || !SERVER_ID.test(value.saveId) || typeof value.confirmationText !== "string" || value.confirmationText.length < 1 || value.confirmationText.length > 48) throw new Error("Invalid save deletion");
+        assertExpectedUpdatedAt(value.expectedUpdatedAt);
+        return { operation: "delete-save", input: { serverId: value.serverId, saveId: value.saveId, expectedUpdatedAt: value.expectedUpdatedAt as string, confirmationText: value.confirmationText } };
+    }
+    if (value.action === "reset-campaign") {
         const parsed = parseCampaignMutation(value);
-        return parsed.action === "select-save"
-            ? { operation: "select-save", input: { serverId: parsed.serverId, saveId: parsed.saveId, expectedUpdatedAt: parsed.expectedUpdatedAt } }
-            : { operation: "reset-campaign", input: { serverId: parsed.serverId, expectedUpdatedAt: parsed.expectedUpdatedAt } };
+        return { operation: "reset-campaign", input: { serverId: parsed.serverId, expectedUpdatedAt: parsed.expectedUpdatedAt } };
     }
     if (value.action === "create-backup") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {
@@ -446,6 +544,15 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
                 expectedUpdatedAt: value.expectedUpdatedAt as string,
             },
         };
+    }
+    if (value.action === "restore-save-generation") {
+        // Only an earlier autosave of the named campaign can be chosen; the control plane checks it is the active save.
+        const parsed = parseSaveGenerationRestoreMutation(value);
+        return { operation: "restore-save-generation", input: {
+            serverId: parsed.serverId, saveId: parsed.saveId, generation: parsed.generation,
+            ...(parsed.expectedLastModifiedAt === undefined ? {} : { expectedLastModifiedAt: parsed.expectedLastModifiedAt }),
+            expectedUpdatedAt: parsed.expectedUpdatedAt,
+        } };
     }
     if (value.action === "update-now") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {
@@ -487,6 +594,30 @@ function readServerId(url: URL) {
     const serverId = url.searchParams.get("serverId");
     if (serverId === null || !SERVER_ID.test(serverId)) throw new Error("Invalid server ID");
     return serverId;
+}
+
+function parseServerDeletionStatus(value: unknown, requestedServerId: string) {
+    if (!isRecord(value) || !hasExactKeys(value, ["job", "operationState", "serverId", "updatedAt"])) {
+        throw new Error("Invalid deletion status");
+    }
+    if (value.serverId !== requestedServerId || typeof value.operationState !== "string"
+        || !SAFE_STATUS_VALUE.test(value.operationState)) {
+        throw new Error("Invalid deletion status");
+    }
+    assertExpectedUpdatedAt(value.updatedAt);
+    if (value.job === null) return;
+    if (!isRecord(value.job) || !hasExactKeys(value.job, ["createdAt", "jobId", "progress", "state", "updatedAt"])) {
+        throw new Error("Invalid deletion status job");
+    }
+    if (typeof value.job.jobId !== "string" || !REQUEST_ID.test(value.job.jobId)
+        || typeof value.job.state !== "string"
+        || !new Set(["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"]).has(value.job.state)
+        || typeof value.job.progress !== "string" || value.job.progress.length < 1 || value.job.progress.length > 256
+        || /[\p{Cc}\p{Cf}]/u.test(value.job.progress)) {
+        throw new Error("Invalid deletion status job");
+    }
+    assertExpectedUpdatedAt(value.job.createdAt);
+    assertExpectedUpdatedAt(value.job.updatedAt);
 }
 
 function assertExpectedUpdatedAt(value: unknown): asserts value is string {
@@ -643,7 +774,11 @@ function configurationEnvelope(value: unknown, requestId: string, status: number
     return normalized;
 }
 
-function isControlPlaneEnvelope(value: unknown, requestId: string) {
+/** A correlated control-plane envelope: a result on success, a safe error otherwise. */
+type ControlPlaneEnvelope = { version: 1; requestId: string } & ({ ok: true; result: unknown } | { ok: false; error: Record<string, unknown> });
+
+/** Whether a value is a well-formed envelope for this request ID with a safe error shape. */
+function isControlPlaneEnvelope(value: unknown, requestId: string): value is ControlPlaneEnvelope {
     if (!isRecord(value) || value.version !== 1 || value.requestId !== requestId || typeof value.ok !== "boolean") {
         return false;
     }
@@ -662,13 +797,16 @@ function isControlPlaneEnvelope(value: unknown, requestId: string) {
         && typeof value.error.retryable === "boolean";
 }
 
-function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]) {
-    const keys = Object.keys(value).sort();
-    return keys.length === expected.length && keys.every((key, index) => key === expected[index]);
+/** Serializes one versioned operation envelope for the control plane's user endpoint. */
+function operationBody(requestId: string, request: { operation: string; input: unknown }) {
+    return JSON.stringify({ version: 1, requestId, operation: request.operation, input: request.input });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
+/** Validates a correlated control-plane envelope and requires its outcome to agree with the HTTP status. */
+function checkedEnvelope(value: unknown, requestId: string, httpOk: boolean): ControlPlaneEnvelope {
+    if (!isControlPlaneEnvelope(value, requestId)) throw new Error("Invalid control-plane envelope");
+    if (value.ok !== httpOk) throw new Error("Inconsistent envelope status");
+    return value;
 }
 
 class RequestTooLargeError extends Error {}

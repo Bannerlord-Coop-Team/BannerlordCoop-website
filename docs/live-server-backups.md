@@ -78,3 +78,33 @@ Deploy this compatible website reader before the control-plane reason field:
 older website readers reject additional backup fields. This reader accepts old
 responses without the field, explicitly says the server supplied no reason, and
 keeps restore disabled. It does not guess a mismatch from `canRestore: false`.
+
+## Earlier autosaves
+
+Above the retained backups, the tab lists the active campaign's current save and
+the two earlier autosave copies the runner keeps beside it (`backup1`, `backup2`),
+read through `resource=save-generations` (control-plane `server-save-generations`).
+The list can be a few minutes stale. Owners and managers can load an earlier
+autosave only while the server is stopped; the request is
+`restore-save-generation` with the save, generation and generation check, and it
+reuses the backup tab's retained-request recovery and `server-backup-status`
+polling because the control plane runs it as a `restore` job that first takes a
+`pre-restore` safety backup. A failed autosave read is reported beside the list
+and never pauses retained backups.
+
+A restore names a slot, not a file, and the game rotates the slots every time it
+autosaves, including while shutting down. The request therefore also carries
+`expectedLastModifiedAt`, the save time shown in the confirmation. The control
+plane refuses the request, or fails the job before its safety backup, when that
+slot no longer holds that autosave, and re-reads the runner's autosaves as it
+does. The tab reloads both lists whenever an autosave load finishes, fails or is
+refused, and once whenever it sees the server become stopped, so the list
+includes the autosave written during shutdown. A failed load says the list was
+refreshed and asks the owner to check the times. The field is optional in the
+Edge Function so a page loaded before this release keeps working; deploy the
+control plane that accepts it first.
+
+Deploy the control plane's two operations and the `my-servers` Edge Function
+before this website reader. Older websites never call the new resource, so the
+Edge Function can ship with the control plane. A website deployed first shows
+the autosave read failure on every Backups tab until both are live.

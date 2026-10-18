@@ -126,7 +126,7 @@ test("native account status waits for fresh identity, session and configuration 
         const pending = readWebsiteAccountStatus(token, { ...config, fetch: async (input, init) => {
             const url = new URL(String(input)); const path = url.pathname; const headers = new Headers(init?.headers);
             assert.equal(url.origin, config.supabaseUrl); assert.equal(init?.cache, "no-store");
-            assert.equal(init?.redirect, "error"); assert.ok(init?.signal);
+            assert.equal(init?.redirect, "manual", "workerd rejects redirect: error"); assert.ok(init?.signal);
             if (path === "/rest/v1/rpc/membership_status") {
                 assert.equal(headers.get("apikey"), config.serviceRoleKey);
                 assert.equal(headers.get("authorization"), null, "new API keys are not JWTs");

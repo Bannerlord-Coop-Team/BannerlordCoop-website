@@ -113,3 +113,29 @@ test("session storage refuses to replace an unresolved intent and ignores late c
     clearManagedServerBackupIntent(storage, key, newer);
     assert.equal(storage.getItem(key), null);
 });
+
+test("session recovery retains an exact earlier-autosave restore and rejects a forged generation", () => {
+    const storage = memoryStorage();
+    const key = managedServerBackupIntentKey("user", retained.serverId);
+    const autosave: ManagedServerBackupInput = {
+        serverId: retained.serverId,
+        saveId: "77777777-7777-4777-8777-777777777777",
+        generation: "backup2",
+        action: "restore-save-generation",
+        expectedUpdatedAt: retained.expectedUpdatedAt,
+        requestId: retained.requestId,
+    };
+    storeManagedServerBackupIntent(storage, key, autosave);
+    assert.deepEqual(readManagedServerBackupIntent(storage, key, retained.serverId), autosave);
+    // A different retained request cannot replace it before it is reconciled.
+    assert.throws(() => storeManagedServerBackupIntent(storage, key, retained));
+    for (const raw of [
+        JSON.stringify({ ...autosave, generation: "current" }),
+        JSON.stringify({ ...autosave, saveId: "invalid" }),
+        JSON.stringify({ ...autosave, backupId: retained.backupId }),
+    ]) {
+        storage.setItem(key, raw);
+        assert.throws(() => readManagedServerBackupIntent(storage, key, retained.serverId));
+        assert.equal(storage.getItem(key), raw);
+    }
+});

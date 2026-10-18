@@ -15,6 +15,7 @@ function fixture() {
     let completedEvidence: Evidence | undefined;
     let tokenExchanges = 0;
     let failExchange = false;
+    let truncateIdentity = false;
     const config: PatreonConfig = {
         supabaseUrl: "https://project.supabase.co", serviceRoleKey: "service-secret",
         clientId: "client-id", clientSecret: "client-secret",
@@ -88,7 +89,7 @@ function fixture() {
                 return Response.json({ data: { type: "user", id: "123", relationships: { memberships: { data: [{ type: "member", id: memberId }] } } }, included: [
                     { type: "member", id: memberId, attributes: { patron_status: "active_patron", last_charge_status: "Paid", last_charge_date: "2026-09-01T12:00:00Z", currently_entitled_amount_cents: 2000, is_free_trial: false, is_gifted: false }, relationships: { user: { data: { type: "user", id: "123" } }, campaign: { data: { type: "campaign", id: "10" } }, currently_entitled_tiers: { data: [{ type: "tier", id: "20" }] } } },
                     { type: "campaign", id: "10", attributes: { currency: "USD" } },
-                    { type: "tier", id: "20", attributes: { amount_cents: 2000 }, relationships: { campaign: { data: { type: "campaign", id: "10" } } } },
+                    ...(truncateIdentity ? [] : [{ type: "tier", id: "20", attributes: { amount_cents: 2000 }, relationships: { campaign: { data: { type: "campaign", id: "10" } } } }]),
                 ] }, { headers: { "Content-Type": "application/vnd.api+json; charset=utf-8" } });
             }
             throw new Error(`Unexpected request: ${url}`);
@@ -122,7 +123,7 @@ function fixture() {
         }));
     }
     return { start, callback, begin, returnFromPatreon, finish, states, accounts, config, evidence: () => completedEvidence,
-        exchanges: () => tokenExchanges, failExchange: () => { failExchange = true; } };
+        exchanges: () => tokenExchanges, failExchange: () => { failExchange = true; }, truncateIdentity: () => { truncateIdentity = true; } };
 }
 
 test("start requires a valid signed-in user and POST", async () => {
@@ -221,6 +222,20 @@ test("provider failures log only a fixed stage and status, never provider respon
     assert.equal(await returned.text(), "");
     assert.equal(f.accounts.length, 0);
     assert.deepEqual(warning.mock.calls.map(call => call.arguments), [["Patreon callback failed", { stage: "token_exchange", status: 400 }]]);
+});
+
+test("an incomplete identity read completes as retryable unknown evidence and logs only a fixed reason", async (t) => {
+    const warning = t.mock.method(console, "warn", () => {});
+    const f = fixture();
+    f.truncateIdentity();
+    const { state, cookie } = await f.begin();
+    const returned = await f.returnFromPatreon(state, cookie);
+    const completion = new URL(returned.headers.get("Location")!).searchParams.get("token")!;
+    assert.equal((await f.finish(completion)).status, 200);
+    assert.equal(f.evidence()?.verification, "unknown");
+    assert.equal(f.evidence()?.memberId, memberId);
+    assert.deepEqual(warning.mock.calls.map(call => call.arguments),
+        [["Patreon identity verification incomplete", { stage: "verify_identity", reason: "Missing tier amount", verification: "unknown" }]]);
 });
 
 test("a Patreon identity already linked to another user is not reassigned", async () => {

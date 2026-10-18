@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
+import { createCreatorTokenProvider, PATREON_TOKEN_URL, staticCreatorToken } from "../_shared/patreon-creator-token.ts";
 import { createPatreonRoleHandler, createPatreonRoleRpc, parsePatreonMembership } from "../_shared/patreon-roles.ts";
 
 const campaignId = "12345";
@@ -40,7 +41,7 @@ function sync(key = syncSecret) {
 function setup(fetchImplementation: typeof fetch = async () => Response.json(membership())) {
     const calls: { operation: string; input: Record<string, unknown> }[] = [];
     const options = {
-        campaignId, tierId, creatorAccessToken, webhookSecret, syncSecret, fetchImplementation,
+        campaignId, tierId, creatorToken: staticCreatorToken(creatorAccessToken), webhookSecret, syncSecret, fetchImplementation,
         rpc: async (operation: string, input: Record<string, unknown>): Promise<unknown> => {
             calls.push({ operation, input });
             if (operation === "acquire") return { token, jobs: [{ memberId, generation: 1 }], cursor: "", scanDue: false };
@@ -128,7 +129,42 @@ test("scheduler secret is distinct from webhook/creator credentials", async () =
     assert.deepEqual(calls, []);
     const { options } = setup();
     assert.throws(() => createPatreonRoleHandler({ ...options, syncSecret: webhookSecret }));
-    assert.throws(() => createPatreonRoleHandler({ ...options, syncSecret: creatorAccessToken }));
+    assert.throws(() => createPatreonRoleHandler({ ...options, syncSecret: "short" }));
+});
+
+test("an expired creator token is rotated through the stored refresh token and the member read retried", async () => {
+    const store = { generation: 1, accessToken: "expired-creator-token-fixture", refreshToken: "stored-refresh-token-fixture" };
+    const tokenOperations: string[] = [];
+    const authorizations: string[] = [];
+    const fetchImplementation: typeof fetch = async (input, init) => {
+        if (String(input) === PATREON_TOKEN_URL) {
+            assert.equal(new URLSearchParams(String(init?.body)).get("refresh_token"), "stored-refresh-token-fixture");
+            return Response.json({ access_token: "rotated-creator-token-fixture", refresh_token: "rotated-refresh-token-fixture", expires_in: 2_678_400 });
+        }
+        const authorization = new Headers(init?.headers).get("authorization") ?? "";
+        authorizations.push(authorization);
+        return authorization === "Bearer rotated-creator-token-fixture" ? Response.json(membership()) : new Response(null, { status: 401 });
+    };
+    const { options, calls } = setup(fetchImplementation);
+    const handler = createPatreonRoleHandler({ ...options, creatorToken: createCreatorTokenProvider({
+        clientId: "client-id-fixture", clientSecret: "client-secret-fixture", fetchImplementation,
+        bootstrap: { accessToken: "bootstrap-creator-token-fixture", refreshToken: "bootstrap-refresh-token-fixture" },
+        rpc: async (operation, input) => {
+            tokenOperations.push(operation);
+            if (operation === "read") return { configured: true, ...store, refreshDue: false };
+            if (operation === "rotate") {
+                assert.equal(input.generation, store.generation);
+                Object.assign(store, { generation: 2, accessToken: input.accessToken, refreshToken: input.refreshToken });
+                return { rotated: true, generation: 2 };
+            }
+            throw new Error(`unexpected ${operation}`);
+        },
+    }) });
+    assert.equal((await handler(sync())).status, 200);
+    assert.deepEqual(authorizations, ["Bearer expired-creator-token-fixture", "Bearer rotated-creator-token-fixture"]);
+    assert.deepEqual(tokenOperations, ["read", "read", "rotate"]);
+    assert.deepEqual(calls.map((call) => call.operation), ["acquire", "complete", "release"]);
+    assert.equal(store.refreshToken, "rotated-refresh-token-fixture");
 });
 
 test("worker fetches authoritative fixed-origin membership and completes under its generation/lease", async () => {
@@ -263,7 +299,7 @@ test("lock refusal is a normal deferred worker outcome and never marks upstream 
     const { DatabaseContention }=await import("../_shared/database-contention.ts");
     for(const refused of ["acquire","complete","release"]) {
         const calls:string[]=[];
-        const handler=createPatreonRoleHandler({campaignId,tierId,creatorAccessToken,webhookSecret,syncSecret,
+        const handler=createPatreonRoleHandler({campaignId,tierId,creatorToken: staticCreatorToken(creatorAccessToken),webhookSecret,syncSecret,
             fetchImplementation:async()=>Response.json(membership()),
             rpc:async(op)=>{calls.push(op);if(op===refused)throw new DatabaseContention();if(op==="acquire")return {token,jobs:[{memberId,generation:1}],scanDue:false};return {applied:true};},
         });
@@ -283,7 +319,7 @@ test("release contention does not hide an actionable worker failure", async () =
         [[{memberId,generation:1}],false,async()=>new Response(null,{status:429}),"sync_incomplete"],
         [[],true,async()=>Response.json({}),"sync_unavailable"],
     ] as const) {
-        const handler=createPatreonRoleHandler({campaignId,tierId,creatorAccessToken,webhookSecret,syncSecret,
+        const handler=createPatreonRoleHandler({campaignId,tierId,creatorToken: staticCreatorToken(creatorAccessToken),webhookSecret,syncSecret,
             fetchImplementation,
             rpc:async(op)=>{if(op==="acquire")return {token,jobs,scanDue,cursor:"",scanGeneration:1};if(op==="failed")return {retry:true};if(op==="release")throw new DatabaseContention();return {applied:true};},
         });
@@ -299,7 +335,7 @@ test("failure-record contention does not hide the upstream failure", async () =>
             if(operation==="failed")return Response.json({code:"55P03",message:"private"},{status:500});
             if(operation==="release")return Response.json({released:true});throw new Error("unexpected_operation");},
     });
-    const handler=createPatreonRoleHandler({campaignId,tierId,creatorAccessToken,webhookSecret,syncSecret,rpc,
+    const handler=createPatreonRoleHandler({campaignId,tierId,creatorToken: staticCreatorToken(creatorAccessToken),webhookSecret,syncSecret,rpc,
         fetchImplementation:async()=>new Response(null,{status:429}),
     });
     const response=await handler(sync());

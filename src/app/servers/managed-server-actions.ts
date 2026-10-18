@@ -1,24 +1,31 @@
 "use server";
 
+import { getTranslations } from "@/app/lib/localization/server";
+
 import {
+    getMyServerBackupStatus,
     MyServersApiError,
     requestMyServerOperation,
     requestMyServerUpdate,
     requestMyServerPassword,
     type MyServerOperation,
 } from "@/app/lib/hosting/my-servers";
-import { getMyServerStartStatus } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerDeletionStatus, getMyServerResources, getMyServerStartStatus } from "@/app/lib/hosting/my-servers-server";
+import { serverResourceUsage, type ServerResourceUsage } from "@/app/lib/hosting/server-resource-usage";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const OPERATIONS = new Set<MyServerOperation>(["start", "stop", "restart-game"]);
 
-export type ManagedServerActionResult = { ok: boolean; message: string; operationId?: string };
+/** `checkStatus` asks the page to follow server status; `refresh` asks it to reload status once. */
+export type ManagedServerActionResult = { ok: boolean; message: string; operationId?: string; checkStatus?: boolean; refresh?: boolean };
 
+// Authenticates and submits lifecycle operations with localized result presentation.
 export async function operateManagedServer(input: unknown): Promise<ManagedServerActionResult> {
+    const { t } = await getTranslations("managed-server");
     const parsed = parseOperation(input);
-    if (parsed === null) return { ok: false, message: "The server operation is invalid." };
+    if (parsed === null) return { ok: false, message: t("action.actions.theServerOperationIsInvalid") };
 
     let accessToken: string | null = null;
     try {
@@ -28,14 +35,14 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             supabase.auth.getSession(),
         ]);
         if (userData.user === null) {
-            return { ok: false, message: "Please sign in again before controlling this server." };
+            return { ok: false, message: t("action.actions.pleaseSignInAgainBeforeControllingThisServer") };
         }
         accessToken = sessionData.session?.access_token ?? null;
     } catch {
-        return { ok: false, message: "Your authenticated server session is unavailable." };
+        return { ok: false, message: t("action.actions.yourAuthenticatedServerSessionIsUnavailable") };
     }
     if (accessToken === null) {
-        return { ok: false, message: "Please sign in again before controlling this server." };
+        return { ok: false, message: t("action.actions.pleaseSignInAgainBeforeControllingThisServer") };
     }
 
     try {
@@ -46,42 +53,54 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             }, crypto.randomUUID());
             revalidatePath("/servers");
             return { ok: true, message: update.outcome === "existing"
-                ? "An update is already queued for this server."
-                : "Update queued. A backup will be taken before the selected release is installed." };
+                ? t("action.actions.anUpdateIsAlreadyQueuedForThisServer")
+                : t("action.actions.updateQueuedABackupWillBeTakenBeforeTheSelected") };
         } else {
             await requestMyServerOperation(accessToken, parsed);
         }
         revalidatePath("/servers");
-        if (parsed.action === "start") return { ok: true, message: "Server started and game readiness confirmed." };
-        return { ok: true, message: `${operationLabel(parsed.action)} command exited successfully (code 0). This does not confirm game readiness.` };
+        if (parsed.action === "start") return { ok: true, message: t("action.actions.serverStartedAndGameReadinessConfirmed") };
+        if (parsed.action === "stop") return { ok: true, checkStatus: true, message: t("controls.checkingWhetherYourServerHasStopped") };
+        return { ok: true, message: t("controls.restartingPlayersCanRejoinOnceTheCampaignFinishesLoadingUsually") };
     } catch (error) {
         revalidatePath("/servers");
         const code = error instanceof MyServersApiError ? error.code : "operation_failed";
         if (code === "server_not_found") {
-            return { ok: false, message: "This server is unavailable or your access was removed." };
+            return { ok: false, message: t("action.actions.thisServerIsUnavailableOrYourAccessWasRemoved") };
         }
         if (code === "container_command_failed" && error instanceof MyServersApiError) {
             return { ok: false, message: error.message };
         }
         if (parsed.action === "start" && code === "operation_timeout"
             && error instanceof MyServersApiError && error.operationId !== undefined) {
-            return { ok: true, operationId: error.operationId, message: "Start accepted. Following your server’s progress…" };
+            return { ok: true, operationId: error.operationId, message: t("action.actions.startAcceptedFollowingYourServerSProgress") };
+        }
+        // The control plane refused because the game is writing a save; nothing changed, so the owner can simply retry.
+        if (code === "save_in_progress" && (parsed.action === "stop" || parsed.action === "restart-game")) {
+            return { ok: false, message: t("action.actions.theGameIsSavingRightNowWaitThenTryActionAgain", {
+                action: t(parsed.action === "stop" ? "controls.stop" : "controls.restart"),
+            }) };
+        }
+        if (code === "operation_in_progress") {
+            return { ok: false, refresh: true, message: t("action.backup.anotherServerOperationIsActiveWaitForItsStatusTo") };
         }
         if (parsed.action === "update-now") {
             if (code === "stale_interaction") {
-                return { ok: false, message: "Server status changed. Refresh the page, then try Update now again." };
+                return { ok: false, refresh: true, message: t("action.actions.yourServerSStatusChangedSoWeRefreshedItPress", { action: t("controls.updateNow") }) };
             }
             if (code === "no_update_available") {
-                return { ok: false, message: "This server already has its selected release." };
+                return { ok: false, message: t("action.actions.thisServerAlreadyHasItsSelectedRelease") };
             }
             if (code === "validated_build_unavailable") {
-                return { ok: false, message: "No validated release is currently available for this server." };
+                return { ok: false, message: t("action.actions.noValidatedReleaseIsCurrentlyAvailableForThisServer") };
             }
         }
-        return { ok: false, message: "The command could not be confirmed. It may have executed. Refresh server status before sending another command." };
+        if (parsed.action === "stop") return { ok: false, checkStatus: true, message: t("controls.checkingWhetherYourServerHasStopped") };
+        return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThatYourOperationRequestWentThrough", { operation: operationLabel(parsed.action, t) }) };
     }
 }
 
+// Validates the existing lifecycle request without changing accepted inputs.
 function parseOperation(value: unknown): {
     serverId: string;
     action: MyServerOperation;
@@ -105,51 +124,102 @@ function parseOperation(value: unknown): {
     };
 }
 
-function operationLabel(action: MyServerOperation) {
+// Resolves the localized label for an unchanged operation code.
+function operationLabel(action: MyServerOperation | "update-now", t: (key: string) => string) {
     switch (action) {
-        case "start": return "Start";
-        case "stop": return "Stop";
-        case "restart-game": return "Restart";
+        case "start": return t("operation.start");
+        case "stop": return t("operation.stop");
+        case "restart-game": return t("operation.restart");
+        case "update-now": return t("controls.updateNow");
     }
 }
 
+// Checks the existing request shape without changing its accepted keys.
 function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]) {
     const keys = Object.keys(value).sort();
     return keys.length === expected.length && keys.every((key, index) => key === expected[index]);
 }
 
+// Recognizes plain request objects for existing validation.
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// Authenticates password changes and localizes the existing result.
 export async function setManagedServerPassword(input: { serverId: string; expectedUpdatedAt: string; password: string }): Promise<ManagedServerActionResult> {
-    if (!input || !SERVER_ID.test(input.serverId) || typeof input.password !== "string" || input.password.length < 1 || input.password.length > 128 || typeof input.expectedUpdatedAt !== "string") return { ok: false, message: "Enter a password of 1–128 characters." };
+    const { t } = await getTranslations("managed-server");
+    if (!input || !SERVER_ID.test(input.serverId) || typeof input.password !== "string" || input.password.length < 1 || input.password.length > 128 || typeof input.expectedUpdatedAt !== "string") return { ok: false, message: t("action.actions.enterAPasswordOf1128Characters") };
     try {
         const supabase = await getSupabaseServerClient();
         const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
-        if (!user || !session) return { ok: false, message: "Sign in again to change the password." };
+        if (!user || !session) return { ok: false, message: t("action.actions.signInAgainToChangeThePassword") };
         const result = await requestMyServerPassword(session.access_token, input, crypto.randomUUID());
         revalidatePath(`/servers/${input.serverId}`);
-        return { ok: true, message: result.restartQueued ? "Password changed. A restart is queued with a player warning." : "Password changed. Use it when joining your server." };
+        return { ok: true, message: result.restartQueued ? t("action.actions.passwordChangedARestartIsQueuedWithAPlayerWarning") : t("action.actions.passwordChangedUseItWhenJoiningYourServer") };
     } catch {
-        return { ok: false, message: "The change could not be confirmed. Refresh server status before trying again." };
+        return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThePasswordChangeSoWeRefreshed") };
     }
 }
 
 /** Reauthenticates each progress read; the control plane checks current server access. */
 export async function readManagedServerStartStatus(serverId: string, jobId: string) {
+    const { t } = await getTranslations("managed-server");
     if (typeof serverId !== "string" || typeof jobId !== "string" || !SERVER_ID.test(serverId) || !SERVER_ID.test(jobId)) {
-        return { ok: false as const, retryable: false, message: "The Start reference is invalid." };
+        return { ok: false as const, retryable: false, message: t("action.actions.theStartReferenceIsInvalid") };
     }
     try {
         const supabase = await getSupabaseServerClient();
         const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
-        if (!user || !session) return { ok: false as const, retryable: false, message: "Sign in again to follow server progress." };
+        if (!user || !session) return { ok: false as const, retryable: false, message: t("action.actions.signInAgainToFollowServerProgress") };
         return { ok: true as const, status: await getMyServerStartStatus(session.access_token, serverId, jobId) };
     } catch (error) {
         if (error instanceof MyServersApiError && ["forbidden", "server_not_found", "unauthenticated"].includes(error.code)) {
-            return { ok: false as const, retryable: false, message: "Your server access could not be confirmed. Sign in again to resume progress updates." };
+            return { ok: false as const, retryable: false, message: t("action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain") };
         }
-        return { ok: false as const, retryable: true, message: "Reconnecting to server progress… Your Start request is still being tracked." };
+        return { ok: false as const, retryable: true, message: t("action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing") };
+    }
+}
+
+/**
+ * Reauthenticates each usage read and returns only percentages: the server's CPU and memory allocation stays
+ * on this side. Failures are quiet because the meters simply hide until the next read.
+ */
+export async function readManagedServerResources(serverId: string): Promise<{ ok: true; usage: ServerResourceUsage | null } | { ok: false }> {
+    if (typeof serverId !== "string" || !SERVER_ID.test(serverId)) return { ok: false };
+    try {
+        const supabase = await getSupabaseServerClient();
+        const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
+        if (!user || !session) return { ok: false };
+        const resources = await getMyServerResources(session.access_token, serverId);
+        return { ok: true, usage: resources === null ? null : serverResourceUsage(resources) };
+    } catch {
+        return { ok: false };
+    }
+}
+
+/**
+ * Reads only the compact status that lifecycle, backup, and deletion polling watch. Polling re-renders the
+ * page only when this fingerprint changes, keeping repeated checks far cheaper than full renders.
+ */
+export async function readManagedServerStatusFingerprint(serverId: string): Promise<{ ok: true; fingerprint: string } | { ok: false }> {
+    if (typeof serverId !== "string" || !SERVER_ID.test(serverId)) return { ok: false };
+    try {
+        const supabase = await getSupabaseServerClient();
+        const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
+        if (!user || !session) return { ok: false };
+        const [status, deletion] = await Promise.all([
+            getMyServerBackupStatus(session.access_token, serverId),
+            getMyServerDeletionStatus(session.access_token, serverId).catch(() => null),
+        ]);
+        const job = status.job;
+        const deletionJob = deletion?.job;
+        return { ok: true, fingerprint: JSON.stringify([
+            status.updatedAt, status.operationState, status.observedGameState,
+            job?.jobId ?? null, job?.state ?? null, job?.progress ?? null,
+            deletion?.updatedAt ?? null, deletion?.operationState ?? null,
+            deletionJob?.jobId ?? null, deletionJob?.state ?? null, deletionJob?.progress ?? null,
+        ]) };
+    } catch {
+        return { ok: false };
     }
 }

@@ -1,16 +1,25 @@
 "use client";
 
-import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
+import { useTranslations } from "@/app/lib/localization/client";
+import type { Translator } from "@/app/lib/localization/types";
+
+
 import {
+    ACTIVE_BACKUP_JOB_STATES,
     canManageServerBackups,
     canRequestServerBackupRestore,
+    latestServerBackupAt,
+    partitionServerBackups,
     restoreDisabledReason,
+    visibleBackupJob,
 } from "@/app/components/servers/managed-server-backup-policy";
 import { useManagedServerPolling } from "@/app/components/servers/ManagedServerPollingProvider";
 import type {
     MyServerBackupJob,
     MyServerBackupStatus,
     MyServerBackupSummary,
+    MyServerRestorableSaveGeneration,
+    MyServerSaveGenerationSummary,
     MyServerSummary,
 } from "@/app/lib/control-plane/types";
 import { manageServerBackup } from "@/app/servers/managed-server-backup-actions";
@@ -22,10 +31,14 @@ import {
     retainManagedServerBackupIntent,
     storeManagedServerBackupIntent,
 } from "@/app/servers/managed-server-backup-intent";
-import { Archive, LoaderCircle, RotateCcw } from "lucide-react";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { Archive, ChevronDown, LoaderCircle, RotateCcw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
 
-const ACTIVE_JOB_STATES = new Set(["queued", "running", "retry-wait"]);
+/** Backup history that failed to load is re-read this many times, this far apart, before the notice stays. */
+const MAXIMUM_LOAD_RETRIES = 5;
+const LOAD_RETRY_MILLISECONDS = 10_000;
+
 const TERMINAL_JOB_STATES = new Set(["succeeded", "failed", "cancelled"]);
 const TRANSITIONAL_SERVER_STATES = new Set([
     "provisioning",
@@ -40,6 +53,29 @@ const TRANSITIONAL_SERVER_STATES = new Set([
     "suspended",
     "unknown",
 ]);
+// Dates carry a zone label because they render in UTC on the server and the viewer's zone after hydration.
+const BACKUP_TIME_FORMAT: Intl.DateTimeFormatOptions = {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+};
+const subscribeToTimeZone = () => () => undefined;
+// Relative ages ("4 minutes ago") follow the clock while the page stays open.
+const subscribeToClock = (onChange: () => void) => {
+    const interval = window.setInterval(onChange, 30_000);
+    return () => window.clearInterval(interval);
+};
+const currentMinute = () => Math.floor(Date.now() / 60_000) * 60_000;
+
+/** The active campaign's current save and earlier autosaves, as read for this page. */
+export type ManagedServerAutosaves = {
+    saveId: string;
+    campaignName: string | null;
+    items: readonly MyServerSaveGenerationSummary[];
+};
 
 type ManagedServerBackupsProps = {
     userId: string;
@@ -47,13 +83,43 @@ type ManagedServerBackupsProps = {
     backups: readonly MyServerBackupSummary[];
     status: MyServerBackupStatus | null;
     loadError?: string;
+    autosaves?: ManagedServerAutosaves | null;
+    autosaveLoadError?: string;
 };
 
+// Keys backup state to the current account and server.
 export function ManagedServerBackups(props: ManagedServerBackupsProps) {
     const intentKey = managedServerBackupIntentKey(props.userId, props.server.serverId);
     return <ManagedServerBackupsSession key={intentKey} {...props} intentKey={intentKey} />;
 }
 
+// Resolves the viewer's IANA time zone, falling back to UTC when the runtime reports none.
+function browserTimeZone() {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+// Uses UTC for server HTML and hydration, then the viewer's own time zone.
+function useViewerTimeZone() {
+    return useSyncExternalStore(subscribeToTimeZone, browserTimeZone, () => "UTC");
+}
+
+// Omits relative ages from server HTML and hydration, then reads the viewer's clock once a minute.
+function useCurrentMinute() {
+    return useSyncExternalStore(subscribeToClock, currentMinute, () => null);
+}
+
+// Identifies an autosave row as a request and feedback target, distinct from backup IDs.
+function autosaveTarget(generation: MyServerRestorableSaveGeneration) {
+    return `autosave:${generation}`;
+}
+
+// Identifies the control that sent a retained request.
+function intentTarget(intent: ManagedServerBackupInput) {
+    if (intent.action === "create-backup") return "create";
+    return intent.action === "restore-backup" ? intent.backupId : autosaveTarget(intent.generation);
+}
+
+// Presents durable backup operations and localized restore confirmations.
 function ManagedServerBackupsSession({
     userId,
     intentKey,
@@ -61,15 +127,29 @@ function ManagedServerBackupsSession({
     backups,
     status,
     loadError,
+    autosaves,
+    autosaveLoadError,
 }: ManagedServerBackupsProps & { intentKey: string }) {
+    const { t, number, date, locale } = useTranslations("managed-server");
+    const timeZone = useViewerTimeZone();
+    const now = useCurrentMinute();
+    const expiredListId = useId();
+    const autosaveHeadingId = useId();
+    const restoreMessages = { expired: t("backupReason.expired"), inProgress: t("backupReason.inProgress"), installedBuildUnknown: t("backupReason.installedBuildUnknown"), backupBuildUnknown: t("backupReason.backupBuildUnknown"), buildMismatch: t("backupReason.buildMismatch"), unknown: t("backupReason.unknown") };
     const [intentReady, setIntentReady] = useState(false);
     const [storageError, setStorageError] = useState(false);
     const [isPending, startTransition] = useTransition();
-    const [pendingBackupId, setPendingBackupId] = useState<string | null>(null);
+    const [pending, setPending] = useState<{ id: string; retry: boolean } | null>(null);
     const [retainedIntent, setRetainedIntent] = useState<ManagedServerBackupInput | null>(null);
-    const [message, setMessage] = useState("");
+    const [feedback, setFeedback] = useState<{ target: string; text: string; jobId?: string } | null>(null);
+    const [watchedJobIds, setWatchedJobIds] = useState<ReadonlySet<string>>(() => new Set());
+    const [interruptingJobIds, setInterruptingJobIds] = useState<ReadonlySet<string>>(() => new Set());
+    const [showExpired, setShowExpired] = useState(false);
     const retainedIntentRef = useRef<ManagedServerBackupInput | null>(null);
     const polledJobIds = useRef(new Set<string>());
+    const autosaveJobs = useRef(new Map<string, MyServerRestorableSaveGeneration>());
+    const router = useRouter();
+    const loadRetries = useRef(0);
     const {
         session: pollingSession,
         timedOutSession,
@@ -77,13 +157,35 @@ function ManagedServerBackupsSession({
         beginPolling,
         endPolling,
     } = useManagedServerPolling();
-    const activeJob = status?.job && ACTIVE_JOB_STATES.has(status.job.state) ? status.job : null;
+
+    useEffect(() => {
+        if (!loadError) { loadRetries.current = 0; return; }
+        if (loadRetries.current >= MAXIMUM_LOAD_RETRIES) return;
+        // History that failed to load reloads itself a few times instead of asking the owner to refresh.
+        const timer = window.setTimeout(() => {
+            loadRetries.current += 1;
+            router.refresh();
+        }, LOAD_RETRY_MILLISECONDS);
+        return () => window.clearTimeout(timer);
+    }, [loadError, backups, status, router]);
+    const activeJob = status?.job && ACTIVE_BACKUP_JOB_STATES.has(status.job.state) ? status.job : null;
+    // Progress seen on this page makes the job's eventual outcome worth reporting.
+    if (activeJob !== null && !watchedJobIds.has(activeJob.jobId)) {
+        setWatchedJobIds(new Set(watchedJobIds).add(activeJob.jobId));
+    }
+    // Outcomes of older jobs are history, not news: report only jobs requested or watched here.
+    const shownJob = visibleBackupJob(status?.job, watchedJobIds);
     const currentServer = status === null ? server : {
         ...server,
         operationState: status.operationState,
         observedGameState: status.observedGameState,
         updatedAt: status.updatedAt,
     };
+    const serverIsRunning = currentServer.observedGameState === "running"
+        || currentServer.operationState === "running";
+    // Earlier autosaves are swapped in only while the server is both meant to be and seen to be stopped.
+    const serverIsStopped = currentServer.operationState === "stopped"
+        && currentServer.observedGameState === "stopped";
     const canManage = canManageServerBackups(server.accessRole);
     const statusIsStale = timedOutSession?.serverId === server.serverId
         && timedOutSession.statusSource === "backup"
@@ -146,11 +248,49 @@ function ManagedServerBackupsSession({
         return () => window.clearTimeout(timeout);
     }, [endPolling, pollingSession, server.serverId, status?.job]);
 
+    useEffect(() => {
+        const job = status?.job;
+        const generation = job ? autosaveJobs.current.get(job.jobId) : undefined;
+        if (!job || generation === undefined || !TERMINAL_JOB_STATES.has(job.state)) return;
+        // A loaded autosave reshuffles the autosave slots and adds a safety backup. A refused one
+        // re-read the server's autosaves first. Either way, read both lists again.
+        autosaveJobs.current.delete(job.jobId);
+        router.refresh();
+        if (job.state === "succeeded") return;
+        const timeout = window.setTimeout(() => setFeedback({
+            target: autosaveTarget(generation),
+            text: t("autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS"),
+        }), 0);
+        return () => window.clearTimeout(timeout);
+    }, [router, status?.job, t]);
+
+    const wasStopped = useRef(serverIsStopped);
+    useEffect(() => {
+        const becameStopped = serverIsStopped && !wasStopped.current;
+        wasStopped.current = serverIsStopped;
+        // The game autosaves while shutting down; show those autosaves before one can be loaded.
+        if (becameStopped && autosaves) router.refresh();
+    }, [autosaves, router, serverIsStopped]);
+
     const busy = !intentReady || storageError || isPending
         || (pollingSession !== null && retainedIntent === null)
         || activeJob !== null
         || TRANSITIONAL_SERVER_STATES.has(currentServer.operationState);
+    const pendingBackupId = pending?.id ?? null;
+    // A first submission in flight is not an unconfirmed outcome; only show reconciliation once it is.
+    const showRetainedNotice = retainedIntent !== null && (pending === null || pending.retry);
 
+    // Formats a backup timestamp with a zone label in the viewer's time zone after hydration.
+    function formatTime(value: string) {
+        return date(value, { ...BACKUP_TIME_FORMAT, timeZone });
+    }
+
+    // Records a job requested or reconciled on this page so its outcome can be reported.
+    function watchJob(jobId: string) {
+        setWatchedJobIds((current) => current.has(jobId) ? current : new Set(current).add(jobId));
+    }
+
+    // Persists the existing backup intent before dispatch or reconciliation.
     function rememberIntent(intent: ManagedServerBackupInput | null, resolved?: ManagedServerBackupInput) {
         try {
             if (intent !== null) {
@@ -167,18 +307,30 @@ function ManagedServerBackupsSession({
         }
     }
 
-    function submitIntent(intent: ManagedServerBackupInput, pendingId: string) {
+    // Dispatches a retained backup request and reports its outcome beside the control that sent it.
+    function submitIntent(
+        intent: ManagedServerBackupInput,
+        pendingId: string,
+        { retry = false, interruptsPlayers = false }: { retry?: boolean; interruptsPlayers?: boolean } = {},
+    ) {
         if (!canManage || loadError || !intentReady || storageError || isPending) return;
         // Persist before dispatch: the response or polling refresh can remove this component.
         if (!rememberIntent(intent)) return;
-        setMessage("");
-        setPendingBackupId(pendingId);
+        const feedbackTarget = retry ? "create" : pendingId;
+        setFeedback(null);
+        setPending({ id: pendingId, retry });
         startTransition(async () => {
             try {
                 const result = await manageServerBackup(intent, userId);
-                setMessage(result.message);
+                // Unconfirmed outcomes are reconciled beside Create backup, so they are reported there.
+                setFeedback(result.ok
+                    ? { target: feedbackTarget, text: result.message, jobId: result.jobId }
+                    : { target: result.retrySameRequest ? "create" : feedbackTarget, text: result.message });
                 if (result.ok) {
                     rememberIntent(null, intent);
+                    watchJob(result.jobId);
+                    if (intent.action === "restore-save-generation") autosaveJobs.current.set(result.jobId, intent.generation);
+                    if (interruptsPlayers) setInterruptingJobIds((current) => new Set(current).add(result.jobId));
                     polledJobIds.current.add(result.jobId);
                     beginPolling(server.serverId, intent.expectedUpdatedAt, result.jobId, "backup");
                 } else if (result.retrySameRequest) {
@@ -187,16 +339,22 @@ function ManagedServerBackupsSession({
                     rememberIntent(null, intent);
                 }
             } catch {
-                setMessage("The submission outcome could not be confirmed. Retry this request to reconcile it without creating a duplicate.");
+                setFeedback({ target: "create", text: t("backups.theSubmissionOutcomeCouldNotBeConfirmedRetryThisRequest") });
                 beginPolling(server.serverId, intent.expectedUpdatedAt, undefined, "backup");
             } finally {
-                setPendingBackupId(null);
+                setPending(null);
             }
         });
     }
 
+    // Confirms the brief interruption of a running server before creating a backup intent.
     function submitCreateBackup() {
         if (retainedIntentRef.current !== null) return;
+        const interruptsPlayers = serverIsRunning;
+        if (interruptsPlayers && !window.confirm([
+            t("backups.createABackupNow"),
+            t("backups.theServerIsRunningItWillSaveStopBrieflyAndStartAgain"),
+        ].join("\n\n"))) return;
         const candidate: ManagedServerBackupInput = {
             serverId: server.serverId,
             action: "create-backup",
@@ -206,21 +364,20 @@ function ManagedServerBackupsSession({
         submitIntent(
             retainManagedServerBackupIntent(retainedIntentRef.current, candidate),
             "create",
+            { interruptsPlayers },
         );
     }
 
+    // Confirms destructive save restoration before retaining its request.
     function submitRestore(backup: MyServerBackupSummary) {
         if (retainedIntentRef.current !== null) return;
-        const createdAt = new Date(backup.createdAt).toLocaleString();
-        const wasRunning = currentServer.observedGameState === "running"
-            || currentServer.operationState === "running";
         if (!window.confirm([
-            `Restore the save from ${createdAt}?`,
-            "Current campaign progress will be replaced. Hosting will first save and safely stop the game, verify it is stopped, and create a safety backup.",
-            wasRunning
-                ? "Connected players will be interrupted. The prior running state will be restored only after the selected save validates."
-                : "The server will remain stopped after the selected save validates.",
-            "The installed game and mod versions will not change.",
+            t("backups.restoreTheSaveFromCreatedat", { createdAt: formatTime(backup.createdAt) }),
+            t("backups.currentCampaignProgressWillBeReplacedHostingWillFirstSave"),
+            serverIsRunning
+                ? t("backups.connectedPlayersWillBeInterruptedThePriorRunningStateWill")
+                : t("backups.theServerWillRemainStoppedAfterTheSelectedSaveValidates"),
+            t("backups.theInstalledGameAndModVersionsWillNotChange"),
         ].join("\n\n"))) return;
 
         const candidate: ManagedServerBackupInput = {
@@ -236,168 +393,366 @@ function ManagedServerBackupsSession({
         );
     }
 
+    // Confirms replacing the current save with an earlier autosave before retaining its request.
+    function submitAutosaveRestore(item: EarlierAutosave) {
+        if (retainedIntentRef.current !== null || !autosaves) return;
+        if (!window.confirm([
+            t("autosaves.loadTheAutosaveFromDate", { date: formatTime(item.lastModifiedAt) }),
+            t("autosaves.aSafetyBackupOfTheCurrentSaveIsTakenFirst"),
+        ].join("\n\n"))) return;
+
+        const candidate: ManagedServerBackupInput = {
+            serverId: server.serverId,
+            saveId: autosaves.saveId,
+            generation: item.generation,
+            action: "restore-save-generation",
+            // The load is refused if this slot no longer holds the autosave named in the confirmation.
+            expectedLastModifiedAt: item.lastModifiedAt,
+            expectedUpdatedAt: currentServer.updatedAt,
+            requestId: crypto.randomUUID(),
+        };
+        submitIntent(
+            retainManagedServerBackupIntent(retainedIntentRef.current, candidate),
+            autosaveTarget(item.generation),
+        );
+    }
+
+    // Retries the exact retained backup request without creating a new identity.
     function retryPendingRequest() {
         const intent = retainedIntentRef.current;
         if (intent === null) return;
-        submitIntent(intent, intent.action === "create-backup" ? "create" : intent.backupId);
+        submitIntent(intent, intentTarget(intent), { retry: true });
     }
 
-    return (
-        <div className="mt-5 space-y-4">
-            {storageError && (
-                <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
-                    Backup request recovery storage is unavailable or invalid. Mutations are disabled. Restore session storage access and reload this page; do not clear pending request data.
-                </p>
-            )}
-            {loadError && (
-                <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
-                    {loadError}
-                </p>
-            )}
+    const { current: currentBackups, expired: expiredBackups } = partitionServerBackups(backups);
+    const currentAutosave = autosaves?.items.find((item) => item.generation === "current") ?? null;
+    const earlierAutosaves = (autosaves?.items ?? []).filter(isEarlierAutosave);
+    const renderedBackupIds = new Set([...currentBackups, ...(showExpired ? expiredBackups : [])]
+        .map((backup) => backup.backupId)
+        .concat(earlierAutosaves.map((item) => autosaveTarget(item.generation))));
+    // An acceptance note is superseded once that job's own outcome is shown.
+    const currentFeedback = feedback?.jobId !== undefined && shownJob?.jobId === feedback.jobId && TERMINAL_JOB_STATES.has(shownJob.state)
+        ? null : feedback;
+    // Row results stay beside their restore button; anything else stays beside Create backup.
+    const rowFeedback = currentFeedback !== null && currentFeedback.target !== "create" && renderedBackupIds.has(currentFeedback.target)
+        ? currentFeedback : null;
+    const controlFeedback = currentFeedback !== null && rowFeedback === null ? currentFeedback : null;
+    const lastBackupAt = latestServerBackupAt(backups);
 
-            {status?.job && <BackupJobStatus job={status.job} />}
+    // Formats an autosave's save time, age and size on one line.
+    function renderAutosaveDetails(item: MyServerSaveGenerationSummary) {
+        return (
+            <p className="mt-2 text-sm text-foreground-muted">
+                <time dateTime={item.lastModifiedAt}>{formatTime(item.lastModifiedAt)}</time>
+                {now !== null && <>
+                    <span aria-hidden="true"> · </span>
+                    {formatRelativeTime(item.lastModifiedAt, now, locale)}
+                </>}
+                <span aria-hidden="true"> · </span>
+                {formatByteCount(item.byteSize, number, t)}
+            </p>
+        );
+    }
 
-            {statusIsStale && (
-                <div className="flex flex-wrap items-center gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-xs text-foreground-muted">
-                    <p role="status">Automatic status updates paused after one minute. The operation may still be running.</p>
-                    <button
-                        type="button"
-                        onClick={() => beginPolling(server.serverId, currentServer.updatedAt, activeJob?.jobId, "backup")}
-                        className="min-h-9 border border-gold/35 px-3 text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                    >
-                        Refresh status and resume updates
-                    </button>
+    // Renders one earlier autosave with its load control and any result for that row.
+    function renderEarlierAutosave(item: EarlierAutosave) {
+        const target = autosaveTarget(item.generation);
+        const isRestoring = pendingBackupId === target;
+        return (
+            <li key={item.generation} className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                    <p className="font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
+                        {item.generation === "backup1" ? t("autosaves.earlierAutosave1") : t("autosaves.earlierAutosave2")}
+                    </p>
+                    {renderAutosaveDetails(item)}
+                    {rowFeedback?.target === target && (
+                        <p role="status" className="mt-2 max-w-2xl text-xs leading-5 text-foreground">
+                            {rowFeedback.text}
+                        </p>
+                    )}
                 </div>
-            )}
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                {canManage ? (
+                {canManage && (
                     <button
                         type="button"
                         disabled={
                             busy
                             || Boolean(loadError)
                             || retainedIntent !== null
+                            || !serverIsStopped
                         }
-                        onClick={submitCreateBackup}
-                        className="inline-flex min-h-10 items-center justify-center gap-2 border border-gold/35 bg-gold/[0.07] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
+                        onClick={() => submitAutosaveRestore(item)}
+                        title={retainedIntent !== null
+                            ? t("backups.reconcileThePendingBackupRequestFirst")
+                            : serverIsStopped ? undefined : t("autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave")}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 border border-red-400/40 bg-red-500/[0.06] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-red-200 transition-colors hover:border-red-300/60 hover:bg-red-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
                     >
-                        <Archive aria-hidden="true" className={`size-3.5 ${pendingBackupId === "create" ? "animate-pulse" : ""}`} />
-                        {pendingBackupId === "create" ? "Submitting…" : "Create backup"}
+                        <RotateCcw aria-hidden="true" className={`size-3.5 ${isRestoring ? "animate-pulse" : ""}`} />
+                        {isRestoring ? t("backups.submitting") : t("autosaves.loadAutosave")}
                     </button>
-                ) : (
-                    <span className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-foreground-dim">
-                        Read-only access
-                    </span>
                 )}
+            </li>
+        );
+    }
+
+    // Renders one retained backup with its restore control and any result for that row.
+    function renderBackup(backup: MyServerBackupSummary) {
+        const canRestore = canManage && canRequestServerBackupRestore(backup);
+        const isRestoring = pendingBackupId === backup.backupId;
+        const reason = restoreDisabledReason(backup, restoreMessages);
+        return (
+            <li key={backup.backupId} className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
+                            {formatBackupType(backup.backupType, t)}
+                        </p>
+                        <BackupState state={backup.restoreState} />
+                    </div>
+                    <p className="mt-2 text-sm text-foreground-muted">
+                        <time dateTime={backup.createdAt}>{formatTime(backup.createdAt)}</time>
+                        <span aria-hidden="true"> · </span>
+                        {formatByteCount(backup.byteSize, number, t)}
+                    </p>
+                    <p className="mt-1 text-xs text-foreground-dim">
+                        {t("backups.retainedUntilDate", { date: formatTime(backup.retentionExpiresAt) })}
+                    </p>
+                    {backup.restoredAt !== null && (
+                        <p className="mt-1 text-xs text-foreground-dim">
+                            {t("backups.lastRestoredDate", { date: formatTime(backup.restoredAt) })}
+                        </p>
+                    )}
+                    {reason && (
+                        <p className="mt-1 text-xs text-foreground-dim">
+                            {reason}
+                        </p>
+                    )}
+                    {rowFeedback?.target === backup.backupId && (
+                        <p role="status" className="mt-2 max-w-2xl text-xs leading-5 text-foreground">
+                            {rowFeedback.text}
+                        </p>
+                    )}
+                </div>
+                {canManage && (
+                    <button
+                        type="button"
+                        disabled={
+                            busy
+                            || !canRestore
+                            || retainedIntent !== null
+                        }
+                        onClick={() => submitRestore(backup)}
+                        title={retainedIntent !== null
+                            ? t("backups.reconcileThePendingBackupRequestFirst")
+                            : reason}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 border border-red-400/40 bg-red-500/[0.06] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-red-200 transition-colors hover:border-red-300/60 hover:bg-red-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
+                    >
+                        <RotateCcw aria-hidden="true" className={`size-3.5 ${isRestoring ? "animate-pulse" : ""}`} />
+                        {isRestoring ? t("backups.submitting") : t("backups.restoreSave")}
+                    </button>
+                )}
+            </li>
+        );
+    }
+
+    return (
+        <div className="mt-5 space-y-4">
+            {storageError && (
+                <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
+                    {t("backups.backupRequestRecoveryStorageIsUnavailableOrInvalidMutationsAre")}</p>
+            )}
+            {loadError && (
+                <p role="status" className="border-l-2 border-gold/50 bg-gold/5 px-4 py-3 text-sm text-foreground-muted">
+                    {loadError}
+                </p>
+            )}
+
+            {shownJob !== null
+                ? <BackupJobStatus job={shownJob} interruptsPlayers={interruptingJobIds.has(shownJob.jobId) || serverIsRunning} />
+                : lastBackupAt !== null && !loadError && (
+                    <p className="text-sm text-foreground-muted">{t("backups.lastBackupDate", { date: formatTime(lastBackupAt) })}</p>
+                )}
+
+            {statusIsStale && (
+                <div className="flex flex-wrap items-center gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-xs text-foreground-muted">
+                    <p role="status">{t("backups.automaticStatusUpdatesHavePausedTheOperationMayStillBeRunning")}</p>
+                    <button
+                        type="button"
+                        onClick={() => beginPolling(server.serverId, currentServer.updatedAt, activeJob?.jobId, "backup")}
+                        className="min-h-9 border border-gold/35 px-3 text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                    >
+                        {t("backups.refreshStatusAndResumeUpdates")}</button>
+                </div>
+            )}
+
+            {(autosaves || autosaveLoadError) && (
+                <section aria-labelledby={autosaveHeadingId}>
+                    <h3 id={autosaveHeadingId} className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
+                        {autosaves?.campaignName
+                            ? t("autosaves.recentAutosavesCampaign", { campaign: autosaves.campaignName })
+                            : t("autosaves.recentAutosaves")}
+                    </h3>
+                    <p className="mt-1 text-xs text-foreground-dim">{t("autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave")}</p>
+                    {autosaveLoadError && (
+                        <p role="status" className="mt-3 border-l-2 border-gold/50 bg-gold/5 px-4 py-3 text-sm text-foreground-muted">
+                            {autosaveLoadError}
+                        </p>
+                    )}
+                    {(currentAutosave !== null || earlierAutosaves.length > 0) && (
+                        <ul className="mt-3 divide-y divide-white/10 border border-white/10" aria-label={t("autosaves.recentAutosaves")}>
+                            {currentAutosave !== null && (
+                                <li className="p-4">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <p className="font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
+                                            {t("autosaves.currentSave")}
+                                        </p>
+                                        <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-emerald-200">
+                                            {t("autosaves.inUse")}
+                                        </span>
+                                    </div>
+                                    {renderAutosaveDetails(currentAutosave)}
+                                </li>
+                            )}
+                            {earlierAutosaves.map(renderEarlierAutosave)}
+                        </ul>
+                    )}
+                    {autosaves && earlierAutosaves.length === 0 && (
+                        <div className="mt-3 border border-dashed border-white/10 px-4 py-6 text-center text-sm text-foreground-muted">
+                            {t("autosaves.noEarlierAutosavesYet")}
+                        </div>
+                    )}
+                    {canManage && earlierAutosaves.length > 0 && !serverIsStopped && (
+                        <p className="mt-2 text-xs text-foreground-dim">{t("autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave")}</p>
+                    )}
+                </section>
+            )}
+
+            <div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    {canManage ? (
+                        <button
+                            type="button"
+                            disabled={
+                                busy
+                                || Boolean(loadError)
+                                || retainedIntent !== null
+                            }
+                            onClick={submitCreateBackup}
+                            className="inline-flex min-h-10 items-center justify-center gap-2 border border-gold/35 bg-gold/[0.07] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
+                        >
+                            <Archive aria-hidden="true" className={`size-3.5 ${pendingBackupId === "create" ? "animate-pulse" : ""}`} />
+                            {pendingBackupId === "create" ? t("backups.submitting") : t("backups.createBackup")}
+                        </button>
+                    ) : (
+                        <span className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-foreground-dim">
+                            {t("backups.readOnlyAccess")}</span>
+                    )}
+                </div>
+                <div aria-live="polite" className="max-w-2xl">
+                    {showRetainedNotice && retainedIntent !== null ? (
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-xs leading-5 text-foreground-muted">
+                            <div className="min-w-0 flex-1 space-y-1">
+                                <p>{retainedIntent.action === "create-backup"
+                                    ? t("backups.wereConfirmingYourBackupRequest")
+                                    : t("backups.wereConfirmingYourRestoreRequest")}</p>
+                                {controlFeedback && <p className="text-foreground">{controlFeedback.text}</p>}
+                            </div>
+                            <button
+                                type="button"
+                                disabled={isPending || !intentReady || storageError || !canManage || Boolean(loadError)}
+                                onClick={retryPendingRequest}
+                                className="inline-flex min-h-9 items-center justify-center border border-gold/35 bg-gold/[0.07] px-3 font-label text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:border-white/10 disabled:text-foreground-dim"
+                            >
+                                {pending?.retry ? t("backups.reconciling") : t("backups.retryPendingRequest")}
+                            </button>
+                        </div>
+                    ) : controlFeedback && (
+                        <p className="mt-3 text-xs leading-5 text-foreground">{controlFeedback.text}</p>
+                    )}
+                </div>
             </div>
 
             {!loadError && (backups.length === 0 ? (
                 <div className="border border-dashed border-white/10 px-4 py-8 text-center text-sm text-foreground-muted">
-                    No retained backups are available yet.
-                </div>
+                    {t("backups.noRetainedBackupsAreAvailableYet")}</div>
             ) : (
-                <ul className="divide-y divide-white/10 border border-white/10" aria-label="Retained save backups">
-                    {backups.map((backup) => {
-                        const canRestore = canManage && canRequestServerBackupRestore(backup);
-                        const isRestoring = pendingBackupId === backup.backupId;
-                        return (
-                            <li key={backup.backupId} className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <p className="font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
-                                            {formatBackupType(backup.backupType)}
-                                        </p>
-                                        <BackupState state={backup.restoreState} />
-                                    </div>
-                                    <p className="mt-2 text-sm text-foreground-muted">
-                                        <LocalDateTime value={backup.createdAt} />
-                                        <span aria-hidden="true"> · </span>
-                                        {formatByteCount(backup.byteSize)}
-                                    </p>
-                                    <p className="mt-1 text-xs text-foreground-dim">
-                                        Retained until <LocalDateTime value={backup.retentionExpiresAt} />
-                                    </p>
-                                    {backup.restoredAt !== null && (
-                                        <p className="mt-1 text-xs text-foreground-dim">
-                                            Last restored <LocalDateTime value={backup.restoredAt} />
-                                        </p>
-                                    )}
-                                    {restoreDisabledReason(backup) && (
-                                        <p className="mt-1 text-xs text-foreground-dim">
-                                            {restoreDisabledReason(backup)}
-                                        </p>
-                                    )}
-                                </div>
-                                {canManage && (
-                                    <button
-                                        type="button"
-                                        disabled={
-                                            busy
-                                            || !canRestore
-                                            || retainedIntent !== null
-                                        }
-                                        onClick={() => submitRestore(backup)}
-                                        title={retainedIntent !== null
-                                            ? "Reconcile the pending backup request first."
-                                            : restoreDisabledReason(backup)}
-                                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 border border-red-400/40 bg-red-500/[0.06] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-red-200 transition-colors hover:border-red-300/60 hover:bg-red-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
-                                    >
-                                        <RotateCcw aria-hidden="true" className={`size-3.5 ${isRestoring ? "animate-pulse" : ""}`} />
-                                        {isRestoring ? "Submitting…" : "Restore save"}
-                                    </button>
-                                )}
-                            </li>
-                        );
-                    })}
-                </ul>
+                <>
+                    {currentBackups.length > 0 && (
+                        <ul className="divide-y divide-white/10 border border-white/10" aria-label={t("backups.retainedSaveBackups")}>
+                            {currentBackups.map(renderBackup)}
+                        </ul>
+                    )}
+                    {expiredBackups.length > 0 && (
+                        <div>
+                            <button
+                                type="button"
+                                aria-expanded={showExpired}
+                                aria-controls={expiredListId}
+                                onClick={() => setShowExpired(!showExpired)}
+                                className="inline-flex min-h-10 items-center gap-2 text-sm text-foreground-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold"
+                            >
+                                <ChevronDown aria-hidden="true" className={`size-4 transition-transform ${showExpired ? "rotate-180" : ""}`} />
+                                {showExpired
+                                    ? t("backups.hideExpiredBackups")
+                                    : t("backups.showCountExpiredBackups", { count: expiredBackups.length })}
+                            </button>
+                            <ul id={expiredListId} hidden={!showExpired} className="mt-3 divide-y divide-white/10 border border-white/10" aria-label={t("backups.expiredBackups")}>
+                                {showExpired && expiredBackups.map(renderBackup)}
+                            </ul>
+                        </div>
+                    )}
+                </>
             ))}
-
-            {retainedIntent !== null && (
-                <div className="flex max-w-2xl flex-wrap items-center justify-between gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-xs leading-5 text-foreground-muted">
-                    <p role="status">
-                        This request has an unconfirmed outcome. Its exact request ID and inputs are retained so reconciliation cannot create another request.
-                    </p>
-                    <button
-                        type="button"
-                        disabled={isPending || !intentReady || storageError || !canManage || Boolean(loadError)}
-                        onClick={retryPendingRequest}
-                        className="inline-flex min-h-9 items-center justify-center border border-gold/35 bg-gold/[0.07] px-3 font-label text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:border-white/10 disabled:text-foreground-dim"
-                    >
-                        {isPending ? "Reconciling…" : "Retry pending request"}
-                    </button>
-                </div>
-            )}
-
-            {message && (
-                <p aria-live="polite" className="max-w-2xl text-xs leading-5 text-foreground-muted">
-                    {message}
-                </p>
-            )}
         </div>
     );
 }
 
-function BackupJobStatus({ job }: { job: MyServerBackupJob }) {
-    const active = ACTIVE_JOB_STATES.has(job.state);
+type EarlierAutosave = MyServerSaveGenerationSummary & { generation: MyServerRestorableSaveGeneration };
+
+// Narrows an autosave to one that can replace the current save.
+function isEarlierAutosave(item: MyServerSaveGenerationSummary): item is EarlierAutosave {
+    return item.generation !== "current";
+}
+
+// Describes how long ago an autosave was written, in the selected locale's own wording.
+function formatRelativeTime(value: string, now: number, locale: string) {
+    const format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    // Clock skew can place a fresh save slightly ahead of the viewer; it still reads as "now".
+    const seconds = Math.max(0, Math.floor((now - Date.parse(value)) / 1_000));
+    if (seconds < 60) return format.format(0, "second");
+    if (seconds < 3_600) return format.format(-Math.floor(seconds / 60), "minute");
+    if (seconds < 86_400) return format.format(-Math.floor(seconds / 3_600), "hour");
+    return format.format(-Math.floor(seconds / 86_400), "day");
+}
+
+// Presents durable backup progress without translating external job output.
+function BackupJobStatus({ job, interruptsPlayers }: { job: MyServerBackupJob; interruptsPlayers: boolean }) {
+    const { t } = useTranslations("managed-server");
+    const active = ACTIVE_BACKUP_JOB_STATES.has(job.state);
     const failed = job.state === "failed" || job.state === "cancelled";
     const message = active
-        ? formatProgress(job)
+        ? formatProgress(job, t)
         : job.state === "succeeded"
-            ? job.action === "backup" ? "Backup completed." : "Save restore completed."
-            : job.action === "backup" ? "The backup did not complete." : "The save restore did not complete.";
+            ? job.action === "backup" ? t("backups.backupCompleted") : t("backups.saveRestoreCompleted")
+            : job.action === "backup" ? t("backups.theBackupDidNotComplete") : t("backups.theSaveRestoreDidNotComplete");
     return (
         <div
             role={failed ? "alert" : "status"}
             className={`flex items-start gap-2 border-l-2 px-4 py-3 text-sm ${failed ? "border-crimson bg-crimson/10 text-red-200" : "border-gold bg-gold/[0.07] text-foreground-muted"}`}
         >
             {active && <LoaderCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 animate-spin text-gold" />}
-            <span>{message}</span>
+            <span>
+                {message}
+                {active && job.action === "backup" && interruptsPlayers && (
+                    <span className="mt-1 block text-xs">{t("backups.theServerIsTemporarilyStoppedForThisBackup")}</span>
+                )}
+            </span>
         </div>
     );
 }
 
+// Renders a localized backup state with its existing severity styling.
 function BackupState({ state }: { state: string }) {
+    const { t } = useTranslations("managed-server");
     const positive = state === "available" || state === "restored";
     const negative = state === "failed" || state === "expired";
     return (
@@ -408,27 +763,28 @@ function BackupState({ state }: { state: string }) {
                     ? "border-red-400/25 bg-red-500/10 text-red-200"
                     : "border-gold/25 bg-gold/[0.07] text-gold"
         }`}>
-            {formatBackupType(state)}
+            {formatBackupType(state, t)}
         </span>
     );
 }
 
-function formatProgress(job: MyServerBackupJob) {
-    if (job.state === "retry-wait") return `Waiting to retry safely. ${job.progress}`;
+// Adds localized retry context to unchanged external progress.
+function formatProgress(job: MyServerBackupJob, t: Translator["t"]) {
+    if (job.state === "retry-wait") return t("backups.waitingToRetrySafelyProgress", { progress: job.progress });
     return job.progress;
 }
 
-function formatBackupType(value: string) {
-    return value
-        .split(/[._-]/u)
-        .filter(Boolean)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" ");
+// Localizes known backup labels and preserves unknown external codes.
+function formatBackupType(value: string, t: Translator["t"]) {
+    const known = new Set(["manual", "daily", "weekly", "automatic", "scheduled", "safety", "pre-update", "pre-import", "pre-restore", "manual-deletion", "role-removal", "final-deletion", "available", "restored", "failed", "expired", "queued", "restoring"]);
+    if (known.has(value)) return t(`backupType.${value}`);
+    return value.split(/[._-]/u).filter(Boolean).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
-function formatByteCount(value: number) {
-    if (value < 1_024) return `${value} B`;
-    if (value < 1_048_576) return `${(value / 1_024).toFixed(1)} KB`;
-    if (value < 1_073_741_824) return `${(value / 1_048_576).toFixed(1)} MB`;
-    return `${(value / 1_073_741_824).toFixed(1)} GB`;
+// Formats retained backup size using the selected locale.
+function formatByteCount(value: number, number: Translator["number"], t: Translator["t"]) {
+    if (value < 1_024) return t("bytes.b", { value: number(value) });
+    if (value < 1_048_576) return t("bytes.kb", { value: number(value / 1_024, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) });
+    if (value < 1_073_741_824) return t("bytes.mb", { value: number(value / 1_048_576, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) });
+    return t("bytes.gb", { value: number(value / 1_073_741_824, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) });
 }

@@ -151,6 +151,15 @@
       "mobile_party_id": "已注册的移动部队 ID。"
     }
   },
+  "coop.debug.army.set_objective": {
+    "name": "Sets an army objective, or finishes it with None.",
+    "summary": "Sets an army objective, or finishes it with None.",
+    "arguments": {
+      "army_id": "已注册的军团 ID。",
+      "type": "Settlement, MobileParty, or None.",
+      "object_id": "The registered objective id, or none when finishing."
+    }
+  },
   "coop.debug.battle.capture_mount_pose": {
     "name": "执行捕获坐骑姿态的调试操作。",
     "summary": "执行捕获坐骑姿态的调试操作。",
@@ -439,6 +448,15 @@
     "arguments": {
       "clan_id": "已注册的家族 ID。",
       "hero_id": "已注册的同伴英雄 ID。"
+    }
+  },
+  "coop.debug.clan.add_heirs": {
+    "name": "Creates eligible heirs for a registered player clan on the server.",
+    "summary": "Creates eligible heirs for a registered player clan on the server.",
+    "arguments": {
+      "clan_id": "The registered player clan id.",
+      "count": "The number of heirs to create, from 1 through 10.",
+      "parent": "Optional player hero id or exact name; defaults to the clan leader."
     }
   },
   "coop.debug.clan.add_influence": {
@@ -778,6 +796,13 @@
       "heroName": "要查找的英雄的完整显示名称。包含多个词的值需加双引号。"
     }
   },
+  "coop.debug.hero.ill_days": {
+    "name": "Reports the local player's illness duration on clients or matching heroes on the server.",
+    "summary": "Reports the local player's illness duration on clients or matching heroes on the server.",
+    "arguments": {
+      "hero_name": "The exact hero display name required on the server. Quote multi-word values."
+    }
+  },
   "coop.debug.hero.info": {
     "name": "转储已注册英雄的字段。",
     "summary": "转储已注册英雄的字段。",
@@ -789,6 +814,15 @@
     "name": "列出有进行中事务的英雄。",
     "summary": "列出有进行中事务的英雄。",
     "arguments": {}
+  },
+  "coop.debug.hero.kill_player": {
+    "name": "Kills a living registered player hero on the server.",
+    "summary": "Kills a living registered player hero on the server.",
+    "arguments": {
+      "hero_id": "已注册的玩家英雄 ID。",
+      "death_detail": "One of old_age, battle, or execution.",
+      "killer_hero_id": "The optional registered killer hero id."
+    }
   },
   "coop.debug.hero.list": {
     "name": "列出已注册的英雄，可按显示名称的前缀筛选。",
@@ -807,6 +841,14 @@
     "summary": "在服务器上刷新据点的志愿兵。",
     "arguments": {
       "settlement_id": "可选的据点 StringId；默认为 town_ES1。"
+    }
+  },
+  "coop.debug.hero.set_age": {
+    "name": "Sets the age of heroes matching a display name or registered id on the server.",
+    "summary": "Sets the age of heroes matching a display name or registered id on the server.",
+    "arguments": {
+      "hero_name_or_id": "The exact hero display name or registered id. Quote multi-word values.",
+      "age": "The age in years."
     }
   },
   "coop.debug.hero.set_banneritem": {
@@ -872,6 +914,13 @@
     "summary": "列出英雄的志愿兵。",
     "arguments": {
       "hero_id": "英雄的 StringId。"
+    }
+  },
+  "coop.debug.hideout.teleport_party": {
+    "name": "Reveals the nearest populated hideout off cooldown and teleports the party with the given id to its entrance.",
+    "summary": "Reveals the nearest populated hideout off cooldown and teleports the party with the given id to its entrance.",
+    "arguments": {
+      "partyId": "The registered party id shown by coop.debug.players.list."
     }
   },
   "coop.debug.inventory.give_animals": {
@@ -1058,12 +1107,20 @@
       "faction2_id": "第二个已注册派系的 ID。"
     }
   },
+  "coop.debug.kingdom.force_ally": {
+    "name": "Forms an alliance between two kingdoms on the server.",
+    "summary": "Forms an alliance between two kingdoms on the server.",
+    "arguments": {
+      "kingdom1_id": "The first registered kingdom id.",
+      "kingdom2_id": "The second registered kingdom id."
+    }
+  },
   "coop.debug.kingdom.force_player_join_kingdom": {
     "name": "将玩家家族移入王国。",
     "summary": "将玩家家族移入王国。",
     "arguments": {
       "controller_id": "玩家控制器 ID。",
-      "kingdom_id": "已注册的王国 ID。"
+      "kingdom_id": "The registered kingdom id, or none to restore a kingdomless clan."
     }
   },
   "coop.debug.kingdom.force_player_vassalage": {
@@ -1073,6 +1130,14 @@
       "controller_id": "玩家控制器 ID。",
       "kingdom_id": "已注册的王国 ID。",
       "grant_rewards": "是否给予效忠奖励。"
+    }
+  },
+  "coop.debug.kingdom.force_trade_agreement": {
+    "name": "Forms a trade agreement between two kingdoms on the server.",
+    "summary": "Forms a trade agreement between two kingdoms on the server.",
+    "arguments": {
+      "kingdom1_id": "The first registered kingdom id.",
+      "kingdom2_id": "The second registered kingdom id."
     }
   },
   "coop.debug.kingdom.info": {
@@ -1344,6 +1409,14 @@
     "summary": "显示遭遇状态。",
     "arguments": {}
   },
+  "coop.debug.map_event.engage_nearest_bandit": {
+    "name": "Places the nearest bandit next to a player and orders it to engage them.",
+    "summary": "Places the nearest bandit next to a player and orders it to engage them.",
+    "arguments": {
+      "controller_id": "控制器 ID。",
+      "excluded_party_id": "要排除的部队 ID。"
+    }
+  },
   "coop.debug.map_event.enter_current_battle": {
     "name": "执行进入当前战斗的调试操作。",
     "summary": "执行进入当前战斗的调试操作。",
@@ -1383,6 +1456,14 @@
     "summary": "显示事件列表。",
     "arguments": {}
   },
+  "coop.debug.map_event.hold_ai_conversation": {
+    "name": "Holds an AI lord party for a player's map conversation.",
+    "summary": "Holds an AI lord party for a player's map conversation.",
+    "arguments": {
+      "controller_id": "The connected player's controller id.",
+      "hero_id": "The AI lord's registered hero id."
+    }
+  },
   "coop.debug.map_event.join_existing": {
     "name": "执行加入现有战斗的调试操作。",
     "summary": "执行加入现有战斗的调试操作。",
@@ -1417,9 +1498,11 @@
     "arguments": {}
   },
   "coop.debug.map_event.kms": {
-    "name": "执行自杀的调试操作。",
-    "summary": "执行自杀的调试操作。",
-    "arguments": {}
+    "name": "Removes the main agent using the current survival roll, or forces death during an active co-op battle.",
+    "summary": "Removes the main agent using the current survival roll, or forces death during an active co-op battle.",
+    "arguments": {
+      "force": "Use force to guarantee a killed result during an active co-op battle."
+    }
   },
   "coop.debug.map_event.late_join_mode_cleanup": {
     "name": "执行中途加入模式的清理调试操作。",
@@ -1653,7 +1736,8 @@
     "summary": "执行移动到据点的调试操作。",
     "arguments": {
       "party_id": "部队 ID。",
-      "settlement_id": "据点 ID。"
+      "settlement_id": "据点 ID。",
+      "instant": "Set to true to teleport instantly instead of travelling."
     }
   },
   "coop.debug.mobile_party.open_clan_party_transfer": {
@@ -1811,6 +1895,14 @@
       "mobilePartyId": "移动部队 ID。"
     }
   },
+  "coop.debug.mobileparty.disorganization_cache": {
+    "name": "Inspects party speed cache versions, optionally evaluating the local speed cache.",
+    "summary": "Inspects party speed cache versions, optionally evaluating the local speed cache.",
+    "arguments": {
+      "partyId": "The registered party id.",
+      "evaluate": "True to evaluate the local speed cache; false only observes."
+    }
+  },
   "coop.debug.mobileparty.info": {
     "name": "显示相关状态，用于联机调试。",
     "summary": "显示相关状态，用于联机调试。",
@@ -1822,6 +1914,14 @@
     "name": "列出相关状态，用于联机调试。",
     "summary": "列出相关状态，用于联机调试。",
     "arguments": {}
+  },
+  "coop.debug.mobileparty.set_disorganized": {
+    "name": "Calls the authoritative disorganization action for a registered party.",
+    "summary": "Calls the authoritative disorganization action for a registered party.",
+    "arguments": {
+      "partyId": "The registered party id.",
+      "value": "True or false."
+    }
   },
   "coop.debug.mobileparty.set_wage_limit_updated": {
     "name": "设置工资上限更新状态，用于联机调试。",
@@ -1859,6 +1959,13 @@
     "summary": "显示列表。",
     "arguments": {}
   },
+  "coop.debug.mod_config.voice_enabled": {
+    "name": "Enables or disables voice for the entire server this session.",
+    "summary": "Enables or disables voice for the entire server this session.",
+    "arguments": {
+      "value": "true or false"
+    }
+  },
   "coop.debug.party_visuals.buffer_state": {
     "name": "显示缓冲区状态。",
     "summary": "显示缓冲区状态。",
@@ -1870,9 +1977,11 @@
     "arguments": {}
   },
   "coop.unstuck": {
-    "name": "执行解除卡住的调试操作。",
-    "summary": "执行解除卡住的调试操作。",
-    "arguments": {}
+    "name": "Unsticks your own party on a client, or a connected player on the server.",
+    "summary": "Unsticks your own party on a client, or a connected player on the server.",
+    "arguments": {
+      "player": "Server only: the controller id, or the hero name in quotes. Leave it out on a client."
+    }
   },
   "coop.debug.players.list": {
     "name": "列出已注册的联机玩家。",
@@ -1908,6 +2017,14 @@
     "arguments": {
       "player_hero_id": "已注册的玩家英雄 ID。",
       "npc_hero_id": "已注册的 NPC 英雄 ID。"
+    }
+  },
+  "coop.debug.romance.fail_practicalities": {
+    "name": "Sets a marriage fixture pair to failed in practicalities.",
+    "summary": "Sets a marriage fixture pair to failed in practicalities.",
+    "arguments": {
+      "first_hero_id": "第一名已注册英雄的 ID。",
+      "second_hero_id": "第二名已注册英雄的 ID。"
     }
   },
   "coop.debug.romance.help": {
@@ -2225,7 +2342,8 @@
     "summary": "加入玩家，用于联机调试。",
     "arguments": {
       "settlementId": "据点 ID。",
-      "expectedPlayerCount": "预期玩家数量。"
+      "expectedPlayerCount": "预期玩家数量。",
+      "declareMissingWars": "Use declare-missing-wars only for a disposable debug fixture."
     }
   },
   "coop.debug.siege.leave": {

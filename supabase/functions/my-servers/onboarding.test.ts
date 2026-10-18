@@ -2,16 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createMyServersHandler } from "../_shared/my-servers.ts";
 import { parseOnboardingIntent, parseOnboardingResult, parseOnboardingSummary, normalizeOnboardingName } from "../_shared/server-onboarding-contract.ts";
-import { onboardingSummary, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID } from "../../../tests/onboarding-fixtures.ts";
+import { createRegionAlerts, type RegionFullEvent, type RegionRequestedEvent } from "../_shared/region-alerts.ts";
+import type { SmtpMessage } from "../_shared/smtp.ts";
+import { onboardingSummary, onboardingRegion, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID, ONBOARDING_TEST_TIME } from "../../../tests/onboarding-fixtures.ts";
 
 const token = "synthetic-jwt-for-contract-tests-only";
-function request(body?: unknown, id: string | null = ONBOARDING_TEST_ID, query = body === undefined ? "?resource=onboarding" : "") {
+function request(body?: unknown, id: string | null = ONBOARDING_TEST_ID, query = "") {
     return new Request(`https://edge.example.test/${query}`, { method: body === undefined ? "GET" : "POST",
         headers: { authorization: `Bearer ${token}`, ...(id === null ? {} : { "x-request-id": id }), "content-type": "application/json" },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 function handler(result: unknown, calls: unknown[] = [], status = 200, error?: unknown) {
     return createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
+        waitUntil: () => {},
         fetchImplementation: async (url, init) => {
             assert.equal(String(url), "https://backend.example.test/v1/user/control-plane");
             assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${token}`);
@@ -20,16 +23,21 @@ function handler(result: unknown, calls: unknown[] = [], status = 200, error?: u
                 ...(error === undefined ? { result } : { error }) }, { status });
         } });
 }
-test("onboarding Edge routes fixed summary/create/request operations and lowercases durable UUIDs", async () => {
+test("onboarding Edge routes fixed create/request operations and lowercases durable UUIDs", async () => {
     const calls: unknown[] = [];
-    assert.equal((await handler(onboardingSummary(), calls)(request())).status, 200);
     assert.equal((await handler(onboardingCreated(), calls)(request({ action: "create-server", displayName: "  My   Campaign  ", region: "us-west" }, ONBOARDING_TEST_ID.toUpperCase()))).status, 200);
     assert.equal((await handler(onboardingRequested(), calls)(request({ action: "request-region", region: "france" }))).status, 200);
     assert.deepEqual(calls, [
-        { version: 1, requestId: ONBOARDING_TEST_ID, operation: "server-onboarding", input: {} },
+        // Region keys only: the control plane resolves them against its stored catalog.
         { version: 1, requestId: ONBOARDING_TEST_ID, operation: "create-server", input: { displayName: "My Campaign", region: "us-west" } },
         { version: 1, requestId: ONBOARDING_TEST_ID, operation: "request-region", input: { region: "france" } },
     ]);
+});
+test("onboarding Edge forwards a well-formed key the website catalog does not know; the control plane decides", async () => {
+    const calls: Array<{ input: unknown }> = [];
+    const receipt = { action: "request-region", request: { ...onboardingRequested().request, region: "atlantis" } };
+    assert.equal((await handler(receipt, calls)(request({ action: "request-region", region: "atlantis" }))).status, 200);
+    assert.deepEqual(calls.map((call) => call.input), [{ region: "atlantis" }]);
 });
 test("onboarding extension preserves existing backup request ID spelling", async () => {
     const calls: unknown[] = [];
@@ -44,11 +52,14 @@ test("onboarding Edge rejects authority/slot/credential fields, invalid UUIDs, r
         assert.equal((await h(request({ ...create, [field]: "forbidden" }))).status, 400);
     }
     for (const id of [null, "not-uuid", "00000000-0000-0000-0000-000000000000"]) assert.equal((await h(request(create, id))).status, 400);
-    for (const region of ["united-states", "spain", "US-West", "", null]) assert.equal((await h(request({ ...create, region }))).status, 400);
+    for (const region of ["US-West", "us_west", "x", "-west", "a".repeat(49), "", null, 1]) assert.equal((await h(request({ ...create, region }))).status, 400);
+    // The browser can never choose hosts, and neither can the website: no placement is accepted or sent.
+    assert.equal((await h(request({ ...create, placement: { countryCodes: ["PL"] } }))).status, 400);
+    assert.equal((await h(request({ action: "request-region", region: "france", placement: { countryCodes: ["FR"] } }))).status, 400);
     for (const displayName of ["ab", "x".repeat(49), "@forbidden", "trailing-", "a\u200bb"]) assert.equal((await h(request({ ...create, displayName }))).status, 400);
     assert.equal((await h(request({ action: "request-region", region: "france", displayName: "My Campaign" }))).status, 400);
-    assert.equal((await h(request(undefined, ONBOARDING_TEST_ID, "?resource=onboarding&ownerId=1"))).status, 400);
-    assert.equal((await h(request(undefined, ONBOARDING_TEST_ID, "?resource=onboarding&resource=onboarding"))).status, 400);
+    // The summary is read server-side only; the Edge has no browser summary route.
+    assert.equal((await h(request(undefined, ONBOARDING_TEST_ID, "?resource=onboarding"))).status, 400);
     assert.equal(calls.length, 0);
 });
 test("onboarding safe DTO parsers reject incomplete, extra, inconsistent and invalid enums at every level", () => {
@@ -57,17 +68,35 @@ test("onboarding safe DTO parsers reject incomplete, extra, inconsistent and inv
     for (const key of Object.keys(summary)) { const missing = { ...summary } as Record<string, unknown>; delete missing[key]; assert.throws(() => parseOnboardingSummary(missing)); }
     for (const key of Object.keys(summary.eligibility)) { const missing = { ...summary.eligibility } as Record<string, unknown>; delete missing[key]; assert.throws(() => parseOnboardingSummary({ ...summary, eligibility: missing })); }
     for (const key of Object.keys(summary.regions[0])) { const missing = { ...summary.regions[0] } as Record<string, unknown>; delete missing[key]; assert.throws(() => parseOnboardingSummary({ ...summary, regions: [missing, ...summary.regions.slice(1)] })); }
-    const variants = [null, {}, { ...summary, host: "private" }, { ...summary, regions: summary.regions.slice(1) },
+    const offered = { ...onboardingRequested().request, region: "france" };
+    const retired = { ...onboardingRequested().request, region: "atlantis" };
+    const stored = (region: string) => ({ region, available: false, request: null });
+    assert.deepEqual(parseOnboardingSummary({ ...summary, otherRequests: [retired] }).otherRequests, [retired]);
+    // The stored catalog need not equal the website catalog: any 1..32 unique well-formed keys, in stored order.
+    for (const regions of [[...summary.regions].reverse(), summary.regions.slice(1), [stored("japan")], Array.from({ length: 32 }, (_, index) => stored(`region-${index}`))]) {
+        assert.deepEqual(parseOnboardingSummary({ ...summary, regions }).regions, regions);
+    }
+    const requested = (region: string, requestId = ONBOARDING_TEST_ID) => ({ ...stored(region), request: { ...retired, region, requestId } });
+    const variants = [null, {}, { ...summary, host: "private" }, { ...summary, regions: [] },
+        { ...summary, version: 2 }, { ...summary, regions: Array.from({ length: 33 }, (_, index) => stored(`region-${index}`)) },
+        { ...summary, regions: [stored("france"), stored("france")] }, { ...summary, regions: [stored("Japan")] }, { ...summary, regions: [stored("j")] },
+        { ...summary, regions: null }, { ...summary, regions: [{ ...stored("japan"), label: "Japan" }] },
+        { ...summary, otherRequests: [offered] }, { ...summary, otherRequests: [{ ...retired, region: "Atlantis" }] },
+        // A request ID may appear only once across the catalog and the requests outside it.
+        { ...summary, regions: [requested("france")], otherRequests: [retired] },
+        { ...summary, regions: [requested("france"), requested("germany", ONBOARDING_TEST_ID.toUpperCase())] },
+        { ...summary, otherRequests: [retired, { ...retired, region: "narnia" }] },
+        { ...summary, otherRequests: Array.from({ length: 33 }, () => retired) }, { ...summary, otherRequests: null },
         { ...summary, eligibility: { ...summary.eligibility, roleIds: [] } },
         { ...summary, eligibility: { ...summary.eligibility, reason: "patreon" } },
         { ...summary, eligibility: { ...summary.eligibility, remaining: 2 } },
         { ...summary, eligibility: { ...summary.eligibility, granted: -1 } },
         { ...summary, unavailableReason: "other" }, { ...summary, unavailableReason: "provisioning_paused" }];
     for (const variant of variants) assert.throws(() => parseOnboardingSummary(variant));
-    for (const override of [{ region: "unknown" }, { label: "private hostname" }, { available: "true" }, { slot: "secret" }, { request: {} },
+    for (const override of [{ region: "Unknown" }, { label: "private hostname" }, { available: "true" }, { slot: "secret" }, { request: {} },
         { request: { ...onboardingRequested().request, region: "germany" } }, { request: { ...onboardingRequested().request, status: "fulfilled" } },
         { request: { ...onboardingRequested().request, createdAt: "2026-02-30T14:00:00.000Z" } }]) {
-        const altered = onboardingSummary(); Object.assign(altered.regions[2], override);
+        const altered = onboardingSummary(); Object.assign(onboardingRegion(altered, "france"), override);
         assert.throws(() => parseOnboardingSummary(altered));
     }
     const created = onboardingCreated(); const expected = { action: "create-server", displayName: "My Campaign", region: "us-west" } as const;
@@ -80,9 +109,6 @@ test("onboarding safe DTO parsers reject incomplete, extra, inconsistent and inv
     assert.equal(parseOnboardingIntent({ ...expected, requestId: ONBOARDING_TEST_ID.toUpperCase() }).requestId, ONBOARDING_TEST_ID);
 });
 test("onboarding Edge never forwards invalid success DTOs or inconsistent envelopes/status", async () => {
-    for (const result of [{ ...onboardingSummary(), hostId: "private" }, { ...onboardingSummary(), regions: [] }]) {
-        const response = await handler(result)(request()); assert.equal(response.status, 502); assert.equal((await response.json()).error.code, "invalid_response");
-    }
     const create = { action: "create-server", displayName: "My Campaign", region: "us-west" };
     assert.equal((await handler({ ...onboardingCreated(), state: "running" })(request(create))).status, 502);
     assert.equal((await handler(onboardingCreated(), [], 409)(request(create))).status, 502);
@@ -93,6 +119,305 @@ test("onboarding Edge preserves typed 400/404/409/429 errors and transport uncer
         const response = await handler(null, [], status, { code, message: "Safe rejection", retryable: false })(request({ action: "request-region", region: "france" }));
         assert.equal(response.status, status); assert.equal((await response.json()).error.code, code);
     }
-    const h = createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test", fetchImplementation: async () => { throw new Error("lost"); } });
-    const response = await h(request()); assert.equal(response.status, 502); assert.equal((await response.json()).error.retryable, true);
+    const h = createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test", waitUntil: () => {}, fetchImplementation: async () => { throw new Error("lost"); } });
+    const response = await h(request({ action: "request-region", region: "france" })); assert.equal(response.status, 502); assert.equal((await response.json()).error.retryable, true);
+});
+
+const JWT = `header.${Buffer.from(JSON.stringify({ sub: ONBOARDING_TEST_ID, email: "Owner@Example.test" }), "utf8").toString("base64url")}.signature`;
+const REQUEST_REGION = { action: "request-region", region: "france" };
+function alerting(result: unknown, events: RegionRequestedEvent[], background: Promise<void>[], options: { status?: number; error?: unknown; fail?: boolean } = {}) {
+    return createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
+        waitUntil: (task) => { background.push(task); },
+        fetchImplementation: async (_url, init) => {
+            const body = JSON.parse(init?.body as string);
+            return Response.json({ version: 1, requestId: body.requestId, ok: options.error === undefined, ...(options.error === undefined ? { result } : { error: options.error }) }, { status: options.status ?? 200 });
+        },
+        onRegionRequested: async (event) => { events.push(event); if (options.fail) throw new Error("smtp unavailable"); } });
+}
+function requestWithToken(body: unknown, bearer: string) {
+    return new Request("https://edge.example.test/", { method: "POST", headers: { authorization: `Bearer ${bearer}`, "x-request-id": ONBOARDING_TEST_ID, "content-type": "application/json" }, body: JSON.stringify(body) });
+}
+test("onboarding Edge alerts once per newly accepted region request, never for dedupes, creates or failures", async () => {
+    const events: RegionRequestedEvent[] = [];
+    const background: Promise<void>[] = [];
+    const accepted = await alerting(onboardingRequested(), events, background)(requestWithToken(REQUEST_REGION, JWT));
+    assert.equal(accepted.status, 200);
+    assert.deepEqual(await accepted.json(), { version: 1, requestId: ONBOARDING_TEST_ID, ok: true, result: onboardingRequested() });
+    await Promise.all(background);
+    assert.deepEqual(events, [{ requestId: ONBOARDING_TEST_ID, region: "france", createdAt: ONBOARDING_TEST_TIME, requester: { accountId: ONBOARDING_TEST_ID, email: "owner@example.test" } }]);
+    // Opaque bearer tokens still alert, without requester details.
+    assert.equal((await alerting(onboardingRequested(), events, background)(request(REQUEST_REGION, ONBOARDING_TEST_ID.toUpperCase()))).status, 200);
+    await Promise.all(background);
+    assert.deepEqual(events[1], { requestId: ONBOARDING_TEST_ID, region: "france", createdAt: ONBOARDING_TEST_TIME, requester: { accountId: null, email: null } });
+    // Dedupe receipts carry the existing request's UUID and must not alert again.
+    const deduplicated = { action: "request-region", request: { ...onboardingRequested().request, requestId: "abcdefab-9999-4999-8999-999999999999" } };
+    assert.equal((await alerting(deduplicated, events, background)(request(REQUEST_REGION))).status, 200);
+    assert.equal((await alerting(onboardingCreated(), events, background)(request({ action: "create-server", displayName: "My Campaign", region: "us-west" }))).status, 200);
+    assert.equal((await alerting({ action: "request-region", request: { ...onboardingRequested().request, status: "fulfilled" } }, events, background)(request(REQUEST_REGION))).status, 502);
+    assert.equal((await alerting(null, events, background, { status: 409, error: { code: "capacity_available", message: "Create instead", retryable: false } })(request(REQUEST_REGION))).status, 409);
+    assert.equal((await alerting(onboardingRequested(), events, background)(request({ ...REQUEST_REGION, region: "Spain" }))).status, 400);
+    const unauthenticated = request(REQUEST_REGION); unauthenticated.headers.delete("authorization");
+    assert.equal((await alerting(onboardingRequested(), events, background)(unauthenticated)).status, 401);
+    const forbiddenOrigin = request(REQUEST_REGION); forbiddenOrigin.headers.set("origin", "https://untrusted.example.test");
+    assert.equal((await alerting(onboardingRequested(), events, background)(forbiddenOrigin)).status, 403);
+    assert.equal(background.length, 2);
+    await Promise.all(background);
+    assert.equal(events.length, 2);
+});
+test("onboarding Edge logs unexpected hook failure without changing the confirmed receipt", async (t) => {
+    const events: RegionRequestedEvent[] = [];
+    const background: Promise<void>[] = [];
+    const log = t.mock.method(console, "error", () => {});
+    const response = await alerting(onboardingRequested(), events, background, { fail: true })(request(REQUEST_REGION));
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).result, onboardingRequested());
+    await Promise.all(background);
+    assert.equal(events.length, 1);
+    assert.deepEqual(log.mock.calls.map((call) => call.arguments), [[`Region request alert failed for ${ONBOARDING_TEST_ID}: smtp unavailable`]]);
+});
+
+const CREATE_SERVER = { action: "create-server", displayName: "My Campaign", region: "us-west" };
+// A summary the control plane refuses, as the region-full check sees it.
+const REJECTED_SUMMARY = Symbol("rejected summary");
+// Serves the create receipt, then the follow-up summary (null simulates a lost summary response).
+function creating(summary: unknown, events: RegionFullEvent[], background: Promise<void>[], calls: Array<{ operation: string; input: unknown }> = []) {
+    return createMyServersHandler({ allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
+        waitUntil: (task) => { background.push(task); },
+        fetchImplementation: async (_url, init) => {
+            const body = JSON.parse(init?.body as string); calls.push({ operation: body.operation, input: body.input });
+            if (body.operation === "server-onboarding" && summary === null) throw new Error("summary lost");
+            if (body.operation === "server-onboarding" && summary === REJECTED_SUMMARY) {
+                return Response.json({ version: 1, requestId: body.requestId, ok: false, error: { code: "forbidden", message: "No access", retryable: false } }, { status: 403 });
+            }
+            return Response.json({ version: 1, requestId: body.requestId, ok: true, result: body.operation === "create-server" ? onboardingCreated() : summary });
+        },
+        onRegionFull: async (event) => { events.push(event); } });
+}
+// Builds a summary whose regions all report the given availability.
+function summaryWith(available: boolean, unavailableReason: "provisioning_paused" | null = null) {
+    return { ...onboardingSummary(), unavailableReason, regions: onboardingSummary().regions.map((entry) => ({ ...entry, available })) };
+}
+test("onboarding Edge alerts when a created server leaves its region full", async () => {
+    const events: RegionFullEvent[] = []; const calls: Array<{ operation: string; input: unknown }> = [];
+    const background: Promise<void>[] = [];
+    const response = await creating(summaryWith(false), events, background, calls)(requestWithToken(CREATE_SERVER, JWT));
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).result, onboardingCreated());
+    assert.equal(background.length, 1);
+    await Promise.all(background);
+    assert.deepEqual(calls.map((call) => call.operation), ["create-server", "server-onboarding"]);
+    assert.deepEqual(calls[1].input, { version: 3 });
+    assert.deepEqual(events, [{ region: "us-west", serverId: ONBOARDING_TEST_ID, createdAt: ONBOARDING_TEST_TIME, requester: { accountId: ONBOARDING_TEST_ID, email: "owner@example.test" } }]);
+});
+test("onboarding Edge sends no full-region alert while capacity remains, provisioning is unavailable or the summary fails", async (t) => {
+    const log = t.mock.method(console, "error", () => {});
+    // A lost, rejected or invalid summary is a failed best-effort check, never a full region.
+    for (const summary of [summaryWith(true), summaryWith(false, "provisioning_paused"), null, REJECTED_SUMMARY, { ...summaryWith(false), version: 2 }]) {
+        const events: RegionFullEvent[] = [];
+        const background: Promise<void>[] = [];
+        const response = await creating(summary, events, background)(request(CREATE_SERVER));
+        assert.equal(response.status, 200);
+        assert.deepEqual((await response.json()).result, onboardingCreated());
+        assert.equal(background.length, 1);
+        await Promise.all(background);
+        assert.equal(events.length, 0);
+    }
+    assert.equal(log.mock.callCount(), 3);
+    for (const call of log.mock.calls) assert.match(call.arguments[0], /^Region full check failed for us-west:/u);
+});
+
+// Synthetic upstreams settle within this turn; optional work stays gated until after the receipt.
+function receiptBeforeBackground(response: Promise<Response>) {
+    return Promise.race([response, new Promise<never>((_, reject) => {
+        setImmediate(() => reject(new Error("Receipt waited for optional background work")));
+    })]);
+}
+
+test("onboarding Edge returns a region receipt without waiting for email delivery or failure", async () => {
+    for (const failure of [false, true]) {
+        const delivery = Promise.withResolvers<void>();
+        const background: Promise<void>[] = [];
+        const sent: SmtpMessage[] = [];
+        const logged: string[] = [];
+        const alerts = createRegionAlerts({
+            recipients: ["admin@example.test"], from: "alerts@example.test",
+            send: async (message) => { await delivery.promise; sent.push(message); },
+            log: (message) => { logged.push(message); },
+        });
+        const h = createMyServersHandler({
+            allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
+            waitUntil: (task) => { background.push(task); },
+            fetchImplementation: async () => Response.json({ version: 1, requestId: ONBOARDING_TEST_ID, ok: true, result: onboardingRequested() }),
+            onRegionRequested: alerts.regionRequested,
+        });
+        try {
+            const response = await receiptBeforeBackground(h(requestWithToken(REQUEST_REGION, JWT)));
+            assert.equal(response.status, 200);
+            assert.equal(response.headers.get("cache-control"), "private, no-store");
+            assert.deepEqual(await response.json(), { version: 1, requestId: ONBOARDING_TEST_ID, ok: true, result: onboardingRequested() });
+            assert.equal(background.length, 1);
+            assert.equal(sent.length, 0);
+            assert.deepEqual(logged, []);
+            if (failure) delivery.reject(new Error("smtp unavailable"));
+            else delivery.resolve();
+            await Promise.all(background);
+            if (failure) {
+                assert.equal(sent.length, 0);
+                assert.deepEqual(logged, [`Region alert failed for request ${ONBOARDING_TEST_ID}: smtp unavailable`]);
+            } else {
+                assert.equal(sent.length, 1);
+                assert.deepEqual(sent[0].to, ["admin@example.test"]);
+                assert.ok(sent[0].text.includes(`Request ID: ${ONBOARDING_TEST_ID}`));
+                assert.deepEqual(logged, []);
+            }
+        } finally {
+            delivery.resolve();
+            await Promise.all(background);
+        }
+    }
+});
+
+test("onboarding Edge returns a creation receipt without waiting for capacity or email", async (t) => {
+    const capacity = Promise.withResolvers<void>();
+    const delivery = Promise.withResolvers<void>();
+    const sending = Promise.withResolvers<void>();
+    const background: Promise<void>[] = [];
+    const deadlines: number[] = [];
+    const sent: SmtpMessage[] = [];
+    const calls: string[] = [];
+    let completed = false;
+    t.mock.method(AbortSignal, "timeout", (milliseconds: number) => {
+        deadlines.push(milliseconds);
+        return new AbortController().signal;
+    });
+    const alerts = createRegionAlerts({
+        recipients: ["admin@example.test"], from: "alerts@example.test",
+        send: async (message) => { sending.resolve(); await delivery.promise; sent.push(message); },
+    });
+    const h = createMyServersHandler({
+        allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
+        waitUntil: (task) => { background.push(task.then(() => { completed = true; })); },
+        fetchImplementation: async (url, init) => {
+            assert.equal(String(url), "https://backend.example.test/v1/user/control-plane");
+            assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${JWT}`);
+            assert.equal(init?.redirect, "error");
+            const body = JSON.parse(init?.body as string);
+            calls.push(body.operation);
+            if (body.operation === "server-onboarding") {
+                assert.deepEqual(body.input, { version: 3 });
+                await capacity.promise;
+            }
+            return Response.json({ version: 1, requestId: body.requestId, ok: true,
+                result: body.operation === "create-server" ? onboardingCreated() : summaryWith(false) });
+        },
+        onRegionFull: alerts.regionFull,
+    });
+    try {
+        const response = await receiptBeforeBackground(h(requestWithToken(CREATE_SERVER, JWT)));
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), { version: 1, requestId: ONBOARDING_TEST_ID, ok: true, result: onboardingCreated() });
+        assert.equal(background.length, 1);
+        assert.deepEqual(calls, ["create-server", "server-onboarding"]);
+        assert.deepEqual(deadlines, [30_000, 30_000]);
+        assert.equal(completed, false);
+        assert.equal(sent.length, 0);
+        capacity.resolve();
+        await sending.promise;
+        assert.equal(completed, false);
+        assert.equal(sent.length, 0);
+        delivery.resolve();
+        await Promise.all(background);
+        assert.equal(completed, true);
+        assert.equal(sent.length, 1);
+        assert.deepEqual(sent[0].to, ["admin@example.test"]);
+        assert.ok(sent[0].text.includes(`Server ID: ${ONBOARDING_TEST_ID}`));
+    } finally {
+        capacity.resolve();
+        delivery.resolve();
+        await Promise.all(background);
+    }
+});
+
+test("onboarding Edge schedules no capacity or email work for rejected or invalid creation receipts", async () => {
+    const background: Promise<void>[] = [];
+    const events: RegionFullEvent[] = [];
+    const cases = [
+        { status: 403, ok: false, error: { code: "forbidden", message: "No access", retryable: false }, expected: 403 },
+        { status: 409, ok: false, error: { code: "capacity_unavailable", message: "Region full", retryable: false }, expected: 409 },
+        { status: 200, ok: true, result: { ...onboardingCreated(), state: "running" }, expected: 502 },
+        { status: 200, ok: true, result: { ...onboardingCreated(), region: "france" }, expected: 502 },
+    ];
+    for (const { status, expected, ...envelope } of cases) {
+        let calls = 0;
+        const h = createMyServersHandler({
+            allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
+            waitUntil: (task) => { background.push(task); },
+            fetchImplementation: async () => {
+                calls++;
+                return Response.json({ version: 1, requestId: ONBOARDING_TEST_ID, ...envelope }, { status });
+            },
+            onRegionFull: async (event) => { events.push(event); },
+        });
+        assert.equal((await h(request(CREATE_SERVER))).status, expected);
+        assert.equal(calls, 1);
+    }
+    assert.deepEqual(background, []);
+    assert.deepEqual(events, []);
+});
+
+test("onboarding Edge logs a capacity deadline after returning the creation receipt", async (t) => {
+    const background: Promise<void>[] = [];
+    const deadlines: AbortController[] = [];
+    const events: RegionFullEvent[] = [];
+    const log = t.mock.method(console, "error", () => {});
+    t.mock.method(AbortSignal, "timeout", (milliseconds: number) => {
+        assert.equal(milliseconds, 30_000);
+        const controller = new AbortController(); deadlines.push(controller); return controller.signal;
+    });
+    const h = createMyServersHandler({
+        allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
+        waitUntil: (task) => { background.push(task); },
+        fetchImplementation: async (_url, init) => {
+            const body = JSON.parse(init?.body as string);
+            if (body.operation === "server-onboarding") {
+                const signal = init?.signal; assert.ok(signal);
+                await new Promise<never>((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }));
+            }
+            return Response.json({ version: 1, requestId: body.requestId, ok: true, result: onboardingCreated() });
+        },
+        onRegionFull: async (event) => { events.push(event); },
+    });
+    try {
+        const response = await receiptBeforeBackground(h(request(CREATE_SERVER)));
+        assert.equal(response.status, 200);
+        assert.deepEqual((await response.json()).result, onboardingCreated());
+        assert.equal(background.length, 1);
+        assert.equal(deadlines.length, 2);
+        deadlines[1].abort(new Error("capacity deadline"));
+        await Promise.all(background);
+        assert.deepEqual(events, []);
+        assert.deepEqual(log.mock.calls.map((call) => call.arguments), [["Region full check failed for us-west: capacity deadline"]]);
+    } finally {
+        for (const controller of deadlines) controller.abort();
+        await Promise.all(background);
+    }
+});
+
+test("onboarding Edge preserves the receipt and handles rejection even if background registration fails", async (t) => {
+    const background: Promise<void>[] = [];
+    const log = t.mock.method(console, "error", () => {});
+    const h = createMyServersHandler({
+        allowedOrigins: ["https://web.example.test"], controlPlaneUrl: "https://backend.example.test",
+        waitUntil: (task) => { background.push(task); throw new Error("runtime unavailable"); },
+        fetchImplementation: async () => Response.json({ version: 1, requestId: ONBOARDING_TEST_ID, ok: true, result: onboardingRequested() }),
+        onRegionRequested: async () => { throw new Error("alert failed"); },
+    });
+    const response = await h(request(REQUEST_REGION));
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).result, onboardingRequested());
+    await Promise.all(background);
+    assert.deepEqual(log.mock.calls.map((call) => call.arguments), [
+        [`Region request alert failed for ${ONBOARDING_TEST_ID}: runtime unavailable`],
+        [`Region request alert failed for ${ONBOARDING_TEST_ID}: alert failed`],
+    ]);
 });

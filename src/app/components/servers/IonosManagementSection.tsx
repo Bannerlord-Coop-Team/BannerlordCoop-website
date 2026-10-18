@@ -1,3 +1,5 @@
+import { getTranslations } from "@/app/lib/localization/server";
+import type { Translator } from "@/app/lib/localization/types";
 import {
     CreateIonosServerForm,
     DestroyIonosServerButton,
@@ -20,10 +22,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-function memoryLabel(ramMb: number | null) {
-    if (ramMb === null) return "Unknown";
-    if (ramMb % 1024 === 0) return `${ramMb / 1024} GB`;
-    return `${ramMb} MB`;
+/** Formats resource memory for the inventory locale, keeping vendor units intact. */
+function memoryLabel(ramMb: number | null, { t, number }: Translator) {
+    if (ramMb === null) return t("ionos.unknown");
+    if (ramMb % 1024 === 0) return t("ionos.gigabytes", { value: number(ramMb / 1024) });
+    return t("ionos.megabytes", { value: number(ramMb) });
 }
 
 const STANDARD_PRESET = getIonosServerPreset("Standard");
@@ -37,7 +40,8 @@ function stateStyle(state: string) {
     return "bg-foreground-dim text-foreground-muted";
 }
 
-export function IonosManagementSection({
+/** Presents the live IONOS inventory; administrator-only provisioning controls retain their behavior. */
+export async function IonosManagementSection({
     creationEnabled,
     isAdmin,
     loadError,
@@ -52,6 +56,8 @@ export function IonosManagementSection({
     provisioning: IonosProvisioningSummary;
     servers: ManagedIonosServer[];
 }) {
+    const translator = await getTranslations("live-server");
+    const { t, number } = translator;
     return (
         <section
             className="mt-8 rounded-sm border border-sky-400/20 bg-[linear-gradient(120deg,rgba(56,189,248,0.07),rgba(17,18,15,0.82)_45%)] p-5 sm:p-6"
@@ -65,14 +71,14 @@ export function IonosManagementSection({
                     <div>
                         <div className="flex flex-wrap items-center gap-2.5">
                             <h2 id="ionos-heading" className="font-display text-2xl font-semibold text-foreground sm:text-3xl">
-                                IONOS infrastructure
+                                {t("ionos.heading")}
                             </h2>
                             <span className="rounded-sm border border-sky-400/25 bg-sky-400/10 px-2 py-1 font-label text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-sky-300">
-                                Live
+                                {t("ionos.live")}
                             </span>
                         </div>
                         <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
-                            This is the live IONOS inventory. Existing managed resources remain available, but new-server provisioning is currently paused.
+                            {t("ionos.intro")}
                         </p>
                     </div>
                 </div>
@@ -81,16 +87,16 @@ export function IonosManagementSection({
             <dl className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <SummaryItem
                     icon={Server}
-                    label="Standard · Cube S"
-                    value={`${STANDARD_PRESET.cores} vCPU · ${memoryLabel(STANDARD_PRESET.ramMb)} · ${STANDARD_PRESET.storageGb} GB NVMe`}
+                    label={t("ionos.standard")}
+                    value={t("ionos.presetResources", { cores: number(STANDARD_PRESET.cores), memory: memoryLabel(STANDARD_PRESET.ramMb, translator), storage: number(STANDARD_PRESET.storageGb) })}
                 />
                 <SummaryItem
                     icon={Crown}
-                    label="Premium · Cube M"
-                    value={`${PREMIUM_PRESET.cores} vCPU · ${memoryLabel(PREMIUM_PRESET.ramMb)} · ${PREMIUM_PRESET.storageGb} GB NVMe`}
+                    label={t("ionos.premium")}
+                    value={t("ionos.presetResources", { cores: number(PREMIUM_PRESET.cores), memory: memoryLabel(PREMIUM_PRESET.ramMb, translator), storage: number(PREMIUM_PRESET.storageGb) })}
                 />
-                <SummaryItem icon={HardDrive} label="Boot storage" value="Direct-attached NVMe" />
-                <SummaryItem icon={KeyRound} label="Image" value={provisioning.imageAlias} />
+                <SummaryItem icon={HardDrive} label={t("ionos.bootStorage")} value={t("ionos.nvme")} />
+                <SummaryItem icon={KeyRound} label={t("ionos.image")} value={provisioning.imageAlias} />
             </dl>
 
             {isAdmin && creationEnabled && !loadError && (
@@ -115,11 +121,11 @@ export function IonosManagementSection({
             <div className="mt-6 grid gap-3">
                 {!loadError && servers.length === 0 && (
                     <div className="rounded-sm border border-dashed border-white/15 bg-background/45 px-5 py-8 text-center">
-                        <p className="font-display text-xl font-semibold text-foreground">No managed IONOS servers</p>
+                        <p className="font-display text-xl font-semibold text-foreground">{t("ionos.empty")}</p>
                         <p className="mt-2 text-sm text-foreground-muted">
                             {creationEnabled
-                                ? "The first Create server operation also creates the website-managed data center and public LAN."
-                                : "New IONOS server provisioning is currently disabled."}
+                                ? t("ionos.firstServer")
+                                : t("ionos.creationDisabled")}
                         </p>
                     </div>
                 )}
@@ -150,14 +156,14 @@ export function IonosManagementSection({
 
                                 <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4 xl:min-w-150">
                                     <ServerDetail
-                                        label="Preset"
-                                        value={server.preset ?? "Custom"}
+                                        label={t("ionos.preset")}
+                                        value={server.preset ?? t("ionos.custom")}
                                     />
-                                    <ServerDetail label="Resources" value={`${server.cores ?? "?"} vCPU · ${memoryLabel(server.ramMb)}`} />
-                                    <ServerDetail label="Location" value={server.location} />
+                                    <ServerDetail label={t("ionos.resources")} value={t("ionos.serverResources", { cores: server.cores === null ? "?" : number(server.cores), memory: memoryLabel(server.ramMb, translator) })} />
+                                    <ServerDetail label={t("ionos.location")} value={server.location} />
                                     <ServerDetail
-                                        label="Public IP"
-                                        value={server.ips.length > 0 ? server.ips.join(", ") : "Provisioning"}
+                                        label={t("ionos.publicIp")}
+                                        value={server.ips.length > 0 ? server.ips.join(", ") : t("ionos.provisioning")}
                                         mono
                                     />
                                 </dl>
@@ -167,7 +173,7 @@ export function IonosManagementSection({
                                         href={`/servers/${server.id}?datacenterId=${encodeURIComponent(server.datacenterId)}`}
                                         className="inline-flex min-h-10 items-center justify-center gap-2 rounded-sm border border-gold/40 bg-gold/10 px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:bg-gold/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                                     >
-                                        Manage <ChevronRight aria-hidden="true" className="size-4" />
+                                        {t("ionos.manage")} <ChevronRight aria-hidden="true" className="size-4" />
                                     </Link>
                                     {isAdmin && (
                                         <DestroyIonosServerButton
@@ -186,8 +192,8 @@ export function IonosManagementSection({
             <p className="mt-5 flex items-start gap-2 text-xs leading-5 text-foreground-dim">
                 <Network aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
                 {creationEnabled
-                    ? "New Cubes use a public LAN with an ingress firewall that permits SSH on TCP 22 only. Game ports and Bannerlord deployment are not configured yet."
-                    : "Inventory and destruction support remain available for previously managed IONOS resources."}
+                    ? t("ionos.networkNotice")
+                    : t("ionos.pausedNotice")}
             </p>
         </section>
     );

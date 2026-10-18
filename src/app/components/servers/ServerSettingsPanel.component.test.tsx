@@ -1,14 +1,17 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ServerSettingsPanel } from "./ServerSettingsPanel";
 
-const mocks = vi.hoisted(() => ({ router: { refresh: vi.fn() }, settings: vi.fn(), visibility: vi.fn(), release: vi.fn(), status: vi.fn(), rename: vi.fn() }));
+const mocks = vi.hoisted(() => ({ router: { refresh: vi.fn() }, settings: vi.fn(), visibility: vi.fn(), release: vi.fn(), status: vi.fn(), rename: vi.fn(), manager: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => mocks.router }));
 vi.mock("@/app/servers/server-settings-actions", () => ({ saveServerSettings: mocks.settings }));
 vi.mock("@/app/servers/server-visibility-actions", () => ({ setServerVisibility: mocks.visibility }));
 vi.mock("@/app/servers/server-release-actions", () => ({ changeServerRelease: mocks.release, readServerReleaseStatus: mocks.status }));
 vi.mock("@/app/servers/name-actions", () => ({ renameLiveServer: mocks.rename }));
+vi.mock("@/app/servers/server-manager-actions", () => ({ setServerManager: mocks.manager }));
 
 const serverId = "11111111-1111-4111-8111-111111111111";
 const updatedAt = "2026-10-01T00:00:00.000Z";
@@ -18,7 +21,8 @@ const access = { serverId, expectedUpdatedAt: updatedAt, canEdit: true };
 const props: ComponentProps<typeof ServerSettingsPanel> = {
     name: "Settings QA", visibility: "private", visibilityAccess: access,
     releaseAccess: { ...access, channel: "stable" },
-    settingsAccess: { ...access, maintenanceSlot: "03:00-04:00", timezone: "America/Chicago" },
+    settingsAccess: { ...access, maintenanceSlot: "06:00-07:00", timezone: "America/Chicago" },
+    managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true },
 };
 let container: HTMLDivElement;
 let root: Root;
@@ -29,10 +33,11 @@ beforeEach(() => {
     mocks.visibility.mockResolvedValue({ ok: true, updatedAt: visibilityAt, message: "Visibility saved." });
     mocks.release.mockResolvedValue({ ok: true, jobId: serverId, message: "Release queued." });
     mocks.status.mockResolvedValue(null);
+    mocks.manager.mockResolvedValue({ ok: true, message: "Manager access granted." });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
-async function render(next = props) { await act(async () => root.render(<ServerSettingsPanel {...next} />)); }
+async function render(next = props) { await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel {...next} />} </TestLocalization>)); }
 async function change(selector: string, value: string) {
     await act(async () => {
         const element = container.querySelector<HTMLInputElement | HTMLSelectElement>(selector)!;
@@ -46,7 +51,7 @@ function click(text: string) { return act(async () => Array.from(container.query
 
 it("renders current maintenance preferences and discards unsaved changes without writes", async () => {
     await render();
-    expect(container.querySelector<HTMLSelectElement>("#settings-maintenance-window")!.value).toBe("03:00-04:00");
+    expect(container.querySelector<HTMLSelectElement>("#settings-maintenance-window")!.value).toBe("06:00-07:00");
     expect(container.querySelectorAll("#settings-maintenance-window option")).toHaveLength(3);
     expect(container.textContent).toContain("America/Chicago");
     expect(container.textContent).not.toContain("Nightly is experimental.");
@@ -55,10 +60,35 @@ it("renders current maintenance preferences and discards unsaved changes without
     expect(container.textContent).toContain("Unsaved changes");
     expect(mocks.settings).not.toHaveBeenCalled();
     await click("Discard");
-    expect(container.querySelector<HTMLSelectElement>("#settings-maintenance-window")!.value).toBe("03:00-04:00");
+    expect(container.querySelector<HTMLSelectElement>("#settings-maintenance-window")!.value).toBe("06:00-07:00");
     expect(container.textContent).toContain("No pending changes");
 });
 
+it("filters the settings controls by their labels and shows an empty state when nothing matches", async () => {
+    await render();
+    await change("#settings-search", "visibility");
+    expect(container.querySelector("#settings-server-name")).toBeNull();
+    expect(container.querySelector("#settings-maintenance-window")).toBeNull();
+    expect(container.querySelector("#settings-release-channel")).toBeNull();
+    expect(container.querySelector('input[name="settings-visibility"]')).not.toBeNull();
+    await change("#settings-search", "does not exist");
+    expect(container.querySelector('input[name="settings-visibility"]')).toBeNull();
+    expect(container.textContent).toContain("No settings match your search.");
+});
+
+it("offers owner manager access through exact email entry without rendering an account directory", async () => {
+    await render();
+    expect(container.textContent).toContain("Bannerlord Coop account email");
+    expect(container.querySelector("datalist")).toBeNull();
+    expect(container.querySelectorAll('input[type="email"]')).toHaveLength(1);
+    await change("#manager-account-email", "friend@example.com");
+    await act(async () => container.querySelector<HTMLFormElement>('form:has(#manager-account-email)')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(mocks.manager).toHaveBeenCalledExactlyOnceWith(expect.any(FormData));
+    const submitted = mocks.manager.mock.calls[0]![0] as FormData;
+    expect(submitted.get("serverId")).toBe(serverId);
+    expect(submitted.get("expectedUpdatedAt")).toBe(updatedAt);
+    expect(submitted.get("managerEmail")).toBe("friend@example.com");
+});
 it("saves name and maintenance once, then carries each returned generation into visibility and release", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     await render();
@@ -68,9 +98,10 @@ it("saves name and maintenance once, then carries each returned generation into 
     await change("#settings-release-channel", "nightly");
     await submit();
     expect(mocks.settings).toHaveBeenCalledExactlyOnceWith({ serverId, expectedUpdatedAt: updatedAt,
-        patch: { displayName: "Renamed QA", maintenanceSlot: "18:00-19:00" }, requestId: expect.any(String) });
+        patch: { displayName: "Renamed QA", maintenanceSlot: "18:00-19:00" }, requestId: expect.any(String),
+        previous: { displayName: "Settings QA", maintenanceSlot: "06:00-07:00" } });
     expect(mocks.visibility).toHaveBeenCalledWith({ serverId, visibility: "public", expectedUpdatedAt: savedAt, requestId: expect.any(String) });
-    expect(mocks.release).toHaveBeenCalledWith({ serverId, releaseChannel: "nightly", expectedUpdatedAt: visibilityAt, requestId: expect.any(String) });
+    expect(mocks.release).toHaveBeenCalledWith({ serverId, releaseChannel: "nightly", expectedUpdatedAt: visibilityAt, requestId: expect.any(String), previousChannel: "stable" });
     expect(mocks.rename).not.toHaveBeenCalled();
     expect(mocks.router.refresh).toHaveBeenCalled();
 });
@@ -103,3 +134,65 @@ it.each([false, true])("disables maintenance when owner access or stored prefere
     expect(container.querySelector<HTMLInputElement>("#settings-server-name")!.disabled).toBe(true);
     expect(mocks.settings).not.toHaveBeenCalled();
 });
+
+it("explains an invalid server name beside the field before contacting the server", async () => {
+    await render();
+    const name = () => container.querySelector<HTMLInputElement>("#settings-server-name")!;
+    await change("#settings-server-name", "ab");
+    await submit();
+    expect(mocks.settings).not.toHaveBeenCalled();
+    expect(name().getAttribute("aria-invalid")).toBe("true");
+    expect(container.querySelector("#settings-server-name-error")?.textContent).toBe("Server names need at least 3 characters.");
+    expect(name().getAttribute("aria-describedby")).toContain("settings-server-name-error");
+    expect(document.activeElement).toBe(name());
+    await change("#settings-server-name", "Bad <name>");
+    expect(container.querySelector("#settings-server-name-error")?.textContent).toContain("Use only letters, numbers, spaces");
+    await change("#settings-server-name", "Valid QA name");
+    expect(container.querySelector("#settings-server-name-error")).toBeNull();
+    expect(name().getAttribute("aria-invalid")).toBeNull();
+    await submit();
+    expect(mocks.settings).toHaveBeenCalledOnce();
+});
+
+it("applies the live rename rules to live server names", async () => {
+    await render({ name: "Live", renameServerId: "live-server" });
+    await change("#settings-server-name", "   ");
+    await submit();
+    expect(mocks.rename).not.toHaveBeenCalled();
+    expect(container.querySelector("#settings-server-name-error")?.textContent).toBe("Enter a server name.");
+});
+
+it.each([
+    ["displayName", "#settings-server-name", "Server names can have at most 48 characters."],
+    ["maintenanceSlot", "#settings-maintenance-window", "Choose one of the listed maintenance windows."],
+] as const)("shows a server rejection of %s under that field and clears Saving at once", async (field, selector, message) => {
+    mocks.settings.mockResolvedValue({ ok: false, rejected: true, field, message });
+    await render();
+    await change("#settings-maintenance-window", "10:00-11:00");
+    await submit();
+    const control = container.querySelector(selector)!;
+    expect(control.getAttribute("aria-invalid")).toBe("true");
+    const error = document.getElementById(control.getAttribute("aria-describedby")!.split(" ")[0])!;
+    expect(error.textContent).toBe(message);
+    expect(container.querySelector("[data-unsaved-bar]")!.textContent).not.toContain(message);
+    expect(Array.from(container.querySelectorAll("button")).find(button => button.type === "submit")!.textContent).toBe("Save settings");
+});
+
+it("pins the save bar to the viewport only while there are unsaved changes", async () => {
+    await render();
+    expect(container.querySelector("[data-unsaved-bar]")).toBeNull();
+    await change("#settings-maintenance-window", "18:00-19:00");
+    const bar = container.querySelector("[data-unsaved-bar]")!;
+    expect(bar.getAttribute("data-unsaved-bar")).toBe("pinned");
+    expect(bar.className).toContain("fixed");
+    expect(bar.textContent).toContain("Save settings");
+    await click("Discard");
+    expect(container.querySelector("[data-unsaved-bar]")).toBeNull();
+});
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

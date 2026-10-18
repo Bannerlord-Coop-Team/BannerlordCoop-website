@@ -7,25 +7,31 @@ import {
 } from "@/app/lib/github-releases.ts";
 import { ArrowUpRight, CalendarDays, GitBranch } from "lucide-react";
 import type { Metadata } from "next";
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import { getLocale, getMessages, getTranslations } from "@/app/lib/localization/server";
+import type { Translator } from "@/app/lib/localization/types";
 
-export const metadata: Metadata = {
-    title: "Changelog",
-    description:
-        "Read the latest Bannerlord Coop releases, improvements, and bug fixes.",
-};
+/** Resolves page metadata from the same explicit locale as the page content. */
+export async function generateMetadata(): Promise<Metadata> {
+    const { t } = await getTranslations("changelog");
+    return {
+        title: t("metadata.title"),
+        description: t("metadata.description"),
+    };
+}
 
-const dateFormatter = new Intl.DateTimeFormat("en", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-});
-
+/** Localizes release presentation while retaining GitHub content and release links unchanged. */
 export default async function ChangelogPage() {
-    const { releases, isAvailable } = await getGitHubReleases();
+    const locale = await getLocale();
+    const [translator, messages, { releases, isAvailable }] = await Promise.all([
+        getTranslations("changelog", locale),
+        getMessages(["changelog"], locale),
+        getGitHubReleases(),
+    ]);
+    const { t, number } = translator;
 
     return (
-        <>
+        <LocalizationProvider locale={locale} messages={messages}>
             <Navbar />
 
             <main className="min-h-svh bg-background">
@@ -41,18 +47,18 @@ export default async function ChangelogPage() {
                     <div className="site-container grid gap-10 py-16 sm:py-20 lg:grid-cols-12 lg:items-end lg:gap-12 lg:py-24">
                         <div className="lg:col-span-8">
                             <p className="font-label text-xs font-semibold uppercase tracking-[0.24em] text-gold">
-                                Development updates
+                                {t("hero.eyebrow")}
                             </p>
 
                             <h1
                                 id="changelog-heading"
                                 className="mt-4 max-w-4xl font-display text-5xl font-semibold leading-[0.95] text-foreground sm:text-6xl lg:text-7xl"
                             >
-                                Bannerlord Coop Changelog
+                                {t("hero.title")}
                             </h1>
 
                             <p className="mt-7 max-w-3xl text-sm leading-7 text-foreground-muted sm:text-base">
-                                Here are all the latest versions, gameplay improvements, technical changes, and fixes published by the Bannerlord Coop development team.
+                                {t("hero.description")}
                             </p>
                         </div>
 
@@ -63,7 +69,7 @@ export default async function ChangelogPage() {
                                 rel="noopener noreferrer"
                                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-sm border border-gold/40 bg-surface/70 px-5 font-label text-xs font-semibold uppercase tracking-[0.16em] text-foreground transition-colors hover:border-gold hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                             >
-                                View releases on GitHub
+                                {t("links.githubReleases")}
                                 <ArrowUpRight
                                     aria-hidden="true"
                                     className="size-4"
@@ -83,28 +89,26 @@ export default async function ChangelogPage() {
                             <div className="lg:col-span-3">
                                 <div className="lg:sticky lg:top-8">
                                     <p className="font-label text-xs font-semibold uppercase tracking-[0.22em] text-gold">
-                                        Release history
+                                        {t("history.eyebrow")}
                                     </p>
 
                                     <h2
                                         id="release-history-heading"
                                         className="mt-3 font-display text-4xl font-semibold leading-tight text-foreground"
                                     >
-                                        What changed?
+                                        {t("history.title")}
                                     </h2>
 
                                     <p className="mt-5 text-sm leading-7 text-foreground-muted">
-                                        Release information is loaded directly from
-                                        the project&apos;s public GitHub repository
-                                        and refreshed every hour.
+                                        {t("history.description")}
                                     </p>
 
                                     {releases.length > 0 && (
                                         <p className="mt-7 border-t border-white/10 pt-5 font-label text-xs font-semibold uppercase tracking-[0.16em] text-foreground-dim">
-                                            Showing {releases.length}{" "}
-                                            {releases.length === 1
-                                                ? "release"
-                                                : "releases"}
+                                            {t("history.count", {
+                                                count: releases.length,
+                                                formattedCount: number(releases.length),
+                                            })}
                                         </p>
                                     )}
                                 </div>
@@ -112,9 +116,9 @@ export default async function ChangelogPage() {
 
                             <div className="lg:col-span-9">
                                 {!isAvailable ? (
-                                    <UnavailableState />
+                                    <UnavailableState t={t} />
                                 ) : releases.length === 0 ? (
-                                    <EmptyState />
+                                    <EmptyState t={t} />
                                 ) : (
                                     <ol className="space-y-8">
                                         {releases.map((release, index) => (
@@ -129,13 +133,13 @@ export default async function ChangelogPage() {
                                                                 <div className="flex flex-wrap items-center gap-3">
                                                                     <span className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold">
                                                                         {index === 0
-                                                                            ? "Latest release"
-                                                                            : "Release"}
+                                                                            ? t("release.latest")
+                                                                            : t("release.label")}
                                                                     </span>
 
                                                                     {release.prerelease && (
                                                                         <span className="border border-crimson/50 bg-crimson/10 px-2.5 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-foreground">
-                                                                            Pre-release
+                                                                            {t("release.prerelease")}
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -170,15 +174,15 @@ export default async function ChangelogPage() {
                                                                     className="size-4 text-gold-muted"
                                                                     strokeWidth={1.5}
                                                                 />
-                                                                Published{" "}
-                                                                {formatReleaseDate(
+                                                                {formatReleasePublication(
                                                                     release.publishedAt,
+                                                                    translator,
                                                                 )}
                                                             </time>
 
                                                             {release.author && (
                                                                 <span>
-                                                                    By {release.author}
+                                                                    {t("release.author", { author: release.author })}
                                                                 </span>
                                                             )}
                                                         </div>
@@ -187,6 +191,7 @@ export default async function ChangelogPage() {
                                                     <div className="px-6 py-7 sm:px-8 sm:py-9">
                                                         <ReleaseNotes
                                                             body={release.body}
+                                                            emptyMessage={t("release.emptyNotes")}
                                                         />
 
                                                         <div className="mt-8 border-t border-white/10 pt-6">
@@ -196,7 +201,7 @@ export default async function ChangelogPage() {
                                                                 rel="noopener noreferrer"
                                                                 className="inline-flex items-center gap-2 font-label text-xs font-semibold uppercase tracking-[0.16em] text-gold transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-background"
                                                             >
-                                                                View full release
+                                                                {t("links.fullRelease")}
                                                                 <ArrowUpRight
                                                                     aria-hidden="true"
                                                                     className="size-4"
@@ -217,28 +222,27 @@ export default async function ChangelogPage() {
             </main>
 
             <Footer />
-        </>
+        </LocalizationProvider>
     );
 }
 
-function UnavailableState() {
+/** Presents a translated GitHub availability failure without changing retry or fetch behavior. */
+function UnavailableState({ t }: Pick<Translator, "t">) {
     return (
         <div
             className="border border-white/10 bg-background px-6 py-12 text-center sm:px-10"
             role="status"
         >
             <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
-                GitHub unavailable
+                {t("unavailable.eyebrow")}
             </p>
 
             <h3 className="mt-3 font-display text-3xl font-semibold text-foreground">
-                The changelog could not be loaded.
+                {t("unavailable.title")}
             </h3>
 
             <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-foreground-muted">
-                GitHub may be temporarily unavailable or the API request may have
-                reached its rate limit. You can still view the releases directly on
-                GitHub.
+                {t("unavailable.description")}
             </p>
 
             <a
@@ -247,7 +251,7 @@ function UnavailableState() {
                 rel="noopener noreferrer"
                 className="mt-7 inline-flex min-h-11 items-center justify-center gap-2 border border-gold/40 px-5 font-label text-xs font-semibold uppercase tracking-[0.16em] text-gold transition-colors hover:border-gold hover:text-foreground"
             >
-                Open GitHub releases
+                {t("links.openGithubReleases")}
                 <ArrowUpRight
                     aria-hidden="true"
                     className="size-4"
@@ -258,33 +262,37 @@ function UnavailableState() {
     );
 }
 
-function EmptyState() {
+/** Presents the translated empty release history with its existing accessible status role. */
+function EmptyState({ t }: Pick<Translator, "t">) {
     return (
         <div
             className="border border-white/10 bg-background px-6 py-12 text-center sm:px-10"
             role="status"
         >
             <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold">
-                No releases yet
+                {t("empty.eyebrow")}
             </p>
 
             <h3 className="mt-3 font-display text-3xl font-semibold text-foreground">
-                The release history is currently empty.
+                {t("empty.title")}
             </h3>
 
             <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-foreground-muted">
-                Published GitHub releases will automatically appear here.
+                {t("empty.description")}
             </p>
         </div>
     );
 }
 
-function formatReleaseDate(value: string): string {
+/** Formats a whole publication message, including invalid dates, in the selected locale. */
+function formatReleasePublication(value: string, translator: Translator): string {
     const date = new Date(value);
 
     if (Number.isNaN(date.getTime())) {
-        return "on an unknown date";
+        return translator.t("release.publishedUnknown");
     }
 
-    return dateFormatter.format(date);
+    return translator.t("release.published", {
+        date: translator.date(date, { day: "numeric", month: "long", year: "numeric" }),
+    });
 }

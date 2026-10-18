@@ -2,13 +2,14 @@
 
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
-import { formatAccountOwner } from "@/app/lib/control-plane/presentation";
+import { formatAccountOwner, hostPlacementLabel } from "@/app/lib/control-plane/presentation";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import type {
     HostingAdminHostResources,
     HostingAdminVpsHost,
     HostingServerResources,
 } from "@/app/lib/control-plane/types";
+import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 import { AlertTriangle, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useId, useState } from "react";
@@ -26,6 +27,8 @@ type VpsHostInventoryProps = {
     hosts: HostingAdminVpsHost[];
     ownerLabels: Record<string, string>;
     runnerTargetSourceCommit: string | null;
+    // Stored catalog placements that name each host's regions; null when the catalog could not be read.
+    regionCatalog?: readonly HostingRegionPayload[] | null;
 };
 
 const SUMMARY_GRID = "grid-cols-2 @min-[70rem]:grid-cols-[minmax(0,12fr)_minmax(0,7fr)_minmax(0,15fr)_minmax(0,12fr)_minmax(0,8fr)_minmax(0,12fr)_2.5rem] [&>*]:min-w-0 [overflow-wrap:anywhere]";
@@ -41,6 +44,7 @@ export function VpsHostInventory({
     onRefresh,
     ownerLabels,
     runnerTargetSourceCommit,
+    regionCatalog = null,
 }: VpsHostInventoryProps) {
     const [expandedHost, setExpandedHost] = useState<string | null>(null);
     const idPrefix = useId();
@@ -78,12 +82,15 @@ export function VpsHostInventory({
                                         : "border-l-2 border-transparent"}
                             >
                                 <div role="row" className={`grid ${SUMMARY_GRID} items-center gap-x-4 gap-y-4 px-4 py-3 hover:bg-white/[0.025]`}>
-                                    <div role="cell" data-label="Host" className={SUMMARY_LABEL}><HostIdentity host={host} /></div>
+                                    <div role="cell" data-label="Host" className={SUMMARY_LABEL}><HostIdentity host={host} regionCatalog={regionCatalog} /></div>
                                     <div role="cell" data-label="Capacity" className={SUMMARY_LABEL}><CapacitySummary host={host} /></div>
                                     <div role="cell" data-label="Slots" className={SUMMARY_LABEL}><SlotSummary host={host} ownerLabels={ownerLabels} /></div>
                                     <div role="cell" data-label="System" className={SUMMARY_LABEL}><SystemSummary resources={host.resources} pending={liveDataPending} /></div>
-                                    <div role="cell" data-label="Billing" className={SUMMARY_LABEL}><p className="text-xs font-semibold text-foreground">{billingPending ? "Loading…" : billingUnavailable ? "Unavailable" : formatVpsCost(host.cost)}</p></div>
-                                    <div role="cell" data-label="Runner" className={SUMMARY_LABEL}>{liveDataPending ? <StateBadge value="loading" /> : <RunnerOnboardingStatus
+                                    <div role="cell" data-label="Billing" className={SUMMARY_LABEL}>
+                                        <p className="text-xs font-semibold text-foreground">{billingPending ? "Loading…" : billingUnavailable ? "Unavailable" : formatVpsCost(host.cost)}</p>
+                                        {!billingPending && !billingUnavailable && <p className="mt-1 text-xs text-foreground-muted">{formatVpsRenewal(host)}</p>}
+                                    </div>
+                                    <div role="cell" data-label="Runner" className={SUMMARY_LABEL}><RunnerOnboardingStatus
                                         compact
                                         onRefresh={onRefresh}
                                         serviceName={host.name}
@@ -91,7 +98,7 @@ export function VpsHostInventory({
                                         targetSourceCommit={runnerTargetSourceCommit}
                                         onboarding={host.runnerOnboarding}
                                         update={host.runnerUpdate ?? null}
-                                    />}</div>
+                                    /></div>
                                     <div role="cell" className="col-span-2 justify-self-end @min-[70rem]:col-span-1"><button
                                         type="button"
                                         aria-expanded={expanded}
@@ -124,8 +131,10 @@ export function diskPressureLevel(resources: HostingAdminHostResources | null): 
     };
 }
 
-function HostIdentity({ host }: { host: HostingAdminVpsHost }) {
-    return <div className="min-w-0"><p className="truncate font-mono text-xs text-foreground" title={host.name}>{host.name}</p><p className="mt-1 truncate text-xs text-foreground-muted" title={`${host.region} · ${host.locationId}`}>{host.region} · {host.locationId}</p></div>;
+/** Shows a host's name and its stored-catalog regions, country and zone. */
+function HostIdentity({ host, regionCatalog }: { host: HostingAdminVpsHost; regionCatalog: readonly HostingRegionPayload[] | null }) {
+    const placement = hostPlacementLabel(host, regionCatalog);
+    return <div className="min-w-0"><p className="truncate font-mono text-xs text-foreground" title={host.name}>{host.name}</p><p className="mt-1 truncate text-xs text-foreground-muted" title={placement}>{placement}</p></div>;
 }
 
 function CapacitySummary({ host }: { host: HostingAdminVpsHost }) {
@@ -223,6 +232,16 @@ function formatVpsCost(cost: HostingAdminVpsHost["cost"]) {
     const amount = new Intl.NumberFormat("en", { style: "currency", currency: cost.currencyCode }).format(cost.priceInMicrocents / 100_000_000);
     const cadence = cost.interval === 1 && cost.duration === "P1M" ? "month" : cost.interval === 1 && cost.duration === "P1Y" ? "year" : `${cost.interval} × ${cost.duration}`;
     return `${amount} / ${cadence}`;
+}
+
+function formatVpsRenewal(host: HostingAdminVpsHost) {
+    if (host.autoRenew === false) return "Won't Renew";
+    if (host.autoRenew !== true) return "Renewal unknown";
+    const date = host.expirationDate === null ? null : new Date(host.expirationDate);
+    if (!date || !Number.isFinite(date.valueOf())) return "Renewal date unknown";
+    return `Renews ${new Intl.DateTimeFormat("en-US", {
+        timeZone: "UTC", month: "2-digit", day: "2-digit", year: "numeric",
+    }).format(date)}`;
 }
 
 function formatCpu(resources: HostingServerResources | null | undefined) {

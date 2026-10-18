@@ -1,29 +1,30 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
 import { Download, ExternalLink, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 const downloadSources = [
     {
-        name: "Guided Installer",
-        description: "Windows and Linux. Supporter and Tester nightly: verifies your Discord role or sponsored seat during every install/update. Later server updates download only changed files.",
+        name: "download.installer.name",
+        description: "download.installer.description",
         href: "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/",
         recommended: true,
         supporterOnly: true,
     },
     {
-        name: "Steam Workshop",
-        description: "Subscribe and receive updates through Steam.",
+        name: "download.steam.name",
+        description: "download.steam.description",
         href: "https://steamcommunity.com/sharedfiles/filedetails/?id=3770450698",
     },
     {
-        name: "Nexus Mods",
-        description: "Download Bannerlord Coop from Nexus Mods.",
+        name: "download.nexus.name",
+        description: "download.nexus.description",
         href: "https://www.nexusmods.com/mountandblade2bannerlord/mods/2387",
     },
     {
-        name: "ModDB",
-        description: "View releases and project updates on ModDB.",
+        name: "download.moddb.name",
+        description: "download.moddb.description",
         href: "https://www.moddb.com/mods/bannerlord-coop",
     },
 ] as const;
@@ -32,7 +33,9 @@ type DownloadModalProps = {
     trigger?: "section" |"navbar";
 }
 
+/** Presents common download messages even when opened by Navbar outside the home route. */
 export function DownloadModal({trigger = "section"} : DownloadModalProps) {
+    const { t } = useTranslations("common");
     const [isOpen, setIsOpen] = useState(false);
     const dialogRef = useRef<HTMLDivElement>(null);
     const openButtonRef = useRef<HTMLButtonElement>(null);
@@ -94,7 +97,7 @@ export function DownloadModal({trigger = "section"} : DownloadModalProps) {
                 }>
 
                 <Download aria-hidden="true" className={`${trigger === "navbar" ? "size-3.5" : "size-4"} shrink-0`} strokeWidth={1.75}/>
-                {trigger === "navbar" ? "Download" : "Download The Mod"}
+                {t(trigger === "navbar" ? "download.trigger" : "download.sectionTrigger")}
             </button>
 
             {isOpen && (
@@ -130,27 +133,25 @@ export function DownloadModal({trigger = "section"} : DownloadModalProps) {
                                 type="button"
                                 onClick={() => setIsOpen(false)}
                                 className="absolute top-4 right-4 flex size-10 cursor-pointer items-center justify-center rounded-sm border border-white/15 text-foreground-muted transition-colors duration-300 hover:border-gold/50 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised sm:top-5 sm:right-5"
-                                aria-label="Close download options"
+                                aria-label={t("download.close")}
                             >
                                 <X aria-hidden="true" className="size-5" />
                             </button>
 
                             <p className="pr-12 font-label text-xs font-semibold uppercase tracking-[0.16em] text-gold sm:pr-14 sm:tracking-[0.2em]">
-                                Download Options
+                                {t("download.options")}
                             </p>
                             <h3
                                 id="download-modal-heading"
                                 className="mt-3 pr-12 font-display text-3xl font-semibold uppercase leading-none text-foreground min-[380px]:text-4xl sm:pr-14 sm:text-5xl"
                             >
-                                Choose A Platform
+                                {t("download.heading")}
                             </h3>
                             <p
                                 id="download-modal-description"
                                 className="mt-4 max-w-xl font-sans text-sm leading-6 text-foreground-muted sm:text-base"
                             >
-                                Public releases are available below. Nightly builds require the
-                                Tester role, a Patreon, Boosty, or Afdian supporter role, or one
-                                of an eligible member&apos;s 10 sponsored Discord-account seats.
+                                {t("download.description")}
                             </p>
 
                             <div className="mt-6 grid gap-3 sm:mt-8">
@@ -165,21 +166,21 @@ export function DownloadModal({trigger = "section"} : DownloadModalProps) {
                                         <span>
                                             <span className="flex flex-wrap items-center gap-2 sm:gap-3">
                                                 <span className="font-display text-xl font-semibold text-foreground transition-colors duration-300 group-hover:text-gold sm:text-2xl">
-                                                    {source.name}
+                                                    {t(source.name)}
                                                 </span>
                                                 {"recommended" in source && source.recommended && (
                                                     <span className="rounded-sm border border-crimson/60 px-2 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-widest text-crimson-hover sm:text-xs sm:tracking-[0.12em]">
-                                                        Recommended
+                                                        {t("download.recommended")}
                                                     </span>
                                                 )}
                                                 {"supporterOnly" in source && source.supporterOnly && (
                                                     <span className="rounded-sm border border-[#ff8181]/60 px-2 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-widest text-[#ff8181] sm:text-xs sm:tracking-[0.12em]">
-                                                        Supporter Only
+                                                        {t("download.supporterOnly")}
                                                     </span>
                                                 )}
                                             </span>
                                             <span className="mt-2 block font-sans text-sm leading-5 text-foreground-muted">
-                                                {source.description}
+                                                {t(source.description)}
                                             </span>
                                         </span>
                                         <ExternalLink

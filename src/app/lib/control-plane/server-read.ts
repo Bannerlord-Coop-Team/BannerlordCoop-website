@@ -6,7 +6,7 @@ import {
     decodeControlPlaneAdminResponse,
 } from "./client";
 
-const READ_OPERATIONS = ["overview", "vps-hosts", "servers", "server-dashboard", "jobs", "audit", "release-catalog"] as const;
+const READ_OPERATIONS = ["overview", "vps-hosts", "servers", "server-dashboard", "jobs", "audit", "release-catalog", "hosting-regions"] as const;
 
 /** Reads the closed Admin API with the relay's protected-role requirement enforced by Oracle. */
 export async function readControlPlaneAdmin<T>(options: {

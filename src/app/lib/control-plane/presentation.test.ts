@@ -8,6 +8,8 @@ import {
     createServerRegionOptions,
     fieldRequirementLabel,
     formatAccountOwner,
+    hostPlacementLabel,
+    hostServedRegionKeys,
     installableBuilds,
     releaseChannelLabel,
     releaseVersion,
@@ -19,72 +21,61 @@ import {
     overviewStatRowClass,
     presentControlPlaneOperationResult,
     serverLifecycleOperationHref,
-    serverRegionOptions,
 } from "./presentation";
+import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
-test("server regions use the approved display order and protocol values", () => {
-    assert.deepEqual(serverRegionOptions(), [
-        { value: "us-west", label: "US-West" },
-        { value: "us-east", label: "US-East" },
-        { value: "france", label: "France" },
-        { value: "germany", label: "Germany" },
-        { value: "united-kingdom", label: "United Kingdom" },
-        { value: "poland", label: "Poland" },
-    ]);
-});
+const entry = (region: string, available: boolean) => ({ region, available });
 
-test("create-server regions come only from registered hosts with available prepared slots", () => {
+test("create-server regions are the stored-catalog entries reported available, in stored order, with website labels", () => {
     assert.deepEqual(createServerRegionOptions([
-        { region: "poland", availableServers: 1 },
-        { region: "us-east", availableServers: 2 },
-        { region: "germany", availableServers: 1 },
-        { region: "us-west", availableServers: 1 },
-        { region: "france", availableServers: 1 },
-        { region: "united-kingdom", availableServers: 1 },
-        { region: "us-east", availableServers: 1 },
-        { region: "spain", availableServers: 5 },
-        { region: "united-states", availableServers: 5 },
-        { region: "europe-automatic", availableServers: 5 },
-        { region: "unexpected", availableServers: 5 },
-    ]), serverRegionOptions());
+        entry("poland", true), entry("us-west", false), entry("us-east", true), entry("united-states", true),
+    ]), [
+        { value: "poland", label: "Poland" },
+        { value: "us-east", label: "US-East" },
+        { value: "united-states", label: "United States" },
+    ]);
+    assert.deepEqual(createServerRegionOptions([entry("france", false)]), []);
     assert.deepEqual(createServerRegionOptions([]), []);
 });
 
-test("create-server regions require positive safe-integer capacity", () => {
-    for (const availableServers of [0, -1, 0.5, 1.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, -Infinity]) {
-        assert.deepEqual(createServerRegionOptions(
-            serverRegionOptions().map(({ value: region }) => ({ region, availableServers })),
-        ), [], `Invalid available capacity: ${availableServers}`);
-    }
-    assert.deepEqual(createServerRegionOptions([
-        { region: "poland", availableServers: Number.MAX_SAFE_INTEGER },
-        { region: "us-east", availableServers: 1 },
-        { region: "us-east", availableServers: 0 },
-        { region: "germany", availableServers: 0 },
-        { region: "united-kingdom", availableServers: -1 },
-        { region: "france", availableServers: 0.5 },
-        { region: "us-west", availableServers: Infinity },
-        { region: "poland", availableServers: 2 },
-    ]), [
-        { value: "us-east", label: "US-East" },
-        { value: "poland", label: "Poland" },
-    ]);
+test("administrator create sends only the region key; other operations get no defaults", () => {
+    const input: Record<string, unknown> = { friendlyRegion: "us-east" };
+    applyControlPlaneOperationDefaults("create-server", input);
+    assert.deepEqual(input, { friendlyRegion: "us-east", releaseChannel: "stable" });
+    const maintenance: Record<string, unknown> = { reason: "Roll the fleet" };
+    applyControlPlaneOperationDefaults("batch-maintenance", maintenance);
+    assert.deepEqual(maintenance, { reason: "Roll the fleet" });
 });
 
-test("create-server regions exclude legacy values, provider locations, and noncanonical spellings", () => {
-    for (const region of [
-        "united-states", "spain", "europe-automatic", "unexpected",
-        "us/las", "us/ewr", "de/fra", "US-West", "us-east ", " france",
-        "", "toString", "constructor", "__proto__",
-    ]) {
-        assert.deepEqual(createServerRegionOptions([{ region, availableServers: 5 }]), [], region);
-    }
+test("hosts are labelled with every stored region they serve, else their legacy region or none", () => {
+    const stored = hostingRegionCatalogPayload();
+    assert.equal(hostPlacementLabel({ countryCode: "PL", locationId: "os-waw2", region: null }, stored), "Poland · PL · os-waw2");
+    assert.deepEqual(hostServedRegionKeys({ countryCode: "PL", locationId: "os-waw2", region: "us-east" }, stored), ["poland"]);
+    assert.equal(hostPlacementLabel({ countryCode: "US", locationId: "us-las", region: "united-states" }, stored), "United States (legacy) · US · us-las");
+    assert.deepEqual(hostServedRegionKeys({ countryCode: "US", locationId: "us-las", region: "united-states" }, stored), ["united-states"]);
+    assert.equal(hostPlacementLabel({ countryCode: "IT", locationId: "it-mil", region: null }, stored), "No stored region · IT · it-mil");
+    assert.deepEqual(hostServedRegionKeys({ countryCode: "IT", locationId: "it-mil", region: null }, stored), []);
+    assert.equal(hostPlacementLabel({ countryCode: "PL", locationId: "os-waw2", region: null }, null), "Regions unavailable · PL · os-waw2");
+    // The stored placements decide, not the website file.
+    const custom = [{ region: "central-europe", placement: { countryCodes: ["PL", "CZ"] } }];
+    assert.equal(hostPlacementLabel({ countryCode: "CZ", locationId: "any", region: null }, custom), "Central Europe · CZ · any");
+});
+
+test("host labels never guess a coast or a country", () => {
+    const stored = hostingRegionCatalogPayload();
+    for (const host of [
+        { countryCode: "US", locationId: "us-las" }, { countryCode: "US", locationId: "US-EAST-VA" },
+        { countryCode: "US", locationId: "us-east-va-other" }, { countryCode: "pl", locationId: "os-waw2" },
+        { countryCode: "ES", locationId: "es-mad" },
+    ]) assert.match(hostPlacementLabel({ ...host, region: null }, stored), /^No stored region · /u, JSON.stringify(host));
+    assert.match(hostPlacementLabel({ countryCode: "US", locationId: "us-east-va", region: null }, stored), /^US-East · /u);
+    assert.match(hostPlacementLabel({ countryCode: "US", locationId: "us-west-or", region: null }, stored), /^US-West · /u);
 });
 
 test("maintenance choices show their authoritative timezone without changing protocol values", () => {
     assert.equal(MAINTENANCE_TIME_ZONE, "America/Chicago");
     assert.deepEqual(maintenanceSlotOptions(), [
-        { value: "03:00-04:00", label: "03:00–04:00 America/Chicago" },
+        { value: "06:00-07:00", label: "06:00–07:00 America/Chicago" },
         { value: "10:00-11:00", label: "10:00–11:00 America/Chicago" },
         { value: "18:00-19:00", label: "18:00–19:00 America/Chicago" },
     ]);
@@ -149,8 +140,10 @@ test("the VPS view presents slot occupants and resources with their owning host"
 
     assert.match(pageSource, /needsAccounts = view === "vps"/u);
     const vpsSource = await readFile(new URL("../../components/admin/VpsView.tsx", import.meta.url), "utf8");
+    const browserSource = await readFile(new URL("../../components/admin/VpsInventoryBrowser.tsx", import.meta.url), "utf8");
     assert.match(vpsSource, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\}/u);
-    assert.match(vpsSource, /<VpsHostInventory/u);
+    assert.match(vpsSource, /<VpsInventoryBrowser/u);
+    assert.match(browserSource, /<VpsHostInventory/u);
     assert.match(inventorySource, /formatAccountOwner\(slot, ownerLabels\)/u);
 
     assert.match(inventorySource, /view=server&serverId=\$\{encodeURIComponent\(slot\.serverId\)\}/u);
@@ -382,15 +375,19 @@ test("operation card rows expand to their row width", () => {
 // Ensure discovery replaces receipt import and renders backend metadata rather than legacy guesses.
 test("Builds refreshes GHCR discovery and displays exact release labels", async () => {
     const source = await readFile(new URL("../../admin/control-plane/page.tsx", import.meta.url), "utf8");
+    const details = await readFile(new URL("../../components/admin/ControlPlanePresentation.tsx", import.meta.url), "utf8");
+    const server = await readFile(new URL("../../components/admin/ControlPlaneServerView.tsx", import.meta.url), "utf8");
     assert.match(source, /<RefreshReleaseCatalog/u);
     assert.doesNotMatch(source, /import-latest-stable|LEGACY_STABLE_METADATA/u);
     for (const key of ["client.revision", "client.version", "dedicated-server.revision", "game.version"]) {
-        assert.ok(source.includes(`io.bannerlordcoop.${key}`));
+        assert.ok(details.includes(`io.bannerlordcoop.${key}`));
     }
+    assert.ok(details.includes("Recorded source revision"));
+    assert.ok(details.includes('build.sourceRevision === "registry-observed"'));
     assert.match(source, /build.currentChannel/u);
-    assert.ok(source.includes('build.registryMetadata ? "Observed" : "Published"'));
+    assert.ok(source.includes('build.registryMetadata ? "First observed" : "Published"'));
     assert.match(source, /Follow channel \(remove version pin\)/u);
-    assert.match(source, /RecordedRelease build=\{result.dashboard.installedBuild\}/u);
+    assert.match(server, /RecordedRelease build=\{result.dashboard.installedBuild\}/u);
 });
 
 // Operations must offer the full discovery bound, not the overview's truncated 20-version lists.

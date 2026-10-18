@@ -9,7 +9,7 @@ import { CONTROL_PLANE_ADMIN_MAXIMUM_RESPONSE_BYTES } from "./client";
 
 const REQUEST_ID = "11111111-1111-4111-8111-111111111111";
 const TOKEN = "access-token-with-enough-characters";
-const operations = ["overview", "vps-hosts", "servers", "server-dashboard", "jobs", "audit", "release-catalog"] as const;
+const operations = ["overview", "vps-hosts", "servers", "server-dashboard", "jobs", "audit", "release-catalog", "hosting-regions"] as const;
 const options = { accessToken: TOKEN, operation: "overview" as const, requestId: REQUEST_ID };
 const headers = { "content-type": "application/json", "x-control-plane-protected-admin": "1" };
 const envelope = (result: unknown) => ({ version: 1, requestId: REQUEST_ID, ok: true, result });
@@ -205,7 +205,7 @@ it("runs every direct read in native workerd and rejects all redirects without f
             expect(response.status).toBe(200);
             expect(await response.json()).toEqual({ operation, revision: calls, rows: [{ name: "Current 👨‍👩‍👧‍👦" }] });
         }
-        expect(calls).toBe(7);
+        expect(calls).toBe(operations.length);
         for (const status of [301, 302, 303, 307, 308]) {
             redirectStatus = status; const before = calls;
             const response = await runtime.dispatchFetch("http://localhost/?operation=overview");

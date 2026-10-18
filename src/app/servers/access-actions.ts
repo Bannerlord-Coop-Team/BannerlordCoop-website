@@ -1,5 +1,7 @@
 "use server";
 
+import { getTranslations } from "@/app/lib/localization/server";
+
 import { isDatabaseContention } from "../../../supabase/functions/_shared/database-contention";
 
 import {
@@ -147,11 +149,13 @@ export async function clearLiveConsoleOwner(formData: FormData) {
     finish(serverId, "Server owner and operator access removed.");
 }
 
+/** Adds delegated live access after the existing actor and owner checks, returning localized feedback. */
 export async function addLiveConsoleOperator(formData: FormData) {
+    const { t } = await getTranslations("live-server");
     const serverId = formServerId(formData);
     const email = accountEmail(formData);
-    if (!serverId) fail("Choose a valid server.");
-    if (!email) fail("Enter the operator's account email.", serverId);
+    if (!serverId) fail(t("action.invalidServer"));
+    if (!email) fail(t("action.operatorEmail"), serverId);
 
     const actor = await currentUser();
     if (!actor) redirect(`/login?next=${encodeURIComponent(`/servers/${serverId}`)}`);
@@ -166,33 +170,35 @@ export async function addLiveConsoleOperator(formData: FormData) {
             getOwnedLiveConsoleServerIds(user.app_metadata).includes(serverId),
         ) ?? [];
         if (!target) {
-            actionError = "No registered member has that email address.";
+            actionError = t("action.missingAccount");
         } else if (result?.truncated) {
-            actionError = "The member directory is too large to verify a unique owner safely.";
+            actionError = t("action.directoryTooLarge");
         } else if (owners.length !== 1) {
-            actionError = "Assign exactly one server owner before adding operators.";
+            actionError = t("action.uniqueOwnerRequired");
         } else if (getOwnedLiveConsoleServerIds(target.app_metadata).includes(serverId)) {
-            actionError = "The server owner already has management access.";
+            actionError = t("action.ownerHasAccess");
         } else if (getMemberRole(target) === "Admin") {
-            actionError = "Administrators already have management access.";
+            actionError = t("action.adminHasAccess");
         } else {
             await updateLiveConsoleAssignment(getSupabaseAdminClient(), target.id, serverId, {
                 operator: true,
             });
         }
     } catch (error) {
-        actionError = isDatabaseContention(error) ? "The account is busy. Refresh assignments and retry the same change." : "The operator could not be added.";
+        actionError = isDatabaseContention(error) ? t("action.accountBusy") : t("action.addFailed");
     }
 
     if (actionError) fail(actionError, serverId);
-    finish(serverId, "Operator access added successfully.");
+    finish(serverId, t("action.added"));
 }
 
+/** Removes delegated live access after the existing authorization checks, returning localized feedback. */
 export async function removeLiveConsoleOperator(formData: FormData) {
+    const { t } = await getTranslations("live-server");
     const serverId = formServerId(formData);
     const operatorUserId = String(formData.get("operatorUserId") ?? "");
-    if (!serverId) fail("Choose a valid server.");
-    if (!operatorUserId) fail("Choose a valid server operator.", serverId);
+    if (!serverId) fail(t("action.invalidServer"));
+    if (!operatorUserId) fail(t("action.invalidOperator"), serverId);
 
     const actor = await currentUser();
     if (!actor) redirect(`/login?next=${encodeURIComponent(`/servers/${serverId}`)}`);
@@ -204,18 +210,18 @@ export async function removeLiveConsoleOperator(formData: FormData) {
         const adminClient = getSupabaseAdminClient();
         const { data, error } = await adminClient.auth.admin.getUserById(operatorUserId);
         if (error || !data.user) {
-            actionError = "That operator account could not be found.";
+            actionError = t("action.operatorMissing");
         } else if (!getOperatedLiveConsoleServerIds(data.user.app_metadata).includes(serverId)) {
-            actionError = "That account is not an operator for this server.";
+            actionError = t("action.notOperator");
         } else {
             await updateLiveConsoleAssignment(adminClient, data.user.id, serverId, {
                 operator: false,
             });
         }
     } catch (error) {
-        actionError = isDatabaseContention(error) ? "The account is busy. Refresh assignments and retry the same change." : "The operator could not be removed.";
+        actionError = isDatabaseContention(error) ? t("action.accountBusy") : t("action.removeFailed");
     }
 
     if (actionError) fail(actionError, serverId);
-    finish(serverId, "Operator access removed successfully.");
+    finish(serverId, t("action.removed"));
 }

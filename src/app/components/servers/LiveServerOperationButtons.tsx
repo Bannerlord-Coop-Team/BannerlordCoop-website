@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
+
 import {
     Download,
     LoaderCircle,
@@ -19,19 +21,20 @@ export type ContainerState =
     | "restarting"
     | "updating";
 
-export const containerOperationLabels: Record<ContainerOperation, string> = {
-    start: "Start",
-    stop: "Stop",
-    restart: "Restart",
-    update: "Update",
+export const containerOperationLabelKeys: Record<ContainerOperation, string> = {
+    start: "operation.start.label",
+    stop: "operation.stop.label",
+    restart: "operation.restart.label",
+    update: "operation.update.label",
 };
 
-export const containerOperationConfirmations: Partial<Record<ContainerOperation, string>> = {
-    stop: "Stop the live Bannerlord server? Connected players will be disconnected.",
-    restart: "Restart the live Bannerlord server? Connected players will be disconnected briefly.",
-    update: "Check for and apply the latest configured server image? If a new image exists, the container will be recreated and connected players will be disconnected. The previous container is retained for rollback.",
+export const containerOperationConfirmationKeys: Partial<Record<ContainerOperation, string>> = {
+    stop: "operation.stop.confirmation",
+    restart: "operation.restart.confirmation",
+    update: "operation.update.confirmation",
 };
 
+/** Presents localized controls while emitting unchanged container operation codes. */
 export function LiveServerOperationButtons({
     className = "grid grid-cols-2 gap-2 sm:flex sm:flex-wrap",
     controlsReady,
@@ -43,13 +46,14 @@ export function LiveServerOperationButtons({
     onOperation: (operation: ContainerOperation) => void;
     pendingOperation: ContainerOperation | null;
 }) {
+    const { t } = useTranslations("live-server");
     const operationBusy = pendingOperation !== null;
 
     return (
-        <div className={className} aria-label="Live server operations">
+        <div className={className} aria-label={t("operation.group")}>
             <OperationButton
                 icon={Play}
-                label="Start"
+                label={t(containerOperationLabelKeys.start)}
                 onClick={() => onOperation("start")}
                 disabled={!controlsReady || operationBusy}
                 pending={pendingOperation === "start"}
@@ -57,7 +61,7 @@ export function LiveServerOperationButtons({
             />
             <OperationButton
                 icon={Square}
-                label="Stop"
+                label={t(containerOperationLabelKeys.stop)}
                 onClick={() => onOperation("stop")}
                 disabled={!controlsReady || operationBusy}
                 pending={pendingOperation === "stop"}
@@ -65,7 +69,7 @@ export function LiveServerOperationButtons({
             />
             <OperationButton
                 icon={RotateCw}
-                label="Restart"
+                label={t(containerOperationLabelKeys.restart)}
                 onClick={() => onOperation("restart")}
                 disabled={!controlsReady || operationBusy}
                 pending={pendingOperation === "restart"}
@@ -73,7 +77,7 @@ export function LiveServerOperationButtons({
             />
             <OperationButton
                 icon={Download}
-                label="Update"
+                label={t(containerOperationLabelKeys.update)}
                 onClick={() => onOperation("update")}
                 disabled={!controlsReady || operationBusy}
                 pending={pendingOperation === "update"}
@@ -83,6 +87,7 @@ export function LiveServerOperationButtons({
     );
 }
 
+/** Displays one operation control and its pending indicator. */
 function OperationButton({
     disabled,
     icon: Icon,

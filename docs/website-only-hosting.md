@@ -11,6 +11,55 @@ custom password using the current server generation. A running server queues a
 warned restart. No password or secret reference is returned; refresh current
 status after an uncertain response instead of automatically resubmitting.
 
+The owner-only **Manager access** panel lives in the server's **Settings** tab.
+It accepts one manually entered Bannerlord Coop account email and never renders
+an account directory or autocomplete list. The website resolves that exact email
+server-side, then the control plane rechecks current ownership and the displayed
+server generation before granting the manager ACL. Managers can view, operate and
+manage saves; they cannot change settings, manage access, export data or delete
+the server.
+
+Campaign transfers distinguish accepted queued jobs, processing, automatic retry
+waits and terminal results. Confirmed jobs are checked for up to ten minutes;
+checks pause after one minute without confirmation. A paused check does not cancel
+the accepted job. **Check status** resumes the same request. A missing later status
+does not erase prior acceptance or enable another submission. Unknown submissions
+retain their original request ID. Failed jobs display an approved reason when
+available, plus a support reference and instructions to dismiss the completed
+request before starting a new transfer.
+
+The shared file-result parser accepts older responses and an optional
+`failureReason` on failed jobs and definitive rejections before job acceptance.
+Job reasons remain `storage-unavailable`, `save-rejected`, `campaign-limit`,
+`stop-required` and `server-changed`. Rejections also allow `invalid-companion`,
+`save-too-large` and `server-unavailable`. The transfer card displays localized
+next steps and the request UUID as a support reference, including when checking
+a retained request after reload. Confirmed rejections clear the pending intent;
+unknown submissions keep their original identity and recovery controls.
+Unknown errors and legacy receipts use generic copy without blaming the files.
+The parser rejects other fields and values. Deploy this website and its
+`my-servers` Edge parser before the paired control-plane response extension,
+since older strict parsers reject that extra field. Import remains
+limited to stopped servers and preserves the current campaign. Stop explicitly
+explains when the server is already stopped.
+
+The owner's Settings tab also contains a separate **Delete server** panel. Its
+dialog requires the exact current server name and a permanent-removal acknowledgement;
+Cancel receives initial focus. Managers and read-only users do not see this control.
+The control plane rechecks ownership, name and generation before queuing its existing
+deletion workflow. A final off-host backup must succeed before removal, and retained
+backups still expire under policy. Download important saves before deleting.
+An accepted request is shown as queued, not completed. Uncertain manual retries
+reuse the original request ID and generation while this page remains mounted;
+a rejected request requires a fresh confirmation. Never automatically retry at a
+newer generation. Deploy the matching control-plane `delete-server` operation
+before the `my-servers` Edge function and website. This does not require a database
+migration or a runner update.
+
+The public `/servers/wireframe` Settings tab uses the same deletion panel with a
+local-only mock submission. [Screenshots and reproduction](server-deletion/README.md)
+illustrate the UI; they do not establish production deletion or backup evidence.
+
 Deploy with the matching control-plane and Bot_UP retirement branches. Apply
 `202609280002_control_plane_website_accounts.sql` and
 `202609280003_account_owned_membership.sql` once during the coordinated migration

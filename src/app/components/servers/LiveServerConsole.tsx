@@ -1,11 +1,14 @@
 "use client";
 
+import { useTranslations } from "@/app/lib/localization/client";
+import type { TranslationParams, Translator } from "@/app/lib/localization/types";
+
 import { ServerConsoleWorkspace } from "./ServerManagementWorkspace";
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
 
 import {
-    containerOperationConfirmations,
-    containerOperationLabels,
+    containerOperationConfirmationKeys,
+    containerOperationLabelKeys,
     type ContainerOperation,
     type ContainerState,
     LiveServerOperationButtons,
@@ -16,6 +19,9 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm font-medium text-foreground transition hover:border-gold/50 hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
 const MAX_CONSOLE_CHARS = 300_000;
+const knownContainerStates = new Set<ContainerState>([
+    "unknown", "error", "running", "starting", "stopped", "stopping", "restarting", "updating",
+]);
 
 type ConnectionStatus =
     | "unavailable"
@@ -41,14 +47,14 @@ type TerminalSanitizerState = {
     pending: string;
 };
 
-const statusLabels: Record<ConnectionStatus, string> = {
-    unavailable: "Not configured",
-    connecting: "Connecting",
-    authorizing: "Authorizing",
-    attaching: "Attaching",
-    connected: "Connected",
-    disconnected: "Disconnected",
-    error: "Connection error",
+const statusLabelKeys: Record<ConnectionStatus, string> = {
+    unavailable: "console.status.unavailable",
+    connecting: "console.status.connecting",
+    authorizing: "console.status.authorizing",
+    attaching: "console.status.attaching",
+    connected: "console.status.connected",
+    disconnected: "console.status.disconnected",
+    error: "console.status.error",
 };
 
 function sanitizeTerminalChunk(value: string, state: TerminalSanitizerState) {
@@ -139,6 +145,7 @@ function decodeOutput(
     return sanitizeTerminalChunk(decoder.decode(bytes, { stream: true }), sanitizer);
 }
 
+/** Connects the authorized live console and localizes UI notices without altering gateway payloads. */
 export function LiveServerConsole({
     gatewayUrl,
     serverId,
@@ -148,6 +155,11 @@ export function LiveServerConsole({
     gatewayUrl: string | null;
     serverId: string;
 }) {
+    const translator = useTranslations("live-server");
+    const { t } = translator;
+    const translatorRef = useRef(translator);
+    // Locale updates must not reconnect the socket or clear an in-flight operation.
+    useEffect(() => { translatorRef.current = translator; }, [translator]);
     const [command, setCommand] = useState("");
     const commandRef = useRef<HTMLInputElement | null>(null);
     const [output, setOutput] = useState("");
@@ -159,10 +171,8 @@ export function LiveServerConsole({
     const [status, setStatus] = useState<ConnectionStatus>(
         gatewayUrl ? "disconnected" : "unavailable",
     );
-    const [statusMessage, setStatusMessage] = useState(
-        gatewayUrl
-            ? "Ready to connect to the console gateway."
-            : "CONSOLE_GATEWAY_URL is not configured with a secure WebSocket URL.",
+    const [statusMessage, setStatusMessage] = useState<string | { key: string; params?: TranslationParams }>(
+        { key: gatewayUrl ? "console.ready" : "console.notConfigured" },
     );
     const socketRef = useRef<WebSocket | null>(null);
     const authorizedRef = useRef(false);
@@ -181,7 +191,9 @@ export function LiveServerConsole({
         appendOutput(`\n[console] ${value}\n`);
     }, [appendOutput]);
 
+    // Clears local connection state and presents a localized operator-disconnect notice.
     const disconnect = useCallback((showNotice = true) => {
+        const { t } = translatorRef.current;
         attemptRef.current += 1;
         const socket = socketRef.current;
         socketRef.current = null;
@@ -195,12 +207,15 @@ export function LiveServerConsole({
             setInputEnabled(false);
             setPendingOperation(null);
             setStatus("disconnected");
-            setStatusMessage("Console disconnected.");
-            if (showNotice) appendNotice("Disconnected.");
+            setStatusMessage({ key: "console.disconnected" });
+            if (showNotice) appendNotice(t("console.disconnectedNotice"));
         }
     }, [appendNotice, gatewayUrl]);
 
+    // Authenticates and attaches the gateway while retaining external messages and output verbatim.
     const connect = useCallback(async () => {
+        // Resolve callback notices against current messages without changing the transport lifecycle.
+        const t: Translator["t"] = (key, params) => translatorRef.current.t(key, params);
         if (!gatewayUrl) return;
         if (
             socketRef.current?.readyState === WebSocket.OPEN ||
@@ -216,21 +231,25 @@ export function LiveServerConsole({
         setInputEnabled(false);
         setPendingOperation(null);
         setStatus("connecting");
-        setStatusMessage("Opening the secure console connection…");
+        setStatusMessage({ key: "console.opening" });
 
         let accessToken: string;
+        let sessionUnavailable = false;
         try {
-            const supabase = getSupabaseBrowserClient();
+            const supabase = getSupabaseBrowserClient(t("console.authenticationNotConfigured"));
             const { data, error } = await supabase.auth.getSession();
             if (error || !data.session?.access_token) {
-                throw new Error("Your Supabase session is no longer available. Sign in again.");
+                sessionUnavailable = true;
+                throw new Error(t("console.sessionExpired"));
             }
             accessToken = data.session.access_token;
         } catch (error) {
             if (attempt !== attemptRef.current || !mountedRef.current) return;
-            const message = error instanceof Error ? error.message : "Authentication failed.";
+            const message = error instanceof Error ? error.message : t("console.authenticationFailed");
             setStatus("error");
-            setStatusMessage(message);
+            setStatusMessage(sessionUnavailable
+                ? { key: "console.sessionExpired" }
+                : error instanceof Error ? message : { key: "console.authenticationFailed" });
             appendNotice(message);
             return;
         }
@@ -248,7 +267,7 @@ export function LiveServerConsole({
                 return;
             }
             setStatus("authorizing");
-            setStatusMessage("Verifying your server access…");
+            setStatusMessage({ key: "console.verifying" });
             socket.send(JSON.stringify({
                 type: "authenticate",
                 accessToken,
@@ -270,8 +289,8 @@ export function LiveServerConsole({
                 authorizedRef.current = true;
                 setControlsReady(true);
                 setStatus("attaching");
-                setStatusMessage("Server access verified. Loading container state…");
-                appendNotice("Authenticated. Waiting for the container attach…");
+                setStatusMessage({ key: "console.loadingState" });
+                appendNotice(t("console.authenticatedNotice"));
                 return;
             }
 
@@ -281,13 +300,13 @@ export function LiveServerConsole({
                 setStatus("connected");
                 setStatusMessage(
                     writable
-                        ? "Live container output and standard input are connected."
-                        : "Live container output is connected. Stdin requires a container maintenance restart.",
+                        ? { key: "console.attached" }
+                        : { key: "console.attachedReadOnly" },
                 );
                 appendNotice(
                     writable
-                        ? "Container attached with stdin enabled."
-                        : "Container attached read-only because Docker stdin is disabled.",
+                        ? t("console.attachedNotice")
+                        : t("console.readOnlyNotice"),
                 );
                 return;
             }
@@ -300,14 +319,16 @@ export function LiveServerConsole({
 
                 if (message.state === "stopped") {
                     setStatus("connected");
-                    setStatusMessage("Control channel connected. The container is stopped.");
+                    setStatusMessage({ key: "console.stopped" });
                 } else if (message.state === "error") {
                     setStatus("connected");
-                    setStatusMessage(message.message ?? "The container state could not be loaded.");
+                    setStatusMessage(message.message ?? { key: "console.stateUnavailable" });
                 } else if (message.state !== "running") {
                     setStatus("connected");
                     setStatusMessage(
-                        message.message ?? `Container operation: ${message.state}.`,
+                        message.message ?? (knownContainerStates.has(message.state)
+                            ? { key: `console.stateNotice.${message.state}` }
+                            : { key: "console.externalStateNotice", params: { state: message.state } }),
                     );
                 }
                 return;
@@ -324,21 +345,20 @@ export function LiveServerConsole({
 
             if (message.type === "operationResult" && message.operation) {
                 setPendingOperation(null);
-                const resultMessage = message.message ?? (
-                    message.ok
-                        ? `${containerOperationLabels[message.operation]} completed.`
-                        : `${containerOperationLabels[message.operation]} failed.`
-                );
-                appendNotice(resultMessage);
-                if (!message.ok) setStatusMessage(resultMessage);
+                const resultKey = Object.hasOwn(containerOperationLabelKeys, message.operation)
+                    ? `operation.${message.operation}.${message.ok ? "completed" : "failed"}`
+                    : `operation.external.${message.ok ? "completed" : "failed"}`;
+                const params = { operation: message.operation };
+                appendNotice(message.message ?? t(resultKey, params));
+                if (!message.ok) setStatusMessage(message.message ?? { key: resultKey, params });
                 return;
             }
 
             if (message.type === "consoleClosed") {
                 setInputEnabled(false);
                 setStatus("connected");
-                setStatusMessage(message.message ?? "The container output stream closed.");
-                appendNotice(message.message ?? "Container output stream closed.");
+                setStatusMessage(message.message ?? { key: "console.outputClosed" });
+                appendNotice(message.message ?? t("console.outputClosedNotice"));
                 return;
             }
 
@@ -350,15 +370,15 @@ export function LiveServerConsole({
                         sanitizerRef.current,
                     ));
                 } catch {
-                    appendNotice("A malformed output frame was ignored.");
+                    appendNotice(t("console.malformedFrame"));
                 }
                 return;
             }
 
             if (message.type === "error") {
-                const errorMessage = message.message ?? "The console gateway reported an error.";
+                const errorMessage = message.message ?? t("console.gatewayError");
                 setStatus(authorizedRef.current ? "connected" : "error");
-                setStatusMessage(errorMessage);
+                setStatusMessage(message.message ?? { key: "console.gatewayError" });
                 appendNotice(errorMessage);
                 return;
             }
@@ -369,15 +389,15 @@ export function LiveServerConsole({
                 setInputEnabled(false);
                 setPendingOperation(null);
                 setStatus("disconnected");
-                setStatusMessage(message.message ?? "The console session closed.");
-                appendNotice(message.message ?? "Console session closed.");
+                setStatusMessage(message.message ?? { key: "console.sessionClosed" });
+                appendNotice(message.message ?? t("console.sessionClosedNotice"));
             }
         });
 
         socket.addEventListener("error", () => {
             if (attempt !== attemptRef.current) return;
             setStatus("error");
-            setStatusMessage("The secure console gateway could not be reached.");
+            setStatusMessage({ key: "console.unreachable" });
         });
 
         socket.addEventListener("close", (event) => {
@@ -388,9 +408,9 @@ export function LiveServerConsole({
             setControlsReady(false);
             setInputEnabled(false);
             setPendingOperation(null);
-            const reason = event.reason || "The console connection closed.";
+            const reason = event.reason || t("console.connectionClosed");
             setStatus(event.code === 1000 ? "disconnected" : "error");
-            setStatusMessage(reason);
+            setStatusMessage(event.reason || { key: "console.connectionClosed" });
             appendNotice(reason);
         });
     }, [appendNotice, appendOutput, gatewayUrl, serverId]);
@@ -410,6 +430,7 @@ export function LiveServerConsole({
         outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }, [output, followingLogs]);
 
+    /** Confirms destructive operations and sends the unchanged operation code to the gateway. */
     function requestOperation(operation: ContainerOperation) {
         const socket = socketRef.current;
         if (
@@ -418,13 +439,13 @@ export function LiveServerConsole({
             socket?.readyState !== WebSocket.OPEN
         ) return;
 
-        const confirmation = containerOperationConfirmations[operation];
-        if (confirmation && !window.confirm(confirmation)) return;
+        const confirmationKey = containerOperationConfirmationKeys[operation];
+        if (confirmationKey && !window.confirm(t(confirmationKey))) return;
 
         setPendingOperation(operation);
         if (operation !== "start") setInputEnabled(false);
-        setStatusMessage(`${containerOperationLabels[operation]} operation requested…`);
-        appendNotice(`${containerOperationLabels[operation]} operation requested.`);
+        setStatusMessage({ key: `operation.${operation}.requested` });
+        appendNotice(t(`operation.${operation}.notice`));
         socket.send(JSON.stringify({ type: "operation", operation }));
     }
 
@@ -453,31 +474,31 @@ export function LiveServerConsole({
         commandRef.current?.focus();
     } : undefined}><section className="min-w-0 rounded-lg border border-white/10 bg-surface" aria-labelledby="container-console-heading">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
-            <h2 id="container-console-heading" className="text-base font-semibold">Console</h2>
+            <h2 id="container-console-heading" className="text-base font-semibold">{t("console.heading")}</h2>
             <DownloadServerLogButton {...logDownload} className={`${button} !border-transparent !bg-transparent !text-foreground-muted hover:!text-foreground`} />
         </div>
         <div className="border-b border-white/10 px-5 py-3">
             <LiveServerOperationButtons controlsReady={controlsReady} onOperation={requestOperation} pendingOperation={pendingOperation} />
-            {pendingOperation && <p role="status" className="mt-3 text-sm text-gold">{containerOperationLabels[pendingOperation]} in progress</p>}
+            {pendingOperation && <p role="status" className="mt-3 text-sm text-gold">{t(Object.hasOwn(containerOperationLabelKeys, pendingOperation) ? `operation.${pendingOperation}.progress` : "operation.external.progress", { operation: pendingOperation })}</p>}
         </div>
         <div className="relative">
             <pre ref={outputRef} onScroll={event => {
                 const viewport = event.currentTarget;
                 setFollowingLogs(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 24);
-            }} role="log" aria-label="Live Bannerlord container output" tabIndex={0} className="h-80 overflow-auto whitespace-pre-wrap break-words bg-surface-raised p-4 font-mono text-[13px] leading-7 text-foreground outline-gold sm:h-96 sm:p-5 sm:text-sm">{output || "Waiting for container output…"}</pre>
-            {!followingLogs && <button type="button" className={`${button} absolute right-4 bottom-3 !bg-surface-raised shadow-lg`} onClick={() => setFollowingLogs(true)}>Jump to latest <ChevronDown className="size-4" aria-hidden="true" /></button>}
+            }} role="log" aria-label={t("console.outputLabel")} tabIndex={0} className="h-80 overflow-auto whitespace-pre-wrap break-words bg-surface-raised p-4 font-mono text-[13px] leading-7 text-foreground outline-gold sm:h-96 sm:p-5 sm:text-sm">{output || t("console.waiting")}</pre>
+            {!followingLogs && <button type="button" className={`${button} absolute right-4 bottom-3 !bg-surface-raised shadow-lg`} onClick={() => setFollowingLogs(true)}>{t("console.latest")} <ChevronDown className="size-4" aria-hidden="true" /></button>}
         </div>
         <form onSubmit={sendCommand} className="flex gap-2 border-t border-white/10 p-5">
-            <label htmlFor="console-command" className="sr-only">Console command</label>
-            <input ref={commandRef} id="console-command" value={command} onChange={event => setCommand(event.target.value)} disabled={!consoleWritable} maxLength={4095} autoComplete="off" spellCheck={false} placeholder="Enter a command…" className="w-full min-w-0 rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm text-foreground outline-none focus:border-gold focus:ring-1 focus:ring-gold disabled:cursor-not-allowed disabled:opacity-40" />
-            <button type="submit" disabled={!consoleWritable || !command.trim()} className={`${button} !border-gold/50 !bg-gold/15 !text-gold`}>Send <ArrowUpRight className="size-4" aria-hidden="true" /></button>
+            <label htmlFor="console-command" className="sr-only">{t("console.command")}</label>
+            <input ref={commandRef} id="console-command" value={command} onChange={event => setCommand(event.target.value)} disabled={!consoleWritable} maxLength={4095} autoComplete="off" spellCheck={false} placeholder={t("console.commandPlaceholder")} className="w-full min-w-0 rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm text-foreground outline-none focus:border-gold focus:ring-1 focus:ring-gold disabled:cursor-not-allowed disabled:opacity-40" />
+            <button type="submit" disabled={!consoleWritable || !command.trim()} className={`${button} !border-gold/50 !bg-gold/15 !text-gold`}>{t("console.send")} <ArrowUpRight className="size-4" aria-hidden="true" /></button>
         </form>
         <div className="px-5 pb-5">
-            <p className="text-xs leading-5 text-foreground-muted">{consoleWritable ? "Enter to send · Commands go to container stdin, not a host shell." : "Console input is unavailable until the running container is connected with stdin enabled."}</p>
+            <p className="text-xs leading-5 text-foreground-muted">{consoleWritable ? t("console.inputHint") : t("console.inputUnavailable")}</p>
             <div className="mt-3 flex flex-wrap items-center gap-3">
-                <p role="status" className="min-w-0 flex-1 text-xs leading-5 text-foreground-muted">{statusLabels[status]} · {containerState} · {statusMessage}</p>
-                {connected || busy ? <button type="button" onClick={() => disconnect()} disabled={operationBusy} className={button}><Unplug className="size-4" aria-hidden="true" />Disconnect</button>
-                    : <button type="button" onClick={() => void connect()} disabled={!gatewayUrl} className={button}>{busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Plug className="size-4" aria-hidden="true" />}Connect</button>}
+                <p role="status" className="min-w-0 flex-1 text-xs leading-5 text-foreground-muted">{t("console.statusSummary", { status: t(statusLabelKeys[status]), state: knownContainerStates.has(containerState) ? t(`console.state.${containerState}`) : containerState, message: typeof statusMessage === "string" ? statusMessage : t(statusMessage.key, statusMessage.params) })}</p>
+                {connected || busy ? <button type="button" onClick={() => disconnect()} disabled={operationBusy} className={button}><Unplug className="size-4" aria-hidden="true" />{t("console.disconnect")}</button>
+                    : <button type="button" onClick={() => void connect()} disabled={!gatewayUrl} className={button}>{busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Plug className="size-4" aria-hidden="true" />}{t("console.connect")}</button>}
             </div>
         </div>
     </section></ServerConsoleWorkspace>;

@@ -4,75 +4,78 @@ import commandsData from "./commands.json";
 import { debugOnlyCommandNames, isPublishedCheat } from "./debugOnly";
 import { featuredCommandNames } from "./featured";
 import { parseCheatsLocale } from "./locale";
-import { getCheatsMessages, localizedCategory, localizedCommandSummary } from "./locales";
+import { locales } from "../lib/localization/types";
+import en from "../lib/localization/dictionaries/en/cheats.json";
+import zh from "./locales/zh-CN.json";
+import chineseSource from "./locales/zh-CN.commands.json";
+import { assertDictionaryParity } from "../lib/localization/integrity";
+import { createTranslator } from "../lib/localization/translator";
 import { buildCheatsPath, parseCheatsQuery } from "./query";
+import { translateCheat } from "./translation";
 
-const commands = commandsData.commands as Array<{
-    command: string;
-    name: string;
-    category: string;
-    summary: string;
-}>;
+const commands = commandsData.commands;
+const english = createTranslator("en", en);
+const chinese = createTranslator("zh-CN", zh);
 
-test("warns that vanilla campaign. cheats are disabled", () => {
-    const en = getCheatsMessages("en").ui.vanillaCampaignWarning;
-    const zh = getCheatsMessages("zh-CN").ui.vanillaCampaignWarning;
-
-    assert.deepEqual(en, [
-        { text: "Vanilla cheats prefixed " },
-        { code: "campaign." },
-        { text: " are DISABLED and cannot be used." },
-    ]);
-    assert.ok(zh.some((part) => "code" in part && part.code === "campaign."));
-    assert.ok(zh.some((part) => "text" in part && part.text.includes("已禁用")));
+test("warns that vanilla campaign. cheats are disabled using a whole rich message", () => {
+    assert.equal(english.t("ui.vanillaCampaignWarning", { prefix: "campaign." }), "Vanilla cheats prefixed campaign. are DISABLED and cannot be used.");
+    assert.match(chinese.t("ui.vanillaCampaignWarning", { prefix: "campaign." }), /campaign\..*已禁用/);
 });
 
-test("parses simplified chinese locale aliases", () => {
-    assert.equal(parseCheatsLocale("zh"), "zh-CN");
-    assert.equal(parseCheatsLocale("zh-CN"), "zh-CN");
-    assert.equal(parseCheatsLocale("zh_hans"), "zh-CN");
+test("parses all existing Chinese aliases and distinguishes absent overrides from English", () => {
+    for (const value of ["zh", "zh-CN", "zh_hans", "zh-hans-cn", "cn", " ZH_CN "]) {
+        assert.equal(parseCheatsLocale(value), "zh-CN");
+    }
     assert.equal(parseCheatsLocale("en"), "en");
-    assert.equal(parseCheatsLocale(undefined), "en");
+    assert.equal(parseCheatsLocale("pt-br"), "pt-BR");
+    assert.equal(parseCheatsLocale("ru"), "ru");
+    assert.equal(parseCheatsLocale(undefined), undefined);
+    assert.equal(parseCheatsLocale("invalid"), undefined);
 });
 
-test("keeps english cheats links clean and adds lang for chinese", () => {
+/** Distinguishes cookie-following navigation from explicit content-language links. */
+test("keeps bare cheats navigation and retains every explicit share locale", () => {
     assert.equal(buildCheatsPath(parseCheatsQuery({})), "/cheats");
+    assert.equal(buildCheatsPath(parseCheatsQuery({ lang: "en" })), "/cheats?lang=en");
     assert.equal(buildCheatsPath(parseCheatsQuery({ lang: "zh-CN" })), "/cheats?lang=zh-CN");
+    assert.equal(buildCheatsPath(parseCheatsQuery({ lang: "pt-PT" })), "/cheats?lang=pt-PT");
 });
 
-test("covers every command category and featured summary in simplified chinese", () => {
-    const zh = getCheatsMessages("zh-CN");
-    const categories = new Set(commands.map((command) => command.category));
-
-    for (const category of categories) {
-        assert.equal(typeof zh.categories[category], "string", category);
-        assert.ok(zh.categories[category].trim(), category);
+/** Existing dictionary entries win; newly synced catalog entries keep their English fallback. */
+test("preserves command names, translated prose, and missing-translation catalog fallbacks", () => {
+    assertDictionaryParity(en, zh, "legacy.zh-CN.cheats");
+    for (const { name } of commandsData.categories) {
+        const key = `category.${name.toLowerCase().replaceAll(" ", "_")}`;
+        assert.equal(translateCheat(english.t, key, name), name);
+        assert.ok(translateCheat(chinese.t, key, name).trim());
     }
-
     for (const command of commands) {
-        const overlay = zh.commands[command.command];
-        assert.ok(overlay, command.command);
-        assert.ok(overlay.name.trim(), command.command);
-        assert.ok(overlay.summary.trim(), command.command);
-        assert.equal(localizedCategory(command.category, zh), zh.categories[command.category]);
+        const key = `command.${command.command}`;
+        assert.equal(Object.hasOwn(en, `${key}.name`), false);
+        assert.equal(Object.hasOwn(zh, `${key}.name`), false);
+        assert.equal(translateCheat(english.t, `${key}.summary`, command.summary),
+            (en as Record<string, unknown>)[`${key}.summary`] ?? command.summary);
+        const original = chineseSource[command.command as keyof typeof chineseSource];
+        assert.ok(original.summary.trim());
+        assert.deepEqual(Object.keys(original.arguments).sort(), command.arguments.map(argument => argument.name).sort());
+        assert.equal(translateCheat(chinese.t, `${key}.summary`, command.summary),
+            (zh as Record<string, unknown>)[`${key}.summary`] ?? command.summary);
+        for (const argument of command.arguments) {
+            const argumentKey = `${key}.argument.${argument.name}`;
+            assert.equal(translateCheat(english.t, argumentKey, argument.description),
+                (en as Record<string, unknown>)[argumentKey] ?? argument.description);
+            assert.equal(translateCheat(chinese.t, argumentKey, argument.description),
+                (zh as Record<string, unknown>)[argumentKey] ?? argument.description);
+            if (Object.hasOwn(zh, argumentKey)) {
+                assert.match(chinese.t(argumentKey), /[\u3400-\u9fff]|^(on|success|Pause|state|open)/);
+            }
+        }
     }
-
-    for (const command of featuredCommandNames) {
-        const source = commands.find((item) => item.command === command);
-        assert.ok(source, command);
-        assert.equal(localizedCommandSummary(source, zh), zh.commands[command].summary);
-        assert.equal(localizedCommandSummary(source, getCheatsMessages("en")), source.summary);
-    }
+    assert.equal(Object.keys(en).filter((key) => key.endsWith(".summary")).length, 400);
 });
 
 test("does not catalog debug-only commands", () => {
-    for (const command of debugOnlyCommandNames) {
-        assert.equal(
-            commands.some((item) => item.command === command),
-            false,
-            command,
-        );
-    }
+    for (const command of debugOnlyCommandNames) assert.equal(commands.some((item) => item.command === command), false, command);
 });
 
 test("keeps featured commands publishable", () => {
@@ -83,57 +86,46 @@ test("keeps featured commands publishable", () => {
     }
 });
 
-test("catalog preserves PR3538 metadata, usage and localized argument coverage", () => {
-    assert.equal(commandsData.source.commit, "4d030c26c49b271e77676179571e120698f42f52");
-    assert.equal(commandsData.count, commandsData.commands.length);
-    assert.equal(commandsData.count, 400);
-    assert.equal(new Set(commandsData.commands.map(c => c.command)).size, commandsData.count);
+test("catalog preserves the current producer metadata, usage and argument coverage", () => {
+    assert.equal(commandsData.source.commit, "2ac901f91e8a852cbe59357333a3e6a2def78c39");
+    assert.equal(commandsData.count, commands.length);
+    assert.equal(commandsData.count, 414);
+    assert.equal(new Set(commands.map(c => c.command)).size, commandsData.count);
     assert.equal(commandsData.categories.reduce((sum, c) => sum + c.count, 0), commandsData.count);
-    const zh = getCheatsMessages("zh-CN");
-    assert.deepEqual(Object.keys(zh.commands).sort(), commandsData.commands.map(c => c.command).sort());
-    for (const command of commandsData.commands) {
+    for (const command of commands) {
         assert.match(command.command, /^coop(?:\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*)+$/);
         assert.equal(command.command, `${command.group}.${command.name}`);
         assert.ok(isPublishedCheat(command), command.command);
         assert.deepEqual(command.aliases, [], command.command);
         assert.equal(command.usage, command.command + command.arguments.map(a => a.required ? ` <${a.name}>` : ` [<${a.name}>]`).join(""));
-        assert.deepEqual(Object.keys(zh.commands[command.command].arguments), command.arguments.map(a => a.name));
-        for (const argument of command.arguments) {
-            assert.match(zh.commands[command.command].arguments[argument.name], /[\u3400-\u9fff]|^(on|success|Pause|state|open)/);
-        }
     }
-    const heroId = commandsData.commands.find(c => c.command === "coop.debug.hero.id")!;
-    assert.ok(heroId, "Includes IHeroIdCommand : ICoopCommand implementations");
+    const heroId = commands.find(c => c.command === "coop.debug.hero.id")!;
     assert.equal(heroId.summary, "Finds registered ids for heroes with an exact display name.");
     assert.equal(heroId.side, "either");
     assert.equal(heroId.kind, "inspect");
     assert.equal(heroId.usage, "coop.debug.hero.id <heroName>");
-    assert.equal(zh.commands[heroId.command].arguments.heroName, "要查找的英雄的完整显示名称。包含多个词的值需加双引号。");
-    const gold = commandsData.commands.find(c => c.command === "coop.debug.hero.set_gold")!;
+    assert.equal(chinese.t(`command.${heroId.command}.argument.heroName`), "要查找的英雄的完整显示名称。包含多个词的值需加双引号。");
+    const gold = commands.find(c => c.command === "coop.debug.hero.set_gold")!;
     assert.equal(gold.side, "server");
     assert.equal(gold.summary, "Sets gold for every hero with an exact display name on the server.");
-    assert.equal(commandsData.commands.find(c => c.command === "coop.debug.hero.list")!.side, "either");
-    assert.equal(commandsData.commands.find(c => c.command === "coop.delete_player")!.side, "client");
-    assert.equal(getCheatsMessages("en").ui.sideEither, "Both");
+    assert.equal(commands.find(c => c.command === "coop.debug.hero.list")!.side, "either");
+    assert.equal(commands.find(c => c.command === "coop.delete_player")!.side, "client");
+    assert.equal(english.t("ui.sideEither"), "Both");
 });
 
-test("featured share links round-trip canonical snake-case commands in both locales", () => {
-    for (const lang of ["en", "zh-CN"] as const) {
+/** Protects command identifiers, filters, and explicit locales through share URL round trips. */
+test("featured links round-trip canonical snake-case commands and preserve every filter", () => {
+    for (const lang of locales) {
         for (const cheat of featuredCommandNames) {
-            const path = buildCheatsPath(parseCheatsQuery({ cheat, lang }));
+            const path = buildCheatsPath(parseCheatsQuery({ cheat, lang, q: "gold", tab: "Heroes", type: "inspect", side: "either" }));
             const query = parseCheatsQuery(Object.fromEntries(new URL(path, "https://example.com").searchParams));
-            assert.equal(query.cheat, cheat);
-            assert.equal(query.lang, lang);
+            assert.deepEqual(query, { cheat, lang, q: "gold", tab: "Heroes", type: "inspect", side: "either" });
         }
     }
 });
 
-test("documentation examples reference published commands", () => {
-    for (const lang of ["en", "zh-CN"] as const) {
-        for (const part of getCheatsMessages(lang).ui.findingIdsParagraphs.flat()) {
-            if ("code" in part && part.code.startsWith("coop.")) {
-                assert.ok(commands.some(c => c.command === part.code.split(" ")[0]), part.code);
-            }
-        }
-    }
+test("repeated and invalid filter values retain the original first-value and default behavior", () => {
+    assert.deepEqual(parseCheatsQuery({ q: [" gold ", "ignored"], lang: ["cn", "en"], type: "invalid", side: "invalid", cheat: [" coop.unstuck "] }), {
+        q: "gold", tab: "featured", type: "all", side: "all", cheat: "coop.unstuck", lang: "zh-CN",
+    });
 });

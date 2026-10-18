@@ -1,0 +1,29 @@
+{
+  "metadata.title": "更新日志",
+  "metadata.description": "查看 Bannerlord Coop 的最新版本、改进和问题修复。",
+  "hero.eyebrow": "开发动态",
+  "hero.title": "Bannerlord Coop 更新日志",
+  "hero.description": "这里汇总了 Bannerlord Coop 开发团队发布的所有最新版本、玩法改进、技术调整和问题修复。",
+  "links.githubReleases": "在 GitHub 上查看版本",
+  "links.fullRelease": "查看完整版本详情",
+  "links.openGithubReleases": "打开 GitHub 版本页面",
+  "history.eyebrow": "版本历史",
+  "history.title": "有哪些更新？",
+  "history.description": "版本信息直接从项目的 GitHub 公共仓库加载，每小时刷新一次。",
+  "history.count": {
+    "other": "共显示 {formattedCount} 个版本"
+  },
+  "release.latest": "最新版本",
+  "release.label": "版本",
+  "release.prerelease": "预发布版本",
+  "release.published": "发布于 {date}",
+  "release.publishedUnknown": "发布日期未知",
+  "release.author": "由 {author} 发布",
+  "release.emptyNotes": "此版本未提供版本说明。",
+  "unavailable.eyebrow": "GitHub 无法访问",
+  "unavailable.title": "无法加载更新日志。",
+  "unavailable.description": "GitHub 可能暂时无法访问，或 API 请求已达到频率限制。您仍可直接在 GitHub 上查看版本。",
+  "empty.eyebrow": "暂无版本",
+  "empty.title": "版本历史目前为空。",
+  "empty.description": "在 GitHub 上发布的版本将自动显示在这里。"
+}

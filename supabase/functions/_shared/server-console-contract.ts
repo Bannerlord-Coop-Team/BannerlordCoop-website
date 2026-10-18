@@ -26,14 +26,17 @@ function timestamp(value: unknown): asserts value is string {
     if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value) || !Number.isFinite(Date.parse(value))) throw new Error("Invalid console timestamp");
 }
 
-/** Matches ControlPlane normalization and permits only one coop.* STDIN command. */
+/** The dedicated server's built-in world save, the only command accepted outside coop.*. */
+export const SAVE_CONSOLE_COMMAND = "save";
+
+/** Matches ControlPlane normalization and permits one coop.* STDIN command or the bare built-in save. */
 export function parseConsoleSubmission(value: unknown): ConsoleSubmission {
     const input = record(value, ["serverId", "command", "expectedUpdatedAt"]);
     requireConsoleUuid(input.serverId);
     timestamp(input.expectedUpdatedAt);
     if (typeof input.command !== "string") throw new Error("Enter a coop.* command");
     const command = input.command.normalize("NFKC").trim();
-    if (command.length > MAXIMUM_CONSOLE_COMMAND_LENGTH || !/^coop\.[A-Za-z\d_.-]+$/u.test(command.split(/\s+/u, 1)[0]) || /[\p{Cc}\p{Zl}\p{Zp};&|`]/u.test(command)) throw new Error("Enter one coop.* command without control characters or command separators");
+    if (command !== SAVE_CONSOLE_COMMAND && (command.length > MAXIMUM_CONSOLE_COMMAND_LENGTH || !/^coop\.[A-Za-z\d_.-]+$/u.test(command.split(/\s+/u, 1)[0]) || /[\p{Cc}\p{Zl}\p{Zp};&|`]/u.test(command))) throw new Error("Enter one coop.* command without control characters or command separators");
     return { serverId: input.serverId, command, expectedUpdatedAt: input.expectedUpdatedAt };
 }
 

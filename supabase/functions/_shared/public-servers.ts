@@ -1,4 +1,5 @@
-import { exactKeys, isRecord, parsePublicServerPage, readPublicResponse, REQUEST_ID } from "./server-visibility-contract.ts";
+import { hasExactKeys, isRecord } from "./dto-validation.ts";
+import { parsePublicServerPage, readPublicResponse, REQUEST_ID } from "./server-visibility-contract.ts";
 
 export function createPublicServersHandler(options: {
     allowedOrigins: readonly string[];
@@ -47,7 +48,7 @@ export function createPublicServersHandler(options: {
             });
             if (!upstream.ok) { await upstream.body?.cancel(); return fail(502, "directory_unavailable"); }
             const envelope = await readPublicResponse(upstream);
-            if (!isRecord(envelope) || !exactKeys(envelope, ["version", "requestId", "ok", "result"])
+            if (!isRecord(envelope) || !hasExactKeys(envelope, ["version", "requestId", "ok", "result"])
                 || envelope.version !== 1 || envelope.requestId !== requestId || envelope.ok !== true) throw new Error("Invalid envelope");
             const result = parsePublicServerPage(envelope.result);
             if (result.items.length > limit) throw new Error("Invalid page size");

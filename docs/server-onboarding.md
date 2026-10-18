@@ -16,24 +16,60 @@ synchronization precedes allocation reads, without delaying either directory.
 The server-rendered onboarding summary uses the existing fixed Oracle user API
 directly, removing the Edge relay for this closed read only. It uses the same
 strict summary parser with a 64 KiB streamed response limit, a 30-second deadline,
-no response cache and no redirect following. Browser reads and all mutations
-retain their existing Edge route; failed summary reads remain unavailable.
+no response cache and no redirect following. It is the only summary read shown to
+owners: the Edge has no browser summary route and reads the summary only for its
+best-effort region-full check. All mutations retain their existing Edge route;
+failed summary reads remain unavailable.
 
 ## Authority and public contract
 
 The backend requires active, unused allocation under `max(administrativeBase, qualifyingPatreonOne) + administrativeBonus`. Membership is disabled until the reviewed configuration/rollout gates in the membership document pass. Roles (including Admin, Standard and Server Owner) and historical role grants do not authorize this feature. The authenticated backend derives the guild and verified linked Discord identity; website-supplied page identity only prevents dispatch after an account switch.
 
-| Website Edge request | Fixed backend operation | Exact backend input |
+| Website request | Fixed backend operation | Exact backend input |
 | --- | --- | --- |
-| `GET my-servers?resource=onboarding` | `server-onboarding` | `{}` |
+| Server-rendered `/servers` summary read (direct), and the Edge's best-effort region-full check after Create | `server-onboarding` | `{version:3}` |
 | `POST my-servers` `{action:'create-server',displayName,region,releaseChannel?}` | `create-server` | `{displayName,region,releaseChannel?}` |
-| Legacy retry only: `POST my-servers` `{action:'request-region',region}` | `request-region` | `{region}` |
+| `POST my-servers` `{action:'request-region',region}` | `request-region` | `{region}` |
+
+The `my-servers` Edge Function and the server-rendered summary read build these requests with the same exported builders (`onboardingSummaryRequest`, `onboardingMutationRequest` in `server-onboarding-contract.ts`). Owner requests carry region **keys only**; a browser-supplied `placement` or any other extra field is rejected before dispatch.
 
 All use existing Supabase JWT forwarding to authenticated `POST /v1/user/control-plane`, `{version:1,requestId,operation,input}`. Mutations require a caller-generated UUID in `x-request-id`, normalized to lowercase. There is no browser service secret or owner/role/host/build/slot selection. Adequate independent administrative grants bypass membership steps; an administrator role alone is not allocation authority. New membership runtime configuration is documented separately. The shared closed DTO parser is used by **both** Edge and website facade. Unknown enums, extra/private fields, missing fields, inconsistent eligibility, wrong regions/names, invalid timestamps, mismatched receipts/envelopes and inconsistent HTTP success/failure are rejected as unavailable, not displayed as safe data.
 
-Canonical order: **US-West, US-East, France, Germany, United Kingdom, Poland**. Name policy matches backend raw 3–48 UTF-16 code units, then NFKC, trim and whitespace collapse, normalized 3–48 policy. Letters/numbers at both ends; letters/numbers/spaces/periods/apostrophes/hyphens inside. Legacy region-request retries do not send a name.
+### Hosting regions: website catalog and stored catalog
 
-New server creation requires `eligibility.eligible && unavailableReason === null`. Availability is advisory. Available regions offer Create. Full regions remain selectable to explain their status, disable Create, and show “[Region] is full—choose another region or check back later.” The website no longer offers Request region or displays the outstanding-request panel or Requested badges. Summary failure is **unknown/unavailable**, not evidence of entitlement or full capacity. Inventory failure is independent of onboarding/recovery.
+The website catalog, `supabase/functions/_shared/hosting-regions.ts`, defines each region's key, English label, continent tab (`HOSTING_CONTINENTS`), and **placement**: the ISO country codes it covers and, optionally, the exact provider zones. US-West and US-East name their exact Oregon and Virginia zones, because a US country code alone never implies a coast. Display order is the order of `HOSTING_REGIONS`.
+
+The control plane matches hosts only against its own **stored catalog** of keys and placements; owners can never send or influence a placement, because the owner endpoint is public. An empty stored catalog fails closed for owners: the summary parser requires at least one region, so the website shows onboarding as unavailable rather than an empty region list. The control plane seeds that catalog with the six original regions (US-West through Poland) and placements identical to the website catalog. It is replaced with the control plane's `set-hosting-regions` administrator operation (input `{expectedRevision, regions, reason}`, where `regions` is the website catalog's ordered `{region, placement}` list and `expectedRevision` is the revision `hosting-regions` currently reports); see [publishing the catalog](#publishing-the-website-catalog). The website's Operations page only reads the stored catalog.
+
+The version-3 summary lists the stored catalog in its stored order (1–32 unique keys matching `^[a-z][a-z0-9-]{1,47}$`), each with availability and the owner's outstanding request, plus `otherRequests` for outstanding requests whose key the stored catalog no longer contains. The shared parser accepts any stored catalog within those bounds; it does not require it to equal the website catalog. It rejects extra fields, a request filed under another entry's key, an `otherRequests` key that is in the catalog, and a request ID repeated anywhere in the summary.
+
+The onboarding dialog offers only stored-catalog regions that the website catalog also knows, because the website supplies each region's continent and translation; other stored keys are ignored. Region names everywhere (onboarding, receipts, recovery, the owner's server page) come from one helper, `localizedRegionLabel`: `region.<key>` in the `servers` dictionary for website catalog keys, otherwise the key humanized (`united-states` → "United States").
+
+To add a region (a VPS there is optional; without one the region is offered as full, and owner requests for it register demand):
+
+1. Add one catalog entry and its `region.<key>` translation in every `servers.json` dictionary. The entry's English `label` must equal its `region.<key>` translation in the English dictionary. `src/app/lib/hosting/region-labels.test.ts` enforces that every catalog key and continent has an English translation and that each label matches it, and dictionary parity carries the keys to the other locales. The catalog's bounds (`MAXIMUM_REGIONS`, the country and zone patterns and placement limits) are exported once from `hosting-regions.ts` and shared by every catalog and summary parser.
+2. Deploy the website.
+3. Publish the website catalog to the control plane as described under [publishing the website catalog](#publishing-the-website-catalog). Until then the control plane does not offer the new region.
+
+#### Publishing the website catalog
+
+The website has no page for this. An administrator sends the control plane's `set-hosting-regions` operation through the website's `control-plane-admin` Edge Function at `<SUPABASE_URL>/functions/v1/control-plane-admin`, which relays any operation name after reauthenticating the caller. Each call is a `POST` with `Content-Type: application/json`, `apikey: <the project's publishable key>` (public; the same header the website client sends), `Authorization: Bearer $TOKEN` and a JSON envelope `{version: 1, requestId, operation, input}` with a fresh UUID `requestId`. `TOKEN` is the Supabase session access token of a signed-in website administrator (read it from the browser session into an environment variable rather than typing it into a command line: it stays valid for every relayed operation until it expires, so keep it out of shell history and transcripts). Two calls are needed, because the website keeps nothing of the stored catalog but its entries:
+
+1. `{"version": 1, "requestId": "<uuid>", "operation": "hosting-regions", "input": {}}`: the response is the control plane's envelope `{version, requestId, ok, result}`, and the stored catalog is `result`; note `result.revision`.
+2. The envelope that `npx tsx scripts/hosting-regions-input.ts <revision> "<reason>"` prints, sent unchanged. It mints the `requestId` and fills `input` with:
+   - `regions`: the website catalog's ordered `{region, placement}` list, exactly as `hostingRegionCatalogPayload()` in `supabase/functions/_shared/hosting-regions.ts` returns it, so nothing is transcribed by hand (`scripts/hosting-regions-input.test.ts` pins this);
+   - `expectedRevision`: the revision from step 1, so a concurrent publish is rejected with `request_conflict` (re-read and retry);
+   - `reason`: 3–1000 characters, stored in the administrative audit event.
+
+The same envelope can be sent directly to `POST /v1/admin/control-plane` on the control plane host when calling from inside its private network with the credentials that host requires.
+
+Publishing removes any region the website catalog omits from what owners can create in or request; existing servers and outstanding requests keep their keys and are labelled from the key.
+
+Removing a region works the same way. An owner tab that still retains a pending intent for a removed key keeps working: retained intents are parsed by key shape rather than against the catalog, and are shown with the fallback label. Retry settles them: the control plane rejects a key outside its stored catalog with `invalid_region` before writing anything (after receipt replay), so the website clears the intent and says the region is no longer offered. **Discard pending request** appears only after a dispatch of that intent ends without a definite outcome.
+
+Name policy matches backend raw 3–48 UTF-16 code units, then NFKC, trim and whitespace collapse, normalized 3–48 policy. Letters/numbers at both ends; letters/numbers/spaces/periods/apostrophes/hyphens inside. Region requests do not send a name.
+
+Both mutations require `eligibility.eligible && unavailableReason === null`. Availability is advisory. Available regions offer Create. Full regions remain selectable and offer **Request region**, or show a **Requested** badge and a disabled **Region requested** button for the owner's existing outstanding request. Summary failure is **unknown/unavailable**, not evidence of entitlement or full capacity. Inventory failure is independent of onboarding/recovery.
 
 ```mermaid
 sequenceDiagram
@@ -43,7 +79,7 @@ sequenceDiagram
     participant Edge as my-servers Edge
     participant Backend as User boundary / owner workflow
     participant DB as Private Supabase persistence
-    Owner->>UI: Name + canonical region
+    Owner->>UI: Name + website region
     UI->>UI: Persist normalized exact intent + UUID in sessionStorage
     UI->>Action: Intent + expected page user
     Action->>Action: getUser + session; compare page user (restriction only)
@@ -64,9 +100,9 @@ Create reserves/assigns an existing prepared slot and creates a **stopped** serv
 
 **Password limitation:** Manage your game password through the existing Discord owner controls: **My Servers → choose server → Settings / Configure your server → Custom game password (optional)**. Enter a new custom password and submit. Blank preserves the generated password that cannot be read from this website. Discord does not mask this input or echo the submitted password. Do not direct owners to the administrator-only Generate Password action.
 
-Region requests are private durable backend writes. One outstanding owner+region request deduplicates even different UUIDs. The returned request UUID may therefore differ from the submitted envelope UUID. Existing requests remain in backend storage but are not displayed in the normal setup flow. The website creates no new region requests; exact retries of previously retained uncertain requests remain supported so their outcomes can be confirmed. Their confirmation explains that no server was created or reserved and directs the owner back to setup. Requests consume **no quota** and create **no server, reservation, job, email or notification**; no ETA or automatic capacity/allocation is promised. They remain outstanding if capacity arrives or a server is subsequently created.
+Region requests are private durable backend writes. One outstanding request per owner deduplicates even different UUIDs; requesting a different region, including one whose request was earlier dismissed, replaces it after explicit confirmation, which also covers a pending request for a region the catalog no longer offers. The returned request UUID may therefore differ from the submitted envelope UUID. Summary reload marks existing requests as Requested. Requests consume **no quota** and the backend creates **no server, reservation, job or notification**; no ETA or automatic capacity/allocation is promised. They remain outstanding if capacity arrives or a server is subsequently created. The website's `my-servers` Edge Function separately sends best-effort [administrator alert emails](#administrator-alert-emails).
 
-Recovery follows the existing managed-server-backup pattern, with one pending onboarding intent per authenticated website account in **sessionStorage**. Exact action/name/region/UUID is written and read back before dispatch; there is no expected generation field in this backend contract. Concurrent double clicks are synchronously guarded. Corrupt/inaccessible storage blocks mutations. Account-keyed remounting separates identity state, and exact compare-clear prevents late responses deleting newer intents.
+Recovery follows the existing managed-server-backup pattern, with one pending onboarding intent per authenticated website account in **sessionStorage**. Exact action/name/region/UUID is written and read back before dispatch; there is no expected generation field in this backend contract. When the current summary no longer offers the intent's region, the recovery notice says so; once a dispatch of that intent has failed for a transient reason it also offers **Discard pending request**, which compare-clears only that exact intent; owners are told to check My Servers first, because an uncertain Create may already have succeeded. Concurrent double clicks are synchronously guarded. Corrupt/inaccessible storage blocks mutations. Account-keyed remounting separates identity state, and exact compare-clear prevents late responses deleting newer intents.
 
 ```mermaid
 stateDiagram-v2
@@ -83,9 +119,36 @@ stateDiagram-v2
     Pending --> Pending: close dialog is NOT cancellation
 ```
 
-`request_conflict`, `rate_limited` (HTTP409 or429), auth/account-switch errors, invalid responses and unknown failures **retain the exact intent**, irrespective of retryable flags. They cannot establish whether an earlier attempt committed. Only documented post-receipt-lookup workflow rejections (`capacity_unavailable`, `capacity_available`, `quota_exhausted`, provider/approval/pilot/pause/build unavailability) release an intent and force a fresh snapshot before another choice. The backend handoff/source was checked for this ordering. Re-evaluate this policy if backend replay ordering changes.
+`request_conflict`, `rate_limited` (HTTP409 or429), auth/account-switch errors, invalid responses and unknown failures **retain the exact intent**, irrespective of retryable flags. They cannot establish whether an earlier attempt committed. Only documented post-receipt-lookup workflow rejections (`capacity_unavailable`, `capacity_available`, `quota_exhausted`, `invalid_region`, provider/approval/pilot/pause/build unavailability) release an intent and force a fresh snapshot before another choice. The backend handoff/source was checked for this ordering. Re-evaluate this policy if backend replay ordering changes.
 
 Retry remains available outside the modal even after list/eligibility changes. Closing a pending modal does not abort or pretend to cancel the request. Native `showModal()` makes the background inert; explicit Tab edge wrapping, Escape close, result focus, scroll containment and focus restoration support keyboard use. **Do not clear sessionStorage, replace the UUID or close the browser tab to resolve an uncertain outcome.** SessionStorage survives reload/account switching in the same tab, not closing the tab or moving devices. If storage is lost/corrupt or access is revoked, reconcile through supported backend/operator procedures before any replacement request; no browser-side quota inference proves non-commit.
+
+## Administrator alert emails
+
+The `my-servers` Edge Function emails administrators in two cases:
+
+- **Region request:** after the backend accepts a **new** region request, so demand for full regions is visible without polling the private table. The alert is sent only after the durable receipt passes the closed DTO parser and only when the returned request UUID equals the submitted one; a dedupe receipt carrying an existing request's UUID sends nothing. An exact replay of the same UUID after a lost response can send again (at-least-once).
+- **Region full:** after a website Create succeeds, the function reads the caller's onboarding summary once. If the created server's region now reports no capacity while `unavailableReason` is `null`, it emails that the region is full. Paused or blocked provisioning is not treated as full. Capacity consumed outside website Create (for example administrator assignment) is not detected. An exact Create replay while the region is still full can send again.
+
+After validating the durable receipt, the handler registers the optional work with an injected `waitUntil` scheduler, backed by Supabase `EdgeRuntime.waitUntil`, and returns the receipt without awaiting capacity or email. The background capacity read still forwards the caller's bearer token to the fixed authenticated backend route, with its existing 30-second deadline and 64 KiB response bound; SMTP retains its 15-second deadline and validated administrator recipients. Alert, summary and scheduling failures are logged by the function and never change the owner's confirmed receipt, status code or retry policy. This remains best-effort notification, not a durable email queue: runtime shutdown can interrupt delivery, and UUID replay/deduplication semantics above are unchanged.
+
+Each message is plain text: region, requester email/account (informational claims from the gateway-verified JWT), request or server UUID and creation time. It contains no capacity, slot, host or other private data and promises no ETA.
+
+The recipients are committed in `supabase/functions/my-servers/alerts.ts`; the sender and SMTP host/port/username are the shared site mail settings committed in `supabase/functions/_shared/mail.ts`. This repository is public, so only addresses and account names that may be public belong there; the SMTP password is the single function secret. When `SMTP_PASS` is unset the function boots with alerting disabled and logs a warning. Invalid committed settings fail `npm test` and the function boot.
+
+```sh
+npx supabase secrets set --project-ref <project-ref> SMTP_PASS=<password>
+npx supabase functions deploy my-servers --project-ref <project-ref>
+```
+
+| Setting | Meaning |
+| --- | --- |
+| `recipients` (`alerts.ts`) | 1–20 administrator addresses. |
+| `from`, `fromName` (`_shared/mail.ts`) | Sender address and optional display name. |
+| `smtp.hostname`, `smtp.port`, `smtp.username` | SMTP host, port and username. |
+| `smtp.tls` | Optional `implicit` or `starttls`. Defaults to `implicit` for port 465 and `starttls` for any other port. Plaintext is never used and credentials are never sent before TLS. |
+
+Supabase Edge Functions block outbound ports **25 and 587**, so use the provider's implicit-TLS port (usually 465); the function refuses those two ports at boot. `AUTH PLAIN` is preferred with `AUTH LOGIN` as fallback; OAuth-only SMTP is unsupported. Backend, schema, quota and dedupe behavior are unchanged by alerting.
 
 ## Ordered rollout — separate authorization required
 
@@ -94,7 +157,7 @@ No deployment or migration was performed by this website lane. Review backend HE
 1. Obtain separate live-operation authorization and plan the exact-catalog application/schema maintenance boundary.
 2. Apply backend's pinned append-only schema migrations in order using the supported migration workflow: `202609030001_control_plane_regions.sql`, then `202609070001_control_plane_owner_onboarding.sql` (private requests/receipts/admission locks). Review RLS/runtime-only grants. Do not improvise old/new application restarts across incompatible catalog expectations.
 3. Deploy reviewed **backend** by its normal serialized workflow and verify the authenticated user boundary/explicit grant behavior. Preserve provisioning OFF, role-triggered deletion OFF and idle VM stopping OFF; existing approvals/profile/build prerequisites remain required.
-4. **Deploy the `my-servers` Supabase Edge Function and its shared modules before the UI.** Verify all three fixed operations and closed safe response/error forwarding with normal verified JWT/Discord linkage. This step is essential: a previous feature failed because the Edge function was not deployed.
+4. **Deploy the `my-servers` Supabase Edge Function and its shared modules before the UI.** Verify its two fixed operations (Create and Request region) and closed safe response/error forwarding with normal verified JWT/Discord linkage. This step is essential: a previous feature failed because the Edge function was not deployed.
 5. Deploy website UI only after the Edge contract is available. Smoke-test with separately authorized test accounts/capacity through ordinary APIs. Keep safe unavailable UI if any earlier layer is absent.
 
 No direct database edits, service-secret browser configuration or administrator role workaround are part of rollout/testing.
@@ -124,10 +187,11 @@ The browser command must be separately authorized where local processes are gate
 
 Tests distinguish:
 
+- **Deferred onboarding dependencies:** the Edge tests hold capacity/email promises open, require the unchanged receipt first, then release the background work and check delivery, deduplication and failure logging. These are deterministic dependency-order checks, not production latency measurements or deployed Edge lifetime verification.
 - **Real in-process facade → real strict Edge → synthetic upstream**, including UUID, JWT forwarding, complete DTO validation and HTTP errors. This is not a real backend or Supabase JWT verification test.
-- Mounted **real UI and real server actions**, with auth/facade dependencies mocked, covering create/full-region blocking/legacy request recovery/validation/eligibility, uncertain exact retries/reload, account mismatch, storage failure, terminal/transitional inventory and late response safety.
+- Mounted **real UI and real server actions**, with auth/facade dependencies mocked, covering create/full-region request/request recovery/validation/eligibility, uncertain exact retries/reload, account mismatch, storage failure, terminal/transitional inventory and late response safety.
 - Real page composition with mocked external dependencies preserves mixed live-console/managed inventory, public placeholder labeling and unavailable onboarding behavior.
-- **Mock-only browser integration**: native desktop/mobile dialog, Tab/Escape/restore, create stopped inventory, full-region guidance and hidden historical requests after reload, capacity race, uncertain retry after reload/consumed quota/account mismatch/switch. No end-to-end production TLS, JWT, Discord linkage, Supabase persistence, backend assignment or game start is proved by these browser checks.
+- **Mock-only browser integration**: native desktop/mobile dialog, Tab/Escape/restore, create stopped inventory, full-region request and Requested summary after reload, capacity race, uncertain retry after reload/consumed quota/account mismatch/switch. No end-to-end production TLS, JWT, Discord linkage, Supabase persistence, backend assignment or game start is proved by these browser checks.
 
 Known baseline full lint failures are only `src/app/cheats/CheatsDirectory.tsx:229` and `src/app/cheats/CheatsView.tsx:40` (`react-hooks/set-state-in-effect`), verified byte-identical to base `84530ab`. Focused changed-file lint passes. Ordinary Windows tests skip the existing Linux installer subprocess test; no skip predicate was changed.
 
@@ -137,9 +201,9 @@ Known baseline full lint failures are only `src/app/cheats/CheatsDirectory.tsx:2
 
 All images below are **synthetic auth/API**, not real backend results. The banner is visible only in the eligible fixture; full regions stay selectable. On narrow screens the dialog scrolls vertically, without horizontal page overflow.
 
-1. Eligible unused quota: open setup by keyboard; inspect all six regions. Try invalid punctuation or a short name: no dispatch; correction normalizes whitespace.
+1. Eligible unused quota: open setup by keyboard; inspect every region across the continent tabs. Try invalid punctuation or a short name: no dispatch; correction normalizes whitespace.
 2. Create US-West: receipt says assigned/stopped at creation, includes a real-shaped manage URL and Discord password notice. The mock inventory refreshes Offline; it is not running evidence.
-3. Select France (full): the named full-region message appears and Create is disabled, including on form submission with Enter. No request is saved. A historical region request remains hidden after reload. Choose an available region to create normally; refreshed capacity also re-enables Create even when an old request exists.
+3. Select France (full), with no name: Request region; the confirmed request shows as Requested after reload and its button is disabled. Choose an available region to create normally; refreshed capacity also re-enables Create even when an old request exists.
 4. Simulate capacity race: no-change message; stale snapshot cannot submit until refreshed.
 5. Simulate lost response: close/reload, consume quota, change current auth or switch page account. Original account retains an accessible exact retry. Replayed success clears only that exact intent.
 6. On mobile390×844 and desktop1440×1000: native dialog has focus containment, Escape closes, trigger/fallback focus restores, and closing while pending does not claim cancellation.
@@ -149,13 +213,21 @@ All images below are **synthetic auth/API**, not real backend results. The banne
 | [Desktop banner](server-onboarding/mock-desktop-banner.png) | Approved design adapted to explicit quota |
 | [Desktop dialog](server-onboarding/mock-desktop-dialog.png) | Name and six selectable regions |
 | [Desktop assigned](server-onboarding/mock-desktop-assigned.png) | Historical stopped receipt/password limitation |
-| [Desktop requested](server-onboarding/mock-desktop-requested.png) | Historical request UI, superseded by full-region guidance |
+| [Desktop requested](server-onboarding/mock-desktop-requested.png) | Private request confirmation |
 | [Capacity race](server-onboarding/mock-desktop-capacity-race.png) | Safe stale snapshot rejection |
 | [Recovery](server-onboarding/mock-desktop-recovery.png) | Retry persists through account mismatch/consumed quota |
 | [Mobile banner](server-onboarding/mock-mobile-banner.png) | Responsive layout |
 | [Mobile dialog](server-onboarding/mock-mobile-dialog.png) | Scrollable two-column region grid |
-| [Mobile requested](server-onboarding/mock-mobile-requested.png) | Historical request UI, superseded by full-region guidance |
+| [Mobile requested](server-onboarding/mock-mobile-requested.png) | Confirmed request without guarantees |
 
 Independent reviewer acceptance is still required. Full-stack browser/backend testing, live rollout, database/provider changes, push/PR/merge and deployments remain out of scope without separate authorization.
 
 Deploy the control-plane channel contract first, then the `my-servers` Edge function and website. Region requests carry no release selection.
+
+Deploy order for the stored region catalog:
+
+1. Deploy the control plane first, with the stored catalog (`hosting-regions` returning `available` per entry, `set-hosting-regions`, the version-3 summary, key-only Create/Request). Its migration 096, `20261009120000_control_plane_provider_regions.sql`, creates the catalog and seeds the six original regions; it is applied through the control plane's manual Supabase release procedure before that release starts.
+2. Then deploy the `my-servers` Edge Function and the website. They request only the version-3 summary, so against an older control plane owner onboarding shows as unavailable and **Create server** is shown unavailable with the read error.
+3. If the website catalog differs from the seed, publish it as described under [publishing the website catalog](#publishing-the-website-catalog).
+
+The `control-plane-admin` Edge Function forwards any operation name and is not changed by this work, so it needs no redeploy.

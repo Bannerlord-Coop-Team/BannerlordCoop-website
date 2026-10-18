@@ -5,9 +5,10 @@ import { ManagedServerCampaigns } from "./ManagedServerCampaigns";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), change: vi.fn(), refresh: vi.fn() }));
+const mocks = vi.hoisted(() => ({ list: vi.fn(), change: vi.fn(), deleteSave: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/app/servers/managed-server-campaign-actions", () => ({ listManagedServerCampaigns: mocks.list, changeManagedServerCampaign: mocks.change }));
+vi.mock("@/app/servers/managed-server-save-actions", () => ({ deleteManagedServerSave: mocks.deleteSave }));
 
 const serverId = "11111111-1111-4111-8111-111111111111";
 const defaultId = "22222222-2222-4222-8222-222222222222";
@@ -87,4 +88,16 @@ it("shows load failures without hiding the controls and refuses changes before s
     expect(container.textContent).toContain("unavailable until the server status loads");
     expect(button("New campaign").disabled).toBe(true);
     expect(mocks.change).not.toHaveBeenCalled();
+});
+
+it("deletes only an inactive imported campaign after exact-name confirmation", async () => {
+    mocks.deleteSave.mockResolvedValue({ ok: true, message: "Campaign deletion queued." });
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    vi.stubGlobal("prompt", vi.fn(() => "Imported Campaign"));
+    await render();
+    const deleteButton = container.querySelector('[aria-label="Delete Imported Campaign"]') as HTMLButtonElement;
+    expect(deleteButton).toBeTruthy();
+    expect((container.querySelector('[aria-label="Delete Default New Game"]') as HTMLButtonElement | null)).toBeNull();
+    await act(async () => deleteButton.click());
+    expect(mocks.deleteSave).toHaveBeenCalledWith({ serverId, saveId: importedId, expectedUpdatedAt: stopped.updatedAt, confirmationText: "Imported Campaign", requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) }, "owner");
 });

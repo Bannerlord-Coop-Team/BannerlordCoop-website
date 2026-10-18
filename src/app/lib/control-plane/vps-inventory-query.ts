@@ -1,0 +1,275 @@
+import { useEffect, useSyncExternalStore } from "react";
+import { hostServedRegionKeys, slotOwnerAccountId } from "@/app/lib/control-plane/presentation";
+import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
+import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
+import { HOSTING_REGIONS, hostingRegionLabel, type HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
+
+type RegionCatalog = readonly HostingRegionPayload[] | null;
+type PlacedHost = Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region" | "totalSlots" | "occupiedSlots">;
+const UNPLACED_REGION = "unplaced";
+
+export const VPS_PAGE_SIZES = [10, 25, 50, 100] as const;
+export type VpsPageSize = (typeof VPS_PAGE_SIZES)[number];
+export const VPS_PAGE_SIZE_STORAGE_KEY = "bannerlordcoop.admin.vps.pageSize";
+const DEFAULT_VPS_PAGE_SIZE: VpsPageSize = 10;
+
+export type VpsInventoryFilters = {
+    regions: readonly string[];
+    email: string;
+    emptySlotsOnly: boolean;
+};
+
+type OccupiedSlot = HostingAdminVpsHost["occupiedSlots"][number];
+type EmailLookup = {
+    byAccount: Map<string, string>;
+    byDiscord: Map<string, string>;
+};
+
+const pageSizeListeners = new Set<() => void>();
+let rememberedPageSize: VpsPageSize = DEFAULT_VPS_PAGE_SIZE;
+
+export function isVpsPageSize(value: number): value is VpsPageSize {
+    return (VPS_PAGE_SIZES as readonly number[]).includes(value);
+}
+
+export function readVpsPageSize(storage: Pick<Storage, "getItem">): VpsPageSize {
+    try {
+        const raw = storage.getItem(VPS_PAGE_SIZE_STORAGE_KEY);
+        if (raw === "10" || raw === "25" || raw === "50" || raw === "100") return Number(raw) as VpsPageSize;
+    } catch {
+        return DEFAULT_VPS_PAGE_SIZE;
+    }
+    return DEFAULT_VPS_PAGE_SIZE;
+}
+
+function subscribeRememberedVpsPageSize(listener: () => void) {
+    pageSizeListeners.add(listener);
+    return () => pageSizeListeners.delete(listener);
+}
+
+function getRememberedVpsPageSize() {
+    return rememberedPageSize;
+}
+
+function getServerVpsPageSize(): VpsPageSize {
+    return DEFAULT_VPS_PAGE_SIZE;
+}
+
+function notifyPageSizeListeners() {
+    for (const listener of pageSizeListeners) listener();
+}
+
+export function setRememberedVpsPageSize(size: VpsPageSize) {
+    rememberedPageSize = size;
+    try {
+        window.localStorage.setItem(VPS_PAGE_SIZE_STORAGE_KEY, String(size));
+    } catch {
+        // Private browsing can reject storage writes. The current view still uses the chosen size.
+    }
+    notifyPageSizeListeners();
+}
+
+export function restoreRememberedVpsPageSize(storage: Pick<Storage, "getItem">) {
+    const restored = readVpsPageSize(storage);
+    if (restored === rememberedPageSize) return;
+    rememberedPageSize = restored;
+    notifyPageSizeListeners();
+}
+
+/** Keeps the first render at 10 so server HTML matches hydration, then applies the stored size. */
+export function useRememberedVpsPageSize() {
+    const pageSize = useSyncExternalStore(subscribeRememberedVpsPageSize, getRememberedVpsPageSize, getServerVpsPageSize);
+    useEffect(() => {
+        restoreRememberedVpsPageSize(window.localStorage);
+    }, []);
+    return [pageSize, setRememberedVpsPageSize] as const;
+}
+
+export function hostHasEmptySlot(host: Pick<HostingAdminVpsHost, "availableServers">) {
+    return Number.isSafeInteger(host.availableServers) && host.availableServers > 0;
+}
+
+export function vpsRegionOptions(hosts: readonly PlacedHost[], catalog: RegionCatalog = null) {
+    const present = new Set<string>();
+    let unplaced = false;
+    for (const host of hosts) {
+        const keys = hostServedRegionKeys(host, catalog);
+        if (keys.length === 0) unplaced = true;
+        for (const key of keys) present.add(key);
+    }
+    const options = [...present]
+        .sort((left, right) => compareRegionKeys(left, right, catalog))
+        .map((value) => ({ value, label: hostingRegionLabel(value) }));
+    return unplaced ? [...options, { value: UNPLACED_REGION, label: "No stored region" }] : options;
+}
+
+export type VpsRegionSlotSummary = {
+    region: string;
+    label: string;
+    totalSlots: number;
+    takenSlots: number;
+};
+
+export type VpsFleetSlotSummary = {
+    totalSlots: number;
+    takenSlots: number;
+    regions: VpsRegionSlotSummary[];
+};
+
+export type RegionSlotOutline = "full" | "one-left" | "open";
+
+/** Full regions are red. A region with exactly one slot left is yellow. */
+export function regionSlotOutline(takenSlots: number, totalSlots: number): RegionSlotOutline {
+    if (!Number.isSafeInteger(totalSlots) || totalSlots <= 0) return "open";
+    const taken = Number.isSafeInteger(takenSlots) && takenSlots > 0 ? takenSlots : 0;
+    const free = totalSlots - taken;
+    if (free <= 0) return "full";
+    if (free === 1) return "one-left";
+    return "open";
+}
+
+/** Counts prepared slots and slots assigned to a server, for the whole fleet and each region it serves. */
+export function summarizeVpsSlots(hosts: readonly PlacedHost[], catalog: RegionCatalog = null): VpsFleetSlotSummary {
+    const totals = new Map<string, { totalSlots: number; takenSlots: number }>();
+    let totalSlots = 0;
+    let takenSlots = 0;
+    for (const host of hosts) {
+        const total = Number.isSafeInteger(host.totalSlots) && host.totalSlots > 0 ? host.totalSlots : 0;
+        const taken = Array.isArray(host.occupiedSlots) ? host.occupiedSlots.length : 0;
+        totalSlots += total;
+        takenSlots += taken;
+        const keys = hostServedRegionKeys(host, catalog);
+        // A host that satisfies more than one placement is capacity for each of those regions.
+        for (const region of keys.length > 0 ? keys : [UNPLACED_REGION]) {
+            const current = totals.get(region) ?? { totalSlots: 0, takenSlots: 0 };
+            current.totalSlots += total;
+            current.takenSlots += taken;
+            totals.set(region, current);
+        }
+    }
+    const regions = [...totals.entries()]
+        .sort(([left], [right]) => compareRegionKeys(left, right, catalog))
+        .map(([region, counts]) => ({
+            region,
+            label: region === UNPLACED_REGION ? "No stored region" : hostingRegionLabel(region),
+            ...counts,
+        }));
+    return { totalSlots, takenSlots, regions };
+}
+
+export function vpsOwnerEmails(hosts: readonly HostingAdminVpsHost[], accounts: readonly WebsiteAccountSummary[]) {
+    const lookup = emailLookup(accounts);
+    const emails = new Set<string>();
+    for (const host of hosts) {
+        for (const slot of occupiedSlots(host)) {
+            const email = slotOwnerEmail(slot, lookup);
+            if (email !== null) emails.add(email);
+        }
+    }
+    return [...emails].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+}
+
+export function emailSuggestions(emails: readonly string[], query: string, limit = 8) {
+    const needle = query.trim().toLowerCase();
+    if (needle.length === 0 || limit <= 0) return [];
+    const matches: string[] = [];
+    for (const email of emails) {
+        if (!email.toLowerCase().includes(needle)) continue;
+        matches.push(email);
+        if (matches.length === limit) break;
+    }
+    return matches;
+}
+
+export function filterVpsHosts(
+    hosts: readonly HostingAdminVpsHost[],
+    accounts: readonly WebsiteAccountSummary[],
+    filters: VpsInventoryFilters,
+    catalog: RegionCatalog = null,
+) {
+    const regions = new Set(filters.regions);
+    const needle = filters.email.trim().toLowerCase();
+    const lookup = needle.length > 0 ? emailLookup(accounts) : null;
+    return hosts.filter((host) => {
+        if (regions.size > 0 && !hostMatchesRegions(host, regions, catalog)) return false;
+        if (filters.emptySlotsOnly && !hostHasEmptySlot(host)) return false;
+        if (lookup !== null && !occupiedSlots(host).some((slot) => {
+            const email = slotOwnerEmail(slot, lookup);
+            return email !== null && email.toLowerCase().includes(needle);
+        })) return false;
+        return true;
+    });
+}
+
+/** Keeps VPS hosts with a terminal runner error ahead of healthy or in-progress hosts. */
+export function sortVpsHosts(hosts: readonly HostingAdminVpsHost[]) {
+    return hosts
+        .map((host, index) => ({ host, index }))
+        .sort((left, right) => runnerErrorRank(right.host) - runnerErrorRank(left.host) || left.index - right.index)
+        .map(({ host }) => host);
+}
+
+export function paginateVpsHosts<T>(items: readonly T[], page: number, pageSize: number) {
+    const safeSize = Number.isSafeInteger(pageSize) && pageSize > 0 ? pageSize : DEFAULT_VPS_PAGE_SIZE;
+    const pageCount = Math.max(1, Math.ceil(items.length / safeSize));
+    const current = Number.isInteger(page) ? Math.min(Math.max(page, 1), pageCount) : 1;
+    const startIndex = (current - 1) * safeSize;
+    const slice = items.slice(startIndex, startIndex + safeSize);
+    return {
+        page: current,
+        pageCount,
+        start: items.length === 0 ? 0 : startIndex + 1,
+        end: startIndex + slice.length,
+        items: slice,
+    };
+}
+
+function emailLookup(accounts: readonly WebsiteAccountSummary[]): EmailLookup {
+    const byAccount = new Map<string, string>();
+    const byDiscord = new Map<string, string>();
+    for (const account of accounts) {
+        const email = account.email?.trim() ?? "";
+        if (email.length === 0) continue;
+        byAccount.set(account.accountId.toLowerCase(), email);
+        if (account.discordUserId) byDiscord.set(account.discordUserId, email);
+    }
+    return { byAccount, byDiscord };
+}
+
+function slotOwnerEmail(slot: OccupiedSlot, lookup: EmailLookup) {
+    const accountId = slotOwnerAccountId(slot);
+    if (accountId !== null) {
+        const email = lookup.byAccount.get(accountId.toLowerCase());
+        if (email !== undefined) return email;
+    }
+    return lookup.byDiscord.get(slot.ownerDiscordUserId) ?? null;
+}
+
+function occupiedSlots(host: HostingAdminVpsHost) {
+    return Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
+}
+
+function runnerErrorRank(host: HostingAdminVpsHost) {
+    return host.runnerOnboarding?.state === "failed" || host.runnerUpdate?.state === "failed" ? 1 : 0;
+}
+
+function hostMatchesRegions(host: PlacedHost, regions: ReadonlySet<string>, catalog: RegionCatalog) {
+    const keys = hostServedRegionKeys(host, catalog);
+    if (keys.length === 0) return regions.has(UNPLACED_REGION);
+    return keys.some((key) => regions.has(key));
+}
+
+function compareRegionKeys(left: string, right: string, catalog: RegionCatalog) {
+    return regionRank(left, catalog) - regionRank(right, catalog) || left.localeCompare(right);
+}
+
+function regionRank(region: string, catalog: RegionCatalog) {
+    if (region === UNPLACED_REGION) return 10_000;
+    const catalogOrder = (catalog ?? []).map((entry) => entry.region);
+    const catalogRank = catalogOrder.indexOf(region);
+    if (catalogRank !== -1) return catalogRank;
+    const websiteOrder: readonly string[] = HOSTING_REGIONS.map((entry) => entry.key);
+    const websiteRank = websiteOrder.indexOf(region);
+    if (websiteRank !== -1) return catalogOrder.length + websiteRank;
+    return catalogOrder.length + websiteOrder.length;
+}

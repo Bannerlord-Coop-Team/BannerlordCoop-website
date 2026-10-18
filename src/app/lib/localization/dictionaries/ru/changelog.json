@@ -1,0 +1,32 @@
+{
+  "metadata.title": "Журнал изменений",
+  "metadata.description": "Узнайте о последних релизах Bannerlord Coop, улучшениях и исправлениях ошибок.",
+  "hero.eyebrow": "Новости разработки",
+  "hero.title": "Журнал изменений Bannerlord Coop",
+  "hero.description": "Здесь собраны все последние версии, улучшения игрового процесса, технические изменения и исправления, опубликованные командой разработчиков Bannerlord Coop.",
+  "links.githubReleases": "Посмотреть релизы на GitHub",
+  "links.fullRelease": "Посмотреть полную информацию о релизе",
+  "links.openGithubReleases": "Открыть релизы на GitHub",
+  "history.eyebrow": "История релизов",
+  "history.title": "Что изменилось?",
+  "history.description": "Информация о релизах загружается напрямую из открытого репозитория проекта на GitHub и обновляется каждый час.",
+  "history.count": {
+    "one": "Показан {formattedCount} релиз",
+    "few": "Показано {formattedCount} релиза",
+    "many": "Показано {formattedCount} релизов",
+    "other": "Показано {formattedCount} релиза"
+  },
+  "release.latest": "Последний релиз",
+  "release.label": "Релиз",
+  "release.prerelease": "Предварительный релиз",
+  "release.published": "Опубликован {date}",
+  "release.publishedUnknown": "Дата публикации неизвестна",
+  "release.author": "Автор: {author}",
+  "release.emptyNotes": "Для этой версии нет описания изменений.",
+  "unavailable.eyebrow": "GitHub недоступен",
+  "unavailable.title": "Не удалось загрузить журнал изменений.",
+  "unavailable.description": "Возможно, GitHub временно недоступен или достигнут лимит запросов к API. Вы по-прежнему можете посмотреть релизы непосредственно на GitHub.",
+  "empty.eyebrow": "Релизов пока нет",
+  "empty.title": "История релизов пока пуста.",
+  "empty.description": "Опубликованные на GitHub релизы будут автоматически появляться здесь."
+}

@@ -44,18 +44,19 @@ export function getAssignedLiveConsoleAccess(
     return null;
 }
 
-export function getLiveConsoleMember(user: User): LiveConsoleMember {
+/** Presents member identity unchanged, using injected labels only when identity values are missing. */
+export function getLiveConsoleMember(user: User, labels = { missingName: "Unnamed member", missingEmail: "No email" }): LiveConsoleMember {
     const metadata = user.user_metadata ?? {};
     const displayName =
         metadata.full_name ??
         metadata.name ??
         metadata.user_name ??
         user.email?.split("@")[0] ??
-        "Unnamed member";
+        labels.missingName;
 
     return {
         id: user.id,
         displayName: String(displayName),
-        email: user.email ?? "No email",
+        email: user.email ?? labels.missingEmail,
     };
 }

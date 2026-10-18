@@ -26,6 +26,25 @@ afterEach(async () => {
 });
 
 describe("compact VPS host inventory", () => {
+    it.each([
+        { autoRenew: true, expirationDate: "2026-11-01T00:00:00.000Z", status: "Renews 11/01/2026" },
+        { autoRenew: false, expirationDate: "2026-11-01T00:00:00.000Z", status: "Won't Renew" },
+        { autoRenew: false, expirationDate: null, status: "Won't Renew" },
+        { autoRenew: null, expirationDate: "2026-11-01T00:00:00.000Z", status: "Renewal unknown" },
+        { autoRenew: true, expirationDate: null, status: "Renewal date unknown" },
+        { autoRenew: true, expirationDate: "not-a-date", status: "Renewal date unknown" },
+    ])("shows $status beneath the price in a collapsed row", async ({ autoRenew, expirationDate, status }) => {
+        await act(async () => root.render(<VpsHostInventory
+            hosts={[{ ...host("host-billing", resources(60, 40), 0), autoRenew, expirationDate }]}
+            ownerLabels={{}}
+            runnerTargetSourceCommit={null}
+        />));
+
+        const billing = container.querySelector('[role="cell"][data-label="Billing"]');
+        expect([...billing!.querySelectorAll("p")].map(line => line.textContent)).toEqual(["$12.32 / month", status]);
+        expect(container.querySelector('[role="region"]')).toBeNull();
+    });
+
     it("keeps summaries compact and reveals only one host detail panel at a time", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-a", resources(70, 30), 0, true), host("host-b", resources(80, 20), 1)]}
@@ -59,6 +78,20 @@ describe("compact VPS host inventory", () => {
         expect(container.textContent).toContain("Slot 2 · UDP 4201");
         expect(container.textContent).not.toContain("Slot 1 · UDP 4200");
         expect(container.querySelector('[role="table"][aria-label="VPS host inventory"]')).not.toBeNull();
+    });
+
+    it("labels a host by the stored catalog regions its country and zone satisfy", async () => {
+        const stored = [
+            { region: "us-east", placement: { countryCodes: ["US"], locationIds: ["os-us-east-va-2"] } },
+            { region: "us-west", placement: { countryCodes: ["US"], locationIds: ["us-west-or"] } },
+            { region: "north-america", placement: { countryCodes: ["US", "CA"] } },
+        ];
+        await act(async () => root.render(<VpsHostInventory hosts={[host("host-a", resources(60, 40), 0)]} ownerLabels={{}}
+            runnerTargetSourceCommit={null} regionCatalog={stored} />));
+        expect(container.textContent).toContain("US-East, North America · US · os-us-east-va-2");
+        await act(async () => root.render(<VpsHostInventory hosts={[host("host-a", resources(60, 40), 0)]} ownerLabels={{}}
+            runnerTargetSourceCommit={null} regionCatalog={null} />));
+        expect(container.textContent).toContain("Regions unavailable · US · os-us-east-va-2");
     });
 
     it("surfaces disk warning state in a collapsed row", async () => {
@@ -119,7 +152,8 @@ function host(name: string, hostResources: HostingAdminHostResources, slotIndex:
     return {
         name,
         locationId: "os-us-east-va-2",
-        region: "us-east",
+        countryCode: "US",
+        region: null,
         totalSlots: 3,
         runningServers: 1,
         availableServers: 2,

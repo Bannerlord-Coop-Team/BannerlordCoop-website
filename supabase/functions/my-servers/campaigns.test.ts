@@ -10,7 +10,7 @@ const updatedAt = "2026-10-02T12:00:00.000Z";
 const token = "original-token-with-enough-characters";
 const campaign = { saveId, displayName: "Default New Game", byteSize: 6_144, createdAt: updatedAt, lastUsedAt: null, importedBy: "system" };
 const page = { serverId, updatedAt, activeSaveId: saveId, items: [campaign], nextCursor: null };
-function handler(fetchImplementation: typeof fetch) { return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", fetchImplementation }); }
+function handler(fetchImplementation: typeof fetch) { return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", fetchImplementation, waitUntil: () => undefined }); }
 function get(query: string) { return new Request(`https://edge.test/my-servers?${query}`, { headers: { authorization: `Bearer ${token}`, "x-request-id": requestId } }); }
 function post(body: unknown, id = true) { return new Request("https://edge.test/my-servers", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}`, ...(id ? { "x-request-id": requestId } : {}) }, body: JSON.stringify(body) }); }
 

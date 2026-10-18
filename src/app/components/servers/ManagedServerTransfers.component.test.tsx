@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { Blob as NodeBlob } from "node:buffer";
 import { unzipSync, strFromU8 } from "fflate";
 import { readConfigurationFile, applyConfigurationImport } from "../../../../supabase/functions/_shared/configuration-file-import";
@@ -5,14 +7,16 @@ import { act } from "react";
 import { randomUUID } from "node:crypto";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ManagedServerTransfers, readFileIntent } from "./ManagedServerTransfers";
+import { ManagedServerTransfers, readFileIntent, saveExportFileName } from "./ManagedServerTransfers";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
-import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
-const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), download: vi.fn(), config: vi.fn(), refresh: vi.fn(), read: vi.fn(), save: vi.fn() }));
+import { OWNER_FILE_REJECTION_REASONS, type OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
+const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), download: vi.fn(), config: vi.fn(), refresh: vi.fn(), read: vi.fn(), save: vi.fn(), fileStatus: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
-vi.mock("@/app/servers/managed-server-file-actions", () => ({ submitManagedServerFile: mocks.submit, checkManagedServerFile: mocks.check, downloadManagedServerSave: mocks.download, exportManagedServerConfig: mocks.config }));
-vi.mock("@/app/servers/managed-server-config-actions", () => ({ readManagedServerConfig: mocks.read, saveManagedServerConfig: mocks.save }));
-vi.mock("@/app/servers/managed-server-campaign-actions", () => ({ listManagedServerCampaigns: async () => ({ ok: true, campaigns: { serverId: status.serverId, updatedAt: status.updatedAt, activeSaveId: status.activeSave!.saveId, items: [] } }), changeManagedServerCampaign: vi.fn() }));
+vi.mock("@/app/servers/managed-server-file-actions", () => ({ submitManagedServerFile: mocks.submit, checkManagedServerFile: mocks.check, downloadManagedServerSave: mocks.download, exportManagedServerConfig: mocks.config, readManagedServerFileStatus: mocks.fileStatus }));
+vi.mock("@/app/servers/managed-server-config-actions", () => ({
+    readManagedServerConfig: mocks.read, saveManagedServerConfig: mocks.save,
+    readManagedServerConfigFiles: async (serverId: string, userId: string) => ({ server: await mocks.read(serverId, "server", userId), mod: await mocks.read(serverId, "mod", userId) }),
+}));
 const status: OwnerFileStatus = { serverId: "11111111-1111-4111-8111-111111111111", updatedAt: "2026-09-13T00:00:00.000Z", operationState: "stopped", observedGameState: "stopped", activeSave: { saveId: "22222222-2222-4222-8222-222222222222", displayName: "Campaign" }, managedConfig: DEFAULT_MANAGED_SERVER_CONFIGURATION };
 const job = { kind: "job", outcome: "enqueued", jobId: "33333333-3333-4333-8333-333333333333", action: "export-save", state: "queued" };
 const key = `managed-file-transfer:v1:owner:${status.serverId}`;
@@ -27,7 +31,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 async function render(current = status, owner = true, userId = "owner") {
-    await act(async () => root.render(<ManagedServerTransfers userId={userId} serverId={current.serverId} status={current} canImportConfig={owner} canEditConfig={owner} canExportSave={owner} />));
+    await act(async () => root.render(<TestLocalization>{<ManagedServerTransfers userId={userId} serverId={current.serverId} status={current} canImportConfig={owner} canEditConfig={owner} canExportSave={owner} />} </TestLocalization>));
     await act(async () => vi.advanceTimersByTimeAsync(0));
 }
 function button(label: string) { const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label); if (!found) throw Error(`Missing button ${label}`); return found; }
@@ -67,7 +71,82 @@ it("keeps one pending dispatch and bounds polling after network loss", async () 
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(mocks.check).toHaveBeenCalledTimes(calls);
     expect(container.textContent).toContain("Check status"); expect(sessionStorage.getItem(key)).not.toBeNull();
+    expect(container.textContent).toContain("accepted transfer may still be processing");
 });
+it("keeps checking an accepted queued transfer past one minute and follows its automatic retry", async () => {
+    mocks.submit.mockResolvedValue({ ok: true, result: job });
+    mocks.check.mockResolvedValue({ ok: true, result: job });
+    await render(); await click("Export save");
+    expect(container.textContent).toContain("accepted and queued");
+    await act(async () => vi.advanceTimersByTimeAsync(120_000));
+    expect(mocks.check.mock.calls.length).toBeGreaterThan(15);
+    expect(container.textContent).toContain("accepted and queued");
+    mocks.check.mockResolvedValue({ ok: true, result: { ...job, state: "retry-wait" } });
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(container.textContent).toContain("automatic retry");
+    mocks.check.mockResolvedValue({ ok: true, result: { ...job, state: "succeeded" } });
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(button("Download save export").disabled).toBe(false);
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+});
+it("bounds confirmed-job polling and resumes checking the same accepted request", async () => {
+    mocks.submit.mockResolvedValue({ ok: true, result: job });
+    mocks.check.mockResolvedValue({ ok: true, result: job });
+    await render(); await click("Export save");
+    const original = JSON.parse(sessionStorage.getItem(key)!);
+    await act(async () => vi.advanceTimersByTimeAsync(604_000));
+    const checks = mocks.check.mock.calls.length;
+    expect(container.textContent).toContain("Automatic status checks are paused");
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(mocks.check).toHaveBeenCalledTimes(checks);
+    expect([...container.querySelectorAll("button")].some((el) => el.textContent === "Retry same request")).toBe(false);
+    await click("Check status");
+    expect(mocks.check).toHaveBeenLastCalledWith(status.serverId, original.requestId, "owner");
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+});
+it("retains acceptance when a later check cannot find the request", async () => {
+    mocks.submit.mockResolvedValue({ ok: true, result: job });
+    mocks.check.mockResolvedValue({ ok: true, result: null });
+    await render(); await click("Export save");
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(container.textContent).toContain("accepted transfer could not be checked");
+    expect([...container.querySelectorAll("button")].some((el) => el.textContent === "Retry same request")).toBe(false);
+});
+it.each(["storage-unavailable", "save-rejected", "stop-required", "server-changed"])("shows the safe %s failure and explains how to start a new request", async (failureReason) => {
+    // Restore a previous import to exercise its durable result without uploading fixture bytes.
+    sessionStorage.setItem(key, JSON.stringify({ requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt,
+        action: "import-save", fingerprints: ["a".repeat(64)], displayName: "Campaign", saveId: status.activeSave!.saveId }));
+    mocks.check.mockResolvedValue({ ok: true, result: { ...job, action: "import-save", state: "failed", failureReason } });
+    await render(); await click("Check status");
+    expect(container.textContent).toContain(serverTestMessages["managed-server"][`transfers.failure.${failureReason}` as keyof typeof serverTestMessages["managed-server"]]);
+    expect(container.textContent).toContain("will not retry");
+    expect(container.textContent).toContain(status.serverId);
+    expect([...container.querySelectorAll("button")].some((el) => el.textContent === "Retry same request")).toBe(false);
+    await click("Dismiss completed transfer");
+    expect(sessionStorage.getItem(key)).toBeNull();
+    expect(button("Import save").disabled).toBe(false);
+});
+it.each([undefined, ...OWNER_FILE_REJECTION_REASONS])("shows descriptive pre-job rejection %s with a support reference and clears the finished intent", async (failureReason) => {
+    sessionStorage.setItem(key, JSON.stringify({ requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt,
+        action: "import-save", fingerprints: ["a".repeat(64)], displayName: "Campaign", saveId: status.activeSave!.saveId }));
+    mocks.check.mockResolvedValue({ ok: true, result: { kind: "rejected", ...(failureReason ? { failureReason } : {}) } });
+    await render(); await click("Check status");
+    const messageKey = failureReason ? `transfers.rejection.${failureReason}` : "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck";
+    expect(container.textContent).toContain(serverTestMessages["managed-server"][messageKey as keyof typeof serverTestMessages["managed-server"]]);
+    expect(container.textContent).toContain(`Support reference: ${status.serverId}`);
+    expect(sessionStorage.getItem(key)).toBeNull();
+    expect(button("Import save").disabled).toBe(false);
+    expect(mocks.refresh).toHaveBeenCalled();
+});
+
+it("shows a rejection reason immediately after submission", async () => {
+    mocks.submit.mockResolvedValue({ ok: true, result: { kind: "rejected", failureReason: "storage-unavailable" } });
+    await render(); await click("Export save");
+    expect(container.textContent).toContain(serverTestMessages["managed-server"]["transfers.rejection.storage-unavailable"]);
+    expect(container.textContent).toContain("Support reference:");
+    expect(sessionStorage.getItem(key)).toBeNull();
+});
+
 it("clears a definitively rejected stale request so refreshed inputs can be used", async () => {
     mocks.submit.mockResolvedValue({ ok: false, rejected: true, message: "The server changed" });
     await render(); await click("Export save");
@@ -283,3 +362,127 @@ it("edits the live configuration in the form by default while file transfers sta
     expect(container.querySelector("fieldset")!.disabled).toBe(true);
     expect(button("Save config").disabled).toBe(true);
 });
+
+const staleRejection = { ok: false, rejected: true, stale: true, notSubmitted: false, message: "The server changed. Refresh before starting a new transfer." };
+
+it("refreshes a stale page and retries a save export once with the current server state", async () => {
+    const fresh = { ...status, updatedAt: "2026-09-14T00:00:00.000Z" };
+    mocks.submit.mockResolvedValueOnce(staleRejection).mockResolvedValueOnce({ ok: true, result: job });
+    mocks.fileStatus.mockResolvedValue({ ok: true, status: fresh });
+    await render(); await click("Export save");
+    expect(mocks.fileStatus).toHaveBeenCalledExactlyOnceWith(status.serverId, "owner");
+    expect(mocks.refresh).toHaveBeenCalled();
+    expect(mocks.submit).toHaveBeenCalledTimes(2);
+    const [first, retry] = mocks.submit.mock.calls.map(([form]) => form as FormData);
+    expect(first.get("expectedUpdatedAt")).toBe(status.updatedAt);
+    expect(retry.get("expectedUpdatedAt")).toBe(fresh.updatedAt);
+    expect(retry.get("saveId")).toBe(status.activeSave!.saveId);
+    expect(retry.get("requestId")).not.toBe(first.get("requestId"));
+    expect(JSON.parse(sessionStorage.getItem(key)!).requestId).toBe(retry.get("requestId"));
+    expect(container.textContent).not.toContain("The server changed");
+    expect(container.textContent).toContain("Transfer accepted and queued");
+});
+
+it("never exports a different campaign than the one shown when the active save changed", async () => {
+    mocks.submit.mockResolvedValue(staleRejection);
+    mocks.fileStatus.mockResolvedValue({ ok: true, status: { ...status, updatedAt: "2026-09-14T00:00:00.000Z", activeSave: { saveId: "44444444-4444-4444-8444-444444444444", displayName: "Other" } } });
+    await render(); await click("Export save");
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+    expect(mocks.refresh).toHaveBeenCalled();
+    expect(container.textContent).toContain("Your active campaign changed while this page was open. Check it above, then press Export save again.");
+    expect(sessionStorage.getItem(key)).toBeNull();
+    expect(button("Export save").disabled).toBe(false);
+});
+
+it("retries a stale export only once, then explains that the server is still changing", async () => {
+    mocks.submit.mockResolvedValue(staleRejection);
+    mocks.fileStatus.mockResolvedValue({ ok: true, status: { ...status, updatedAt: "2026-09-14T00:00:00.000Z" } });
+    await render(); await click("Export save");
+    expect(mocks.submit).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("The server is still changing. Wait a moment and try Export save again.");
+    expect(sessionStorage.getItem(key)).toBeNull();
+    expect(button("Export save").disabled).toBe(false);
+});
+
+it("does not replace a retained export request with new inputs after a stale rejection", async () => {
+    sessionStorage.setItem(key, JSON.stringify({ requestId: "55555555-5555-4555-8555-555555555555", serverId: status.serverId, expectedUpdatedAt: status.updatedAt, action: "export-save", fingerprints: [], displayName: "", saveId: status.activeSave!.saveId }));
+    mocks.submit.mockResolvedValue(staleRejection);
+    await render(); await click("Retry same request");
+    // A retained request keeps its identity: the stale answer is reported, not retried with new inputs.
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+    expect(mocks.fileStatus).not.toHaveBeenCalled();
+});
+
+it("keeps save feedback in the campaign card and explains why other transfers are paused", async () => {
+    mocks.submit.mockResolvedValue({ ok: true, result: job });
+    await render(); await click("Export save");
+    const saveCard = container.querySelector("#campaign-save-heading")!.closest("section")!;
+    const configCard = container.querySelector("#configuration-heading")!.closest("section")!;
+    expect(saveCard.textContent).toContain("Transfer accepted and queued");
+    expect(saveCard.textContent).toContain("Check status");
+    expect(configCard.textContent).not.toContain("Transfer accepted and queued");
+    expect(button("Export config").disabled).toBe(true);
+    expect(button("Import config").disabled).toBe(true);
+    expect(configCard.textContent).toContain("Paused while another transfer is open. Finish or dismiss it to start a new one.");
+});
+
+it("reports configuration export results directly under the configuration buttons", async () => {
+    mocks.config.mockRejectedValue(new Error("Network interrupted"));
+    await render(); await click("Export config");
+    const configCard = container.querySelector("#configuration-heading")!.closest("section")!;
+    const message = [...configCard.querySelectorAll("p")].find((paragraph) => paragraph.textContent === "Configuration download failed. Please try again.")!;
+    expect(message.closest('[aria-live="polite"]')).not.toBeNull();
+    expect(message.compareDocumentPosition(configCard.querySelector("fieldset")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector("#campaign-save-heading")!.closest("section")!.textContent).not.toContain("Configuration download failed");
+});
+
+it("clears the ready-to-download message together with a dismissed export", async () => {
+    mocks.submit.mockResolvedValue({ ok: true, result: { ...job, state: "succeeded" } });
+    await render(); await click("Export save");
+    expect(container.textContent).toContain("Your save export is ready to download.");
+    await click("Dismiss completed transfer");
+    expect(container.textContent).not.toContain("Your save export is ready to download.");
+    expect(container.textContent).not.toContain("Download save export");
+    expect(button("Export save").disabled).toBe(false);
+});
+
+it("shows download progress and names the export after the server and day", async () => {
+    vi.setSystemTime(new Date(2026, 9, 4, 12));
+    mocks.submit.mockResolvedValue({ ok: true, result: { ...job, state: "succeeded" } });
+    let respond!: (value: unknown) => void;
+    mocks.download.mockImplementation(() => new Promise((resolve) => { respond = resolve; }));
+    let filename = "";
+    vi.stubGlobal("Blob", NodeBlob);
+    vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:save-export"), revokeObjectURL: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { filename = this.download; });
+    await act(async () => root.render(<TestLocalization>{<ManagedServerTransfers userId="owner" serverId={status.serverId} serverName="Testésrver QA" status={status} canImportConfig canEditConfig canExportSave />} </TestLocalization>));
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    await click("Export save");
+    await click("Download save export");
+    expect(button("Preparing download…").disabled).toBe(true);
+    await act(async () => respond({ ok: true, download: { kind: "file", fileName: "save-export-33333333-1759579200.blcexport", base64: btoa("save"), byteSize: 4 } }));
+    expect(filename).toBe("testesrver-qa-save-2026-10-04.blcexport");
+    expect(button("Download save export").disabled).toBe(false);
+});
+
+it("derives safe export filenames without changing the server's extension", () => {
+    const day = new Date(2026, 0, 2);
+    expect(saveExportFileName("Testesrver", "save-export-1.blcexport", day)).toBe("testesrver-save-2026-01-02.blcexport");
+    expect(saveExportFileName("../../Évreux: Campaign!", "x.zip", day)).toBe("evreux-campaign-save-2026-01-02.zip");
+    expect(saveExportFileName("卡拉迪亚", "x", day)).toBe("server-save-2026-01-02.blcexport");
+    expect(saveExportFileName(undefined, "x.blcexport", day)).toBe("server-save-2026-01-02.blcexport");
+});
+
+it("says once that configuration changes apply the next time the server starts", async () => {
+    await render();
+    const configCard = container.querySelector("#configuration-heading")!.closest("section")!;
+    expect(configCard.textContent!.split("next time the server starts").length - 1).toBe(1);
+    expect(configCard.textContent).not.toContain("stop and start a running server");
+});
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

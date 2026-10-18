@@ -4,13 +4,14 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Sparkles } from "lucide-react";
 import { changeManagedServerCampaign, listManagedServerCampaigns } from "@/app/servers/managed-server-campaign-actions";
+import { deleteManagedServerSave } from "@/app/servers/managed-server-save-actions";
 import { fileButtonClass, filePrimaryButtonClass } from "./server-file-styles";
 import type { CampaignPage } from "../../../../supabase/functions/_shared/server-campaign-contract";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 
 type Campaigns = Omit<CampaignPage, "nextCursor">;
 
-export function ManagedServerCampaigns({ userId, serverId, status }: { userId: string; serverId: string; status: OwnerFileStatus | null }) {
+export function ManagedServerCampaigns({ userId, serverId, status, canDelete = false }: { userId: string; serverId: string; status: OwnerFileStatus | null; canDelete?: boolean }) {
     const router = useRouter();
     const [campaigns, setCampaigns] = useState<Campaigns | null>(null);
     const [loadError, setLoadError] = useState("");
@@ -94,6 +95,29 @@ export function ManagedServerCampaigns({ userId, serverId, status }: { userId: s
         });
     }
 
+    function remove(campaign: Campaigns["items"][number]) {
+        const page = campaigns;
+        if (!canDelete || campaign.importedBy !== "owner" || !stopped || busy || !page) return;
+        if (!window.confirm(`Delete campaign "${campaign.displayName}"? Type the exact campaign name in the next prompt to confirm.`)) return;
+        const confirmationText = window.prompt(`Type the exact campaign name to delete "${campaign.displayName}".`);
+        if (confirmationText !== campaign.displayName) {
+            setMessage("The campaign name did not match, so nothing was deleted.");
+            return;
+        }
+        setMessage("");
+        startTransition(async () => {
+            try {
+                const result = await deleteManagedServerSave({ serverId, saveId: campaign.saveId, expectedUpdatedAt: page.updatedAt, confirmationText, requestId: crypto.randomUUID() }, userId);
+                if (!result.ok) throw new Error(result.message);
+                setMessage("Campaign deletion queued.");
+                setVersion((value) => value + 1);
+                router.refresh();
+            } catch (error) {
+                setMessage(error instanceof Error ? error.message : "The campaign could not be deleted. Refresh and try again.");
+            }
+        });
+    }
+
     const busy = pending || resetting !== null;
     const stopHint = status === null ? "Campaign changes are unavailable until the server status loads." : stopped ? null : "Stop the server to switch campaigns or start a new one.";
 
@@ -118,7 +142,10 @@ export function ManagedServerCampaigns({ userId, serverId, status }: { userId: s
                         <p className="truncate text-sm">{campaign.displayName}{active && <span className="ml-2 rounded bg-gold/20 px-1.5 py-0.5 text-xs text-gold">Selected</span>}</p>
                         <p className="text-xs text-foreground-muted">{campaign.importedBy === "system" ? "Created by hosting" : "Imported"} · {new Date(campaign.createdAt).toLocaleDateString()} · {formatBytes(campaign.byteSize)}</p>
                     </div>
-                    {!active && <button type="button" className={fileButtonClass} disabled={busy || !stopped} onClick={() => change({ action: "select-save", saveId: campaign.saveId })}>Use this campaign</button>}
+                    <div className="flex flex-wrap gap-2">
+                        {!active && <button type="button" className={fileButtonClass} disabled={busy || !stopped} onClick={() => change({ action: "select-save", saveId: campaign.saveId })}>Use this campaign</button>}
+                        {canDelete && campaign.importedBy === "owner" && <button type="button" aria-label={`Delete ${campaign.displayName}`} className="inline-flex size-10 items-center justify-center rounded-md border border-crimson/50 text-xl text-red-200 hover:border-crimson disabled:opacity-50" disabled={busy || !stopped || active} onClick={() => remove(campaign)}>×</button>}
+                    </div>
                 </li>;
             })}
         </ul>}
@@ -138,3 +165,4 @@ function formatBytes(bytes: number) {
     if (bytes < 1_048_576) return `${Math.max(1, Math.round(bytes / 1_024))} KB`;
     return `${(bytes / 1_048_576).toFixed(1)} MB`;
 }
+

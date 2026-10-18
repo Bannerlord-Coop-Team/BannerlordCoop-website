@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -6,6 +8,7 @@ import { ServerManagementWorkspace } from "./ServerManagementWorkspace";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 
 vi.mock("./ManagedServerTransfers", () => ({ ManagedServerTransfers: ({ canImportConfig }: { canImportConfig: boolean }) => <div id="transfers">Transfers: {canImportConfig ? "config owner" : "save manager"}</div> }));
+vi.mock("./ManagedServerCampaigns", () => ({ ManagedServerCampaigns: () => <div id="campaigns">Campaign controls</div> }));
 vi.mock("./ManagedServerBackups", () => ({ ManagedServerBackups: () => <div id="backups">Backup controls</div> }));
 let container: HTMLDivElement;
 let root: Root;
@@ -18,9 +21,9 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 
 it.each(["owner", "manager", "admin", "support"] as const)("preserves %s file permissions while splitting backups from transfers", async accessRole => {
     const server = { serverId: "test", accessRole } as MyServerSummary;
-    await act(async () => root.render(<ServerManagementWorkspace name="Server" summary="Running" notice="Live controls" initialSection="Backups">
-        <ManagedServerFiles userId="user" server={server} files={null} backups={[]} status={null} />
-    </ServerManagementWorkspace>));
+    await act(async () => root.render(<TestLocalization>{<ServerManagementWorkspace name="Server" summary="Running" notice="Live controls" initialSection="Backups">
+        <ManagedServerFiles userId="user" server={server} files={null} saves={null} backups={[]} status={null} />
+    </ServerManagementWorkspace>} </TestLocalization>));
     if (accessRole === "owner" || accessRole === "manager") {
         expect(container.querySelector("#backups")?.closest("[hidden]")).toBeNull();
         expect(container.querySelector("#transfers")?.closest("[hidden]")).not.toBeNull();
@@ -34,3 +37,10 @@ it.each(["owner", "manager", "admin", "support"] as const)("preserves %s file pe
         for (const control of container.querySelectorAll("#server-files button, #server-files textarea")) expect((control as HTMLButtonElement).disabled).toBe(true);
     }
 });
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

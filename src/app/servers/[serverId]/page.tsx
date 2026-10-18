@@ -1,3 +1,7 @@
+import type { Translator } from "@/app/lib/localization/types";
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import { localizedRegionLabel } from "@/app/lib/hosting/region-labels";
+import { getLocale, getMessages, getTranslations } from "@/app/lib/localization/server";
 import { ManagedServerCommands } from "@/app/components/servers/ManagedServerCommands";
 import { releaseChannelLabel } from "@/app/lib/control-plane/presentation";
 import { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
@@ -5,6 +9,7 @@ import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfi
 import { EditableServerName } from "@/app/components/servers/EditableServerName";
 import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "@/app/components/servers/ServerManagementWorkspace";
 import { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
+import { serverWorkspaceSectionFromTab, type ServerWorkspaceSection } from "@/app/components/servers/server-workspace-tabs";
 import { LiveServerVisibilitySetup } from "@/app/components/servers/LiveServerVisibilitySetup";
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
 import { LiveServerAccessManager } from "@/app/components/servers/LiveServerAccessManager";
@@ -13,8 +18,11 @@ import { LiveServerBackupSetup, type LiveServerBackupUnavailableReason } from "@
 import { LiveServerFileSetup } from "@/app/components/servers/LiveServerFileSetup";
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { getMyServerFiles } from "@/app/lib/hosting/server-files";
+import { getMyServerSaveGenerations, listAllMyServerSaves } from "@/app/lib/hosting/my-servers";
 import { ManagedServerControls, ManagedServerPassword } from "@/app/components/servers/ManagedServerControls";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
+import { ManagedServerDelete } from "@/app/components/servers/ManagedServerDelete";
+import { readManagedServerStatusFingerprint } from "@/app/servers/managed-server-actions";
 import {
     getLiveConsoleAccessLevel,
     getMemberRole,
@@ -36,9 +44,11 @@ import { hasServerFleetAccess } from "@/app/lib/auth/roles";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import {
     getMyServerBackupStatus,
+    MyServersApiError,
     listAllMyServerBackups,
+    type MyServerDeletionStatus,
 } from "@/app/lib/hosting/my-servers";
-import { listAllMyServers } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerDeletionStatus, getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -53,35 +63,27 @@ type ServerPageProps = {
     searchParams: Promise<{
         accessError?: string | string[];
         accessUpdated?: string | string[];
+        tab?: string | string[];
     }>;
 };
 
-const accessLabels: Record<LiveConsoleAccessLevel, string> = {
-    admin: "Administrator",
-    owner: "Owner",
-    operator: "Operator",
-};
-
-const managedAccessLabels: Record<MyServerSummary["accessRole"], string> = {
-    admin: "Read-only administrator",
-    manager: "Manager",
-    owner: "Owner",
-    support: "Read-only support",
-};
-
+// Selects the first existing query value without altering external feedback.
 function firstValue(value: string | string[] | undefined) {
     return Array.isArray(value) ? value[0] : value;
 }
 
 export const dynamic = "force-dynamic";
+const INITIALIZING_SERVER_STATES = new Set(["provisioning", "configuring"]);
 
-export const metadata: Metadata = {
-    title: "Manage Server",
-    description: "Manage a Bannerlord Coop server."
-};
+// Resolves metadata from the explicit website locale.
+export async function generateMetadata(): Promise<Metadata> {
+    const { t } = await getTranslations("managed-server");
+    return { title: t("page.metadataTitle"), description: t("page.metadataDescription") };
+}
 
 // Authorizes the requested server before resolving its available management capabilities.
-export default async function ServerPage({ params, searchParams }: ServerPageProps) {
+async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
+    const { t } = await getTranslations("managed-server");
     const [{ serverId }, query] = await Promise.all([params, searchParams]);
     const supabase = await getSupabaseServerClient();
     const [{ data: userData }, { data: sessionData }] = await Promise.all([
@@ -89,6 +91,8 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
         supabase.auth.getSession(),
     ]);
     const user = userData.user;
+    // A remembered tab renders on the server, so reloading does not flash the Console first.
+    const rememberedSection = serverWorkspaceSectionFromTab(firstValue(query.tab));
 
     if (!user) redirect(`/login?next=/servers/${encodeURIComponent(serverId)}`);
 
@@ -103,11 +107,10 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     let managedLookupFailed = false;
     try {
         const managedServerId = liveServer?.managedServerId ?? serverId;
-        managedServer = (await listAllMyServers(accessToken))
-            .find((server) => server.serverId === managedServerId) ?? null;
+        managedServer = await getMyServerSummary(accessToken, managedServerId);
     } catch (error) {
-        managedLookupFailed = true;
-        console.error("Managed server detail failed to load", error);
+        managedLookupFailed = !(error instanceof MyServersApiError && ["invalid_request", "server_not_found", "forbidden"].includes(error.code));
+        if (managedLookupFailed) console.error("Managed server detail failed to load", error);
     }
 
     if (liveServer && liveAccessLevel) {
@@ -118,6 +121,7 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
                 accessLevel={liveAccessLevel}
                 accessToken={accessToken}
                 accessUpdated={firstValue(query.accessUpdated)}
+                rememberedSection={rememberedSection}
                 userId={user.id}
                 managedServer={managedServer}
                 backupUnavailableReason={managedLookupFailed ? "lookup-failed" : liveServer.managedServerId ? "access-required" : "mapping-required"}
@@ -132,7 +136,7 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     }
 
     if (managedServer !== null) {
-        return <ManagedServerManagementPage userId={user.id} accessToken={accessToken} server={managedServer} />;
+        return <ManagedServerManagementPage userId={user.id} accessToken={accessToken} server={managedServer} initialSection={rememberedSection} />;
     }
 
     if (!hasHostedServerAccess(user)) redirect("/");
@@ -143,17 +147,18 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
 
     return <ServerManagementWorkspace
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.name}</h1>}
-        summary={<>{server.plan} · {server.location} · Preview</>}
-        notice="Preview server. The control plane is not connected; server actions are unavailable."
+        summary={t("page.previewSummary", { plan: server.plan, location: server.location })}
+        notice={t("page.previewServerTheControlPlaneIsNotConnectedServerActionsAreUnavailable")}
+        initialSection={rememberedSection}
     >
         <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><UnavailableServerConsole /></ServerConsoleWorkspace></ServerWorkspacePanel>
         <UnavailableFileWorkspaces />
         <ServerWorkspacePanel section="Settings">
             <ServerSettingsPanel name={server.name} />
-            <section className="grid gap-3 sm:grid-cols-3" aria-label="Server information">
-                <ResourceCard icon={MemoryStick} label="Memory" value={server.memory} />
-                <ResourceCard icon={HardDrive} label="Storage" value={server.storage} />
-                <ResourceCard icon={Server} label="Version" value={server.version} />
+            <section className="grid gap-3 sm:grid-cols-3" aria-label={t("page.serverInformation")}>
+                <ResourceCard icon={MemoryStick} label={t("page.memory")} value={server.memory} />
+                <ResourceCard icon={HardDrive} label={t("page.storage")} value={server.storage} />
+                <ResourceCard icon={Server} label={t("page.version")} value={server.version} />
             </section>
             {hasServerFleetAccess(role) && <section className="rounded-lg border border-white/10 bg-surface p-5">
                 <h2 className="text-base font-semibold">Assigned account</h2>
@@ -165,9 +170,11 @@ export default async function ServerPage({ params, searchParams }: ServerPagePro
     </ServerManagementWorkspace>;
 }
 
-function UnavailableFileWorkspaces() {
+// Composes inert file panels for servers without a connected control plane.
+async function UnavailableFileWorkspaces() {
+    const { t } = await getTranslations("managed-server");
     return <>
-        <ServerWorkspacePanel section="Backups"><UnavailableServerPanel title="Backups" actions={["Create backup", "Restore backup"]} /></ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Backups"><UnavailableServerPanel title={t("page.backups")} actions={[t("page.createBackup"), t("page.restoreBackup")]} /></ServerWorkspacePanel>
         <ServerWorkspacePanel section="Save & config">
             <ServerSaveConfigPanels />
         </ServerWorkspacePanel>
@@ -175,21 +182,37 @@ function UnavailableFileWorkspaces() {
 }
 
 /** Composes the managed workspace with compact runtime metadata and task-specific panels. */
-function ManagedServerManagementPage({ userId, accessToken, server }: {
-    userId: string; accessToken: string; server: MyServerSummary;
+async function ManagedServerManagementPage({ userId, accessToken, server, initialSection }: {
+    userId: string; accessToken: string; server: MyServerSummary; initialSection?: ServerWorkspaceSection;
 }) {
+    const { t } = await getTranslations("managed-server");
+    // Region names live with onboarding in the servers namespace, so both pages share one translation.
+    const { t: tServers } = await getTranslations("servers");
+    const deletionStatus = server.accessRole === "owner"
+        ? await getMyServerDeletionStatus(accessToken, server.serverId, AbortSignal.timeout(5_000)).catch(() => null)
+        : null;
+    const initializing = INITIALIZING_SERVER_STATES.has(server.operationState);
+    const managedAccessLabels: Record<MyServerSummary["accessRole"], string> = {
+        admin: t("page.readOnlyAdministrator"),
+        manager: t("page.manager"),
+        owner: t("page.owner"),
+        support: t("page.readOnlySupport"),
+    };
+
     return <ServerManagementWorkspace
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.displayName}</h1>}
+        initialSection={initializing ? "Console" : initialSection}
+        interactionLocked={initializing}
         address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
-        visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} />}
-        summary={<>{formatManagedValue(server.friendlyRegion)} · {managedAccessLabels[server.accessRole]}</>}
-        status={<dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs" aria-label="Server status">
-            {[["Game state", formatManagedValue(server.observedGameState)], ["Lifecycle", formatManagedValue(server.operationState)], ["Release channel", releaseChannelLabel(server.releaseChannel)]].map(([label, value]) => <div key={label} className="flex items-center gap-2"><dt className="text-foreground-muted">{label}</dt><dd className="font-medium text-foreground">{value}</dd></div>)}
-        </dl>}
+        visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} disabled={initializing} />}
+        summary={t("page.managedSummary", { region: localizedRegionLabel(tServers, server.friendlyRegion), access: managedAccessLabels[server.accessRole] })}
+        status={<Suspense fallback={<ManagedServerStatus accessToken={accessToken} server={server} checkBackup={false} />}>
+            <ManagedServerStatus accessToken={accessToken} server={server} checkBackup={server.accessRole === "owner" || server.accessRole === "manager"} />
+        </Suspense>}
     >
-        <ManagedServerSections userId={userId} accessToken={accessToken} server={server} />
+        <ManagedServerSections userId={userId} accessToken={accessToken} server={server} deletionStatus={deletionStatus} />
         <ServerWorkspacePanel section="Settings">
-            <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
+            <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} managerAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
 }
@@ -200,14 +223,16 @@ function ManagedServerSections({
     accessToken,
     server,
     hasLiveConsole = false,
+    deletionStatus,
 }: {
     userId: string;
     accessToken: string;
     server: MyServerSummary;
     hasLiveConsole?: boolean;
+    deletionStatus?: MyServerDeletionStatus | null;
 }) {
     return (
-        <ManagedServerPollingProvider>
+        <ManagedServerPollingProvider readStatus={readManagedServerStatusFingerprint} initialServer={{ serverId: server.serverId, updatedAt: server.updatedAt, operationState: server.operationState }}>
             <ServerWorkspacePanel section="Console">
                 {hasLiveConsole ? <ManagedServerLifecycleSection server={server} /> : server.accessRole === "owner" || server.accessRole === "manager"
                     ? <ManagedServerCommands key={`${userId}:${server.serverId}`} server={server} userId={userId} controls={<ManagedServerLifecycleSection server={server} />} />
@@ -215,6 +240,7 @@ function ManagedServerSections({
             </ServerWorkspacePanel>
             <ServerWorkspacePanel section="Settings">
                 <ManagedServerPassword serverId={server.serverId} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} />
+                <ManagedServerDelete key={`${userId}:${server.serverId}`} serverId={server.serverId} displayName={server.displayName} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} deletionStatus={deletionStatus} />
             </ServerWorkspacePanel>
             <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
                 <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
@@ -223,20 +249,24 @@ function ManagedServerSections({
     );
 }
 
-function ManagedServerLifecycleSection({ server }: { server: MyServerSummary }) {
+// Renders lifecycle controls with an accessible localized section name.
+async function ManagedServerLifecycleSection({ server }: { server: MyServerSummary }) {
+    const { t } = await getTranslations("managed-server");
     return (
-        <section id="server-lifecycle" aria-label="Server controls">
+        <section id="server-lifecycle" aria-label={t("page.serverControls")}>
                 <ManagedServerControls
                     serverId={server.serverId}
                     displayName={server.displayName}
                     accessRole={server.accessRole}
                     operationState={server.operationState}
+                    observedGameState={server.observedGameState}
                     expectedUpdatedAt={server.updatedAt}
                 />
         </section>
     );
 }
 
+// Loads authorized backup and file state while keeping failures independent.
 async function ManagedServerBackupsSection({
     userId,
     accessToken,
@@ -246,19 +276,43 @@ async function ManagedServerBackupsSection({
     accessToken: string;
     server: MyServerSummary;
 }) {
+    const { t } = await getTranslations("managed-server");
     if (server.accessRole === "support" || server.accessRole === "admin") {
-        return <ManagedServerFiles userId={userId} server={server} files={null} backups={[]} status={null} />;
+        return <ManagedServerFiles userId={userId} server={server} files={null} saves={null} backups={[]} status={null} />;
     }
 
-    const [backupsResult, statusResult, filesResult] = await Promise.allSettled([
+    const savesRequest = listAllMyServerSaves(accessToken, server.serverId);
+    // Earlier autosaves belong to the active campaign, so they are read once the save list names it.
+    const autosavesRequest = savesRequest.then(async (saves) => {
+        if (saves.activeSaveId === null) return null;
+        const generations = await getMyServerSaveGenerations(accessToken, server.serverId, saves.activeSaveId);
+        return {
+            saveId: generations.saveId,
+            campaignName: saves.items.find((save) => save.saveId === generations.saveId)?.displayName ?? null,
+            items: generations.items,
+        };
+    });
+    const [initialBackups, initialStatus, filesResult, savesResult, autosavesResult] = await Promise.allSettled([
         listAllMyServerBackups(accessToken, server.serverId),
         getMyServerBackupStatus(accessToken, server.serverId),
         getMyServerFiles(accessToken, server.serverId),
+        savesRequest,
+        autosavesRequest,
     ]);
+    let backupsResult = initialBackups;
+    let statusResult = initialStatus;
+    // Reads can fail briefly while the server restarts; retry once before reporting anything.
+    if (backupsResult.status === "rejected" || statusResult.status === "rejected") {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        [backupsResult, statusResult] = await Promise.allSettled([
+            backupsResult.status === "rejected" ? listAllMyServerBackups(accessToken, server.serverId) : Promise.resolve(backupsResult.value),
+            statusResult.status === "rejected" ? getMyServerBackupStatus(accessToken, server.serverId) : Promise.resolve(statusResult.value),
+        ]);
+    }
     const backups = backupsResult.status === "fulfilled" ? backupsResult.value : [];
     const status = statusResult.status === "fulfilled" ? statusResult.value : null;
     const loadError = backupsResult.status === "rejected" || statusResult.status === "rejected"
-        ? "Backup history or durable progress could not be loaded. Refresh before submitting another backup operation."
+        ? t("page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused")
         : undefined;
     if (backupsResult.status === "rejected") {
         console.error("Managed server backups failed to load");
@@ -266,15 +320,24 @@ async function ManagedServerBackupsSection({
     if (statusResult.status === "rejected") {
         console.error("Managed server backup status failed to load");
     }
+    // Autosave failures are reported on their own and never pause retained backups.
+    if (autosavesResult.status === "rejected" && savesResult.status === "fulfilled") {
+        console.error("Managed server autosaves failed to load");
+    }
 
     return <ManagedServerFiles userId={userId} server={server}
         files={filesResult.status === "fulfilled" ? filesResult.value : null}
-        backups={backups} status={status} loadError={loadError} />;
+        saves={savesResult.status === "fulfilled" ? savesResult.value : null}
+        backups={backups} status={status} loadError={loadError}
+        autosaves={autosavesResult.status === "fulfilled" ? autosavesResult.value : null}
+        autosaveLoadError={autosavesResult.status === "rejected" ? t("page.recentAutosavesCouldNotBeLoaded") : undefined} />;
 }
 
-function ManagedServerBackupsSkeleton() {
+// Renders the accessible loading state for streamed backup and file data.
+async function ManagedServerBackupsSkeleton() {
+    const { t } = await getTranslations("managed-server");
     return (
-        <section className="rounded-lg border border-white/10 bg-surface p-5 sm:p-6" aria-busy="true" aria-label="Loading saves, configs and backups">
+        <section className="rounded-lg border border-white/10 bg-surface p-5 sm:p-6" aria-busy="true" aria-label={t("page.loadingSavesConfigsAndBackups")}>
             <div className="h-3 w-28 animate-pulse bg-white/10" />
             <div className="mt-3 h-8 w-64 max-w-full animate-pulse bg-white/10" />
             <div className="mt-5 h-20 animate-pulse border border-white/10 bg-white/[0.02]" />
@@ -289,6 +352,7 @@ async function LiveServerManagementPage({
     accessLevel,
     accessToken,
     accessUpdated,
+    rememberedSection,
     managedServer,
     backupUnavailableReason,
     logDownload,
@@ -299,11 +363,20 @@ async function LiveServerManagementPage({
     accessLevel: LiveConsoleAccessLevel;
     accessToken: string;
     accessUpdated?: string;
+    rememberedSection?: ServerWorkspaceSection;
     managedServer: MyServerSummary | null;
     backupUnavailableReason: LiveServerBackupUnavailableReason;
     logDownload?: { serverId: string; userId: string };
     server: LiveConsoleServer;
 }) {
+    const { t } = await getTranslations("managed-server");
+    const accessLabels: Record<LiveConsoleAccessLevel, string> = {
+        admin: t("page.administrator"),
+        owner: t("page.owner"),
+        operator: t("page.operator"),
+    };
+
+    const memberLabels = { missingName: t("member.missingName"), missingEmail: t("member.missingEmail") };
     const canManageAssignments = accessLevel === "admin" || accessLevel === "owner";
     let assignmentLoadError = "";
     let assignmentWarning = "";
@@ -314,7 +387,7 @@ async function LiveServerManagementPage({
         try {
             const result = await listSupabaseUsers();
             if (result.truncated) {
-                assignmentLoadError = "The member directory is too large to manage assignments safely.";
+                assignmentLoadError = t("page.directoryTooLarge");
             } else {
                 const owners = result.users.filter((member) =>
                     getOwnedLiveConsoleServerIds(member.app_metadata).includes(server.id),
@@ -323,34 +396,38 @@ async function LiveServerManagementPage({
                     getOperatedLiveConsoleServerIds(member.app_metadata).includes(server.id),
                 );
 
-                owner = owners[0] ? getLiveConsoleMember(owners[0]) : null;
-                operators = operatorUsers.map(getLiveConsoleMember);
+                owner = owners[0] ? getLiveConsoleMember(owners[0], memberLabels) : null;
+                operators = operatorUsers.map((member) => getLiveConsoleMember(member, memberLabels));
                 if (owners.length > 1) {
-                    assignmentWarning = "Multiple owner assignments were found. Reassign the owner to repair access.";
+                    assignmentWarning = t("page.multipleOwners");
                 }
             }
         } catch (error) {
             console.error("Live server assignments failed to load", error);
-            assignmentLoadError = "Owner and operator assignments could not be loaded.";
+            assignmentLoadError = t("page.assignmentsUnavailable");
         }
     }
+
+    const deletionStatus = managedServer?.accessRole === "owner"
+        ? await getMyServerDeletionStatus(accessToken, managedServer.serverId, AbortSignal.timeout(5_000)).catch(() => null)
+        : null;
 
     return <ServerManagementWorkspace
         name={<EditableServerName key={server.name} canEdit={canManageAssignments && managedServer === null} initialName={server.name} serverId={server.id} />}
         address={server.address}
         visibility={managedServer !== null
             ? <ServerVisibilitySetting serverId={managedServer.serverId} visibility={managedServer.visibility} accessRole={managedServer.accessRole} expectedUpdatedAt={managedServer.updatedAt} />
-            : <a href="#server-visibility" className="ml-auto inline-flex min-h-10 items-center rounded-md border border-white/15 px-3 text-sm text-gold underline focus-visible:outline-2 focus-visible:outline-gold">Set up visibility</a>}
-        summary={<>{server.provider} · {accessLabels[accessLevel]} · Live dedicated server</>}
-        initialSection={accessError || accessUpdated ? "Settings" : "Console"}
-        notice="Protected production access. Controls and commands affect the live Bannerlord process immediately. The gateway revalidates your server access."
+            : <a href="#server-visibility" className="ml-auto inline-flex min-h-10 items-center rounded-md border border-white/15 px-3 text-sm text-gold underline focus-visible:outline-2 focus-visible:outline-gold">{t("page.setUpVisibility")}</a>}
+        summary={t("page.liveSummary", { provider: server.provider, access: accessLabels[accessLevel] })}
+        initialSection={accessError || accessUpdated ? "Settings" : rememberedSection ?? "Console"}
+        notice={t("page.protectedProductionAccessControlsAndCommandsAffectTheLiveBannerlordProcessImmediately")}
     >
         <ServerWorkspacePanel section="Console">
             <LiveServerConsole gatewayUrl={getConsoleGatewayUrl()} serverId={server.id} logDownload={logDownload} />
-            {!logDownload && <p className="text-sm text-foreground-muted">Log downloads require a linked managed server and owner or manager access. Ask an administrator to check onboarding, the server mapping, and your managed-server access.</p>}
+            {!logDownload && <p className="text-sm text-foreground-muted">{t("page.logDownloadsRequireALinkedManagedServerAndOwnerOrManagerAccess")}</p>}
         </ServerWorkspacePanel>
         {managedServer !== null
-            ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole />
+            ? <ManagedServerSections userId={userId} accessToken={accessToken} server={managedServer} hasLiveConsole deletionStatus={deletionStatus} />
             : <>
                 <ServerWorkspacePanel section="Backups"><LiveServerBackupSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>
                 <ServerWorkspacePanel section="Save & config"><LiveServerFileSetup reason={backupUnavailableReason} serverId={server.id} /></ServerWorkspacePanel>
@@ -358,18 +435,16 @@ async function LiveServerManagementPage({
         <ServerWorkspacePanel section="Settings">
             <ServerSettingsPanel settingsAccess={managedServer ? { serverId: managedServer.serverId, maintenanceSlot: managedServer.maintenanceSlot, timezone: managedServer.timezone, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} releaseAccess={managedServer ? { serverId: managedServer.serverId, channel: managedServer.releaseChannel, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} name={server.name} renameServerId={canManageAssignments && managedServer === null ? server.id : undefined} visibility={managedServer ? managedServer.visibility ?? "private" : undefined} visibilityAccess={managedServer ? { serverId: managedServer.serverId, expectedUpdatedAt: managedServer.updatedAt, canEdit: managedServer.accessRole === "owner" } : undefined} />
             {managedServer === null && <LiveServerVisibilitySetup reason={backupUnavailableReason} serverId={server.id} />}
-            <section className="grid gap-3 sm:grid-cols-2" aria-label="Server information">
-                <ResourceCard icon={Server} label="Provider" value={server.provider} />
-                <ResourceCard icon={Container} label="Node" value={server.nodeId} />
+            <section className="grid gap-3 sm:grid-cols-2" aria-label={t("page.serverInformation")}>
+                <ResourceCard icon={Server} label={t("page.provider")} value={server.provider} />
+                <ResourceCard icon={Container} label={t("page.node")} value={server.nodeId} />
             </section>
             {canManageAssignments && (
                     <section id="server-access" className="rounded-lg border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="server-access-heading">
                         <h2 id="server-access-heading" className="text-base font-semibold text-foreground">
-                            Server access
-                        </h2>
+                            {t("page.serverAccess")}</h2>
                         <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">
-                            Administrators assign the owner. Administrators and the owner can grant operator access to this server.
-                        </p>
+                            {t("page.administratorsAssignTheOwnerAdministratorsAndTheOwnerCanGrantOperatorAccess")}</p>
 
                         {accessError && (
                             <p role="alert" className="mt-4 border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
@@ -396,13 +471,45 @@ async function LiveServerManagementPage({
     </ServerManagementWorkspace>;
 }
 
-function formatManagedValue(value: string) {
+const ACTIVE_BACKUP_STATES = new Set(["queued", "running", "retry-wait"]);
+
+// Lists the header status. A running-server backup stops the game inside the runner without changing the
+// recorded lifecycle, so an active backup job is shown here rather than an unchanged "Running".
+async function ManagedServerStatus({ accessToken, server, checkBackup }: { accessToken: string; server: MyServerSummary; checkBackup: boolean }) {
+    const { t } = await getTranslations("managed-server");
+    let backup: "active" | "paused" | null = null;
+    if (checkBackup && server.operationState === "running") {
+        const job = (await getMyServerBackupStatus(accessToken, server.serverId).catch(() => null))?.job;
+        if (job?.action === "backup" && ACTIVE_BACKUP_STATES.has(job.state)) backup = job.state === "running" ? "paused" : "active";
+    }
+    const entries = [
+        [t("page.gameState"), backup === "paused" ? t("page.pausedForBackup") : formatManagedValue(server.observedGameState, t)],
+        [t("page.lifecycle"), backup !== null ? t("page.backingUp") : formatManagedValue(server.operationState, t)],
+        [t("page.releaseChannel"), releaseChannelLabel(server.releaseChannel, { stable: t("page.releaseStable"), nightly: t("page.releaseNightly") })],
+    ];
+    const initializing = INITIALIZING_SERVER_STATES.has(server.operationState);
+    return <div className="space-y-3">
+        <dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs" aria-label={t("page.serverStatus")}>
+            {entries.map(([label, value]) => <div key={label} className="flex items-center gap-2"><dt className="text-foreground-muted">{label}</dt><dd className="font-medium text-foreground">{value}</dd></div>)}
+        </dl>
+        {initializing && <div role="status" aria-live="polite" className="flex max-w-2xl items-start gap-3 rounded-md border border-gold/30 bg-gold/[0.06] px-4 py-3 text-sm">
+            <span aria-hidden="true" className="mt-0.5 size-3 shrink-0 animate-pulse rounded-full bg-gold motion-reduce:animate-none" />
+            <div><p className="font-medium text-foreground">{t("page.serverInitializing")}</p><p className="mt-1 leading-6 text-foreground-muted">{t("page.serverInitializingDescription")}</p></div>
+        </div>}
+    </div>;
+}
+
+// Localizes known operational states while preserving the existing external-value display.
+function formatManagedValue(value: string, t?: Translator["t"]) {
+    const states = new Set(["running","stopped","starting","stopping","failed","degraded","unknown","provisioning","configuring","maintenance","updating","deletion-pending","deleting","deleted","suspended","awaiting-save","ready","offline","online"]);
+    if (t && states.has(value)) return t(`state.${value}`);
     return value
         .split("-")
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(" ");
 }
 
+// Renders a labeled server resource without altering its supplied value.
 function ResourceCard({
     icon: Icon,
     label,
@@ -421,4 +528,12 @@ function ResourceCard({
             <p className="mt-2 break-words font-display text-xl font-semibold text-foreground sm:text-2xl">{value}</p>
         </div>
     );
+}
+
+// Delivers only the namespaces used by the unified managed and live workspace.
+export default async function ServerPage(props: ServerPageProps) {
+    const content = await AuthorizedServerPage(props);
+    const locale = await getLocale();
+    const messages = await getMessages(["managed-server", "server-common", "live-server", "cheats"], locale);
+    return <LocalizationProvider locale={locale} messages={messages}>{content}</LocalizationProvider>;
 }

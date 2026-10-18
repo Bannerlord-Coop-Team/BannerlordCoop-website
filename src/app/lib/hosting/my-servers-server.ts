@@ -1,6 +1,12 @@
 import "server-only";
-import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse } from "./my-servers";
-import { parseOnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { isIP } from "node:net";
+import type { MyServerSummary } from "@/app/lib/control-plane/types";
+import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
+import { isRegionKey } from "../../../../supabase/functions/_shared/hosting-regions";
+import { REQUEST_ID, timestamp } from "../../../../supabase/functions/_shared/server-visibility-contract";
+import { HOSTING_MAINTENANCE_SLOTS, type MaintenanceSlot } from "../../../../supabase/functions/_shared/server-settings-contract";
+import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse, type MyServerDeletionStatus } from "./my-servers";
+import { onboardingSummaryRequest, parseOnboardingSummary, type OnboardingSummaryRequest } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 
 /** Reads owner inventory directly; Oracle rechecks the current session and durable access on every page. */
 export async function listAllMyServers(accessToken: string, callerSignal?: AbortSignal) {
@@ -9,11 +15,64 @@ export async function listAllMyServers(accessToken: string, callerSignal?: Abort
         { operation: "my-servers", input: { cursor, limit: 100 } }, signal));
 }
 
+/** Reads one freshly authorized summary without collecting inventory or hydrating a dashboard. */
+export async function getMyServerSummary(accessToken: string, serverId: string, callerSignal?: AbortSignal): Promise<MyServerSummary> {
+    if (!REQUEST_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid managed server ID.");
+    const value = await readOwner(accessToken, { operation: "server-summary", input: { serverId } }, ownerReadSignal(accessToken, callerSignal));
+    if (!isRecord(value) || !hasExactKeys(value, ["serverId", "displayName", "accessRole", "friendlyRegion", "operationState",
+        "observedGameState", "releaseChannel", "maintenanceSlot", "timezone", "visibility", "connectionIp", "gamePorts", "updatedAt"])
+        || value.serverId !== serverId || !timestamp(value.updatedAt)
+        || typeof value.displayName !== "string" || value.displayName.length < 1 || value.displayName.length > 48 || /[\p{Cc}]/u.test(value.displayName)
+        || !["owner", "manager", "support", "admin"].includes(value.accessRole as string)
+        || !isRegionKey(value.friendlyRegion)
+        || typeof value.operationState !== "string" || !/^[a-z][a-z0-9-]{0,63}$/u.test(value.operationState)
+        || !["running", "stopped", "starting", "stopping", "unknown", "awaiting-save", "failed", "degraded"].includes(value.observedGameState as string)
+        || !["stable", "nightly"].includes(value.releaseChannel as string)
+        || !HOSTING_MAINTENANCE_SLOTS.includes(value.maintenanceSlot as MaintenanceSlot)
+        || typeof value.timezone !== "string" || value.timezone.length < 1 || value.timezone.length > 100 || /[\p{Cc}\p{Cf}]/u.test(value.timezone)
+        || !["private", "public"].includes(value.visibility as string)
+        || (value.connectionIp !== null && (typeof value.connectionIp !== "string" || isIP(value.connectionIp) === 0))
+        || !Array.isArray(value.gamePorts) || value.gamePorts.length > 32
+        || value.gamePorts.some(port => !Number.isInteger(port) || port < 1 || port > 65535)) {
+        throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid summary.", true);
+    }
+    return value as MyServerSummary;
+}
+
 /** Called after website account synchronization; eligibility and capacity are freshly checked by Oracle. */
 export async function getServerOnboarding(accessToken: string, callerSignal?: AbortSignal) {
-    const result = await readOwner(accessToken, { operation: "server-onboarding", input: {} }, ownerReadSignal(accessToken, callerSignal));
-    try { return parseOnboardingSummary(result); }
-    catch { throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid response.", true); }
+    const result = await readOwner(accessToken, onboardingSummaryRequest(), ownerReadSignal(accessToken, callerSignal));
+    try { return parseOnboardingSummary(result); } catch {
+        throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid response.", true);
+    }
+}
+
+/** Reads the durable owner deletion receipt without dispatching another operation. */
+export async function getMyServerDeletionStatus(accessToken: string, serverId: string, callerSignal?: AbortSignal): Promise<MyServerDeletionStatus> {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+    if (!uuid.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid deletion reference.");
+    const result = await readOwner(accessToken, { operation: "server-deletion-status", input: { serverId } }, ownerReadSignal(accessToken, callerSignal));
+    if (!result || typeof result !== "object" || Array.isArray(result)) throw new MyServersApiError("invalid_response", "Invalid deletion status.");
+    const value = result as Record<string, unknown>;
+    const job = value.job;
+    if (Object.keys(value).length !== 4 || !["job", "operationState", "serverId", "updatedAt"].every(key => Object.hasOwn(value, key))
+        || value.serverId !== serverId || typeof value.operationState !== "string" || !/^[a-z][a-z0-9-]{0,63}$/u.test(value.operationState)
+        || typeof value.updatedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value.updatedAt)
+        || (job !== null && (!job || typeof job !== "object" || Array.isArray(job)))) {
+        throw new MyServersApiError("invalid_response", "Invalid deletion status.");
+    }
+    if (job !== null) {
+        const parsed = job as Record<string, unknown>;
+        if (Object.keys(parsed).length !== 5 || !["createdAt", "jobId", "progress", "state", "updatedAt"].every(key => Object.hasOwn(parsed, key))
+            || typeof parsed.jobId !== "string" || !uuid.test(parsed.jobId)
+            || typeof parsed.state !== "string" || !["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"].includes(parsed.state)
+            || typeof parsed.progress !== "string" || parsed.progress.length < 1 || parsed.progress.length > 256 || /[\p{Cc}\p{Cf}]/u.test(parsed.progress)
+            || typeof parsed.createdAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(parsed.createdAt)
+            || typeof parsed.updatedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(parsed.updatedAt)) {
+            throw new MyServersApiError("invalid_response", "Invalid deletion status.");
+        }
+    }
+    return value as MyServerDeletionStatus;
 }
 
 export type ManagedStartStatus = {
@@ -42,6 +101,38 @@ export async function getMyServerStartStatus(accessToken: string, serverId: stri
     return value as ManagedStartStatus;
 }
 
+/** CPU and memory of one running server's own allocation (its cgroup), not the whole VPS it shares. */
+export type ManagedServerResources = {
+    observedAt: string;
+    cpuVcpus: number;
+    cpuLimitVcpus: number;
+    memoryUsedBytes: number;
+    memoryLimitBytes: number;
+};
+
+/** Reads current usage, or null when the server is not running or its runner could not be sampled. */
+export async function getMyServerResources(accessToken: string, serverId: string): Promise<ManagedServerResources | null> {
+    if (!REQUEST_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid managed server ID.");
+    const value = await readOwner(accessToken, { operation: "server-resources", input: { serverId } },
+        ownerReadSignal(accessToken, AbortSignal.timeout(10_000)));
+    if (!isRecord(value) || !hasExactKeys(value, ["serverId", "resources"]) || value.serverId !== serverId) {
+        throw new MyServersApiError("invalid_response", "Invalid server resources.");
+    }
+    if (value.resources === null) return null;
+    const resources = value.resources;
+    const finite = (number: unknown, maximum: number) => typeof number === "number" && Number.isFinite(number) && number >= 0 && number <= maximum;
+    if (!isRecord(resources) || !hasExactKeys(resources, ["observedAt", "cpuVcpus", "cpuLimitVcpus", "memoryUsedBytes", "memoryLimitBytes"])
+        || typeof resources.observedAt !== "string" || Number.isNaN(Date.parse(resources.observedAt))
+        || !finite(resources.cpuVcpus, 1_024) || !finite(resources.cpuLimitVcpus, 1_024) || resources.cpuLimitVcpus === 0
+        || !Number.isSafeInteger(resources.memoryUsedBytes) || !Number.isSafeInteger(resources.memoryLimitBytes)
+        || (resources.memoryUsedBytes as number) < 0 || (resources.memoryLimitBytes as number) < 1
+        || (resources.memoryUsedBytes as number) > (resources.memoryLimitBytes as number)) {
+        throw new MyServersApiError("invalid_response", "Invalid server resources.");
+    }
+    return resources as ManagedServerResources;
+}
+
+// Validates the owner token and bounds a read by the caller's signal and a 30-second timeout.
 function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
     if (accessToken.length < 20 || accessToken.length > 8_192) {
         throw new MyServersApiError("invalid_request", "The managed-server read request is invalid.");
@@ -51,10 +142,14 @@ function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
         : AbortSignal.timeout(30_000);
 }
 
+// Posts one owner read to the control plane and returns its result after checking the redirect, content type and length.
 async function readOwner(accessToken: string, request:
     | { operation: "my-servers"; input: { cursor: string | null; limit: 100 } }
-    | { operation: "server-onboarding"; input: Record<string, never> }
-    | { operation: "server-start-status"; input: { serverId: string; jobId: string } }, signal: AbortSignal) {
+    | { operation: "server-summary"; input: { serverId: string } }
+    | OnboardingSummaryRequest
+    | { operation: "server-deletion-status"; input: { serverId: string } }
+    | { operation: "server-start-status"; input: { serverId: string; jobId: string } }
+    | { operation: "server-resources"; input: { serverId: string } }, signal: AbortSignal) {
     const requestId = crypto.randomUUID();
     let response: Response;
     try {

@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -5,8 +7,17 @@ import { ManagedServerConfigEditor } from "./ManagedServerConfigEditor";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION as config } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { RunnerConfigurationFile, RunnerConfigurationPart } from "../../../../supabase/functions/_shared/server-configuration-contract";
 
-const mocks = vi.hoisted(() => ({ read: vi.fn(), save: vi.fn() }));
-vi.mock("@/app/servers/managed-server-config-actions", () => ({ readManagedServerConfig: mocks.read, saveManagedServerConfig: mocks.save }));
+const mocks = vi.hoisted(() => ({ read: vi.fn(), readFiles: vi.fn(), save: vi.fn() }));
+vi.mock("@/app/servers/managed-server-config-actions", () => ({
+    readManagedServerConfig: mocks.read,
+    // One action reads both files, so each load is a single request rather than two queued ones.
+    readManagedServerConfigFiles: async (serverId: string, userId: string) => {
+        mocks.readFiles(serverId, userId);
+        const [server, mod] = await Promise.all([mocks.read(serverId, "server", userId), mocks.read(serverId, "mod", userId)]);
+        return { server, mod };
+    },
+    saveManagedServerConfig: mocks.save,
+}));
 
 const serverId = "11111111-1111-4111-8111-111111111111";
 const access = { serverId, userId: "owner", canEdit: true };
@@ -27,7 +38,7 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
 
 async function render(props: Parameters<typeof ManagedServerConfigEditor>[0] = { configuration: config, access }) {
-    await act(async () => root.render(<ManagedServerConfigEditor {...props} />));
+    await act(async () => root.render(<TestLocalization>{<ManagedServerConfigEditor {...props} />} </TestLocalization>));
     await act(async () => {});
 }
 function button(label: string) { const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label); if (!found) throw Error(`Missing button ${label}`); return found; }
@@ -65,13 +76,29 @@ it("loads the live runner files, defaults to the form and saves only the changed
     expect(mocks.save).toHaveBeenLastCalledWith(expect.objectContaining({ expectedRevision: "c".repeat(64) }), "owner");
 });
 
+it("shows a form-shaped skeleton while the live configuration is loading", async () => {
+    let resolveServer!: (value: unknown) => void;
+    let resolveMod!: (value: unknown) => void;
+    const serverPending = new Promise((resolve) => { resolveServer = resolve; });
+    const modPending = new Promise((resolve) => { resolveMod = resolve; });
+    mocks.read.mockImplementation((_serverId: string, part: RunnerConfigurationPart) => part === "server" ? serverPending : modPending);
+    await act(async () => root.render(<TestLocalization>{<ManagedServerConfigEditor configuration={config} access={access} />} </TestLocalization>));
+    expect(container.querySelector("[data-config-loading-skeleton]")).not.toBeNull();
+    expect(container.querySelector("#config-serverConfig-autosaveMinutes")).toBeNull();
+    expect(container.textContent).toContain("Loading the server's current configuration");
+    resolveServer({ ok: true, file: file("server") }); resolveMod({ ok: true, file: file("mod") });
+    await act(async () => {});
+    expect(container.querySelector("[data-config-loading-skeleton]")).toBeNull();
+    expect(field<HTMLInputElement>("config-serverConfig-autosaveMinutes").value).toBe("15");
+});
+
 it("edits JSON, rejects invalid or unsupported settings and discards back to the loaded values", async () => {
     await render();
     await click("JSON");
     const editor = field<HTMLTextAreaElement>("config-json");
     expect(JSON.parse(editor.value)).toEqual({ serverConfig: liveServer, modConfig: config.modConfig });
     await type("config-json", "{ not json");
-    expect(container.textContent).toContain("not valid JSON");
+    expect(container.textContent).toContain("This isn't valid JSON (line 1, column 3)");
     expect(button("Save config").disabled).toBe(true);
     await type("config-json", JSON.stringify({ serverConfig: { ...liveServer, password: "secret" }, modConfig: config.modConfig }));
     expect(container.querySelector("#config-json-error")).not.toBeNull();
@@ -103,7 +130,9 @@ it("retries an unconfirmed save with the same request and reloads after a confli
     expect(container.textContent).toContain("The configuration changed");
     mocks.read.mockImplementation(async (_serverId: string, part: RunnerConfigurationPart) => ({ ok: true, file: part === "mod"
         ? { configPart: "mod", revision: "e".repeat(64), settings: config.modConfig } : file(part) }));
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     await click("Reload settings");
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("unsaved changes will be lost"));
     expect(mocks.read).toHaveBeenCalledTimes(4);
     expect(field<HTMLInputElement>("config-modOptions-clientsCanUseCheats").checked).toBe(false);
     expect(container.textContent).toContain("No pending changes");
@@ -136,4 +165,99 @@ it("shows the stored configuration read-only without access and reports a failed
     expect(container.textContent).toContain("Configuration is unavailable for this server.");
     expect(button("Form").disabled).toBe(true);
     expect(button("JSON").disabled).toBe(true);
+});
+
+it("loads both runner files with one request", async () => {
+    await render();
+    expect(mocks.readFiles).toHaveBeenCalledExactlyOnceWith(serverId, "owner");
+});
+
+it("treats invalid JSON as a discardable edit and explains where it is wrong", async () => {
+    await render();
+    await click("JSON");
+    await type("config-json", '{\n  "serverConfig": {\n    oops\n}');
+    const error = container.querySelector("#config-json-error")!;
+    expect(error.textContent).toContain("This isn't valid JSON (line 3, column 5)");
+    expect(field<HTMLTextAreaElement>("config-json").getAttribute("aria-invalid")).toBe("true");
+    expect(container.textContent).toContain("The JSON has unsaved edits that aren't valid yet.");
+    expect(container.textContent).not.toContain("No pending changes");
+    expect(button("Save config").disabled).toBe(true);
+    expect(button("Discard").disabled).toBe(false);
+    await click("Discard");
+    expect(container.querySelector("#config-json-error")).toBeNull();
+    expect(JSON.parse(field<HTMLTextAreaElement>("config-json").value)).toEqual({ serverConfig: liveServer, modConfig: config.modConfig });
+    expect(container.textContent).toContain("No pending changes");
+});
+
+it("switches from invalid JSON to the form only after confirming the JSON edits are dropped", async () => {
+    await render();
+    await click("JSON");
+    await type("config-json", JSON.stringify({ serverConfig: { ...liveServer, autosaveMinutes: 30 }, modConfig: config.modConfig }));
+    await type("config-json", "{ broken");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false);
+    await click("Form");
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Switch to the form?"));
+    expect(button("JSON").getAttribute("aria-pressed")).toBe("true");
+    expect(field<HTMLTextAreaElement>("config-json").value).toBe("{ broken");
+    confirm.mockReturnValueOnce(true);
+    await click("Form");
+    expect(button("Form").getAttribute("aria-pressed")).toBe("true");
+    // The last valid JSON edit survives; only the broken text is dropped.
+    expect(field<HTMLInputElement>("config-serverConfig-autosaveMinutes").value).toBe("30");
+    expect(container.textContent).toContain("Unsaved changes to server settings");
+});
+
+it("asks before reloading over unsaved edits and reloads without asking when clean", async () => {
+    await render();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await click("Reload settings");
+    expect(confirm).not.toHaveBeenCalled();
+    expect(mocks.readFiles).toHaveBeenCalledTimes(2);
+    await type("config-serverConfig-autosaveMinutes", "42");
+    await click("Reload settings");
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(mocks.readFiles).toHaveBeenCalledTimes(2);
+    expect(field<HTMLInputElement>("config-serverConfig-autosaveMinutes").value).toBe("42");
+    confirm.mockReturnValue(true);
+    await click("Reload settings");
+    expect(mocks.readFiles).toHaveBeenCalledTimes(3);
+    expect(field<HTMLInputElement>("config-serverConfig-autosaveMinutes").value).toBe("15");
+});
+
+it("pins the save bar to the viewport only while there are unsaved changes", async () => {
+    await render();
+    const bar = () => container.querySelector("[data-unsaved-bar]");
+    expect(bar()).toBeNull();
+    await type("config-serverConfig-autosaveMinutes", "42");
+    expect(bar()?.getAttribute("data-unsaved-bar")).toBe("pinned");
+    expect(bar()?.className).toContain("fixed");
+    await click("Discard");
+    expect(bar()).toBeNull();
+});
+
+it("states once that configuration changes apply on the next start", async () => {
+    await render();
+    expect(container.textContent).toContain("Editing the files on the server's runner.");
+    expect(container.textContent).not.toContain("next time the server starts");
+});
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));
+
+it("edits the battle size within the range the game applies and saves it to the gameplay file", async () => {
+    await render();
+    expect(field<HTMLInputElement>("config-modOptions-battleSize").value).toBe("1000");
+    expect(container.textContent).toContain("Total troops across both sides of a battle, from 200 to 1,000.");
+    await type("config-modOptions-battleSize", "1500");
+    expect(container.textContent).toContain("Enter a value from 200 to 1,000.");
+    expect(button("Save config").disabled).toBe(true);
+    await type("config-modOptions-battleSize", "600");
+    const saved = { ...config.modConfig, modOptions: { ...config.modConfig.modOptions, battleSize: 600 } };
+    mocks.save.mockResolvedValue({ ok: true, file: { configPart: "mod", revision: "c".repeat(64), settings: saved } });
+    await click("Save config");
+    expect(mocks.save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ configPart: "mod", expectedRevision: revisions.mod, settings: saved }), "owner");
 });

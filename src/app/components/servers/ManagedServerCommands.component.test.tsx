@@ -1,10 +1,15 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { ManagedServerCommands } from "./ManagedServerCommands";
+import { ManagedServerControls } from "./ManagedServerControls";
+import { ManagedServerPollingProvider } from "./ManagedServerPollingProvider";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 
-const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn() }));
+const mocks = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), ack: vi.fn(), refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/app/servers/managed-server-console-actions", () => ({ submitManagedConsoleCommand: mocks.submit, checkManagedConsoleCommand: mocks.check, acknowledgeManagedConsoleCommand: mocks.ack }));
 vi.mock("./DownloadServerLogButton", () => ({ DownloadServerLogButton: () => <span>Download logs</span> }));
 const server: MyServerSummary = { serverId: "22222222-2222-4222-8222-222222222222", displayName: "Campaign", accessRole: "owner", operationState: "running", observedGameState: "running", friendlyRegion: "germany", releaseChannel: "stable", updatedAt: "2026-09-20T12:00:00.000Z" };
@@ -33,7 +38,7 @@ async function select() {
 }
 /** Mounts the console with its lifecycle controls as provided by the page. */
 async function mount(overrides: Partial<MyServerSummary> = {}) {
-    await act(async () => root.render(<ManagedServerCommands server={{ ...server, ...overrides }} userId="owner-id" controls={<p>Lifecycle controls</p>} />));
+    await act(async () => root.render(<TestLocalization>{<ManagedServerCommands server={{ ...server, ...overrides }} userId="owner-id" controls={<p>Lifecycle controls</p>} />} </TestLocalization>));
 }
 
 it("offers only coop cheats, inserts without sending, and sends without a confirmation popup", async () => {
@@ -128,14 +133,14 @@ it("places only the input and Send below live output in the same card while idle
     expect(form.closest("section")).toBe(output.closest("section"));
     expect(output.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(container.querySelector('[aria-label="Command result"]')).toBeNull();
-    expect(form.nextElementSibling!.textContent).toBe("Enter to send");
+    expect(form.nextElementSibling!.textContent).toBe("Enter to send · ↑ ↓ for recent commands");
     expect(form.nextElementSibling!.nextElementSibling).toBeNull();
     expect(form.querySelectorAll("input")).toHaveLength(1);
     expect(form.querySelectorAll("button")).toHaveLength(1);
     expect(form.querySelector("button")!.textContent).toBe("Send");
 });
 
-it.each(["rejected", "uncertain", "network"])("reports a late %s failure without locking or replacing the next draft", async (failure) => {
+it.each(["rejected", "uncertain", "network"])("reports a late %s failure under the input without locking or replacing the next draft", async (failure) => {
     let resolve!: (value: unknown) => void;
     let reject!: (error: Error) => void;
     mocks.submit.mockReturnValueOnce(new Promise((accept, fail) => { resolve = accept; reject = fail; }));
@@ -145,17 +150,61 @@ it.each(["rejected", "uncertain", "network"])("reports a late %s failure without
     await typeDraft("coop.debug.alley.abandon");
     await act(async () => {
         if (failure === "network") reject(new Error("network"));
-        else resolve({ ok: false, notSubmitted: failure === "rejected", message: "The command could not be sent." });
+        else resolve({ ok: false, notSubmitted: failure === "rejected", uncertain: failure === "uncertain", refresh: false, message: "The command was not sent." });
     });
-    const error = container.querySelector('pre [role="alert"]')!.textContent;
-    expect(error).toContain("coop.help:");
-    expect(error).toContain(failure === "network" ? "Delivery could not be confirmed" : "The command could not be sent.");
+    const alert = container.querySelector('form [role="alert"]')!;
+    expect(container.querySelector('pre [role="alert"]')).toBeNull();
+    expect(alert.textContent).toBe(failure === "rejected"
+        ? "coop.help: The command was not sent."
+        : "We couldn’t confirm coop.help was delivered. If no output appears above in a few seconds, send it again.");
+    expect(alert.textContent).not.toContain("Discord");
+    expect(input.getAttribute("aria-describedby")).toContain(alert.parentElement!.id);
+    expect(input.getAttribute("aria-invalid")).toBeNull();
     expect(input.value).toBe("coop.debug.alley.abandon");
     expect(input.disabled).toBe(false);
     expect(button("Retry send")).toBeUndefined();
+    expect(mocks.refresh).not.toHaveBeenCalled();
     await act(async () => button("Send").click());
     expect(mocks.submit).toHaveBeenCalledTimes(2);
     expect(mocks.submit.mock.calls[1][1]).not.toBe(mocks.submit.mock.calls[0][1]);
+});
+
+it("preserves a rejected command without refreshing the page or its console stream", async () => {
+    mocks.submit.mockResolvedValueOnce({ ok: false, notSubmitted: false, uncertain: false, refresh: true, message: "The server is busy with another command or its status just changed. Wait a moment, then send it again." });
+    await mount();
+    const input = await typeDraft("coop.help");
+    await act(async () => button("Send").click());
+    expect(container.querySelector('form [role="alert"]')!.textContent).toContain("coop.help: The server is busy");
+    expect(input.value).toBe("coop.help");
+    expect(mocks.submit).toHaveBeenCalledOnce();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it("keeps a newer draft when an earlier command is rejected", async () => {
+    let reject!: (value: unknown) => void;
+    mocks.submit.mockReturnValueOnce(new Promise(resolve => { reject = resolve; }));
+    await mount();
+    await typeDraft("coop.help");
+    await act(async () => button("Send").click());
+    const input = await typeDraft("coop.debug.players.list");
+    await act(async () => reject({ ok: false, uncertain: false, refresh: false, message: "The server is busy." }));
+    expect(input.value).toBe("coop.debug.players.list");
+    expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it("confirms a delivered command briefly under the input", async () => {
+    await mount();
+    const input = await typeDraft("coop.help");
+    await act(async () => button("Send").click());
+    const feedback = document.getElementById(input.getAttribute("aria-describedby")!.split(" ")[1])!;
+    expect(feedback.getAttribute("aria-live")).toBe("polite");
+    expect(feedback.textContent).toBe("Sent coop.help. Output appears above.");
+    expect(feedback.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => vi.advanceTimersByTimeAsync(4_999));
+    expect(feedback.textContent).toBe("Sent coop.help. Output appears above.");
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(feedback.textContent).toBe("");
+    expect(input.getAttribute("aria-describedby")).not.toContain(feedback.id);
 });
 
 it("allows multiple pending submissions and preserves the new draft when responses arrive", async () => {
@@ -169,8 +218,9 @@ it("allows multiple pending submissions and preserves the new draft when respons
     expect(input.value).toBe("");
     expect(input.disabled).toBe(false);
     expect(document.activeElement).toBe(input);
-    expect(button("Sending…")).toBeUndefined();
+    expect(button("Sending…")!.getAttribute("aria-busy")).toBe("true");
     await typeDraft("coop.debug.alley.abandon");
+    expect(button("Sending…")!.disabled).toBe(false);
     await act(async () => input.form!.requestSubmit());
     expect(mocks.submit).toHaveBeenCalledTimes(2);
     expect(mocks.submit.mock.calls[0]).toEqual([expect.objectContaining({ command: "coop.help" }), expect.any(String), "owner-id"]);
@@ -180,22 +230,86 @@ it("allows multiple pending submissions and preserves the new draft when respons
     await typeDraft("coop.help next");
     await act(async () => acceptSecond({ ok: true, result: { outcome: "enqueued", jobId } }));
     expect(input.value).toBe("coop.help next");
+    expect(button("Sending…")).toBeDefined();
     await act(async () => acceptFirst({ ok: true, result: { outcome: "enqueued", jobId } }));
     expect(input.value).toBe("coop.help next");
     expect(input.disabled).toBe(false);
+    expect(button("Sending…")).toBeUndefined();
+    expect(button("Send")!.getAttribute("aria-busy")).toBeNull();
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
-    expect(mocks.check).not.toHaveBeenCalled();
     expect(mocks.ack).not.toHaveBeenCalled();
 });
 
-it("reports invalid input inside the console without adding footer messages", async () => {
+it("fetches and shows a result the live stream never rendered", async () => {
+    const output = "ID: 'town_comp_EN2'\nName: 'Diathma'";
+    mocks.check.mockResolvedValueOnce({ ok: true, result: { status: "pending" } })
+        .mockResolvedValueOnce({ ok: true, result: { status: "succeeded", output, outputTruncated: false, outputWithheld: false, completedAt: "2026-10-15T14:00:19.639Z" } });
     await mount();
-    const input = await typeDraft("not-a-coop-command");
+    await typeDraft("coop.debug.town.list_towns");
+    await act(async () => button("Send").click());
+    await act(async () => vi.advanceTimersByTimeAsync(3_999));
+    expect(mocks.check).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(mocks.check).toHaveBeenCalledWith({ serverId: server.serverId, jobId, commandRequestId: mocks.submit.mock.calls[0][1] }, "owner-id");
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(mocks.check).toHaveBeenCalledTimes(2);
+    const block = container.querySelector('[role="group"][aria-label="Command output"]');
+    expect(block?.textContent).toContain("Name: 'Diathma'");
+    expect(container.querySelector("pre")!.textContent).not.toContain("@DS@");
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(mocks.check).toHaveBeenCalledTimes(2);
+});
+
+it("does not fetch a result the live stream already showed", async () => {
+    let stream!: ReadableStreamDefaultController<Uint8Array>;
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new ReadableStream<Uint8Array>({ start(controller) { stream = controller; } }))));
+    await mount();
+    await typeDraft("coop.debug.players.list");
+    await act(async () => button("Send").click());
+    const frame = `@DS@${JSON.stringify({ ev: "managed-command", id: "608721b5db6e6025f5af4261078e888c", ok: true, output: "No players" })}`;
+    await act(async () => stream.enqueue(new TextEncoder().encode(`event: line\ndata: ${JSON.stringify(frame)}\n\n`)));
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(container.querySelector('[role="group"][aria-label="Command output"]')?.textContent).toContain("No players");
+    expect(mocks.check).not.toHaveBeenCalled();
+});
+
+it("explains a non-coop command directly under the input and points to the command browser", async () => {
+    await mount();
+    const input = await typeDraft("status");
+    await act(async () => button("Send").click());
+    expect(mocks.submit).not.toHaveBeenCalled();
+    const alert = input.form!.querySelector('[role="alert"]')!;
+    expect(alert.textContent).toBe("The web console runs coop.* commands only. Use Browse commands below to find one.");
+    expect(alert.querySelector("strong")!.textContent).toBe("Browse commands");
+    expect(container.querySelector('pre [role="alert"]')).toBeNull();
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(input.getAttribute("aria-describedby")!.split(" ")).toContain(alert.parentElement!.id);
+    expect(input.value).toBe("status");
+    expect(document.activeElement).toBe(input);
+    expect(input.form!.nextElementSibling!.textContent).toBe("Enter to send · ↑ ↓ for recent commands");
+    expect(input.form!.nextElementSibling!.nextElementSibling).toBeNull();
+    await typeDraft("coop.help");
+    expect(input.form!.querySelector('[role="alert"]')).toBeNull();
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+});
+
+it("explains a malformed coop command under the input", async () => {
+    await mount();
+    const input = await typeDraft("coop.help; stop");
     await act(async () => input.form!.requestSubmit());
     expect(mocks.submit).not.toHaveBeenCalled();
-    expect(container.querySelector('pre [role="alert"]')!.textContent).toContain("Enter one coop.* command");
-    expect(input.form!.nextElementSibling!.textContent).toBe("Enter to send");
-    expect(input.form!.nextElementSibling!.nextElementSibling).toBeNull();
+    expect(input.form!.querySelector('[role="alert"]')!.textContent).toBe("Enter one coop.* command (up to 4096 characters), without control characters or command separators.");
+});
+
+it("keeps lifecycle progress in its own row below the toolbar, hidden while empty", async () => {
+    await mount();
+    const heading = container.querySelector("h2")!;
+    const toolbar = heading.parentElement!;
+    const statusRow = toolbar.nextElementSibling!;
+    expect(statusRow.className).toContain("empty:hidden");
+    expect(statusRow.childElementCount).toBe(0);
+    expect(toolbar.contains(statusRow)).toBe(false);
+    expect(statusRow.compareDocumentPosition(container.querySelector("pre")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 it.each([{ accessRole: "support" as const }, { operationState: "stopped" as const }, { observedGameState: "unknown" as const }])("disables commands for a read-only or non-running server: %o", async (state) => {
@@ -203,4 +317,109 @@ it.each([{ accessRole: "support" as const }, { operationState: "stopped" as cons
     expect(button("Send").disabled).toBe(true);
     expect([...container.querySelectorAll<HTMLButtonElement>("aside li button")].every(button => button.disabled)).toBe(true);
     expect(mocks.submit).not.toHaveBeenCalled();
+});
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));
+
+/** Dispatches an arrow key and reports whether history navigation consumed it. */
+async function arrow(input: HTMLInputElement, key: "ArrowUp" | "ArrowDown") {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    await act(async () => { input.dispatchEvent(event); });
+    return event.defaultPrevented;
+}
+/** Sends a typed command through the composer and lets the stored history load. */
+async function sendDraft(value: string) {
+    await typeDraft(value);
+    await act(async () => button("Send").click());
+}
+
+it("recalls sent commands with Up and Down like a terminal, restoring the unsent draft", async () => {
+    window.localStorage.clear();
+    await mount();
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!;
+    expect(await arrow(input, "ArrowUp")).toBe(false);
+    await sendDraft("coop.help");
+    await sendDraft("coop.debug.get_time_mode");
+    await sendDraft("coop.debug.get_time_mode");
+    await typeDraft("coop.unsent");
+    expect(await arrow(input, "ArrowUp")).toBe(true);
+    expect(input.value).toBe("coop.debug.get_time_mode");
+    expect(await arrow(input, "ArrowUp")).toBe(true);
+    expect(input.value).toBe("coop.help");
+    expect(await arrow(input, "ArrowUp")).toBe(true);
+    expect(input.value).toBe("coop.help");
+    expect(await arrow(input, "ArrowDown")).toBe(true);
+    expect(input.value).toBe("coop.debug.get_time_mode");
+    expect(await arrow(input, "ArrowDown")).toBe(true);
+    expect(input.value).toBe("coop.unsent");
+    expect(await arrow(input, "ArrowDown")).toBe(false);
+    expect(mocks.submit).toHaveBeenCalledTimes(3);
+});
+
+it("keeps history per account and server across reloads, and editing a recalled command starts a new draft", async () => {
+    window.localStorage.clear();
+    await mount();
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    await sendDraft("coop.help");
+    await sendDraft("coop.debug.get_time_mode");
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await mount();
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!;
+    expect(await arrow(input, "ArrowUp")).toBe(true);
+    expect(input.value).toBe("coop.debug.get_time_mode");
+    await typeDraft("coop.debug.get_time_mode extra");
+    expect(await arrow(input, "ArrowDown")).toBe(false);
+    expect(await arrow(input, "ArrowUp")).toBe(true);
+    expect(input.value).toBe("coop.debug.get_time_mode");
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await mount({ serverId: "44444444-4444-4444-8444-444444444444" });
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    const other = container.querySelector<HTMLInputElement>('input[placeholder="coop.…"]')!;
+    expect(await arrow(other, "ArrowUp")).toBe(false);
+    expect(other.value).toBe("");
+});
+
+/** Mounts the console with the real lifecycle controls inside the shared provider, as the manage page does. */
+async function mountWithLifecycle() {
+    await act(async () => root.render(<TestLocalization><ManagedServerPollingProvider>
+        <ManagedServerCommands server={server} userId="owner-id" controls={<ManagedServerControls serverId={server.serverId} displayName="Campaign"
+            accessRole="owner" operationState="running" observedGameState="running" expectedUpdatedAt={server.updatedAt} />} />
+    </ManagedServerPollingProvider></TestLocalization>));
+}
+const stopAndRestart = () => [button("Stop").disabled, button("Restart").disabled];
+
+it("disables Stop and Restart while a typed save runs, until its stored result arrives", async () => {
+    mocks.check.mockResolvedValueOnce({ ok: true, result: { status: "pending" } }).mockResolvedValue({ ok: true, result: {
+        status: "succeeded", output: "[DedicatedServer] operator save: world saved to 'default_new_game.sav' (900 ms)",
+        outputTruncated: false, outputWithheld: false, completedAt: "2026-10-17T02:35:02.734Z" } });
+    await mountWithLifecycle();
+    await sendDraft("coop.help");
+    expect(stopAndRestart()).toEqual([false, false]);
+    await sendDraft("  save ");
+    expect(mocks.submit).toHaveBeenLastCalledWith({ serverId: server.serverId, command: "save", expectedUpdatedAt: server.updatedAt }, expect.any(String), "owner-id");
+    expect(stopAndRestart()).toEqual([true, true]);
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(stopAndRestart()).toEqual([true, true]);
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(stopAndRestart()).toEqual([false, false]);
+    // A typed command's result is shown in the console, not acknowledged as a Save button notice.
+    expect(mocks.ack).not.toHaveBeenCalled();
+});
+
+it("re-enables Stop and Restart when a typed save is refused", async () => {
+    mocks.submit.mockResolvedValue({ ok: false, notSubmitted: true, uncertain: false, refresh: false, message: "The server is busy with another command." });
+    await mountWithLifecycle();
+    await sendDraft("save");
+    expect(container.textContent).toContain("save: The server is busy with another command.");
+    expect(stopAndRestart()).toEqual([false, false]);
 });

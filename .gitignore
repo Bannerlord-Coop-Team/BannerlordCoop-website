@@ -58,3 +58,6 @@ next-env.d.ts
 /playwright-report/
 /test-results/
 /.lighthouseci/
+
+# Production Edge deployment receipts are CI artifacts, not source.
+/supabase-hosting-deployment.json

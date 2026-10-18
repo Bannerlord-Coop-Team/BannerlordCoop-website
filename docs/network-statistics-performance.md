@@ -1,4 +1,38 @@
-# Network statistics query index
+# Network statistics performance
+
+## Homepage rendering
+
+The homepage renders its navigation, hero and calls to action without awaiting
+network statistics. Only the async `NetworkStatistics` leaf waits for that
+optional request, inside a `Suspense` boundary. The fallback reuses the localized
+statistics section and cards, reserving space for both translated status labels
+and the value/unavailable line. Pending values are hidden from assistive
+technology and the section is marked busy; a pending request does not display
+zero or claim that statistics are already unavailable.
+
+The request to `network-stats-cached` has a three-second abort deadline covering
+both headers and response-body reading. Timeout, transport/HTTP failure and
+invalid JSON retain the existing unavailable presentation; invalid or missing
+individual counts remain unavailable, while a valid zero remains zero. The
+timer is cleared after settlement. The endpoint, public API key, safe-count
+validation and `next.revalidate: 15` policy are unchanged. This removes one
+remote dependency from the homepage shell, not one upstream request.
+
+Run the focused boundary, failure and locale regressions with:
+
+```sh
+npm run test:components -- src/app/home-streaming.component.test.tsx src/app/lib/network-stats.component.test.tsx src/app/components/home/home-localization.component.test.tsx
+```
+
+The streaming regression holds statistics unresolved until it has received the
+navigation and hero/CTA HTML, then checks the completed statistics segment.
+When changing card layout, compare pending, loaded and unavailable states at
+mobile, two-column and four-column widths, including longer translated labels.
+Local streaming and layout checks do not establish production OpenNext cache
+persistence, hit rate, deployed streaming latency or whole-page CLS. Verify
+those separately on the deployed Cloudflare adapter before quantifying gains.
+
+## Query index
 
 `get_network_stats()` uses `server_statistics.updated_at` for its two-minute
 freshness window. Migration `202609100011_network_stats_updated_at_index.sql`

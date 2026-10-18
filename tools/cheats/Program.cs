@@ -49,7 +49,20 @@ foreach (var declaration in release.Values)
         expression = method.ExpressionBody?.Expression ?? throw new InvalidOperationException("Only expression-bodied argument factories are supported.");
     }
     var expectedArgs = new List<object>();
-    if (expression is ArrayCreationExpressionSyntax array && array.Initializer != null)
+    if (expression is CollectionExpressionSyntax collection)
+    {
+        foreach (var element in collection.Elements.OfType<ExpressionElementSyntax>().Select(e => e.Expression))
+        {
+            if (element is not ObjectCreationExpressionSyntax creation || creation.Type.ToString() != "ExpectedArgs" || creation.ArgumentList == null)
+                throw new InvalidOperationException($"Unsupported argument metadata: {fullName}");
+            var values = creation.ArgumentList.Arguments;
+            if (values.Count is < 2 or > 3 || values.Take(2).Any(v => v.NameColon != null) || (values.Count == 3 && values[2].NameColon != null && values[2].NameColon!.Name.Identifier.Text != "isRequired")) throw new InvalidOperationException(fullName);
+            var required = values.Count == 2 || values[2].Expression.IsKind(SyntaxKind.TrueLiteralExpression);
+            if (values.Count == 3 && !required && !values[2].Expression.IsKind(SyntaxKind.FalseLiteralExpression)) throw new InvalidOperationException(fullName);
+            expectedArgs.Add(new { name = Literal(values[0].Expression, declaration), description = Literal(values[1].Expression, declaration), required });
+        }
+    }
+    else if (expression is ArrayCreationExpressionSyntax array && array.Initializer != null)
     {
         foreach (var element in array.Initializer.Expressions)
         {
