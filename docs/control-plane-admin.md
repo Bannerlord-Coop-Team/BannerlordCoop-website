@@ -89,8 +89,9 @@ The page provides:
 - installable validated Stable and Nightly release catalogs, source commit revisions, and validation/revocation actions;
 - lifecycle, update, rollback, restore, diagnostics, password, suspension, and deletion controls;
 - ownership transfer, manager access, quota, provider replacement, and server creation;
-- bounded provider orphan review/cleanup, fleet reconciliation, batch maintenance, and owner announcements;
-- a co-tenancy placement dry run whose steps open the relocation dialog; and
+- bounded provider orphan review/cleanup, fleet reconciliation, and batch maintenance;
+- a co-tenancy placement dry run whose steps open the relocation dialog, and the automatic placement executor's settings;
+- server notices shown at the top of selected servers' pages; and
 - the hash-chained audit history.
 
 The website does not query the private `control_plane` schema, call OVH, connect to runner agents, or construct container operations. Browser request UUIDs become the control-plane correlation and idempotency identity. Server and job mutations carry the current `updatedAt` value selected from the page. A correlated `stale_interaction` rejection refreshes the UI without clearing the form. For server lifecycle jobs, updates, rollbacks, restores, and diagnostics only, the card reads the exact server's authoritative dashboard and retries once with its new generation, the original request UUID, and unchanged user input. These workflows reject stale generations before accepting a job. An error carrying an accepted operation ID, a timeout, or a network failure is never automatically retried. Job retry/cancellation and failure acknowledgement are not replayed against a newer attempt; other mutations also require another explicit submission after refresh. Managed backup requests similarly read fresh backup status and replay at most once with the original durable UUID and backup selection; repeated stale or uncertain responses retain the pending request for manual reconciliation. Direct container commands and file-transfer/visibility contracts are unchanged.
@@ -504,3 +505,85 @@ VPS reads **Done**, a server with another active job waits, and a server no long
 on the step's source VPS asks for a new dry run. **Refresh status** re-reads those
 without discarding the plan. Relocation stops a running game and changes the
 server's address and game port. No Edge Function change is required.
+
+### Automatic executor
+
+The top of the Placement tab shows the automatic placement executor, read in the
+browser with `placement-executor` when the tab opens. Its current state is shown
+first: **On · relocating servers automatically** or **Off · nothing moves
+automatically**, with who last changed it, when and why (or that the defaults
+were never saved). The form edits all five settings (`enabled`,
+`maximumRelocationsPerDay` 1–24, `minimumGainHours` 1–168, `alwaysOnPolicy` and
+`noticeLeadHours` 1–168) plus an optional audit reason, and **Save settings**
+sends `set-placement-executor` with `expectedUpdatedAt` set to the `updatedAt` it
+read (null when never saved). Turning it on asks for a browser confirmation that
+spells out what it does: the control plane relocates customer servers by itself
+within the daily cap, each move stops the game and changes the server's address
+and game port, and always-on servers move only in their quiet window after a
+notice on their page. The `single-slot` policy means one-slot VPSs only, which
+the server never shares. A `stale_interaction` rejection reloads the settings
+someone else saved and asks the administrator to review them before saving again;
+`relocation_provider_unsupported` explains that enabling needs live OVH mode.
+Below the form, the 50 newest automatic relocations show their mode (offline or
+announced), state, gain, scheduled, queued and completed times and error code.
+
+## Server notices
+
+A server notice is a plain-text message at the top of selected servers' pages,
+shown to everyone who can view the server until they dismiss it, it expires or an
+administrator withdraws it. It is not email or a Discord message; the retired
+owner announcements have no website form. See the control-plane repository's
+`docs/managed-hosting/server-notices.md`.
+
+The **Notices** tab renders the first 100 servers from the existing `servers`
+read on the server, so the page keeps its fresh administrator authority. The
+search box re-reads `servers` with its query filter from the browser, and
+**Load more servers** follows its cursor, so selections survive searches. An
+administrator can tick servers one by one or **Select all shown**, sees the
+selected count and can remove each one; a notice targets at most 500 servers.
+The form takes a one-line title (at most 120 characters), a plain-text message
+(at most 2,000; line breaks kept), severity, an optional expiry and an audit
+reason. The expiry is entered as browser-local `datetime-local` time and sent as
+UTC with milliseconds; it must be in the future and within a year. Posting asks
+for confirmation and sends `create-notice`. Its request UUID is the idempotency
+key: an unchanged retry after an error or uncertain response reuses it (a replay
+reports that the notice already exists), and changed content or a submission
+after success gets a new one. Validation failures show the control plane's
+message.
+
+The list below reads `notices` 25 at a time, newest first, with **Load older
+notices** following `nextCursor`. Each notice shows its state (active, expired or
+withdrawn), severity, kind, message, creation and expiry times, target and
+dismissal counts, up to five target names with how many more, its author and
+reason. **Withdraw** asks for confirmation and sends `withdraw-notice`.
+
+### Owner banner
+
+`/servers/[serverId]` reads the viewer's undismissed notices with the closed
+owner read `server-notices` through `getMyServerNotices` (strict DTO, at most ten,
+64 KiB response) whenever the page has a managed server, both on the managed page
+and on a live page linked to one. The read has a five-second bound and any
+failure, including an older control plane that lacks the operation, renders the
+page without notices. `ServerManagementWorkspace` shows them in its `banner` slot
+between the back link and the header. Each card is plain text with its line
+breaks; `info` cards are `role="status"` and `warning` cards `role="alert"`.
+Administrator notices show their title and message untranslated. The two
+placement kinds are written in the viewer's language from their parameters:
+`placement-scheduled` from `scheduledAt` and `windowMinutes`, in the viewer's time
+zone, and `placement-completed` with the new `address` when it is a valid
+`ip:port` (a variant without it otherwise). A scheduled notice without a usable
+`scheduledAt` falls back to the stored English title and message.
+
+**Dismiss** calls the `dismissManagedServerNotice` server action, which sends the
+`my-servers` Edge Function the closed mutation
+`{action: "dismiss-server-notice", serverId, noticeId}` with a request UUID; the
+function forwards `dismiss-server-notice` to the control plane and accepts only
+`{dismissed: true}`. The card hides on success, and also on `notice_not_found`,
+since that notice is not for this server. An administrator impersonating a user
+gets HTTP 403 `impersonation_read_only` and a short localized explanation; other
+failures keep the card with a localized retry message.
+
+Deploy the control plane that adds these operations before merging this website
+change. Merging to main redeploys `my-servers` through the Supabase hosting API
+workflow; the notice read degrades to no banner against an older control plane,
+and the admin Notices tab and executor panel show the control plane's error.

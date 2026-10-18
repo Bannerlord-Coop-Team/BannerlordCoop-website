@@ -33,6 +33,7 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
 vi.mock("@/app/lib/hosting/my-servers-server", () => ({
     getMyServerSummary: mocks.servers,
     getMyServerDeletionStatus: async () => null,
+    getMyServerNotices: async () => [],
 }));
 vi.mock("@/app/lib/hosting/server-files", () => ({ getMyServerFiles: mocks.files, submitMyServerFile: mocks.submit }));
 vi.mock("@/app/lib/hosting/server-configuration", () => ({ getMyServerConfiguration: mocks.configFile, saveMyServerConfiguration: vi.fn() }));

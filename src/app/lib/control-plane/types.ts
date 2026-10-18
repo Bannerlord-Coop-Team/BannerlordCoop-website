@@ -52,6 +52,18 @@ export type MyServerSummary = Pick<
     gamePorts?: number[];
 };
 
+/** A notice on one server's page that this viewer has not dismissed. Placement kinds carry typed parameters. */
+export type MyServerNotice = {
+    noticeId: string;
+    kind: "administrator" | "placement-scheduled" | "placement-completed";
+    severity: "info" | "warning";
+    title: string;
+    body: string;
+    parameters: Record<string, string | number | boolean | null>;
+    createdAt: string;
+    expiresAt: string | null;
+};
+
 export type MyServerSaveSummary = {
     saveId: string;
     displayName: string;
@@ -405,6 +417,76 @@ export type HostingAdminPlacementPlan = {
     moves: HostingPlacementMove[];
     unsequencedServerIds: string[];
 };
+
+export type HostingPlacementAlwaysOnPolicy = "single-slot" | "none" | "any";
+
+/** The automatic placement executor's settings; `updatedAt` is null until an administrator first saves them. */
+export type HostingPlacementExecutorSettings = {
+    enabled: boolean;
+    maximumRelocationsPerDay: number;
+    minimumGainHours: number;
+    alwaysOnPolicy: HostingPlacementAlwaysOnPolicy;
+    noticeLeadHours: number;
+    updatedBy: string | null;
+    reason: string | null;
+    updatedAt: string | null;
+};
+
+/** One automatic relocation: `offline` moves a stopped server at once, `announced` notifies the owner first. */
+export type HostingPlacementRelocation = {
+    relocationId: string;
+    serverId: string;
+    displayName: string;
+    fromServiceName: string;
+    toServiceName: string;
+    targetRegion: string;
+    mode: "offline" | "announced";
+    state: "announced" | "queued" | "succeeded" | "failed" | "cancelled";
+    gainPairHoursPerWeek: number;
+    scheduledAt: string;
+    announcementNoticeId: string | null;
+    completionNoticeId: string | null;
+    jobId: string | null;
+    errorCode: string | null;
+    createdAt: string;
+    queuedAt: string | null;
+    updatedAt: string;
+    completedAt: string | null;
+};
+
+/** The `placement-executor` read: current settings and the 50 newest automatic relocations. */
+export type HostingAdminPlacementExecutor = {
+    settings: HostingPlacementExecutorSettings;
+    relocations: HostingPlacementRelocation[];
+};
+
+export type HostingServerNoticeKind = "administrator" | "placement-scheduled" | "placement-completed";
+export type HostingServerNoticeSeverity = "info" | "warning";
+
+/** A server notice as administrators list it, with at most 20 of its target servers. */
+export type HostingAdminNotice = {
+    noticeId: string;
+    kind: HostingServerNoticeKind;
+    severity: HostingServerNoticeSeverity;
+    title: string;
+    body: string;
+    parameters: Record<string, unknown>;
+    createdAt: string;
+    expiresAt: string | null;
+    state: "active" | "expired" | "withdrawn";
+    createdBy: string;
+    reason: string | null;
+    withdrawnAt: string | null;
+    targetCount: number;
+    dismissalCount: number;
+    servers: { serverId: string; displayName: string }[];
+};
+
+/** The outcome of `create-notice`; a replayed request ID returns the first notice as `existing`. */
+export type HostingAdminNoticeCreation = { outcome: "created" | "existing"; notice: HostingAdminNotice };
+
+/** The Notices view's data: the first page of servers that a notice can target. */
+export type NoticesViewData = { servers: HostingPage<ManagedServer> };
 
 /** The Placement view's data: the slots servers occupy, the catalog that places hosts in regions, and active jobs. The plan itself loads on demand. */
 export type PlacementViewData = {

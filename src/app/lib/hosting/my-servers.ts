@@ -257,6 +257,20 @@ export async function requestMyServerManager(accessToken: string, input: { serve
     return result as { changed: boolean };
 }
 
+/** Hides one notice on one server's page for the signed-in viewer; dismissing twice is harmless. */
+export async function dismissServerNotice(accessToken: string, input: { serverId: string; noticeId: string }, requestId: string) {
+    if (!REQUEST_ID.test(requestId) || !RESOURCE_ID.test(input.serverId) || !REQUEST_ID.test(input.noticeId)) {
+        throw new MyServersApiError("invalid_request", "The notice dismissal is invalid.");
+    }
+    const result = await requestMyServersApi(accessToken, {
+        method: "POST",
+        body: JSON.stringify({ action: "dismiss-server-notice", serverId: input.serverId, noticeId: input.noticeId }),
+        requestId,
+    });
+    if (!isRecord(result) || !hasExactKeys(result, ["dismissed"]) || result.dismissed !== true) throw invalidResponse();
+    return { dismissed: true as const };
+}
+
 export async function requestServerVisibility(accessToken: string, input: VisibilityMutation, requestId: string) {
     if (!REQUEST_ID.test(requestId)) throw new MyServersApiError("invalid_request", "The visibility request ID is invalid.");
     const parsed = parseVisibilityMutation(input);

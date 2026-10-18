@@ -161,8 +161,10 @@ export function UnavailableServerPanel({ title, actions }: { title: string; acti
 }
 
 /** Organizes server identity, join actions and persistent task panels in one workspace. */
-export function ServerManagementWorkspace({ name, address, summary, status, visibility, notice, initialSection = "Console", interactionLocked = false, children }: {
+export function ServerManagementWorkspace({ name, address, summary, status, visibility, notice, banner, initialSection = "Console", interactionLocked = false, children }: {
     name: ReactNode; address?: string | null; summary: ReactNode; status?: ReactNode; visibility?: ReactNode; notice?: string;
+    /** Server notices shown above everything else on the page. */
+    banner?: ReactNode;
     initialSection?: Section; interactionLocked?: boolean; children: ReactNode;
 }) {
     const { t } = useTranslations("server-common");
@@ -221,6 +223,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
     return <WorkspaceContext.Provider value={{ current: activeSection, initial: initialSection, revealAddress }}><main className="min-h-svh bg-background">
         <div className="site-container py-5 sm:py-6">
             <Link href="/servers" className="inline-flex items-center gap-2 text-sm text-foreground-muted hover:text-gold"><ArrowLeft className="size-4" aria-hidden="true" />{t("managementWorkspace.allServers")}</Link>
+            {banner}
             {notice && <p className="my-5 rounded-md border border-white/10 bg-surface px-4 py-3 text-sm leading-6 text-foreground-muted">{notice}</p>}
             <header className="mt-4 mb-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

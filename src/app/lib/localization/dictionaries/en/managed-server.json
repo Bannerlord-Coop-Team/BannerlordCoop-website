@@ -828,5 +828,19 @@
   "autosaves.noEarlierAutosavesYet": "No earlier autosaves yet. They appear after the server has autosaved a few times.",
   "autosaves.theAutosaveWasNotLoadedTheListNowShowsTheServerS": "The autosave wasn’t loaded. The list now shows the server’s current autosaves, so check the save times before trying again.",
   "page.recentAutosavesCouldNotBeLoaded": "Recent autosaves couldn’t be loaded just now. Retained backups are unaffected; refresh the page to try again.",
-  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "That autosave couldn’t be loaded. Make sure the game server is stopped, then refresh and choose an autosave that is still listed."
+  "action.backup.thatAutosaveCouldNotBeLoadedStopTheServerAndRefresh": "That autosave couldn’t be loaded. Make sure the game server is stopped, then refresh and choose an autosave that is still listed.",
+  "notices.regionLabel": "Server notices",
+  "notices.info": "Notice",
+  "notices.warning": "Warning",
+  "notices.dismiss": "Dismiss",
+  "notices.dismissNamed": "Dismiss notice: {title}",
+  "notices.dismissReadOnly": "You’re viewing this server as another user, so you can’t dismiss its notices.",
+  "notices.dismissFailed": "This notice couldn’t be dismissed. Try again in a moment.",
+  "notices.signInAgain": "Sign in again to dismiss this notice.",
+  "notices.placementScheduledTitle": "Planned move to a new machine",
+  "notices.placementScheduledBody": "This server will move to a new machine between {start} and {end}. Players get an in-game warning, the game stops for a few minutes, and its address and port change.",
+  "notices.placementScheduledBodyAround": "This server will move to a new machine around {time}. Players get an in-game warning, the game stops for a few minutes, and its address and port change.",
+  "notices.placementCompletedTitle": "Moved to a new machine",
+  "notices.placementCompletedBody": "This server moved to a new machine to reduce slowdowns. Its new address is {address}; players need it to join.",
+  "notices.placementCompletedBodyNoAddress": "This server moved to a new machine to reduce slowdowns. Its address changed, so players need the new one to join."
 }
