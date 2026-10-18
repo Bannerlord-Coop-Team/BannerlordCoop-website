@@ -9,9 +9,10 @@ export type ControlPlaneView =
     | "releases"
     | "audit"
     | "operations"
-    | "relocate";
+    | "relocate"
+    | "placement";
 
-const TAB_WIDTHS = ["w-24", "w-15", "w-22", "w-18", "w-24", "w-19", "w-28", "w-24"];
+const TAB_WIDTHS = ["w-24", "w-15", "w-22", "w-18", "w-24", "w-19", "w-28", "w-24", "w-26"];
 
 export function ControlPlanePageSkeleton() {
     return (
@@ -58,6 +59,7 @@ export function ControlPlaneViewSkeleton({ view }: { view: ControlPlaneView }) {
                 {view === "server" && <ServerSkeleton />}
                 {view === "operations" && <OperationsSkeleton />}
                 {view === "releases" && <ReleaseSkeleton />}
+                {view === "placement" && <PlacementSkeleton />}
                 {["vps", "servers", "jobs", "audit", "relocate"].includes(view) && <TableSkeleton view={view} />}
             </div>
         </section>
@@ -138,6 +140,22 @@ function ReleaseSkeleton() {
         <div className="space-y-10">
             <div><HeadingSkeleton /><TableRowsSkeleton columns={5} rows={4} /></div>
             <div><HeadingSkeleton /><TableRowsSkeleton columns={5} rows={4} /></div>
+        </div>
+    );
+}
+
+function PlacementSkeleton() {
+    return (
+        <div className="space-y-8">
+            <div className="border border-white/10 bg-surface p-5">
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="mt-3 h-9 w-64 max-w-full" />
+                <Skeleton className="mt-3 h-3 w-full max-w-3xl" />
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                    {Array.from({ length: 5 }, (_, field) => <div key={field}><Skeleton className="h-3 w-24" /><Skeleton className="mt-2 h-10 w-full" /></div>)}
+                </div>
+                <Skeleton className="mt-5 h-10 w-36" />
+            </div>
         </div>
     );
 }

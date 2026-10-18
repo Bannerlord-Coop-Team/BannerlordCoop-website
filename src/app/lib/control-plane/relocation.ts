@@ -24,22 +24,10 @@ export type RelocationRegionOption = { region: string; label: string; freeSlots:
 export function relocationRows(
     servers: readonly ManagedServer[],
     hosts: readonly RelocationHost[],
-    jobs: readonly Pick<HostingJob, "jobId" | "serverId" | "action" | "state" | "createdAt">[],
+    jobs: readonly RelocationJob[],
 ): RelocationRow[] {
-    const slots = new Map<string, { hostName: string; slotIndex: number }>();
-    for (const host of hosts) {
-        for (const slot of Array.isArray(host.occupiedSlots) ? host.occupiedSlots : []) {
-            slots.set(slot.serverId, { hostName: host.name, slotIndex: slot.slotIndex });
-        }
-    }
-    const activeJobs = new Map<string, Pick<HostingJob, "jobId" | "serverId" | "action" | "state" | "createdAt">>();
-    for (const job of jobs) {
-        if (!ACTIVE_JOB_STATES.has(job.state)) continue;
-        const current = activeJobs.get(job.serverId);
-        // A relocation is what this view is about, so it wins over any other active job.
-        if (current === undefined || (job.action === RELOCATION_JOB_ACTION && current.action !== RELOCATION_JOB_ACTION)
-            || (job.action === current.action && job.createdAt > current.createdAt)) activeJobs.set(job.serverId, job);
-    }
+    const slots = occupiedSlotsByServer(hosts);
+    const activeJobs = activeJobsByServer(jobs);
     return servers.map((server) => {
         const slot = slots.get(server.serverId);
         const job = activeJobs.get(server.serverId);
@@ -48,9 +36,35 @@ export function relocationRows(
             hostName: slot?.hostName ?? null,
             slotIndex: slot?.slotIndex ?? null,
             regionLabel: hostingRegionLabel(server.friendlyRegion),
-            activeJob: job === undefined ? null : { jobId: job.jobId, action: job.action, state: job.state },
+            activeJob: job ?? null,
         };
     });
+}
+
+type RelocationJob = Pick<HostingJob, "jobId" | "serverId" | "action" | "state" | "createdAt">;
+
+/** The VPS slot each server occupies, by server ID. */
+export function occupiedSlotsByServer(hosts: readonly Pick<HostingAdminVpsHost, "name" | "occupiedSlots">[]) {
+    const slots = new Map<string, { hostName: string; slotIndex: number }>();
+    for (const host of hosts) {
+        for (const slot of Array.isArray(host.occupiedSlots) ? host.occupiedSlots : []) {
+            slots.set(slot.serverId, { hostName: host.name, slotIndex: slot.slotIndex });
+        }
+    }
+    return slots;
+}
+
+/** Each server's newest active job, preferring a relocation over any other job. */
+export function activeJobsByServer(jobs: readonly RelocationJob[]) {
+    const activeJobs = new Map<string, RelocationJob>();
+    for (const job of jobs) {
+        if (!ACTIVE_JOB_STATES.has(job.state)) continue;
+        const current = activeJobs.get(job.serverId);
+        // A relocation is what this view is about, so it wins over any other active job.
+        if (current === undefined || (job.action === RELOCATION_JOB_ACTION && current.action !== RELOCATION_JOB_ACTION)
+            || (job.action === current.action && job.createdAt > current.createdAt)) activeJobs.set(job.serverId, job);
+    }
+    return new Map([...activeJobs].map(([serverId, job]) => [serverId, { jobId: job.jobId, action: job.action, state: job.state }]));
 }
 
 /**
