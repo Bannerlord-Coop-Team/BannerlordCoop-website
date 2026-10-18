@@ -1,6 +1,6 @@
 import "server-only";
 import { isIP } from "node:net";
-import type { MyServerSummary } from "@/app/lib/control-plane/types";
+import type { MyServerNotice, MyServerSummary } from "@/app/lib/control-plane/types";
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
 import { isRegionKey } from "../../../../supabase/functions/_shared/hosting-regions";
 import { REQUEST_ID, timestamp } from "../../../../supabase/functions/_shared/server-visibility-contract";
@@ -132,6 +132,36 @@ export async function getMyServerResources(accessToken: string, serverId: string
     return resources as ManagedServerResources;
 }
 
+const NOTICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const NOTICE_KINDS = new Set(["administrator", "placement-scheduled", "placement-completed"]);
+const NOTICE_PARAMETER_NAME = /^[A-Za-z][A-Za-z0-9]{0,63}$/u;
+
+/** Reads the undismissed notices this viewer sees on one server's page, newest first (at most 10). */
+export async function getMyServerNotices(accessToken: string, serverId: string, callerSignal?: AbortSignal): Promise<MyServerNotice[]> {
+    if (!REQUEST_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid managed server ID.");
+    const value = await readOwner(accessToken, { operation: "server-notices", input: { serverId } }, ownerReadSignal(accessToken, callerSignal));
+    if (!isRecord(value) || !hasExactKeys(value, ["serverId", "notices"]) || value.serverId !== serverId
+        || !Array.isArray(value.notices) || value.notices.length > 10 || !value.notices.every(isMyServerNotice)
+        || new Set(value.notices.map(notice => notice.noticeId)).size !== value.notices.length) {
+        throw new MyServersApiError("invalid_response", "The managed-server API returned invalid server notices.", true);
+    }
+    return value.notices;
+}
+
+// Notice text is plain and rendered as text: one title line, a message that may keep line breaks and tabs.
+function isMyServerNotice(value: unknown): value is MyServerNotice {
+    if (!isRecord(value) || !hasExactKeys(value, ["noticeId", "kind", "severity", "title", "body", "parameters", "createdAt", "expiresAt"])) return false;
+    const parameters = value.parameters;
+    return typeof value.noticeId === "string" && NOTICE_ID.test(value.noticeId)
+        && NOTICE_KINDS.has(value.kind as string) && (value.severity === "info" || value.severity === "warning")
+        && typeof value.title === "string" && value.title.length >= 1 && value.title.length <= 120 && !/[\p{Cc}]/u.test(value.title)
+        && typeof value.body === "string" && value.body.length >= 1 && value.body.length <= 2_000 && !/[^\P{Cc}\t\n]/u.test(value.body)
+        && isRecord(parameters) && Object.keys(parameters).length <= 16 && Object.entries(parameters).every(([name, parameter]) => NOTICE_PARAMETER_NAME.test(name)
+            && (parameter === null || typeof parameter === "boolean" || (typeof parameter === "number" && Number.isFinite(parameter))
+                || (typeof parameter === "string" && parameter.length <= 256 && !/[\p{Cc}]/u.test(parameter))))
+        && timestamp(value.createdAt) && (value.expiresAt === null || timestamp(value.expiresAt));
+}
+
 // Validates the owner token and bounds a read by the caller's signal and a 30-second timeout.
 function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
     if (accessToken.length < 20 || accessToken.length > 8_192) {
@@ -149,7 +179,8 @@ async function readOwner(accessToken: string, request:
     | OnboardingSummaryRequest
     | { operation: "server-deletion-status"; input: { serverId: string } }
     | { operation: "server-start-status"; input: { serverId: string; jobId: string } }
-    | { operation: "server-resources"; input: { serverId: string } }, signal: AbortSignal) {
+    | { operation: "server-resources"; input: { serverId: string } }
+    | { operation: "server-notices"; input: { serverId: string } }, signal: AbortSignal) {
     const requestId = crypto.randomUUID();
     let response: Response;
     try {
