@@ -89,7 +89,8 @@ The page provides:
 - installable validated Stable and Nightly release catalogs, source commit revisions, and validation/revocation actions;
 - lifecycle, update, rollback, restore, diagnostics, password, suspension, and deletion controls;
 - ownership transfer, manager access, quota, provider replacement, and server creation;
-- bounded provider orphan review/cleanup, fleet reconciliation, batch maintenance, and owner announcements; and
+- bounded provider orphan review/cleanup, fleet reconciliation, batch maintenance, and owner announcements;
+- a co-tenancy placement dry run whose steps open the relocation dialog; and
 - the hash-chained audit history.
 
 The website does not query the private `control_plane` schema, call OVH, connect to runner agents, or construct container operations. Browser request UUIDs become the control-plane correlation and idempotency identity. Server and job mutations carry the current `updatedAt` value selected from the page. A correlated `stale_interaction` rejection refreshes the UI without clearing the form. For server lifecycle jobs, updates, rollbacks, restores, and diagnostics only, the card reads the exact server's authoritative dashboard and retries once with its new generation, the original request UUID, and unchanged user input. These workflows reject stale generations before accepting a job. An error carrying an accepted operation ID, a timeout, or a network failure is never automatically retried. Job retry/cancellation and failure acknowledgement are not replayed against a newer attempt; other mutations also require another explicit submission after refresh. Managed backup requests similarly read fresh backup status and replay at most once with the original durable UUID and backup selection; repeated stale or uncertain responses retain the pending request for manual reconciliation. Direct container commands and file-transfer/visibility contracts are unchanged.
@@ -457,3 +458,49 @@ progress error without falling back to whole-page polling. The deterministic API
 counts and website fake-timer/component checks demonstrate reduced scheduled work,
 not production timing or bandwidth savings. Linux API coverage and control-plane
 verification remain separate from native Windows website tests/builds and live evidence.
+
+## Placement planner
+
+The **Placement** tab shows the control plane's co-tenancy planner, which learns
+from reconcile history when each OVH slot server is usually online and proposes
+which servers should share a VPS so fewer of them are online at once. See the
+control-plane repository's `docs/managed-hosting/placement-planner.md` for the model.
+
+The dry run is never requested on page load. The administrator sets the options
+(`historyDays` 14–90, `halfLifeDays` 1–90, `maximumMoves` 0–64,
+`minimumGainHours` 0–168 and where always-on servers may move) and selects
+**Run dry run**, which sends `placement-plan` from the browser through the
+`control-plane-admin` Edge Function. A plan takes a few seconds, so the tab shows
+elapsed time; the control plane allows each administrator six plans per five
+minutes (`rate_limited`) and one differing plan at a time
+(`placement_plan_busy`), and both show retry text. The default `alwaysOnTargets`
+value `any` is omitted from the request so a control plane that predates the
+option still accepts it, and a plan without per-server `alwaysOn` reads as not
+always-on.
+
+The result shows current and proposed fleet totals (co-online pair-hours, hours
+with two and three servers online, and the observed replay), the plan's options,
+history start, samples and unsequenced servers, then three tables:
+
+- **Moves** in step order, with the from and to VPS, target region, the step's own
+  gain (zero or negative for an enabling leg of a swap), a staging badge, and the
+  server's quiet window in UTC with its next occurrence in local time.
+- **Servers**, moving ones first, with current and proposed VPS, why a server is
+  pinned, an always-on badge, weekly online hours, observed days and a 7×24 heatmap
+  of its hourly online probability (Monday first, UTC). Each square has a title and
+  the grid has a text summary for assistive technology.
+- **VPS hosts**, most contended first, with capacity, whether relocation may target
+  them, current and proposed contention and their servers.
+
+Nothing is relocated by the plan. Each step's **Relocate** reads the server's
+`server-dashboard` for its current `updatedAt`, then opens the Relocate tab's
+dialog preselected to the step's `targetRegion` and `toServiceName`. The dialog
+keeps its own request UUID, stale-generation replay and confirmation; it sends
+`relocate-server` with the reason `Placement plan step N`. The tab's server-rendered
+reads are only the fresh slot inventory (`vps-hosts` without live data), the region
+catalog and active jobs, so each step is checked against where its server is now:
+only the first unfinished step may run, a step whose server already reached its
+VPS reads **Done**, a server with another active job waits, and a server no longer
+on the step's source VPS asks for a new dry run. **Refresh status** re-reads those
+without discarding the plan. Relocation stops a running game and changes the
+server's address and game port. No Edge Function change is required.

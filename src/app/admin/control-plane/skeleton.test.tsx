@@ -17,6 +17,7 @@ const VIEWS: ControlPlaneView[] = [
     "audit",
     "operations",
     "relocate",
+    "placement",
 ];
 
 test("the route-level skeleton exposes one accessible loading state", () => {

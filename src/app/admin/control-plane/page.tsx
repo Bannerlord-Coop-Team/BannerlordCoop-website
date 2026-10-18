@@ -11,6 +11,7 @@ import { VpsView } from "@/app/components/admin/VpsView";
 import { ControlPlaneServerView } from "@/app/components/admin/ControlPlaneServerView";
 import { ControlPlaneJobsProgress } from "@/app/components/admin/ControlPlaneJobsProgress";
 import { RelocateView } from "@/app/components/admin/RelocateView";
+import { PlacementView } from "@/app/components/admin/PlacementView";
 import { AuditTable, Panel, Definition, SectionHeading, State, Empty, ReleaseMetadata, shortId } from "@/app/components/admin/ControlPlanePresentation";
 import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
 import { hasAdminAccess } from "@/app/lib/auth/access";
@@ -49,6 +50,7 @@ import type {
     ManagedServer,
     OperationsData,
     OverviewSummary,
+    PlacementViewData,
     RelocateViewData,
     ReleaseBuild,
     ServerDashboardResult,
@@ -61,6 +63,7 @@ import {
     ArrowLeft,
     ArrowLeftRight,
     BriefcaseBusiness,
+    ChartNetwork,
     Cloud,
     CloudCog,
     History,
@@ -269,6 +272,7 @@ async function ControlPlaneViewContent({
             {!error && view === "audit" && <AuditView page={data as HostingPage<AuditEvent>} />}
             {!error && view === "operations" && <OperationsView data={data as OperationsData} accounts={accounts} />}
             {!error && view === "relocate" && <RelocateView data={data as RelocateViewData} query={query} accounts={accounts} />}
+            {!error && view === "placement" && <PlacementView data={data as PlacementViewData} />}
         </>
     );
 }
@@ -361,6 +365,16 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             // Without the catalog, hosts are placed by their legacy region only.
             return { servers, inventory, regionCatalog: hostingRegions.regions, activeJobs: activeJobs.items } satisfies RelocateViewData;
         }
+        case "placement": {
+            // The dry run itself is slow and rate limited, so the browser requests it on demand.
+            // These reads let each planned step open a relocation against current slots and jobs.
+            const [inventory, hostingRegions, activeJobs] = await Promise.all([
+                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
+                loadHostingRegionCatalog(token, signal, identity),
+                readControlPlaneAdmin<HostingPage<HostingJob>>({ accessToken: token, signal, ...identity, operation: "jobs", input: { filter: { activeOnly: true }, cursor: null, limit: 100 } }),
+            ]);
+            return { inventory, regionCatalog: hostingRegions.regions, activeJobs: activeJobs.items } satisfies PlacementViewData;
+        }
     }
 }
 
@@ -387,6 +401,7 @@ function ViewTabs({ active }: { active: View }) {
         { view: "audit", label: "Audit", icon: History },
         { view: "operations", label: "Operations", icon: ListChecks },
         { view: "relocate", label: "Relocate", icon: ArrowLeftRight },
+        { view: "placement", label: "Placement", icon: ChartNetwork },
     ];
     return (
         <nav aria-label="Control plane" className="mt-9 flex gap-2 overflow-x-auto border-b border-white/10 pb-3">
@@ -681,7 +696,7 @@ function chunk<T>(items: readonly T[], size: number): T[][] { const rows: T[][] 
 function enumOptions(values: readonly string[]): AdminActionOption[] { return values.map((value) => ({ label: value, value })); }
 function accountLabelMap(users: readonly WebsiteAccountSummary[]) { return Object.fromEntries(users.map(user => [user.accountId, user.label])); }
 function first(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
-function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations", "relocate"].includes(value ?? "") ? value as View : "overview"; }
+function parseView(value: string | undefined): View { return ["overview", "vps", "servers", "server", "jobs", "releases", "audit", "operations", "relocate", "placement"].includes(value ?? "") ? value as View : "overview"; }
 function parseJobState(value: string | undefined): "failed" | "active" | null { return value === "failed" || value === "active" ? value : null; }
 function parseJobAction(value: string | undefined): string | null { return JOB_ACTION_FILTERS.includes(value as typeof JOB_ACTION_FILTERS[number]) ? value ?? null : null; }
 function parseCursor(value: string | undefined): string | null { const normalized = value?.trim() ?? ""; return normalized.length > 0 && normalized.length <= 4_096 ? normalized : null; }

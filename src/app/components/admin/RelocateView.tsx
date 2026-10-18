@@ -2,7 +2,7 @@
 
 import { ArrowLeftRight, LoaderCircle, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Empty, State } from "@/app/components/admin/ControlPlanePresentation";
 import { formatAccountOwner } from "@/app/lib/control-plane/presentation";
 import {
@@ -86,21 +86,35 @@ export function RelocateView({ data, query, accounts }: { data: RelocateViewData
     );
 }
 
-function RelocateDialog({ row, targets, onClose, onQueued }: {
+/** The relocation pop-up; `preselected` opens it on a planned region and VPS, such as a placement-plan step. */
+export function RelocateDialog({ row, targets, onClose, onQueued, preselected, reason, children }: {
     row: RelocationRow;
     targets: RelocationRegionOption[];
     onClose: () => void;
     onQueued: (serverId: string) => void;
+    preselected?: { region: string; serviceName: string };
+    /** Audit reason sent with the request; the control plane's default applies when omitted. */
+    reason?: string;
+    /** Extra context shown above the warning. */
+    children?: ReactNode;
 }) {
     const router = useRouter();
     const dialogRef = useRef<HTMLDialogElement>(null);
     // One request id per pop-up, so a repeated click replays the same idempotent request.
     const [requestId] = useState(() => crypto.randomUUID());
-    const [region, setRegion] = useState(() => targets.find((target) => target.freeSlots > 0)?.region ?? "");
-    const [host, setHost] = useState(ANY_HOST);
+    const [region, setRegion] = useState(() => (preselected !== undefined && targets.some((target) => target.region === preselected.region)
+        ? preselected.region
+        : targets.find((target) => target.freeSlots > 0)?.region) ?? "");
+    const [host, setHost] = useState(() => preselected !== undefined && region === preselected.region
+        && targets.find((target) => target.region === region)?.hosts.some((option) => option.name === preselected.serviceName)
+        ? preselected.serviceName
+        : ANY_HOST);
     const [pending, setPending] = useState(false);
     const [error, setError] = useState("");
     const target = targets.find((option) => option.region === region);
+    const hostFull = host !== ANY_HOST && target?.hosts.find((option) => option.name === host)?.freeSlots === 0;
+    const plannedHostMissing = preselected !== undefined && host === ANY_HOST && region === preselected.region
+        && !target?.hosts.some((option) => option.name === preselected.serviceName);
 
     useEffect(() => {
         const dialog = dialogRef.current;
@@ -108,7 +122,7 @@ function RelocateDialog({ row, targets, onClose, onQueued }: {
     }, []);
 
     async function relocate() {
-        if (target === undefined || target.freeSlots === 0) return;
+        if (target === undefined || target.freeSlots === 0 || hostFull) return;
         setPending(true);
         setError("");
         try {
@@ -123,6 +137,7 @@ function RelocateDialog({ row, targets, onClose, onQueued }: {
                     expectedUpdatedAt: row.server.updatedAt,
                     targetRegion: target.region,
                     targetServiceName: host === ANY_HOST ? null : host,
+                    ...(reason === undefined ? {} : { reason }),
                 },
             }, () => router.refresh());
             onQueued(row.server.serverId);
@@ -167,12 +182,15 @@ function RelocateDialog({ row, targets, onClose, onQueued }: {
                         </option>)}
                     </select>
                 </label>
+                {hostFull && <p className="text-sm text-amber-200">{host} has no free slot right now. Wait for earlier relocations to finish, then try again.</p>}
+                {plannedHostMissing && <p className="text-sm text-amber-200">The planned VPS {preselected?.serviceName} is not offered for {target?.label ?? "this region"}. Choose a VPS.</p>}
+                {children}
                 <p className="text-sm text-amber-200">The server will be stopped and moved. Its IP address will change.</p>
             </div>}
             {error && <p role="alert" className="mt-4 text-sm text-red-200">{error}</p>}
             <div className="mt-6 flex justify-end gap-3 border-t border-white/10 pt-4">
                 <button type="button" disabled={pending} onClick={onClose} className={`${buttonClass} border-white/15 text-foreground-muted hover:text-foreground`}>Cancel</button>
-                <button type="button" disabled={pending || target === undefined || target.freeSlots === 0} onClick={relocate} className={`${buttonClass} border-crimson bg-crimson text-white`}>
+                <button type="button" disabled={pending || target === undefined || target.freeSlots === 0 || hostFull} onClick={relocate} className={`${buttonClass} border-crimson bg-crimson text-white`}>
                     {pending && <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />}{pending ? "Relocating" : "Relocate"}
                 </button>
             </div>

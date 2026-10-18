@@ -299,6 +299,120 @@ export type RelocateViewData = {
     activeJobs: HostingJob[];
 };
 
+export type HostingPlacementWeekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+export type HostingPlacementAlwaysOnTargets = "any" | "single-slot" | "none";
+export type HostingPlacementPinReason =
+    | "unavailable-state"
+    | "no-provider-resource"
+    | "no-installed-build"
+    | "insufficient-history"
+    | "always-on"
+    | "no-compatible-host";
+
+/** A recurring weekly UTC window, with its next occurrence. */
+export type HostingPlacementWindow = {
+    weekday: HostingPlacementWeekday;
+    /** `HH:MM` UTC. */
+    startsAtUtc: string;
+    durationMinutes: number;
+    onlineProbability: number;
+    nextStartsAt: string;
+};
+
+/** Modelled co-tenancy totals; every value is hours per week. */
+export type HostingPlacementContention = {
+    pairHoursPerWeek: number;
+    /** Hours with at least two servers on one VPS online. */
+    contendedHoursPerWeek: number;
+    /** Hours with at least three servers on one VPS online. */
+    saturatedHoursPerWeek: number;
+    /** The history window replayed onto the placement, as pair-hours per week. */
+    observedPairHoursPerWeek: number;
+};
+
+export type HostingPlacementHostSide = HostingPlacementContention & {
+    serverIds: string[];
+    peakExpectedOnline: number;
+};
+
+export type HostingPlacementServer = {
+    serverId: string;
+    displayName: string;
+    region: string;
+    serviceName: string;
+    proposedServiceName: string;
+    pinnedReason: HostingPlacementPinReason | null;
+    /** Older control planes omit it; treat a missing value as false. */
+    alwaysOn?: boolean;
+    observedDays: number;
+    weeklyOnlineHours: number;
+    /** 168 hourly digits from Monday 00:00 UTC; digit d means online probability in [d/10, (d+1)/10). */
+    heatmap: string;
+    quietWindow: HostingPlacementWindow;
+};
+
+export type HostingPlacementHost = {
+    serviceName: string;
+    regionKeys: string[];
+    vCpu: number;
+    slots: number;
+    freeSlots: number;
+    acceptsRelocations: boolean;
+    current: HostingPlacementHostSide;
+    proposed: HostingPlacementHostSide;
+};
+
+export type HostingPlacementMove = {
+    step: number;
+    serverId: string;
+    displayName: string;
+    fromServiceName: string;
+    toServiceName: string;
+    /** The region to pass to `relocate-server` with this target VPS. */
+    targetRegion: string;
+    /** A temporary hop into a spare slot that unblocks a cycle of full VPSs. */
+    staging: boolean;
+    /** Depends on step order; one leg of a swap can save nothing on its own. */
+    gainPairHoursPerWeek: number;
+    window: HostingPlacementWindow;
+};
+
+/** The control plane's read-only `placement-plan` proposal. Nothing is relocated. */
+export type HostingAdminPlacementPlan = {
+    dryRun: true;
+    generatedAt: string;
+    options: {
+        historyDays: number;
+        halfLifeDays: number;
+        maximumMoves: number;
+        minimumGainHours: number;
+        /** Older control planes omit it; they plan as `any`. */
+        alwaysOnTargets?: HostingPlacementAlwaysOnTargets;
+    };
+    model: {
+        historyStartedAt: string;
+        binMinutes: number;
+        timeZone: "UTC";
+        minimumObservedDays: number;
+        samples: number;
+        searchEvaluations: number;
+    };
+    current: HostingPlacementContention;
+    proposed: HostingPlacementContention;
+    relocations: number;
+    servers: HostingPlacementServer[];
+    hosts: HostingPlacementHost[];
+    moves: HostingPlacementMove[];
+    unsequencedServerIds: string[];
+};
+
+/** The Placement view's data: the slots servers occupy, the catalog that places hosts in regions, and active jobs. The plan itself loads on demand. */
+export type PlacementViewData = {
+    inventory: HostingAdminVpsInventory;
+    regionCatalog: HostingRegionPayload[] | null;
+    activeJobs: HostingJob[];
+};
+
 export type FleetSummary = {
     entitledUsers: number;
     totalEffectiveQuota: number;

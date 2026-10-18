@@ -31,6 +31,13 @@ test("explains reconciliation and OVH assignment boundaries", () => {
 
 test("gives destructive cards a concrete warning", () => {
     assert.match(destructiveExplanation("suspend-server"), /blocks owner operations/iu);
+    assert.match(destructiveExplanation("relocate-server"), /address and game port/iu);
+});
+
+test("explains that a placement plan relocates nothing by itself", () => {
+    assert.match(operationExplanation("placement-plan"), /dry run/iu);
+    assert.match(operationExplanation("placement-plan"), /nothing is reserved, queued or relocated/iu);
+    assert.match(operationExplanation("relocate-server"), /address and game port change/iu);
 });
 
 test("explains exact and structured audit actions", () => {
