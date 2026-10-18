@@ -37,6 +37,7 @@ vi.mock("@/app/lib/hosting/my-servers-server", () => ({
 }));
 vi.mock("@/app/lib/hosting/server-files", () => ({ getMyServerFiles: mocks.files, submitMyServerFile: mocks.submit }));
 vi.mock("@/app/lib/hosting/server-configuration", () => ({ getMyServerConfiguration: mocks.configFile, saveMyServerConfiguration: vi.fn() }));
+vi.mock("@/app/lib/hosting/server-campaigns", () => ({ listMyServerCampaigns: async () => ({ serverId: managedId, updatedAt: "2026-09-26T00:00:00.000Z", activeSaveId: null, items: [] }), selectMyServerCampaign: vi.fn(), resetMyServerCampaign: vi.fn() }));
 vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: async () => new Map() }));
 vi.mock("@/app/lib/hosting/servers", () => ({ getServerForRole: mocks.preview }));
 
@@ -173,7 +174,7 @@ it.each(["admin", "support"])("keeps managed %s read-only even for a live owner"
 it("opens import review without submitting or bypassing existing confirmation", async () => {
     await render();
     await act(async () => button("Import config").click());
-    expect(container.querySelector("dialog")?.open).toBe(true);
+    expect([...container.querySelectorAll("dialog")].some((dialog) => dialog.open)).toBe(true);
     expect(button("Review import")).toBeDefined();
     expect(mocks.submit).not.toHaveBeenCalled();
 });

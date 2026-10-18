@@ -6,6 +6,7 @@ import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseO
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
 import { onboardingMutationRequest, onboardingRequestMutation, onboardingSummaryRequest, parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingMutationRequest } from "./server-onboarding-contract.ts";
 import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, requireRunnerConfigurationPart, type RunnerConfigurationMutation, type RunnerConfigurationPart } from "./server-configuration-contract.ts";
+import { MAXIMUM_CAMPAIGN_LIMIT, parseCampaignMutation, parseCampaignPage, parseCampaignResetResult, parseCampaignSelection } from "./server-campaign-contract.ts";
 import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
 import { hasExactKeys, isRecord } from "./dto-validation.ts";
 
@@ -61,6 +62,7 @@ type UpstreamRequest =
     | { operation: "restore-save-generation"; input: Omit<SaveGenerationRestoreMutation, "action"> }
     | { operation: "select-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string } }
     | { operation: "delete-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string; confirmationText: string } }
+    | { operation: "reset-campaign"; input: { serverId: string; expectedUpdatedAt: string } }
     | { operation: "server-backup-status"; input: { serverId: string } }
     | { operation: "server-deletion-status"; input: { serverId: string } }
     | { operation: "update-server"; input: { serverId: string; expectedUpdatedAt: string } }
@@ -154,7 +156,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // Durable mutations must retain the caller's UUID for exactly-once handling.
-            if (upstreamRequest.operation === "delete-server" || upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "set-server-manager" || upstreamRequest.operation === "update-server" || upstreamRequest.operation === "restore-save-generation" || upstreamRequest.operation === "dismiss-server-notice") {
+            if (upstreamRequest.operation === "delete-server" || upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "set-server-manager" || upstreamRequest.operation === "update-server" || upstreamRequest.operation === "restore-save-generation" || upstreamRequest.operation === "select-save" || upstreamRequest.operation === "reset-campaign" || upstreamRequest.operation === "dismiss-server-notice") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -270,11 +272,15 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "server-deletion-status") parseServerDeletionStatus(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "save-server-settings") parseOwnerSettingsResult(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
-                if (upstreamRequest.operation === "server-saves" && (!isRecord(envelope.result) || envelope.result.serverId !== upstreamRequest.input.serverId)) throw new Error("Save response belongs to another server");
+                if (upstreamRequest.operation === "server-saves" && parseCampaignPage(envelope.result).serverId !== upstreamRequest.input.serverId) throw new Error("Campaign page belongs to another server");
                 if (upstreamRequest.operation === "server-save-generations") parseSaveGenerationList(envelope.result, upstreamRequest.input.serverId, upstreamRequest.input.saveId);
                 if (upstreamRequest.operation === "restore-save-generation") parseSaveGenerationRestoreResult(envelope.result);
-                if (upstreamRequest.operation === "select-save" && (!isRecord(envelope.result) || envelope.result.serverId !== upstreamRequest.input.serverId || envelope.result.activeSaveId !== upstreamRequest.input.saveId)) throw new Error("Save selection response is invalid");
+                if (upstreamRequest.operation === "select-save") {
+                    const selection = parseCampaignSelection(envelope.result);
+                    if (selection.serverId !== upstreamRequest.input.serverId || selection.activeSaveId !== upstreamRequest.input.saveId) throw new Error("Save selection response is invalid");
+                }
                 if (upstreamRequest.operation === "delete-save" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["action", "jobId", "outcome"]) || envelope.result.action !== "delete-save" || !REQUEST_ID.test(String(envelope.result.jobId)) || (envelope.result.outcome !== "enqueued" && envelope.result.outcome !== "existing"))) throw new Error("Save deletion response is invalid");
+                if (upstreamRequest.operation === "reset-campaign") parseCampaignResetResult(envelope.result);
                 if (upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "file-transfer-status") parseOwnerFileResult(envelope.result);
                 if (upstreamRequest.operation === "download-save-export") parseOwnerFileDownload(envelope.result);
                 if ((upstreamRequest.operation === "configuration-file" || upstreamRequest.operation === "save-configuration-file")
@@ -376,7 +382,7 @@ function listRequest(request: Request): UpstreamRequest {
 
     if (resource === "saves") {
         assertQueryParameters(url, ["cursor", "limit", "resource", "serverId"]);
-        return { operation: "server-saves", input: { serverId: readServerId(url), ...readPageInput(url, MAXIMUM_LIMIT) } };
+        return { operation: "server-saves", input: { serverId: readServerId(url), ...readPageInput(url, MAXIMUM_CAMPAIGN_LIMIT) } };
     }
     if (resource === "save-generations") {
         assertQueryParameters(url, ["resource", "saveId", "serverId"]);
@@ -514,6 +520,10 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
         if (!hasExactKeys(value, ["action", "confirmationText", "expectedUpdatedAt", "saveId", "serverId"]) || typeof value.saveId !== "string" || !SERVER_ID.test(value.saveId) || typeof value.confirmationText !== "string" || value.confirmationText.length < 1 || value.confirmationText.length > 48) throw new Error("Invalid save deletion");
         assertExpectedUpdatedAt(value.expectedUpdatedAt);
         return { operation: "delete-save", input: { serverId: value.serverId, saveId: value.saveId, expectedUpdatedAt: value.expectedUpdatedAt as string, confirmationText: value.confirmationText } };
+    }
+    if (value.action === "reset-campaign") {
+        const parsed = parseCampaignMutation(value);
+        return { operation: "reset-campaign", input: { serverId: parsed.serverId, expectedUpdatedAt: parsed.expectedUpdatedAt } };
     }
     if (value.action === "create-backup") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {

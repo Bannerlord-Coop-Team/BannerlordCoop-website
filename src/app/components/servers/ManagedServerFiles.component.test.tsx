@@ -8,6 +8,7 @@ import { ServerManagementWorkspace } from "./ServerManagementWorkspace";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 
 vi.mock("./ManagedServerTransfers", () => ({ ManagedServerTransfers: ({ canImportConfig }: { canImportConfig: boolean }) => <div id="transfers">Transfers: {canImportConfig ? "config owner" : "save manager"}</div> }));
+vi.mock("./ManagedServerCampaigns", () => ({ ManagedServerCampaigns: () => <div id="campaigns">Campaign controls</div> }));
 vi.mock("./ManagedServerBackups", () => ({ ManagedServerBackups: () => <div id="backups">Backup controls</div> }));
 let container: HTMLDivElement;
 let root: Root;
