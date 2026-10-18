@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isVpsProviderId, parseVpsHostSelection, vpsHostSelectionValue } from "./vps-providers";
+import { failedVpsProviderReadsMessage, isVpsProviderId, parseVpsHostSelection, vpsHostSelectionValue, vpsProviderLabel } from "./vps-providers";
 
 test("a host selection round-trips its provider with its service name", () => {
     const value = vpsHostSelectionValue({ provider: "contabo-vps", serviceName: "203779521" });
@@ -20,4 +20,19 @@ test("a selection without a known provider is rejected instead of guessed", () =
     assert.throws(() => parseVpsHostSelection(JSON.stringify({ provider: "ionos-cloud", serviceName: "x" })), /unknown provider/u);
     assert.throws(() => parseVpsHostSelection(JSON.stringify({ provider: "ovhcloud-vps", serviceName: "" })), /invalid service name/u);
     assert.throws(() => parseVpsHostSelection(undefined), /Choose a VPS/u);
+});
+
+test("provider labels name the catalog providers and show retired ids verbatim", () => {
+    assert.equal(vpsProviderLabel("ovhcloud-vps"), "OVHcloud");
+    assert.equal(vpsProviderLabel("contabo-vps"), "Contabo");
+    assert.equal(vpsProviderLabel("experiment-host"), "experiment-host");
+});
+
+test("failed provider reads are named; successful or absent reads are not reported", () => {
+    assert.equal(failedVpsProviderReadsMessage(undefined), null);
+    assert.equal(failedVpsProviderReadsMessage([{ provider: "ovhcloud-vps", status: "ok", code: null }]), null);
+    assert.match(failedVpsProviderReadsMessage([
+        { provider: "ovhcloud-vps", status: "failed", code: "authorization" },
+        { provider: "contabo-vps", status: "failed", code: null },
+    ]) ?? "", /^The OVHcloud \(authorization\), Contabo account reads failed/u);
 });

@@ -88,7 +88,7 @@ describe("compact VPS host inventory", () => {
         ];
         await act(async () => root.render(<VpsHostInventory hosts={[host("host-a", resources(60, 40), 0)]} ownerLabels={{}}
             runnerTargetSourceCommit={null} regionCatalog={stored} />));
-        expect(container.textContent).toContain("US-East, North America · US · os-us-east-va-2");
+        expect(container.textContent).toContain("OVHcloud · US-East, North America · US · os-us-east-va-2");
         await act(async () => root.render(<VpsHostInventory hosts={[host("host-a", resources(60, 40), 0)]} ownerLabels={{}}
             runnerTargetSourceCommit={null} regionCatalog={null} />));
         expect(container.textContent).toContain("Regions unavailable · US · os-us-east-va-2");

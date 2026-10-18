@@ -20,6 +20,19 @@ test("a provider account failure degrades to local inventory with the failure re
     assert.deepEqual(requests.map((input) => input.includeProviderInventory), ["service-names", false]);
 });
 
+test("one failed provider account read is reported while the other providers' hosts stay listed", async () => {
+    const inventory = { ...local, availableHosts: [{ provider: "ovhcloud-vps", serviceName: "vps-1", label: "OVHcloud · vps-1" }],
+        providerReads: [{ provider: "ovhcloud-vps", status: "ok", code: null }, { provider: "contabo-vps", status: "failed", code: "transport" }] } as HostingAdminVpsInventory;
+    const result = await readOperationsVpsInventory(async () => inventory);
+    assert.equal(result.inventory, inventory);
+    assert.match(result.providerError ?? "", /Contabo \(transport\) account read failed/u);
+});
+
+test("successful provider account reads report no error", async () => {
+    const inventory = { ...local, providerReads: [{ provider: "contabo-vps", status: "ok", code: null }] } as HostingAdminVpsInventory;
+    assert.equal((await readOperationsVpsInventory(async () => inventory)).providerError, null);
+});
+
 test("a failed local fallback still rejects so an unreachable control plane is reported", async () => {
     await assert.rejects(readOperationsVpsInventory(async () => {
         throw new ControlPlaneAdminError("control_plane_unavailable", "down");

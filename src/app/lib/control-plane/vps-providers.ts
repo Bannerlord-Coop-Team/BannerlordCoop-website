@@ -32,3 +32,21 @@ export function parseVpsHostSelection(value: unknown): VpsHostTarget {
     }
     return { provider, serviceName };
 }
+
+const VPS_PROVIDER_LABELS: Record<VpsProviderId, string> = { "ovhcloud-vps": "OVHcloud", "contabo-vps": "Contabo" };
+
+/** Names a provider for display; a retired or unknown id from a historical row is shown verbatim. */
+export function vpsProviderLabel(provider: string): string {
+    return isVpsProviderId(provider) ? VPS_PROVIDER_LABELS[provider] : provider;
+}
+
+/** One enabled provider's account read outcome, as the control plane reports it with VPS inventory. */
+export type VpsProviderRead = { provider: VpsProviderId; status: "ok" | "failed"; code: string | null };
+
+/** Describes the provider account reads that failed, or null when every read succeeded or none was made. */
+export function failedVpsProviderReadsMessage(reads: readonly VpsProviderRead[] | undefined): string | null {
+    const failed = (Array.isArray(reads) ? reads : []).filter((read) => read.status === "failed");
+    if (failed.length === 0) return null;
+    const names = failed.map((read) => `${vpsProviderLabel(read.provider)}${read.code ? ` (${read.code})` : ""}`);
+    return `The ${names.join(", ")} account ${failed.length === 1 ? "read" : "reads"} failed, so ${failed.length === 1 ? "that provider's" : "those providers'"} unregistered VPS products and billing are not shown.`;
+}

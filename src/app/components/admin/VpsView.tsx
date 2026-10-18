@@ -8,6 +8,7 @@ import { VpsSlotSummary } from "./VpsSlotSummary";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
+import { failedVpsProviderReadsMessage } from "@/app/lib/control-plane/vps-providers";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingAdminVpsInventory, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
@@ -31,6 +32,7 @@ export function VpsView({ inventory: initialInventory, regionCatalog, accounts }
     const controlPlaneHost = oracle.result?.controlPlaneHost ?? null;
     const ownerLabels = new Map(accounts.map(account => [account.accountId, account.label]));
     const availableHostCount = billing.result?.availableHosts?.length ?? 0;
+    const failedProviderReads = failedVpsProviderReadsMessage(billing.result?.providerReads);
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
     return (
@@ -43,6 +45,7 @@ export function VpsView({ inventory: initialInventory, regionCatalog, accounts }
             {pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading live resource readings…</p>}
             {readings.error && <p role="alert" className="mt-3 text-xs text-red-200">{readings.error} {readings.result ? "Showing the last resource readings; retrying automatically." : "Registered inventory remains visible; retrying automatically."} <button type="button" className="underline" onClick={readings.refreshReadings}>Retry live readings</button></p>}
             {billing.pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading billing readings…</p>}
+            {!billing.error && failedProviderReads && <p role="status" className="mt-3 text-xs text-amber-200">{failedProviderReads}</p>}
             {billing.error && <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {billing.error} {billing.result ? "Showing the last billing readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={billing.refreshReadings}>Retry billing</button></p>}
             <VpsSlotSummary hosts={hosts} regionCatalog={regionCatalog} />
             <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">

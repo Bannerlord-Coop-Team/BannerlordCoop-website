@@ -63,7 +63,7 @@ it.each([true, false])("server detail resolves only its displayed account, with 
         request.onAuthenticated();
         return { dashboard: { server: { serverId: "22222222-2222-4222-8222-222222222222", displayName: "Test campaign",
             ownerAccountId, ownerDiscordUserId: ownerAccountId, operationState: "stopped", friendlyRegion: "germany",
-            desiredState: "stopped", observedVmState: "running", observedGameState: "stopped", provider: "mock", releaseChannel: "stable" },
+            desiredState: "stopped", observedVmState: "running", observedGameState: "stopped", provider: "ovhcloud-vps", releaseChannel: "stable" },
         activeJob: null, activeSave: null, installedBuild: null, desiredBuild: null, runtime: null },
         backups: { items: [] }, audit: { items: [] } };
     });

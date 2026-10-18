@@ -90,11 +90,12 @@ export const metadata: Metadata = {
 };
 
 type View = ControlPlaneView;
+// Exactly the control plane's job actions; retired ones remain because historical jobs still carry them.
 const JOB_ACTION_FILTERS = [
     "backup", "console-command", "delete", "delete-save", "export-data", "export-save",
     "force-stop", "import-save", "migrate-region", "provision", "reactivate", "rebuild",
-    "reboot", "reboot-vm", "reconcile", "reset-password", "resize", "restart", "restart-game",
-    "restore", "rollback", "start", "stop", "suspend", "transfer", "update",
+    "reboot-vm", "reconcile", "reset-campaign", "reset-password", "resize", "restart-game",
+    "restore", "role-removal-delete", "rollback", "start", "stop", "suspend", "transfer", "update",
 ] as const;
 type PageProps = {
     searchParams: Promise<{

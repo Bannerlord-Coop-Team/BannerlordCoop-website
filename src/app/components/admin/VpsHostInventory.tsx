@@ -4,6 +4,7 @@ import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
 import { formatAccountOwner, hostPlacementLabel } from "@/app/lib/control-plane/presentation";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
+import { vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
 import type {
     HostingAdminHostResources,
     HostingAdminVpsHost,
@@ -134,7 +135,7 @@ export function diskPressureLevel(resources: HostingAdminHostResources | null): 
 
 /** Shows a host's name and its stored-catalog regions, country and zone. */
 function HostIdentity({ host, regionCatalog }: { host: HostingAdminVpsHost; regionCatalog: readonly HostingRegionPayload[] | null }) {
-    const placement = hostPlacementLabel(host, regionCatalog);
+    const placement = `${vpsProviderLabel(host.provider)} · ${hostPlacementLabel(host, regionCatalog)}`;
     return <div className="min-w-0"><p className="truncate font-mono text-xs text-foreground" title={host.name}>{host.name}</p><p className="mt-1 truncate text-xs text-foreground-muted" title={placement}>{placement}</p></div>;
 }
 
