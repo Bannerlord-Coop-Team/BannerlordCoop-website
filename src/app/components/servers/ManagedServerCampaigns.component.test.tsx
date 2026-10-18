@@ -31,8 +31,8 @@ beforeEach(() => {
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
-async function render(status: OwnerFileStatus | null = stopped) {
-    await act(async () => root.render(<ManagedServerCampaigns userId="owner" serverId={serverId} status={status} />));
+async function render(status: OwnerFileStatus | null = stopped, canDelete = false) {
+    await act(async () => root.render(<ManagedServerCampaigns userId="owner" serverId={serverId} status={status} canDelete={canDelete} />));
     await act(async () => vi.advanceTimersByTimeAsync(0));
 }
 function button(label: string) { const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label); if (!found) throw Error(`Missing button ${label}`); return found; }
@@ -51,7 +51,7 @@ it("lists campaigns with the selection marked and only offers switching while th
 
 it("selects an imported campaign with a durable request bound to the listed server revision", async () => {
     mocks.change.mockResolvedValue({ ok: true, selection: { serverId, activeSaveId: importedId, updatedAt: "2026-10-02T12:00:01.000Z" } });
-    await render();
+    await render(stopped, true);
     await act(async () => button("Use this campaign").click());
     expect(mocks.change).toHaveBeenCalledExactlyOnceWith({ requestId: expect.stringMatching(/^[0-9a-f-]{36}$/), action: "select-save", saveId: importedId, serverId, expectedUpdatedAt: stopped.updatedAt }, "owner");
     expect(container.textContent).toContain("Campaign selected");
@@ -94,10 +94,11 @@ it("deletes only an inactive imported campaign after exact-name confirmation", a
     mocks.deleteSave.mockResolvedValue({ ok: true, message: "Campaign deletion queued." });
     vi.stubGlobal("confirm", vi.fn(() => true));
     vi.stubGlobal("prompt", vi.fn(() => "Imported Campaign"));
-    await render();
+    await render(stopped, true);
     const deleteButton = container.querySelector('[aria-label="Delete Imported Campaign"]') as HTMLButtonElement;
     expect(deleteButton).toBeTruthy();
     expect((container.querySelector('[aria-label="Delete Default New Game"]') as HTMLButtonElement | null)).toBeNull();
     await act(async () => deleteButton.click());
     expect(mocks.deleteSave).toHaveBeenCalledWith({ serverId, saveId: importedId, expectedUpdatedAt: stopped.updatedAt, confirmationText: "Imported Campaign", requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) }, "owner");
 });
+
