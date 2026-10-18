@@ -50,7 +50,7 @@ export function VpsHostInventory({
     const idPrefix = useId();
 
     if (hosts.length === 0) {
-        return <div className="mt-6 border border-white/10 bg-surface px-6 py-12 text-center text-sm text-foreground-muted">No registered OVH VPS hosts.</div>;
+        return <div className="mt-6 border border-white/10 bg-surface px-6 py-12 text-center text-sm text-foreground-muted">No registered VPS hosts.</div>;
     }
 
     return (
@@ -93,6 +93,7 @@ export function VpsHostInventory({
                                     <div role="cell" data-label="Runner" className={SUMMARY_LABEL}><RunnerOnboardingStatus
                                         compact
                                         onRefresh={onRefresh}
+                                        provider={host.provider}
                                         serviceName={host.name}
                                         runningServers={host.runningServers}
                                         targetSourceCommit={runnerTargetSourceCommit}

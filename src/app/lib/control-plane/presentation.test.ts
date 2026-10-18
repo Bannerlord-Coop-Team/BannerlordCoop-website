@@ -358,7 +358,8 @@ test("failed and legacy runner rows expose the typed service-only onboarding act
     );
 
     assert.match(source, /operation: "onboard-vps-host"/u);
-    assert.match(source, /input: \{ serviceName, mode: onboarding === null \? "enroll" : "retry" \}/u);
+    assert.match(source, /input: \{ provider, serviceName, mode: onboarding === null \? "enroll" : "retry" \}/u);
+    assert.match(source, /operation: "update-vps-runner",\s+input: \{\s+provider,\s+serviceName,/u);
     assert.match(source, /Retry onboarding/u);
     assert.match(source, /Onboard runner/u);
     assert.doesNotMatch(source, /hostPublicKey/u);

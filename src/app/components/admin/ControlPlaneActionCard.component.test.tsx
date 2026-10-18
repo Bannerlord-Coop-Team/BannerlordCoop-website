@@ -5,12 +5,12 @@ import { ControlPlaneActionCard, type AdminActionField } from "./ControlPlaneAct
 import type { Backup, HostingPage } from "@/app/lib/control-plane/types";
 import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 
-const { request, session, refresh } = vi.hoisted(() => ({ request: vi.fn(), session: vi.fn(), refresh: vi.fn() }));
+const { request, session, refresh, push } = vi.hoisted(() => ({ request: vi.fn(), session: vi.fn(), refresh: vi.fn(), push: vi.fn() }));
 vi.mock("@/app/lib/control-plane/client", async (importOriginal) => ({
     ...await importOriginal<typeof import("@/app/lib/control-plane/client")>(), requestControlPlaneAdmin: request,
 }));
 vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({ auth: { getSession: session } }) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push }) }));
 const servers: AdminActionField = { name: "serverId", label: "Server", kind: "server", required: true, options: [
     { label: "Alpha", value: "server-a", updatedAt: "2026-09-06T12:00:00Z", releaseChannel: "stable" },
     { label: "Bravo", value: "server-b", updatedAt: "2026-09-06T12:00:00Z", releaseChannel: "nightly" },
@@ -144,4 +144,19 @@ it("refreshes non-replayable stale actions without clearing the form or resubmit
     expect(request).toHaveBeenCalledOnce(); expect(refresh).toHaveBeenCalledOnce();
     expect(container.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("Keep settings intent");
     expect(container.querySelector<HTMLSelectElement>('select[name="serverId"]')!.selectedIndex).toBe(1);
+});
+it("onboards the selected VPS with the provider the inventory listed it under", async () => {
+    request.mockResolvedValueOnce({ outcome: "registered" });
+    const value = JSON.stringify({ provider: "contabo-vps", serviceName: "203779521" });
+    await act(async () => root.render(<ControlPlaneActionCard operation="onboard-vps-host" title="Onboard" description="Onboard"
+        fields={[{ name: "host", label: "Available VPS", kind: "select", required: true, defaultValue: value,
+            options: [{ label: "Contabo VPS · 203779521", value }] }]} />));
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]?.[0]).toMatchObject({
+        operation: "onboard-vps-host",
+        input: { provider: "contabo-vps", serviceName: "203779521", mode: "enroll" },
+    });
+    expect(request.mock.calls[0]?.[0].input).not.toHaveProperty("host");
+    expect(push).toHaveBeenCalledWith("/admin/control-plane?view=vps");
 });

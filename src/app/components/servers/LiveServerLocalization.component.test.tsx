@@ -9,7 +9,6 @@ import { LiveServerBackupSetup } from "./LiveServerBackupSetup";
 import { LiveServerFileSetup } from "./LiveServerFileSetup";
 import { LiveServerVisibilitySetup } from "./LiveServerVisibilitySetup";
 import { LiveServerOperationButtons } from "./LiveServerOperationButtons";
-import { IonosManagementSection } from "./IonosManagementSection";
 
 let dictionary: Dictionary = messages;
 let locale: Locale = "en";
@@ -21,7 +20,6 @@ vi.mock("@/app/servers/access-actions", () => ({
     addLiveConsoleOperator: vi.fn(), assignLiveConsoleOwner: vi.fn(), clearLiveConsoleOwner: vi.fn(), removeLiveConsoleOperator: vi.fn(),
 }));
 vi.mock("./ServerSaveConfigPanels", () => ({ ServerSaveConfigPanels: () => <div data-shared-files /> }));
-vi.mock("./IonosServerButtons", () => ({ CreateIonosServerForm: () => null, DestroyIonosServerButton: () => null }));
 
 beforeEach(() => { dictionary = messages; locale = "en"; });
 
@@ -75,25 +73,6 @@ it("localizes every operation label and accessible group while preserving disabl
     expect(html).toContain('aria-label="Operaciones"');
     for (const label of ["Iniciar", "Detener", "Reiniciar", "Actualizar"]) expect(html).toContain(label);
     expect((html.match(/disabled=""/g) ?? []).length).toBe(4);
-});
-
-it("formats IONOS inventory numbers and retains vendor states, names, IDs and addresses", async () => {
-    locale = "es";
-    dictionary = { ...messages, "ionos.heading": "Infraestructura IONOS", "ionos.manage": "Administrar", "ionos.unknown": "Desconocido" };
-    const html = renderToStaticMarkup(await IonosManagementSection({
-        creationEnabled: false, isAdmin: false, loadError: "", locations: [],
-        provisioning: { imageAlias: "debian:12", location: "de/fra" },
-        servers: [{ cores: 1234.5, datacenterId: "dc-id", id: "server-id", ips: ["203.0.113.1"], location: "de/fra", name: "<source-name>", preset: null, provisioningState: "AVAILABLE", ramMb: null, storageGb: null, type: "CUBE", vmState: "RUNNING" }],
-    }));
-    expect(html).toContain("Infraestructura IONOS");
-    expect(html).toContain("Administrar");
-    expect(html).toContain("1234,5 vCPU");
-    expect(html).toContain("Desconocido");
-    expect(html).toContain("RUNNING");
-    expect(html).toContain("&lt;source-name&gt;");
-    expect(html).toContain("203.0.113.1");
-    expect(html).toContain("debian:12");
-    expect(html).toContain('/servers/server-id?datacenterId=dc-id');
 });
 
 it("resolves every English message with exact named tokens and all operation/state messages", () => {

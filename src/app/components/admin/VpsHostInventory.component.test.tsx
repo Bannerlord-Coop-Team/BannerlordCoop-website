@@ -150,6 +150,7 @@ describe("disk pressure presentation", () => {
 
 function host(name: string, hostResources: HostingAdminHostResources, slotIndex: number, updating = false): HostingAdminVpsHost {
     return {
+        provider: "ovhcloud-vps",
         name,
         locationId: "os-us-east-va-2",
         countryCode: "US",

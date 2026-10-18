@@ -117,7 +117,7 @@ Bootstrap administrators always retain admin access, preventing an accidental to
 
 ### Control Plane administration
 
-The protected `/admin/control-plane` page is the administrative surface for managed hosting. It reads fleet/server/job/release/audit state and submits the administrator operations it offers through the `control-plane-admin` Supabase Edge Function. The page has no form for publishing the hosting-region catalog (`set-hosting-regions`); that operation is sent through the same Edge Function by hand, as described in `docs/server-onboarding.md`. The function reauthenticates the current Discord administrator and relays the typed request to the Oracle control-plane web adapter. The website does not query the private control-plane schema or talk directly to OVH, runners, containers, or object storage. See `docs/control-plane-admin.md` and the control-plane repository's `docs/managed-hosting/web-admin.md`.
+The protected `/admin/control-plane` page is the administrative surface for managed hosting. It reads fleet/server/job/release/audit state and submits the administrator operations it offers through the `control-plane-admin` Supabase Edge Function. The page has no form for publishing the hosting-region catalog (`set-hosting-regions`); that operation is sent through the same Edge Function by hand, as described in `docs/server-onboarding.md`. The function reauthenticates the current Discord administrator and relays the typed request to the Oracle control-plane web adapter. The website does not query the private control-plane schema or talk directly to VPS providers, runners, containers, or object storage. See `docs/control-plane-admin.md` and the control-plane repository's `docs/managed-hosting/web-admin.md`.
 
 ### Legacy server hosting preview
 
@@ -131,8 +131,6 @@ The legacy placeholder implementation (not the current authenticated My Servers/
 
 The public directory and legacy placeholder assigned-server records remain fixtures. Typed placeholder records—including fictitious account assignments—live in `src/app/lib/hosting/servers.ts`; they are not evidence of current account assignments or onboarding eligibility.
 
-A dormant IONOS adapter is retained, but its inventory panel and API calls are disabled while alternative hosting options are evaluated. The create-server Server Action rejects requests before contacting IONOS. `IONOS_MANAGEMENT_ENABLED=true` restores inventory management; billable creation additionally requires `IONOS_SERVER_CREATION_ENABLED=true`.
-
 The placeholder design is documented in `docs/server-hosting-design.md`.
 
 ### Managed-server onboarding
@@ -143,7 +141,7 @@ See [website server onboarding](docs/server-onboarding.md) for the strict contra
 
 ### Live server console
 
-Configured live Bannerlord containers hosted at `15.204.120.17` appear under **My Servers** on `/servers`. Administrators see every configured server and can assign each one owner account. Owners can add and remove operator accounts; owners and operators receive the same protected Start, Stop, Restart, Update, log-stream, and stdin controls for their assigned server. Administrators and owners can also edit a server's globally persisted display name from its manage page after the `server_settings` migration is applied. These servers are not IONOS resources.
+Configured live Bannerlord containers hosted at `15.204.120.17` appear under **My Servers** on `/servers`. Administrators see every configured server and can assign each one owner account. Owners can add and remove operator accounts; owners and operators receive the same protected Start, Stop, Restart, Update, log-stream, and stdin controls for their assigned server. Administrators and owners can also edit a server's globally persisted display name from its manage page after the `server_settings` migration is applied.
 
 Update pulls the configured image, treats an unchanged digest as a no-op, and otherwise recreates only the allowlisted game container after validating its deployment specification. The old container is retained until the replacement passes the configured readiness marker; failed readiness triggers verified automatic rollback.
 
@@ -166,12 +164,6 @@ Server-only Supabase secret key used by protected member-role and live-server as
 ### `SUPABASE_ADMIN_EMAILS`
 
 Comma-separated bootstrap administrator emails. These users always have admin access and cannot be demoted through the member administration page.
-
-### IONOS management
-
-`IONOS_MANAGEMENT_ENABLED` controls whether the dormant IONOS inventory is loaded and displayed. `IONOS_SERVER_CREATION_ENABLED` separately enables billable creation and has no effect unless management is enabled. Both default to disabled.
-
-`IONOS_TOKEN_ID` and `IONOS_CLOUD_API_TOKEN` are server-only provider credentials. `IONOS_LOCATION` and `IONOS_IMAGE_ALIAS` configure provisioning defaults when management and creation are explicitly enabled.
 
 ### `CONSOLE_GATEWAY_URL`
 

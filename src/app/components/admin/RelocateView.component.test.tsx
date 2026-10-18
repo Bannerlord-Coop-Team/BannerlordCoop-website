@@ -29,7 +29,7 @@ function server(serverId: string, displayName: string, friendlyRegion: string): 
 
 function host(name: string, countryCode: string, availableServers: number, occupied: Array<[string, number]>): HostingAdminVpsHost {
     return {
-        name, countryCode, locationId: `${countryCode.toLowerCase()}-1`, region: null, totalSlots: 3, runningServers: occupied.length,
+        provider: "ovhcloud-vps", name, countryCode, locationId: `${countryCode.toLowerCase()}-1`, region: null, totalSlots: 3, runningServers: occupied.length,
         availableServers, cost: null, expirationDate: null, autoRenew: null, providerCheckedAt: null, resources: null, runnerOnboarding: null,
         occupiedSlots: occupied.map(([serverId, slotIndex]) => ({
             serverId, slotIndex, gamePort: 4200 + slotIndex, displayName: serverId, ownerDiscordUserId: "123456789012345678", operationState: "running",
@@ -52,7 +52,7 @@ const hosts = [
 ];
 const data: RelocateViewData = {
     servers: { items: [server("gang", "The Gang", "united-kingdom"), server("knights", "Calradian Knights", "united-kingdom"), server("boys", "Dem Boys", "france")], nextCursor: null },
-    inventory: { hosts, controlPlaneHost: null, availableServiceNames: [] },
+    inventory: { hosts, controlPlaneHost: null, availableHosts: [] },
     regionCatalog: catalog,
     activeJobs: [job("knights", "migrate-region"), job("boys", "backup")],
 };
