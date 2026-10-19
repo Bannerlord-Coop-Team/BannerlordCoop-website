@@ -35,6 +35,11 @@ type VpsHostInventoryProps = {
 const SUMMARY_GRID = "grid-cols-2 @min-[70rem]:grid-cols-[minmax(0,12fr)_minmax(0,7fr)_minmax(0,15fr)_minmax(0,12fr)_minmax(0,8fr)_minmax(0,12fr)_2.5rem] [&>*]:min-w-0 [overflow-wrap:anywhere]";
 const SLOT_GRID = "grid-cols-2 @min-[45rem]:grid-cols-[minmax(0,10fr)_minmax(0,20fr)_minmax(0,11fr)_minmax(0,13fr)_minmax(0,8fr)] [&>*]:min-w-0 [overflow-wrap:anywhere]";
 const SUMMARY_LABEL = "before:mb-2 before:block before:text-[0.62rem] before:uppercase before:text-foreground-dim before:content-[attr(data-label)] @min-[70rem]:before:hidden";
+/** A host's row identity: a service name is unique only within its provider, as `VpsView` joins billing. */
+function hostKey(host: HostingAdminVpsHost): string {
+    return `${host.provider}:${host.name}`;
+}
+
 const SLOT_LABEL = "before:mb-2 before:block before:text-[0.58rem] before:uppercase before:text-foreground-dim before:content-[attr(data-label)] @min-[45rem]:before:hidden";
 
 export function VpsHostInventory({
@@ -70,12 +75,12 @@ export function VpsHostInventory({
                 </div>
                 <div role="presentation" className="divide-y divide-white/10">
                     {hosts.map((host, index) => {
-                        const expanded = expandedHost === host.name;
+                        const expanded = expandedHost === hostKey(host);
                         const panelId = `${idPrefix}-host-${index}`;
                         const pressure = diskPressureLevel(host.resources);
                         return (
                             <section role="rowgroup"
-                                key={host.name}
+                                key={hostKey(host)}
                                 className={pressure?.level === "critical"
                                     ? "border-l-2 border-crimson"
                                     : pressure?.level === "warning"
@@ -106,7 +111,7 @@ export function VpsHostInventory({
                                         aria-expanded={expanded}
                                         aria-controls={panelId}
                                         aria-label={`${expanded ? "Collapse" : "Expand"} details for ${host.name}`}
-                                        onClick={() => setExpandedHost(expanded ? null : host.name)}
+                                        onClick={() => setExpandedHost(expanded ? null : hostKey(host))}
                                         className="flex size-10 items-center justify-center border-l border-white/10 text-gold outline-none transition-colors hover:bg-gold/10 focus-visible:ring-2 focus-visible:ring-gold"
                                     >
                                         <ChevronDown aria-hidden="true" className={`size-5 transition-transform ${expanded ? "rotate-180" : "-rotate-90"}`} />

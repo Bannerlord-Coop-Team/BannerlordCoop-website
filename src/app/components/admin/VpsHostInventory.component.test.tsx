@@ -80,6 +80,28 @@ describe("compact VPS host inventory", () => {
         expect(container.querySelector('[role="table"][aria-label="VPS host inventory"]')).not.toBeNull();
     });
 
+    it("keeps same-named hosts of different providers as separate rows that expand independently", async () => {
+        const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+            await act(async () => root.render(<VpsHostInventory
+                hosts={[host("shared-name", resources(70, 30), 0), { ...host("shared-name", resources(80, 20), 1), provider: "contabo-vps" }]}
+                ownerLabels={{}}
+                runnerTargetSourceCommit={null}
+            />));
+
+            const toggles = [...container.querySelectorAll<HTMLButtonElement>('button[aria-label="Expand details for shared-name"]')];
+            expect(toggles).toHaveLength(2);
+            await act(async () => toggles[1]!.click());
+            expect(toggles.map(toggle => toggle.getAttribute("aria-expanded"))).toEqual(["false", "true"]);
+            expect(container.querySelectorAll('[role="region"]')).toHaveLength(1);
+            expect(container.textContent).toContain("Slot 2 · UDP 4201");
+            expect(container.textContent).not.toContain("Slot 1 · UDP 4200");
+            expect(errors.mock.calls.flat().join(" ")).not.toContain("same key");
+        } finally {
+            errors.mockRestore();
+        }
+    });
+
     it("labels a host by the stored catalog regions its country and zone satisfy", async () => {
         const stored = [
             { region: "us-east", placement: { countryCodes: ["US"], locationIds: ["os-us-east-va-2"] } },
