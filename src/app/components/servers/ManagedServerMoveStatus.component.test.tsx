@@ -61,9 +61,16 @@ afterEach(async () => {
     vi.useRealTimers();
 });
 
-async function render(initialMove: MyServerMove | null, notices: MyServerNotice[] = []) {
-    await act(async () => root.render(<TestLocalization><ManagedServerMoveProvider serverId={serverId} initialMove={initialMove}>
+async function render(initialMove: MyServerMove | null, notices: MyServerNotice[] = [], headerAddress: string | null = null) {
+    await act(async () => root.render(<TestLocalization><ManagedServerMoveProvider serverId={serverId} initialMove={initialMove} headerAddress={headerAddress}>
         <ManagedServerMoveStatus notices={notices} /></ManagedServerMoveProvider></TestLocalization>));
+}
+
+/** Resolves when the test settles it, like a read still on its way back from the server. */
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((settle) => { resolve = settle; });
+    return { promise, resolve };
 }
 
 /** Starts a fresh page, as a reload would. */
@@ -391,7 +398,7 @@ it("refreshes the page once for each change it shows, not for a new step or an u
         .mockResolvedValueOnce({ ok: true, move: { ...moving, step: "switching-address" } })
         .mockResolvedValueOnce({ ok: true, move: moved })
         .mockResolvedValue({ ok: true, move: moved });
-    await render(move("starting", { scheduledAt: at(-30_000) }));
+    await render(move("starting", { scheduledAt: at(-30_000) }), [], moved.address);
 
     await advance(5_000);
     expect(mocks.refresh).toHaveBeenCalledOnce();
@@ -439,11 +446,92 @@ it("reads only while the page is visible and catches up as soon as it is shown",
 
     await setVisibility("visible");
     expect(mocks.read).toHaveBeenCalledOnce();
+    await advance(60_000);
+    expect(mocks.read).toHaveBeenCalledTimes(2);
+});
+
+it("reads as soon as the page is shown again, even before the next read was due", async () => {
+    mocks.read.mockResolvedValue({ ok: true, move: null });
+    await render(null);
+    await advance(10_000);
     await setVisibility("hidden");
     await setVisibility("visible");
     expect(mocks.read).toHaveBeenCalledOnce();
-    await advance(60_000);
+    // The read replaces the one that was due, rather than adding to it.
+    await advance(59_999);
+    expect(mocks.read).toHaveBeenCalledOnce();
+    await advance(1);
     expect(mocks.read).toHaveBeenCalledTimes(2);
+});
+
+it("reads again right after a read that was under way while the page was hidden", async () => {
+    const underway = deferred<{ ok: true; move: MyServerMove }>();
+    mocks.read.mockReturnValueOnce(underway.promise).mockResolvedValue({ ok: true, move: moved });
+    await render(moving, [], moved.address);
+    await advance(5_000);
+    expect(mocks.read).toHaveBeenCalledOnce();
+    await setVisibility("hidden");
+    await setVisibility("visible");
+    expect(mocks.read).toHaveBeenCalledOnce();
+
+    await act(async () => underway.resolve({ ok: true, move: moving }));
+    expect(mocks.read).toHaveBeenCalledTimes(2);
+    expect(card()!.querySelector("h2")!.textContent).toBe(messages["move.movedTitle"]);
+});
+
+it("shows the status a refreshed page renders at once and confirms it with a read", async () => {
+    mocks.read.mockResolvedValue({ ok: true, move: moving });
+    await render(scheduled);
+    await render({ ...moving });
+    await advance(0);
+    expect(card()!.querySelector("h2")!.textContent).toBe(messages["move.movingTitle"]);
+    expect(mocks.read).toHaveBeenCalledOnce();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    // The same status rendered again needs no further read.
+    await render({ ...moving });
+    await advance(0);
+    expect(mocks.read).toHaveBeenCalledOnce();
+});
+
+it("does not refresh back and forth when a refreshed page renders an older status", async () => {
+    mocks.read.mockResolvedValue({ ok: true, move: moved });
+    await render(moved, [], moved.address);
+    for (let refresh = 1; refresh <= 3; refresh += 1) {
+        await render({ ...moving }, [], moved.address);
+        await advance(0);
+        expect(mocks.read).toHaveBeenCalledTimes(refresh);
+        expect(card()!.querySelector("h2")!.textContent).toBe(messages["move.movedTitle"]);
+    }
+    expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it("keeps the move shown when a refreshed page renders none, and checks with a read", async () => {
+    mocks.read.mockResolvedValue({ ok: true, move: moving });
+    await render(moving);
+    await render(null);
+    await advance(0);
+    expect(card()!.querySelector("h2")!.textContent).toBe(messages["move.movingTitle"]);
+    expect(mocks.read).toHaveBeenCalledOnce();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it("refreshes again, at most three times per move, while the header lacks the moved address", async () => {
+    mocks.read.mockResolvedValue({ ok: true, move: moved });
+    await render(moved, [], "198.51.100.7:4201");
+    for (let read = 1; read <= 4; read += 1) await advance(60_000);
+    expect(mocks.read).toHaveBeenCalledTimes(4);
+    expect(mocks.refresh).toHaveBeenCalledTimes(3);
+
+    // A later move refreshes for its change, then gets its own attempts; a header that has the address needs none.
+    const later = { ...moved, completedAt: at(-1_000) };
+    mocks.read.mockResolvedValue({ ok: true, move: later });
+    await advance(60_000);
+    expect(mocks.refresh).toHaveBeenCalledTimes(4);
+    await advance(60_000);
+    expect(mocks.refresh).toHaveBeenCalledTimes(5);
+    await render(later, [], later.address);
+    await advance(60_000);
+    expect(mocks.refresh).toHaveBeenCalledTimes(5);
 });
 
 it("stops reading once the page closes", async () => {

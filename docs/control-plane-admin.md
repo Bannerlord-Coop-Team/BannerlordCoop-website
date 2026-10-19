@@ -605,9 +605,17 @@ or bracketed IPv6 address with a valid port, and exactly these fields per state
 with no move or a finished one, every 30 s while one is scheduled, and every 5 s
 from two minutes before `scheduledAt`, while `starting` and while `moving` or
 `returning`. A failed read keeps the status shown and backs off to at most five
-minutes; a hidden page reads as soon as it is shown again. A new state, address or
-completion time calls `router.refresh()` once so the header, address and notices
-follow; a new step alone does not.
+minutes. Showing the page again always reads at once, and a read that was under
+way meanwhile is followed by another as soon as it returns. A new state, address
+or completion time calls `router.refresh()` once so the header, address and
+notices follow; a new step alone does not. A refreshed page that renders a
+different move status is shown at once and confirmed by an immediate read; a read
+that only restores the status shown before does not refresh again, and a refresh
+that renders no move (which a failed server-side read also produces) is not
+adopted. While a moved server's new address differs from the header address the
+page passes in, the next reads refresh the page again, at most three times per
+move. On a live page linked to a managed server, the header uses the managed
+server's address when it has one.
 
 `ManagedServerMoveStatus` is the first card in the `banner` slot: a countdown and
 the start time in the viewer's zone while scheduled, the steps with the current

@@ -676,3 +676,11 @@ it.each([
     const workspace = await findServerElement(await page(liveId), "ServerManagementWorkspace" as string);
     expect((workspace!.props as { address?: string | null }).address).toBe(address);
 });
+
+it.each([[false, managedId], [true, liveId]] as const)("gives the move status the header's address on a managed or linked live page: live=%s", async (live, serverId) => {
+    if (!live) mocks.liveServer.mockReturnValue(null);
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, connectionIp: "198.51.100.20", gamePorts: [4203] });
+    const tree = await page(serverId);
+    expect((await findServerElement(tree, "ServerManagementWorkspace" as string) as ReactElement<{ address?: string | null }>).props.address).toBe("198.51.100.20:4203");
+    expect((await findServerElement(tree, "ManagedServerMoveProvider"))?.props).toMatchObject({ headerAddress: "198.51.100.20:4203" });
+});

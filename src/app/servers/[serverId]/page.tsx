@@ -206,12 +206,14 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
         support: t("page.readOnlySupport"),
     };
 
-    return <ManagedServerMoveProvider serverId={server.serverId} initialMove={move}><ServerManagementWorkspace
+    const address = connectionAddress(server.connectionIp ?? null, server.gamePorts ?? []);
+
+    return <ManagedServerMoveProvider serverId={server.serverId} initialMove={move} headerAddress={address}><ServerManagementWorkspace
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.displayName}</h1>}
         banner={managedBanner(server.serverId, notices)}
         initialSection={initializing ? "Console" : initialSection}
         interactionLocked={initializing}
-        address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
+        address={address}
         visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} disabled={initializing} />}
         summary={t("page.managedSummary", { region: localizedRegionLabel(tServers, server.friendlyRegion), access: managedAccessLabels[server.accessRole] })}
         status={<Suspense fallback={<ManagedServerStatus accessToken={accessToken} server={server} move={move} checkBackup={false} />}>
@@ -480,7 +482,9 @@ async function LiveServerManagementPage({
                 )}
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
-    return managedServer !== null ? <ManagedServerMoveProvider serverId={managedServer.serverId} initialMove={move}>{workspace}</ManagedServerMoveProvider> : workspace;
+    return managedServer !== null
+        ? <ManagedServerMoveProvider serverId={managedServer.serverId} initialMove={move} headerAddress={address}>{workspace}</ManagedServerMoveProvider>
+        : workspace;
 }
 
 // Reads can fail briefly while the server restarts, so backup reads retry once before reporting anything.
