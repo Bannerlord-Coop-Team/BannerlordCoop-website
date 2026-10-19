@@ -71,6 +71,23 @@ it("writes placement notices from their parameters in the viewer's language", ()
     }
 });
 
+it.each([
+    ["999.999.999.999:0", false],
+    ["1.2.3.4:70000", false],
+    ["[zz::1]:7210", false],
+    ["[1::2::3]:7210", false],
+    ["203.0.113.10:4201", true],
+    ["[2001:db8::1]:4201", true],
+] as const)("shows a completed move's address %s only when players can join it: %s", async (address, shown) => {
+    await render([{ ...completed, parameters: { ...completed.parameters, address } }]);
+    const text = card(messages["notices.placementCompletedTitle"]).textContent;
+    if (shown) expect(text).toContain(`Its new address is ${address}; players need it to join.`);
+    else {
+        expect(text).toContain(messages["notices.placementCompletedBodyNoAddress"]);
+        expect(text).not.toContain(address);
+    }
+});
+
 it("falls back to the stored text when a scheduled move has no usable time", () => {
     for (const parameters of [{}, { scheduledAt: "tomorrow", windowMinutes: 120 }, { scheduledAt: 1_760_000_000_000 }] as MyServerNotice["parameters"][]) {
         expect(noticeText({ ...scheduled, parameters }, t, utc)).toEqual({ title: "Server move scheduled", body: "English fallback" });

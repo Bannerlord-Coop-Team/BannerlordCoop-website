@@ -569,8 +569,10 @@ breaks; `info` cards are `role="status"` and `warning` cards `role="alert"`.
 Administrator notices show their title and message untranslated. The two
 placement kinds are written in the viewer's language from their parameters:
 `placement-scheduled` from `scheduledAt` and `windowMinutes`, in the viewer's time
-zone, and `placement-completed` with the new `address` when it is a valid
-`ip:port` (a variant without it otherwise). A scheduled notice without a usable
+zone, and `placement-completed` with the new `address` when it is a join address
+`isJoinAddress` accepts (a real IPv4 address or a bracketed IPv6 address, with a
+port from 1 to 65535, the same check the move status uses), and a variant without
+it otherwise. A scheduled notice without a usable
 `scheduledAt` falls back to the stored English title and message.
 
 **Dismiss** calls the `dismissManagedServerNotice` server action, which sends the

@@ -9,6 +9,7 @@ import { controlPlaneEndpoint } from "@/app/lib/control-plane/origin";
 import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse, type MyServerDeletionStatus } from "./my-servers";
 import { onboardingSummaryRequest, parseOnboardingSummary, type OnboardingSummaryRequest } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 import { SERVER_MOVE_STATES, SERVER_MOVE_STEPS } from "./server-move";
+import { isJoinAddress } from "./connection-address";
 
 /** Reads owner inventory directly; Oracle rechecks the current session and durable access on every page. */
 export async function listAllMyServers(accessToken: string, callerSignal?: AbortSignal) {
@@ -173,9 +174,6 @@ function hasNoticeControlCharacter(value: string, allowWhitespace: boolean) {
     return false;
 }
 
-// An IPv4 or bracketed IPv6 address with its game port, as the control plane reports a moved server.
-const JOIN_ADDRESS = /^(?:(\d{1,3}(?:\.\d{1,3}){3})|\[([0-9A-Fa-f:.]+)\]):(\d{1,5})$/u;
-
 /**
  * Reads this server's announced, running or recently finished move to another machine, or null when there
  * is none. Older control planes reject the operation, which callers treat the same as no move.
@@ -218,13 +216,6 @@ function isMyServerMove(value: unknown): value is MyServerMove {
         : presence !== "null" && MOVE_FIELD_VALUES[field as MoveField](value[field]));
 }
 
-// Accepts only a real IPv4 or IPv6 address and a valid port, so the page can show the address as players type it.
-function isJoinAddress(value: unknown) {
-    const match = typeof value === "string" ? JOIN_ADDRESS.exec(value) : null;
-    if (match === null) return false;
-    const port = Number(match[3]);
-    return (match[1] !== undefined ? isIP(match[1]) === 4 : isIP(match[2]!) === 6) && port >= 1 && port <= 65_535;
-}
 
 // Validates the owner token and bounds a read by the caller's signal and a 30-second timeout.
 function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {

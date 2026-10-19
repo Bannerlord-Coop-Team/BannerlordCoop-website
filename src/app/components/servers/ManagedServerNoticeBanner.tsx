@@ -3,6 +3,7 @@
 import { Info, LoaderCircle, TriangleAlert, X } from "lucide-react";
 import { useState } from "react";
 import type { MyServerNotice } from "@/app/lib/control-plane/types";
+import { isJoinAddress } from "@/app/lib/hosting/connection-address";
 import { useTranslations } from "@/app/lib/localization/client";
 import type { Translator } from "@/app/lib/localization/types";
 import { dismissManagedServerNotice } from "@/app/servers/server-notice-actions";
@@ -10,8 +11,6 @@ import { moveCoversNotice, useManagedServerMove } from "./managed-server-move-co
 import { useViewerTimeZone, ZONED_DATE_TIME_FORMAT as START_FORMAT } from "./viewer-time-zone";
 
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
-// An IPv4 or bracketed IPv6 address with its game port, as the control plane reports a moved server.
-const JOIN_ADDRESS = /^(?:\d{1,3}(?:\.\d{1,3}){3}|\[[0-9A-Fa-f:.]+\]):\d{1,5}$/u;
 const END_FORMAT: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit", timeZoneName: "short" };
 
 /**
@@ -93,7 +92,7 @@ export function noticeText(
         const address = parameters.address;
         return {
             title: t("notices.placementCompletedTitle"),
-            body: typeof address === "string" && JOIN_ADDRESS.test(address)
+            body: isJoinAddress(address)
                 ? t("notices.placementCompletedBody", { address })
                 : t("notices.placementCompletedBodyNoAddress"),
         };
