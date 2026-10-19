@@ -249,8 +249,9 @@ export const PLACEMENT_EXECUTOR_ENABLE_CONFIRMATION = "Turn on automatic placeme
     + "each move stops the game for a few minutes and changes the server's address and game port.";
 
 /**
- * Settings that control planes from before the switch-only panel still require on every save, and newer ones
- * ignore. The panel never shows them: it sends each back exactly as the latest read gave it.
+ * Settings that control planes before #516 require on every save (#514 already accepts the cap as optional and
+ * ignores it), and #516 and later ignore. The panel never shows them: it sends each back exactly as the latest
+ * read gave it.
  */
 export const PLACEMENT_EXECUTOR_LEGACY_KEYS = ["maximumRelocationsPerDay", "minimumGainHours", "noticeLeadHours", "alwaysOnPolicy"] as const;
 export type PlacementExecutorLegacyValues = Partial<Record<typeof PLACEMENT_EXECUTOR_LEGACY_KEYS[number], number | string>>;
