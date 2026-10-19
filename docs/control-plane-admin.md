@@ -548,7 +548,8 @@ yet; or **No move under way**. Then "N moves queued in the last 24 hours" from
 `queuedInLast24Hours`, an informational count: only one move runs at a time.
 Below it, each server in `status.backedOff` reads "Waiting to retry: *server*
 until *time* (*reason*)": the executor leaves a server whose latest automatic move
-failed or was cancelled alone until then. The name comes from the listed move
+failed, or was cancelled other than by switching the executor off
+(`placement_disabled`), alone until then. The name comes from the listed move
 with that `relocationId` or `serverId`, else the server ID is shown, and the
 reason is the plain explanation of its `errorCode` (or the code itself).
 
