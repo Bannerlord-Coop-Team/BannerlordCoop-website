@@ -540,7 +540,8 @@ browser with `placement-executor` when the tab opens. Its current state is shown
 first: **On · relocating servers automatically** or **Off · nothing moves
 automatically**, with who last changed it, when and why (or that the defaults
 were never saved). A status line from the read's `status` says what it is doing:
-**Moving now** with the server, its VPSs and its current step; **Announced** with
+**Moving now** with the server, its VPSs and, once its job has reported one, its
+current step; **Announced** with
 the server and when it moves; **Returning** while a failed move puts its server
 back on its original VPS; **Move failed**, **Move cancelled** or **Move finished**
 when a queued move's job has ended but the executor has not recorded the outcome
