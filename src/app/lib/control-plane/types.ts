@@ -448,18 +448,21 @@ export type HostingAdminPlacementPlan = {
 
 export type HostingPlacementAlwaysOnPolicy = "single-slot" | "none" | "any";
 
-/** The automatic placement executor's settings; `updatedAt` is null until an administrator first saves them. */
-/** The executor's settings; moves are not rate limited. */
+/**
+ * The automatic placement executor's settings: only `enabled` is a setting, and moves are not rate limited.
+ * `updatedAt` is null until an administrator first saves them.
+ */
 export type HostingPlacementExecutorSettings = {
     enabled: boolean;
     /**
-     * A legacy compatibility field: never shown, only sent back on save as the latest read gave it, because
-     * older control planes still require it. Current ones ignore it.
+     * Legacy compatibility fields, never shown and only sent back on save as the latest read gave them: control
+     * planes before #516 require them (#514 already accepts the cap as optional and ignores it), and #516 and later
+     * ignore all four. The rules are fixed now (20 pair-hours, an hour's notice, one-slot VPSs).
      */
     maximumRelocationsPerDay?: number;
-    minimumGainHours: number;
-    alwaysOnPolicy: HostingPlacementAlwaysOnPolicy;
-    noticeLeadHours: number;
+    minimumGainHours?: number;
+    alwaysOnPolicy?: HostingPlacementAlwaysOnPolicy;
+    noticeLeadHours?: number;
     updatedBy: string | null;
     reason: string | null;
     updatedAt: string | null;

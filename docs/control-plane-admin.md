@@ -535,51 +535,67 @@ server's address and game port. No Edge Function change is required.
 
 ### Automatic executor
 
+This switch-only panel requires control plane #516 or later, which fixes the
+rules below, and must be deployed after it; an older control plane still applies
+the stored minimum gain, notice lead and always-on policy.
+
 The top of the Placement tab shows the automatic placement executor, read in the
-browser with `placement-executor` when the tab opens. Its current state is shown
-first: **On · relocating servers automatically** or **Off · nothing moves
-automatically**, with who last changed it, when and why (or that the defaults
-were never saved). A status line from the read's `status` says what it is doing:
-**Moving now** with the server, its VPSs and, once its job has reported one, its
-current step; **Announced** with
-the server and when it moves; **Returning** while a failed move puts its server
-back on its original VPS; **Move failed**, **Move cancelled** or **Move finished**
-when a queued move's job has ended but the executor has not recorded the outcome
-yet; or **No move under way**. Then "N moves queued in the last 24 hours" from
-`queuedInLast24Hours`, an informational count: only one move runs at a time.
-Below it, each server in `status.backedOff` reads "Waiting to retry: *server*
-until *time* (*reason*)": the executor leaves a server whose latest automatic move
-failed, or was cancelled other than by switching the executor off
-(`placement_disabled`), alone until then. The name comes from the listed move
-with that `relocationId` or `serverId`, else the server ID is shown, and the
-reason is the plain explanation of its `errorCode` (or the code itself).
+browser with `placement-executor` when the tab opens. It has nothing to configure:
+a heading, one sentence on what it does, a single **Automatic placement** switch
+(`role="switch"`, with **On · relocating servers automatically** or **Off ·
+nothing moves automatically** beside it and "On since" or "Off since" the
+settings' `updatedAt`), the status line, the waiting-to-retry list and **Live
+moves**. It never shows who switched it or why. The rules are fixed by the
+control plane: a move must save at least 20 pair-hours a week, a stopped server
+moves at once and stays stopped, a running server gets an hour's notice on its
+page and in-game warnings before it moves and starts again, and always-on
+servers move only to one-slot VPSs, which they never share.
 
-The form edits the four settings (`enabled`, `minimumGainHours` 1–168,
-`alwaysOnPolicy` and `noticeLeadHours` 1–168) plus an optional audit reason, and
-**Save settings** sends `set-placement-executor` with `expectedUpdatedAt` set to
-the `updatedAt` it read (null when never saved). The settings read can also carry
-`maximumRelocationsPerDay`, a legacy compatibility field that the panel never
-shows. A save sends it back exactly as the latest read of any kind gave it (the
-first read, a poll, the stale reload or the previous save's response) and leaves
-it out when that read had none, so a control plane that still requires the field
-accepts the save; current control planes ignore it. Turning it on asks for a
-browser confirmation that spells out what it does: the control plane relocates
-customer servers by itself, one at a time, each move stops the game and changes
-the server's address and game port, and a running server moves after a notice on
-its page and in-game warnings. The `single-slot` policy means one-slot VPSs only,
-which the server never shares. A `stale_interaction` rejection reloads the
-settings someone else saved and asks the administrator to review them before
-saving again; `relocation_provider_unsupported` explains that enabling needs live
-OVH mode.
+The status line from the read's `status` says what it is doing: **Moving now**
+with the server, its VPSs and, once its job has reported one, its current step;
+**Announced** with the server and when it moves; **Returning** while a failed
+move puts its server back on its original VPS; **Move failed**, **Move
+cancelled** or **Move finished** when a queued move's job has ended but the
+executor has not recorded the outcome yet; or **No move under way**. Then "N
+moves queued in the last 24 hours" from `queuedInLast24Hours`, an informational
+count: only one move runs at a time. Below it, each server in `status.backedOff`
+reads "Waiting to retry: *server* until *time* (*reason*)": the executor leaves a
+server whose latest automatic move failed, or was cancelled other than by
+switching the executor off (`placement_disabled`), alone until then. The name
+comes from the listed move with that `relocationId` or `serverId`, else the
+server ID is shown, and the reason is the plain explanation of its `errorCode`
+(or the code itself).
 
-**Live moves** below the form lists the 50 newest automatic relocations, those
+Switching sends `set-placement-executor` with `enabled`, `expectedUpdatedAt` set
+to the `updatedAt` it read (null when never saved) and a fixed audit reason,
+"Switched automatic placement on from the admin panel" or "… off …", because the
+control plane requires one. Switching on first asks for a short browser
+confirmation that the control plane will start moving servers by itself and
+that each move stops the game for a few minutes and changes the server's address
+and game port; switching off saves at once. The settings read can also carry
+`maximumRelocationsPerDay`, `minimumGainHours`, `noticeLeadHours` and
+`alwaysOnPolicy`, legacy fields: control planes before #516 require them on every
+save (#514 already accepts the cap as optional and ignores it), and #516 and later
+ignore all four. The panel never shows them: each
+switch sends each one back exactly as the latest read of any kind gave it (the
+first read, a poll, the stale reload or the previous switch's response) and
+leaves out any that read did not carry, so a save succeeds in either deploy order
+and after a rollback. The panel still deploys after #516, so the fixed rules it
+states hold. A `stale_interaction` rejection reloads the state someone else saved
+and asks the administrator to switch again if they still want to;
+`relocation_provider_unsupported` explains that enabling needs live OVH mode.
+
+**Live moves** lists the 50 newest automatic relocations, those
 announced or queued first. Each shows the server, its from and to VPS (without the
 `.vps.ovh.net` suffix; the full names are in the title), target region, mode,
 gain and state, and a track from each relocation's `progress`: **Warned** →
 **Starting** → **Saving & stopping** → **Restore point** → **Restoring** →
 **Switching address** → **Starting game** → **Finishing** → **Done**. Each step
 the job reached shows when it first reached it, in the viewer's time zone with
-seconds, and the step under way is marked `aria-current="step"`. Every stop says
+seconds, and the step under way is marked `aria-current="step"`. The stops are
+equal columns of one grid (at least 5.5rem each), with a small chevron drawn in
+the gap between them; their labels, times and notes wrap inside the stop, and a
+panel too narrow for the row scrolls the track rather than cutting it off. Every stop says
 its phase in words (done, current step, not reached, not needed, failed or
 cancelled) and any note in visible text, so colour only repeats it. **Warned**
 lists the 60- and 10-minute in-game warnings as sent (with the time), pending, not
@@ -605,11 +621,15 @@ as not returning; a read without `status` shows no status line, and one without
 While any relocation is announced or queued, the panel reads `placement-executor`
 again every 15 seconds, only while the page is visible; showing the page again
 reads at once, and the reads stop once nothing is active. They update only the
-status, the moves and the legacy compatibility field: the settings stay as last
-read, so a save is still checked against the generation the form shows. Polls,
-the stale reload and **Retry** share one read at a time: a poll joins a read under
-way, and the stale reload waits for it and then reads again, since a read that
-started before the rejected save may predate the other administrator's.
+status, the moves and the four legacy values: the switch's state and its
+`updatedAt` stay as last read, so a switch is still checked against the state the
+panel shows. Polls, the stale reload and **Retry** share one read at a time: a
+poll joins a read under way, and the stale reload waits for it and then reads
+again, since a read that started before the rejected switch may predate the other
+administrator's. If that reload fails, the message says the current state could
+not be loaded and asks for a page reload before switching again. The track scrolls
+in a focusable group (labelled "*server* move steps"), so a keyboard can reach
+stops past the panel's edge.
 
 ## Server notices
 
