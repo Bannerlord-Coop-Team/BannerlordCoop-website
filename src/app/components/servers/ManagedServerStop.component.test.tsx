@@ -260,6 +260,24 @@ it("opens a polling session within 1.5 s when the status read is slow", async ()
     expect(router.refresh).toHaveBeenCalledOnce();
 });
 
+it("shares a slow opening status read with the next check instead of starting another", async () => {
+    let release!: (value: { ok: true; fingerprint: string }) => void;
+    const readStatus = vi.fn<ManagedServerStatusReader>()
+        .mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }))
+        .mockResolvedValue({ ok: true, fingerprint: "running" });
+    await renderWithProbe(readStatus);
+    await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt));
+    await act(async () => vi.advanceTimersByTimeAsync(1_500));
+    expect(router.refresh).toHaveBeenCalledOnce();
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(readStatus).toHaveBeenCalledOnce();
+    await act(async () => release({ ok: true, fingerprint: "running" }));
+    expect(router.refresh).toHaveBeenCalledTimes(2);
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(readStatus).toHaveBeenCalledTimes(2);
+    expect(router.refresh).toHaveBeenCalledTimes(2);
+});
+
 it("keeps the polling baseline when a backup request's job attaches", async () => {
     const readStatus = vi.fn<ManagedServerStatusReader>().mockResolvedValue({ ok: true, fingerprint: "running" });
     await renderWithProbe(readStatus);
@@ -280,7 +298,10 @@ it("still opens with a refresh when a job attaches during the opening status rea
     await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt, undefined, "backup"));
     expect(router.refresh).not.toHaveBeenCalled();
     await act(async () => polling.attachJob(server.serverId, "33333333-3333-4333-8333-333333333333"));
-    expect(readStatus).toHaveBeenCalledTimes(2);
+    // The restarted opening shares the pending read, then refreshes when its own wait ends.
+    expect(readStatus).toHaveBeenCalledOnce();
+    expect(router.refresh).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTimeAsync(1_500));
     expect(router.refresh).toHaveBeenCalledOnce();
 });
 

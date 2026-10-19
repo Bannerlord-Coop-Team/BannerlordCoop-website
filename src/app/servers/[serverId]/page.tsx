@@ -297,7 +297,7 @@ async function ManagedServerBackupsSection({
             items: generations.items,
         };
     });
-    const [initialBackups, initialStatus, filesResult, savesResult, autosavesResult] = await Promise.allSettled([
+    const [initialBackups, statusResult, filesResult, savesResult, autosavesResult] = await Promise.allSettled([
         listAllMyServerBackups(accessToken, server.serverId),
         readBackupStatus(accessToken, server.serverId),
         getMyServerFiles(accessToken, server.serverId),
@@ -305,16 +305,10 @@ async function ManagedServerBackupsSection({
         autosavesRequest,
     ]);
     let backupsResult = initialBackups;
-    let statusResult = initialStatus;
-    // Reads can fail briefly while the server restarts; retry once before reporting anything.
-    // A rate-limited read is not retried: another request half a second later only extends the limit.
-    if ((backupsResult.status === "rejected" || statusResult.status === "rejected")
-        && !rateLimited(backupsResult) && !rateLimited(statusResult)) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        [backupsResult, statusResult] = await Promise.allSettled([
-            backupsResult.status === "rejected" ? listAllMyServerBackups(accessToken, server.serverId) : Promise.resolve(backupsResult.value),
-            statusResult.status === "rejected" ? getMyServerBackupStatus(accessToken, server.serverId) : Promise.resolve(statusResult.value),
-        ]);
+    // Backup status retries inside its shared reader; history gets the same single retry here.
+    if (backupsResult.status === "rejected" && !rateLimited(backupsResult.reason)) {
+        await new Promise((resolve) => setTimeout(resolve, BACKUP_READ_RETRY_MILLISECONDS));
+        [backupsResult] = await Promise.allSettled([listAllMyServerBackups(accessToken, server.serverId)]);
     }
     const backups = backupsResult.status === "fulfilled" ? backupsResult.value : [];
     const status = statusResult.status === "fulfilled" ? statusResult.value : null;
@@ -482,12 +476,23 @@ async function LiveServerManagementPage({
     </ServerManagementWorkspace>;
 }
 
-// The header status and the backups section both read backup status; one render reads it once.
-const readBackupStatus = cache((accessToken: string, serverId: string) => getMyServerBackupStatus(accessToken, serverId));
+// Reads can fail briefly while the server restarts, so backup reads retry once before reporting anything.
+// A rate-limited read is not retried: another request half a second later only extends the limit.
+const BACKUP_READ_RETRY_MILLISECONDS = 500;
 
-function rateLimited(result: PromiseSettledResult<unknown>) {
-    return result.status === "rejected" && result.reason instanceof MyServersApiError
-        && (result.reason.code === "rate_limited" || result.reason.code === "busy");
+// The header status and the backups section both read backup status; one render reads it, and retries it, once.
+const readBackupStatus = cache(async (accessToken: string, serverId: string) => {
+    try {
+        return await getMyServerBackupStatus(accessToken, serverId);
+    } catch (error) {
+        if (rateLimited(error)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, BACKUP_READ_RETRY_MILLISECONDS));
+        return await getMyServerBackupStatus(accessToken, serverId);
+    }
+});
+
+function rateLimited(error: unknown) {
+    return error instanceof MyServersApiError && (error.code === "rate_limited" || error.code === "busy");
 }
 
 // Notices are optional page content: a failed read, a slow one or an older control plane never blocks the page.

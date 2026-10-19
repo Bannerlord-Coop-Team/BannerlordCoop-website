@@ -133,7 +133,10 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
     const [consoleSignals] = useState(createManagedConsoleSignals);
     const [savesInFlight, setSavesInFlight] = useState<ReadonlyMap<string, number>>(() => new Map());
     const sessionSequence = useRef(0);
-    const pollingBaseline = useRef<{ sequence: number; fingerprint: string | null; opened: boolean } | null>(null);
+    const pollingBaseline = useRef<{
+        sequence: number; fingerprint: string | null; opened: boolean;
+        read: Promise<Awaited<ReturnType<ManagedServerStatusReader>> | null> | null;
+    } | null>(null);
 
     const beginSave = useCallback((serverId: string) => {
         const adjust = (change: number) => setSavesInFlight((current) => {
@@ -196,7 +199,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         const { serverId, startedAt, sequence } = session;
         // Attaching a job replaces the session object; the same session keeps its baseline.
         const polled = pollingBaseline.current?.sequence === sequence
-            ? pollingBaseline.current : { sequence, fingerprint: null, opened: false };
+            ? pollingBaseline.current : { sequence, fingerprint: null, opened: false, read: null };
         pollingBaseline.current = polled;
         let timer: number | undefined;
         let refreshWhenVisible = false;
@@ -208,11 +211,13 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         // A bounded wait refreshes without a baseline when the read is slow; the next check then renders.
         async function refreshIfChanged(waitMilliseconds?: number) {
             if (readStatus) {
-                const read = readStatus(serverId).catch(() => null);
+                // A read outlasting the opening wait stays shared until it settles, so no check starts a second one.
+                const read = polled.read ??= readStatus(serverId).catch(() => null).finally(() => { polled.read = null; });
+                let timeout: number | undefined;
                 const result = waitMilliseconds === undefined ? await read : await Promise.race([
                     read,
-                    new Promise<null>((resolve) => { window.setTimeout(() => resolve(null), waitMilliseconds); }),
-                ]);
+                    new Promise<null>((resolve) => { timeout = window.setTimeout(() => resolve(null), waitMilliseconds); }),
+                ]).finally(() => window.clearTimeout(timeout));
                 if (cancelled) return;
                 if (result?.ok && result.fingerprint === polled.fingerprint) return;
                 polled.fingerprint = result?.ok ? result.fingerprint : null;

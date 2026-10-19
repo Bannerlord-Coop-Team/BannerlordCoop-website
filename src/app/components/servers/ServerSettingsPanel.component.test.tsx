@@ -229,9 +229,11 @@ it("re-renders the page once after an update it followed finishes", async () => 
         await act(async () => vi.advanceTimersByTimeAsync(4_000));
         expect(mocks.status).toHaveBeenCalledTimes(2);
         expect(mocks.router.refresh).not.toHaveBeenCalled();
-        mocks.status.mockResolvedValue({ serverId, releaseChannel: "stable", job: { jobId, state: "succeeded", progress: "Done." } });
+        mocks.status.mockResolvedValue({ serverId, releaseChannel: "nightly", job: { jobId, state: "succeeded", progress: "Done." } });
         await act(async () => vi.advanceTimersByTimeAsync(4_000));
         expect(mocks.router.refresh).toHaveBeenCalledOnce();
+        // The refresh delivers the new channel; it must not start another release check.
+        await render({ ...props, releaseAccess: { ...props.releaseAccess!, channel: "nightly" } });
         await act(async () => vi.advanceTimersByTimeAsync(60_000));
         expect(mocks.status).toHaveBeenCalledTimes(3);
         expect(mocks.router.refresh).toHaveBeenCalledOnce();
