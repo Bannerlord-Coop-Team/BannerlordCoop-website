@@ -183,16 +183,16 @@ function Test-NightlyAccessTokenResponse {
 
     if ($null -eq $Response) { return $false }
     return [string]$Response.token_type -ceq 'Bearer' -and
-        [string]$Response.access_token -match '^[A-Za-z0-9_-]{43}$'
+        [string]$Response.access_token -cmatch '^[A-Za-z0-9_-]{43}$'
 }
 
 function Test-NightlyDeviceSessionResponse {
     param($Response)
 
     if ($null -eq $Response -or $Response -is [string] -or $Response -is [xml]) { return $false }
-    return [string]$Response.device_code -match '^[A-Za-z0-9_-]{43}$' -and
-        [string]$Response.user_code -match '^[A-Z2-9]{4}-[A-Z2-9]{4}$' -and
-        [string]$Response.verification_uri -match '^https://bannerlordcoop-nightly-gateway\.garrett-luskey\.workers\.dev/activate\?'
+    return [string]$Response.device_code -cmatch '^[A-Za-z0-9_-]{43}$' -and
+        [string]$Response.user_code -cmatch '^[A-Z2-9]{4}-[A-Z2-9]{4}$' -and
+        [string]$Response.verification_uri -cmatch '^https://bannerlordcoop-nightly-gateway\.garrett-luskey\.workers\.dev/activate\?'
 }
 
 function Get-NightlyDeviceSessionShape {
@@ -214,9 +214,9 @@ function Get-NightlyDeviceSessionShape {
     $deviceCode = [string]$Response.device_code
     $userCode = [string]$Response.user_code
     $uri = [string]$Response.verification_uri
-    $deviceValid = ($deviceCode -match '^[A-Za-z0-9_-]{43}$').ToString().ToLowerInvariant()
-    $userValid = ($userCode -match '^[A-Z2-9]{4}-[A-Z2-9]{4}$').ToString().ToLowerInvariant()
-    $uriValid = ($uri -match '^https://bannerlordcoop-nightly-gateway\.garrett-luskey\.workers\.dev/activate\?').ToString().ToLowerInvariant()
+    $deviceValid = ($deviceCode -cmatch '^[A-Za-z0-9_-]{43}$').ToString().ToLowerInvariant()
+    $userValid = ($userCode -cmatch '^[A-Z2-9]{4}-[A-Z2-9]{4}$').ToString().ToLowerInvariant()
+    $uriValid = ($uri -cmatch '^https://bannerlordcoop-nightly-gateway\.garrett-luskey\.workers\.dev/activate\?').ToString().ToLowerInvariant()
     $expires = [string]$Response.expires_in
     $interval = [string]$Response.interval
     if ($expires -notmatch '^\d{1,5}$') { $expires = 'invalid' }
@@ -1014,7 +1014,7 @@ function Get-InstallerPin {
     $value = [string]$env:BANNERLORDCOOP_INSTALLER_PIN
     if ([string]::IsNullOrWhiteSpace($value)) { return '' }
     $pin = $value.Trim()
-    if ($pin -notmatch '^[A-Za-z0-9_-]{43}$') {
+    if ($pin -cnotmatch '^[A-Za-z0-9_-]{43}$') {
         throw 'The create-build installer pin is invalid. Ask staff for a new /create-build link.'
     }
     return $pin
@@ -1355,7 +1355,7 @@ function Get-ReleaseManifest {
         if (-not $validUri -or
             [string]$release.sha256 -notmatch '^[a-f0-9]{64}$' -or
             -not $validBytes -or $bytes -le 0 -or $bytes -gt $entry.Maximum -or
-            [string]$release.fileName -notmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,199}\.7z$') {
+            [string]$release.fileName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,199}\.7z$') {
             throw "The nightly $($entry.Name) release metadata is invalid."
         }
     }
@@ -1380,7 +1380,7 @@ function Get-ReleaseManifest {
             if (-not (Test-PublicArtifactUri ([string]$part.publicUrl) $partName) -or
                 [string]$part.sha256 -notmatch '^[a-f0-9]{64}$' -or
                 -not $validPartBytes -or $partBytes -le 0 -or $partBytes -gt $maximum -or
-                [string]$part.fileName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$') {
+                [string]$part.fileName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$') {
                 throw "The incremental Windows server $partName metadata is invalid."
             }
         }
@@ -1439,7 +1439,7 @@ function Get-PinManifest {
         -not (Test-PinServerArtifactUri ([string]$manifest.server.publicUrl)) -or
         [string]$manifest.server.sha256 -notmatch '^[a-f0-9]{64}$' -or
         -not $validServerBytes -or $serverBytes -le 0 -or $serverBytes -gt 6442450944L -or
-        [string]$manifest.server.fileName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$' -or
+        [string]$manifest.server.fileName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$' -or
         $null -ne $manifest.server.incremental) {
         throw 'The create-build installer manifest is invalid.'
     }
