@@ -13,7 +13,6 @@ const definition: LocaleDefinition = {
         "cheats": () => import("../dictionaries/ja/cheats.json"),
         "common": () => import("../dictionaries/ja/common.json"),
         "home": () => import("../dictionaries/ja/home.json"),
-        "live-server": () => import("../dictionaries/ja/live-server.json"),
         "login": () => import("../dictionaries/ja/login.json"),
         "managed-server": () => import("../dictionaries/ja/managed-server.json"),
         "not-found": () => import("../dictionaries/ja/not-found.json"),

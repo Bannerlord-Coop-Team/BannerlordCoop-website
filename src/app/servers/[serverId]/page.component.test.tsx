@@ -12,23 +12,17 @@ import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles"
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import ServerPage, { generateMetadata } from "./page";
 import { createTranslator } from "@/app/lib/localization/translator";
-import { LiveServerBackupSetup } from "@/app/components/servers/LiveServerBackupSetup";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
-import { LiveServerVisibilitySetup } from "@/app/components/servers/LiveServerVisibilitySetup";
 
 vi.mock("@/app/lib/localization/server", () => ({
     getLocale: async () => "en",
     getMessages: async () => serverTestMessages,
-    // Selects the requested namespace while keeping deliberately distinct managed member labels.
-    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", namespace === "managed-server"
-        ? { ...serverTestMessages[namespace], "member.missingName": "Missing member name", "member.missingEmail": "Missing member email" }
-        : serverTestMessages[namespace]),
+    // Selects the requested namespace without reading request state.
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
 }));
 
 const mocks = vi.hoisted(() => ({
-    getUser: vi.fn(), getSession: vi.fn(), liveServer: vi.fn(),
-    liveAccess: vi.fn(), managedServers: vi.fn(), displayNames: vi.fn(),
-    preview: vi.fn(), users: vi.fn(),
+    getUser: vi.fn(), getSession: vi.fn(), managedServers: vi.fn(), preview: vi.fn(), hostedAccess: vi.fn(),
     backups: vi.fn(), backupStatus: vi.fn(), files: vi.fn(), requestBackup: vi.fn(), requestVisibility: vi.fn(), refresh: vi.fn(),
     saves: vi.fn(), generations: vi.fn(), notices: vi.fn(), move: vi.fn(),
 }));
@@ -38,15 +32,13 @@ vi.mock("next/navigation", () => ({
     useRouter: () => ({ refresh: mocks.refresh }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/app/lib/supabase/users", () => ({ listSupabaseUsers: mocks.users }));
 vi.mock("@/app/lib/hosting/server-files", () => ({ getMyServerFiles: mocks.files }));
 vi.mock("@/app/components/servers/ManagedServerTransfers", () => ({ ManagedServerTransfers: () => null }));
 vi.mock("@/app/lib/supabase/server", () => ({
     getSupabaseServerClient: async () => ({ auth: { getUser: mocks.getUser, getSession: mocks.getSession } }),
 }));
-vi.mock("@/app/lib/console/servers", () => ({ getLiveConsoleServer: mocks.liveServer, getConsoleGatewayUrl: () => null }));
 vi.mock("@/app/lib/auth/access", () => ({
-    getLiveConsoleAccessLevel: mocks.liveAccess, getMemberRole: () => "Admin", hasHostedServerAccess: () => true,
+    getMemberRole: () => "Admin", hasHostedServerAccess: mocks.hostedAccess,
 }));
 vi.mock("@/app/lib/hosting/my-servers", async (importOriginal) => ({
     ...await importOriginal<typeof import("@/app/lib/hosting/my-servers")>(),
@@ -63,23 +55,21 @@ vi.mock("@/app/lib/hosting/my-servers-server", () => ({
     getMyServerNotices: mocks.notices,
     getMyServerMoveStatus: mocks.move,
 }));
-vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: mocks.displayNames }));
 vi.mock("@/app/lib/hosting/servers", () => ({ getServerForRole: mocks.preview }));
 
-const liveId = "live-server";
 const managedId = "abcdef12-1234-4123-8123-123456789abc";
-const liveServer = { id: liveId, name: "Live", address: "203.0.113.10", nodeId: "node", provider: "External VPS", managedServerId: managedId };
+const managedSummary = { serverId: managedId, accessRole: "owner", displayName: "Managed", friendlyRegion: "Europe", operationState: "running", observedGameState: "running", releaseChannel: "stable", updatedAt: "2026-10-01T00:00:00.000Z" } as const;
 
-// Verifies the unified page delivers each client namespace and localized metadata.
-it("composes managed, shared, live and cheats dictionaries without changing page access", async () => {
-    const result = await ServerPage({ params: Promise.resolve({ serverId: liveId }), searchParams: Promise.resolve({}) });
+// Verifies the page delivers each client namespace and localized metadata.
+it("composes managed, shared and cheats dictionaries without changing page access", async () => {
+    const result = await ServerPage({ params: Promise.resolve({ serverId: managedId }), searchParams: Promise.resolve({}) });
     expect(result.props.locale).toBe("en");
     expect(result.props.messages).toMatchObject(serverTestMessages);
     expect(await generateMetadata()).toEqual({ title: "Manage Server", description: "Manage a Bannerlord Coop server." });
 });
 
 // Invoke the real server page with a fixed requested identity.
-function page(serverId = liveId) {
+function page(serverId: string = managedId) {
     return ServerPage({ params: Promise.resolve({ serverId }), searchParams: Promise.resolve({}) }).then(result => result.props.children);
 }
 
@@ -87,11 +77,8 @@ beforeEach(() => {
     vi.resetAllMocks();
     mocks.getUser.mockResolvedValue({ data: { user: { id: "user" } } });
     mocks.getSession.mockResolvedValue({ data: { session: { access_token: "token" } } });
-    mocks.liveServer.mockReturnValue(liveServer);
-    mocks.liveAccess.mockReturnValue("operator");
-    mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "manager" });
-    mocks.displayNames.mockResolvedValue(new Map());
-    mocks.users.mockResolvedValue({ users: [], truncated: false });
+    mocks.hostedAccess.mockReturnValue(true);
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, accessRole: "manager" });
     // Unconfigured test environments cannot list saves, so most page tests have no active campaign.
     mocks.saves.mockRejectedValue(new MyServersApiError("server_api_not_configured", "Not configured"));
     mocks.notices.mockResolvedValue([]);
@@ -100,80 +87,44 @@ beforeEach(() => {
 
 it("redirects anonymous visitors to login", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } });
-    await expect(page()).rejects.toThrow("redirect:/login?next=/servers/live-server");
-    expect(mocks.liveServer).not.toHaveBeenCalled();
+    await expect(page()).rejects.toThrow(`redirect:/login?next=/servers/${managedId}`);
     expect(mocks.managedServers).not.toHaveBeenCalled();
 });
 
 it("redirects a verified user without a session token before loading server data", async () => {
     mocks.getSession.mockResolvedValue({ data: { session: null } });
-    await expect(page()).rejects.toThrow("redirect:/login?next=/servers/live-server");
-    expect(mocks.liveServer).not.toHaveBeenCalled();
+    await expect(page()).rejects.toThrow(`redirect:/login?next=/servers/${managedId}`);
     expect(mocks.managedServers).not.toHaveBeenCalled();
-    expect(mocks.displayNames).not.toHaveBeenCalled();
     expect(mocks.preview).not.toHaveBeenCalled();
 });
 
-it("denies known live servers before managed or preview fallthrough, even for a same-ID managed assignment", async () => {
-    mocks.liveAccess.mockReturnValue(null);
-    mocks.managedServers.mockResolvedValue({ serverId: liveId, accessRole: "owner" });
-    await expect(page()).rejects.toThrow("redirect:/servers");
-    expect(mocks.managedServers).not.toHaveBeenCalled();
-    expect(mocks.displayNames).not.toHaveBeenCalled();
-    expect(mocks.preview).not.toHaveBeenCalled();
-});
-
-it.each(["owner", "operator", "admin"])("resolves one managed identity for live %s access and all managed controls", async (accessLevel) => {
-    mocks.liveAccess.mockReturnValue(accessLevel);
-    const result = await page();
-    expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId);
-    expect(result.props.logDownload).toEqual({ serverId: managedId, userId: "user" });
-    expect(result.props.server.id).toBe(liveId);
-    expect(result.props.managedServer).toEqual({ serverId: managedId, accessRole: "manager" });
-});
-
-it.each(["missing", "support", "admin"])("keeps mapped logs unavailable for %s managed access without falling back", async (accessRole) => {
-    mocks.managedServers.mockResolvedValue(accessRole === "missing" ? null : { serverId: managedId, accessRole });
-    const result = await page();
-    expect(result.props.logDownload).toBeUndefined();
-    expect(result.props.managedServer).toEqual(accessRole === "missing" ? null : { serverId: managedId, accessRole });
-});
-
-it("preserves same-ID downloads when no explicit mapping exists", async () => {
-    mocks.liveServer.mockReturnValue({ ...liveServer, managedServerId: undefined });
-    mocks.managedServers.mockResolvedValue({ serverId: liveId, accessRole: "owner" });
-    expect((await page()).props.logDownload).toEqual({ serverId: liveId, userId: "user" });
-});
-
-it("keeps live access but no download when the managed lookup is unavailable", async () => {
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+// Retired external IDs reach no managed record or preview, so every viewer returns to discovery.
+it.each([true, false])("returns a retired external server ID to discovery with hosted access %s", async hostedAccess => {
+    vi.stubEnv("CONSOLE_SERVER_CATALOG", JSON.stringify([{ id: "legacy-server", name: "Legacy", address: "203.0.113.10", nodeId: "node", provider: "External VPS" }]));
     try {
-        mocks.managedServers.mockRejectedValue(new Error("Unavailable"));
-        expect((await page()).props.logDownload).toBeUndefined();
-    } finally { error.mockRestore(); }
+        mocks.hostedAccess.mockReturnValue(hostedAccess);
+        mocks.managedServers.mockRejectedValue(new MyServersApiError("server_not_found", "Gone"));
+        await expect(page("legacy-server")).rejects.toThrow("redirect:/servers");
+        expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", "legacy-server");
+        expect(mocks.backups).not.toHaveBeenCalled();
+        expect(mocks.files).not.toHaveBeenCalled();
+    } finally { vi.unstubAllEnvs(); }
 });
 
-it("preserves managed-only pages without requiring live authorization", async () => {
-    mocks.liveServer.mockReturnValue(null);
+it("renders managed pages from the requested registered server identity", async () => {
     const result = await page(managedId);
+    expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId);
     expect(result.props.server.serverId).toBe(managedId);
-    expect(mocks.liveAccess).not.toHaveBeenCalled();
 });
 
 // Restores a remembered tab on the server so a reload does not flash the Console first.
-it.each<[{ tab: string | string[]; accessError?: string }, string]>([
-    [{ tab: "backups" }, "Backups"],
-    [{ tab: ["save-config", "settings"] }, "Save & config"],
-    [{ tab: "../../admin" }, "Console"],
-    [{ tab: "backups", accessError: "Access could not be updated." }, "Settings"],
-])("opens the live workspace tab remembered in %j", async (query, section) => {
-    const tree = (await ServerPage({ params: Promise.resolve({ serverId: liveId }), searchParams: Promise.resolve(query) })).props.children;
-    const workspace = await findServerElement(tree, "ServerManagementWorkspace" as string);
-    expect((workspace!.props as { initialSection?: string }).initialSection).toBe(section);
-});
-
-it.each([["settings", "Settings"], ["unknown", undefined]] as const)("opens the managed workspace tab remembered as %s", async (tab, section) => {
-    mocks.liveServer.mockReturnValue(null);
+it.each<[string | string[], string | undefined]>([
+    ["settings", "Settings"],
+    ["backups", "Backups"],
+    [["save-config", "settings"], "Save & config"],
+    ["../../admin", undefined],
+    ["unknown", undefined],
+])("opens the managed workspace tab remembered as %j", async (tab, section) => {
     mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "owner", displayName: "Managed", friendlyRegion: "Europe", operationState: "running", observedGameState: "running", releaseChannel: "stable", updatedAt: "2026-10-01T00:00:00.000Z" });
     const tree = (await ServerPage({ params: Promise.resolve({ serverId: managedId }), searchParams: Promise.resolve({ tab }) })).props.children;
     const workspace = await findServerElement(tree, "ServerManagementWorkspace" as string);
@@ -181,7 +132,6 @@ it.each([["settings", "Settings"], ["unknown", undefined]] as const)("opens the 
 });
 
 it("locks the managed workspace and explains initialization while the lifecycle is configuring", async () => {
-    mocks.liveServer.mockReturnValue(null);
     const updatedAt = "2026-10-01T00:00:00.000Z";
     mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "owner", displayName: "Preparing", friendlyRegion: "Europe", operationState: "configuring", observedGameState: "unknown", releaseChannel: "stable", updatedAt });
     const tree = await page(managedId);
@@ -199,7 +149,6 @@ it.each([
     ["queued", "Running", "Backing up"],
     [null, "Running", "Running"],
 ] as const)("reports a %s backup job on a running server in the header status", async (jobState, gameState, lifecycle) => {
-    mocks.liveServer.mockReturnValue(null);
     const updatedAt = "2026-10-01T00:00:00.000Z";
     mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "owner", displayName: "Managed", friendlyRegion: "Europe", operationState: "running", observedGameState: "running", releaseChannel: "stable", updatedAt });
     mocks.backupStatus.mockResolvedValue({ serverId: managedId, updatedAt, operationState: "running", observedGameState: "running",
@@ -215,8 +164,6 @@ it.each([
 });
 
 // Resolve the page's server components, leaving client components for React to render.
-function findServerElement(node: ReactNode, name: "LiveServerBackupSetup"): Promise<ReactElement<ComponentProps<typeof LiveServerBackupSetup>> | null>;
-function findServerElement(node: ReactNode, name: "LiveServerVisibilitySetup"): Promise<ReactElement<ComponentProps<typeof LiveServerVisibilitySetup>> | null>;
 function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
 function findServerElement(node: ReactNode, name: "ServerSettingsPanel"): Promise<ReactElement<ComponentProps<typeof ServerSettingsPanel>> | null>;
 function findServerElement(node: ReactNode, name: "ServerWorkspacePanel"): Promise<ReactElement<ComponentProps<typeof ServerWorkspacePanel>> | null>;
@@ -228,7 +175,7 @@ async function findServerElement(node: ReactNode, name: string): Promise<ReactEl
         if (!isValidElement<{ children?: ReactNode }>(child)) continue;
         if (typeof child.type === "function") {
             if (child.type.name === name) return child;
-            if (["LiveServerManagementPage", "ManagedServerManagementPage", "ManagedServerSections", "ManagedServerBackupsSection", "UnavailableFileWorkspaces"].includes(child.type.name)) {
+            if (["ManagedServerManagementPage", "ManagedServerSections", "ManagedServerBackupsSection", "UnavailableFileWorkspaces"].includes(child.type.name)) {
                 const component = child.type as (props: unknown) => ReactNode | Promise<ReactNode>;
                 const found = await findServerElement(await component(child.props), name);
                 if (found) return found;
@@ -241,58 +188,16 @@ async function findServerElement(node: ReactNode, name: string): Promise<ReactEl
     return null;
 }
 
-// Exercises the unified page's member projection without altering assignment authority.
-it("supplies localized missing identity labels while retaining real operator identity", async () => {
-    mocks.liveAccess.mockReturnValue("owner");
-    mocks.users.mockResolvedValue({ truncated: false, users: [
-        { id: "owner", app_metadata: { live_console_owner_server_ids: [liveId] }, user_metadata: {} },
-        { id: "operator", email: "real@example.com", app_metadata: { live_console_operator_server_ids: [liveId] }, user_metadata: { full_name: "Real {name}" } },
-    ] });
-    const access = await findServerElement(await page(), "LiveServerAccessManager");
-    expect(access?.props).toMatchObject({
-        owner: { id: "owner", displayName: "Missing member name", email: "Missing member email" },
-        operators: [{ id: "operator", displayName: "Real {name}", email: "real@example.com" }],
-    });
-});
-
-// Awaits real backup setup output before checking unavailable-access guidance and inert operations.
-it.each(["mapping-required", "access-required", "lookup-failed"] as const)("explains %s without exposing backup operations", async (reason) => {
-    mocks.managedServers.mockResolvedValue(null);
-    if (reason === "mapping-required") mocks.liveServer.mockReturnValue({ ...liveServer, managedServerId: undefined });
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-        if (reason === "lookup-failed") mocks.managedServers.mockRejectedValue(new Error("Unavailable"));
-        const tree = await page();
-        const setup = await findServerElement(tree, "LiveServerBackupSetup");
-        expect(setup?.props).toEqual({ reason, serverId: liveId });
-        const html = renderToStaticMarkup(<TestLocalization>{await LiveServerBackupSetup(setup!.props)} </TestLocalization>);
-        expect(html).toContain(reason === "lookup-failed" ? "Reload backup access" : "View managed servers and setup options");
-        if (reason === "lookup-failed") {
-            // A same-page fragment link would not reload; GET must request fresh access.
-            expect(html).toContain(`action="/servers/${liveId}#server-backups" method="get"`);
-        } else {
-            expect(html).not.toContain("<button");
-        }
-        expect(html).not.toContain("Create backup");
-        expect(html).not.toContain("Restore save");
-        expect(await findServerElement(tree, "ManagedServerFiles")).toBeNull();
-        expect(mocks.backups).not.toHaveBeenCalled();
-        expect(mocks.backupStatus).not.toHaveBeenCalled();
-    } finally { error.mockRestore(); }
-});
-
 it("keeps fictional preview backup panels non-operational", async () => {
-    mocks.liveServer.mockReturnValue(null);
     mocks.managedServers.mockResolvedValue(null);
     mocks.preview.mockReturnValue({ name: "Demo", assignedAccount: {} });
     const tree = await page("preview");
-    expect(await findServerElement(tree, "LiveServerBackupSetup")).toBeNull();
     expect(await findServerElement(tree, "ManagedServerFiles")).toBeNull();
     expect(await findServerElement(tree, "UnavailableServerPanel")).not.toBeNull();
 });
 
-it.each(["admin", "support"])("does not load private backup data for mapped read-only %s access", async (accessRole) => {
-    mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole });
+it.each(["admin", "support"])("does not load private backup data for managed read-only %s access", async (accessRole) => {
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, accessRole });
     const files = await findServerElement(await page(), "ManagedServerFiles");
     expect(files).not.toBeNull();
     expect(renderToStaticMarkup(<TestLocalization>{files} </TestLocalization>)).toContain("require owner or manager access");
@@ -310,7 +215,6 @@ it("keeps managed backup load failures distinct from missing onboarding", async 
         const tree = await page();
         const files = await findServerElement(tree, "ManagedServerFiles");
         expect(files?.props).toMatchObject({ backups: [], loadError: expect.stringContaining("It will reload automatically") });
-        expect(await findServerElement(tree, "LiveServerBackupSetup")).toBeNull();
     } finally { error.mockRestore(); }
 });
 
@@ -352,13 +256,13 @@ it.each([
 it.each([
     ["owner", "Create backup", "create-backup"],
     ["manager", "Restore save", "restore-backup"],
-])("connects mapped %s backup history and %s to the existing authenticated operation", async (accessRole, label, action) => {
+])("connects managed %s backup history and %s to the existing authenticated operation", async (accessRole, label, action) => {
     vi.useFakeTimers();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     sessionStorage.clear();
     const updatedAt = "2026-09-22T10:00:00.000Z";
     const backupId = "33333333-3333-4333-8333-333333333333";
-    mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole, updatedAt, displayName: "Mapped campaign", operationState: "running", observedGameState: "running" });
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, accessRole, updatedAt, displayName: "Managed campaign" });
     mocks.backups.mockResolvedValue([{ backupId, backupType: "manual", byteSize: 1024, createdAt: updatedAt, retentionExpiresAt: "2026-10-22T10:00:00.000Z", restoreState: "available", restoredAt: null, canRestore: true }]);
     mocks.backupStatus.mockResolvedValue({ serverId: managedId, updatedAt, operationState: "running", observedGameState: "running", job: null });
     mocks.files.mockResolvedValue(null);
@@ -391,79 +295,42 @@ it.each([
     }
 });
 
-// Awaits real visibility setup output without changing mapped identity or authorization expectations.
-it.each(["mapping-required", "access-required", "lookup-failed"] as const)("links live visibility to actionable %s guidance without granting access", async reason => {
-    // An unrelated owned server must never substitute for the configured identity.
-    mocks.managedServers.mockResolvedValue(null);
-    if (reason === "mapping-required") mocks.liveServer.mockReturnValue({ ...liveServer, managedServerId: undefined });
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-        if (reason === "lookup-failed") mocks.managedServers.mockRejectedValue(new Error("Unavailable"));
-        const tree = await page();
-        const workspace = await findServerElement(tree, "ServerManagementWorkspace");
-        expect(renderToStaticMarkup(<TestLocalization>{workspace!.props.visibility} </TestLocalization>)).toContain('href="#server-visibility"');
-        const setup = await findServerElement(tree, "LiveServerVisibilitySetup");
-        expect(setup?.props).toEqual({ reason, serverId: liveId });
-        const html = renderToStaticMarkup(<TestLocalization>{await LiveServerVisibilitySetup(setup!.props)} </TestLocalization>);
-        expect(html).toContain('id="server-visibility"');
-        if (reason === "lookup-failed") {
-            expect(html).toContain(`action="/servers/${liveId}#server-visibility" method="get"`);
-            expect(html).not.toContain("setup options");
-        } else {
-            expect(html).toContain("managed owner");
-            expect(html).toContain("does not publish");
-            expect(html).not.toContain("<button");
-        }
-        const settings = await findServerElement(tree, "ServerSettingsPanel");
-        expect(settings!.props.visibilityAccess).toBeUndefined();
-        expect(settings!.props.visibility).toBeUndefined();
-        expect(mocks.requestVisibility).not.toHaveBeenCalled();
-    } finally { error.mockRestore(); }
-});
-
-it.each(["owner", "manager", "admin", "support"])("uses mapped managed %s authority in both visibility controls", async accessRole => {
-    mocks.liveAccess.mockReturnValue("owner");
-    mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole, visibility: "public", updatedAt: "2026-09-26T12:00:00.000Z" });
+it.each(["owner", "manager", "admin", "support"])("uses managed %s authority in both visibility controls", async accessRole => {
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, accessRole, visibility: "public", updatedAt: "2026-09-26T12:00:00.000Z" });
     const tree = await page();
     const workspace = await findServerElement(tree, "ServerManagementWorkspace");
     const header = workspace!.props.visibility;
     const settings = await findServerElement(tree, "ServerSettingsPanel");
-    expect(header.props).toEqual({ serverId: managedId, visibility: "public", accessRole, expectedUpdatedAt: "2026-09-26T12:00:00.000Z" });
+    expect(header.props).toEqual({ serverId: managedId, visibility: "public", accessRole, expectedUpdatedAt: "2026-09-26T12:00:00.000Z", disabled: false });
     expect(settings!.props.visibility).toBe("public");
     expect(settings!.props.visibilityAccess).toEqual({ serverId: managedId, expectedUpdatedAt: "2026-09-26T12:00:00.000Z", canEdit: accessRole === "owner" });
-    expect(await findServerElement(tree, "LiveServerVisibilitySetup")).toBeNull();
 });
 
-it.each([liveId, managedId])("supplies current maintenance preferences for managed identity on %s", async requestedId => {
-    mocks.liveAccess.mockReturnValue("owner");
-    if (requestedId === managedId) mocks.liveServer.mockReturnValue(null);
+it("supplies current maintenance preferences for the managed identity", async () => {
     mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "owner", displayName: "Owned server",
         friendlyRegion: "us-west", observedGameState: "stopped", operationState: "drifted", releaseChannel: "stable", visibility: "private",
         maintenanceSlot: "18:00-19:00", timezone: "America/Chicago", updatedAt: "2026-10-01T00:00:00.000Z" });
-    const settings = await findServerElement(await page(requestedId), "ServerSettingsPanel");
+    const settings = await findServerElement(await page(managedId), "ServerSettingsPanel");
     expect(settings!.props.settingsAccess).toEqual({ serverId: managedId, expectedUpdatedAt: "2026-10-01T00:00:00.000Z",
         maintenanceSlot: "18:00-19:00", timezone: "America/Chicago", canEdit: true });
     expect(settings!.props.name).toBe("Owned server");
-    expect(settings!.props.renameServerId).toBeUndefined();
 });
 
-it("keeps preview visibility non-operational without live onboarding", async () => {
-    mocks.liveServer.mockReturnValue(null);
+it("keeps preview visibility non-operational without a managed server", async () => {
     mocks.managedServers.mockResolvedValue(null);
     mocks.preview.mockReturnValue({ name: "Demo", assignedAccount: {} });
     const tree = await page("preview");
-    expect(await findServerElement(tree, "LiveServerVisibilitySetup")).toBeNull();
     const settings = await findServerElement(tree, "ServerSettingsPanel");
     expect(settings!.props.visibilityAccess).toBeUndefined();
     expect(settings!.props.visibility).toBeUndefined();
 });
 
-it("updates the mapped identity through both controls and waits for authoritative refresh", async () => {
+it("updates the managed identity through both controls and waits for authoritative refresh", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     mocks.getSession.mockResolvedValue({ data: { session: { access_token: "token", user: { id: "user" } } } });
     const updatedAt = "2026-09-26T12:00:00.000Z";
     const nextUpdatedAt = "2026-09-26T12:01:00.000Z";
-    mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "owner", visibility: "private", updatedAt });
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, visibility: "private", updatedAt });
     mocks.requestVisibility.mockResolvedValue({ outcome: "updated" });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const container = document.createElement("div");
@@ -482,7 +349,7 @@ it("updates the mapped identity through both controls and waits for authoritativ
         // An acknowledged receipt does not prove the current state (it may be a replay).
         expect(container.querySelector("summary")!.textContent).not.toContain("Public");
         expect(container.querySelector<HTMLInputElement>('input[value="private"]')!.checked).toBe(true);
-        mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "owner", visibility: "public", updatedAt: nextUpdatedAt });
+        mocks.managedServers.mockResolvedValue({ ...managedSummary, visibility: "public", updatedAt: nextUpdatedAt });
         await renderVisibility();
         expect(container.querySelector("summary")!.textContent).toContain("Public");
         expect(container.querySelector<HTMLInputElement>('input[value="public"]')!.checked).toBe(true);
@@ -491,7 +358,7 @@ it("updates the mapped identity through both controls and waits for authoritativ
         expect(mocks.requestVisibility).toHaveBeenLastCalledWith("token", { action: "set-server-visibility", serverId: managedId, visibility: "private", expectedUpdatedAt: nextUpdatedAt }, expect.any(String));
         expect(mocks.refresh).toHaveBeenCalledTimes(2);
         expect(container.querySelector("summary")!.textContent).toContain("Public");
-        mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "owner", visibility: "private", updatedAt: "2026-09-26T12:02:00.000Z" });
+        mocks.managedServers.mockResolvedValue({ ...managedSummary, visibility: "private", updatedAt: "2026-09-26T12:02:00.000Z" });
         await renderVisibility();
         expect(container.querySelector("summary")!.textContent).toContain("Private");
         expect(container.querySelector<HTMLInputElement>('input[value="private"]')!.checked).toBe(true);
@@ -502,9 +369,8 @@ it("updates the mapped identity through both controls and waits for authoritativ
     }
 });
 
-// Console merge matrix: managed owners/managers get output; read-only roles and existing live consoles do not.
+// Console matrix: managed owners/managers get commands and output; read-only roles do not.
 it.each(["owner", "manager", "support", "admin"])("preserves managed console access for %s in the workspace", async (accessRole) => {
-    mocks.liveServer.mockReturnValue(null);
     mocks.managedServers.mockResolvedValue({
         serverId: managedId, accessRole, observedGameState: "running", operationState: "idle", friendlyRegion: "europe",
     });
@@ -516,15 +382,7 @@ it.each(["owner", "manager", "support", "admin"])("preserves managed console acc
     expect(commands?.props.server.serverId).toBe(operator ? managedId : undefined);
 });
 
-it("does not duplicate the existing live console with managed output", async () => {
-    const tree = await page();
-    expect(await findServerElement(tree, "LiveServerConsole")).not.toBeNull();
-    expect(await findServerElement(tree, "ManagedServerConsole")).toBeNull();
-    expect(await findServerElement(tree, "ManagedServerCommands")).toBeNull();
-});
-
 it("places managed password configuration in Settings rather than the Console workspace", async () => {
-    mocks.liveServer.mockReturnValue(null);
     mocks.managedServers.mockResolvedValue({
         serverId: managedId, accessRole: "owner", observedGameState: "running", operationState: "running", friendlyRegion: "europe",
     });
@@ -538,12 +396,27 @@ it("places managed password configuration in Settings rather than the Console wo
     expect(await findServerElement(consolePanel, "ManagedServerPassword")).toBeNull();
 });
 
-it.each(["server_not_found", "forbidden"])("keeps managed controls unavailable when the single-server read returns %s", async code => {
-    mocks.managedServers.mockRejectedValueOnce(new MyServersApiError(code, "Unavailable"));
-    const result = await page();
-    expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId);
-    expect(result.props).toMatchObject({ managedServer: null, backupUnavailableReason: "access-required" });
-    expect(result.props.logDownload).toBeUndefined();
+it("logs an unexpected single-server read failure and returns to discovery without managed controls", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+        const failure = new Error("Unavailable");
+        mocks.managedServers.mockRejectedValueOnce(failure);
+        await expect(page()).rejects.toThrow("redirect:/servers");
+        expect(error).toHaveBeenCalledExactlyOnceWith("Managed server detail failed to load", failure);
+    } finally { error.mockRestore(); }
+    expect(mocks.backups).not.toHaveBeenCalled();
+    expect(mocks.files).not.toHaveBeenCalled();
+});
+
+it.each(["server_not_found", "forbidden"])("returns to discovery without managed controls when the single-server read returns %s", async code => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+        mocks.managedServers.mockRejectedValueOnce(new MyServersApiError(code, "Unavailable"));
+        await expect(page()).rejects.toThrow("redirect:/servers");
+        expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId);
+        // An expected unknown-server answer is not logged as a failure.
+        expect(error).not.toHaveBeenCalled();
+    } finally { error.mockRestore(); }
     expect(mocks.backups).not.toHaveBeenCalled();
     expect(mocks.files).not.toHaveBeenCalled();
 });
@@ -593,18 +466,13 @@ function bannerParts(workspace: ReactElement | null) {
     return { move: move as ReactElement<{ notices: unknown[] }> | undefined, notices: notices as ReactElement<{ serverId: string; notices: unknown[] }> | undefined };
 }
 
-const managedSummary = { serverId: managedId, accessRole: "owner", displayName: "Managed", friendlyRegion: "Europe", operationState: "running", observedGameState: "running", releaseChannel: "stable", updatedAt: "2026-10-01T00:00:00.000Z" } as const;
 const moving = { state: "moving", scheduledAt: null, startedAt: "2026-10-18T09:00:00.000Z", completedAt: null, step: "restoring", address: null, stayedOnOriginal: null } as const;
 
-it.each([
-    ["managed", false, managedId],
-    ["live", true, liveId],
-] as const)("shows this viewer's notices below the move status at the top of the %s page", async (_kind, live, serverId) => {
-    if (!live) mocks.liveServer.mockReturnValue(null);
+it("shows this viewer's notices below the move status at the top of the page", async () => {
     mocks.managedServers.mockResolvedValue(managedSummary);
     mocks.notices.mockResolvedValue([pageNotice]);
     mocks.move.mockResolvedValue(moving);
-    const tree = await page(serverId);
+    const tree = await page(managedId);
     const workspace = await findServerElement(tree, "ServerManagementWorkspace" as string);
     const { move, notices } = bannerParts(workspace);
     expect((move?.type as { name?: string }).name).toBe("ManagedServerMoveStatus");
@@ -620,7 +488,6 @@ it.each([
     ["is empty", () => { mocks.notices.mockResolvedValue([]); }],
 ])("renders the page with only the move status when the notice read %s", async (_case, arrange) => {
     arrange();
-    mocks.liveServer.mockReturnValue(null);
     mocks.managedServers.mockResolvedValue({ ...managedSummary, accessRole: "manager" });
     const workspace = await findServerElement(await page(managedId), "ServerManagementWorkspace" as string);
     expect(workspace).not.toBeNull();
@@ -630,22 +497,11 @@ it.each([
 });
 
 it("follows no move when the control plane cannot report one, such as an older release", async () => {
-    mocks.liveServer.mockReturnValue(null);
     mocks.managedServers.mockResolvedValue(managedSummary);
     mocks.move.mockRejectedValue(new MyServersApiError("invalid_request", "Unknown operation"));
     const tree = await page(managedId);
     expect((await findServerElement(tree, "ManagedServerMoveProvider"))?.props).toMatchObject({ serverId: managedId, initialMove: null });
     expect(await findServerElement(tree, "ServerManagementWorkspace" as string)).not.toBeNull();
-});
-
-it("does not read notices or move status for a live server without a managed server", async () => {
-    mocks.managedServers.mockRejectedValue(new MyServersApiError("server_not_found", "Gone"));
-    const tree = await page(liveId);
-    const workspace = await findServerElement(tree, "ServerManagementWorkspace" as string);
-    expect((workspace!.props as { banner?: unknown }).banner).toBeUndefined();
-    expect(await findServerElement(tree, "ManagedServerMoveProvider")).toBeNull();
-    expect(mocks.notices).not.toHaveBeenCalled();
-    expect(mocks.move).not.toHaveBeenCalled();
 });
 
 it.each([
@@ -654,7 +510,6 @@ it.each([
     ["scheduled", "Maintenance"],
     [null, "Maintenance"],
 ] as const)("names a %s move in the header status instead of maintenance", async (state, lifecycle) => {
-    mocks.liveServer.mockReturnValue(null);
     mocks.managedServers.mockResolvedValue({ ...managedSummary, operationState: "maintenance", observedGameState: "stopped" });
     mocks.move.mockResolvedValue(state === null ? null : state === "scheduled"
         ? { ...moving, state, scheduledAt: "2026-10-19T03:00:00.000Z", startedAt: null, step: null }
@@ -667,20 +522,9 @@ it.each([
     }
 });
 
-it.each([
-    ["the linked managed server's address", () => mocks.managedServers.mockResolvedValue({ ...managedSummary, connectionIp: "198.51.100.20", gamePorts: [4203] }), "198.51.100.20:4203"],
-    ["the catalog address while the managed server has none", () => mocks.managedServers.mockResolvedValue({ ...managedSummary, connectionIp: null, gamePorts: [] }), "203.0.113.10"],
-    ["the catalog address without a linked managed server", () => mocks.managedServers.mockRejectedValue(new MyServersApiError("server_not_found", "Gone")), "203.0.113.10"],
-] as const)("shows %s in a live page header, so a relocated address reaches it", async (_case, arrange, address) => {
-    arrange();
-    const workspace = await findServerElement(await page(liveId), "ServerManagementWorkspace" as string);
-    expect((workspace!.props as { address?: string | null }).address).toBe(address);
-});
-
-it.each([[false, managedId], [true, liveId]] as const)("gives the move status the header's address on a managed or linked live page: live=%s", async (live, serverId) => {
-    if (!live) mocks.liveServer.mockReturnValue(null);
+it("gives the move status the header's address", async () => {
     mocks.managedServers.mockResolvedValue({ ...managedSummary, connectionIp: "198.51.100.20", gamePorts: [4203] });
-    const tree = await page(serverId);
+    const tree = await page(managedId);
     expect((await findServerElement(tree, "ServerManagementWorkspace" as string) as ReactElement<{ address?: string | null }>).props.address).toBe("198.51.100.20:4203");
     expect((await findServerElement(tree, "ManagedServerMoveProvider"))?.props).toMatchObject({ headerAddress: "198.51.100.20:4203" });
 });

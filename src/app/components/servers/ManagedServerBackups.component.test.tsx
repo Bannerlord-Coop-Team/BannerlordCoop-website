@@ -239,7 +239,7 @@ it.each(["support", "admin"] as const)("does not expose backup mutations to %s a
 const intentKey = managedServerBackupIntentKey("user", server.serverId);
 
 describe("ManagedServerBackups session recovery", () => {
-    it.each(["managed-only redirect", "live overlap removal"])("replays the exact lost restore after polling causes %s and recovery", async (removal) => {
+    it.each(["redirect to the directory", "inventory loss within the workspace"])("replays the exact lost restore after polling causes a %s and recovery", async (removal) => {
         request.mockImplementationOnce(async () => {
             // Storage must be durable before the first request can be accepted.
             expect(JSON.parse(window.sessionStorage.getItem(intentKey)!)).toMatchObject({
@@ -250,9 +250,9 @@ describe("ManagedServerBackups session recovery", () => {
         });
         await render();
         router.refresh.mockImplementationOnce(() => root.render(
-            <TestLocalization>{removal === "managed-only redirect"
+            <TestLocalization>{removal === "redirect to the directory"
                 ? <p>Server directory after inventory failure</p>
-                : <ManagedServerPollingProvider><p>Live console without managed inventory</p></ManagedServerPollingProvider>} </TestLocalization>,
+                : <ManagedServerPollingProvider><p>Workspace without managed inventory</p></ManagedServerPollingProvider>} </TestLocalization>,
         ));
         await click("Restore save");
         const original = request.mock.calls[0];

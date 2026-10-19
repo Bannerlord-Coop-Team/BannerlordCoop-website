@@ -4,9 +4,7 @@ import { useTranslations } from "@/app/lib/localization/client";
 
 import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { MAX_SERVER_DISPLAY_NAME_LENGTH, validateServerDisplayName } from "@/app/lib/hosting/server-names";
 import { managedServerNameMessage, managedServerNameProblem } from "@/app/servers/managed-server-name-validation";
-import { renameLiveServer } from "@/app/servers/name-actions";
 import { setServerVisibility } from "@/app/servers/server-visibility-actions";
 import { changeServerRelease, readServerReleaseStatus } from "@/app/servers/server-release-actions";
 import { saveServerSettings, type ServerSettingsField, type ServerSettingsPrevious } from "@/app/servers/server-settings-actions";
@@ -27,11 +25,11 @@ type Visibility = "private" | "public";
 type VisibilityAccess = { serverId: string; expectedUpdatedAt: string; canEdit: boolean };
 
 // Presents authorized settings drafts and localized mutation feedback.
-export function ServerSettingsPanel({ name, visibility, renameServerId, visibilityAccess, releaseAccess, settingsAccess, managerAccess }: {
+export function ServerSettingsPanel({ name, visibility, visibilityAccess, releaseAccess, settingsAccess, managerAccess }: {
     settingsAccess?: VisibilityAccess & { maintenanceSlot?: string; timezone?: string };
     releaseAccess?: VisibilityAccess & { channel: ReleaseChannel };
     managerAccess?: { serverId: string; expectedUpdatedAt: string; canEdit: boolean };
-    name: string; visibility?: Visibility; renameServerId?: string; visibilityAccess?: VisibilityAccess;
+    name: string; visibility?: Visibility; visibilityAccess?: VisibilityAccess;
 }) {
     const { t } = useTranslations("managed-server");
     const router = useRouter();
@@ -109,7 +107,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
     const channelDirty = releaseAccess?.canEdit === true && channelState.draft !== releaseAccess.channel;
     const hasMaintenance = settingsAccess?.timezone === HOSTING_TIME_ZONE && HOSTING_MAINTENANCE_SLOTS.includes(settingsAccess.maintenanceSlot as MaintenanceSlot);
     const canChangeSettings = settingsAccess?.canEdit === true && hasMaintenance;
-    const canRename = !!renameServerId || canChangeSettings;
+    const canRename = canChangeSettings;
     const canChangeVisibility = visibilityAccess?.canEdit === true && visibility !== undefined;
     const nameDirty = canRename && nameState.draft.trim() !== nameState.saved;
     const visibilityDirty = canChangeVisibility && visibilityState.draft !== visibility;
@@ -126,14 +124,6 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
 
     // Checks a name draft with the rules its save path enforces, so problems appear beside the field.
     function nameProblem(value: string) {
-        if (renameServerId) {
-            const result = validateServerDisplayName(value, {
-                required: t("name.required"),
-                singleLine: t("name.singleLine"),
-                tooLong: t("name.tooLong", { maximum: MAX_SERVER_DISPLAY_NAME_LENGTH }),
-            });
-            return result.ok ? null : result.error;
-        }
         const problem = managedServerNameProblem(value.trim());
         return problem === null ? null : managedServerNameMessage(problem, t);
     }
@@ -157,19 +147,9 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
         let changed = false;
         let expectedUpdatedAt = settingsAccess?.expectedUpdatedAt ?? visibilityAccess?.expectedUpdatedAt ?? releaseAccess?.expectedUpdatedAt;
         try {
-            if (nameDirty && renameServerId) {
-                const form = new FormData();
-                form.set("serverId", renameServerId);
-                form.set("displayName", nameState.draft.trim());
-                const result = await renameLiveServer(form);
-                if (!result.ok) { setMessage(result.error); return; }
-                changed = true;
-                setNameState(current => ({ ...current, saved: result.displayName, draft: result.displayName }));
-                messages.push(t("settingsPanel.serverNameSaved"));
-            }
-            if (settingsAccess && canChangeSettings && ((nameDirty && !renameServerId) || maintenanceDirty)) {
+            if (settingsAccess && canChangeSettings && (nameDirty || maintenanceDirty)) {
                 const patch = {
-                    ...(nameDirty && !renameServerId ? { displayName: nameState.draft.trim() } : {}),
+                    ...(nameDirty ? { displayName: nameState.draft.trim() } : {}),
                     ...(maintenanceDirty ? { maintenanceSlot: maintenanceState.draft as MaintenanceSlot } : {}),
                 };
                 if (!settingsRequest.current || settingsRequest.current.serverId !== settingsAccess.serverId
@@ -266,7 +246,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
         <div className="max-w-3xl space-y-5 p-5">
             {showName && <div>
                 <label htmlFor="settings-server-name" className="text-sm font-medium">{t("settingsPanel.serverName")}</label>
-                <input id="settings-server-name" ref={nameInput} disabled={!canRename || pending || updateBusy} required minLength={renameServerId ? undefined : 3} maxLength={renameServerId ? 80 : 48} value={nameState.draft}
+                <input id="settings-server-name" ref={nameInput} disabled={!canRename || pending || updateBusy} required minLength={3} maxLength={48} value={nameState.draft}
                     aria-invalid={nameError ? true : undefined} aria-describedby={nameError ? "settings-server-name-error settings-server-name-help" : "settings-server-name-help"}
                     onChange={event => { setNameState(current => ({ ...current, draft: event.target.value })); setFieldErrors(current => ({ ...current, displayName: undefined })); setMessage(""); }}
                     onBlur={() => setNameTouched(true)}

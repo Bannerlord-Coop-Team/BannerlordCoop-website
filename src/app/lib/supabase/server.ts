@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ADMIN_COOKIE_PREFIX, IMPERSONATION_COOKIE, IMPERSONATION_OPTIONS } from "../auth/impersonation-cookie";
+import { ADMIN_SESSION_COOKIE_OPTIONS, IMPERSONATION_COOKIE } from "../auth/impersonation-cookie-options";
 
 /** The backup client has a separate HttpOnly cookie namespace, never browser auth storage. */
 export async function createSupabaseServerClient(administratorBackup = false): Promise<SupabaseClient> {
@@ -11,11 +11,12 @@ export async function createSupabaseServerClient(administratorBackup = false): P
     if (!url || !publishableKey) throw new Error("Supabase authentication is not configured.");
     const cookieStore = await cookies();
     return createServerClient(url, publishableKey, {
-        ...(administratorBackup ? { cookieOptions: { ...IMPERSONATION_OPTIONS, name: ADMIN_COOKIE_PREFIX } } : {}),
+        ...(administratorBackup ? { cookieOptions: ADMIN_SESSION_COOKIE_OPTIONS } : {}),
         cookies: {
             getAll() { return cookieStore.getAll(); },
             setAll(cookiesToSet) {
                 try { cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); }
+                // src/middleware.ts refreshes sessions first; a refresh here in an action re-renders the page.
                 catch { /* Server components cannot persist refreshed cookies; actions and routes can. */ }
             },
         },

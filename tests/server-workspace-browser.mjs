@@ -36,7 +36,7 @@ export default async function Page({searchParams}){const {initial}=await searchP
     const page = await browser.newPage();
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
     page.on('console',message=>{if(message.type()==='error' && message.text().includes('hydrat')) errors.push(message.text());});
-    for (const initial of ["console", "settings"]) for (const [hash, heading] of [["server-files", "Campaign save"], ["server-backups", "Backups and restore"], ["server-access", "Server settings"]]) {
+    for (const initial of ["console", "settings"]) for (const [hash, heading] of [["server-files", "Campaign save"], ["server-backups", "Backups and restore"], ["server-visibility", "Server settings"]]) {
         await page.goto(`${base}/?initial=${initial}#${hash}`); await page.reload({ waitUntil: "networkidle" });
         await page.getByRole("heading", { name: heading, exact: true }).waitFor({ timeout: 5000 });
         assert.equal(await page.getByRole("heading", { name: "Console content" }).isVisible(), false);
