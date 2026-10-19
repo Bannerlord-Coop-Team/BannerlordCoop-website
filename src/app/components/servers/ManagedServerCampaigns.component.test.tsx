@@ -49,6 +49,13 @@ it("lists campaigns with the selection marked and only offers switching while th
     expect(button("Use this campaign").disabled).toBe(false); expect(button("New campaign").disabled).toBe(false);
 });
 
+it("explains why campaign controls are disabled while the server is running", async () => {
+    await render({ ...stopped, operationState: "running", observedGameState: "running" });
+    const tooltips = [...container.querySelectorAll('[role="tooltip"]')].map((element) => element.textContent);
+    expect(tooltips).toContain("Stop the server before starting a new campaign.");
+    expect(tooltips).toContain("Stop the server before switching campaigns.");
+});
+
 it("selects an imported campaign with a durable request bound to the listed server revision", async () => {
     mocks.change.mockResolvedValue({ ok: true, selection: { serverId, activeSaveId: importedId, updatedAt: "2026-10-02T12:00:01.000Z" } });
     await render(stopped, true);

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { RefreshCw, Sparkles } from "lucide-react";
 import { changeManagedServerCampaign, listManagedServerCampaigns } from "@/app/servers/managed-server-campaign-actions";
 import { deleteManagedServerSave } from "@/app/servers/managed-server-save-actions";
+import { DisabledControlHint } from "./DisabledControlHint";
 import { fileButtonClass, filePrimaryButtonClass } from "./server-file-styles";
 import type { CampaignPage } from "../../../../supabase/functions/_shared/server-campaign-contract";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
@@ -120,6 +121,8 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
 
     const busy = pending || resetting !== null;
     const stopHint = status === null ? "Campaign changes are unavailable until the server status loads." : stopped ? null : "Stop the server to switch campaigns or start a new one.";
+    const newCampaignDisabled = busy || !stopped || !campaigns;
+    const newCampaignHint = status === null ? "Campaign changes are unavailable until the server status loads." : !stopped ? "Stop the server before starting a new campaign." : busy ? "Finish the current campaign operation first." : "Campaigns are still loading.";
 
     return <div className="mt-4 border-t border-white/10 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -129,7 +132,9 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             </div>
             <div className="flex flex-wrap gap-2">
                 <button type="button" className={fileButtonClass} disabled={busy} onClick={() => setVersion((value) => value + 1)}><RefreshCw aria-hidden className="size-4" />Refresh list</button>
-                <button type="button" className={fileButtonClass} disabled={busy || !stopped || !campaigns} onClick={() => setConfirming(true)}><Sparkles aria-hidden className="size-4" />New campaign</button>
+                <DisabledControlHint disabled={newCampaignDisabled} message={newCampaignHint}>
+                    <button type="button" className={fileButtonClass} disabled={newCampaignDisabled} onClick={() => setConfirming(true)}><Sparkles aria-hidden className="size-4" />New campaign</button>
+                </DisabledControlHint>
             </div>
         </div>
         {loadError && <p role="alert" className="mt-3 text-sm text-red-300">{loadError}</p>}
@@ -143,8 +148,12 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
                         <p className="text-xs text-foreground-muted">{campaign.importedBy === "system" ? "Created by hosting" : "Imported"} · {new Date(campaign.createdAt).toLocaleDateString()} · {formatBytes(campaign.byteSize)}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        {!active && <button type="button" className={fileButtonClass} disabled={busy || !stopped} onClick={() => change({ action: "select-save", saveId: campaign.saveId })}>Use this campaign</button>}
-                        {canDelete && campaign.importedBy === "owner" && <button type="button" aria-label={`Delete ${campaign.displayName}`} className="inline-flex size-10 items-center justify-center rounded-md border border-crimson/50 text-xl text-red-200 hover:border-crimson disabled:opacity-50" disabled={busy || !stopped || active} onClick={() => remove(campaign)}>×</button>}
+                        {!active && <DisabledControlHint disabled={busy || !stopped} message={busy ? "Finish the current campaign operation first." : "Stop the server before switching campaigns."}>
+                            <button type="button" className={fileButtonClass} disabled={busy || !stopped} onClick={() => change({ action: "select-save", saveId: campaign.saveId })}>Use this campaign</button>
+                        </DisabledControlHint>}
+                        {canDelete && campaign.importedBy === "owner" && <DisabledControlHint disabled={busy || !stopped || active} message={active ? "Select another campaign before deleting this one." : busy ? "Finish the current campaign operation first." : "Stop the server before deleting a campaign."}>
+                            <button type="button" aria-label={`Delete ${campaign.displayName}`} className="inline-flex size-10 items-center justify-center rounded-md border border-crimson/50 text-xl text-red-200 hover:border-crimson disabled:opacity-50" disabled={busy || !stopped || active} onClick={() => remove(campaign)}>×</button>
+                        </DisabledControlHint>}
                     </div>
                 </li>;
             })}
