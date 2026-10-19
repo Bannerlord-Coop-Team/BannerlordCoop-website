@@ -10,18 +10,23 @@ import { ADMIN_SESSION_COOKIE_OPTIONS, IMPERSONATION_COOKIE } from "./app/lib/au
  * writes cookies, and Next then re-renders the whole page in the action response.
  */
 const REFRESH_BEFORE_EXPIRY_SECONDS = 5 * 60;
-/** These routes install sessions themselves. A refresh here could overwrite them. */
-const SESSION_CALLBACKS = new Set(["/auth/callback", "/account/discord/callback", "/account/patreon/callback"]);
+/**
+ * Route handlers set cookies without re-rendering anything, so they refresh for
+ * themselves and keep their own headers. The OAuth callbacks also install sessions
+ * that a refresh here would overwrite.
+ */
+const ROUTE_HANDLER = /^\/(?:api\/|auth\/callback$|account\/(?:discord|patreon)\/callback$)/u;
 
 export async function middleware(request: NextRequest) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-    if (!url || !publishableKey || SESSION_CALLBACKS.has(request.nextUrl.pathname)
-        || !request.cookies.getAll().some(({ name }) => name.startsWith("sb-"))) return NextResponse.next();
+    const impersonating = request.cookies.has(IMPERSONATION_COOKIE);
+    if (!url || !publishableKey || ROUTE_HANDLER.test(request.nextUrl.pathname)
+        || (!impersonating && !request.cookies.getAll().some(({ name }) => name.startsWith("sb-")))) return NextResponse.next();
 
     const written = new Map<string, { value: string; options: CookieOptions }>();
     let cacheHeaders: Record<string, string> = {};
-    const impersonating = request.cookies.has(IMPERSONATION_COOKIE);
+    let writes = 0;
     for (const cookieOptions of impersonating ? [undefined, ADMIN_SESSION_COOKIE_OPTIONS] : [undefined]) {
         const client = createServerClient(url, publishableKey, {
             ...(cookieOptions ? { cookieOptions } : {}),
@@ -35,13 +40,16 @@ export async function middleware(request: NextRequest) {
                         written.set(name, { value, options });
                     }
                     cacheHeaders = { ...cacheHeaders, ...headers };
+                    writes += 1;
                 },
             },
         });
         try {
-            // getSession refreshes inside the SDK margin; refreshSession covers the rest of ours.
+            // getSession refreshes inside the SDK margin; refreshSession covers the rest of ours,
+            // once per request even if the token lifetime is configured shorter than both.
+            const before = writes;
             const { data: { session } } = await client.auth.getSession();
-            if (session?.expires_at !== undefined && session.expires_at - Date.now() / 1000 < REFRESH_BEFORE_EXPIRY_SECONDS) {
+            if (writes === before && session?.expires_at !== undefined && session.expires_at - Date.now() / 1000 < REFRESH_BEFORE_EXPIRY_SECONDS) {
                 await client.auth.refreshSession();
             }
         } catch { /* Pages and actions authenticate independently and can still refresh. */ }
@@ -57,5 +65,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+    matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?|ttf|mp4|webm|txt|xml|webmanifest)$).*)"],
 };
