@@ -6,6 +6,7 @@ import { useTranslations } from "@/app/lib/localization/client";
 import type { Translator } from "@/app/lib/localization/types";
 
 import { ServerSaveConfigPanels, fileButtonClass } from "./ServerSaveConfigPanels";
+import { DisabledControlHint } from "./DisabledControlHint";
 import { strToU8, zipSync } from "fflate";
 import { Download, Upload, Info, X, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -103,6 +104,8 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
     const canTransferSave = status !== null && status.observedGameState === "stopped"
         && ["stopped", "awaiting-save"].includes(status.operationState);
     const blocked = !ready || storageError || isPending || intent !== null || status === null;
+    const importSaveDisabled = blocked || !canTransferSave;
+    const importSaveHint = status === null ? "Server status is still loading." : !canTransferSave ? "Stop the server before importing a campaign save." : intent !== null ? "Finish or dismiss the current transfer before importing another save." : isPending ? "Wait for the current transfer to finish." : "Save import is temporarily unavailable.";
 
     // Shows transfer feedback beside the controls of the given card.
     function say(text: string, scope: Scope) {
@@ -387,7 +390,9 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
             configAccess={canEditConfig ? { serverId, userId, canEdit: true } : undefined}
             saveActions={<>
                 <button className={buttonClass} disabled={blocked || !canExportSave || !status?.activeSave || !["running", "stopped", "awaiting-save"].includes(status.operationState)} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />{t("transfers.exportSave")}</button>
-                <button className={buttonClass} disabled={blocked || !canTransferSave} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />{t("transfers.importSave")}</button>
+                <DisabledControlHint disabled={importSaveDisabled} message={importSaveHint}>
+                    <button className={buttonClass} disabled={importSaveDisabled} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />{t("transfers.importSave")}</button>
+                </DisabledControlHint>
             </>}
             saveNotice={<>
                 <p className="mt-3 text-xs leading-5 text-foreground-muted">{t("transfers.onlyTheServerOwnerCanExportSavesExportDownloadsThe")}</p>
