@@ -234,15 +234,20 @@ async function loadManagedInventory(user: User | null, accessToken: string | nul
     };
 }
 
-/** Loads public inventory independently, keeping failures inside its section. */
+/** Game states that cannot accept players, so the public directory omits them. */
+const OFFLINE_GAME_STATES: ReadonlySet<string> = new Set(["stopped", "failed"]);
+
+/** Loads joinable public inventory (offline servers hidden) independently, keeping failures inside its section. */
 async function loadPublicInventory() {
     let allServers: ManagedServerDirectoryEntry[] = [];
     let publicServersError = "";
     try {
-        allServers = (await listPublicServers()).map(server => ({
+        const listedServers = (await listPublicServers())
+            .filter(server => !OFFLINE_GAME_STATES.has(server.observedGameState ?? ""));
+        allServers = listedServers.map(server => ({
             id: server.serverId,
             name: server.displayName,
-            status: server.observedGameState === "running" ? "Online" : server.observedGameState === "stopped" ? "Offline" : "Unknown",
+            status: server.observedGameState === "running" ? "Online" : "Unknown",
             connectionType: "Direct",
             joinUrl: "",
             connectionAddress: connectionAddress(server.connectionIp, server.gamePorts),
