@@ -449,9 +449,14 @@ export type HostingAdminPlacementPlan = {
 export type HostingPlacementAlwaysOnPolicy = "single-slot" | "none" | "any";
 
 /** The automatic placement executor's settings; `updatedAt` is null until an administrator first saves them. */
+/** The executor's settings; moves are not rate limited. */
 export type HostingPlacementExecutorSettings = {
     enabled: boolean;
-    maximumRelocationsPerDay: number;
+    /**
+     * A legacy compatibility field: never shown, only sent back on save as the latest read gave it, because
+     * older control planes still require it. Current ones ignore it.
+     */
+    maximumRelocationsPerDay?: number;
     minimumGainHours: number;
     alwaysOnPolicy: HostingPlacementAlwaysOnPolicy;
     noticeLeadHours: number;
@@ -480,11 +485,57 @@ export type HostingPlacementRelocation = {
     queuedAt: string | null;
     updatedAt: string;
     completedAt: string | null;
+    /** The move's job as administrators follow it live; older control planes omit it. */
+    progress?: HostingPlacementRelocationProgress;
 };
 
-/** The `placement-executor` read: current settings and the 50 newest automatic relocations. */
+/** A relocation job's steps, in the order it runs them. */
+export type HostingPlacementMoveStep = "preparing" | "saving-and-stopping" | "backing-up" | "restoring" | "switching-address" | "starting-game" | "finishing";
+
+/** One in-game warning of an announced move: queued, running or retry-wait until it goes out. */
+export type HostingPlacementRelocationWarning = {
+    minutes: 60 | 10;
+    state: "queued" | "running" | "retry-wait" | "succeeded" | "unsupported" | "failed";
+    /** Set only once the game received it. */
+    sentAt: string | null;
+};
+
+export type HostingPlacementRelocationProgress = {
+    /** The job's current step; null without a job, once it finished or while it puts the server back. */
+    step: HostingPlacementMoveStep | null;
+    /** True while the unfinished job puts the server back on its original VPS after a failure; older control planes omit it. */
+    returning?: boolean;
+    /** Each step the job reached, in step order, with the first time it reached it. */
+    steps: { step: HostingPlacementMoveStep; reachedAt: string }[];
+    jobState: "queued" | "running" | "retry-wait" | "succeeded" | "failed" | "cancelled" | null;
+    jobStartedAt: string | null;
+    jobCompletedAt: string | null;
+    /** Whether the move starts the game on the new VPS: only when it was running as the job began; null without a job. */
+    restartsGame: boolean | null;
+    /** An announced move's in-game warnings, 60 minutes first; empty for an offline move. */
+    warnings: HostingPlacementRelocationWarning[];
+};
+
+/** A server the executor leaves alone until `until`, because its latest automatic move failed or was cancelled. */
+export type HostingPlacementBackoff = {
+    serverId: string;
+    relocationId: string;
+    until: string;
+    errorCode: string | null;
+};
+
+/** The `placement-executor` read: current settings, what it is doing and the 50 newest automatic relocations. */
 export type HostingAdminPlacementExecutor = {
     settings: HostingPlacementExecutorSettings;
+    /** Older control planes omit it. */
+    status?: {
+        /** The announced or queued relocation; the executor runs one at a time. */
+        activeRelocationId: string | null;
+        /** Relocations queued in the last 24 hours. Informational: moves are not rate limited. */
+        queuedInLast24Hours: number;
+        /** Servers not moved automatically until `until` after a failed or cancelled move, newest first; older control planes omit it. */
+        backedOff?: HostingPlacementBackoff[];
+    };
     relocations: HostingPlacementRelocation[];
 };
 
