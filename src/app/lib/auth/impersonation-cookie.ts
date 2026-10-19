@@ -1,9 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export const IMPERSONATION_COOKIE = "__Host-view-as-user";
-export const ADMIN_COOKIE_PREFIX = "__Host-impersonation-admin";
+export { ADMIN_COOKIE_PREFIX, IMPERSONATION_COOKIE, IMPERSONATION_OPTIONS } from "./impersonation-cookie-options";
 export const IMPERSONATION_SECONDS = 30 * 60;
-export const IMPERSONATION_OPTIONS = { httpOnly: true, secure: true, sameSite: "lax" as const, path: "/", maxAge: 400 * 24 * 60 * 60 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 export type Impersonation = { id: string; actorId: string; actorSessionId: string; targetId: string; targetSessionId: string; issuedAt: number; expiresAt: number };
 
