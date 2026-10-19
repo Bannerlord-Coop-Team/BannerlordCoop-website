@@ -540,27 +540,35 @@ browser with `placement-executor` when the tab opens. Its current state is shown
 first: **On · relocating servers automatically** or **Off · nothing moves
 automatically**, with who last changed it, when and why (or that the defaults
 were never saved). A status line from the read's `status` says what it is doing:
-**Moving now** with the server, its VPSs and its current step, **Announced** with
-the server and when it moves, or **No move under way**, then "N moves started in
-the last 24 hours" from `queuedInLast24Hours`. That count is informational: moves
-are not rate limited, and only one runs at a time.
+**Moving now** with the server, its VPSs and its current step; **Announced** with
+the server and when it moves; **Returning** while a failed move puts its server
+back on its original VPS; **Move failed**, **Move cancelled** or **Move finished**
+when a queued move's job has ended but the executor has not recorded the outcome
+yet; or **No move under way**. Then "N moves queued in the last 24 hours" from
+`queuedInLast24Hours`, an informational count: only one move runs at a time.
+Below it, each server in `status.backedOff` reads "Waiting to retry: *server*
+until *time* (*reason*)": the executor leaves a server whose latest automatic move
+failed or was cancelled alone until then. The name comes from the listed move
+with that `relocationId` or `serverId`, else the server ID is shown, and the
+reason is the plain explanation of its `errorCode` (or the code itself).
 
 The form edits the four settings (`enabled`, `minimumGainHours` 1–168,
 `alwaysOnPolicy` and `noticeLeadHours` 1–168) plus an optional audit reason, and
 **Save settings** sends `set-placement-executor` with `expectedUpdatedAt` set to
-the `updatedAt` it read (null when never saved). The retired daily cap
-`maximumRelocationsPerDay` is never shown. For compatibility with control planes
-that still require it, a save sends it back exactly as the last settings read
-gave it (the panel's first read, the stale reload or the previous save's
-response) and leaves it out when that read had none; current control planes
-ignore it. Turning it on asks for a browser confirmation that spells out what it
-does: the control plane relocates customer servers by itself, one at a time,
-each move stops the game and changes the server's address and game port, and a
-running server moves after a notice on its page and in-game warnings. The
-`single-slot` policy means one-slot VPSs only, which the server never shares. A
-`stale_interaction` rejection reloads the settings someone else saved and asks
-the administrator to review them before saving again;
-`relocation_provider_unsupported` explains that enabling needs live OVH mode.
+the `updatedAt` it read (null when never saved). The settings read can also carry
+`maximumRelocationsPerDay`, a legacy compatibility field that the panel never
+shows. A save sends it back exactly as the latest read of any kind gave it (the
+first read, a poll, the stale reload or the previous save's response) and leaves
+it out when that read had none, so a control plane that still requires the field
+accepts the save; current control planes ignore it. Turning it on asks for a
+browser confirmation that spells out what it does: the control plane relocates
+customer servers by itself, one at a time, each move stops the game and changes
+the server's address and game port, and a running server moves after a notice on
+its page and in-game warnings. The `single-slot` policy means one-slot VPSs only,
+which the server never shares. A `stale_interaction` rejection reloads the
+settings someone else saved and asks the administrator to review them before
+saving again; `relocation_provider_unsupported` explains that enabling needs live
+OVH mode.
 
 **Live moves** below the form lists the 50 newest automatic relocations, those
 announced or queued first. Each shows the server, its from and to VPS (without the
@@ -571,24 +579,34 @@ gain and state, and a track from each relocation's `progress`: **Warned** →
 the job reached shows when it first reached it, in the viewer's time zone with
 seconds, and the step under way is marked `aria-current="step"`. Every stop says
 its phase in words (done, current step, not reached, not needed, failed or
-cancelled), so colour only repeats it. **Warned** lists the 60- and 10-minute
-in-game warnings as sent (with the time), pending, not possible on this runner or
-not sent; an offline move says no warning was needed because the server was
-stopped. When `restartsGame` is false the game step reads **Stays stopped**: the
-relocator never starts a game that was stopped. With no job yet (`null`) it reads
-**Starting game** with the note that it starts only a game still running when the
-move begins. A finished move shows how long its job took; a failed or cancelled
-one shows its `errorCode`, with a plain explanation for the executor's own codes
+cancelled) and any note in visible text, so colour only repeats it. **Warned**
+lists the 60- and 10-minute in-game warnings as sent (with the time), pending, not
+possible on this runner or not sent; an offline move says no warning was needed
+because the server was stopped. When `restartsGame` is false the game step reads
+**Stays stopped**: the relocator never starts a game that was stopped. With no job
+yet (`null`) it reads **Starting game** with the note that it starts only a game
+still running when the move begins. While `progress.returning` is true a
+**Returning** stop is the current step, saying the server is being put back on its
+original VPS, so the move never looks stalled. A queued move whose job failed or
+was cancelled (`jobState`) has no current step and reads as such until the
+executor records it; the relocation's `errorCode` is set then, as the job's code
+is not part of `progress`. In both cases **Done** is not reached and says why. A
+finished move shows how long its job took; a failed or cancelled one shows its
+`errorCode`, with a plain explanation for the executor's own codes
 (`placement_disabled`, `placement_window_missed`, `server_not_found`,
-`placement_job_missing`). A relocation without `progress`, or a read without
-`status`, from an older control plane shows the move's scheduled, queued and
-completed times instead of a track.
+`placement_job_missing`, `placement_job_cancelled`). A relocation without
+`progress` (or without `returning`), or a read without `status` (or without
+`backedOff`), from an older control plane shows the move's scheduled, queued and
+completed times instead of a track, or treats the missing field as empty.
 
 While any relocation is announced or queued, the panel reads `placement-executor`
-again every 15 seconds, one read at a time, and only while the page is visible;
-showing the page again reads at once, and the reads stop once nothing is active.
-They update only the status and moves: the settings stay as last read, so a save
-is still checked against the generation the form shows.
+again every 15 seconds, only while the page is visible; showing the page again
+reads at once, and the reads stop once nothing is active. They update only the
+status, the moves and the legacy compatibility field: the settings stay as last
+read, so a save is still checked against the generation the form shows. Polls,
+the stale reload and **Retry** share one read at a time: a poll joins a read under
+way, and the stale reload waits for it and then reads again, since a read that
+started before the rejected save may predate the other administrator's.
 
 ## Server notices
 
