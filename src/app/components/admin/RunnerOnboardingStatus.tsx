@@ -10,9 +10,11 @@ import { useEffect, useState } from "react";
 type RunnerOnboarding = NonNullable<HostingAdminVpsHost["runnerOnboarding"]>;
 type RunnerUpdate = NonNullable<HostingAdminVpsHost["runnerUpdate"]>;
 
+/** Shows one registered host's runner enrollment and update state and requests onboarding or an update for it. */
 export function RunnerOnboardingStatus({
     compact = false,
     onRefresh,
+    provider,
     serviceName,
     runningServers,
     targetSourceCommit,
@@ -21,6 +23,8 @@ export function RunnerOnboardingStatus({
 }: {
     compact?: boolean;
     onRefresh?: () => void;
+    // The host row's own provider; the control plane rejects a request whose provider differs from the stored host.
+    provider: HostingAdminVpsHost["provider"];
     serviceName: string;
     runningServers: number;
     targetSourceCommit: string | null;
@@ -58,6 +62,7 @@ export function RunnerOnboardingStatus({
                 requestId: crypto.randomUUID(),
                 operation: "update-vps-runner",
                 input: {
+                    provider,
                     serviceName,
                     reason: "Deploy the current reviewed managed-runner release through the transactional fleet workflow.",
                 },
@@ -80,7 +85,7 @@ export function RunnerOnboardingStatus({
                 accessToken: session.access_token,
                 requestId: crypto.randomUUID(),
                 operation: "onboard-vps-host",
-                input: { serviceName, mode: onboarding === null ? "enroll" : "retry" },
+                input: { provider, serviceName, mode: onboarding === null ? "enroll" : "retry" },
             });
             refresh();
         } catch (error) {

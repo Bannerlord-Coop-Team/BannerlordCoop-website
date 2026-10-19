@@ -8,6 +8,7 @@ import { VpsSlotSummary } from "./VpsSlotSummary";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
+import { failedVpsProviderReadsMessage } from "@/app/lib/control-plane/vps-providers";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingAdminVpsInventory, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
@@ -21,31 +22,34 @@ export function VpsView({ inventory: initialInventory, regionCatalog, accounts }
     const oracle = useVpsReadings(initialInventory, "oracle");
     const inventory = readings.result ?? initialInventory;
     const pending = readings.pending;
-    const providerHosts = new Map(billing.result?.hosts.map(host => [host.name, host]));
+    // A service name is unique only within its provider, so billing rows are matched by both.
+    const providerHosts = new Map(billing.result?.hosts.map(host => [`${host.provider}:${host.name}`, host]));
     const hosts = inventory.hosts.map(host => {
-        const provider = providerHosts.get(host.name);
+        const provider = providerHosts.get(`${host.provider}:${host.name}`);
         return { ...host, cost: provider?.cost ?? null, expirationDate: provider?.expirationDate ?? null,
             autoRenew: provider?.autoRenew ?? null, providerCheckedAt: provider?.providerCheckedAt ?? null };
     });
     const controlPlaneHost = oracle.result?.controlPlaneHost ?? null;
     const ownerLabels = new Map(accounts.map(account => [account.accountId, account.label]));
-    const availableServiceNames = billing.result?.availableServiceNames ?? [];
+    const availableHostCount = billing.result?.availableHosts?.length ?? 0;
+    const failedProviderReads = failedVpsProviderReadsMessage(billing.result?.providerReads);
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
     return (
         <section className="mt-8">
-            <SectionHeading eyebrow="OVHcloud inventory" title="VPS hosts" count={hosts.length} />
+            <SectionHeading eyebrow="VPS inventory" title="VPS hosts" count={hosts.length} />
             <p className="mt-3 text-xs text-foreground-muted">
-                Registered VPS capacity and server assignments. {billing.result && <>{availableServiceNames.length} authenticated OVH {availableServiceNames.length === 1 ? "VPS is" : "VPS products are"} available to onboard.</>}
+                Registered VPS capacity and server assignments. {billing.result && <>{availableHostCount} authenticated provider {availableHostCount === 1 ? "VPS is" : "VPS products are"} available to onboard.</>}
                 {checkedAt && <> Provider data checked <LocalDateTime value={checkedAt} />.</>}
             </p>
             {pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading live resource readings…</p>}
             {readings.error && <p role="alert" className="mt-3 text-xs text-red-200">{readings.error} {readings.result ? "Showing the last resource readings; retrying automatically." : "Registered inventory remains visible; retrying automatically."} <button type="button" className="underline" onClick={readings.refreshReadings}>Retry live readings</button></p>}
             {billing.pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading billing readings…</p>}
+            {!billing.error && failedProviderReads && <p role="status" className="mt-3 text-xs text-amber-200">{failedProviderReads}</p>}
             {billing.error && <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {billing.error} {billing.result ? "Showing the last billing readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={billing.refreshReadings}>Retry billing</button></p>}
             <VpsSlotSummary hosts={hosts} regionCatalog={regionCatalog} />
             <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
-                <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased OVH VPS. The durable workflow verifies account ownership, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
+                <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased VPS. The durable workflow verifies account ownership, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
                 <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
             </div>
             <div className="mt-6">

@@ -11,6 +11,7 @@ import {
     presentControlPlaneOperationResult,
     type ControlPlaneOperationResultLink,
 } from "@/app/lib/control-plane/presentation";
+import { parseVpsHostSelection } from "@/app/lib/control-plane/vps-providers";
 import { ControlPlaneBackupPicker } from "./ControlPlaneBackupPicker";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -381,8 +382,13 @@ function setPath(target: Record<string, unknown>, path: string, value: unknown) 
     current[parts.at(-1)!] = value;
 }
 
+/** Reshapes collected form values into the exact wire input each operation expects. */
 function normalizeOperationInput(operation: string, input: Record<string, unknown>) {
-    if (operation === "onboard-vps-host") input.mode = "enroll";
+    if (operation === "onboard-vps-host") {
+        const { provider, serviceName } = parseVpsHostSelection(input.host);
+        delete input.host;
+        Object.assign(input, { provider, serviceName, mode: "enroll" });
+    }
     if (operation === "update-server") {
         if (input.buildId === "__keep__") delete input.buildId;
         else if (input.buildId === "__latest__") input.buildId = null;
@@ -390,18 +396,5 @@ function normalizeOperationInput(operation: string, input: Record<string, unknow
     if (operation === "reset-password") {
         const choice = input.choice as Record<string, unknown> | undefined;
         if (choice?.kind === "generated") delete choice.password;
-    }
-    if (operation === "replace-provider") {
-        const selection = input.selection as Record<string, unknown> | undefined;
-        if (selection?.action === "resize") {
-            delete selection.targetImageId;
-            delete selection.targetFriendlyRegion;
-        } else if (selection?.action === "rebuild") {
-            delete selection.targetSizeId;
-            delete selection.targetFriendlyRegion;
-        } else if (selection?.action === "migrate-region") {
-            delete selection.targetSizeId;
-            delete selection.targetImageId;
-        }
     }
 }

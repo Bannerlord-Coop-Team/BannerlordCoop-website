@@ -101,7 +101,7 @@ function managedServer(serverId: string, displayName: string): ManagedServer {
 
 function host(name: string, availableServers: number, occupied: Array<[string, number]>): HostingAdminVpsHost {
     return {
-        name, countryCode: "GB", locationId: "uk-1", region: null, totalSlots: 3, runningServers: occupied.length,
+        provider: "ovhcloud-vps", name, countryCode: "GB", locationId: "uk-1", region: null, totalSlots: 3, runningServers: occupied.length,
         availableServers, cost: null, expirationDate: null, autoRenew: null, providerCheckedAt: null, resources: null, runnerOnboarding: null,
         occupiedSlots: occupied.map(([serverId, slotIndex]) => ({
             serverId, slotIndex, gamePort: 4200 + slotIndex, displayName: serverId, ownerDiscordUserId: "123456789012345678", operationState: "running",
@@ -119,7 +119,7 @@ function job(serverId: string, action: string): HostingJob {
 const data: PlacementViewData = {
     inventory: {
         hosts: [host("vps-uk-a", 0, [["gang", 0], ["knights", 1], ["boys", 2]]), host("vps-uk-b", 3, []), host("vps-uk-c", 1, [["march", 0]])],
-        controlPlaneHost: null, availableServiceNames: [],
+        controlPlaneHost: null, availableHosts: [],
     },
     regionCatalog: catalog,
     activeJobs: [],

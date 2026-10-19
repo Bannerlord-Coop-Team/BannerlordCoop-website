@@ -37,7 +37,7 @@ beforeEach(() => {
         fleet: { running: 5, stopped: 0, suspended: 0, provisioning: 0, failedOrDegraded: 0,
             activeJobs: 0, agentUnhealthyOrUnknown: 0, pendingDeletion: 0, backupFailures: 0,
             managedVpsCount: 1, usedQuota: 5, totalSlots: 6, availableSlots: 1,
-            observability: { recentJobFailures: 2 }, provider: { orphanCandidateCount: 0 }, lastReconciledAt: null },
+            observability: { recentJobFailures: 2 }, provider: {}, lastReconciledAt: null },
         controls: { provisioningPaused: false, startsPaused: false, backupsPaused: false, maintenancePaused: false,
             nightlyRolloutsPaused: false, reason: "Current control reason" },
         jobs: { items: [], nextCursor: null },
@@ -63,7 +63,7 @@ it.each([true, false])("server detail resolves only its displayed account, with 
         request.onAuthenticated();
         return { dashboard: { server: { serverId: "22222222-2222-4222-8222-222222222222", displayName: "Test campaign",
             ownerAccountId, ownerDiscordUserId: ownerAccountId, operationState: "stopped", friendlyRegion: "germany",
-            desiredState: "stopped", observedVmState: "running", observedGameState: "stopped", provider: "mock", releaseChannel: "stable" },
+            desiredState: "stopped", observedVmState: "running", observedGameState: "stopped", provider: "ovhcloud-vps", releaseChannel: "stable" },
         activeJob: null, activeSave: null, installedBuild: null, desiredBuild: null, runtime: null },
         backups: { items: [] }, audit: { items: [] } };
     });
@@ -109,7 +109,8 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     mocks.request.mockImplementation(async request => {
         if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
         if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
-        if (request.operation === "vps-hosts") return { availableServiceNames: ["vps-available.vps.ovh.us"],
+        if (request.operation === "vps-hosts") return {
+            availableHosts: [{ provider: "ovhcloud-vps", serviceName: "vps-available.vps.ovh.us", label: "OVHcloud VPS · vps-available.vps.ovh.us" }],
             hosts: [{ locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }] };
         // Only US-East has a free slot in the stored catalog, so it is the only Create region offered.
         if (request.operation === "hosting-regions") return { revision: 4, updatedAt: "2026-10-09T12:00:00.000Z", updatedBy: "supabase:admin",
@@ -123,8 +124,10 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     const html = await new Response(stream).text();
     expect(html).not.toContain("Hosting regions");
     expect(html).not.toContain("Publish website regions");
-    expect(html).toContain("Onboard existing OVH VPS");
-    expect(html).toContain("vps-available.vps.ovh.us");
+    expect(html).toContain("Onboard existing VPS");
+    expect(html).toContain("OVHcloud VPS · vps-available.vps.ovh.us");
+    // The option value carries the listed provider so onboarding never guesses it.
+    expect(html).toContain("{&quot;provider&quot;:&quot;ovhcloud-vps&quot;,&quot;serviceName&quot;:&quot;vps-available.vps.ovh.us&quot;}");
     expect(html.match(/<option value="us-east">US-East<\/option>/gu) ?? []).toHaveLength(1);
     expect(html).not.toContain('value="us-west"');
     expect(html).not.toContain("The control plane view could not be loaded");
@@ -141,7 +144,7 @@ it("keeps Operations usable when the stored hosting-region catalog cannot be rea
     mocks.request.mockImplementation(async request => {
         if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
         if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
-        if (request.operation === "vps-hosts") return { availableServiceNames: [], hosts: [] };
+        if (request.operation === "vps-hosts") return { availableHosts: [], hosts: [] };
         throw new ControlPlaneAdminError("unsupported_operation", "The operation is not supported.");
     });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));
@@ -149,7 +152,7 @@ it("keeps Operations usable when the stored hosting-region catalog cannot be rea
     const html = await new Response(stream).text();
     expect(html).toContain("The operation is not supported.");
     expect(html).not.toContain("Publish website regions");
-    expect(html).toContain("Onboard existing OVH VPS");
+    expect(html).toContain("Onboard existing VPS");
     expect(html).toContain("Regions are unavailable: The operation is not supported.");
 });
 

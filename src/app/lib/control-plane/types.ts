@@ -1,4 +1,5 @@
 import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
+import type { VpsProviderId, VpsProviderRead } from "./vps-providers";
 
 export type ManagedServer = {
     serverId: string;
@@ -208,6 +209,8 @@ export type HostingServerResources = {
 };
 
 export type HostingAdminVpsHost = {
+    /** The provider that owns this host; host-scoped admin requests send it back unchanged. */
+    provider: VpsProviderId;
     name: string;
     locationId: string;
     // Provider-reported ISO country, present for every host.
@@ -258,8 +261,18 @@ export type HostingAdminVpsInventory = {
     liveDataIncluded?: boolean;
     controlPlaneHost: HostingAdminHostResources | null;
     hosts: HostingAdminVpsHost[];
-    availableServiceNames: string[];
+    /** Unregistered account hosts an administrator may onboard; empty when no account read was requested. */
+    availableHosts: HostingAdminVpsAvailableHost[];
+    /** One entry per enabled provider whose account was read; a failed read withholds only that provider's data. */
+    providerReads?: VpsProviderRead[];
     runnerTargetSourceCommit?: string | null;
+};
+
+/** One unregistered provider account host, labelled `<provider display name> · <service name>`. */
+export type HostingAdminVpsAvailableHost = {
+    provider: VpsProviderId;
+    serviceName: string;
+    label: string;
 };
 
 export type HostingAdminRegionRequest = {
@@ -520,7 +533,6 @@ export type FleetSummary = {
         apiHealth: string;
         capacityAvailable: boolean;
         managedInstanceCount: number | null;
-        orphanCandidateCount: number;
         ambiguousResourceCount: number;
         missingInstanceCount: number;
         mismatchedInstanceCount: number;

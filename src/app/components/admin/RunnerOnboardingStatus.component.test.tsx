@@ -37,6 +37,19 @@ it("offers the same compact control for an actionable update", async () => {
     expect(actionButton("Update runner").disabled).toBe(false);
 });
 
+it("sends the host row's provider with a runner update", async () => {
+    mocks.session.mockResolvedValue({ data: { session: { access_token: "test-token" } } });
+    mocks.request.mockResolvedValue({});
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    await renderRunner({ targetSourceCommit: "new-source", runningServers: 0 });
+    await act(async () => actionButton("Update runner").click());
+    confirm.mockRestore();
+    expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({
+        operation: "update-vps-runner",
+        input: expect.objectContaining({ provider: "contabo-vps", serviceName: "host-a" }),
+    }));
+});
+
 it("preserves the stopped-server gate in compact mode", async () => {
     await renderRunner({ targetSourceCommit: "new-source", runningServers: 1 });
     expect(actionButton("Stop servers first").disabled).toBe(true);
@@ -45,6 +58,7 @@ it("preserves the stopped-server gate in compact mode", async () => {
 async function renderRunner({ targetSourceCommit, runningServers }: { targetSourceCommit: string; runningServers: number }) {
     await act(async () => root.render(<RunnerOnboardingStatus
         compact
+        provider="contabo-vps"
         serviceName="host-a"
         runningServers={runningServers}
         targetSourceCommit={targetSourceCommit}
@@ -67,14 +81,18 @@ it("uses the parent live refresh after a mutation and leaves polling to it", asy
     mocks.request.mockResolvedValue({});
     try {
         await act(async () => root.render(<RunnerOnboardingStatus
-            serviceName="host-a" runningServers={0} targetSourceCommit="new-source"
+            provider="ovhcloud-vps" serviceName="host-a" runningServers={0} targetSourceCommit="new-source"
             onboarding={null} update={null} onRefresh={refresh}
         />));
         await act(async () => actionButton("Onboard runner").click());
+        expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({
+            operation: "onboard-vps-host",
+            input: { provider: "ovhcloud-vps", serviceName: "host-a", mode: "enroll" },
+        }));
         expect(refresh).toHaveBeenCalledTimes(1);
         expect(mocks.refresh).not.toHaveBeenCalled();
         await act(async () => root.render(<RunnerOnboardingStatus
-            serviceName="host-a" runningServers={0} targetSourceCommit="new-source"
+            provider="ovhcloud-vps" serviceName="host-a" runningServers={0} targetSourceCommit="new-source"
             onboarding={{ state: "running", progressStage: "runner-installing", errorCode: null, sourceCommit: null, updatedAt: "2026-09-10T18:00:00.000Z" }}
             update={null} onRefresh={refresh}
         />));

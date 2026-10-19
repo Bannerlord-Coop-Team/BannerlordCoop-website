@@ -32,7 +32,7 @@ function inventory(liveDataIncluded = false, name = "host-a"): HostingAdminVpsIn
         occupiedSlots: item.occupiedSlots.map(slot => ({ ...slot, resources: liveDataIncluded ? slot.resources : null })),
         cost: liveDataIncluded ? item.cost : null, providerCheckedAt: liveDataIncluded ? item.providerCheckedAt : null }],
         controlPlaneHost: liveDataIncluded ? resources(60, 40) : null,
-        availableServiceNames: [], runnerTargetSourceCommit: liveDataIncluded ? "target-source" : null };
+        availableHosts: [], runnerTargetSourceCommit: liveDataIncluded ? "target-source" : null };
 }
 
 function oracleCard() {
@@ -422,6 +422,7 @@ it("ignores old billing after new inventory arrives and aborts billing on unmoun
 
 function host(name: string, hostResources: HostingAdminHostResources, slotIndex: number, updating = false): HostingAdminVpsHost {
     return {
+        provider: "ovhcloud-vps",
         name,
         locationId: "os-us-east-va-2",
         countryCode: "US",

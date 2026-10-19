@@ -14,10 +14,9 @@ test("distinguishes stopped and suspended server states", () => {
     assert.notEqual(stateExplanation("stopped"), stateExplanation("suspended"));
 });
 
-test("explains reconciliation and OVH assignment boundaries", () => {
+test("explains reconciliation and VPS assignment boundaries", () => {
     assert.match(jobActionExplanation("reconcile"), /desired state/iu);
     assert.match(operationExplanation("force-reconcile"), /intentionally stopped/iu);
-    assert.match(operationExplanation("review-orphans"), /never deletes/iu);
     assert.match(operationExplanation("create-server"), /never purchases/iu);
     assert.match(operationExplanation("create-server"), /fails without creating or billing/iu);
     assert.match(operationExplanation("onboard-vps-host"), /already-purchased/iu);

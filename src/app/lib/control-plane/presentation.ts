@@ -197,7 +197,7 @@ export function presentControlPlaneOperationResult(
             links,
         };
     }
-    if (typeof result.reviewId === "string" || Object.hasOwn(result, "snapshot")) {
+    if (Object.hasOwn(result, "snapshot")) {
         return { message: JSON.stringify(result, null, 2).slice(0, 12_000), links };
     }
     return { message: "Operation completed and the dashboard has been refreshed.", links };

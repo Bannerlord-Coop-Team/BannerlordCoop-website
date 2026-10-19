@@ -10,7 +10,7 @@
 - Stream the allowlisted Docker container's stdout/stderr and send entered commands to its stdin.
 - Keep protected Start, Stop, Restart, and Update buttons available after authentication regardless of the last observed container state; disable them only while disconnected or while another operation is pending.
 - Let an Administrator or the assigned owner edit a live server's display name from its manage page and persist that name globally for every authorized viewer.
-- Keep this external-provider server separate from IONOS provisioning, destruction, and VPS management.
+- Keep this external-provider server separate from managed VPS hosting.
 - Do not expose Docker Engine, SSH, node credentials, or a host shell to the browser.
 - Use a persistent outbound WSS connection from the VPS node agent to the console gateway.
 - Reauthenticate every browser console connection with Supabase Auth, require an allowed browser origin, limit one operator per server, and cap session lifetime.

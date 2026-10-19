@@ -125,7 +125,7 @@ it("discards a late response when the displayed page changes and aborts on unmou
 
 const serverId = "22222222-2222-4222-8222-222222222222";
 const dashboard = { dashboard: { server: { serverId, displayName: "Campaign A", ownerDiscordUserId: "192469416892432384",
-    friendlyRegion: "germany", provider: "mock", operationState: "starting", desiredState: "running", observedVmState: "running", observedGameState: "stopped",
+    friendlyRegion: "germany", provider: "ovhcloud-vps", operationState: "starting", desiredState: "running", observedVmState: "running", observedGameState: "stopped",
     releaseChannel: "stable", updatedAt: job.updatedAt }, activeJob: { ...job, serverId }, runtime: null,
     installedBuild: null, desiredBuild: null, activeSave: null }, backups: { items: [], nextCursor: null }, audit: { items: [], nextCursor: null } } as unknown as ServerDashboardResult;
 it("projects initial client props without internal server, job, build or history fields", () => {

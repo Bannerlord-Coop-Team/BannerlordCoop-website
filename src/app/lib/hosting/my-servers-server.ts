@@ -5,6 +5,7 @@ import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/d
 import { isRegionKey } from "../../../../supabase/functions/_shared/hosting-regions";
 import { REQUEST_ID, timestamp } from "../../../../supabase/functions/_shared/server-visibility-contract";
 import { HOSTING_MAINTENANCE_SLOTS, type MaintenanceSlot } from "../../../../supabase/functions/_shared/server-settings-contract";
+import { controlPlaneEndpoint } from "@/app/lib/control-plane/origin";
 import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse, type MyServerDeletionStatus } from "./my-servers";
 import { onboardingSummaryRequest, parseOnboardingSummary, type OnboardingSummaryRequest } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 
@@ -194,7 +195,7 @@ async function readOwner(accessToken: string, request:
     let response: Response;
     try {
         signal.throwIfAborted();
-        response = await fetch("https://control-plane.bannerlordcoop.com/v1/user/control-plane", {
+        response = await fetch(controlPlaneEndpoint("/v1/user/control-plane"), {
             method: "POST", credentials: "omit", cache: "no-store", redirect: "manual", signal,
             headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json",
                 accept: "application/json", "x-request-id": requestId },

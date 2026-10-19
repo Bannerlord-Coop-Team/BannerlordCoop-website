@@ -7,7 +7,8 @@ it has a refreshed session token. Successful reads reuse Oracle's fresh authorit
 instead of repeating the user and session-context calls in the website.
 The seven server-rendered reads (`overview`, `vps-hosts`, `servers`,
 `server-dashboard`, `jobs`, `audit`, `release-catalog`) use a server-only helper to call
-`https://control-plane.bannerlordcoop.com/v1/admin/control-plane` directly.
+`https://control-plane.bannerlordcoop.com/v1/admin/control-plane` directly. The server-only
+`CONTROL_PLANE_ORIGIN` setting can replace that origin (see the README); an invalid value fails closed.
 Each sends the current Bearer token and `x-control-plane-protected-admin: 1`.
 Oracle freshly verifies the Supabase user and durable session context and requires
 the protected `Admin` role, regardless of bootstrap email admission. The reader
@@ -83,30 +84,22 @@ remain compatible with the API's original full Overview response.
 The page provides:
 
 - clickable fleet health summaries, exact registered-VPS/managed-server/slot capacity, reconciliation, and global controls;
-- registered OVH VPS capacity plus reviewed location IDs and live read-only cost, expiration, and auto-renew metadata;
+- registered VPS capacity (OVHcloud and Contabo) plus reviewed location IDs and live read-only cost, expiration, and auto-renew metadata;
 - searchable servers with Discord usernames, durable state explanations, desired/observed state, runtime, release, save, backup, and audit detail;
 - durable job state and action explanations plus retry/cancellation controls;
 - installable validated Stable and Nightly release catalogs, source commit revisions, and validation/revocation actions;
 - lifecycle, update, rollback, restore, diagnostics, password, suspension, and deletion controls;
-- ownership transfer, manager access, quota, provider replacement, and server creation;
-- bounded provider orphan review/cleanup, fleet reconciliation, and batch maintenance;
+- ownership transfer, manager access, quota, and server creation;
+- fleet reconciliation and batch maintenance;
 - a co-tenancy placement dry run whose steps open the relocation dialog, and the automatic placement executor's settings;
 - server notices shown at the top of selected servers' pages; and
 - the hash-chained audit history.
 
-The website does not query the private `control_plane` schema, call OVH, connect to runner agents, or construct container operations. Browser request UUIDs become the control-plane correlation and idempotency identity. Server and job mutations carry the current `updatedAt` value selected from the page. A correlated `stale_interaction` rejection refreshes the UI without clearing the form. For server lifecycle jobs, updates, rollbacks, restores, and diagnostics only, the card reads the exact server's authoritative dashboard and retries once with its new generation, the original request UUID, and unchanged user input. These workflows reject stale generations before accepting a job. An error carrying an accepted operation ID, a timeout, or a network failure is never automatically retried. Job retry/cancellation and failure acknowledgement are not replayed against a newer attempt; other mutations also require another explicit submission after refresh. Managed backup requests similarly read fresh backup status and replay at most once with the original durable UUID and backup selection; repeated stale or uncertain responses retain the pending request for manual reconciliation. Direct container commands and file-transfer/visibility contracts are unchanged.
+The website does not query the private `control_plane` schema, call a VPS provider, connect to runner agents, or construct container operations. Browser request UUIDs become the control-plane correlation and idempotency identity. Server and job mutations carry the current `updatedAt` value selected from the page. A correlated `stale_interaction` rejection refreshes the UI without clearing the form. For server lifecycle jobs, updates, rollbacks, restores, and diagnostics only, the card reads the exact server's authoritative dashboard and retries once with its new generation, the original request UUID, and unchanged user input. These workflows reject stale generations before accepting a job. An error carrying an accepted operation ID, a timeout, or a network failure is never automatically retried. Job retry/cancellation and failure acknowledgement are not replayed against a newer attempt; other mutations also require another explicit submission after refresh. Managed backup requests similarly read fresh backup status and replay at most once with the original durable UUID and backup selection; repeated stale or uncertain responses retain the pending request for manual reconciliation. Direct container commands and file-transfer/visibility contracts are unchanged.
 
 The administrator presentation resolves Discord usernames only from bounded Supabase Auth accounts that signed in with Discord. Numeric Discord IDs remain visible and accepted as a fallback. Dates and provider-check times render only after browser hydration so they use the administrator's browser locale and time zone rather than the Netlify or Oracle server time zone.
 
-The Operations page's **Register existing OVH VPS** card is the normal additive host-ingestion path. It verifies that an already-purchased service belongs to the configured OVH account, derives the reviewed image within the control plane, records `floor(vCPU / 2)` empty slots, and writes an administrative audit event. It never purchases, renews, powers, assigns, or installs the VPS. Managed-runner enrollment is still required before an assigned slot can Start. Server creation assigns an existing prepared OVH slot in the selected region; it never orders a VPS, and unavailable capacity fails without creating or billing anything. The Region choices are the stored-catalog entries that `hosting-regions` reports `available: true` (a free slot admissible under the owner admission rules), in stored order, labelled from the website catalog or the humanized key. That flag is advisory: only the region key (`friendlyRegion`) is sent, and the control plane revalidates capacity. If the stored catalog cannot be read, Create server is shown unavailable with the read error. The VPS view also reads the stored catalog and labels each host with every stored region whose placement its provider-reported country and zone satisfy, then the country and zone. A host no stored placement covers is labelled **No stored region** until a catalog entry is published, and **Regions unavailable** when the catalog cannot be read. The normal Releases view hides non-validated history, but pending, rejected, and revoked receipts remain retained for explicit inspection and audit rather than being deleted.
-
-### Import Latest Stable
-
-The Builds page provides **Import Latest Stable** with a required audit reason. It sends the existing admin envelope with `operation: "import-latest-stable"`, a request UUID, and `input: { reason }`. No repository, tag, digest, workflow, or actor is selected by the browser. The backend discovers and verifies the authoritative receipt from the latest successful Stable publication, then atomically registers, validates, and audits the build. Success displays the build ID and immutable image digest and refreshes the catalog. While the card remains mounted, retrying unchanged input after an uncertain response retains its request UUID; a changed reason or a submission after confirmed success starts a new request. Reloading the page loses this browser-held retry identity.
-
-Deploy the companion control-plane backend and configure its dedicated optional Actions-read credential before using this action; see that repository's managed-hosting deployment documentation. Missing configuration or unverifiable publication evidence returns an error, not an unverified import. The website never receives the Actions credential. No Edge Function routing change is required: existing authenticated forwarding and backend authorization apply.
-
-Import advances the Stable catalog but does not directly enqueue an installation or restart. Existing server update policies may subsequently select the imported build. The action does not repair Discord publication or re-run a build.
+The Operations page's **Onboard existing VPS** card is the normal additive host-ingestion path. Its choices are the inventory's `availableHosts` (unregistered hosts from every enabled provider account, labelled `<provider> · <service name>`); each option carries that host's `provider` and `serviceName`, and the card sends both. The inventory's `providerReads` reports each enabled provider's account read; a failed read withholds only that provider's unregistered hosts and billing, and the Operations and VPS views name the failed provider. The control plane verifies that the already-purchased service belongs to that provider's account, derives the reviewed image within the control plane, records `floor(vCPU / 2)` empty slots, and writes an administrative audit event. It never purchases, renews, or powers the VPS. The VPS view's per-host **Onboard runner**, **Retry onboarding**, and **Update runner** buttons send the host row's own `provider` with its service name; the control plane requires it and rejects a provider that differs from the stored host. Server creation assigns an existing prepared VPS slot in the selected region; it never orders a VPS, and unavailable capacity fails without creating or billing anything. The Region choices are the stored-catalog entries that `hosting-regions` reports `available: true` (a free slot admissible under the owner admission rules), in stored order, labelled from the website catalog or the humanized key. That flag is advisory: only the region key (`friendlyRegion`) is sent, and the control plane revalidates capacity. If the stored catalog cannot be read, Create server is shown unavailable with the read error. The VPS view also reads the stored catalog and labels each host with every stored region whose placement its provider-reported country and zone satisfy, then the country and zone. A host no stored placement covers is labelled **No stored region** until a catalog entry is published, and **Regions unavailable** when the catalog cannot be read. The normal Releases view hides non-validated history, but pending, rejected, and revoked receipts remain retained for explicit inspection and audit rather than being deleted.
 
 Deploy the Edge Function from the repository root:
 
@@ -121,7 +114,8 @@ npx supabase functions deploy my-servers --project-ref <project-ref>
 The `my-servers` function accepts authenticated GET inventory requests and
 strict POST direct commands `{action: "start" | "stop" | "restart-game", serverId}`.
 The server-rendered directory reads inventory directly from the
-fixed `https://control-plane.bannerlordcoop.com/v1/user/control-plane` endpoint,
+fixed `https://control-plane.bannerlordcoop.com/v1/user/control-plane` endpoint (origin overridable
+only through the validated server-only `CONTROL_PLANE_ORIGIN`),
 using only the current bearer and closed `my-servers` operation. Oracle freshly
 verifies the user, session context and durable owner/grant access on every page;
 the website's existing viewer gates still apply. These reads omit cookies and
@@ -205,9 +199,14 @@ Older pages, empty lists, request failures, and retries are supported. Changing
 servers clears the selected backup and ignores late responses from the previous
 server. In-game date is not yet recorded in the backup catalog.
 
-Orphan cleanup/review, forced reconciliation, provider-generation replacement,
-and build inspect/validate/reject/revoke are removed from everyday Operations.
-Their backend operator APIs and durable audit history remain intact. Releases
+Forced reconciliation and build inspect/validate/reject/revoke are removed from
+everyday Operations; their backend operator APIs and durable audit history
+remain intact. Provider orphan review/cleanup, provider-generation replacement
+(resize, rebuild, migrate region), the `reboot-vm` lifecycle action, and owner
+announcements were retired from the control plane with dynamic provisioning, and
+**Import Latest Stable** (`import-latest-stable`) was removed with it, so the
+website no longer offers or sends them. Historical jobs with those actions
+still display and filter. Releases
 is a read-only view of installable builds; approval belongs to the release pipeline.
 Missing save compatibility metadata is assumed compatible without a checkbox;
 safety backups, integrity checks, and known incompatibility checks remain.

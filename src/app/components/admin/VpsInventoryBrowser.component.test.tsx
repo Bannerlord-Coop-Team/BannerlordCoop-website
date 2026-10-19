@@ -163,10 +163,10 @@ describe("VPS inventory filters", () => {
         await act(async () => emptySlotsBox().click());
         expect(container.textContent).toContain("No VPS hosts match these filters.");
         expect(container.textContent).toContain("Showing 0 VPS");
-        expect(container.textContent).not.toContain("No registered OVH VPS hosts.");
+        expect(container.textContent).not.toContain("No registered VPS hosts.");
 
         await act(async () => root.render(<VpsInventoryBrowser hosts={[]} accounts={accounts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
-        expect(container.textContent).toContain("No registered OVH VPS hosts.");
+        expect(container.textContent).toContain("No registered VPS hosts.");
         expect(container.textContent).not.toContain("Rows per page");
         expect(container.textContent).not.toContain("Only show VPS with empty slots");
     });
@@ -308,6 +308,7 @@ async function choosePageSize(value: string) {
 
 function host(name: string, region: string, availableServers: number, ownerAccountId: string | null, ownerDiscordUserId = ownerAccountId ?? "owner-missing"): HostingAdminVpsHost {
     return {
+        provider: "ovhcloud-vps",
         name,
         locationId: "location",
         countryCode: "US",
