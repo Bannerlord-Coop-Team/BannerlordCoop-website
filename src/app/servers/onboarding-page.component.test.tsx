@@ -77,7 +77,7 @@ it("public directory failure does not hide private inventory or fall back to pla
 });
 it("public directory and its totals omit offline servers", async () => {
     const publicServer = (serverId: string, observedGameState: string | null) => ({ serverId, displayName: `Campaign ${serverId}`, friendlyRegion: "Europe", observedGameState, connectionIp: "203.0.113.4", gamePorts: [4200] });
-    mocks.publicList.mockResolvedValue([publicServer("running", "running"), publicServer("stopped", "stopped"), publicServer("unknown", null)]);
+    mocks.publicList.mockResolvedValue([publicServer("running", "running"), publicServer("stopped", "stopped"), publicServer("failed", "failed"), publicServer("unknown", null)]);
     const html = await renderPage();
     const listed = mocks.directory.mock.calls[0][0].servers as { id: string; status: string }[];
     expect(listed.map(server => [server.id, server.status])).toEqual([["running", "Online"], ["unknown", "Unknown"]]);
