@@ -99,6 +99,8 @@ The `/login` page uses [Supabase Auth](https://supabase.com/docs/guides/auth) fo
 
 The OAuth providers also require their Supabase callback URL (shown in the provider settings) to be allow-listed in the Google/Discord developer console.
 
+Signed-in requests pass through `src/middleware.ts`. It refreshes the Supabase session once it is within five minutes of expiry and forwards the new cookies to the page or server action, so they never refresh it themselves. A refresh inside a server action writes cookies, and Next then re-renders the whole page in the action response; the managed server page's background polls used to do this. The middleware sends its cookies as plain `Set-Cookie` headers, because cookies set through `response.cookies` reach the action's cookie store and cause the same re-render. The OAuth callback routes skip it because they install sessions themselves. `open-next.config.ts` lets a server action's cookies win over the middleware's, as in Next itself, so a sign-out or impersonation change on the same request still applies. The file keeps the deprecated `middleware` name because Next 16's `proxy.ts` runs only on Node.js, which OpenNext Cloudflare supports only experimentally.
+
 ### Supabase database migrations
 
 Apply the SQL files in `supabase/migrations/` to the Supabase project in filename order. For a new project, open **SQL Editor** in the Supabase dashboard and run `202608240001_create_server_settings.sql`. This creates the RLS-protected global display-name overrides used by live server management. Browser roles receive no direct table privileges; the website accesses it only with `SUPABASE_SECRET_KEY` after reauthenticating and authorizing each rename.

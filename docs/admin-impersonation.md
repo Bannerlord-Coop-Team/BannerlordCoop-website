@@ -53,7 +53,9 @@ purpose-separated HMAC with the existing server-only `SUPABASE_SECRET_KEY`.
 The cookies persist until Exit, including after browser restart; the durable
 grant expires after 30 minutes regardless of cookie retention. Exit can recover
 a damaged marker using the independently verified admin backup. If the original
-login is no longer valid, Exit returns to sign-in.
+login is no longer valid, Exit returns to sign-in. While the marker is present,
+`src/middleware.ts` refreshes the retained login with the same cookie options as
+well as the target session, so neither refreshes inside a server action.
 
 `website_impersonations` and `website_impersonation_sessions` bind the target's
 native sessions to the exact original admin session. `website_session_context`
