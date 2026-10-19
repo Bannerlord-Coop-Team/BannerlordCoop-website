@@ -190,6 +190,42 @@ it("pins the save bar to the viewport only while there are unsaved changes", asy
     expect(container.querySelector("[data-unsaved-bar]")).toBeNull();
 });
 
+it.each([
+    ["no update job", null],
+    ["an update that finished before the page loaded", { jobId: "22222222-2222-4222-8222-222222222222", state: "succeeded", progress: "Done." }],
+] as const)("does not re-render the page when its first release check finds %s", async (_case, job) => {
+    mocks.status.mockResolvedValue({ serverId, releaseChannel: "stable", job });
+    await render();
+    expect(mocks.status).toHaveBeenCalledExactlyOnceWith(serverId);
+    expect(mocks.router.refresh).not.toHaveBeenCalled();
+});
+
+it("re-renders the page when the channel moved since it rendered", async () => {
+    mocks.status.mockResolvedValue({ serverId, releaseChannel: "nightly", job: null });
+    await render();
+    expect(mocks.router.refresh).toHaveBeenCalledOnce();
+});
+
+it("re-renders the page once after an update it followed finishes", async () => {
+    vi.useFakeTimers();
+    try {
+        const jobId = "22222222-2222-4222-8222-222222222222";
+        mocks.status.mockResolvedValue({ serverId, releaseChannel: "stable", job: { jobId, state: "running", progress: "Updating." } });
+        await render();
+        await act(async () => vi.advanceTimersByTimeAsync(4_000));
+        expect(mocks.status).toHaveBeenCalledTimes(2);
+        expect(mocks.router.refresh).not.toHaveBeenCalled();
+        mocks.status.mockResolvedValue({ serverId, releaseChannel: "stable", job: { jobId, state: "succeeded", progress: "Done." } });
+        await act(async () => vi.advanceTimersByTimeAsync(4_000));
+        expect(mocks.router.refresh).toHaveBeenCalledOnce();
+        await act(async () => vi.advanceTimersByTimeAsync(60_000));
+        expect(mocks.status).toHaveBeenCalledTimes(3);
+        expect(mocks.router.refresh).toHaveBeenCalledOnce();
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
 // Resolves real English messages without reading cookies in standalone tests.
 vi.mock("@/app/lib/localization/server", () => ({
     getLocale: async () => "en",

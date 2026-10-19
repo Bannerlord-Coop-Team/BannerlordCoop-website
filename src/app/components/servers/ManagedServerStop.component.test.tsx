@@ -233,18 +233,20 @@ it("re-renders the page only when the compact server status changes", async () =
     const readStatus = vi.fn<ManagedServerStatusReader>().mockResolvedValue({ ok: true, fingerprint: "running" });
     await renderWithProbe(readStatus);
     await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt));
+    // The opening refresh reads the fingerprint first, so an unchanged first check renders nothing.
+    expect(readStatus).toHaveBeenCalledTimes(1);
     expect(router.refresh).toHaveBeenCalledTimes(1);
     await act(async () => vi.advanceTimersByTimeAsync(4_000));
-    expect(router.refresh).toHaveBeenCalledTimes(2);
+    expect(router.refresh).toHaveBeenCalledTimes(1);
     await act(async () => vi.advanceTimersByTimeAsync(16_000));
-    expect(readStatus).toHaveBeenCalledTimes(5);
-    expect(router.refresh).toHaveBeenCalledTimes(2);
+    expect(readStatus).toHaveBeenCalledTimes(6);
+    expect(router.refresh).toHaveBeenCalledTimes(1);
     readStatus.mockResolvedValue({ ok: true, fingerprint: "stopping" });
     await act(async () => vi.advanceTimersByTimeAsync(4_000));
-    expect(router.refresh).toHaveBeenCalledTimes(3);
+    expect(router.refresh).toHaveBeenCalledTimes(2);
     readStatus.mockResolvedValue({ ok: false });
     await act(async () => vi.advanceTimersByTimeAsync(4_000));
-    expect(router.refresh).toHaveBeenCalledTimes(4);
+    expect(router.refresh).toHaveBeenCalledTimes(3);
     expect(readStatus).toHaveBeenCalledWith(server.serverId);
 });
 

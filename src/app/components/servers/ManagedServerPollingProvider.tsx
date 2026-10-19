@@ -167,8 +167,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
             deadline: startedAt + (statusSource === "backup" && jobId === undefined
                 ? UNATTACHED_BACKUP_DEADLINE_MILLISECONDS : POLL_DEADLINE_MILLISECONDS),
         });
-        router.refresh();
-    }, [router]);
+    }, []);
 
     const attachJob = useCallback((serverId: string, jobId: string) => {
         setSession((current) => current?.serverId === serverId
@@ -217,7 +216,10 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
             void refreshIfChanged();
         }
 
-        timer = window.setTimeout(tick, managedServerPollDelay(Date.now() - startedAt));
+        // The session's first refresh also records the baseline, so an unchanged first tick skips its render.
+        void refreshIfChanged().then(() => {
+            if (!cancelled) timer = window.setTimeout(tick, managedServerPollDelay(Date.now() - startedAt));
+        });
         const deadline = window.setTimeout(() => {
             setTimedOutSession(session);
             setSession((current) => current?.deadline === session.deadline ? null : current);

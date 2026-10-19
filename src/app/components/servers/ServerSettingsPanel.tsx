@@ -53,7 +53,9 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
     const [progressError, setProgressError] = useState("");
     const releaseRequest = useRef<{ serverId: string; releaseChannel: ReleaseChannel; expectedUpdatedAt: string; requestId: string; previousChannel: ReleaseChannel } | null>(null);
     const expectedJob = useRef<string | null>(null);
+    const followedReleaseJob = useRef(false);
     const releaseServerId = releaseAccess?.serverId;
+    const renderedChannel = releaseAccess?.channel;
     const canReadRelease = releaseAccess?.canEdit === true;
     useEffect(() => {
         if (!releaseServerId || !canReadRelease) return;
@@ -70,9 +72,18 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
                 setProgressError("");
                 // A job seen running on this page makes its eventual outcome worth reporting.
                 const activeJobId = status.job && ACTIVE_RELEASE_JOB_STATES.has(status.job.state) ? status.job.jobId : null;
-                if (activeJobId) setWatchedReleaseJobs(current => withReleaseJob(current, activeJobId));
+                if (activeJobId) {
+                    followedReleaseJob.current = true;
+                    setWatchedReleaseJobs(current => withReleaseJob(current, activeJobId));
+                }
                 if (!status.job || ["succeeded", "failed", "cancelled"].includes(status.job.state)) {
-                    router.refresh();
+                    // Every page load lands here with no update running, and the page it rendered is current.
+                    // Re-render only after a job this page followed or requested, or for a channel it does not show.
+                    const changed = followedReleaseJob.current || expectedJob.current !== null
+                        || status.releaseChannel !== renderedChannel;
+                    followedReleaseJob.current = false;
+                    expectedJob.current = null;
+                    if (changed) router.refresh();
                     return;
                 }
             } else setProgressError(t("settingsPanel.updateProgressIsUnavailableTheOperationMayStillBeRunning"));
@@ -81,7 +92,7 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
         }
         void poll();
         return () => { cancelled = true; clearTimeout(timer); };
-    }, [releaseServerId, canReadRelease, pollVersion, router]);
+    }, [releaseServerId, canReadRelease, pollVersion, renderedChannel, router]);
     const updateBusy = releaseStatus?.job != null && ACTIVE_RELEASE_JOB_STATES.has(releaseStatus.job.state);
     // Older outcomes are history: only report jobs requested or watched during this page session.
     const shownReleaseJob = releaseStatus?.job && (updateBusy || watchedReleaseJobs.has(releaseStatus.job.jobId)) ? releaseStatus.job : null;

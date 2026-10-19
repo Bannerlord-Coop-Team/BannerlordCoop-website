@@ -57,7 +57,7 @@ import { listSupabaseUsers } from "@/app/lib/supabase/users";
 import { Container, HardDrive, MemoryStick, Server } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
+import { cache, Suspense } from "react";
 
 type ServerPageProps = {
     params: Promise<{ serverId: string }>;
@@ -299,7 +299,7 @@ async function ManagedServerBackupsSection({
     });
     const [initialBackups, initialStatus, filesResult, savesResult, autosavesResult] = await Promise.allSettled([
         listAllMyServerBackups(accessToken, server.serverId),
-        getMyServerBackupStatus(accessToken, server.serverId),
+        readBackupStatus(accessToken, server.serverId),
         getMyServerFiles(accessToken, server.serverId),
         savesRequest,
         autosavesRequest,
@@ -307,7 +307,9 @@ async function ManagedServerBackupsSection({
     let backupsResult = initialBackups;
     let statusResult = initialStatus;
     // Reads can fail briefly while the server restarts; retry once before reporting anything.
-    if (backupsResult.status === "rejected" || statusResult.status === "rejected") {
+    // A rate-limited read is not retried: another request half a second later only extends the limit.
+    if ((backupsResult.status === "rejected" || statusResult.status === "rejected")
+        && !rateLimited(backupsResult) && !rateLimited(statusResult)) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         [backupsResult, statusResult] = await Promise.allSettled([
             backupsResult.status === "rejected" ? listAllMyServerBackups(accessToken, server.serverId) : Promise.resolve(backupsResult.value),
@@ -480,6 +482,14 @@ async function LiveServerManagementPage({
     </ServerManagementWorkspace>;
 }
 
+// The header status and the backups section both read backup status; one render reads it once.
+const readBackupStatus = cache((accessToken: string, serverId: string) => getMyServerBackupStatus(accessToken, serverId));
+
+function rateLimited(result: PromiseSettledResult<unknown>) {
+    return result.status === "rejected" && result.reason instanceof MyServersApiError
+        && (result.reason.code === "rate_limited" || result.reason.code === "busy");
+}
+
 // Notices are optional page content: a failed read, a slow one or an older control plane never blocks the page.
 function readServerNotices(accessToken: string, serverId: string) {
     return getMyServerNotices(accessToken, serverId, AbortSignal.timeout(5_000)).catch(() => null);
@@ -497,7 +507,7 @@ async function ManagedServerStatus({ accessToken, server, checkBackup }: { acces
     const { t } = await getTranslations("managed-server");
     let backup: "active" | "paused" | null = null;
     if (checkBackup && server.operationState === "running") {
-        const job = (await getMyServerBackupStatus(accessToken, server.serverId).catch(() => null))?.job;
+        const job = (await readBackupStatus(accessToken, server.serverId).catch(() => null))?.job;
         if (job?.action === "backup" && ACTIVE_BACKUP_STATES.has(job.state)) backup = job.state === "running" ? "paused" : "active";
     }
     const entries = [
