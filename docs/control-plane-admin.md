@@ -480,7 +480,7 @@ always-on.
 
 The result shows current and proposed fleet totals (co-online pair-hours, hours
 with two and three servers online, and the observed replay), the plan's options,
-history start, samples and unsequenced servers, then three tables:
+history start, samples and unsequenced servers, then these sections:
 
 - **Moves** in step order, with the from and to VPS, target region, the step's own
   gain (zero or negative for an enabling leg of a swap), a staging badge, and the
@@ -489,6 +489,22 @@ history start, samples and unsequenced servers, then three tables:
   pinned, an always-on badge, weekly online hours, observed days and a 7×24 heatmap
   of its hourly online probability (Monday first, UTC). Each square has a title and
   the grid has a text summary for assistive technology.
+- **Host overlap**, when a VPS's slots are busy at the same time, for every VPS with
+  more than one slot (a one-slot VPS cannot overlap), grouped by region in the hosts
+  table's order. **Now** and **After plan** (`aria-pressed`) switch between each
+  host's `current` and `proposed` servers and pair-hours. Each row shows the VPS,
+  its slot count and servers, a 168-cell strip of the week (Monday first, UTC, a
+  hairline between days) and its pair-hours per week with "~N h/wk all K busy", or
+  "M slots free" while a slot is free. The math uses only the plan: a server's
+  hourly online probability is the midpoint of its heatmap band, (d + 0.5) / 10;
+  a cell is shaded by expected servers online over slots, on the heatmap's ten
+  bands; for a full VPS the chance every slot is busy is the product of its
+  servers' probabilities (independent, as the planner assumes), hours of at least
+  50% are marked on a thin red row under the strip, and N is its sum over the week.
+  Each cell's title gives the hour, expected online and the all-busy chance, and
+  each strip's text summary gives the slots, all-busy hours and busiest hour. A VPS
+  holding a server without a usable heatmap shows no strip. The computations live
+  in `lib/control-plane/placement-overlap.ts`.
 - **VPS hosts**, most contended first, with capacity, whether relocation may target
   them, current and proposed contention and their servers.
 
