@@ -159,7 +159,9 @@ it("shows a page opened mid-move with the steps done, the current step and the t
     ]);
     expect(steps.findIndex((step) => step.getAttribute("aria-current") === "step")).toBe(3);
     expect(card()!.textContent).toContain("4 min 10 s elapsed");
-    expect(card()!.textContent).toContain(messages["move.movingBody"]);
+    // Only the lifecycle controls wait for the move; settings stay available.
+    expect(card()!.textContent).toContain("Start, Stop, Restart and Update now are unavailable until the move finishes.");
+    expect(card()!.textContent).not.toContain("settings");
     expect(announcement()).toBe(`${messages["move.movingTitle"]} Current step: Restoring on the new machine`);
     expect(card()!.querySelector("button")).toBeNull();
 
@@ -184,7 +186,8 @@ it("explains that a failed move is putting the server back on its original machi
     await advance(0);
     expect(card()!.querySelector("h2")!.textContent).toBe(messages["move.returningTitle"]);
     expect(card()!.textContent).toContain(messages["move.returningProgress"]);
-    expect(card()!.textContent).toContain(messages["move.returningBody"]);
+    expect(card()!.textContent).toContain("Its address stays the same. Start, Stop, Restart and Update now are unavailable until this finishes.");
+    expect(card()!.textContent).not.toContain("settings");
     expect(card()!.textContent).toContain("10 min 0 s elapsed");
     expect(card()!.querySelector("ol, button")).toBeNull();
     expect(card()!.className).toContain("border-amber-400/40");
@@ -200,6 +203,11 @@ it.each([
     expect(card()!.querySelector("h2")!.textContent).toBe(messages[title]);
     expect(card()!.textContent).toContain(messages[body]);
     expect(card()!.className).toContain(tone);
+    // Nobody is told about a failed move, so the owner is asked to contact support rather than to wait.
+    if (stayedOnOriginal !== true) {
+        expect(card()!.textContent).toContain("Please contact support so we can sort it out.");
+        expect(card()!.textContent).not.toContain("notified");
+    }
 
     await act(async () => button(messages["notices.dismiss"])!.click());
     expect(card()).toBeNull();
