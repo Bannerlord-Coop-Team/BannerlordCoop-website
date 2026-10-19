@@ -228,6 +228,11 @@ it("lays a move's stops out as equal columns whose text wraps inside them", asyn
         expect(list.className).toContain("grid");
         expect(list.style.gridTemplateColumns).toBe(`repeat(${columns}, minmax(5.5rem, 1fr))`);
         expect(list.parentElement!.className).toContain("overflow-x-auto");
+        // The scrolling track itself takes focus, so a keyboard can scroll to later stops.
+        expect(list.parentElement!.getAttribute("tabindex")).toBe("0");
+        expect(list.parentElement!.getAttribute("role")).toBe("region");
+        expect(list.parentElement!.getAttribute("aria-label")).toBe(`${name} move steps`);
+        expect(list.parentElement!.className).toContain("focus-visible:outline-2");
         const stops = [...list.children];
         expect(stops).toHaveLength(columns);
         expect(stops.every((stop) => stop.tagName === "LI" && stop.classList.contains("min-w-0") && stop.classList.contains("break-words"))).toBe(true);
@@ -540,4 +545,19 @@ it("keeps one read at a time when the page is shown again during a poll and a st
     expect(most).toBe(1);
     expect(calls("placement-executor")).toHaveLength(3);
     expect(container.querySelector('time[datetime="2026-10-19T15:00:00.000Z"]')).not.toBeNull();
+});
+
+it("says to reload when the state after a stale switch cannot be loaded", async () => {
+    current = { ...current, settings: saved };
+    await act(async () => root.render(<PlacementExecutorPanel />));
+    const respond = mocks.request.getMockImplementation()!;
+    mocks.request.mockImplementation(async (request: { operation: string }) => {
+        if (request.operation === "set-placement-executor") throw new ControlPlaneAdminError("stale_interaction", "Settings changed.", false, "request");
+        if (request.operation === "placement-executor") throw new ControlPlaneAdminError("control_plane_unavailable", "Unreachable.", true);
+        return respond(request);
+    });
+    await flip();
+    expect(calls("placement-executor")).toHaveLength(2);
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Someone else switched automatic placement meanwhile, and its current state could not be loaded. Reload the page before switching again.");
+    expect(container.textContent).not.toContain("Its current state is shown");
 });

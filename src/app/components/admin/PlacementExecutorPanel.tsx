@@ -179,6 +179,7 @@ export function PlacementExecutorPanel() {
             setLegacy(placementExecutorLegacyValues(settings));
             setResult({ ok: true, message: settings.enabled ? "Automatic placement is on." : "Automatic placement is off." });
         } catch (cause) {
+            let reloaded = true;
             if (cause instanceof ControlPlaneAdminError && cause.code === "stale_interaction") {
                 // Someone else switched it first: show their state rather than overwrite it.
                 try {
@@ -186,9 +187,12 @@ export function PlacementExecutorPanel() {
                     const fresh = await reads.fresh();
                     setExecutor(fresh);
                     setLegacy(placementExecutorLegacyValues(fresh.settings));
-                } catch { /* The stale message below still asks to try again. */ }
+                } catch {
+                    // The state shown is the one this switch was refused against, so the message says to reload.
+                    reloaded = false;
+                }
             }
-            setResult({ ok: false, message: placementExecutorErrorMessage(cause) });
+            setResult({ ok: false, message: placementExecutorErrorMessage(cause, reloaded) });
         } finally {
             setPending(false);
         }
@@ -312,7 +316,8 @@ function LiveMove({ relocation }: { relocation: HostingPlacementRelocation }) {
  */
 function MoveTrack({ name, steps }: { name: string; steps: readonly PlacementTrackStep[] }) {
     return (
-        <div className="mt-2 overflow-x-auto pb-1">
+        // Focusable, so a keyboard can scroll a track wider than the panel; the stops have nothing to focus.
+        <div role="region" tabIndex={0} aria-label={`${name} move steps`} className="mt-2 overflow-x-auto pb-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold">
             <ol aria-label={`${name}: move steps`} className="grid gap-x-3" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(5.5rem, 1fr))` }}>
                 {steps.map((step, index) => {
                     const phase = TRACK_PHASES[step.phase];

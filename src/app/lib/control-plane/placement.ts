@@ -279,10 +279,15 @@ export function placementExecutorSwitchInput(enabled: boolean, expectedUpdatedAt
     };
 }
 
-/** Turns a failed executor read or save into text for the administrator. */
-export function placementExecutorErrorMessage(error: unknown) {
+/**
+ * Turns a failed executor read or switch into text for the administrator. After a stale switch the panel
+ * reloads the state; `reloaded` says whether that worked, so the message never claims a state it could not show.
+ */
+export function placementExecutorErrorMessage(error: unknown, reloaded = true) {
     if (error instanceof ControlPlaneAdminError && error.code === "stale_interaction") {
-        return "Someone else switched automatic placement meanwhile. Its current state is shown; switch it again if you still want to.";
+        return reloaded
+            ? "Someone else switched automatic placement meanwhile. Its current state is shown; switch it again if you still want to."
+            : "Someone else switched automatic placement meanwhile, and its current state could not be loaded. Reload the page before switching again.";
     }
     if (error instanceof ControlPlaneAdminError && error.code === "relocation_provider_unsupported") {
         return "Automatic placement can only be turned on when the control plane runs in live OVH mode.";
