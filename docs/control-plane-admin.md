@@ -535,6 +535,10 @@ server's address and game port. No Edge Function change is required.
 
 ### Automatic executor
 
+This switch-only panel requires control plane #516 or later, which fixes the
+rules below, and must be deployed after it; an older control plane still applies
+the stored minimum gain, notice lead and always-on policy.
+
 The top of the Placement tab shows the automatic placement executor, read in the
 browser with `placement-executor` when the tab opens. It has nothing to configure:
 a heading, one sentence on what it does, a single **Automatic placement** switch
@@ -615,11 +619,15 @@ as not returning; a read without `status` shows no status line, and one without
 While any relocation is announced or queued, the panel reads `placement-executor`
 again every 15 seconds, only while the page is visible; showing the page again
 reads at once, and the reads stop once nothing is active. They update only the
-status, the moves and the legacy compatibility field: the settings stay as last
-read, so a save is still checked against the generation the form shows. Polls,
-the stale reload and **Retry** share one read at a time: a poll joins a read under
-way, and the stale reload waits for it and then reads again, since a read that
-started before the rejected save may predate the other administrator's.
+status, the moves and the four legacy values: the switch's state and its
+`updatedAt` stay as last read, so a switch is still checked against the state the
+panel shows. Polls, the stale reload and **Retry** share one read at a time: a
+poll joins a read under way, and the stale reload waits for it and then reads
+again, since a read that started before the rejected switch may predate the other
+administrator's. If that reload fails, the message says the current state could
+not be loaded and asks for a page reload before switching again. The track scrolls
+in a focusable region (labelled "*server* move steps"), so a keyboard can reach
+stops past the panel's edge.
 
 ## Server notices
 
