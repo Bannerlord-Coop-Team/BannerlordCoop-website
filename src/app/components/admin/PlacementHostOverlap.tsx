@@ -13,10 +13,10 @@ import {
     placementHostOverlapGroups,
     slotsFreeLabel,
     type HostOverlap,
+    type PlacementOverlapPlan,
     type PlacementOverlapRow,
     type PlacementOverlapSide,
 } from "@/app/lib/control-plane/placement-overlap";
-import type { HostingAdminPlacementPlan } from "@/app/lib/control-plane/types";
 import { HEATMAP_CLASSES } from "./placement-heatmap-classes";
 
 const toggleClass = "inline-flex min-h-9 items-center border px-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] focus-visible:outline-2 focus-visible:outline-gold";
@@ -33,7 +33,7 @@ const WEEK = PLACEMENT_WEEKDAYS.map((_, day) => Array.from({ length: 24 }, (__, 
  * with more than one slot, shaded by how much of its capacity is expected online, with the hours in
  * which every slot is usually busy marked underneath.
  */
-export function PlacementHostOverlap({ plan }: { plan: Pick<HostingAdminPlacementPlan, "hosts" | "servers" | "moves"> }) {
+export function PlacementHostOverlap({ plan }: { plan: PlacementOverlapPlan }) {
     const [side, setSide] = useState<PlacementOverlapSide>("current");
     const groups = useMemo(() => placementHostOverlapGroups(plan, side), [plan, side]);
     const count = groups.reduce((total, group) => total + group.rows.length, 0);
@@ -84,7 +84,7 @@ function OverlapLegend() {
 }
 
 function OverlapRow({ row }: { row: PlacementOverlapRow }) {
-    const { host, occupants, overlap, freeSlots } = row;
+    const { host, occupants, overlap, freeSlots, estimate } = row;
     return (
         <li className={`${ROW_GRID} py-3`}>
             <div className="min-w-0 text-xs">
@@ -94,22 +94,23 @@ function OverlapRow({ row }: { row: PlacementOverlapRow }) {
             </div>
             {overlap === null
                 ? <p className="self-center text-xs text-foreground-dim">Unavailable: a server on this VPS has no learned weekly activity yet.</p>
-                : <OverlapStrip serviceName={host.serviceName} slots={host.slots} occupants={occupants.length} overlap={overlap} />}
+                : <OverlapStrip serviceName={host.serviceName} slots={host.slots} occupants={occupants.length} overlap={overlap} estimate={estimate} />}
             <div className="text-right font-mono text-xs">
                 <p className="text-foreground">{pairHoursLabel(row.pairHoursPerWeek)}</p>
                 <p className="mt-1 text-foreground-muted">{freeSlots > 0 ? slotsFreeLabel(freeSlots) : overlap === null ? "—" : allBusyLabel(overlap, host.slots)}</p>
+                {overlap !== null && estimate !== null && <p className="mt-1 font-sans text-amber-200">{estimate}</p>}
             </div>
         </li>
     );
 }
 
 /** The week's 168 hours shaded by expected occupancy; a full VPS adds a row marking its usually all-busy hours. */
-function OverlapStrip({ serviceName, slots, occupants, overlap }: { serviceName: string; slots: number; occupants: number; overlap: HostOverlap }) {
+function OverlapStrip({ serviceName, slots, occupants, overlap, estimate }: { serviceName: string; slots: number; occupants: number; overlap: HostOverlap; estimate: string | null }) {
     return (
-        <div role="img" aria-label={hostOverlapSummary(serviceName, slots, occupants, overlap)} className="flex flex-col gap-0.5">
+        <div role="img" aria-label={hostOverlapSummary(serviceName, slots, occupants, overlap, estimate)} className="flex flex-col gap-0.5">
             <div className="flex gap-0.5">{WEEK.map((hours, day) => (
                 <span key={day} className="flex">{hours.map((hour) => (
-                    <span key={hour} title={hostOverlapCellLabel(overlap, hour, slots)} className={`h-5 w-1 ${HEATMAP_CLASSES[overlapBand(overlap.expected[hour]!, slots)]}`} />
+                    <span key={hour} title={hostOverlapCellLabel(overlap, hour, slots, estimate !== null)} className={`h-5 w-1 ${HEATMAP_CLASSES[overlapBand(overlap.expected[hour]!, slots)]}`} />
                 ))}</span>
             ))}</div>
             {overlap.full && <div className="flex gap-0.5">{WEEK.map((hours, day) => (

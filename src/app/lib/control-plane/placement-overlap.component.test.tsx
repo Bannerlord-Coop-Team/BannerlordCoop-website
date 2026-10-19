@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
     allBusyLabel,
+    estimatedHistoryLabel,
     heatmapDigitProbability,
     hostOverlap,
     hostOverlapCellLabel,
@@ -90,9 +91,9 @@ it("labels hours and summarizes a VPS's week", () => {
     expect(hostOverlapSummary("vps-empty", 2, 0, hostOverlap(2, [])!)).toBe("vps-empty: 0 of 2 slots; 2 slots free; no servers");
 });
 
-function server(serverId: string, displayName: string, heatmapValue: string): HostingPlacementServer {
+function server(serverId: string, displayName: string, heatmapValue: string, observedDays = 28): HostingPlacementServer {
     return {
-        serverId, displayName, region: "germany", serviceName: "vps-a", proposedServiceName: "vps-a", pinnedReason: null, observedDays: 28,
+        serverId, displayName, region: "germany", serviceName: "vps-a", proposedServiceName: "vps-a", pinnedReason: null, observedDays,
         weeklyOnlineHours: 100, heatmap: heatmapValue,
         quietWindow: { weekday: "sunday", startsAtUtc: "03:00", durationMinutes: 120, onlineProbability: 0.1, nextStartsAt: "2026-10-25T03:00:00.000Z" },
     };
@@ -105,6 +106,7 @@ function host(serviceName: string, regionKeys: string[], slots: number, current:
 
 it("groups VPSs with more than one slot by region, on either side of the plan", () => {
     const plan = {
+        model: { minimumObservedDays: 7 },
         servers: [server("raven", "Ravenclaw", allNine), server("brute", "Brute", allNine), server("dog", "The Dog House", allNine), server("solo", "Solo", allNine)],
         moves: [],
         hosts: [
@@ -129,4 +131,39 @@ it("groups VPSs with more than one slot by region, on either side of the plan", 
     // An unknown server has no heatmap, so its VPS has no overlap rather than a guess.
     expect(placementHostOverlapGroups({ ...plan, hosts: [host("vps-x", ["germany"], 2, ["raven", "gone"], [], 1, 0)] }, "current")[0]!.rows[0]!)
         .toMatchObject({ overlap: null, occupants: [{ displayName: "Ravenclaw" }, { displayName: "gone" }] });
+});
+
+it("notes servers with less history than the plan's minimum", () => {
+    expect(estimatedHistoryLabel([], 7)).toBeNull();
+    expect(estimatedHistoryLabel([{ displayName: "Game Night", observedDays: 0 }], 7)).toBe("Estimated: Game Night has no history yet");
+    expect(estimatedHistoryLabel([{ displayName: "Game Night", observedDays: 3 }], 7)).toBe("Estimated: Game Night has under 7 days of history");
+    expect(estimatedHistoryLabel([{ displayName: "Game Night", observedDays: 0 }, { displayName: "X", observedDays: 0 }], 7)).toBe("Estimated: Game Night, X have no history yet");
+    expect(estimatedHistoryLabel([{ displayName: "Game Night", observedDays: 0 }, { displayName: "X", observedDays: 6.5 }], 10)).toBe("Estimated: Game Night, X have under 10 days of history");
+    expect(estimatedHistoryLabel(["A", "B", "C", "D"].map((displayName) => ({ displayName, observedDays: 2 })), 7)).toBe("Estimated: 4 servers have under 7 days of history");
+    expect(estimatedHistoryLabel([{ displayName: "A", observedDays: 0.5 }], 1)).toBe("Estimated: A has under 1 day of history");
+});
+
+it("ends an estimated VPS's summary and hour labels with the estimate", () => {
+    const overlap = hostOverlap(2, [allNine, allNine])!;
+    expect(hostOverlapCellLabel(overlap, 0, 2, true)).toBe("Mon 00:00 UTC · ~1.9 of 2 online · all 2 busy 90% · estimated");
+    expect(hostOverlapSummary("vps-new", 2, 2, overlap, "Estimated: Game Night has no history yet"))
+        .toBe("vps-new: 2 of 2 slots; all busy about 152 hours a week; busiest Mon 00:00 UTC, about 1.9 online. Estimated: Game Night has no history yet");
+});
+
+it("estimates each side of the plan from the plan's own minimum history", () => {
+    const plan = {
+        model: { minimumObservedDays: 7 },
+        moves: [],
+        servers: [server("night", "Game Night", allNine, 0), server("fresh", "Fresh Start", allNine, 3), server("old", "Old Guard", allNine, 28), server("vet", "Veteran", allNine, 7)],
+        hosts: [
+            host("vps-new", ["germany"], 2, ["night", "old"], ["old", "vet"], 50, 40),
+            host("vps-mid", ["germany"], 2, ["fresh", "vet"], ["fresh", "night"], 30, 20),
+        ],
+    };
+    const estimates = (side: "current" | "proposed", minimumObservedDays = 7) => Object.fromEntries(placementHostOverlapGroups({ ...plan, model: { minimumObservedDays } }, side)[0]!.rows
+        .map((row) => [row.host.serviceName, row.estimate]));
+    expect(estimates("current")).toEqual({ "vps-new": "Estimated: Game Night has no history yet", "vps-mid": "Estimated: Fresh Start has under 7 days of history" });
+    // Veteran has exactly the minimum, so once Game Night leaves, vps-new is no estimate.
+    expect(estimates("proposed")).toEqual({ "vps-new": null, "vps-mid": "Estimated: Fresh Start, Game Night have under 7 days of history" });
+    expect(estimates("proposed", 30)).toEqual({ "vps-new": "Estimated: Old Guard, Veteran have under 30 days of history", "vps-mid": "Estimated: Fresh Start, Game Night have under 30 days of history" });
 });

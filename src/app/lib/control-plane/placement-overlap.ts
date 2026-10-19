@@ -31,7 +31,15 @@ export type PlacementOverlapRow = {
     freeSlots: number;
     /** Null while a server on it has no learned weekly activity. */
     overlap: HostOverlap | null;
+    /**
+     * Servers with less history than the planner's minimum. Their heatmaps lean on the fleet's
+     * typical week (entirely, with no history), so the row is an estimate; null when there are none.
+     */
+    estimate: string | null;
 };
+
+/** Servers named in an estimate note before it counts them instead. */
+const MAXIMUM_NAMED_ESTIMATES = 3;
 
 export type PlacementOverlapGroup = { region: string; rows: PlacementOverlapRow[] };
 
@@ -96,24 +104,37 @@ function oneDecimal(value: number) {
     return (Math.round(value * 10 + 1e-9) / 10).toFixed(1);
 }
 
-/** One hour's tooltip, such as "Tue 20:00 UTC · ~2.9 of 3 online · all 3 busy 85%". */
-export function hostOverlapCellLabel(overlap: HostOverlap, hour: number, slots: number) {
+/** One hour's tooltip, such as "Tue 20:00 UTC · ~2.9 of 3 online · all 3 busy 85%", ending "· estimated" for an estimate. */
+export function hostOverlapCellLabel(overlap: HostOverlap, hour: number, slots: number, estimated = false) {
     const online = `${weekHourLabel(hour)} · ~${oneDecimal(overlap.expected[hour]!)} of ${slots} online`;
-    return overlap.full ? `${online} · all ${slots} busy ${Math.round(overlap.allBusy[hour]! * 100)}%` : online;
+    const label = overlap.full ? `${online} · all ${slots} busy ${Math.round(overlap.allBusy[hour]! * 100)}%` : online;
+    return estimated ? `${label} · estimated` : label;
+}
+
+/**
+ * "Estimated: Game Night has under 7 days of history", naming up to three servers and counting more;
+ * "no history yet" when none of them has any. Null when every server has the minimum history.
+ */
+export function estimatedHistoryLabel(servers: readonly { displayName: string; observedDays: number }[], minimumObservedDays: number) {
+    if (servers.length === 0) return null;
+    const who = servers.length > MAXIMUM_NAMED_ESTIMATES ? `${servers.length} servers` : servers.map((server) => server.displayName).join(", ");
+    const history = servers.every((server) => server.observedDays <= 0) ? "no history yet" : `under ${minimumObservedDays} ${minimumObservedDays === 1 ? "day" : "days"} of history`;
+    return `Estimated: ${who} ${servers.length === 1 ? "has" : "have"} ${history}`;
 }
 
 export function slotsFreeLabel(freeSlots: number) {
     return `${freeSlots} ${freeSlots === 1 ? "slot" : "slots"} free`;
 }
 
-/** One sentence describing a VPS's week for assistive technology. */
-export function hostOverlapSummary(serviceName: string, slots: number, occupants: number, overlap: HostOverlap) {
+/** One sentence describing a VPS's week for assistive technology, ending with its estimate note if it has one. */
+export function hostOverlapSummary(serviceName: string, slots: number, occupants: number, overlap: HostOverlap, estimate: string | null = null) {
     const filled = `${serviceName}: ${occupants} of ${slots} slots`;
     if (occupants === 0) return `${filled}; ${slotsFreeLabel(slots)}; no servers`;
     const busiest = `busiest ${weekHourLabel(overlap.peakHour)}, about ${oneDecimal(overlap.expected[overlap.peakHour]!)} online`;
-    return overlap.full
+    const summary = overlap.full
         ? `${filled}; all busy about ${Math.round(overlap.allBusyHoursPerWeek)} hours a week; ${busiest}`
         : `${filled}; ${slotsFreeLabel(Math.max(0, slots - occupants))}; ${busiest}`;
+    return estimate === null ? summary : `${summary}. ${estimate}`;
 }
 
 /** "~144 h/wk all 3 busy" from the week's expected all-busy hours. */
@@ -126,14 +147,21 @@ export function pairHoursLabel(pairHoursPerWeek: number) {
     return `${formatPlacementHours(pairHoursPerWeek)} pair-h/wk`;
 }
 
+/** The parts of a plan the overlap view reads. */
+export type PlacementOverlapPlan = Pick<HostingAdminPlacementPlan, "hosts" | "servers" | "moves"> & {
+    model: Pick<HostingAdminPlacementPlan["model"], "minimumObservedDays">;
+};
+
 /**
  * The VPSs whose slots can overlap (more than one slot), grouped by region, with each one's servers on
  * the chosen side of the plan. Rows keep the hosts table's order, most contended now first, so switching
  * sides does not reorder them; groups are alphabetical with hosts without a region last.
  */
-export function placementHostOverlapGroups(plan: Pick<HostingAdminPlacementPlan, "hosts" | "servers" | "moves">, side: PlacementOverlapSide): PlacementOverlapGroup[] {
+export function placementHostOverlapGroups(plan: PlacementOverlapPlan, side: PlacementOverlapSide): PlacementOverlapGroup[] {
     const names = placementServerNames(plan);
     const heatmaps = new Map(plan.servers.map((server) => [server.serverId, server.heatmap]));
+    const observedDays = new Map(plan.servers.map((server) => [server.serverId, server.observedDays]));
+    const minimum = plan.model.minimumObservedDays;
     const groups = new Map<string, PlacementOverlapRow[]>();
     for (const host of sortPlacementHosts(plan.hosts)) {
         if (!(host.slots > 1)) continue;
@@ -141,12 +169,19 @@ export function placementHostOverlapGroups(plan: Pick<HostingAdminPlacementPlan,
         const serverIds = Array.isArray(placement.serverIds) ? placement.serverIds : [];
         const region = host.regionKeys.length === 0 ? "" : host.regionKeys.map(hostingRegionLabel).join(", ");
         const rows = groups.get(region) ?? [];
+        const occupants = serverIds.map((serverId) => ({ serverId, displayName: names.get(serverId) ?? serverId }));
+        // The plan's own minimum, so a planner that changes it needs no website change.
+        const young = Number.isFinite(minimum) ? occupants.flatMap((occupant) => {
+            const days = observedDays.get(occupant.serverId);
+            return typeof days === "number" && days < minimum ? [{ displayName: occupant.displayName, observedDays: days }] : [];
+        }) : [];
         rows.push({
             host,
-            occupants: serverIds.map((serverId) => ({ serverId, displayName: names.get(serverId) ?? serverId })),
+            occupants,
             pairHoursPerWeek: placement.pairHoursPerWeek,
             freeSlots: Math.max(0, host.slots - serverIds.length),
             overlap: hostOverlap(host.slots, serverIds.map((serverId) => heatmaps.get(serverId) ?? "")),
+            estimate: estimatedHistoryLabel(young, minimum),
         });
         groups.set(region, rows);
     }

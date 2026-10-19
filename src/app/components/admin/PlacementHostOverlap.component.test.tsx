@@ -1,7 +1,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import type { HostingAdminPlacementPlan, HostingPlacementHost, HostingPlacementServer } from "@/app/lib/control-plane/types";
+import type { PlacementOverlapPlan } from "@/app/lib/control-plane/placement-overlap";
+import type { HostingPlacementHost, HostingPlacementServer } from "@/app/lib/control-plane/types";
 import { PlacementHostOverlap } from "./PlacementHostOverlap";
 
 const heatmap = (digit: (hour: number) => number) => Array.from({ length: 168 }, (_, hour) => String(digit(hour))).join("");
@@ -9,9 +10,9 @@ const allNine = heatmap(() => 9);
 // Saturday and Sunday (hours 120–167) at 0.95, weekdays at 0.25.
 const weekends = heatmap((hour) => hour >= 120 ? 9 : 2);
 
-function server(serverId: string, displayName: string, heatmapValue: string): HostingPlacementServer {
+function server(serverId: string, displayName: string, heatmapValue: string, observedDays = 28): HostingPlacementServer {
     return {
-        serverId, displayName, region: "germany", serviceName: "vps-a", proposedServiceName: "vps-a", pinnedReason: null, observedDays: 28,
+        serverId, displayName, region: "germany", serviceName: "vps-a", proposedServiceName: "vps-a", pinnedReason: null, observedDays,
         weeklyOnlineHours: 100, heatmap: heatmapValue,
         quietWindow: { weekday: "sunday", startsAtUtc: "03:00", durationMinutes: 120, onlineProbability: 0.1, nextStartsAt: "2026-10-25T03:00:00.000Z" },
     };
@@ -23,7 +24,8 @@ function host(serviceName: string, regionKeys: string[], slots: number, current:
 }
 
 // Today's busiest VPS: three servers that are nearly always online, of which the plan leaves only Brute.
-const plan: Pick<HostingAdminPlacementPlan, "hosts" | "servers" | "moves"> = {
+const plan: PlacementOverlapPlan = {
+    model: { minimumObservedDays: 7 },
     servers: [
         server("raven", "Ravenclaw", allNine), server("brute", "Brute", allNine), server("dog", "The Dog House", allNine),
         server("sat", "Saturday Club", weekends), server("sun", "Sunday Club", weekends), server("solo", "Solo", allNine), server("new", "Newcomer", "bad"),
@@ -52,8 +54,8 @@ afterEach(async () => {
     container.remove();
 });
 
-async function render() {
-    await act(async () => root.render(<PlacementHostOverlap plan={plan} />));
+async function render(shown: PlacementOverlapPlan = plan) {
+    await act(async () => root.render(<PlacementHostOverlap plan={shown} />));
 }
 
 function hostRow(serviceName: string) {
@@ -140,6 +142,38 @@ it("switches between the current placement and the plan's", async () => {
 
     await act(async () => button("Now").click());
     expect(hostRow("vps-7e1cbd42")!.textContent).toContain("~144 h/wk all 3 busy");
+});
+
+it("marks a VPS as an estimate while a server on it has less than the plan's minimum history", async () => {
+    // Game Night has no history at all and Fresh Start three days: the control plane fills their weeks from the fleet's.
+    await render({
+        model: { minimumObservedDays: 7 },
+        moves: [],
+        servers: [server("night", "Game Night", allNine, 0), server("fresh", "Fresh Start", weekends, 3), server("old", "Old Guard", allNine, 28), server("vet", "Veteran", allNine, 7)],
+        hosts: [
+            host("vps-new", ["germany"], 2, ["night", "old"], ["old", "vet"], 50, 40),
+            host("vps-mid", ["germany"], 2, ["fresh", "vet"], ["fresh", "night"], 30, 20),
+        ],
+    });
+    expect(hostRow("vps-new")!.textContent).toContain("Estimated: Game Night has no history yet");
+    expect(strip("vps-new")!.getAttribute("aria-label")).toBe("vps-new: 2 of 2 slots; all busy about 152 hours a week; busiest Mon 00:00 UTC, about 1.9 online. Estimated: Game Night has no history yet");
+    expect(cells("vps-new").shading.every((cell) => cell.getAttribute("title")!.endsWith(" · estimated"))).toBe(true);
+    expect(hostRow("vps-mid")!.textContent).toContain("Estimated: Fresh Start has under 7 days of history");
+    expect(strip("vps-mid")!.getAttribute("aria-label")).toMatch(/\. Estimated: Fresh Start has under 7 days of history$/u);
+    expect(cells("vps-mid").shading[0]!.getAttribute("title")).toBe("Mon 00:00 UTC · ~1.2 of 2 online · all 2 busy 24% · estimated");
+
+    // After the plan Game Night joins Fresh Start, and vps-new holds only servers with the minimum history.
+    await act(async () => button("After plan").click());
+    expect(hostRow("vps-new")!.textContent).not.toContain("Estimated");
+    expect(strip("vps-new")!.getAttribute("aria-label")).not.toContain("Estimated");
+    expect(cells("vps-new").shading.some((cell) => cell.getAttribute("title")!.includes("estimated"))).toBe(false);
+    expect(hostRow("vps-mid")!.textContent).toContain("Estimated: Fresh Start, Game Night have under 7 days of history");
+});
+
+it("marks nothing as an estimate when every server has the minimum history", async () => {
+    await render();
+    expect(container.textContent).not.toContain("Estimated");
+    expect(cells("vps-7e1cbd42").shading.some((cell) => cell.getAttribute("title")!.includes("estimated"))).toBe(false);
 });
 
 it("explains the scale and the marker in words, not colour alone", async () => {
