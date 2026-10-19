@@ -5,12 +5,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ServerSettingsPanel } from "./ServerSettingsPanel";
 
-const mocks = vi.hoisted(() => ({ router: { refresh: vi.fn() }, settings: vi.fn(), visibility: vi.fn(), release: vi.fn(), status: vi.fn(), rename: vi.fn(), manager: vi.fn() }));
+const mocks = vi.hoisted(() => ({ router: { refresh: vi.fn() }, settings: vi.fn(), visibility: vi.fn(), release: vi.fn(), status: vi.fn(), manager: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => mocks.router }));
 vi.mock("@/app/servers/server-settings-actions", () => ({ saveServerSettings: mocks.settings }));
 vi.mock("@/app/servers/server-visibility-actions", () => ({ setServerVisibility: mocks.visibility }));
 vi.mock("@/app/servers/server-release-actions", () => ({ changeServerRelease: mocks.release, readServerReleaseStatus: mocks.status }));
-vi.mock("@/app/servers/name-actions", () => ({ renameLiveServer: mocks.rename }));
 vi.mock("@/app/servers/server-manager-actions", () => ({ setServerManager: mocks.manager }));
 
 const serverId = "11111111-1111-4111-8111-111111111111";
@@ -102,7 +101,6 @@ it("saves name and maintenance once, then carries each returned generation into 
         previous: { displayName: "Settings QA", maintenanceSlot: "06:00-07:00" } });
     expect(mocks.visibility).toHaveBeenCalledWith({ serverId, visibility: "public", expectedUpdatedAt: savedAt, requestId: expect.any(String) });
     expect(mocks.release).toHaveBeenCalledWith({ serverId, releaseChannel: "nightly", expectedUpdatedAt: visibilityAt, requestId: expect.any(String), previousChannel: "stable" });
-    expect(mocks.rename).not.toHaveBeenCalled();
     expect(mocks.router.refresh).toHaveBeenCalled();
 });
 
@@ -152,14 +150,6 @@ it("explains an invalid server name beside the field before contacting the serve
     expect(name().getAttribute("aria-invalid")).toBeNull();
     await submit();
     expect(mocks.settings).toHaveBeenCalledOnce();
-});
-
-it("applies the live rename rules to live server names", async () => {
-    await render({ name: "Live", renameServerId: "live-server" });
-    await change("#settings-server-name", "   ");
-    await submit();
-    expect(mocks.rename).not.toHaveBeenCalled();
-    expect(container.querySelector("#settings-server-name-error")?.textContent).toBe("Enter a server name.");
 });
 
 it.each([

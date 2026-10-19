@@ -28,6 +28,12 @@ const nextConfig: NextConfig = {
                 destination: `${GATEWAY_ORIGIN}/install-linux.sh`,
                 permanent: true,
             },
+            // Retired external-console links carry no managed identity, so they return to discovery.
+            {
+                source: "/servers/live/:serverId",
+                destination: "/servers",
+                permanent: false,
+            },
         ];
     },
     images: {

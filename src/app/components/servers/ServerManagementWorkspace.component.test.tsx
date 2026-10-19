@@ -6,15 +6,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel, useRevealServerAddress } from "./ServerManagementWorkspace";
 
-const settingsMocks = vi.hoisted(() => ({ rename: vi.fn(), visibility: vi.fn(), refresh: vi.fn(), release: vi.fn(), releaseStatus: vi.fn() }));
+const settingsMocks = vi.hoisted(() => ({ settings: vi.fn(), visibility: vi.fn(), refresh: vi.fn(), release: vi.fn(), releaseStatus: vi.fn() }));
 vi.mock("next/navigation", () => { const router = { refresh: settingsMocks.refresh }; return { useRouter: () => router }; });
-vi.mock("@/app/servers/name-actions", () => ({ renameLiveServer: settingsMocks.rename }));
 vi.mock("@/app/servers/server-visibility-actions", () => ({ setServerVisibility: settingsMocks.visibility }));
+vi.mock("@/app/servers/server-settings-actions", () => ({ saveServerSettings: settingsMocks.settings }));
 vi.mock("@/app/servers/server-release-actions", () => ({ changeServerRelease: settingsMocks.release, readServerReleaseStatus: settingsMocks.releaseStatus }));
 let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
-    settingsMocks.rename.mockReset(); settingsMocks.visibility.mockReset(); settingsMocks.refresh.mockReset();
+    settingsMocks.settings.mockReset(); settingsMocks.visibility.mockReset(); settingsMocks.refresh.mockReset();
     settingsMocks.release.mockReset(); settingsMocks.releaseStatus.mockReset();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     window.history.replaceState(null, "", "/servers/test");
@@ -115,7 +115,7 @@ it("reports clipboard failure on the Copy IP button and permits retry without he
     expect(writeText).toHaveBeenCalledTimes(2);
 });
 
-it("opens access feedback and hash targets in Settings and disables unsupported actions", async () => {
+it("opens an explicit initial section and hash targets in Settings and disables unsupported actions", async () => {
     await act(async () => root.render(<TestLocalization>{<ServerManagementWorkspace name="Server" summary="Unknown" notice="Unavailable" initialSection="Settings">
         <ServerWorkspacePanel section="Settings"><UnavailableServerPanel title="Visibility" actions={["Public"]} /></ServerWorkspacePanel>
     </ServerManagementWorkspace>} </TestLocalization>));
@@ -123,7 +123,7 @@ it("opens access feedback and hash targets in Settings and disables unsupported 
     expect([...container.querySelectorAll("button")].find(b => b.textContent === "Public")?.disabled).toBe(true);
     expect([...container.querySelectorAll("button")].find(b => b.textContent === "Copy IP")?.disabled).toBe(true);
     await act(async () => click("Console"));
-    await act(async () => { window.location.hash = "server-access"; window.dispatchEvent(new HashChangeEvent("hashchange")); });
+    await act(async () => { window.location.hash = "server-visibility"; window.dispatchEvent(new HashChangeEvent("hashchange")); });
     expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Settings");
 });
 
@@ -157,56 +157,48 @@ it("shows authoritative settings without enabling unsupported save controls", as
 });
 
 const visibilityAccess = { serverId: "managed-server", expectedUpdatedAt: "2026-09-13T00:00:00.000Z", canEdit: true };
-async function renameDraft(value: string) {
-    const input = container.querySelector<HTMLInputElement>("#settings-server-name")!;
-    await act(async () => {
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-}
 async function saveSettings() {
     await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 }
-it("discards local settings drafts without calling either server action", async () => {
-    await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel name="Campaign" visibility="private" renameServerId="live-server" visibilityAccess={visibilityAccess} />} </TestLocalization>));
-    await renameDraft("New campaign");
+it("discards local name and visibility drafts without calling either managed server action", async () => {
+    const settingsAccess = { ...visibilityAccess, maintenanceSlot: "06:00-07:00", timezone: "America/Chicago" };
+    await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel name="Campaign" visibility="private" visibilityAccess={visibilityAccess} settingsAccess={settingsAccess} />} </TestLocalization>));
+    const nameInput = container.querySelector<HTMLInputElement>("#settings-server-name")!;
+    expect(nameInput.disabled).toBe(false);
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(nameInput, "New campaign");
+        nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     await act(async () => container.querySelector<HTMLInputElement>('input[value="public"]')!.click());
     await act(async () => click("Discard"));
     expect(container.querySelector<HTMLInputElement>("#settings-server-name")!.value).toBe("Campaign");
     expect(container.querySelector<HTMLInputElement>('input[value="private"]')!.checked).toBe(true);
-    expect(settingsMocks.rename).not.toHaveBeenCalled();
+    expect(settingsMocks.settings).not.toHaveBeenCalled();
     expect(settingsMocks.visibility).not.toHaveBeenCalled();
 });
-it("confirms publishing before saving, retains partial failures and retries the same visibility request", async () => {
+it("confirms publishing before saving, retains unconfirmed failures and retries the same visibility request", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    settingsMocks.rename.mockResolvedValue({ ok: true, displayName: "New campaign" });
     settingsMocks.visibility.mockRejectedValueOnce(new Error("Disconnected")).mockResolvedValueOnce({ ok: true, message: "Update acknowledged" });
-    await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel name="Campaign" visibility="private" renameServerId="live-server" visibilityAccess={visibilityAccess} />} </TestLocalization>));
-    await renameDraft("New campaign");
+    await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel name="Campaign" visibility="private" visibilityAccess={visibilityAccess} />} </TestLocalization>));
     await act(async () => container.querySelector<HTMLInputElement>('input[value="public"]')!.click());
     await saveSettings();
-    expect(settingsMocks.rename).not.toHaveBeenCalled();
+    expect(settingsMocks.visibility).not.toHaveBeenCalled();
     confirm.mockReturnValue(true);
     await saveSettings();
-    expect(settingsMocks.rename.mock.calls[0][0].get("displayName")).toBe("New campaign");
-    expect(settingsMocks.rename.mock.calls[0][0].get("serverId")).toBe("live-server");
     const first = settingsMocks.visibility.mock.calls[0][0];
     expect(first).toEqual(expect.objectContaining({ serverId: "managed-server", visibility: "public", expectedUpdatedAt: visibilityAccess.expectedUpdatedAt, requestId: expect.any(String) }));
-    expect(container.textContent).toContain("Server name saved.");
     expect(container.textContent).toContain("could not be confirmed");
     await saveSettings();
-    expect(settingsMocks.rename).toHaveBeenCalledOnce();
     expect(settingsMocks.visibility.mock.calls[1][0]).toEqual(first);
     expect(settingsMocks.refresh).toHaveBeenCalled();
 });
-it("saves a managed owner's visibility without attempting unsupported renaming", async () => {
+it("saves a managed owner's visibility while keeping the recorded name read-only", async () => {
     settingsMocks.visibility.mockResolvedValue({ ok: true, message: "Update acknowledged" });
     await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel name="Campaign" visibility="public" visibilityAccess={visibilityAccess} />} </TestLocalization>));
     expect(container.querySelector<HTMLInputElement>("#settings-server-name")!.disabled).toBe(true);
     await act(async () => container.querySelector<HTMLInputElement>('input[value="private"]')!.click());
     await saveSettings();
     expect(settingsMocks.visibility).toHaveBeenCalledWith(expect.objectContaining({ visibility: "private" }));
-    expect(settingsMocks.rename).not.toHaveBeenCalled();
     await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel name="Campaign" visibility="private" visibilityAccess={{ ...visibilityAccess, expectedUpdatedAt: "2026-09-14T00:00:00.000Z" }} />} </TestLocalization>));
     expect(container.textContent).toContain("No pending changes");
 });
@@ -336,7 +328,7 @@ it("returns Copy IP feedback to its normal label after a moment", async () => {
 });
 
 it("remembers the selected tab in the URL without navigating and restores it on load", async () => {
-    window.history.replaceState(null, "", "/servers/test?accessUpdated=1#server-access");
+    window.history.replaceState(null, "", "/servers/test?source=1#server-visibility");
     const replace = vi.spyOn(window.history, "replaceState");
     const workspace = <ServerManagementWorkspace name="Server" summary="Running">
         <ServerWorkspacePanel section="Console"><div id="console-content">Console</div></ServerWorkspacePanel>
@@ -348,7 +340,7 @@ it("remembers the selected tab in the URL without navigating and restores it on 
     expect(replace).toHaveBeenCalledOnce();
     expect(window.location.pathname).toBe("/servers/test");
     expect(new URLSearchParams(window.location.search).get("tab")).toBe("save-config");
-    expect(new URLSearchParams(window.location.search).get("accessUpdated")).toBe("1");
+    expect(new URLSearchParams(window.location.search).get("source")).toBe("1");
     expect(window.location.hash).toBe("");
     await act(async () => click("Backups"));
     expect(new URLSearchParams(window.location.search).get("tab")).toBe("backups");
@@ -366,10 +358,10 @@ it("remembers the selected tab in the URL without navigating and restores it on 
     expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Console");
 });
 
-it("keeps access feedback in Settings even when another tab is remembered", async () => {
-    window.history.replaceState(null, "", "/servers/test?tab=backups&accessError=Denied");
+it("keeps an explicit initial section even when another tab is remembered", async () => {
+    window.history.replaceState(null, "", "/servers/test?tab=backups");
     await act(async () => root.render(<TestLocalization>{<ServerManagementWorkspace name="Server" summary="Running" initialSection="Settings">
-        <ServerWorkspacePanel section="Settings"><div id="settings-content">Access</div></ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Settings"><div id="settings-content">Settings</div></ServerWorkspacePanel>
     </ServerManagementWorkspace>} </TestLocalization>));
     expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Settings");
 });

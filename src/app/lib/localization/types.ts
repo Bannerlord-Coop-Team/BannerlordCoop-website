@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 export const locales = ["en", "zh-CN", "ru", "es", "pt-BR", "pt-PT", "ja", "ko", "de", "tr", "fr"] as const;
 export type Locale = (typeof locales)[number];
-export const namespaces = ["common", "home", "account", "changelog", "cheats", "login", "servers", "managed-server", "server-common", "live-server", "server-wireframe", "support", "not-found"] as const;
+export const namespaces = ["common", "home", "account", "changelog", "cheats", "login", "servers", "managed-server", "server-common", "server-wireframe", "support", "not-found"] as const;
 export type Namespace = (typeof namespaces)[number];
 export type PluralMessage = Partial<Record<Intl.LDMLPluralRule, string>> & { other: string };
 export type Dictionary = Record<string, string | PluralMessage>;

@@ -17,7 +17,6 @@ const definition: LocaleDefinition = {
         "servers": () => import("../dictionaries/tr/servers.json"),
         "managed-server": () => import("../dictionaries/tr/managed-server.json"),
         "server-common": () => import("../dictionaries/tr/server-common.json"),
-        "live-server": () => import("../dictionaries/tr/live-server.json"),
         "server-wireframe": () => import("../dictionaries/tr/server-wireframe.json"),
         "support": () => import("../dictionaries/tr/support.json"),
         "not-found": () => import("../dictionaries/tr/not-found.json"),

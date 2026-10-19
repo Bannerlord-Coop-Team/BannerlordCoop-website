@@ -17,7 +17,6 @@ const definition: LocaleDefinition = {
         "servers": () => import("../dictionaries/ko/servers.json"),
         "managed-server": () => import("../dictionaries/ko/managed-server.json"),
         "server-common": () => import("../dictionaries/ko/server-common.json"),
-        "live-server": () => import("../dictionaries/ko/live-server.json"),
         "server-wireframe": () => import("../dictionaries/ko/server-wireframe.json"),
         "support": () => import("../dictionaries/ko/support.json"),
         "not-found": () => import("../dictionaries/ko/not-found.json"),

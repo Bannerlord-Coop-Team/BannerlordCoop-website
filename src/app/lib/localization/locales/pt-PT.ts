@@ -26,8 +26,6 @@ const definition: LocaleDefinition = {
         "managed-server": () => import("../dictionaries/pt-PT/managed-server.json"),
         // Loads the server-common namespace only when requested.
         "server-common": () => import("../dictionaries/pt-PT/server-common.json"),
-        // Loads the live-server namespace only when requested.
-        "live-server": () => import("../dictionaries/pt-PT/live-server.json"),
         // Loads the server-wireframe namespace only when requested.
         "server-wireframe": () => import("../dictionaries/pt-PT/server-wireframe.json"),
         // Loads the support namespace only when requested.

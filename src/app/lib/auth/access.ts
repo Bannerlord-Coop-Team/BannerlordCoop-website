@@ -5,12 +5,9 @@ import {
     isMemberRole,
     type MemberRole,
 } from "@/app/lib/auth/roles";
-import {
-    getAssignedLiveConsoleAccess,
-    type LiveConsoleAccessLevel,
-} from "@/app/lib/console/access";
 import type { User } from "@supabase/supabase-js";
 
+// Reads the configured bootstrap administrator email allowlist.
 function adminEmails() {
     return new Set(
         (process.env.SUPABASE_ADMIN_EMAILS ?? "")
@@ -20,10 +17,12 @@ function adminEmails() {
     );
 }
 
+// Identifies an administrator explicitly allowlisted by email.
 export function isBootstrapAdmin(email: string | undefined) {
     return Boolean(email && adminEmails().has(email.toLowerCase()));
 }
 
+// Resolves the trusted member role, preserving bootstrap administrator access.
 export function getMemberRole(user: User): MemberRole {
     if (isBootstrapAdmin(user.email)) return "Admin";
 
@@ -31,22 +30,12 @@ export function getMemberRole(user: User): MemberRole {
     return isMemberRole(role) ? role : "User";
 }
 
+// Checks access to member administration.
 export function hasAdminAccess(user: User) {
     return getMemberRole(user) === "Admin";
 }
 
+// Checks access to the fictional hosting preview dashboard.
 export function hasHostedServerAccess(user: User) {
     return hasServerDashboardAccess(getMemberRole(user));
-}
-
-export function getLiveConsoleAccessLevel(
-    user: User,
-    serverId: string,
-): LiveConsoleAccessLevel | null {
-    if (hasAdminAccess(user)) return "admin";
-    return getAssignedLiveConsoleAccess(user.app_metadata, serverId);
-}
-
-export function hasLiveConsoleServerAccess(user: User, serverId: string) {
-    return getLiveConsoleAccessLevel(user, serverId) !== null;
 }

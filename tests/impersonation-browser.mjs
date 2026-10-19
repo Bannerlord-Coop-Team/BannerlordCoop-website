@@ -33,7 +33,6 @@ try {
     await write("src/app/lib/hosting/my-servers.ts", 'import {fixtureFetch} from "../../../../fixture-auth.mjs";\n' + (await readFile("src/app/lib/hosting/my-servers.ts", "utf8")).replace("await fetch(endpoint,", "await fixtureFetch(endpoint,"));
     await write("src/app/fixture-state/route.ts", `import {fixtureResult} from '../../../fixture-auth.mjs';export function GET(){return Response.json(fixtureResult())}`);
     await write("src/app/lib/hosting/public-servers.ts", "export async function listPublicServers(){return []}");
-    await write("src/app/lib/hosting/server-settings.ts", "export async function getServerDisplayNames(){return new Map()}");
     await write("src/app/layout.tsx", `import {ImpersonationBanner} from '@/app/components/admin/ImpersonationBanner';import './globals.css';export default function Layout({children}){return <html><body><ImpersonationBanner/>{children}</body></html>}`);
     execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", join(fixture, "key.pem"), "-out", join(fixture, "cert.pem"), "-days", "1", "-subj", "/CN=localhost", "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost"], { stdio: "ignore" });
     server = spawn(process.execPath, [join(root, "node_modules/next/dist/bin/next"), "dev", "--webpack", "--hostname", "127.0.0.1", "--port", String(port), "--experimental-https", "--experimental-https-key", join(fixture, "key.pem"), "--experimental-https-cert", join(fixture, "cert.pem")], {

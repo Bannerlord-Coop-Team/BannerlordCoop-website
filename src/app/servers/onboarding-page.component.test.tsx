@@ -1,8 +1,8 @@
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 import { renderToReadableStream } from "react-dom/server";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { onboardingSummary, ONBOARDING_TEST_ID } from "../../../tests/onboarding-fixtures";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn(), publicList: vi.fn(), prepareAccount: vi.fn(), account: vi.fn(), displayNames: vi.fn(), navbar: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn(), publicList: vi.fn(), prepareAccount: vi.fn(), account: vi.fn(), navbar: vi.fn() }));
 vi.mock("@/app/lib/hosting/website-account-status", () => ({ getWebsiteAccountStatus: mocks.account, prepareWebsiteAccountStatusRequest: mocks.prepareAccount }));
 vi.mock("@/app/lib/hosting/public-servers", () => ({ listPublicServers: mocks.publicList }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: async (options?: { onReadOnlySession?: (token: string) => unknown }) => {
@@ -15,9 +15,6 @@ vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: async (op
 vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.list, getServerOnboarding: mocks.onboarding }));
 vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: (props: unknown) => { mocks.navbar(props); return <nav>Navigation</nav>; } }));
 vi.mock("@/app/components/servers/ServerOnboarding", () => ({ ServerOnboarding: ({ userId, summary }: { userId: string; summary: unknown }) => <div data-user={userId}>{summary ? "Trusted onboarding snapshot" : "Unavailable snapshot"}</div>, GamePasswordNotice: () => <p>Discord password controls</p> }));
-vi.mock("@/app/lib/console/servers", () => ({ listLiveConsoleServers: () => [{ id: "live-one", name: "Live campaign" }] }));
-vi.mock("@/app/lib/auth/access", () => ({ getLiveConsoleAccessLevel: () => "owner" }));
-vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: mocks.displayNames }));
 vi.mock("@/app/components/servers/AllServersDirectory", () => ({ AllServersDirectory: () => <div>Public directory</div> }));
 import ServersPage, { generateMetadata } from "./page";
 import ServersLoading from "./loading";
@@ -34,16 +31,22 @@ beforeEach(() => {
     vi.resetAllMocks();
     mocks.account.mockResolvedValue(null);
     mocks.prepareAccount.mockImplementation(async (token: string) => (viewer: { id: string }) => mocks.account(viewer.id, token));
-    mocks.displayNames.mockResolvedValue(new Map());
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "44444444-4444-4444-8444-444444444444", identities: [{ provider: "discord", identity_data: { sub: "123456789012345678" } }] } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt", user: { id: "44444444-4444-4444-8444-444444444444" } } } }) } });
     mocks.list.mockResolvedValue([{ serverId: ONBOARDING_TEST_ID, displayName: "Assigned campaign", operationState: "stopped", observedGameState: "stopped", accessRole: "owner" }]);
     mocks.onboarding.mockResolvedValue(onboardingSummary());
     mocks.publicList.mockResolvedValue([]);
 });
-it("real servers page keeps mixed managed/live inventory and trusted onboarding separate from the public directory", async () => {
+afterEach(() => vi.unstubAllEnvs());
+
+// Removed catalog settings must not resurrect an external server alongside authenticated inventory.
+it("real servers page uses only managed inventory and ignores retired external configuration", async () => {
+    vi.stubEnv("CONSOLE_SERVER_CATALOG", JSON.stringify([{ id: "legacy-server", name: "Legacy external campaign", address: "203.0.113.10", nodeId: "legacy-node", provider: "External VPS" }]));
+    vi.stubEnv("CONSOLE_GATEWAY_URL", "wss://legacy.example.test/v1/browser");
     const html = await renderPage();
+    expect(html).not.toContain("Legacy external campaign");
+    expect(html).not.toContain("/servers/legacy-server");
     expect(html).toContain("Trusted onboarding snapshot"); expect(html).toContain('data-user="44444444-4444-4444-8444-444444444444"');
-    expect(html).toContain("Assigned campaign"); expect(html).toContain("Live campaign"); expect(html).toContain("Public directory");
+    expect(html).toContain("Assigned campaign"); expect(html).toContain("Public directory");
     expect(html).toContain(`/servers/${ONBOARDING_TEST_ID}`); expect(html).toContain("Offline");
     expect(mocks.onboarding).toHaveBeenCalledWith("test-page-jwt"); expect(mocks.list).toHaveBeenCalledWith("test-page-jwt", expect.any(AbortSignal));
 });
@@ -112,19 +115,19 @@ it.each(["managed", "public"])("streams %s inventory without waiting for the oth
         expect(shell).toContain("Public Servers");
         expect(shell).toContain("Loading your servers…");
         expect(shell).toContain("Loading public servers…");
-        expect(shell).not.toContain("Live campaign");
+        expect(shell).not.toContain("Assigned campaign");
         expect(shell).not.toContain("Public directory</div>");
-        if (first === "managed") managed.resolve([]);
+        if (first === "managed") managed.resolve([{ serverId: ONBOARDING_TEST_ID, displayName: "Assigned campaign", operationState: "stopped", observedGameState: "stopped", accessRole: "owner" }]);
         else publicServers.resolve([]);
         let chunk = "";
-        const expected = first === "managed" ? "Live campaign" : "Public directory</div>";
+        const expected = first === "managed" ? "Assigned campaign" : "Public directory</div>";
         while (!chunk.includes(expected)) {
             const next = await reader.read();
             if (next.done) break;
             chunk += decoder.decode(next.value, { stream: true });
         }
         expect(chunk).toContain(expected);
-        expect(chunk).not.toContain(first === "managed" ? "Public directory</div>" : "Live campaign");
+        expect(chunk).not.toContain(first === "managed" ? "Public directory</div>" : "Assigned campaign");
         expect(mocks.list).toHaveBeenCalledTimes(1);
         expect(mocks.publicList).toHaveBeenCalledTimes(1);
     } finally {
@@ -136,7 +139,7 @@ it.each(["managed", "public"])("streams %s inventory without waiting for the oth
 });
 
 
-it.each(["auth", "account", "onboarding", "displayNames"] as const)("streams the public directory while %s is pending", async (dependency) => {
+it.each(["auth", "account", "onboarding"] as const)("streams the public directory while %s is pending", async (dependency) => {
     const pending = Promise.withResolvers<unknown>();
     // Hold a real dependency indefinitely: the public section must arrive without it.
     mocks[dependency].mockReturnValueOnce(pending.promise);
@@ -144,6 +147,7 @@ it.each(["auth", "account", "onboarding", "displayNames"] as const)("streams the
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     let html = "";
+    // Collects streamed content until the requested independent section is present.
     async function readUntil(text: string) {
         while (!html.includes(text)) {
             const next = await reader.read();
@@ -159,20 +163,16 @@ it.each(["auth", "account", "onboarding", "displayNames"] as const)("streams the
             expect(mocks.list).not.toHaveBeenCalled();
             expect(mocks.account).not.toHaveBeenCalled();
             expect(mocks.onboarding).not.toHaveBeenCalled();
-            expect(mocks.displayNames).not.toHaveBeenCalled();
         } else {
             await vi.waitFor(() => expect(mocks.list).toHaveBeenCalledExactlyOnceWith("test-page-jwt", expect.any(AbortSignal)));
-            if (dependency !== "displayNames") {
-                await readUntil("Assigned campaign");
-                expect(html).not.toContain("Trusted onboarding snapshot");
-            }
+            await readUntil("Assigned campaign");
+            expect(html).not.toContain("Trusted onboarding snapshot");
             if (dependency === "account") expect(mocks.onboarding).not.toHaveBeenCalled();
         }
         expect(mocks.publicList).toHaveBeenCalledTimes(1);
     } finally {
         // Exercise the existing failure fallbacks after proving independence.
-        if (dependency === "displayNames") pending.resolve(new Map());
-        else pending.reject(new Error("Dependency unavailable"));
+        pending.reject(new Error("Dependency unavailable"));
         await stream.allReady;
         reader.releaseLock();
     }
@@ -275,12 +275,16 @@ it("localizes whole inventory totals and isolated errors without translating ser
         "page.error.publicUnavailable": "Localized public failure",
     } });
     mocks.publicList.mockRejectedValue(new Error("offline"));
+    mocks.list.mockResolvedValue([
+        { serverId: ONBOARDING_TEST_ID, displayName: "Assigned campaign", operationState: "stopped", observedGameState: "stopped", accessRole: "owner" },
+        { serverId: "55555555-5555-4555-8555-555555555555", displayName: "Second campaign", operationState: "stopped", observedGameState: "stopped", accessRole: "manager" },
+    ]);
     try {
         const html = await renderPage();
         expect(html).toContain("Account entries: 2");
         expect(html).toContain("Localized public failure");
         expect(html).toContain("Assigned campaign");
-        expect(html).toContain("Live campaign");
+        expect(html).toContain("Second campaign");
         expect(mocks.list).toHaveBeenCalledWith("test-page-jwt", expect.any(AbortSignal));
     } finally { localeDefinitions.en.dictionaries.servers = original; }
 });

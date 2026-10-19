@@ -20,7 +20,7 @@ This website integration does not establish backend support or deployment availa
 
 ## Minimal boundaries
 
-The `/servers` shell and anonymous directory start immediately. Authentication, live-server display names, and account/hosting status cannot hold up the public listing. Once authentication resolves, My Servers loads alongside account status and live display names; it does not wait for membership or allocation checks. Account synchronization still completes before the hosting allocation read, and onboarding uses the same private inventory request as My Servers. Navigation and each section stream through their own loading boundary. No responses or credentials are cached by this page orchestration.
+The `/servers` shell and anonymous directory start immediately. Authentication and account/hosting status cannot hold up the public listing. Once authentication resolves, My Servers loads alongside account status; it does not wait for membership or allocation checks. Account synchronization still completes before the hosting allocation read, and onboarding uses the same private inventory request as My Servers. Navigation and each section stream through their own loading boundary. No responses or credentials are cached by this page orchestration.
 
 The control plane owns visibility persistence, authorization, and public projection. The website never fetches an administrative inventory to filter it into public data. Missing visibility is private; missing endpoints disable Join. Public reads use a dedicated read-only endpoint, with a bounded allowlisted response and no caching. Private inventory retains its current authentication boundary.
 

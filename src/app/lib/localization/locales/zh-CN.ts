@@ -18,7 +18,6 @@ const definition: LocaleDefinition = {
         "servers": () => import("../dictionaries/zh-CN/servers.json"),
         "managed-server": () => import("../dictionaries/zh-CN/managed-server.json"),
         "server-common": () => import("../dictionaries/zh-CN/server-common.json"),
-        "live-server": () => import("../dictionaries/zh-CN/live-server.json"),
         "server-wireframe": () => import("../dictionaries/zh-CN/server-wireframe.json"),
         "support": () => import("../dictionaries/zh-CN/support.json"),
         "not-found": () => import("../dictionaries/zh-CN/not-found.json"),

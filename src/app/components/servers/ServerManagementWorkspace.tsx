@@ -190,7 +190,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
         // Selects the existing workspace section for deep-linked server tasks.
         function followHash() {
             const target = window.location.hash;
-            if (target === "#server-access" || target === "#server-visibility") setSection("Settings");
+            if (target === "#server-visibility") setSection("Settings");
             if (target === "#server-backups") setSection("Backups");
             if (target === "#server-files") setSection("Save & config");
             if (target === "#server-lifecycle") setSection("Console");

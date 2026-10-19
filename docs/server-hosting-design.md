@@ -100,7 +100,7 @@ flowchart LR
 
 ## Live console
 
-The separately hosted live Bannerlord console is not part of the placeholder repository. Its architecture is documented in `docs/live-server-console-design.md`.
+The external WebSocket server console and its gateway/node-agent deployment have been removed. Current authenticated management uses registered control-plane servers; the placeholder repository remains separate.
 
 ## Acceptance checks
 
