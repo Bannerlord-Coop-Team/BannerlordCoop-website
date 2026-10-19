@@ -136,6 +136,29 @@ test("an unset role is restored without inventing a previous role", async () => 
     assert.deepEqual(await metadata(), { unrelated: true });
 });
 
+// Calls the retired console assignment RPC, which remains deployed by its applied migration.
+async function retiredConsoleAssignment(serverId: string | null = "server-one", id: string | null = user, owner: boolean | null = null, operator: boolean | null = true) {
+    await db.query("select public.set_live_console_assignment($1,$2,$3,$4)", [id, serverId, owner, operator]);
+}
+
+test("the retired console assignment RPC stays service-role only and fails closed on invalid requests", async () => {
+    await addUser();
+    for (const role of ["anon", "authenticated"]) {
+        await db.exec(`set role ${role}`);
+        await assert.rejects(() => retiredConsoleAssignment(), { message: /permission denied/ });
+        await db.exec("reset role");
+    }
+    const original = await metadata();
+    for (const serverId of ["", "../server", "server\n", "x".repeat(129)]) {
+        await assert.rejects(() => retiredConsoleAssignment(serverId), { message: /invalid_console_assignment/ });
+    }
+    await assert.rejects(() => retiredConsoleAssignment("server-one", user, null, null), { message: /invalid_console_assignment/ });
+    await assert.rejects(() => retiredConsoleAssignment("server-one", secondUser), { message: /console_account_not_found/ });
+    await assert.rejects(() => retiredConsoleAssignment("server-one", null));
+    await assert.rejects(() => retiredConsoleAssignment(null));
+    assert.deepEqual(await metadata(), original);
+});
+
 test("a new link schedules fresh verification instead of granting from cached membership", async () => {
     await apply(); await addUser(); await link();
     assert.equal((await metadata()).role, "User");

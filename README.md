@@ -143,11 +143,11 @@ See [website server onboarding](docs/server-onboarding.md) for the strict contra
 
 **My Servers** uses authenticated control-plane assignments only. Manage a server using its registered `/servers/<UUID>` route. Unknown and retired server IDs return signed-in visitors to `/servers`; no static alias, IP address or display name is used to associate a legacy server with a managed record.
 
-Owners and managers use the existing read-only HTTP/SSE console plus managed lifecycle controls and log downloads. Support and administrator assignments remain read-only and do not connect to console streaming. Managed backup, save/configuration transfer, visibility and release settings retain their existing authorization boundaries. Server names are displayed from the control-plane record; renaming is not supported.
+Owners and managers use the managed console, its command input, lifecycle controls and log downloads. Support and administrator assignments remain read-only and do not connect to console streaming. Owners rename a server from Settings through the control plane. Managed backup, save/configuration transfer, visibility, maintenance and release settings retain their existing authorization boundaries.
 
-The legacy external WebSocket console, catalog, owner/operator assignment actions, rename actions, gateway, Docker node agent, deployment recipes and `/servers/live/<id>` redirect route have been removed. This source change does not stop an existing deployment, erase historical account metadata, or commission the managed SSE endpoint. Command submission is separate work (PR #185), not part of this removal.
+The legacy external WebSocket console, catalog, owner/operator assignment actions, live rename actions, gateway, Docker node agent and deployment recipes have been removed; old `/servers/live/<id>` links redirect to `/servers`. This source change does not stop an existing deployment or erase historical account metadata.
 
-Configure `CONTROL_PLANE_CONSOLE_ORIGIN` with the fixed HTTPS control-plane origin. Its `/v1/user/console-stream` adapter and production proxy route must be commissioned separately before streaming is available.
+Configure `CONTROL_PLANE_CONSOLE_ORIGIN` with the fixed HTTPS control-plane origin used by the `/v1/user/console-stream` proxy.
 
 ## Environment Variables
 

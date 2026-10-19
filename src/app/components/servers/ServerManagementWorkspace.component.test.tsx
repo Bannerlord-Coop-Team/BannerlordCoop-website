@@ -6,14 +6,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel, useRevealServerAddress } from "./ServerManagementWorkspace";
 
-const settingsMocks = vi.hoisted(() => ({ visibility: vi.fn(), refresh: vi.fn(), release: vi.fn(), releaseStatus: vi.fn() }));
+const settingsMocks = vi.hoisted(() => ({ settings: vi.fn(), visibility: vi.fn(), refresh: vi.fn(), release: vi.fn(), releaseStatus: vi.fn() }));
 vi.mock("next/navigation", () => { const router = { refresh: settingsMocks.refresh }; return { useRouter: () => router }; });
 vi.mock("@/app/servers/server-visibility-actions", () => ({ setServerVisibility: settingsMocks.visibility }));
+vi.mock("@/app/servers/server-settings-actions", () => ({ saveServerSettings: settingsMocks.settings }));
 vi.mock("@/app/servers/server-release-actions", () => ({ changeServerRelease: settingsMocks.release, readServerReleaseStatus: settingsMocks.releaseStatus }));
 let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
-    settingsMocks.visibility.mockReset(); settingsMocks.refresh.mockReset();
+    settingsMocks.settings.mockReset(); settingsMocks.visibility.mockReset(); settingsMocks.refresh.mockReset();
     settingsMocks.release.mockReset(); settingsMocks.releaseStatus.mockReset();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     window.history.replaceState(null, "", "/servers/test");
@@ -114,7 +115,7 @@ it("reports clipboard failure on the Copy IP button and permits retry without he
     expect(writeText).toHaveBeenCalledTimes(2);
 });
 
-it("opens access feedback and hash targets in Settings and disables unsupported actions", async () => {
+it("opens an explicit initial section and hash targets in Settings and disables unsupported actions", async () => {
     await act(async () => root.render(<TestLocalization>{<ServerManagementWorkspace name="Server" summary="Unknown" notice="Unavailable" initialSection="Settings">
         <ServerWorkspacePanel section="Settings"><UnavailableServerPanel title="Visibility" actions={["Public"]} /></ServerWorkspacePanel>
     </ServerManagementWorkspace>} </TestLocalization>));
@@ -159,12 +160,20 @@ const visibilityAccess = { serverId: "managed-server", expectedUpdatedAt: "2026-
 async function saveSettings() {
     await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 }
-it("discards local settings drafts without calling the managed server action", async () => {
-    await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel name="Campaign" visibility="private" visibilityAccess={visibilityAccess} />} </TestLocalization>));
+it("discards local name and visibility drafts without calling either managed server action", async () => {
+    const settingsAccess = { ...visibilityAccess, maintenanceSlot: "06:00-07:00", timezone: "America/Chicago" };
+    await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel name="Campaign" visibility="private" visibilityAccess={visibilityAccess} settingsAccess={settingsAccess} />} </TestLocalization>));
+    const nameInput = container.querySelector<HTMLInputElement>("#settings-server-name")!;
+    expect(nameInput.disabled).toBe(false);
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(nameInput, "New campaign");
+        nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     await act(async () => container.querySelector<HTMLInputElement>('input[value="public"]')!.click());
     await act(async () => click("Discard"));
     expect(container.querySelector<HTMLInputElement>("#settings-server-name")!.value).toBe("Campaign");
     expect(container.querySelector<HTMLInputElement>('input[value="private"]')!.checked).toBe(true);
+    expect(settingsMocks.settings).not.toHaveBeenCalled();
     expect(settingsMocks.visibility).not.toHaveBeenCalled();
 });
 it("confirms publishing before saving, retains unconfirmed failures and retries the same visibility request", async () => {
@@ -349,10 +358,10 @@ it("remembers the selected tab in the URL without navigating and restores it on 
     expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Console");
 });
 
-it("keeps access feedback in Settings even when another tab is remembered", async () => {
-    window.history.replaceState(null, "", "/servers/test?tab=backups&accessError=Denied");
+it("keeps an explicit initial section even when another tab is remembered", async () => {
+    window.history.replaceState(null, "", "/servers/test?tab=backups");
     await act(async () => root.render(<TestLocalization>{<ServerManagementWorkspace name="Server" summary="Running" initialSection="Settings">
-        <ServerWorkspacePanel section="Settings"><div id="settings-content">Access</div></ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Settings"><div id="settings-content">Settings</div></ServerWorkspacePanel>
     </ServerManagementWorkspace>} </TestLocalization>));
     expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Settings");
 });

@@ -17,10 +17,8 @@ import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 vi.mock("@/app/lib/localization/server", () => ({
     getLocale: async () => "en",
     getMessages: async () => serverTestMessages,
-    // Selects the requested namespace while keeping deliberately distinct managed member labels.
-    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", namespace === "managed-server"
-        ? { ...serverTestMessages[namespace], "member.missingName": "Missing member name", "member.missingEmail": "Missing member email" }
-        : serverTestMessages[namespace]),
+    // Selects the requested namespace without reading request state.
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -396,6 +394,18 @@ it("places managed password configuration in Settings rather than the Console wo
     const consolePanel = panels.find(child => isValidElement<{ section?: string }>(child) && child.props.section === "Console");
     expect(await findServerElement(settings, "ManagedServerPassword")).toMatchObject({ props: { serverId: managedId, accessRole: "owner" } });
     expect(await findServerElement(consolePanel, "ManagedServerPassword")).toBeNull();
+});
+
+it("logs an unexpected single-server read failure and returns to discovery without managed controls", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+        const failure = new Error("Unavailable");
+        mocks.managedServers.mockRejectedValueOnce(failure);
+        await expect(page()).rejects.toThrow("redirect:/servers");
+        expect(error).toHaveBeenCalledExactlyOnceWith("Managed server detail failed to load", failure);
+    } finally { error.mockRestore(); }
+    expect(mocks.backups).not.toHaveBeenCalled();
+    expect(mocks.files).not.toHaveBeenCalled();
 });
 
 it.each(["server_not_found", "forbidden"])("returns to discovery without managed controls when the single-server read returns %s", async code => {
