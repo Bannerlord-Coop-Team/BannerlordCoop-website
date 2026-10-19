@@ -868,7 +868,7 @@
   "move.step.finishing": "Abschließen",
   "move.movedTitle": "Dein Server ist auf einen neuen Rechner umgezogen",
   "move.movedBody": "Die Spieler brauchen die neue Adresse zum Beitreten.",
-  "move.movedBodyNoAddress": "Adresse und Port haben sich geändert, deshalb brauchen die Spieler die neue Adresse zum Beitreten. Sie steht oben auf dieser Seite.",
+  "move.movedBodyNoAddress": "Adresse und Port haben sich geändert, deshalb brauchen die Spieler die neue Adresse zum Beitreten. Sie erscheint oben auf dieser Seite, sobald sie zugewiesen ist.",
   "move.newAddress": "Neue Adresse",
   "move.copyAddress": "Adresse kopieren",
   "move.copied": "Kopiert",

@@ -227,7 +227,7 @@ it("shows the new address once the move finishes, reveals it in the header and c
     Reflect.deleteProperty(navigator, "clipboard");
 });
 
-async function renderWorkspace(initialMove: MyServerMove | null, address: string) {
+async function renderWorkspace(initialMove: MyServerMove | null, address: string | null) {
     await act(async () => root.render(<TestLocalization><ManagedServerMoveProvider serverId={serverId} initialMove={initialMove}>
         <ServerManagementWorkspace name={<h1>Campaign</h1>} summary="Summary" address={address} banner={<ManagedServerMoveStatus notices={[]} />}>{null}</ServerManagementWorkspace>
     </ManagedServerMoveProvider></TestLocalization>));
@@ -269,9 +269,10 @@ it("reveals the header address on a page opened after the move, unless that move
     expect(container.querySelector("#server-address")!.textContent).toBe("IP hidden");
 });
 
-it("tells players to look for the new address when the move reports none", async () => {
-    await render({ ...moved, address: null });
-    expect(card()!.textContent).toContain(messages["move.movedBodyNoAddress"]);
+it("tells players the new address will appear once assigned when the move reports none", async () => {
+    await renderWorkspace({ ...moved, address: null }, null);
+    expect(container.querySelector("#server-address")!.textContent).toBe("Not assigned");
+    expect(card()!.textContent).toContain("so players need the new address to join. It will appear at the top of this page once it is assigned.");
     expect(button(messages["move.copyAddress"])).toBeUndefined();
 });
 

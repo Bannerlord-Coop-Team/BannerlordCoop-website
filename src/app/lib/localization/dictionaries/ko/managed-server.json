@@ -867,7 +867,7 @@
   "move.step.finishing": "마무리",
   "move.movedTitle": "서버가 새 머신으로 이전되었습니다",
   "move.movedBody": "플레이어가 참가하려면 새 주소가 필요합니다.",
-  "move.movedBodyNoAddress": "주소와 포트가 바뀌었으므로 플레이어가 참가하려면 새 주소가 필요합니다. 새 주소는 이 페이지 상단에 표시됩니다.",
+  "move.movedBodyNoAddress": "주소와 포트가 바뀌었으므로 플레이어가 참가하려면 새 주소가 필요합니다. 새 주소는 할당되는 대로 이 페이지 상단에 표시됩니다.",
   "move.newAddress": "새 주소",
   "move.copyAddress": "주소 복사",
   "move.copied": "복사됨",

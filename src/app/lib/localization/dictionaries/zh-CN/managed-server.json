@@ -867,7 +867,7 @@
   "move.step.finishing": "收尾",
   "move.movedTitle": "您的服务器已迁移到新机器",
   "move.movedBody": "玩家需要使用新地址加入。",
-  "move.movedBodyNoAddress": "地址和端口已改变，玩家需要使用新地址加入。新地址显示在此页面顶部。",
+  "move.movedBodyNoAddress": "地址和端口已改变，玩家需要使用新地址加入。新地址分配后将显示在此页面顶部。",
   "move.newAddress": "新地址",
   "move.copyAddress": "复制地址",
   "move.copied": "已复制",

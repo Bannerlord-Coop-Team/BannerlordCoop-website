@@ -868,7 +868,7 @@
   "move.step.finishing": "Concluir",
   "move.movedTitle": "Seu servidor foi transferido para uma nova máquina",
   "move.movedBody": "Os jogadores precisam do novo endereço para entrar.",
-  "move.movedBodyNoAddress": "O endereço e a porta mudaram, então os jogadores precisam do novo endereço para entrar. Ele aparece no topo desta página.",
+  "move.movedBodyNoAddress": "O endereço e a porta mudaram, então os jogadores precisam do novo endereço para entrar. Ele aparecerá no topo desta página assim que for atribuído.",
   "move.newAddress": "Novo endereço",
   "move.copyAddress": "Copiar endereço",
   "move.copied": "Copiado",

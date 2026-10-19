@@ -868,7 +868,7 @@
   "move.step.finishing": "Finishing",
   "move.movedTitle": "Your server moved to a new machine",
   "move.movedBody": "Players need the new address to join.",
-  "move.movedBodyNoAddress": "Its address and port changed, so players need the new address to join. It is shown at the top of this page.",
+  "move.movedBodyNoAddress": "Its address and port changed, so players need the new address to join. It will appear at the top of this page once it is assigned.",
   "move.newAddress": "New address",
   "move.copyAddress": "Copy address",
   "move.copied": "Copied",

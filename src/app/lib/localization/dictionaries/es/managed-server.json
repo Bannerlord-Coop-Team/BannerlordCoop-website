@@ -868,7 +868,7 @@
   "move.step.finishing": "Finalizar",
   "move.movedTitle": "Tu servidor se trasladó a una nueva máquina",
   "move.movedBody": "Los jugadores necesitan la nueva dirección para unirse.",
-  "move.movedBodyNoAddress": "Su dirección y su puerto cambiaron, así que los jugadores necesitan la nueva dirección para unirse. Aparece en la parte superior de esta página.",
+  "move.movedBodyNoAddress": "Su dirección y su puerto cambiaron, así que los jugadores necesitan la nueva dirección para unirse. Aparecerá en la parte superior de esta página en cuanto se asigne.",
   "move.newAddress": "Nueva dirección",
   "move.copyAddress": "Copiar dirección",
   "move.copied": "Copiada",

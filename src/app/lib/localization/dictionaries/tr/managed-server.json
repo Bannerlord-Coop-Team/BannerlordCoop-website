@@ -868,7 +868,7 @@
   "move.step.finishing": "Tamamla",
   "move.movedTitle": "Sunucunuz yeni bir makineye taşındı",
   "move.movedBody": "Oyuncuların katılmak için yeni adrese ihtiyacı var.",
-  "move.movedBodyNoAddress": "Adres ve port değişti; bu yüzden oyuncuların katılmak için yeni adrese ihtiyacı var. Yeni adres bu sayfanın üst kısmında gösteriliyor.",
+  "move.movedBodyNoAddress": "Adres ve port değişti; bu yüzden oyuncuların katılmak için yeni adrese ihtiyacı var. Yeni adres atanır atanmaz bu sayfanın üst kısmında görünecek.",
   "move.newAddress": "Yeni adres",
   "move.copyAddress": "Adresi kopyala",
   "move.copied": "Kopyalandı",

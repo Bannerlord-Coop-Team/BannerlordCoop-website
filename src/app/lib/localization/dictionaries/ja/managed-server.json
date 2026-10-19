@@ -867,7 +867,7 @@
   "move.step.finishing": "完了処理",
   "move.movedTitle": "サーバーは新しいマシンへ移転しました",
   "move.movedBody": "参加するにはプレイヤーに新しいアドレスが必要です。",
-  "move.movedBodyNoAddress": "アドレスとポートが変わったため、参加するにはプレイヤーに新しいアドレスが必要です。新しいアドレスはこのページの上部に表示されています。",
+  "move.movedBodyNoAddress": "アドレスとポートが変わったため、参加するにはプレイヤーに新しいアドレスが必要です。新しいアドレスは割り当てられ次第、このページの上部に表示されます。",
   "move.newAddress": "新しいアドレス",
   "move.copyAddress": "アドレスをコピー",
   "move.copied": "コピーしました",
