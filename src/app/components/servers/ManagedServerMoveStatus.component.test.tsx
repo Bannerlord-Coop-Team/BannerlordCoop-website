@@ -284,6 +284,45 @@ it("reveals the header address on a page opened after the move, unless that move
     expect(container.querySelector("#server-address")!.textContent).toBe("IP hidden");
 });
 
+it("keeps copy feedback with the move whose address was copied when the page changes server", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const other = "44444444-4444-4444-8444-444444444444";
+    const otherMoved = { ...moved, completedAt: at(-30_000), address: "198.51.100.30:4205" };
+    const show = (id: string, initialMove: MyServerMove) => act(async () => root.render(<TestLocalization>
+        <ManagedServerMoveProvider serverId={id} initialMove={initialMove}><ManagedServerMoveStatus notices={[]} /></ManagedServerMoveProvider></TestLocalization>));
+    try {
+        await show(serverId, moved);
+        await act(async () => button(messages["move.copyAddress"])!.click());
+        expect(button(messages["move.copied"])).toBeDefined();
+
+        // Within the feedback window the owner opens another moved server, whose address was never copied.
+        await advance(1_000);
+        await show(other, otherMoved);
+        expect(card()!.textContent).toContain("198.51.100.30:4205");
+        expect(button(messages["move.copied"])).toBeUndefined();
+        expect(button(messages["move.copyAddress"])).toBeDefined();
+
+        // Its own copy shows its own feedback, which the first copy's timer does not cut short.
+        await advance(500);
+        await act(async () => button(messages["move.copyAddress"])!.click());
+        expect(writeText).toHaveBeenLastCalledWith("198.51.100.30:4205");
+        await advance(1_000);
+        expect(button(messages["move.copied"])).toBeDefined();
+        await advance(1_000);
+        expect(button(messages["move.copyAddress"])).toBeDefined();
+
+        // A failed copy is not reported on another server either.
+        writeText.mockRejectedValueOnce(new Error("denied"));
+        await act(async () => button(messages["move.copyAddress"])!.click());
+        expect(card()!.textContent).toContain(messages["move.copyFailed"]);
+        await show(serverId, moved);
+        expect(card()!.textContent).not.toContain(messages["move.copyFailed"]);
+    } finally {
+        Reflect.deleteProperty(navigator, "clipboard");
+    }
+});
+
 it("tells players the new address will appear once assigned when the move reports none", async () => {
     await renderWorkspace({ ...moved, address: null }, null);
     expect(container.querySelector("#server-address")!.textContent).toBe("Not assigned");

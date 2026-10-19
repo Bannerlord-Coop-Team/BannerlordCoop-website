@@ -194,15 +194,16 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
     const serverId = context?.serverId ?? "";
     const storageKey = `${DISMISSAL_STORAGE_PREFIX}${serverId}`;
     const storedDismissal = useSyncExternalStore(subscribeToStorage, () => readDismissal(storageKey), () => null);
-    // Dismissals and reveals this page made, by server and completion time, since the card outlives a server change.
+    // Dismissals, reveals and copy feedback this page made, by server and completion time, since the card outlives a server change.
     const [dismissedNow, setDismissedNow] = useState<string | null>(null);
-    const [copy, setCopy] = useState<"copied" | "failed" | null>(null);
+    const [copy, setCopy] = useState<{ moveKey: string; state: "copied" | "failed" } | null>(null);
     const now = useSecondClock(move?.state === "scheduled" || isMoveInProgress(move));
     const revealedMoves = useRef(new Set<string>());
     const dismissedNotices = useRef(new Set<string>());
     const finished = move?.state === "moved" || move?.state === "failed";
     const moveKey = finished && move.completedAt !== null ? `${serverId}|${move.completedAt}` : null;
     const dismissed = finished && move.completedAt !== null && (storedDismissal === move.completedAt || dismissedNow === moveKey);
+    const copyState = copy !== null && copy.moveKey === moveKey ? copy.state : null;
 
     useEffect(() => {
         if (move?.state !== "moved" || moveKey === null || move.address === null || headerAddress !== move.address) return;
@@ -223,8 +224,9 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
     }, [dismissed, move, notices, serverId]);
 
     useEffect(() => {
-        if (copy !== "copied") return;
-        const timer = window.setTimeout(() => setCopy(null), COPY_FEEDBACK_MILLISECONDS);
+        if (copy?.state !== "copied") return;
+        // Clears only this feedback, never a later copy's.
+        const timer = window.setTimeout(() => setCopy((current) => current === copy ? null : current), COPY_FEEDBACK_MILLISECONDS);
         return () => window.clearTimeout(timer);
     }, [copy]);
 
@@ -247,12 +249,15 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
         writeDismissal(storageKey, shown.completedAt);
     }
 
+    // The feedback belongs to the move whose address was copied, even if the page shows another one by then.
     async function copyAddress(address: string) {
+        if (moveKey === null) return;
+        const copied = moveKey;
         try {
             await navigator.clipboard.writeText(address);
-            setCopy("copied");
+            setCopy({ moveKey: copied, state: "copied" });
         } catch {
-            setCopy("failed");
+            setCopy({ moveKey: copied, state: "failed" });
         }
     }
 
@@ -307,9 +312,9 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
                         <span className="select-all break-all font-mono text-xl font-semibold text-foreground sm:text-2xl">{shown.address}</span>
                         <button type="button" aria-live="polite" onClick={() => void copyAddress(shown.address!)}
                             className="inline-flex min-h-10 items-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm text-emerald-200 hover:border-emerald-400 focus-visible:outline-2 focus-visible:outline-gold">
-                            <Copy aria-hidden="true" className="size-4" />{copy === "copied" ? t("move.copied") : t("move.copyAddress")}</button>
+                            <Copy aria-hidden="true" className="size-4" />{copyState === "copied" ? t("move.copied") : t("move.copyAddress")}</button>
                     </div>
-                    {copy === "failed" && <p className="mt-2 text-xs text-foreground-muted">{t("move.copyFailed")}</p>}
+                    {copyState === "failed" && <p className="mt-2 text-xs text-foreground-muted">{t("move.copyFailed")}</p>}
                 </> : <p className="mt-1 leading-6 text-foreground-muted">{t("move.movedBodyNoAddress")}</p>)}
                 {shown.state === "failed" && <p className="mt-1 leading-6 text-foreground-muted">
                     {t(shown.stayedOnOriginal === true ? "move.failedStayedBody" : "move.failedAttentionBody")}</p>}
