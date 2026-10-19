@@ -99,6 +99,8 @@ The `/login` page uses [Supabase Auth](https://supabase.com/docs/guides/auth) fo
 
 The OAuth providers also require their Supabase callback URL (shown in the provider settings) to be allow-listed in the Google/Discord developer console.
 
+Signed-in page and server action requests pass through `src/middleware.ts`. It refreshes the Supabase session once it is within five minutes of expiry and forwards the new cookies, so the page or action normally finds nothing left to refresh. A refresh inside a server action writes cookies, and Next then re-renders the whole page in the action response; the managed server page's background polls used to do this. The middleware sends its cookies as plain `Set-Cookie` headers, because cookies set through `response.cookies` reach the action's cookie store and cause the same re-render. Route handlers (`/api/*` and the OAuth callbacks) skip it: their cookie writes re-render nothing, and the callbacks install sessions that a refresh would overwrite. `open-next.config.ts` lets a server action's cookies win over the middleware's, as in Next itself, so a sign-out or impersonation change on the same request still applies. The file keeps the deprecated `middleware` name because Next 16's `proxy.ts` runs only on Node.js, which OpenNext Cloudflare supports only experimentally.
+
 ### Supabase database migrations
 
 Apply reviewed SQL migrations in their coordinated rollout order. Applied migration history remains immutable, including historical external-console tables and RPCs. The website no longer reads or writes those legacy objects; this source removal does not drop production data or rewrite Auth metadata.
