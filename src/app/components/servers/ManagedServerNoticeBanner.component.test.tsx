@@ -128,9 +128,12 @@ it("renders nothing without notices", async () => {
 });
 
 const move = (state: MyServerMove["state"]): MyServerMove => ({
-    state, scheduledAt: "2026-10-19T03:00:00.000Z", startedAt: null, step: null, address: null, stayedOnOriginal: null,
+    state, scheduledAt: "2026-10-19T03:00:00.000Z", startedAt: null, step: null, stayedOnOriginal: null,
     completedAt: state === "moved" || state === "failed" ? "2026-10-19T03:20:00.000Z" : null,
+    address: state === "moved" ? "203.0.113.10:4201" : null,
 });
+// The control plane writes this move's completion notice as the move settles, just after its job completes.
+const currentCompletion: MyServerNotice = { ...completed, createdAt: "2026-10-19T03:20:01.000Z" };
 
 it.each([
     [null, [true, true]],
@@ -142,8 +145,19 @@ it.each([
     ["failed", [true, true]],
 ] as const)("leaves the placement notices that a %s move's status card covers to it", async (state, [scheduledShown, completedShown]) => {
     await act(async () => root.render(<TestLocalization><ManagedServerMoveProvider serverId={serverId} initialMove={state === null ? null : move(state)}>
-        <ManagedServerNoticeBanner serverId={serverId} notices={[administrator, scheduled, completed]} /></ManagedServerMoveProvider></TestLocalization>));
+        <ManagedServerNoticeBanner serverId={serverId} notices={[administrator, scheduled, currentCompletion]} /></ManagedServerMoveProvider></TestLocalization>));
     expect(card("Maintenance")).toBeDefined();
     expect(card(messages["notices.placementScheduledTitle"]) !== undefined).toBe(scheduledShown);
     expect(card(messages["notices.placementCompletedTitle"]) !== undefined).toBe(completedShown);
+});
+
+it.each([
+    ["this move's completion", {}, false],
+    ["a completion without an address from this move", { parameters: { movedAt: "2026-10-19T03:20:00.000Z" } }, false],
+    ["an earlier move's completion", { createdAt: "2026-10-19T03:19:59.999Z" }, true],
+    ["a completion for another address", { parameters: { movedAt: "2026-10-19T03:20:00.000Z", address: "198.51.100.7:4201" } }, true],
+] as const)("beside a moved card, hides %s notice only when it is this move's: shown=%s", async (_case, fields, shown) => {
+    await act(async () => root.render(<TestLocalization><ManagedServerMoveProvider serverId={serverId} initialMove={move("moved")}>
+        <ManagedServerNoticeBanner serverId={serverId} notices={[{ ...currentCompletion, ...fields }]} /></ManagedServerMoveProvider></TestLocalization>));
+    expect(card(messages["notices.placementCompletedTitle"]) !== undefined).toBe(shown);
 });

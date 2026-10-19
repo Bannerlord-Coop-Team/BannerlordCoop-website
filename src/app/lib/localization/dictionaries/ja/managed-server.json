@@ -857,6 +857,7 @@
   "move.elapsed": "経過時間: {duration}",
   "move.stepsLabel": "移転の進行状況",
   "move.currentStep": "現在の手順: {step}",
+  "move.inProgress": "進行中",
   "move.step.preparing": "準備",
   "move.step.saving-and-stopping": "ゲームを保存して停止",
   "move.step.backing-up": "復元ポイントを作成",

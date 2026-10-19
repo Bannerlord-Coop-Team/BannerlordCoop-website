@@ -860,6 +860,7 @@
   "move.elapsed": "Прошло: {duration}",
   "move.stepsLabel": "Ход переезда",
   "move.currentStep": "Текущий шаг: {step}",
+  "move.inProgress": "Выполняется",
   "move.step.preparing": "Подготовка",
   "move.step.saving-and-stopping": "Сохранение и остановка игры",
   "move.step.backing-up": "Создание точки восстановления",

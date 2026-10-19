@@ -604,17 +604,24 @@ follow; a new step alone does not.
 
 `ManagedServerMoveStatus` is the first card in the `banner` slot: a countdown and
 the start time in the viewer's zone while scheduled, the steps with the current
-one and the elapsed time while moving, a progress line while returning, and the
-new address with **Copy address** once moved; a failed move says whether the
-server stayed on its original machine. Only finished moves can be dismissed. The
-dismissal is remembered in this browser by `completedAt` under
-`bannerlordcoop.servers.moveDismissed.<serverId>`, and dismissing a moved card
-also dismisses the `placement-completed` notices it covers. The notice banner
-hides `placement-scheduled` notices while a move is pending or running and
-`placement-completed` ones once moved. While `moving` or `returning` the header
-lifecycle names the move instead of "Maintenance", Start, Stop, Restart and
-Update now are disabled with an explanation, and the stopped console says the
-server is moving.
+one and the elapsed time while moving (an "In progress" line and no current step
+before the job reports one), a progress line while returning, and the new address
+with **Copy address** once moved; a failed move says whether the server stayed on
+its original machine. Once moved, the header address is revealed once per move,
+as soon as the header shows that address: after the refresh that delivers it, or
+on a page opened later, unless the card was dismissed.
+
+Only finished moves can be dismissed. The dismissal is remembered in this browser
+by `completedAt` under `bannerlordcoop.servers.moveDismissed.<serverId>`. A
+`placement-completed` notice belongs to the moved card when it was created at or
+after `completedAt` and, if both name one, has the same address; servers keep
+earlier moves' completion notices for 14 days and those are left alone. The notice
+banner hides `placement-scheduled` notices while a move is pending or running and
+the moved card's own completion notice. Dismissing the card dismisses that notice,
+including one that only reaches the page after the dismissal (once per notice per
+page). While `moving` or `returning` the header lifecycle names the move instead of
+"Maintenance", Start, Stop, Restart and Update now are disabled with an
+explanation, and the stopped console says the server is moving.
 
 Deploy the control plane that adds these operations before merging this website
 change. Merging to main redeploys `my-servers` through the Supabase hosting API

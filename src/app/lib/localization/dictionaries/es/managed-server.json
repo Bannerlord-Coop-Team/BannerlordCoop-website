@@ -858,6 +858,7 @@
   "move.elapsed": "Tiempo transcurrido: {duration}",
   "move.stepsLabel": "Progreso del traslado",
   "move.currentStep": "Paso actual: {step}",
+  "move.inProgress": "En curso",
   "move.step.preparing": "Preparar",
   "move.step.saving-and-stopping": "Guardar y detener el juego",
   "move.step.backing-up": "Crear un punto de restauración",

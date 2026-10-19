@@ -857,6 +857,7 @@
   "move.elapsed": "已用时 {duration}",
   "move.stepsLabel": "迁移进度",
   "move.currentStep": "当前步骤：{step}",
+  "move.inProgress": "进行中",
   "move.step.preparing": "准备",
   "move.step.saving-and-stopping": "保存并停止游戏",
   "move.step.backing-up": "创建还原点",

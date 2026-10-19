@@ -858,6 +858,7 @@
   "move.elapsed": "{duration} vergangen",
   "move.stepsLabel": "Fortschritt des Umzugs",
   "move.currentStep": "Aktueller Schritt: {step}",
+  "move.inProgress": "Läuft …",
   "move.step.preparing": "Vorbereiten",
   "move.step.saving-and-stopping": "Spiel speichern und stoppen",
   "move.step.backing-up": "Wiederherstellungspunkt erstellen",

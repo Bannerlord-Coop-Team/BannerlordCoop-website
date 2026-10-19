@@ -21,7 +21,7 @@ const sections = [
 ] as const;
 type Section = ServerWorkspaceSection;
 const COPY_FEEDBACK_MILLISECONDS = 2_000;
-const WorkspaceContext = createContext<{ current: Section; initial: Section; revealAddress: () => void }>({ current: "Console", initial: "Console", revealAddress: () => {} });
+const WorkspaceContext = createContext<{ current: Section; initial: Section; revealAddress: () => void; address: string | null }>({ current: "Console", initial: "Console", revealAddress: () => {}, address: null });
 const subscribe = () => () => {};
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-foreground hover:border-gold/50 focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
 
@@ -37,6 +37,11 @@ export function ServerWorkspacePanel({ section, children }: { section: Section; 
 /** Reveals the join address when a live start has been confirmed. */
 export function useRevealServerAddress() {
     return useContext(WorkspaceContext).revealAddress;
+}
+
+/** The join address the header currently has, whether shown or hidden; null without one or outside the workspace. */
+export function useServerAddress() {
+    return useContext(WorkspaceContext).address;
 }
 
 // Published command syntax is shared by completion without duplicating translated command prose.
@@ -220,7 +225,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
         addressEmphasisTimer.current = setTimeout(() => setAddressEmphasis(false), 6_000);
     }
 
-    return <WorkspaceContext.Provider value={{ current: activeSection, initial: initialSection, revealAddress }}><main className="min-h-svh bg-background">
+    return <WorkspaceContext.Provider value={{ current: activeSection, initial: initialSection, revealAddress, address: address ?? null }}><main className="min-h-svh bg-background">
         <div className="site-container py-5 sm:py-6">
             <Link href="/servers" className="inline-flex items-center gap-2 text-sm text-foreground-muted hover:text-gold"><ArrowLeft className="size-4" aria-hidden="true" />{t("managementWorkspace.allServers")}</Link>
             {banner}

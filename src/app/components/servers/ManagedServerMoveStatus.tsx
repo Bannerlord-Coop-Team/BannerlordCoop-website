@@ -9,8 +9,8 @@ import { useTranslations } from "@/app/lib/localization/client";
 import type { Translator } from "@/app/lib/localization/types";
 import { readManagedServerMoveStatus } from "@/app/servers/managed-server-move-actions";
 import { dismissManagedServerNotice } from "@/app/servers/server-notice-actions";
-import { ManagedServerMoveContext } from "./managed-server-move-context";
-import { useRevealServerAddress } from "./ServerManagementWorkspace";
+import { isCurrentMoveCompletion, ManagedServerMoveContext } from "./managed-server-move-context";
+import { useRevealServerAddress, useServerAddress } from "./ServerManagementWorkspace";
 import { useViewerTimeZone, ZONED_DATE_TIME_FORMAT } from "./viewer-time-zone";
 
 /** Without a move to follow, a page checks once a minute; an announced move every 30 s. */
@@ -121,6 +121,7 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
     const { t, date } = useTranslations("managed-server");
     const timeZone = useViewerTimeZone();
     const revealAddress = useRevealServerAddress();
+    const headerAddress = useServerAddress();
     const headingId = useId();
     const move = context?.move ?? null;
     const serverId = context?.serverId ?? "";
@@ -129,14 +130,29 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
     const [dismissedNow, setDismissedNow] = useState<string | null>(null);
     const [copy, setCopy] = useState<"copied" | "failed" | null>(null);
     const now = useSecondClock(move?.state === "scheduled" || isMoveInProgress(move));
-    const previousState = useRef(move?.state ?? null);
+    // Finished moves whose header address this page already revealed, and notices it already dismissed.
+    const revealedMoves = useRef(new Set<string>());
+    const dismissedNotices = useRef(new Set<string>());
+    const finished = move?.state === "moved" || move?.state === "failed";
+    const dismissed = finished && move.completedAt !== null && (storedDismissal === move.completedAt || dismissedNow === move.completedAt);
 
     useEffect(() => {
-        const previous = previousState.current;
-        previousState.current = move?.state ?? null;
-        // A move that finishes while the page is open also reveals the new address in the header.
-        if (move?.state === "moved" && previous !== "moved") revealAddress();
-    }, [move?.state, revealAddress]);
+        if (move?.state !== "moved" || move.completedAt === null || move.address === null || headerAddress !== move.address) return;
+        // Once the header has the new address, show it once per move; a viewer who hides it again keeps it hidden.
+        if (revealedMoves.current.has(move.completedAt) || readDismissal(storageKey) === move.completedAt || dismissedNow === move.completedAt) return;
+        revealedMoves.current.add(move.completedAt);
+        revealAddress();
+    }, [dismissedNow, headerAddress, move, revealAddress, storageKey]);
+
+    useEffect(() => {
+        if (!dismissed || move?.state !== "moved") return;
+        // This move's completion notice goes with its card, including one that only arrives after the dismissal.
+        for (const notice of notices) {
+            if (!isCurrentMoveCompletion(notice, move) || dismissedNotices.current.has(notice.noticeId)) continue;
+            dismissedNotices.current.add(notice.noticeId);
+            void dismissManagedServerNotice({ serverId, noticeId: notice.noticeId }).catch(() => undefined);
+        }
+    }, [dismissed, move, notices, serverId]);
 
     useEffect(() => {
         if (copy !== "copied") return;
@@ -145,11 +161,10 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
     }, [copy]);
 
     if (context === null) return null;
-    const finished = move?.state === "moved" || move?.state === "failed";
-    const dismissed = finished && move.completedAt !== null && (storedDismissal === move.completedAt || dismissedNow === move.completedAt);
     const shown = move !== null && !dismissed ? move : null;
     const title = shown === null ? null : moveTitle(shown, t);
-    const currentStep = shown?.state === "moving" ? Math.max(0, SERVER_MOVE_STEPS.indexOf(shown.step ?? "preparing")) : -1;
+    // A move that has not reported its step yet marks none as current.
+    const currentStep = shown?.state === "moving" && shown.step !== null ? SERVER_MOVE_STEPS.indexOf(shown.step) : -1;
     // Announced with the heading: the step a move reached, or that the server is going back.
     const progress = currentStep >= 0 ? t("move.currentStep", { step: t(`move.step.${SERVER_MOVE_STEPS[currentStep]}`) })
         : shown?.state === "returning" ? t("move.returningProgress") : null;
@@ -157,17 +172,11 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
         ? t("move.elapsed", { duration: formatDuration(Math.max(0, Math.floor((now - Date.parse(shown.startedAt)) / 1_000)), t) })
         : null;
 
-    // Hides a finished move for this browser and dismisses the completion notice it replaced, where the viewer may.
+    // Hides a finished move for this browser; its completion notice is then dismissed too, where the viewer may.
     function dismiss() {
         if (shown === null || shown.completedAt === null) return;
         setDismissedNow(shown.completedAt);
         writeDismissal(storageKey, shown.completedAt);
-        if (shown.state !== "moved") return;
-        for (const notice of notices) {
-            if (notice.kind === "placement-completed") {
-                void dismissManagedServerNotice({ serverId, noticeId: notice.noticeId }).catch(() => undefined);
-            }
-        }
     }
 
     async function copyAddress(address: string) {
@@ -199,15 +208,21 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
                 {shown.state === "starting" && <p className="mt-1 leading-6 text-foreground-muted">{t("move.startingBody")}</p>}
                 {shown.state === "moving" && <>
                     {elapsed && <p className="mt-1 text-xs tabular-nums text-foreground-muted">{elapsed}</p>}
+                    {currentStep < 0 && <p className="mt-2 flex items-center gap-2 text-foreground">
+                        <LoaderCircle aria-hidden="true" className="size-4 shrink-0 animate-spin text-gold motion-reduce:animate-none" />{t("move.inProgress")}</p>}
                     <ol aria-label={t("move.stepsLabel")} className="mt-3 space-y-2">
-                        {SERVER_MOVE_STEPS.map((step, index) => <li key={step} aria-current={index === currentStep ? "step" : undefined}
-                            className={`flex items-center gap-2 ${index <= currentStep ? "text-foreground" : "text-foreground-dim"}`}>
-                            {index < currentStep
-                                ? <Check aria-hidden="true" className="size-4 text-gold" />
-                                : index === currentStep ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-gold motion-reduce:animate-none" />
-                                    : <span aria-hidden="true" className="size-4 rounded-full border border-white/20" />}
-                            <span>{t(`move.step.${step}`)}<span className="sr-only">{index < currentStep ? t("controls.completed") : index === currentStep ? t("controls.currentPhase") : t("controls.waiting")}</span></span>
-                        </li>)}
+                        {SERVER_MOVE_STEPS.map((step, index) => {
+                            const phase = currentStep < 0 ? null : index < currentStep ? "done" : index === currentStep ? "current" : "waiting";
+                            return <li key={step} aria-current={phase === "current" ? "step" : undefined}
+                                className={`flex items-center gap-2 ${phase === "done" || phase === "current" ? "text-foreground" : phase === "waiting" ? "text-foreground-dim" : "text-foreground-muted"}`}>
+                                {phase === "done"
+                                    ? <Check aria-hidden="true" className="size-4 text-gold" />
+                                    : phase === "current" ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-gold motion-reduce:animate-none" />
+                                        : <span aria-hidden="true" className="size-4 rounded-full border border-white/20" />}
+                                <span>{t(`move.step.${step}`)}{phase !== null && <span className="sr-only">
+                                    {t(phase === "done" ? "controls.completed" : phase === "current" ? "controls.currentPhase" : "controls.waiting")}</span>}</span>
+                            </li>;
+                        })}
                     </ol>
                     <p className="mt-3 leading-6 text-foreground-muted">{t("move.movingBody")}</p>
                 </>}

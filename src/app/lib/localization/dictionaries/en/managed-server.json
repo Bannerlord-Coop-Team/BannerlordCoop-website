@@ -858,6 +858,7 @@
   "move.elapsed": "{duration} elapsed",
   "move.stepsLabel": "Move progress",
   "move.currentStep": "Current step: {step}",
+  "move.inProgress": "In progress",
   "move.step.preparing": "Preparing",
   "move.step.saving-and-stopping": "Saving and stopping the game",
   "move.step.backing-up": "Creating a restore point",

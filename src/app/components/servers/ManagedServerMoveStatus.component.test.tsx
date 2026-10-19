@@ -23,12 +23,17 @@ const move = (state: MyServerMove["state"], fields: Partial<MyServerMove> = {}):
 const scheduled = move("scheduled", { scheduledAt: at(42 * 60_000 + 10_000) });
 const moving = move("moving", { scheduledAt: at(-300_000), startedAt: at(-250_000), step: "restoring" });
 const moved = move("moved", { startedAt: at(-900_000), completedAt: at(-60_000), address: "203.0.113.20:4201" });
-const notice = (noticeId: string, kind: MyServerNotice["kind"]): MyServerNotice => ({
-    noticeId, kind, severity: "info", title: "Stored title", body: "Stored body", parameters: {}, createdAt: at(-3_600_000), expiresAt: null,
+const notice = (noticeId: string, kind: MyServerNotice["kind"], fields: Partial<MyServerNotice> = {}): MyServerNotice => ({
+    noticeId, kind, severity: "info", title: "Stored title", body: "Stored body", parameters: {}, createdAt: at(-3_600_000), expiresAt: null, ...fields,
 });
 const administrator = notice("66666666-6666-4666-8666-666666666666", "administrator");
 const scheduledNotice = notice("77777777-7777-4777-8777-777777777777", "placement-scheduled");
-const completedNotice = notice("88888888-8888-4888-8888-888888888888", "placement-completed");
+// The control plane writes a move's completion notice as the move settles, just after its job completes.
+const completedNotice = notice("88888888-8888-4888-8888-888888888888", "placement-completed",
+    { createdAt: at(-59_000), parameters: { movedAt: moved.completedAt, address: moved.address } });
+// A server keeps completion notices for 14 days, so an earlier move's notice can still be on the page.
+const earlierCompletion = notice("99999999-9999-4999-8999-999999999999", "placement-completed",
+    { createdAt: at(-3 * 86_400_000), parameters: { movedAt: at(-3 * 86_400_000), address: "198.51.100.7:4201" } });
 
 let container: HTMLDivElement;
 let root: Root;
@@ -62,9 +67,13 @@ async function render(initialMove: MyServerMove | null, notices: MyServerNotice[
 }
 
 /** Starts a fresh page, as a reload would. */
-async function reload(initialMove: MyServerMove | null, notices: MyServerNotice[] = []) {
+async function freshPage() {
     await act(async () => root.unmount());
     root = createRoot(container);
+}
+
+async function reload(initialMove: MyServerMove | null, notices: MyServerNotice[] = []) {
+    await freshPage();
     await render(initialMove, notices);
 }
 
@@ -149,8 +158,18 @@ it("shows a page opened mid-move with the steps done, the current step and the t
 
     await advance(1_000);
     expect(card()!.textContent).toContain("4 min 11 s elapsed");
-    await reload({ ...moving, step: null });
-    expect(card()!.querySelector('[aria-current="step"]')!.textContent).toContain("Preparing");
+});
+
+it("marks no step as done or current while a move has not reported its step", async () => {
+    await render({ ...moving, step: null });
+    const steps = [...card()!.querySelectorAll("ol > li")];
+    expect(steps.map((step) => step.textContent)).toEqual([
+        "Preparing", "Saving and stopping the game", "Creating a restore point", "Restoring on the new machine",
+        "Switching to the new address", "Starting the game", "Finishing",
+    ]);
+    expect(card()!.querySelector('[aria-current="step"]')).toBeNull();
+    expect(card()!.textContent).toContain(messages["move.inProgress"]);
+    expect(announcement()).toBe(messages["move.movingTitle"]);
 });
 
 it("explains that a failed move is putting the server back on its original machine", async () => {
@@ -208,14 +227,56 @@ it("shows the new address once the move finishes, reveals it in the header and c
     Reflect.deleteProperty(navigator, "clipboard");
 });
 
+async function renderWorkspace(initialMove: MyServerMove | null, address: string) {
+    await act(async () => root.render(<TestLocalization><ManagedServerMoveProvider serverId={serverId} initialMove={initialMove}>
+        <ServerManagementWorkspace name={<h1>Campaign</h1>} summary="Summary" address={address} banner={<ManagedServerMoveStatus notices={[]} />}>{null}</ServerManagementWorkspace>
+    </ManagedServerMoveProvider></TestLocalization>));
+}
+
+it("reveals the header address only once the header has the new one, and only once per move", async () => {
+    mocks.read.mockResolvedValue({ ok: true, move: moved });
+    await renderWorkspace(moving, "198.51.100.7:4201");
+    const header = container.querySelector("#server-address")!;
+    await advance(5_000);
+    expect(card()!.querySelector("h2")!.textContent).toBe(messages["move.movedTitle"]);
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+    // The refreshed page has not delivered the new address yet, so the old one stays hidden.
+    expect(header.textContent).toBe("IP hidden");
+    expect(header.className).not.toContain("animate-pulse");
+
+    await renderWorkspace(moving, moved.address!);
+    expect(header.textContent).toBe(moved.address);
+    expect(header.className).toContain("animate-pulse");
+
+    // Hiding it again sticks through later reads and renders.
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Hide server IP and port"]')!.click());
+    await advance(60_000);
+    await renderWorkspace(moving, moved.address!);
+    expect(header.textContent).toBe("IP hidden");
+});
+
+it("reveals the header address on a page opened after the move, unless that move was dismissed", async () => {
+    await renderWorkspace(moved, moved.address!);
+    expect(container.querySelector("#server-address")!.textContent).toBe(moved.address);
+
+    await freshPage();
+    await renderWorkspace(moved, "198.51.100.7:4201");
+    expect(container.querySelector("#server-address")!.textContent).toBe("IP hidden");
+
+    localStorage.setItem(`bannerlordcoop.servers.moveDismissed.${serverId}`, moved.completedAt!);
+    await freshPage();
+    await renderWorkspace(moved, moved.address!);
+    expect(container.querySelector("#server-address")!.textContent).toBe("IP hidden");
+});
+
 it("tells players to look for the new address when the move reports none", async () => {
     await render({ ...moved, address: null });
     expect(card()!.textContent).toContain(messages["move.movedBodyNoAddress"]);
     expect(button(messages["move.copyAddress"])).toBeUndefined();
 });
 
-it("dismisses a finished move for this browser along with the completion notice it covers", async () => {
-    await render(moved, [administrator, scheduledNotice, completedNotice]);
+it("dismisses a finished move for this browser along with this move's completion notice only", async () => {
+    await render(moved, [administrator, scheduledNotice, earlierCompletion, completedNotice]);
     const dismiss = button(messages["notices.dismiss"])!;
     expect(dismiss.getAttribute("aria-label")).toBe(`Dismiss notice: ${messages["move.movedTitle"]}`);
 
@@ -230,6 +291,33 @@ it("dismisses a finished move for this browser along with the completion notice 
     // A later move is new, so it shows again.
     await reload({ ...moved, completedAt: at(-1_000) });
     expect(card()).not.toBeNull();
+});
+
+it.each([
+    ["was written before the move completed", { createdAt: at(-120_000) }],
+    ["names another address", { parameters: { movedAt: moved.completedAt, address: "198.51.100.7:4201" } }],
+] as const)("leaves a completion notice that %s", async (_case, fields) => {
+    await render(moved, [{ ...completedNotice, ...fields }]);
+    await act(async () => button(messages["notices.dismiss"])!.click());
+    expect(mocks.dismiss).not.toHaveBeenCalled();
+});
+
+it("dismisses this move's completion notice once when it only arrives after the card was dismissed", async () => {
+    await render(moved, [earlierCompletion]);
+    await act(async () => button(messages["notices.dismiss"])!.click());
+    expect(mocks.dismiss).not.toHaveBeenCalled();
+
+    await render(moved, [earlierCompletion, completedNotice]);
+    expect(mocks.dismiss).toHaveBeenCalledExactlyOnceWith({ serverId, noticeId: completedNotice.noticeId });
+    await render(moved, [completedNotice, earlierCompletion]);
+    await advance(60_000);
+    expect(mocks.dismiss).toHaveBeenCalledOnce();
+
+    // A later page load retries a notice that is still there, once.
+    mocks.dismiss.mockClear();
+    await reload(moved, [earlierCompletion, completedNotice]);
+    expect(card()).toBeNull();
+    expect(mocks.dismiss).toHaveBeenCalledExactlyOnceWith({ serverId, noticeId: completedNotice.noticeId });
 });
 
 it("keeps a dismissal on this page even when the notice cannot be dismissed", async () => {

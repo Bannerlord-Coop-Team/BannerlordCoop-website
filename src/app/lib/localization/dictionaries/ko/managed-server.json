@@ -857,6 +857,7 @@
   "move.elapsed": "{duration} 경과",
   "move.stepsLabel": "이전 진행 상황",
   "move.currentStep": "현재 단계: {step}",
+  "move.inProgress": "진행 중",
   "move.step.preparing": "준비",
   "move.step.saving-and-stopping": "게임 저장 및 중지",
   "move.step.backing-up": "복원 지점 만들기",

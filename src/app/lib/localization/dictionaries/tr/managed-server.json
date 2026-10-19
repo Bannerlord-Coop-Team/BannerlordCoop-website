@@ -858,6 +858,7 @@
   "move.elapsed": "Geçen süre: {duration}",
   "move.stepsLabel": "Taşıma ilerlemesi",
   "move.currentStep": "Geçerli adım: {step}",
+  "move.inProgress": "Devam ediyor",
   "move.step.preparing": "Hazırla",
   "move.step.saving-and-stopping": "Oyunu kaydet ve durdur",
   "move.step.backing-up": "Geri yükleme noktası oluştur",
