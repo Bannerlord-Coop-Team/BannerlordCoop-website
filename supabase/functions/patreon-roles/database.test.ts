@@ -148,14 +148,17 @@ test("the retired console assignment RPC stays service-role only and fails close
         await assert.rejects(() => retiredConsoleAssignment(), { message: /permission denied/ });
         await db.exec("reset role");
     }
+    await db.exec("set role service_role");
+    await retiredConsoleAssignment();
+    await db.exec("reset role");
     const original = await metadata();
     for (const serverId of ["", "../server", "server\n", "x".repeat(129)]) {
         await assert.rejects(() => retiredConsoleAssignment(serverId), { message: /invalid_console_assignment/ });
     }
     await assert.rejects(() => retiredConsoleAssignment("server-one", user, null, null), { message: /invalid_console_assignment/ });
     await assert.rejects(() => retiredConsoleAssignment("server-one", secondUser), { message: /console_account_not_found/ });
-    await assert.rejects(() => retiredConsoleAssignment("server-one", null));
-    await assert.rejects(() => retiredConsoleAssignment(null));
+    await assert.rejects(() => retiredConsoleAssignment("server-one", null), { message: /invalid_console_assignment/ });
+    await assert.rejects(() => retiredConsoleAssignment(null), { message: /invalid_console_assignment/ });
     assert.deepEqual(await metadata(), original);
 });
 

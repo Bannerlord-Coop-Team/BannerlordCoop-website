@@ -85,9 +85,9 @@ There are **2,467 messages in 12 English namespaces**. Each later locale supplie
 | changelog | 25 | changelog |
 | cheats | 933 | cheats |
 | login | 27 | login |
-| servers | 133 | servers |
-| managed-server | 669 | managed-server |
-| server-common | 49 | managed-server |
+| servers | 152 | servers |
+| managed-server | 853 | managed-server |
+| server-common | 51 | managed-server |
 | server-wireframe | 137 | server-wireframe |
 | support | 35 | support |
 | not-found | 7 | not-found |
