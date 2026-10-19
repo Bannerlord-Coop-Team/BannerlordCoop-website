@@ -480,7 +480,7 @@ always-on.
 
 The result shows current and proposed fleet totals (co-online pair-hours, hours
 with two and three servers online, and the observed replay), the plan's options,
-history start, samples and unsequenced servers, then three tables:
+history start, samples and unsequenced servers, then these sections:
 
 - **Moves** in step order, with the from and to VPS, target region, the step's own
   gain (zero or negative for an enabling leg of a swap), a staging badge, and the
@@ -489,6 +489,34 @@ history start, samples and unsequenced servers, then three tables:
   pinned, an always-on badge, weekly online hours, observed days and a 7×24 heatmap
   of its hourly online probability (Monday first, UTC). Each square has a title and
   the grid has a text summary for assistive technology.
+- **Host overlap**, when a VPS's slots are busy at the same time, for every VPS with
+  more than one slot (a one-slot VPS cannot overlap), grouped by region (alphabetical,
+  hosts without a region last) with rows in the hosts table's order. **Now** and **After plan** (`aria-pressed`) switch between each
+  host's `current` and `proposed` servers and pair-hours. Each row shows the VPS,
+  its slot count and servers, a 168-cell strip of the week (Monday first, UTC, a
+  hairline between days) and its pair-hours per week with "~N h/wk all K busy", or
+  "M slots free" while a slot is free. The math uses only the plan: a server's
+  hourly online probability is the midpoint of its heatmap band, (d + 0.5) / 10;
+  a cell is shaded by expected servers online over slots, on the heatmap's ten
+  bands; for a full VPS the chance every slot is busy is the product of its
+  servers' probabilities (independent, as the planner assumes), hours of at least
+  50% are marked on a thin red row under the strip, and N is its sum over the week.
+  Each cell's title gives the hour and expected online, plus the all-busy chance on
+  a full VPS. Each strip's text summary gives the slots filled and then, on a full
+  VPS, the all-busy hours and busiest hour; with a free slot, the free slots and
+  busiest hour; with no servers, the free slots and "no servers". A VPS holding a
+  server with fewer observed days than the plan's `model.minimumObservedDays` is an
+  estimate, because the control plane shrinks such a server's heatmap toward the
+  fleet's overall online fraction (with no history, entirely, so its heatmap is flat):
+  its row says so in words, such
+  as "Estimated: Game Night has under 7 days of history" or "… has no history yet"
+  (naming up to three servers, counting more), the summary ends with that note and
+  each cell's title with "· estimated". This is worked out separately for **Now**
+  and **After plan**. A VPS holding a server without a usable heatmap, or one the
+  plan does not list, shows "Unavailable" instead of a strip, without an estimate
+  note or all-busy hours: a full VPS shows "—" there, one with a free slot still
+  shows its free slots. The computations live
+  in `lib/control-plane/placement-overlap.ts`.
 - **VPS hosts**, most contended first, with capacity, whether relocation may target
   them, current and proposed contention and their servers.
 
