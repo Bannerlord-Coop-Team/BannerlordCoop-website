@@ -420,10 +420,12 @@ async function LiveServerManagementPage({
         managedServer !== null ? readServerMoveStatus(accessToken, managedServer.serverId) : null,
     ]);
 
+    // A linked managed server's own address follows relocations; the catalog address is the fallback.
+    const address = (managedServer !== null ? connectionAddress(managedServer.connectionIp ?? null, managedServer.gamePorts ?? []) : null) ?? server.address;
     const workspace = <ServerManagementWorkspace
         banner={managedServer !== null ? managedBanner(managedServer.serverId, notices) : undefined}
         name={<EditableServerName key={server.name} canEdit={canManageAssignments && managedServer === null} initialName={server.name} serverId={server.id} />}
-        address={server.address}
+        address={address}
         visibility={managedServer !== null
             ? <ServerVisibilitySetting serverId={managedServer.serverId} visibility={managedServer.visibility} accessRole={managedServer.accessRole} expectedUpdatedAt={managedServer.updatedAt} />
             : <a href="#server-visibility" className="ml-auto inline-flex min-h-10 items-center rounded-md border border-white/15 px-3 text-sm text-gold underline focus-visible:outline-2 focus-visible:outline-gold">{t("page.setUpVisibility")}</a>}

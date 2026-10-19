@@ -666,3 +666,13 @@ it.each([
         expect(html).toContain(`Lifecycle</dt><dd class="font-medium text-foreground">${lifecycle}`);
     }
 });
+
+it.each([
+    ["the linked managed server's address", () => mocks.managedServers.mockResolvedValue({ ...managedSummary, connectionIp: "198.51.100.20", gamePorts: [4203] }), "198.51.100.20:4203"],
+    ["the catalog address while the managed server has none", () => mocks.managedServers.mockResolvedValue({ ...managedSummary, connectionIp: null, gamePorts: [] }), "203.0.113.10"],
+    ["the catalog address without a linked managed server", () => mocks.managedServers.mockRejectedValue(new MyServersApiError("server_not_found", "Gone")), "203.0.113.10"],
+] as const)("shows %s in a live page header, so a relocated address reaches it", async (_case, arrange, address) => {
+    arrange();
+    const workspace = await findServerElement(await page(liveId), "ServerManagementWorkspace" as string);
+    expect((workspace!.props as { address?: string | null }).address).toBe(address);
+});
