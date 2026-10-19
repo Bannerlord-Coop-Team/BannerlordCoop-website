@@ -197,12 +197,16 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
     // Dismissals, reveals and copy feedback this page made, by server and completion time, since the card outlives a server change.
     const [dismissedNow, setDismissedNow] = useState<string | null>(null);
     const [copy, setCopy] = useState<{ moveKey: string; state: "copied" | "failed" } | null>(null);
+    // Counts Copy clicks, so only the latest click's clipboard result is reported.
+    const copyClicks = useRef(0);
     const now = useSecondClock(move?.state === "scheduled" || isMoveInProgress(move));
     const revealedMoves = useRef(new Set<string>());
     const dismissedNotices = useRef(new Set<string>());
     const finished = move?.state === "moved" || move?.state === "failed";
     const moveKey = finished && move.completedAt !== null ? `${serverId}|${move.completedAt}` : null;
     const dismissed = finished && move.completedAt !== null && (storedDismissal === move.completedAt || dismissedNow === moveKey);
+    // Feedback is for the move shown when it was given; showing another move drops it, so it never comes back stale.
+    if (copy !== null && copy.moveKey !== moveKey) setCopy(null);
     const copyState = copy !== null && copy.moveKey === moveKey ? copy.state : null;
 
     useEffect(() => {
@@ -249,16 +253,18 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
         writeDismissal(storageKey, shown.completedAt);
     }
 
-    // The feedback belongs to the move whose address was copied, even if the page shows another one by then.
+    // The feedback belongs to the move whose address was copied, and only to the latest click.
     async function copyAddress(address: string) {
         if (moveKey === null) return;
         const copied = moveKey;
+        const click = ++copyClicks.current;
+        let state: "copied" | "failed" = "copied";
         try {
             await navigator.clipboard.writeText(address);
-            setCopy({ moveKey: copied, state: "copied" });
         } catch {
-            setCopy({ moveKey: copied, state: "failed" });
+            state = "failed";
         }
+        if (click === copyClicks.current) setCopy({ moveKey: copied, state });
     }
 
     const tone = shown === null ? null : moveTone(shown);

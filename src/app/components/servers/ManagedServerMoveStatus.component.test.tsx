@@ -1,7 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import type { MyServerMove, MyServerNotice } from "@/app/lib/control-plane/types";
 import { ManagedServerMoveProvider, ManagedServerMoveStatus, serverMovePollDelay } from "./ManagedServerMoveStatus";
@@ -321,6 +321,52 @@ it("keeps copy feedback with the move whose address was copied when the page cha
     } finally {
         Reflect.deleteProperty(navigator, "clipboard");
     }
+});
+
+describe("copy feedback from more than one click", () => {
+    const other = "44444444-4444-4444-8444-444444444444";
+    const otherMoved = { ...moved, completedAt: at(-30_000), address: "198.51.100.30:4205" };
+    const show = (id: string, initialMove: MyServerMove) => act(async () => root.render(<TestLocalization>
+        <ManagedServerMoveProvider serverId={id} initialMove={initialMove}><ManagedServerMoveStatus notices={[]} /></ManagedServerMoveProvider></TestLocalization>));
+    const writeText = vi.fn();
+    beforeEach(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } }));
+    afterEach(() => { Reflect.deleteProperty(navigator, "clipboard"); });
+
+    it("ignores an earlier server's copy that settles after a copy on the next server", async () => {
+        const firstCopy = deferred<void>();
+        writeText.mockReturnValueOnce(firstCopy.promise).mockResolvedValue(undefined);
+        await show(serverId, moved);
+        await act(async () => button(messages["move.copyAddress"])!.click());
+        await show(other, otherMoved);
+        await act(async () => button(messages["move.copyAddress"])!.click());
+        expect(button(messages["move.copied"])).toBeDefined();
+
+        await act(async () => firstCopy.resolve());
+        expect(button(messages["move.copied"])).toBeDefined();
+    });
+
+    it("reports the latest of two clicks when the earlier one fails after it", async () => {
+        const firstCopy = deferred<void>();
+        writeText.mockReturnValueOnce(firstCopy.promise.then(() => { throw new Error("denied"); })).mockResolvedValue(undefined);
+        await show(serverId, moved);
+        await act(async () => button(messages["move.copyAddress"])!.click());
+        await act(async () => button(messages["move.copyAddress"])!.click());
+        expect(button(messages["move.copied"])).toBeDefined();
+
+        await act(async () => firstCopy.resolve());
+        expect(card()!.textContent).not.toContain(messages["move.copyFailed"]);
+        expect(button(messages["move.copied"])).toBeDefined();
+    });
+
+    it("drops a failed copy once another move is shown, so it does not come back", async () => {
+        writeText.mockRejectedValueOnce(new Error("denied"));
+        await show(serverId, moved);
+        await act(async () => button(messages["move.copyAddress"])!.click());
+        expect(card()!.textContent).toContain(messages["move.copyFailed"]);
+        await show(other, otherMoved);
+        await show(serverId, moved);
+        expect(card()!.textContent).not.toContain(messages["move.copyFailed"]);
+    });
 });
 
 it("tells players the new address will appear once assigned when the move reports none", async () => {
