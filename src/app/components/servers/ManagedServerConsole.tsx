@@ -1,6 +1,8 @@
 "use client";
 
 import { useTranslations } from "@/app/lib/localization/client";
+import { isMoveInProgress } from "@/app/lib/hosting/server-move";
+import { useManagedServerMove } from "./managed-server-move-context";
 import { useManagedConsoleSignals, type CampaignSpeed, type ManagedGamePhase } from "./ManagedServerPollingProvider";
 
 import { ArrowDown, RotateCw } from "lucide-react";
@@ -358,6 +360,8 @@ export function ManagedServerConsole({ serverId, operationState = "running", obs
 }) {
     const { t } = useTranslations("managed-server");
     const { state, text, reconnect } = useConsoleStream(serverId, consoleRun(operationState, observedGameState), outputChannel);
+    // The game stays stopped while the server moves to another machine.
+    const moving = isMoveInProgress(useManagedServerMove());
     const outputRef = useRef<HTMLPreElement>(null);
     const followingRef = useRef(true);
     const [following, setFollowing] = useState(true);
@@ -365,7 +369,7 @@ export function ManagedServerConsole({ serverId, operationState = "running", obs
         connecting: t("console.connectingToLiveOutput"),
         connected: t("console.connectedWaitingForOutput"),
         reconnecting: t("console.reconnectingToLiveOutput"),
-        stopped: t("console.theServerIsStoppedOutputWillAppearHereWhenIt"),
+        stopped: moving ? t("move.consoleMoving") : t("console.theServerIsStoppedOutputWillAppearHereWhenIt"),
         idle: t("console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching"),
         unavailable: t("console.liveOutputIsnTAvailableRightNow"),
     };

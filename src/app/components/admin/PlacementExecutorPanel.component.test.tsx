@@ -11,7 +11,7 @@ vi.mock("@/app/lib/control-plane/client", async (original) => ({ ...await origin
 vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({ auth: { getSession: mocks.session } }) }));
 
 const defaults: HostingPlacementExecutorSettings = {
-    enabled: false, maximumRelocationsPerDay: 2, minimumGainHours: 20, alwaysOnPolicy: "single-slot", noticeLeadHours: 24,
+    enabled: false, maximumRelocationsPerDay: 2, minimumGainHours: 20, alwaysOnPolicy: "single-slot", noticeLeadHours: 1,
     updatedBy: null, reason: null, updatedAt: null,
 };
 const saved: HostingPlacementExecutorSettings = {
@@ -97,8 +97,14 @@ it("validates settings and spells out what enabling does", () => {
     expect(confirmation).toContain("relocate customer servers to other VPSs by itself, up to 3 in any 24 hours");
     expect(confirmation).toContain("changes the server's IP address and game port");
     expect(confirmation).toContain("only to one-slot VPSs, which they never share");
-    expect(confirmation).toContain("at least 48 hours ahead");
-    expect(placementExecutorEnableConfirmation({ maximumRelocationsPerDay: 1, minimumGainHours: 20, noticeLeadHours: 24, alwaysOnPolicy: "none" })).toContain("Always-on servers are never moved.");
+    expect(confirmation).toContain("A running server is moved 48 hours after a notice on its page");
+    const anywhere = placementExecutorEnableConfirmation({ maximumRelocationsPerDay: 3, minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "any" });
+    expect(anywhere).toContain("A running server is moved an hour after a notice on its page, with in-game warnings");
+    expect(anywhere).not.toContain("Always-on");
+    const never = placementExecutorEnableConfirmation({ maximumRelocationsPerDay: 1, minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "none" });
+    expect(never).toContain("Stopped servers move at once. A running server that is not always-on is moved an hour after a notice on its page, "
+        + "with in-game warnings an hour and ten minutes ahead; the move stops the game and starts it again on the new VPS. Always-on servers are never moved.");
+    expect(never).not.toContain("A running server is moved");
 });
 
 it("shows the current state, its defaults and recent automatic relocations", async () => {
@@ -110,6 +116,8 @@ it("shows the current state, its defaults and recent automatic relocations", asy
     expect(container.textContent).toContain("always-on servers: only to one-slot VPSs (never shared)");
     expect(container.querySelector<HTMLInputElement>('input[name="enabled"]')!.checked).toBe(false);
     expect(container.querySelector<HTMLInputElement>('input[name="maximumRelocationsPerDay"]')!.value).toBe("2");
+    // The control plane's default notice lead time is one hour.
+    expect(container.querySelector<HTMLInputElement>('input[name="noticeLeadHours"]')!.value).toBe("1");
     expect(container.querySelector<HTMLSelectElement>('select[name="alwaysOnPolicy"]')!.value).toBe("single-slot");
     const rows = [...container.querySelectorAll("tbody tr")].map((row) => row.textContent);
     expect(rows[0]).toContain("The Gang");
@@ -135,7 +143,7 @@ it("needs explicit confirmation to turn the executor on", async () => {
     await type("reason", "Start placement");
     await save();
     expect(calls("set-placement-executor")).toEqual([expect.objectContaining({
-        input: { enabled: true, maximumRelocationsPerDay: 2, minimumGainHours: 20, noticeLeadHours: 24, alwaysOnPolicy: "single-slot", expectedUpdatedAt: null, reason: "Start placement" },
+        input: { enabled: true, maximumRelocationsPerDay: 2, minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "single-slot", expectedUpdatedAt: null, reason: "Start placement" },
     })]);
     expect(container.textContent).toContain("On · relocating servers automatically");
     expect(container.querySelector('[role="status"].border-l-2')?.textContent).toBe("Saved. Automatic placement is on.");

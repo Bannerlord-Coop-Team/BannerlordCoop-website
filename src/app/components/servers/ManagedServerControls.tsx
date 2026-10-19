@@ -15,6 +15,9 @@ import type { ManagedStartStatus } from "@/app/lib/hosting/my-servers-server";
 import { Check, Download, LoaderCircle, Play, RotateCw, Square } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { isMoveInProgress } from "@/app/lib/hosting/server-move";
+import { DisabledControlHint } from "./DisabledControlHint";
+import { useManagedServerMove } from "./managed-server-move-context";
 import { useRevealServerAddress } from "./ServerManagementWorkspace";
 import { segmentedButtonClass, segmentedGroupClass, toolbarButtonClass } from "./segmented-controls";
 
@@ -141,6 +144,8 @@ export function ManagedServerControls({
     const statusSlot = useManagedServerStatusSlot();
     // Stopping or restarting mid-save would cut the owner's save short, so both wait for it.
     const saving = useManagedServerSaves()?.isSaving(serverId) ?? false;
+    // A move to another machine owns the server until it finishes; an announced one leaves the controls usable.
+    const moving = isMoveInProgress(useManagedServerMove());
     const canOperate = accessRole === "owner" || accessRole === "manager";
     const displayedState = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision ? "running" : operationState;
     const stateIsTransitional = TRANSITIONAL_STATES.has(displayedState);
@@ -285,7 +290,7 @@ export function ManagedServerControls({
     const restartPolling = watchingAcceptedRestart && pollingSession?.serverId === serverId
         && pollingSession.statusSource === "server" && pollingSession.initialUpdatedAt === restartRevision;
     const busy = isPending || trackingStart || (trackingStop && !stopCheckPaused)
-        || (trackingRestart && !watchingAcceptedRestart) || stateIsTransitional || (pollingSession !== null && !restartPolling);
+        || (trackingRestart && !watchingAcceptedRestart) || stateIsTransitional || (pollingSession !== null && !restartPolling) || moving;
     const canStart = ["stopped", "failed", "degraded"].includes(displayedState);
     const canStop = ["running", "starting", "failed", "degraded"].includes(displayedState);
     const canRestart = ["running", "degraded"].includes(displayedState);
@@ -425,41 +430,43 @@ export function ManagedServerControls({
 
     return (
         <div className="flex flex-col items-start gap-2">
-            <div className="flex flex-wrap gap-2">
-                <div role="group" aria-label={t("controls.serverPower")} className={segmentedGroupClass}>
+            <DisabledControlHint disabled={moving} message={t("move.controlsUnavailable")}>
+                <div className="flex flex-wrap gap-2">
+                    <div role="group" aria-label={t("controls.serverPower")} className={segmentedGroupClass}>
+                        <ControlButton
+                            segmented
+                            label={t("controls.start")}
+                            icon={Play}
+                            disabled={busy || !canStart}
+                            pending={pendingOperation === "start" || trackingStart}
+                            onClick={() => requestOperation("start")}
+                        />
+                        <ControlButton
+                            segmented
+                            label={t("controls.stop")}
+                            icon={Square}
+                            disabled={busy || saving || !canStop}
+                            pending={pendingOperation === "stop" || (trackingStop && !stopCheckPaused)}
+                            onClick={() => requestOperation("stop")}
+                        />
+                        <ControlButton
+                            segmented
+                            label={t("controls.restart")}
+                            icon={RotateCw}
+                            disabled={busy || saving || !canRestart}
+                            pending={pendingOperation === "restart-game"}
+                            onClick={() => requestOperation("restart-game")}
+                        />
+                    </div>
                     <ControlButton
-                        segmented
-                        label={t("controls.start")}
-                        icon={Play}
-                        disabled={busy || !canStart}
-                        pending={pendingOperation === "start" || trackingStart}
-                        onClick={() => requestOperation("start")}
-                    />
-                    <ControlButton
-                        segmented
-                        label={t("controls.stop")}
-                        icon={Square}
-                        disabled={busy || saving || !canStop}
-                        pending={pendingOperation === "stop" || (trackingStop && !stopCheckPaused)}
-                        onClick={() => requestOperation("stop")}
-                    />
-                    <ControlButton
-                        segmented
-                        label={t("controls.restart")}
-                        icon={RotateCw}
-                        disabled={busy || saving || !canRestart}
-                        pending={pendingOperation === "restart-game"}
-                        onClick={() => requestOperation("restart-game")}
+                        label={t("controls.updateNow")}
+                        icon={Download}
+                        disabled={busy || trackingRestart}
+                        pending={pendingOperation === "update-now"}
+                        onClick={() => requestOperation("update-now")}
                     />
                 </div>
-                <ControlButton
-                    label={t("controls.updateNow")}
-                    icon={Download}
-                    disabled={busy || trackingRestart}
-                    pending={pendingOperation === "update-now"}
-                    onClick={() => requestOperation("update-now")}
-                />
-            </div>
+            </DisabledControlHint>
             {!busy && operationState === "stopped" && observedGameState === "stopped" && <p className="max-w-sm text-xs text-foreground-muted">{t("controls.alreadyStopped")}</p>}
             {statusArea !== null && (statusSlot === undefined ? statusArea : statusSlot ? createPortal(statusArea, statusSlot) : null)}
         </div>

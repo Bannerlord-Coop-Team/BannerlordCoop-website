@@ -2,12 +2,15 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
-import type { MyServerNotice } from "@/app/lib/control-plane/types";
+import type { MyServerMove, MyServerNotice } from "@/app/lib/control-plane/types";
 import { createTranslator } from "@/app/lib/localization/translator";
+import { ManagedServerMoveProvider } from "./ManagedServerMoveStatus";
 import { ManagedServerNoticeBanner, noticeText } from "./ManagedServerNoticeBanner";
 
 const dismiss = vi.hoisted(() => vi.fn());
 vi.mock("@/app/servers/server-notice-actions", () => ({ dismissManagedServerNotice: dismiss }));
+vi.mock("@/app/servers/managed-server-move-actions", () => ({ readManagedServerMoveStatus: async () => ({ ok: false }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const messages = serverTestMessages["managed-server"];
 const serverId = "11111111-1111-4111-8111-111111111111";
@@ -68,6 +71,23 @@ it("writes placement notices from their parameters in the viewer's language", ()
     }
 });
 
+it.each([
+    ["999.999.999.999:0", false],
+    ["1.2.3.4:70000", false],
+    ["[zz::1]:7210", false],
+    ["[1::2::3]:7210", false],
+    ["203.0.113.10:4201", true],
+    ["[2001:db8::1]:4201", true],
+] as const)("shows a completed move's address %s only when players can join it: %s", async (address, shown) => {
+    await render([{ ...completed, parameters: { ...completed.parameters, address } }]);
+    const text = card(messages["notices.placementCompletedTitle"]).textContent;
+    if (shown) expect(text).toContain(`Its new address is ${address}; players need it to join.`);
+    else {
+        expect(text).toContain(messages["notices.placementCompletedBodyNoAddress"]);
+        expect(text).not.toContain(address);
+    }
+});
+
 it("falls back to the stored text when a scheduled move has no usable time", () => {
     for (const parameters of [{}, { scheduledAt: "tomorrow", windowMinutes: 120 }, { scheduledAt: 1_760_000_000_000 }] as MyServerNotice["parameters"][]) {
         expect(noticeText({ ...scheduled, parameters }, t, utc)).toEqual({ title: "Server move scheduled", body: "English fallback" });
@@ -122,4 +142,40 @@ it("keeps the notice and explains why when it cannot be dismissed", async () => 
 it("renders nothing without notices", async () => {
     await render([]);
     expect(container.innerHTML).toBe("");
+});
+
+const move = (state: MyServerMove["state"]): MyServerMove => ({
+    state, scheduledAt: "2026-10-19T03:00:00.000Z", startedAt: null, step: null, stayedOnOriginal: null,
+    completedAt: state === "moved" || state === "failed" ? "2026-10-19T03:20:00.000Z" : null,
+    address: state === "moved" ? "203.0.113.10:4201" : null,
+});
+// The control plane writes this move's completion notice as the move settles, just after its job completes.
+const currentCompletion: MyServerNotice = { ...completed, createdAt: "2026-10-19T03:20:01.000Z" };
+
+it.each([
+    [null, [true, true]],
+    ["scheduled", [false, true]],
+    ["starting", [false, true]],
+    ["moving", [false, true]],
+    ["returning", [false, true]],
+    // The announcement can outlive the move by up to a minute, until the control plane withdraws it.
+    ["moved", [false, false]],
+    ["failed", [false, true]],
+] as const)("leaves the placement notices that a %s move's status card covers to it", async (state, [scheduledShown, completedShown]) => {
+    await act(async () => root.render(<TestLocalization><ManagedServerMoveProvider serverId={serverId} initialMove={state === null ? null : move(state)}>
+        <ManagedServerNoticeBanner serverId={serverId} notices={[administrator, scheduled, currentCompletion]} /></ManagedServerMoveProvider></TestLocalization>));
+    expect(card("Maintenance")).toBeDefined();
+    expect(card(messages["notices.placementScheduledTitle"]) !== undefined).toBe(scheduledShown);
+    expect(card(messages["notices.placementCompletedTitle"]) !== undefined).toBe(completedShown);
+});
+
+it.each([
+    ["this move's completion", {}, false],
+    ["a completion without an address from this move", { parameters: { movedAt: "2026-10-19T03:20:00.000Z" } }, false],
+    ["an earlier move's completion", { createdAt: "2026-10-19T03:19:59.999Z" }, true],
+    ["a completion for another address", { parameters: { movedAt: "2026-10-19T03:20:00.000Z", address: "198.51.100.7:4201" } }, true],
+] as const)("beside a moved card, hides %s notice only when it is this move's: shown=%s", async (_case, fields, shown) => {
+    await act(async () => root.render(<TestLocalization><ManagedServerMoveProvider serverId={serverId} initialMove={move("moved")}>
+        <ManagedServerNoticeBanner serverId={serverId} notices={[{ ...currentCompletion, ...fields }]} /></ManagedServerMoveProvider></TestLocalization>));
+    expect(card(messages["notices.placementCompletedTitle"]) !== undefined).toBe(shown);
 });

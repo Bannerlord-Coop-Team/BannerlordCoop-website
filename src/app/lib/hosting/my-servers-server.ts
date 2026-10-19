@@ -1,6 +1,6 @@
 import "server-only";
 import { isIP } from "node:net";
-import type { MyServerNotice, MyServerSummary } from "@/app/lib/control-plane/types";
+import type { MyServerMove, MyServerNotice, MyServerSummary } from "@/app/lib/control-plane/types";
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
 import { isRegionKey } from "../../../../supabase/functions/_shared/hosting-regions";
 import { REQUEST_ID, timestamp } from "../../../../supabase/functions/_shared/server-visibility-contract";
@@ -8,6 +8,8 @@ import { HOSTING_MAINTENANCE_SLOTS, type MaintenanceSlot } from "../../../../sup
 import { controlPlaneEndpoint } from "@/app/lib/control-plane/origin";
 import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse, type MyServerDeletionStatus } from "./my-servers";
 import { onboardingSummaryRequest, parseOnboardingSummary, type OnboardingSummaryRequest } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { SERVER_MOVE_STATES, SERVER_MOVE_STEPS } from "./server-move";
+import { isJoinAddress } from "./connection-address";
 
 /** Reads owner inventory directly; Oracle rechecks the current session and durable access on every page. */
 export async function listAllMyServers(accessToken: string, callerSignal?: AbortSignal) {
@@ -172,6 +174,49 @@ function hasNoticeControlCharacter(value: string, allowWhitespace: boolean) {
     return false;
 }
 
+/**
+ * Reads this server's announced, running or recently finished move to another machine, or null when there
+ * is none. Older control planes reject the operation, which callers treat the same as no move.
+ */
+export async function getMyServerMoveStatus(accessToken: string, serverId: string, callerSignal?: AbortSignal): Promise<MyServerMove | null> {
+    if (!REQUEST_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid managed server ID.");
+    const value = await readOwner(accessToken, { operation: "server-move-status", input: { serverId } }, ownerReadSignal(accessToken, callerSignal));
+    if (!isRecord(value) || !hasExactKeys(value, ["serverId", "move"]) || value.serverId !== serverId
+        || (value.move !== null && !isMyServerMove(value.move))) {
+        throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid move status.", true);
+    }
+    return value.move;
+}
+
+type MoveField = Exclude<keyof MyServerMove, "state">;
+/** Which fields each state carries, exactly as the control plane sends them: required, optional (null allowed) or null. */
+const MOVE_FIELDS: Record<MyServerMove["state"], Record<MoveField, "required" | "optional" | "null">> = {
+    scheduled: { scheduledAt: "required", startedAt: "null", completedAt: "null", step: "null", address: "null", stayedOnOriginal: "null" },
+    starting: { scheduledAt: "required", startedAt: "null", completedAt: "null", step: "null", address: "null", stayedOnOriginal: "null" },
+    moving: { scheduledAt: "optional", startedAt: "required", completedAt: "null", step: "optional", address: "null", stayedOnOriginal: "null" },
+    returning: { scheduledAt: "optional", startedAt: "required", completedAt: "null", step: "null", address: "null", stayedOnOriginal: "null" },
+    moved: { scheduledAt: "null", startedAt: "required", completedAt: "required", step: "null", address: "optional", stayedOnOriginal: "null" },
+    failed: { scheduledAt: "null", startedAt: "required", completedAt: "required", step: "null", address: "null", stayedOnOriginal: "required" },
+};
+const MOVE_FIELD_VALUES: Record<MoveField, (value: unknown) => boolean> = {
+    scheduledAt: timestamp,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    step: (value) => SERVER_MOVE_STEPS.includes(value as NonNullable<MyServerMove["step"]>),
+    address: isJoinAddress,
+    stayedOnOriginal: (value) => typeof value === "boolean",
+};
+
+// Each state carries only its own fields, so the page never shows a time, step, address or outcome out of place.
+function isMyServerMove(value: unknown): value is MyServerMove {
+    if (!isRecord(value) || !hasExactKeys(value, ["state", ...Object.keys(MOVE_FIELD_VALUES)])) return false;
+    if (!SERVER_MOVE_STATES.includes(value.state as MyServerMove["state"])) return false;
+    return Object.entries(MOVE_FIELDS[value.state as MyServerMove["state"]]).every(([field, presence]) => value[field] === null
+        ? presence !== "required"
+        : presence !== "null" && MOVE_FIELD_VALUES[field as MoveField](value[field]));
+}
+
+
 // Validates the owner token and bounds a read by the caller's signal and a 30-second timeout.
 function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
     if (accessToken.length < 20 || accessToken.length > 8_192) {
@@ -190,7 +235,8 @@ async function readOwner(accessToken: string, request:
     | { operation: "server-deletion-status"; input: { serverId: string } }
     | { operation: "server-start-status"; input: { serverId: string; jobId: string } }
     | { operation: "server-resources"; input: { serverId: string } }
-    | { operation: "server-notices"; input: { serverId: string } }, signal: AbortSignal) {
+    | { operation: "server-notices"; input: { serverId: string } }
+    | { operation: "server-move-status"; input: { serverId: string } }, signal: AbortSignal) {
     const requestId = crypto.randomUUID();
     let response: Response;
     try {

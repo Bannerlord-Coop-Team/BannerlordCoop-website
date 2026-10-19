@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
     liveAccess: vi.fn(), managedServers: vi.fn(), displayNames: vi.fn(),
     preview: vi.fn(), users: vi.fn(),
     backups: vi.fn(), backupStatus: vi.fn(), files: vi.fn(), requestBackup: vi.fn(), requestVisibility: vi.fn(), refresh: vi.fn(),
-    saves: vi.fn(), generations: vi.fn(), notices: vi.fn(),
+    saves: vi.fn(), generations: vi.fn(), notices: vi.fn(), move: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
     // Model Next's terminal redirect without rendering a denied page.
@@ -61,6 +61,7 @@ vi.mock("@/app/lib/hosting/my-servers-server", () => ({
     getMyServerSummary: mocks.managedServers,
     getMyServerDeletionStatus: async () => null,
     getMyServerNotices: mocks.notices,
+    getMyServerMoveStatus: mocks.move,
 }));
 vi.mock("@/app/lib/hosting/server-settings", () => ({ getServerDisplayNames: mocks.displayNames }));
 vi.mock("@/app/lib/hosting/servers", () => ({ getServerForRole: mocks.preview }));
@@ -94,6 +95,7 @@ beforeEach(() => {
     // Unconfigured test environments cannot list saves, so most page tests have no active campaign.
     mocks.saves.mockRejectedValue(new MyServersApiError("server_api_not_configured", "Not configured"));
     mocks.notices.mockResolvedValue([]);
+    mocks.move.mockResolvedValue(null);
 });
 
 it("redirects anonymous visitors to login", async () => {
@@ -584,34 +586,101 @@ const pageNotice = {
     body: "Expect a short outage.", parameters: {}, createdAt: "2026-10-18T09:00:00.000Z", expiresAt: null,
 } as const;
 
+// The banner slot holds the move status card first, then the notice cards.
+function bannerParts(workspace: ReactElement | null) {
+    const banner = (workspace!.props as { banner?: ReactElement<{ children: ReactNode }> }).banner;
+    const [move, notices] = Children.toArray(banner?.props.children) as ReactElement[];
+    return { move: move as ReactElement<{ notices: unknown[] }> | undefined, notices: notices as ReactElement<{ serverId: string; notices: unknown[] }> | undefined };
+}
+
+const managedSummary = { serverId: managedId, accessRole: "owner", displayName: "Managed", friendlyRegion: "Europe", operationState: "running", observedGameState: "running", releaseChannel: "stable", updatedAt: "2026-10-01T00:00:00.000Z" } as const;
+const moving = { state: "moving", scheduledAt: null, startedAt: "2026-10-18T09:00:00.000Z", completedAt: null, step: "restoring", address: null, stayedOnOriginal: null } as const;
+
 it.each([
     ["managed", false, managedId],
     ["live", true, liveId],
-] as const)("shows this viewer's notices at the top of the %s page", async (_kind, live, serverId) => {
+] as const)("shows this viewer's notices below the move status at the top of the %s page", async (_kind, live, serverId) => {
     if (!live) mocks.liveServer.mockReturnValue(null);
-    mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "owner", displayName: "Managed", friendlyRegion: "Europe", operationState: "running", observedGameState: "running", releaseChannel: "stable", updatedAt: "2026-10-01T00:00:00.000Z" });
+    mocks.managedServers.mockResolvedValue(managedSummary);
     mocks.notices.mockResolvedValue([pageNotice]);
-    const workspace = await findServerElement(await page(serverId), "ServerManagementWorkspace" as string);
-    const banner = (workspace!.props as { banner?: ReactElement<{ serverId: string; notices: unknown[] }> }).banner;
-    expect(banner?.props).toEqual({ serverId: managedId, notices: [pageNotice] });
+    mocks.move.mockResolvedValue(moving);
+    const tree = await page(serverId);
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace" as string);
+    const { move, notices } = bannerParts(workspace);
+    expect((move?.type as { name?: string }).name).toBe("ManagedServerMoveStatus");
+    expect(move?.props).toEqual({ notices: [pageNotice] });
+    expect(notices?.props).toEqual({ serverId: managedId, notices: [pageNotice] });
+    expect((await findServerElement(tree, "ManagedServerMoveProvider"))?.props).toMatchObject({ serverId: managedId, initialMove: moving });
     expect(mocks.notices).toHaveBeenCalledWith("token", managedId, expect.any(AbortSignal));
+    expect(mocks.move).toHaveBeenCalledWith("token", managedId, expect.any(AbortSignal));
 });
 
 it.each([
     ["fails", () => { mocks.notices.mockRejectedValue(new MyServersApiError("invalid_request", "Unknown operation")); }],
     ["is empty", () => { mocks.notices.mockResolvedValue([]); }],
-])("renders the page without a banner when the notice read %s", async (_case, arrange) => {
+])("renders the page with only the move status when the notice read %s", async (_case, arrange) => {
     arrange();
     mocks.liveServer.mockReturnValue(null);
-    mocks.managedServers.mockResolvedValue({ serverId: managedId, accessRole: "manager", displayName: "Managed", friendlyRegion: "Europe", operationState: "running", observedGameState: "running", releaseChannel: "stable", updatedAt: "2026-10-01T00:00:00.000Z" });
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, accessRole: "manager" });
     const workspace = await findServerElement(await page(managedId), "ServerManagementWorkspace" as string);
     expect(workspace).not.toBeNull();
-    expect((workspace!.props as { banner?: unknown }).banner).toBeUndefined();
+    const { move, notices } = bannerParts(workspace);
+    expect(move?.props).toEqual({ notices: [] });
+    expect(notices).toBeUndefined();
 });
 
-it("does not read notices for a live server without a managed server", async () => {
+it("follows no move when the control plane cannot report one, such as an older release", async () => {
+    mocks.liveServer.mockReturnValue(null);
+    mocks.managedServers.mockResolvedValue(managedSummary);
+    mocks.move.mockRejectedValue(new MyServersApiError("invalid_request", "Unknown operation"));
+    const tree = await page(managedId);
+    expect((await findServerElement(tree, "ManagedServerMoveProvider"))?.props).toMatchObject({ serverId: managedId, initialMove: null });
+    expect(await findServerElement(tree, "ServerManagementWorkspace" as string)).not.toBeNull();
+});
+
+it("does not read notices or move status for a live server without a managed server", async () => {
     mocks.managedServers.mockRejectedValue(new MyServersApiError("server_not_found", "Gone"));
-    const workspace = await findServerElement(await page(liveId), "ServerManagementWorkspace" as string);
+    const tree = await page(liveId);
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace" as string);
     expect((workspace!.props as { banner?: unknown }).banner).toBeUndefined();
+    expect(await findServerElement(tree, "ManagedServerMoveProvider")).toBeNull();
     expect(mocks.notices).not.toHaveBeenCalled();
+    expect(mocks.move).not.toHaveBeenCalled();
+});
+
+it.each([
+    ["moving", "Moving to a new machine"],
+    ["returning", "Moving back to its original machine"],
+    ["scheduled", "Maintenance"],
+    [null, "Maintenance"],
+] as const)("names a %s move in the header status instead of maintenance", async (state, lifecycle) => {
+    mocks.liveServer.mockReturnValue(null);
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, operationState: "maintenance", observedGameState: "stopped" });
+    mocks.move.mockResolvedValue(state === null ? null : state === "scheduled"
+        ? { ...moving, state, scheduledAt: "2026-10-19T03:00:00.000Z", startedAt: null, step: null }
+        : { ...moving, state });
+    const workspace = await findServerElement(await page(managedId), "ServerManagementWorkspace" as string);
+    const status = (workspace!.props as { status: ReactElement<{ children: ReactElement; fallback: ReactElement }> }).status.props;
+    for (const element of [status.children, status.fallback]) {
+        const html = renderToStaticMarkup(<>{await (element.type as (props: unknown) => Promise<ReactNode>)(element.props)}</>);
+        expect(html).toContain(`Lifecycle</dt><dd class="font-medium text-foreground">${lifecycle}`);
+    }
+});
+
+it.each([
+    ["the linked managed server's address", () => mocks.managedServers.mockResolvedValue({ ...managedSummary, connectionIp: "198.51.100.20", gamePorts: [4203] }), "198.51.100.20:4203"],
+    ["the catalog address while the managed server has none", () => mocks.managedServers.mockResolvedValue({ ...managedSummary, connectionIp: null, gamePorts: [] }), "203.0.113.10"],
+    ["the catalog address without a linked managed server", () => mocks.managedServers.mockRejectedValue(new MyServersApiError("server_not_found", "Gone")), "203.0.113.10"],
+] as const)("shows %s in a live page header, so a relocated address reaches it", async (_case, arrange, address) => {
+    arrange();
+    const workspace = await findServerElement(await page(liveId), "ServerManagementWorkspace" as string);
+    expect((workspace!.props as { address?: string | null }).address).toBe(address);
+});
+
+it.each([[false, managedId], [true, liveId]] as const)("gives the move status the header's address on a managed or linked live page: live=%s", async (live, serverId) => {
+    if (!live) mocks.liveServer.mockReturnValue(null);
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, connectionIp: "198.51.100.20", gamePorts: [4203] });
+    const tree = await page(serverId);
+    expect((await findServerElement(tree, "ServerManagementWorkspace" as string) as ReactElement<{ address?: string | null }>).props.address).toBe("198.51.100.20:4203");
+    expect((await findServerElement(tree, "ManagedServerMoveProvider"))?.props).toMatchObject({ headerAddress: "198.51.100.20:4203" });
 });

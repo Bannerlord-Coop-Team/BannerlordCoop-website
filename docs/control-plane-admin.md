@@ -569,8 +569,10 @@ breaks; `info` cards are `role="status"` and `warning` cards `role="alert"`.
 Administrator notices show their title and message untranslated. The two
 placement kinds are written in the viewer's language from their parameters:
 `placement-scheduled` from `scheduledAt` and `windowMinutes`, in the viewer's time
-zone, and `placement-completed` with the new `address` when it is a valid
-`ip:port` (a variant without it otherwise). A scheduled notice without a usable
+zone, and `placement-completed` with the new `address` when it is a join address
+`isJoinAddress` accepts (a real IPv4 address or a bracketed IPv6 address, with a
+port from 1 to 65535, the same check the move status uses), and a variant without
+it otherwise. A scheduled notice without a usable
 `scheduledAt` falls back to the stored English title and message.
 
 **Dismiss** calls the `dismissManagedServerNotice` server action, which sends the
@@ -581,6 +583,64 @@ function forwards `dismiss-server-notice` to the control plane and accepts only
 since that notice is not for this server. An administrator impersonating a user
 gets HTTP 403 `impersonation_read_only` and a short localized explanation; other
 failures keep the card with a localized retry message.
+
+### Owner move status
+
+The same pages read the owner operation `server-move-status` through
+`getMyServerMoveStatus`, in parallel with the notices and with the same
+five-second bound; any failure, including an older control plane without the
+operation, shows no move. The DTO is strict: exact keys, one of the six states,
+millisecond UTC timestamps, one of the seven steps, an `address` that is a real IPv4
+or bracketed IPv6 address with a valid port, and exactly these fields per state
+(anything else is rejected):
+
+| State | `scheduledAt` | `startedAt` | `completedAt` | `step` | `address` | `stayedOnOriginal` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `scheduled`, `starting` | set | null | null | null | null | null |
+| `moving` | set or null | set | null | set or null | null | null |
+| `returning` | set or null | set | null | null | null | null |
+| `moved` | null | set | set | null | set or null | null |
+| `failed` | null | set | set | null | null | set (boolean) |
+
+`ManagedServerMoveProvider` wraps the workspace and polls the
+`readManagedServerMoveStatus` server action while the page is visible: every 60 s
+with no move or a finished one, every 30 s while one is scheduled, and every 5 s
+from two minutes before `scheduledAt`, while `starting` and while `moving` or
+`returning`. A failed read keeps the status shown and backs off to at most five
+minutes. Showing the page again always reads at once, and a read that was under
+way meanwhile is followed by another as soon as it returns. A new state, address
+or completion time calls `router.refresh()` once so the header, address and
+notices follow; a new step alone does not. A refreshed page that renders a
+different move status is shown at once and confirmed by an immediate read; a read
+that only restores the status shown before does not refresh again, and a refresh
+that renders no move (which a failed server-side read also produces) is not
+adopted. While a moved server's new address differs from the header address the
+page passes in, the next reads refresh the page again, at most three times per
+move. On a live page linked to a managed server, the header uses the managed
+server's address when it has one.
+
+`ManagedServerMoveStatus` is the first card in the `banner` slot: a countdown and
+the start time in the viewer's zone while scheduled, the steps with the current
+one and the elapsed time while moving (an "In progress" line and no current step
+before the job reports one), a progress line while returning, and the new address
+with **Copy address** once moved; a failed move says whether the server stayed on
+its original machine. Once moved, the header address is revealed once per move,
+as soon as the header shows that address: after the refresh that delivers it, or
+on a page opened later, unless the card was dismissed.
+
+Only finished moves can be dismissed. The dismissal is remembered in this browser
+by `completedAt` under `bannerlordcoop.servers.moveDismissed.<serverId>`. A
+`placement-completed` notice belongs to the moved card when it was created at or
+after `completedAt` and, if both name one, has the same address; servers keep
+earlier moves' completion notices for 14 days and those are left alone. The notice
+banner hides every `placement-scheduled` notice whenever the card has a move (the
+control plane withdraws the announcement only when the move settles, up to about a
+minute after the job finishes, and administrators cannot write placement kinds) and
+the moved card's own completion notice. Dismissing the card dismisses that notice,
+including one that only reaches the page after the dismissal (once per notice per
+page). While `moving` or `returning` the header lifecycle names the move instead of
+"Maintenance", Start, Stop, Restart and Update now are disabled with an
+explanation, and the stopped console says the server is moving.
 
 Deploy the control plane that adds these operations before merging this website
 change. Merging to main redeploys `my-servers` through the Supabase hosting API
