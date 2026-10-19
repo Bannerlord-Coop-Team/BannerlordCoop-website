@@ -6,6 +6,8 @@ import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "
 import { Definition, Empty, Panel, SectionHeading } from "@/app/components/admin/ControlPlanePresentation";
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { PlacementExecutorPanel } from "@/app/components/admin/PlacementExecutorPanel";
+import { PlacementHostOverlap } from "@/app/components/admin/PlacementHostOverlap";
+import { HEATMAP_CLASSES } from "@/app/components/admin/placement-heatmap-classes";
 import { RelocateDialog } from "@/app/components/admin/RelocateView";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { operationExplanation } from "@/app/lib/control-plane/explanations";
@@ -61,8 +63,6 @@ const inputClass = "mt-1.5 min-h-10 w-full border border-white/15 bg-background 
 const labelClass = "font-label text-[0.6rem] font-semibold uppercase tracking-[0.13em] text-foreground-muted";
 const tableHeadClass = "border-b border-white/10 font-label text-[0.62rem] uppercase tracking-[0.12em] text-foreground-muted";
 const badgeClass = "inline-flex w-fit border px-2 py-0.5 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em]";
-// One gold ramp from the surface to full gold: a darker cell is less likely to be online.
-const HEATMAP_CLASSES = ["bg-gold/10", "bg-gold/20", "bg-gold/30", "bg-gold/40", "bg-gold/50", "bg-gold/60", "bg-gold/70", "bg-gold/80", "bg-gold/90", "bg-gold"];
 const DEFAULT_FORM: PlacementPlanForm = {
     historyDays: String(PLACEMENT_PLAN_DEFAULTS.historyDays),
     halfLifeDays: String(PLACEMENT_PLAN_DEFAULTS.halfLifeDays),
@@ -218,6 +218,7 @@ function PlacementPlanResult({ plan, data }: { plan: HostingAdminPlacementPlan; 
             </div>
             <PlacementMoves plan={plan} data={data} />
             <PlacementServers plan={plan} />
+            <PlacementHostOverlap plan={plan} />
             <PlacementHosts plan={plan} names={names} />
         </div>
     );

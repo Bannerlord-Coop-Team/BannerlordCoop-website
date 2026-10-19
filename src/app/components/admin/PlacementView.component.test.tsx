@@ -306,6 +306,18 @@ it("runs the dry run only when asked, with progress, and renders the plan", asyn
     expect(hostRow.textContent).toContain("→ Dem Boys");
 });
 
+it("shows each shared VPS's overlap between the servers and the hosts tables", async () => {
+    await act(async () => root.render(<PlacementView data={data} />));
+    await runPlan();
+    const sections = [...container.querySelectorAll("section[aria-label]")].map((section) => section.getAttribute("aria-label"));
+    expect(sections.slice(sections.indexOf("Servers"))).toEqual(["Servers", "Host overlap", "VPS hosts"]);
+    const overlap = container.querySelector('section[aria-label="Host overlap"]')!;
+    expect([...overlap.querySelectorAll("li")].map((item) => item.querySelector("p")!.textContent)).toEqual(["vps-uk-a", "vps-uk-b", "vps-uk-c"]);
+    // Dem Boys has no usable heatmap yet, so vps-uk-a cannot be drawn.
+    expect(overlap.textContent).toContain("Unavailable: a server on this VPS has no learned weekly activity yet.");
+    expect(overlap.querySelector('[role="img"][aria-label^="vps-uk-b:"]')!.getAttribute("aria-label")).toBe("vps-uk-b: 0 of 3 slots; 3 slots free; no servers");
+});
+
 it("explains a rate-limited dry run and keeps the form usable", async () => {
     const respond = mocks.request.getMockImplementation()!;
     mocks.request.mockImplementation(async (request: { operation: string }) => {
