@@ -217,6 +217,30 @@ it("retries a failed read", async () => {
     expect(container.textContent).toContain("Off · nothing moves automatically");
 });
 
+it("lays a move's stops out as equal columns whose text wraps inside them", async () => {
+    const back = relocation("back", "Going Back", "queued", { mode: "announced", progress: { ...restoring, step: null, returning: true } });
+    const quest = relocation("quest", "Kofman's Quest", "succeeded", { completedAt: "2026-10-19T10:04:13.000Z", progress: offlineDone });
+    current = { settings: saved, status: { activeRelocationId: "back", queuedInLast24Hours: 2 }, relocations: [quest, back] };
+    await act(async () => root.render(<PlacementExecutorPanel />));
+    for (const [name, columns] of [["Kofman's Quest", 9], ["Going Back", 10]] as const) {
+        const list = move(name).querySelector("ol")!;
+        // Every stop gets the same share of the row, whatever it holds; a narrow panel scrolls rather than cuts.
+        expect(list.className).toContain("grid");
+        expect(list.style.gridTemplateColumns).toBe(`repeat(${columns}, minmax(5.5rem, 1fr))`);
+        expect(list.parentElement!.className).toContain("overflow-x-auto");
+        const stops = [...list.children];
+        expect(stops).toHaveLength(columns);
+        expect(stops.every((stop) => stop.tagName === "LI" && stop.classList.contains("min-w-0") && stop.classList.contains("break-words"))).toBe(true);
+        // The separators are drawn in the gap, with no text of their own.
+        expect(stops.slice(1).every((stop) => stop.lastElementChild!.getAttribute("aria-hidden") === "true" && stop.lastElementChild!.textContent === "")).toBe(true);
+    }
+    // A long note is its own line inside the stop, so it wraps instead of widening it.
+    const warned = track("Kofman's Quest")[0]!;
+    const note = [...warned.querySelectorAll("span.block")].find((line) => line.textContent === "No warning needed: the server was stopped")!;
+    expect(note).toBeDefined();
+    expect(warned.querySelector("span.flex")!.textContent).toBe("Warned: not needed");
+});
+
 // The contract's own example: a running server's move half way through, after both warnings went out.
 const restoring: HostingPlacementRelocationProgress = {
     step: "restoring",

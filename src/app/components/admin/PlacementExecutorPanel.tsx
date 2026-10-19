@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, LoaderCircle } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Empty } from "@/app/components/admin/ControlPlanePresentation";
 import { LocalDateTime, LocalTime } from "@/app/components/admin/LocalDateTime";
 import { ControlPlaneAdminError, requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
@@ -306,31 +306,36 @@ function LiveMove({ relocation }: { relocation: HostingPlacementRelocation }) {
     );
 }
 
-/** The move's stops as an ordered list: each says its phase in words, and the one under way is the current step. */
+/**
+ * The move's stops as an ordered list of equal columns: each says its phase in words, notes and times wrap
+ * inside it, and the one under way is the current step. A narrow panel scrolls the track instead of cutting it.
+ */
 function MoveTrack({ name, steps }: { name: string; steps: readonly PlacementTrackStep[] }) {
     return (
-        <ol aria-label={`${name}: move steps`} className="mt-2 flex flex-wrap items-stretch gap-1">
-            {steps.map((step, index) => {
-                const phase = TRACK_PHASES[step.phase];
-                return (
-                    <Fragment key={step.id}>
-                        {index > 0 && <li aria-hidden="true" className="self-center text-foreground-dim">→</li>}
-                        <li aria-current={step.phase === "current" ? "step" : undefined} className={`min-w-0 border px-2 py-1 ${phase.className}`}>
-                            <span className="flex items-center gap-1 font-medium">
-                                {step.phase === "done" && <Check aria-hidden="true" className="size-3 text-emerald-300" />}
-                                {step.label}<span className="sr-only">: {phase.label}</span>
+        <div className="mt-2 overflow-x-auto pb-1">
+            <ol aria-label={`${name}: move steps`} className="grid gap-x-3" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(5.5rem, 1fr))` }}>
+                {steps.map((step, index) => {
+                    const phase = TRACK_PHASES[step.phase];
+                    return (
+                        <li key={step.id} aria-current={step.phase === "current" ? "step" : undefined}
+                            className={`relative min-w-0 border px-2 py-1 break-words ${phase.className}`}>
+                            <span className="flex items-start gap-1 font-medium">
+                                {step.phase === "done" && <Check aria-hidden="true" className="mt-0.5 size-3 shrink-0 text-emerald-300" />}
+                                <span className="min-w-0">{step.label}<span className="sr-only">: {phase.label}</span></span>
                             </span>
                             {step.reachedAt !== null && <span className="block font-mono text-[0.62rem] text-foreground-muted"><LocalTime value={step.reachedAt} /></span>}
-                            {step.note !== null && <span className="block max-w-48 text-[0.62rem] text-foreground-muted">{step.note}</span>}
+                            {step.note !== null && <span className="block text-[0.62rem] text-foreground-muted">{step.note}</span>}
                             {step.warnings.map((warning) => (
                                 <span key={warning.minutes} className="block text-[0.62rem] text-foreground-muted">
                                     {warning.minutes} min: {warning.label}{warning.sentAt !== null && <> <LocalTime value={warning.sentAt} /></>}
                                 </span>
                             ))}
+                            {/* A chevron drawn in the gap before the stop: no text, and it never widens a column. */}
+                            {index > 0 && <span aria-hidden="true" className="absolute top-1/2 -left-2.25 size-1.5 -translate-y-1/2 rotate-45 border-t border-r border-foreground-dim" />}
                         </li>
-                    </Fragment>
-                );
-            })}
-        </ol>
+                    );
+                })}
+            </ol>
+        </div>
     );
 }

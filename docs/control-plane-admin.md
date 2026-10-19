@@ -586,7 +586,10 @@ gain and state, and a track from each relocation's `progress`: **Warned** →
 **Starting** → **Saving & stopping** → **Restore point** → **Restoring** →
 **Switching address** → **Starting game** → **Finishing** → **Done**. Each step
 the job reached shows when it first reached it, in the viewer's time zone with
-seconds, and the step under way is marked `aria-current="step"`. Every stop says
+seconds, and the step under way is marked `aria-current="step"`. The stops are
+equal columns of one grid (at least 5.5rem each), with a small chevron drawn in
+the gap between them; their labels, times and notes wrap inside the stop, and a
+panel too narrow for the row scrolls the track rather than cutting it off. Every stop says
 its phase in words (done, current step, not reached, not needed, failed or
 cancelled) and any note in visible text, so colour only repeats it. **Warned**
 lists the 60- and 10-minute in-game warnings as sent (with the time), pending, not
