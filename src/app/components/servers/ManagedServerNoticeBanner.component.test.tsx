@@ -141,8 +141,9 @@ it.each([
     ["starting", [false, true]],
     ["moving", [false, true]],
     ["returning", [false, true]],
-    ["moved", [true, false]],
-    ["failed", [true, true]],
+    // The announcement can outlive the move by up to a minute, until the control plane withdraws it.
+    ["moved", [false, false]],
+    ["failed", [false, true]],
 ] as const)("leaves the placement notices that a %s move's status card covers to it", async (state, [scheduledShown, completedShown]) => {
     await act(async () => root.render(<TestLocalization><ManagedServerMoveProvider serverId={serverId} initialMove={state === null ? null : move(state)}>
         <ManagedServerNoticeBanner serverId={serverId} notices={[administrator, scheduled, currentCompletion]} /></ManagedServerMoveProvider></TestLocalization>));

@@ -23,8 +23,12 @@ export function isCurrentMoveCompletion(notice: Pick<MyServerNotice, "kind" | "c
         && (typeof address !== "string" || move.address === null || address === move.address);
 }
 
-/** Placement notices the move card already says: the announcement until the move ends, and this move's completion. */
+/**
+ * Placement notices the move card already says: any move announcement while the card shows a move, and this
+ * move's completion. The control plane withdraws the announcement only after the move settles, up to a minute
+ * after it finishes, and only it writes placement notices.
+ */
 export function moveCoversNotice(notice: Pick<MyServerNotice, "kind" | "createdAt" | "parameters">, move: MyServerMove | null) {
-    if (notice.kind === "placement-scheduled") return move !== null && move.state !== "moved" && move.state !== "failed";
+    if (notice.kind === "placement-scheduled") return move !== null;
     return isCurrentMoveCompletion(notice, move);
 }

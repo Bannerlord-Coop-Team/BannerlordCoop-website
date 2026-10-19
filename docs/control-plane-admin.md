@@ -616,7 +616,9 @@ by `completedAt` under `bannerlordcoop.servers.moveDismissed.<serverId>`. A
 `placement-completed` notice belongs to the moved card when it was created at or
 after `completedAt` and, if both name one, has the same address; servers keep
 earlier moves' completion notices for 14 days and those are left alone. The notice
-banner hides `placement-scheduled` notices while a move is pending or running and
+banner hides every `placement-scheduled` notice whenever the card has a move (the
+control plane withdraws the announcement only when the move settles, up to about a
+minute after the job finishes, and administrators cannot write placement kinds) and
 the moved card's own completion notice. Dismissing the card dismisses that notice,
 including one that only reaches the page after the dismissal (once per notice per
 page). While `moving` or `returning` the header lifecycle names the move instead of
