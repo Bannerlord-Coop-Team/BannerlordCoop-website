@@ -242,9 +242,8 @@ export function placementMoveStatuses(
     return statuses;
 }
 
-/** Accepted executor ranges; the control plane validates them again. */
+/** Accepted executor ranges; the control plane validates them again. Moves are not rate limited. */
 export const PLACEMENT_EXECUTOR_LIMITS = {
-    maximumRelocationsPerDay: { minimum: 1, maximum: 24, label: "Relocations per day" },
     minimumGainHours: { minimum: 1, maximum: 168, label: "Minimum gain" },
     noticeLeadHours: { minimum: 1, maximum: 168, label: "Notice lead time" },
 } as const;
@@ -259,10 +258,10 @@ export type PlacementExecutorForm = Record<keyof typeof PLACEMENT_EXECUTOR_LIMIT
 
 const MAXIMUM_ADMIN_REASON_LENGTH = 1_000;
 
+/** The form for the saved settings; a retired `maximumRelocationsPerDay` from an older control plane is ignored. */
 export function placementExecutorForm(settings: HostingPlacementExecutorSettings): PlacementExecutorForm {
     return {
         enabled: settings.enabled,
-        maximumRelocationsPerDay: String(settings.maximumRelocationsPerDay),
         minimumGainHours: String(settings.minimumGainHours),
         noticeLeadHours: String(settings.noticeLeadHours),
         alwaysOnPolicy: settings.alwaysOnPolicy,
@@ -270,9 +269,14 @@ export function placementExecutorForm(settings: HostingPlacementExecutorSettings
     };
 }
 
-/** Builds the `set-placement-executor` input, guarded by the `updatedAt` last read (null when never saved). */
-export function placementExecutorInput(form: PlacementExecutorForm, expectedUpdatedAt: string | null): { input: Record<string, boolean | number | string | null> } | { error: string } {
+/**
+ * Builds the `set-placement-executor` input, guarded by the `updatedAt` last read (null when never saved).
+ * The retired `maximumRelocationsPerDay` goes back exactly as last read when the read had one, so a control
+ * plane that still requires it accepts the save; a newer one ignores it. It is left out when the read had none.
+ */
+export function placementExecutorInput(form: PlacementExecutorForm, expectedUpdatedAt: string | null, retiredMaximumRelocationsPerDay?: unknown): { input: Record<string, boolean | number | string | null> } | { error: string } {
     const input: Record<string, boolean | number | string | null> = { enabled: form.enabled };
+    if (typeof retiredMaximumRelocationsPerDay === "number") input.maximumRelocationsPerDay = retiredMaximumRelocationsPerDay;
     for (const [name, limit] of Object.entries(PLACEMENT_EXECUTOR_LIMITS) as Array<[keyof typeof PLACEMENT_EXECUTOR_LIMITS, typeof PLACEMENT_EXECUTOR_LIMITS[keyof typeof PLACEMENT_EXECUTOR_LIMITS]]>) {
         const text = form[name].trim();
         const value = Number(text);
@@ -292,7 +296,7 @@ export function placementExecutorInput(form: PlacementExecutorForm, expectedUpda
 }
 
 /** What turning the executor on does, for the confirmation an administrator must accept. */
-export function placementExecutorEnableConfirmation(input: { maximumRelocationsPerDay: number; minimumGainHours: number; noticeLeadHours: number; alwaysOnPolicy: HostingPlacementAlwaysOnPolicy }) {
+export function placementExecutorEnableConfirmation(input: { minimumGainHours: number; noticeLeadHours: number; alwaysOnPolicy: HostingPlacementAlwaysOnPolicy }) {
     const lead = input.noticeLeadHours === 1 ? "an hour" : `${input.noticeLeadHours} hours`;
     // With always-on servers excluded, the running servers that move are only the others.
     const runningServer = input.alwaysOnPolicy === "none" ? "A running server that is not always-on" : "A running server";
@@ -300,7 +304,7 @@ export function placementExecutorEnableConfirmation(input: { maximumRelocationsP
         ? " Always-on servers are never moved."
         : input.alwaysOnPolicy === "single-slot" ? " Always-on servers move only to one-slot VPSs, which they never share." : "";
     return "Turn on automatic placement?\n\n"
-        + `The control plane will relocate customer servers to other VPSs by itself, up to ${input.maximumRelocationsPerDay} in any 24 hours, whenever a move saves at least ${input.minimumGainHours} pair-hours a week. `
+        + `The control plane will relocate customer servers to other VPSs by itself, one at a time, whenever a move saves at least ${input.minimumGainHours} pair-hours a week. `
         + "Each move stops the game for a few minutes and changes the server's IP address and game port, so players need the new address to join. "
         + `Stopped servers move at once. ${runningServer} is moved ${lead} after a notice on its page, with in-game warnings an hour and ten minutes ahead; the move stops the game and starts it again on the new VPS.${alwaysOn}`;
 }
