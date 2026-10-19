@@ -40,6 +40,7 @@ it("maps control plane rejections to guidance and marks state conflicts for refr
         ["safe_stop_required", "Stop the server", true],
         ["operation_in_progress", "still running", true],
         ["stale_interaction", "changed since this page loaded", true],
+        ["first_start_required", "Start the server once", false],
         ["server_not_found", "unavailable or your access changed", false],
         ["control_plane_unavailable", "could not be reached", false],
     ] as const) {

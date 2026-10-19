@@ -56,6 +56,18 @@ it("explains why campaign controls are disabled while the server is running", as
     expect(tooltips).toContain("Stop the server before switching campaigns.");
 });
 
+it("keeps New campaign disabled on a server that never started because its first Start creates the campaign", async () => {
+    mocks.list.mockResolvedValue({ ok: true, campaigns: { serverId, updatedAt: stopped.updatedAt, activeSaveId: null, items: [] } });
+    await render({ ...stopped, operationState: "awaiting-save", activeSave: null });
+    expect(container.textContent).toContain("No campaigns are registered yet. Starting the server creates a fresh one.");
+    expect(button("New campaign").disabled).toBe(true);
+    const tooltips = [...container.querySelectorAll('[role="tooltip"]')].map((element) => element.textContent);
+    expect(tooltips).toContain("This server has no campaign yet. Starting it creates a fresh one.");
+    await act(async () => button("New campaign").click());
+    expect(dialog().open).toBe(false);
+    expect(mocks.change).not.toHaveBeenCalled();
+});
+
 it("selects an imported campaign with a durable request bound to the listed server revision", async () => {
     mocks.change.mockResolvedValue({ ok: true, selection: { serverId, activeSaveId: importedId, updatedAt: "2026-10-02T12:00:01.000Z" } });
     await render(stopped, true);
