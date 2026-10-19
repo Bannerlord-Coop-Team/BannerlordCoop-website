@@ -101,7 +101,10 @@ it("validates settings and spells out what enabling does", () => {
     const anywhere = placementExecutorEnableConfirmation({ maximumRelocationsPerDay: 3, minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "any" });
     expect(anywhere).toContain("A running server is moved an hour after a notice on its page, with in-game warnings");
     expect(anywhere).not.toContain("Always-on");
-    expect(placementExecutorEnableConfirmation({ maximumRelocationsPerDay: 1, minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "none" })).toContain("Always-on servers are never moved.");
+    const never = placementExecutorEnableConfirmation({ maximumRelocationsPerDay: 1, minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "none" });
+    expect(never).toContain("Stopped servers move at once. A running server that is not always-on is moved an hour after a notice on its page, "
+        + "with in-game warnings an hour and ten minutes ahead; the move stops the game and starts it again on the new VPS. Always-on servers are never moved.");
+    expect(never).not.toContain("A running server is moved");
 });
 
 it("shows the current state, its defaults and recent automatic relocations", async () => {
