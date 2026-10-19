@@ -62,13 +62,24 @@ export function ManagedServerMoveProvider({ serverId, initialMove, headerAddress
     children: ReactNode;
 }) {
     const router = useRouter();
-    const [move, setMove] = useState(initialMove);
+    // The move shown and the server it was shown for: another server's page starts again from its own status.
+    const [shown, setShown] = useState({ serverId, move: initialMove });
+    if (shown.serverId !== serverId) setShown({ serverId, move: initialMove });
+    const move = shown.serverId === serverId ? shown.move : initialMove;
     const latest = useRef(initialMove);
     const failures = useRef(0);
     const readNow = useRef<(() => void) | null>(null);
     // The status shown before one was adopted from a refreshed page, until the next read confirms or undoes it.
     const beforeAdoption = useRef<string | null>(null);
     const addressRefreshes = useRef(new Map<string, number>());
+
+    // Reads for another server start over from that server's rendered status, without the last server's history.
+    const startTracking = useEffectEvent(() => {
+        latest.current = initialMove;
+        failures.current = 0;
+        beforeAdoption.current = null;
+        addressRefreshes.current = new Map();
+    });
 
     // Applies one read: a failure keeps the status already shown and backs off.
     const applyRead = useEffectEvent((result: Awaited<ReturnType<typeof readManagedServerMoveStatus>>) => {
@@ -82,7 +93,7 @@ export function ManagedServerMoveProvider({ serverId, initialMove, headerAddress
         beforeAdoption.current = null;
         const changed = key !== serverMoveRefreshKey(latest.current);
         latest.current = result.move;
-        setMove(result.move);
+        setShown({ serverId, move: result.move });
         // A read that undoes an adopted status only restores what this page showed, so it does not refresh again.
         if (changed && !restored) {
             router.refresh();
@@ -104,7 +115,7 @@ export function ManagedServerMoveProvider({ serverId, initialMove, headerAddress
         if (next !== null) {
             beforeAdoption.current = serverMoveRefreshKey(latest.current);
             latest.current = next;
-            setMove(next);
+            setShown({ serverId, move: next });
         }
         readNow.current?.();
     });
@@ -147,6 +158,7 @@ export function ManagedServerMoveProvider({ serverId, initialMove, headerAddress
             if (document.visibilityState === "visible") void read();
         }
 
+        startTracking();
         readNow.current = () => void read();
         schedule();
         document.addEventListener("visibilitychange", readOnReturn);
@@ -182,22 +194,23 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
     const serverId = context?.serverId ?? "";
     const storageKey = `${DISMISSAL_STORAGE_PREFIX}${serverId}`;
     const storedDismissal = useSyncExternalStore(subscribeToStorage, () => readDismissal(storageKey), () => null);
+    // Dismissals and reveals this page made, by server and completion time, since the card outlives a server change.
     const [dismissedNow, setDismissedNow] = useState<string | null>(null);
     const [copy, setCopy] = useState<"copied" | "failed" | null>(null);
     const now = useSecondClock(move?.state === "scheduled" || isMoveInProgress(move));
-    // Finished moves whose header address this page already revealed, and notices it already dismissed.
     const revealedMoves = useRef(new Set<string>());
     const dismissedNotices = useRef(new Set<string>());
     const finished = move?.state === "moved" || move?.state === "failed";
-    const dismissed = finished && move.completedAt !== null && (storedDismissal === move.completedAt || dismissedNow === move.completedAt);
+    const moveKey = finished && move.completedAt !== null ? `${serverId}|${move.completedAt}` : null;
+    const dismissed = finished && move.completedAt !== null && (storedDismissal === move.completedAt || dismissedNow === moveKey);
 
     useEffect(() => {
-        if (move?.state !== "moved" || move.completedAt === null || move.address === null || headerAddress !== move.address) return;
+        if (move?.state !== "moved" || moveKey === null || move.address === null || headerAddress !== move.address) return;
         // Once the header has the new address, show it once per move; a viewer who hides it again keeps it hidden.
-        if (revealedMoves.current.has(move.completedAt) || readDismissal(storageKey) === move.completedAt || dismissedNow === move.completedAt) return;
-        revealedMoves.current.add(move.completedAt);
+        if (revealedMoves.current.has(moveKey) || readDismissal(storageKey) === move.completedAt || dismissedNow === moveKey) return;
+        revealedMoves.current.add(moveKey);
         revealAddress();
-    }, [dismissedNow, headerAddress, move, revealAddress, storageKey]);
+    }, [dismissedNow, headerAddress, move, moveKey, revealAddress, storageKey]);
 
     useEffect(() => {
         if (!dismissed || move?.state !== "moved") return;
@@ -230,7 +243,7 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
     // Hides a finished move for this browser; its completion notice is then dismissed too, where the viewer may.
     function dismiss() {
         if (shown === null || shown.completedAt === null) return;
-        setDismissedNow(shown.completedAt);
+        setDismissedNow(moveKey);
         writeDismissal(storageKey, shown.completedAt);
     }
 

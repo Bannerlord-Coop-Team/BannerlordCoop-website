@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import * as serverActions from "@/app/servers/managed-server-actions";
 import { ManagedServerControls, ManagedServerPassword } from "./ManagedServerControls";
-import { ManagedServerMoveProvider } from "./ManagedServerMoveStatus";
+import { ManagedServerMoveProvider, ManagedServerMoveStatus } from "./ManagedServerMoveStatus";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import type { MyServerMove } from "@/app/lib/control-plane/types";
 
@@ -470,6 +470,40 @@ it.each([
         expect(buttons).toEqual({ Start: true, Stop: unavailable, Restart: unavailable, "Update now": unavailable });
         const hint = container.querySelector('[role="tooltip"]');
         expect(hint?.textContent ?? null).toBe(unavailable ? "Unavailable while your server moves to a new machine" : null);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("forgets one server's move when the page changes to another server", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const first = "22222222-2222-4222-8222-222222222222";
+    const second = "33333333-3333-4333-8333-333333333333";
+    const moving: MyServerMove = { state: "moving", scheduledAt: null, startedAt: "2026-10-19T03:01:00.000Z", completedAt: null,
+        step: "restoring", address: null, stayedOnOriginal: null };
+    const moved: MyServerMove = { ...moving, state: "moved", step: null, completedAt: "2026-10-19T03:20:00.000Z", address: "203.0.113.20:4201" };
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    // The same page component renders each server, as a client navigation between two server pages does.
+    const render = (serverId: string, initialMove: MyServerMove | null) => act(async () => root.render(<TestLocalization>
+        <ManagedServerMoveProvider serverId={serverId} initialMove={initialMove}>
+            <ManagedServerMoveStatus notices={[]} />
+            <ManagedServerControls serverId={serverId} displayName="Campaign" accessRole="owner" operationState="running" observedGameState="running" expectedUpdatedAt="2026-09-20T12:00:00.000Z" />
+        </ManagedServerMoveProvider></TestLocalization>));
+    const stop = () => [...container.querySelectorAll("button")].find(button => button.textContent === "Stop")!;
+    try {
+        await render(first, moving);
+        expect(container.querySelector("h2")?.textContent).toBe("Your server is moving to a new machine");
+        expect(stop().disabled).toBe(true);
+
+        // The other server has no move, and its move-status read fails, so nothing may carry the first server's move over.
+        await render(second, null);
+        expect(container.querySelector("section")).toBeNull();
+        expect(container.querySelector('[role="tooltip"]')).toBeNull();
+        expect(stop().disabled).toBe(false);
+
+        // Back on the first server, its own freshly rendered status is shown.
+        await render(first, moved);
+        expect(container.querySelector("h2")?.textContent).toBe("Your server moved to a new machine");
+        expect(stop().disabled).toBe(false);
     } finally { await act(async () => root.unmount()); }
 });
 
