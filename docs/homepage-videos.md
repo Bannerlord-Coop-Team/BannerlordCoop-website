@@ -29,3 +29,16 @@ Anonymous and signed-in website users have SELECT access only, restricted by RLS
 The list revalidates on requests after 60 seconds (Next.js may serve a stale response while refreshing); YouTube metadata retains its existing 24-hour cache. If the list is unavailable or empty, the carousel is omitted. The hero trailer and creator list are unchanged.
 
 Validation: `npx tsx --test src/app/lib/homepage-videos.test.mjs` (Node 22.15+ or 24, for module hooks).
+
+Thumbnail `sizes` in `VideoCarousel.tsx` follows `.site-container` in `globals.css`: 2rem mobile gutters, 3rem from 640px, 6rem from 1024px, and the 3rem short-landscape override. At 1024px the cards form two columns with a 1rem gap; the container caps at 1280px. The hint also subtracts the card's two 1px borders (a capped image is 630px wide at the default font size). Update these together when changing the layout; both the one/two-video grid and scrolling carousel use the same image hint.
+
+For sizing changes, run:
+
+```sh
+npm run test:components -- src/app/components/home/media/VideoCarousel.component.test.tsx src/app/components/home/home-localization.component.test.tsx
+npm run test:e2e -- --project=desktop video-carousel.desktop.spec.ts
+```
+
+The browser regression uses actual component markup and compiled site CSS with known-size SVG candidates. It checks both sides of 640px/1024px, the container cap, and the short-landscape 700px height boundary for grid/carousel layouts at 1x/2x DPR, without requiring external media data. This is layout evidence, not an optimizer bandwidth test.
+
+Separately compare `currentSrc`, rendered dimensions, decoded image dimensions and actual response bytes at 1024px/2560px and 1x/2x DPR with representative media. Candidate width is not a bandwidth measurement: source limits, optimizer format, cache state and browser selection all matter. Do not substitute the source file size for optimizer transfer bytes.

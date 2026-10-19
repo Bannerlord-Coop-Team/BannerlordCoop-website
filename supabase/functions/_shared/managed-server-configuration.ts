@@ -35,6 +35,13 @@ export interface ManagedDifficultyConfiguration {
   autoAllocateClanMemberPerks: boolean;
 }
 
+export interface ManagedVoiceConfiguration {
+  mapFullVolumeDistance: number;
+  mapMaximumDistance: number;
+  sceneFullVolumeDistance: number;
+  sceneMaximumDistance: number;
+}
+
 export interface ManagedModOptionsConfiguration {
   fastForwardEnabled: boolean;
   autoPauseEnabled: boolean;
@@ -42,11 +49,16 @@ export interface ManagedModOptionsConfiguration {
   goldFoodInfluenceChangeInSettlements: boolean;
   goldFoodInfluenceChangeInBattles: ManagedGoldFoodChangeMode;
   goldFoodInfluenceChangeForDisconnectedPlayers: boolean;
+  voiceEnabled: boolean;
+  battleSize: number;
+  blockAiWarDeclarationsOnOfflinePlayers: boolean;
   playerBattleAiJoinWindowHours: number;
   speedLimitWhilePlayersInBattle: boolean;
+  ensureUnaffiliatedWanderers: boolean;
   wandererLimit: number;
   wandererLimitScalesWithPlayers: boolean;
   playerKingdomClanTierRequired: number;
+  coopClansEnabled: boolean;
   smithingStaminaRecoveryOutsideSettlements: boolean;
   smithingStaminaRecoveryMultiplier: number;
   maximumLootersMultiplier: number;
@@ -54,12 +66,14 @@ export interface ManagedModOptionsConfiguration {
   lordDefectionRetries: ManagedLordDefectionRetryMode;
   enableHeroExecutions: boolean;
   enablePlayerClanMemberExecutions: boolean;
+  enablePlayerExecutions: boolean;
 }
 
 export interface ManagedServerConfiguration {
   schemaVersion: 1;
   serverConfig: ManagedServerProcessConfiguration;
   modConfig: {
+    voice: ManagedVoiceConfiguration;
     difficulty: ManagedDifficultyConfiguration;
     modOptions: ManagedModOptionsConfiguration;
   };
@@ -77,6 +91,12 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
       traceBandits: false,
     },
     modConfig: {
+      voice: {
+        mapFullVolumeDistance: 5,
+        mapMaximumDistance: 20,
+        sceneFullVolumeDistance: 10,
+        sceneMaximumDistance: 50,
+      },
       difficulty: {
         playerReceivedDamage: 'VeryEasy',
         playerTroopsReceivedDamage: 'VeryEasy',
@@ -91,17 +111,22 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
         autoAllocateClanMemberPerks: false,
       },
       modOptions: {
+        voiceEnabled: true,
+        battleSize: 1000,
         fastForwardEnabled: true,
         autoPauseEnabled: true,
         clientsCanUseCheats: false,
         goldFoodInfluenceChangeInSettlements: true,
         goldFoodInfluenceChangeInBattles: 'OneDayMax',
         goldFoodInfluenceChangeForDisconnectedPlayers: false,
+        blockAiWarDeclarationsOnOfflinePlayers: false,
         playerBattleAiJoinWindowHours: 24,
         speedLimitWhilePlayersInBattle: true,
+        ensureUnaffiliatedWanderers: true,
         wandererLimit: 32,
         wandererLimitScalesWithPlayers: false,
         playerKingdomClanTierRequired: 4,
+        coopClansEnabled: true,
         smithingStaminaRecoveryOutsideSettlements: true,
         smithingStaminaRecoveryMultiplier: 0.1,
         maximumLootersMultiplier: 1,
@@ -109,15 +134,40 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
         lordDefectionRetries: 'Vanilla',
         enableHeroExecutions: true,
         enablePlayerClanMemberExecutions: false,
+        enablePlayerExecutions: false,
       },
     },
   });
 
-export function parseManagedServerConfiguration(value: unknown): ManagedServerConfiguration {
+export type ManagedConfigurationMessages = {
+  root: string;
+  version: string;
+  shape: string;
+  boolean: string;
+  integer: string;
+  number: string;
+  choice: string;
+};
+
+const defaultConfigurationMessages: ManagedConfigurationMessages = {
+  root: 'Managed server configuration root is invalid',
+  version: 'Managed server configuration version is invalid',
+  shape: 'Managed server configuration shape is invalid',
+  boolean: 'Managed server configuration boolean is invalid',
+  integer: 'Managed server configuration integer is invalid',
+  number: 'Managed server configuration number is invalid',
+  choice: 'Managed server configuration choice is invalid',
+};
+
+// Validates and freezes configuration using caller-provided diagnostics without request dependencies.
+export function parseManagedServerConfiguration(
+  value: unknown,
+  messages: ManagedConfigurationMessages = defaultConfigurationMessages,
+): ManagedServerConfiguration {
   if (!isExactRecord(value, ['schemaVersion', 'serverConfig', 'modConfig'])) {
-    throw new Error('Managed server configuration root is invalid');
+    throw new Error(messages.root);
   }
-  if (value.schemaVersion !== 1) throw new Error('Managed server configuration version is invalid');
+  if (value.schemaVersion !== 1) throw new Error(messages.version);
   const serverConfig = requireExactRecord(value.serverConfig, [
     'autosaveMinutes',
     'logFile',
@@ -125,8 +175,10 @@ export function parseManagedServerConfiguration(value: unknown): ManagedServerCo
     'traceTick',
     'tracePublish',
     'traceBandits',
-  ]);
-  const modConfig = requireExactRecord(value.modConfig, ['difficulty', 'modOptions']);
+  ], messages);
+  const modConfig = requireCompatibleRecord(value.modConfig, ['difficulty', 'modOptions'], {
+    voice: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.voice,
+  }, messages);
   const difficulty = requireExactRecord(modConfig.difficulty, [
     'playerReceivedDamage',
     'playerTroopsReceivedDamage',
@@ -139,8 +191,8 @@ export function parseManagedServerConfiguration(value: unknown): ManagedServerCo
     'battleDeath',
     'birthAndDeath',
     'autoAllocateClanMemberPerks',
-  ]);
-  const modOptions = requireExactRecord(modConfig.modOptions, [
+  ], messages);
+  const modOptions = requireCompatibleRecord(modConfig.modOptions, [
     'fastForwardEnabled',
     'autoPauseEnabled',
     'clientsCanUseCheats',
@@ -159,76 +211,98 @@ export function parseManagedServerConfiguration(value: unknown): ManagedServerCo
     'lordDefectionRetries',
     'enableHeroExecutions',
     'enablePlayerClanMemberExecutions',
-  ]);
+  ], {
+    voiceEnabled: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.voiceEnabled,
+    blockAiWarDeclarationsOnOfflinePlayers: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.blockAiWarDeclarationsOnOfflinePlayers,
+    ensureUnaffiliatedWanderers: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.ensureUnaffiliatedWanderers,
+    coopClansEnabled: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.coopClansEnabled,
+    enablePlayerExecutions: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.enablePlayerExecutions,
+    battleSize: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.battleSize,
+  }, messages);
   return deepFreeze({
     schemaVersion: 1,
     serverConfig: {
-      autosaveMinutes: requireInteger(serverConfig.autosaveMinutes, 0, 1_440),
-      logFile: requireBoolean(serverConfig.logFile),
-      steam: requireBoolean(serverConfig.steam),
-      traceTick: requireBoolean(serverConfig.traceTick),
-      tracePublish: requireBoolean(serverConfig.tracePublish),
-      traceBandits: requireBoolean(serverConfig.traceBandits),
+      autosaveMinutes: requireInteger(serverConfig.autosaveMinutes, 0, 1_440, messages),
+      logFile: requireBoolean(serverConfig.logFile, messages),
+      steam: requireBoolean(serverConfig.steam, messages),
+      traceTick: requireBoolean(serverConfig.traceTick, messages),
+      tracePublish: requireBoolean(serverConfig.tracePublish, messages),
+      traceBandits: requireBoolean(serverConfig.traceBandits, messages),
     },
     modConfig: {
+      voice: {
+        mapFullVolumeDistance: requireVoiceDistance(modConfig.voice, 'mapFullVolumeDistance', messages),
+        mapMaximumDistance: requireVoiceDistance(modConfig.voice, 'mapMaximumDistance', messages),
+        sceneFullVolumeDistance: requireVoiceDistance(modConfig.voice, 'sceneFullVolumeDistance', messages),
+        sceneMaximumDistance: requireVoiceDistance(modConfig.voice, 'sceneMaximumDistance', messages),
+      },
       difficulty: {
-        playerReceivedDamage: requireEnum(difficulty.playerReceivedDamage, MANAGED_DIFFICULTY_LEVELS),
-        playerTroopsReceivedDamage: requireEnum(difficulty.playerTroopsReceivedDamage, MANAGED_DIFFICULTY_LEVELS),
-        combatAIDifficulty: requireEnum(difficulty.combatAIDifficulty, MANAGED_DIFFICULTY_LEVELS),
-        recruitmentDifficulty: requireEnum(difficulty.recruitmentDifficulty, MANAGED_DIFFICULTY_LEVELS),
-        playerMapMovementSpeed: requireEnum(difficulty.playerMapMovementSpeed, MANAGED_DIFFICULTY_LEVELS),
-        stealthAndDisguiseDifficulty: requireEnum(difficulty.stealthAndDisguiseDifficulty, MANAGED_DIFFICULTY_LEVELS),
-        persuasionSuccessChance: requireEnum(difficulty.persuasionSuccessChance, MANAGED_DIFFICULTY_LEVELS),
-        clanMemberDeathChance: requireEnum(difficulty.clanMemberDeathChance, MANAGED_DIFFICULTY_LEVELS),
-        battleDeath: requireEnum(difficulty.battleDeath, MANAGED_DIFFICULTY_LEVELS),
-        birthAndDeath: requireBoolean(difficulty.birthAndDeath),
-        autoAllocateClanMemberPerks: requireBoolean(difficulty.autoAllocateClanMemberPerks),
+        playerReceivedDamage: requireEnum(difficulty.playerReceivedDamage, MANAGED_DIFFICULTY_LEVELS, messages),
+        playerTroopsReceivedDamage: requireEnum(difficulty.playerTroopsReceivedDamage, MANAGED_DIFFICULTY_LEVELS, messages),
+        combatAIDifficulty: requireEnum(difficulty.combatAIDifficulty, MANAGED_DIFFICULTY_LEVELS, messages),
+        recruitmentDifficulty: requireEnum(difficulty.recruitmentDifficulty, MANAGED_DIFFICULTY_LEVELS, messages),
+        playerMapMovementSpeed: requireEnum(difficulty.playerMapMovementSpeed, MANAGED_DIFFICULTY_LEVELS, messages),
+        stealthAndDisguiseDifficulty: requireEnum(difficulty.stealthAndDisguiseDifficulty, MANAGED_DIFFICULTY_LEVELS, messages),
+        persuasionSuccessChance: requireEnum(difficulty.persuasionSuccessChance, MANAGED_DIFFICULTY_LEVELS, messages),
+        clanMemberDeathChance: requireEnum(difficulty.clanMemberDeathChance, MANAGED_DIFFICULTY_LEVELS, messages),
+        battleDeath: requireEnum(difficulty.battleDeath, MANAGED_DIFFICULTY_LEVELS, messages),
+        birthAndDeath: requireBoolean(difficulty.birthAndDeath, messages),
+        autoAllocateClanMemberPerks: requireBoolean(difficulty.autoAllocateClanMemberPerks, messages),
       },
       modOptions: {
-        fastForwardEnabled: requireBoolean(modOptions.fastForwardEnabled),
-        autoPauseEnabled: requireBoolean(modOptions.autoPauseEnabled),
-        clientsCanUseCheats: requireBoolean(modOptions.clientsCanUseCheats),
+        voiceEnabled: requireBoolean(modOptions.voiceEnabled, messages),
+        // The game clamps battle size to this range.
+        battleSize: requireInteger(modOptions.battleSize, 200, 1_000, messages),
+        fastForwardEnabled: requireBoolean(modOptions.fastForwardEnabled, messages),
+        autoPauseEnabled: requireBoolean(modOptions.autoPauseEnabled, messages),
+        clientsCanUseCheats: requireBoolean(modOptions.clientsCanUseCheats, messages),
         goldFoodInfluenceChangeInSettlements: requireBoolean(
-          modOptions.goldFoodInfluenceChangeInSettlements,
+          modOptions.goldFoodInfluenceChangeInSettlements, messages,
         ),
         goldFoodInfluenceChangeInBattles: requireEnum(
           modOptions.goldFoodInfluenceChangeInBattles,
-          MANAGED_GOLD_FOOD_CHANGE_MODES,
+          MANAGED_GOLD_FOOD_CHANGE_MODES, messages,
         ),
         goldFoodInfluenceChangeForDisconnectedPlayers: requireBoolean(
-          modOptions.goldFoodInfluenceChangeForDisconnectedPlayers,
+          modOptions.goldFoodInfluenceChangeForDisconnectedPlayers, messages,
+        ),
+        blockAiWarDeclarationsOnOfflinePlayers: requireBoolean(
+          modOptions.blockAiWarDeclarationsOnOfflinePlayers, messages,
         ),
         playerBattleAiJoinWindowHours: requireInteger(
           modOptions.playerBattleAiJoinWindowHours,
           0,
-          8_760,
+          8_760, messages,
         ),
-        speedLimitWhilePlayersInBattle: requireBoolean(modOptions.speedLimitWhilePlayersInBattle),
-        wandererLimit: requireInteger(modOptions.wandererLimit, 0, 1_000),
-        wandererLimitScalesWithPlayers: requireBoolean(modOptions.wandererLimitScalesWithPlayers),
+        speedLimitWhilePlayersInBattle: requireBoolean(modOptions.speedLimitWhilePlayersInBattle, messages),
+        ensureUnaffiliatedWanderers: requireBoolean(modOptions.ensureUnaffiliatedWanderers, messages),
+        wandererLimit: requireInteger(modOptions.wandererLimit, 0, 1_000, messages),
+        wandererLimitScalesWithPlayers: requireBoolean(modOptions.wandererLimitScalesWithPlayers, messages),
         playerKingdomClanTierRequired: requireInteger(
           modOptions.playerKingdomClanTierRequired,
           0,
-          6,
+          6, messages,
         ),
+        coopClansEnabled: requireBoolean(modOptions.coopClansEnabled, messages),
         smithingStaminaRecoveryOutsideSettlements: requireBoolean(
-          modOptions.smithingStaminaRecoveryOutsideSettlements,
+          modOptions.smithingStaminaRecoveryOutsideSettlements, messages,
         ),
         smithingStaminaRecoveryMultiplier: requireNumber(
           modOptions.smithingStaminaRecoveryMultiplier,
           0,
-          100,
+          100, messages,
         ),
-        maximumLootersMultiplier: requireNumber(modOptions.maximumLootersMultiplier, 0, 100),
-        looterPartySizeMultiplier: requireNumber(modOptions.looterPartySizeMultiplier, 0, 100),
+        maximumLootersMultiplier: requireNumber(modOptions.maximumLootersMultiplier, 0, 100, messages),
+        looterPartySizeMultiplier: requireNumber(modOptions.looterPartySizeMultiplier, 0, 100, messages),
         lordDefectionRetries: requireEnum(
           modOptions.lordDefectionRetries,
-          MANAGED_LORD_DEFECTION_RETRY_MODES,
+          MANAGED_LORD_DEFECTION_RETRY_MODES, messages,
         ),
-        enableHeroExecutions: requireBoolean(modOptions.enableHeroExecutions),
+        enableHeroExecutions: requireBoolean(modOptions.enableHeroExecutions, messages),
         enablePlayerClanMemberExecutions: requireBoolean(
-          modOptions.enablePlayerClanMemberExecutions,
+          modOptions.enablePlayerClanMemberExecutions, messages,
         ),
+        enablePlayerExecutions: requireBoolean(modOptions.enablePlayerExecutions, messages),
       },
     },
   });
@@ -244,12 +318,40 @@ export function canonicalManagedServerConfiguration(value: ManagedServerConfigur
   return JSON.stringify(parseManagedServerConfiguration(value));
 }
 
+// Requires the existing exact object shape with the selected diagnostic.
 function requireExactRecord(
   value: unknown,
   keys: readonly string[],
+  messages: ManagedConfigurationMessages,
 ): Record<string, unknown> {
-  if (!isExactRecord(value, keys)) throw new Error('Managed server configuration shape is invalid');
+  if (!isExactRecord(value, keys)) throw new Error(messages.shape);
   return value;
+}
+
+function requireCompatibleRecord(
+  value: unknown,
+  requiredKeys: readonly string[],
+  optionalDefaults: Readonly<Record<string, unknown>>,
+  messages: ManagedConfigurationMessages,
+): Record<string, unknown> {
+  if (!isPlainRecord(value)) throw new Error(messages.shape);
+  const allowed = new Set([...requiredKeys, ...Object.keys(optionalDefaults)]);
+  const actual = Object.keys(value);
+  if (actual.some((key) => !allowed.has(key)) || requiredKeys.some((key) => !Object.hasOwn(value, key))) {
+    throw new Error(messages.shape);
+  }
+  return { ...optionalDefaults, ...value };
+}
+
+function requireVoiceDistance(value: unknown, key: string, messages: ManagedConfigurationMessages): number {
+  if (!isPlainRecord(value)) throw new Error(messages.shape);
+  const distance = requireNumber(value[key], 0, 100_000, messages);
+  const pair = key.startsWith('map')
+    ? (key === 'mapFullVolumeDistance' ? value.mapMaximumDistance : value.mapFullVolumeDistance)
+    : (key === 'sceneFullVolumeDistance' ? value.sceneMaximumDistance : value.sceneFullVolumeDistance);
+  if (key.endsWith('MaximumDistance') && distance <= Number(pair)) throw new Error(messages.number);
+  if (key.endsWith('FullVolumeDistance') && Number(pair) <= distance) throw new Error(messages.number);
+  return distance;
 }
 
 function isExactRecord(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
@@ -263,31 +365,40 @@ function isExactRecord(value: unknown, keys: readonly string[]): value is Record
   return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 }
 
-function requireBoolean(value: unknown): boolean {
-  if (typeof value !== 'boolean') throw new Error('Managed server configuration boolean is invalid');
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+// Requires a boolean without coercion, using the selected diagnostic.
+function requireBoolean(value: unknown, messages: ManagedConfigurationMessages): boolean {
+  if (typeof value !== 'boolean') throw new Error(messages.boolean);
   return value;
 }
 
-function requireInteger(value: unknown, minimum: number, maximum: number): number {
+// Requires a safe integer within the unchanged bounds.
+function requireInteger(value: unknown, minimum: number, maximum: number, messages: ManagedConfigurationMessages): number {
   if (!Number.isSafeInteger(value) || (value as number) < minimum || (value as number) > maximum) {
-    throw new Error('Managed server configuration integer is invalid');
+    throw new Error(messages.integer);
   }
   return value as number;
 }
 
-function requireNumber(value: unknown, minimum: number, maximum: number): number {
+// Requires a finite number within the unchanged bounds.
+function requireNumber(value: unknown, minimum: number, maximum: number, messages: ManagedConfigurationMessages): number {
   if (
     typeof value !== 'number'
     || !Number.isFinite(value)
     || value < minimum
     || value > maximum
-  ) throw new Error('Managed server configuration number is invalid');
+  ) throw new Error(messages.number);
   return value;
 }
 
-function requireEnum<const T extends readonly string[]>(value: unknown, values: T): T[number] {
+// Requires an unchanged configuration choice without translating its stored value.
+function requireEnum<const T extends readonly string[]>(value: unknown, values: T, messages: ManagedConfigurationMessages): T[number] {
   if (typeof value !== 'string' || !values.includes(value)) {
-    throw new Error('Managed server configuration choice is invalid');
+    throw new Error(messages.choice);
   }
   return value;
 }

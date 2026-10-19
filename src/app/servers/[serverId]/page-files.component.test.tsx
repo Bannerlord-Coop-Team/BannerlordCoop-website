@@ -1,12 +1,21 @@
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act, Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 import ServerPage from "./page";
+import { createTranslator } from "@/app/lib/localization/translator";
+
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    // Selects the requested server namespace without reading request state in file-flow tests.
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 
-const mocks = vi.hoisted(() => ({ servers: vi.fn(), files: vi.fn(), submit: vi.fn(), preview: vi.fn() }));
+const mocks = vi.hoisted(() => ({ servers: vi.fn(), files: vi.fn(), submit: vi.fn(), preview: vi.fn(), configFile: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: (url: string) => { throw Error(url); }, useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: async () => ({ auth: {
@@ -16,13 +25,21 @@ vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: async () 
 vi.mock("@/app/lib/auth/access", () => ({ getMemberRole: () => "Admin", hasHostedServerAccess: () => true }));
 vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
     ...await original<typeof import("@/app/lib/hosting/my-servers")>(),
-    listAllMyServers: mocks.servers, listAllMyServerBackups: async () => [], getMyServerBackupStatus: async () => null,
+    listAllMyServerBackups: async () => [], getMyServerBackupStatus: async () => null,
+}));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({
+    getMyServerSummary: mocks.servers,
+    getMyServerDeletionStatus: async () => null,
+    getMyServerNotices: async () => [],
+    getMyServerMoveStatus: async () => null,
 }));
 vi.mock("@/app/lib/hosting/server-files", () => ({ getMyServerFiles: mocks.files, submitMyServerFile: mocks.submit }));
+vi.mock("@/app/lib/hosting/server-configuration", () => ({ getMyServerConfiguration: mocks.configFile, saveMyServerConfiguration: vi.fn() }));
+vi.mock("@/app/lib/hosting/server-campaigns", () => ({ listMyServerCampaigns: async () => ({ serverId: managedId, updatedAt: "2026-09-26T00:00:00.000Z", activeSaveId: null, items: [] }), selectMyServerCampaign: vi.fn(), resetMyServerCampaign: vi.fn() }));
 vi.mock("@/app/lib/hosting/servers", () => ({ getServerForRole: mocks.preview }));
 
 const managedId = "abcdef12-1234-4123-8123-123456789abc";
-const managedServer = { serverId: managedId, displayName: "Campaign", observedGameState: "running", operationState: "running", friendlyRegion: "europe", releaseChannel: "stable" };
+const managedServer = { serverId: managedId, displayName: "Campaign", observedGameState: "running", operationState: "running", friendlyRegion: "europe", releaseChannel: "stable", updatedAt: "2026-09-26T00:00:00.000Z" };
 const status: OwnerFileStatus = { serverId: managedId, updatedAt: "2026-09-26T00:00:00.000Z", operationState: "stopped", observedGameState: "stopped",
     activeSave: { saveId: "22222222-2222-4222-8222-222222222222", displayName: "Real managed campaign" }, managedConfig: DEFAULT_MANAGED_SERVER_CONFIGURATION };
 let container: HTMLDivElement;
@@ -32,8 +49,11 @@ beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value() { this.open = true; } });
     Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
-    mocks.servers.mockResolvedValue([{ ...managedServer, accessRole: "owner" }]);
+    mocks.servers.mockResolvedValue({ ...managedServer, accessRole: "owner" });
     mocks.files.mockResolvedValue(status);
+    mocks.configFile.mockImplementation(async (_token: string, _serverId: string, part: string) => part === "server"
+        ? { configPart: "server", revision: "a".repeat(64), settings: { ...status.managedConfig.serverConfig, autosaveMinutes: 30 } }
+        : { configPart: "mod", revision: "b".repeat(64), settings: status.managedConfig.modConfig });
     mocks.submit.mockResolvedValue({ kind: "job", outcome: "enqueued", jobId: "33333333-3333-4333-8333-333333333333", action: "export-save", state: "queued" });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
@@ -57,11 +77,12 @@ async function find(node: ReactNode, name: string): Promise<ReactElement | null>
     }
     return null;
 }
-async function page() { return ServerPage({ params: Promise.resolve({ serverId: managedId }) }); }
+async function page() { return ServerPage({ params: Promise.resolve({ serverId: managedId }), searchParams: Promise.resolve({}) }); }
+// Resolves the real page tree before mounting the client-side file workspace.
 async function render(name = "ManagedServerFiles") {
     const element = await find(await page(), name);
     expect(element).not.toBeNull();
-    await act(async () => root.render(<ManagedServerPollingProvider>{element}</ManagedServerPollingProvider>));
+    await act(async () => root.render(<TestLocalization>{<ManagedServerPollingProvider>{element}</ManagedServerPollingProvider>} </TestLocalization>));
     await act(async () => vi.advanceTimersByTimeAsync(0));
 }
 function button(label: string) {
@@ -71,11 +92,23 @@ function button(label: string) {
 }
 
 it.each(["owner", "manager"])("shows actual managed save/config for managed %s and permits only owner save exports", async (accessRole) => {
-    mocks.servers.mockResolvedValue([{ ...managedServer, accessRole }]);
+    mocks.servers.mockResolvedValue({ ...managedServer, accessRole });
     await render();
     expect(mocks.files).toHaveBeenCalledExactlyOnceWith("token", managedId);
     expect(container.textContent).toContain(status.activeSave!.displayName);
-    expect(JSON.parse(container.querySelector<HTMLTextAreaElement>("#config-json")!.value)).toEqual(status.managedConfig);
+    // Owners edit the runner's live files; managers only see the stored configuration.
+    const autosave = container.querySelector<HTMLInputElement>("#config-serverConfig-autosaveMinutes")!;
+    expect(button("Form").getAttribute("aria-pressed")).toBe("true");
+    if (accessRole === "owner") {
+        expect(mocks.configFile).toHaveBeenCalledWith("token", managedId, "server");
+        expect(mocks.configFile).toHaveBeenCalledWith("token", managedId, "mod");
+        expect(autosave.value).toBe("30");
+        expect(container.querySelector("fieldset")!.disabled).toBe(false);
+    } else {
+        expect(mocks.configFile).not.toHaveBeenCalled();
+        expect(autosave.value).toBe(String(status.managedConfig.serverConfig.autosaveMinutes));
+        expect(container.querySelector("fieldset")!.disabled).toBe(true);
+    }
     expect(button("Import save").disabled).toBe(false);
     expect(button("Export config").disabled).toBe(false);
     expect(button("Import config").disabled).toBe(accessRole !== "owner");
@@ -102,7 +135,7 @@ it("keeps missing file status unavailable and disables transfers", async () => {
 });
 
 it.each(["admin", "support"])("keeps managed %s read-only without loading private file data", async (accessRole) => {
-    mocks.servers.mockResolvedValue([{ ...managedServer, accessRole }]);
+    mocks.servers.mockResolvedValue({ ...managedServer, accessRole });
     await render();
     expect(container.textContent).toContain("require owner or manager access");
     expect(mocks.files).not.toHaveBeenCalled();
@@ -112,13 +145,13 @@ it.each(["admin", "support"])("keeps managed %s read-only without loading privat
 it("opens import review without submitting or bypassing existing confirmation", async () => {
     await render();
     await act(async () => button("Import config").click());
-    expect(container.querySelector("dialog")?.open).toBe(true);
+    expect([...container.querySelectorAll("dialog")].some((dialog) => dialog.open)).toBe(true);
     expect(button("Review import")).toBeDefined();
     expect(mocks.submit).not.toHaveBeenCalled();
 });
 
 it("keeps fictional previews inert without operational transfers", async () => {
-    mocks.servers.mockResolvedValue([]); mocks.preview.mockReturnValue({ name: "Preview", assignedAccount: {} });
+    mocks.servers.mockResolvedValue(null); mocks.preview.mockReturnValue({ name: "Preview", assignedAccount: {} });
     const tree = await page();
     expect(await find(tree, "ManagedServerFiles")).toBeNull();
     await render("ServerSaveConfigPanels");

@@ -26,7 +26,8 @@ export function membershipStore(config: StoreConfig) {
         for (let attempt = 0; ; attempt++) {
             const remaining = deadline - Date.now();
             if (remaining <= 0) throw new Error("Membership service unavailable");
-            const response = await requestFetch(new URL(path, origin), { ...init, redirect: "error", signal: AbortSignal.timeout(remaining), headers: { apikey: config.serviceRoleKey, Authorization: `Bearer ${config.serviceRoleKey}`, "Content-Type": "application/json", ...init.headers } });
+            // Shared with the Cloudflare-hosted website server: workerd rejects redirect: "error", and a manual 3xx is already not ok.
+            const response = await requestFetch(new URL(path, origin), { ...init, cache: "no-store", redirect: "manual", signal: AbortSignal.timeout(remaining), headers: { apikey: config.serviceRoleKey, ...(!config.serviceRoleKey.startsWith("sb_secret_") ? { Authorization: `Bearer ${config.serviceRoleKey}` } : {}), "Content-Type": "application/json", ...init.headers } });
             if (allowDeleted && response.status === 404) return null;
             if (response.status === 429) throw new MembershipRateLimit();
             let contention = false;
@@ -47,9 +48,14 @@ export function membershipStore(config: StoreConfig) {
     }
     return {
         async user(authorization: string) {
-            const user = await request("/auth/v1/user", { headers: { Authorization: authorization } });
-            if (!record(user) || typeof user.id !== "string" || !UUID.test(user.id)) throw new Error("Unauthorized");
-            await verifyWebsiteSessionContext({ supabaseUrl: config.supabaseUrl, key: config.serviceRoleKey, authorization, userId: user.id, action: "membership", fetch: requestFetch });
+            const userRead = request("/auth/v1/user", { headers: { Authorization: authorization } }).then(user => {
+                if (!record(user) || typeof user.id !== "string" || !UUID.test(user.id)) throw new Error("Unauthorized");
+                return { ...user, id: user.id };
+            });
+            const [user] = await Promise.all([
+                userRead,
+                verifyWebsiteSessionContext({ supabaseUrl: config.supabaseUrl, key: config.serviceRoleKey, authorization, userId: userRead.then(value => value.id), action: "membership", fetch: requestFetch }),
+            ]);
             return { accountId: user.id, discordUserId: optionalDiscord(user) };
         },
         async binding(accountId: string) {

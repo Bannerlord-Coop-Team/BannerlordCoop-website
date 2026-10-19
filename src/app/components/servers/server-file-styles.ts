@@ -1,0 +1,2 @@
+export const fileButtonClass = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm font-medium text-foreground transition hover:border-gold/50 hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
+export const filePrimaryButtonClass = `${fileButtonClass} !border-gold/50 !bg-gold/15 !text-gold`;

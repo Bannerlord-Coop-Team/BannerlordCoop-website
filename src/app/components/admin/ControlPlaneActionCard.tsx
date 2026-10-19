@@ -11,6 +11,7 @@ import {
     presentControlPlaneOperationResult,
     type ControlPlaneOperationResultLink,
 } from "@/app/lib/control-plane/presentation";
+import { parseVpsHostSelection } from "@/app/lib/control-plane/vps-providers";
 import { ControlPlaneBackupPicker } from "./ControlPlaneBackupPicker";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -37,6 +38,7 @@ export type AdminActionField = {
     help?: string;
 };
 
+/** One administrator operation form: collects its fields, submits the typed request and shows the outcome. */
 export function ControlPlaneActionCard({
     operation,
     title,
@@ -45,6 +47,7 @@ export function ControlPlaneActionCard({
     destructive = false,
     help,
     destructiveReason,
+    unavailableReason,
 }: {
     operation: string;
     title: string;
@@ -53,6 +56,8 @@ export function ControlPlaneActionCard({
     destructive?: boolean;
     help?: string;
     destructiveReason?: string;
+    // Page-supplied reason the action cannot run now; the card stays mounted but its submit is disabled.
+    unavailableReason?: string;
 }) {
     const router = useRouter();
     const cardRef = useRef<HTMLElement>(null);
@@ -77,6 +82,8 @@ export function ControlPlaneActionCard({
         && ["select", "server", "job"].includes(field.kind ?? "")
         && (field.options?.length ?? 0) === 0
     ));
+    const blockedReason = unavailableReason
+        ?? (unavailableField ? `No eligible ${unavailableField.label.toLowerCase()} is currently available.` : null);
 
     useEffect(() => {
         let animationFrame: number | null = null;
@@ -187,17 +194,17 @@ export function ControlPlaneActionCard({
                         ? <ControlPlaneBackupPicker key={`${serverValue}:${formRevision}`} serverId={selectedServer?.value ?? null} onReady={setBackupReady} />
                         : <ActionField key={field.name === "buildId" ? `${field.name}:${serverValue}` : `${field.name}:${formRevision}`} field={field} />)}
                 </div>
-                {unavailableField && <p className="mt-3 text-xs leading-5 text-amber-300">No eligible {unavailableField.label.toLowerCase()} is currently available.</p>}
+                {blockedReason !== null && <p className="mt-3 text-xs leading-5 text-amber-300">{blockedReason}</p>}
                 <div className="mt-auto pt-4">
                     <button
                         type="submit"
-                        disabled={pending || unavailableField !== undefined || (needsBackup && !backupReady)}
+                        disabled={pending || blockedReason !== null || (needsBackup && !backupReady)}
                         className="inline-flex min-h-10 w-full items-center justify-center gap-2 border border-crimson bg-crimson px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:bg-crimson-hover disabled:cursor-wait disabled:opacity-60"
                     >
                         {pending ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <Play aria-hidden="true" className="size-3.5" />}
                         {pending
                             ? "Working"
-                            : unavailableField
+                            : blockedReason !== null
                                 ? "Unavailable"
                                 : operation === "onboard-vps-host"
                                     ? "Onboard VPS"
@@ -229,6 +236,7 @@ export function ControlPlaneActionCard({
         </article>
     );
 }
+/** Renders one administrator-editable form control for a field definition. */
 function ActionField({ field }: { field: AdminActionField }) {
     const [targetValue, setTargetValue] = useState(String(field.defaultValue ?? ""));
     if (field.kind === "checkbox") {
@@ -374,8 +382,13 @@ function setPath(target: Record<string, unknown>, path: string, value: unknown) 
     current[parts.at(-1)!] = value;
 }
 
+/** Reshapes collected form values into the exact wire input each operation expects. */
 function normalizeOperationInput(operation: string, input: Record<string, unknown>) {
-    if (operation === "onboard-vps-host") input.mode = "enroll";
+    if (operation === "onboard-vps-host") {
+        const { provider, serviceName } = parseVpsHostSelection(input.host);
+        delete input.host;
+        Object.assign(input, { provider, serviceName, mode: "enroll" });
+    }
     if (operation === "update-server") {
         if (input.buildId === "__keep__") delete input.buildId;
         else if (input.buildId === "__latest__") input.buildId = null;
@@ -383,18 +396,5 @@ function normalizeOperationInput(operation: string, input: Record<string, unknow
     if (operation === "reset-password") {
         const choice = input.choice as Record<string, unknown> | undefined;
         if (choice?.kind === "generated") delete choice.password;
-    }
-    if (operation === "replace-provider") {
-        const selection = input.selection as Record<string, unknown> | undefined;
-        if (selection?.action === "resize") {
-            delete selection.targetImageId;
-            delete selection.targetFriendlyRegion;
-        } else if (selection?.action === "rebuild") {
-            delete selection.targetSizeId;
-            delete selection.targetFriendlyRegion;
-        } else if (selection?.action === "migrate-region") {
-            delete selection.targetSizeId;
-            delete selection.targetImageId;
-        }
     }
 }

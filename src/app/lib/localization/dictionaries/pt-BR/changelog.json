@@ -1,0 +1,30 @@
+{
+  "metadata.title": "Histórico de alterações",
+  "metadata.description": "Confira as versões mais recentes, melhorias e correções de erros do Bannerlord Coop.",
+  "hero.eyebrow": "Novidades do desenvolvimento",
+  "hero.title": "Histórico de alterações do Bannerlord Coop",
+  "hero.description": "Veja todas as versões mais recentes, melhorias na jogabilidade, mudanças técnicas e correções publicadas pela equipe de desenvolvimento do Bannerlord Coop.",
+  "links.githubReleases": "Ver versões no GitHub",
+  "links.fullRelease": "Ver detalhes da versão",
+  "links.openGithubReleases": "Abrir versões no GitHub",
+  "history.eyebrow": "Histórico de versões",
+  "history.title": "O que mudou?",
+  "history.description": "As informações sobre as versões são carregadas diretamente do repositório público do projeto no GitHub e atualizadas a cada hora.",
+  "history.count": {
+    "one": "Exibindo {formattedCount} versão",
+    "other": "Exibindo {formattedCount} versões"
+  },
+  "release.latest": "Versão mais recente",
+  "release.label": "Versão",
+  "release.prerelease": "Pré-lançamento",
+  "release.published": "Publicada em {date}",
+  "release.publishedUnknown": "Publicada em data desconhecida",
+  "release.author": "Por {author}",
+  "release.emptyNotes": "Não foram fornecidas notas de lançamento para esta versão.",
+  "unavailable.eyebrow": "GitHub indisponível",
+  "unavailable.title": "Não foi possível carregar o histórico de alterações.",
+  "unavailable.description": "O GitHub pode estar temporariamente indisponível ou o limite de requisições à API pode ter sido atingido. Você ainda pode ver as versões diretamente no GitHub.",
+  "empty.eyebrow": "Nenhuma versão disponível ainda",
+  "empty.title": "O histórico de versões está vazio no momento.",
+  "empty.description": "As versões publicadas no GitHub aparecerão aqui automaticamente."
+}

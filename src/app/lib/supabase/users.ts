@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdminClient } from "@/app/lib/supabase/admin";
-import { uniqueDiscordUsers } from "@/app/lib/supabase/discord-users";
+import { discordUserSummary, uniqueDiscordUsers } from "@/app/lib/supabase/discord-users";
 import type { User } from "@supabase/supabase-js";
 
 export const AUTH_USERS_PAGE_SIZE = 1000;
@@ -35,6 +35,34 @@ export async function listDiscordUsers() {
 
 export async function listWebsiteAccounts() {
     const { users, truncated } = await listSupabaseUsers();
-    return { users: users.map(user => ({ accountId: user.id, label: user.email || user.phone || user.id })), truncated };
+    return {
+        users: users.map(user => ({
+            accountId: user.id,
+            label: user.email || user.phone || user.id,
+            email: user.email || null,
+            discordUserId: discordUserSummary(user)?.discordUserId ?? null,
+        })),
+        truncated,
+    };
 }
-export type WebsiteAccountSummary = { accountId: string; label: string };
+export type WebsiteAccountSummary = { accountId: string; label: string; email: string | null; discordUserId: string | null };
+
+/** Resolves one displayed owner without enumerating the Auth directory. */
+export async function getWebsiteAccount(accountId: string): Promise<WebsiteAccountSummary | null> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(accountId)) return null;
+    const { data, error } = await getSupabaseAdminClient().auth.admin.getUserById(accountId);
+    if (error) throw error;
+    const user = data.user;
+    return user ? { accountId: user.id, label: user.email || user.phone || user.id,
+        email: user.email || null, discordUserId: discordUserSummary(user)?.discordUserId ?? null } : null;
+}
+
+/** Resolves one exact email on the server; callers never receive an account directory. */
+export async function findWebsiteAccountByEmail(email: string): Promise<WebsiteAccountSummary | null> {
+    const normalized = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalized) || normalized.length > 320) return null;
+    const { users } = await listSupabaseUsers();
+    const user = users.find(candidate => candidate.email?.trim().toLowerCase() === normalized);
+    return user ? { accountId: user.id, label: user.email || user.phone || user.id,
+        email: user.email || null, discordUserId: discordUserSummary(user)?.discordUserId ?? null } : null;
+}

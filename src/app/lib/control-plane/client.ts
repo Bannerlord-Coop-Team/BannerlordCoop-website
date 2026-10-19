@@ -1,4 +1,4 @@
-const MAXIMUM_RESPONSE_BYTES = 8 * 1_048_576;
+export const CONTROL_PLANE_ADMIN_MAXIMUM_RESPONSE_BYTES = 8 * 1_048_576;
 export const CONTROL_PLANE_ADMIN_BROWSER_TIMEOUT_MILLISECONDS = 90_000;
 
 export class ControlPlaneAdminError extends Error {
@@ -61,9 +61,13 @@ export async function requestControlPlaneAdmin<T>(options: {
         );
     }
     const text = await response.text();
-    if (new TextEncoder().encode(text).byteLength > MAXIMUM_RESPONSE_BYTES) {
+    if (new TextEncoder().encode(text).byteLength > CONTROL_PLANE_ADMIN_MAXIMUM_RESPONSE_BYTES) {
         throw new ControlPlaneAdminError("response_too_large", "The control plane response was too large.");
     }
+    return decodeControlPlaneAdminResponse<T>(text, requestId, response.ok);
+}
+
+export function decodeControlPlaneAdminResponse<T>(text: string, requestId: string, responseOk: boolean): T {
     let parsed: unknown;
     try {
         parsed = JSON.parse(text);
@@ -79,7 +83,7 @@ export async function requestControlPlaneAdmin<T>(options: {
         );
     }
     if (!parsed.ok) {
-        throw new ControlPlaneAdminError(parsed.error.code, parsed.error.message, parsed.error.retryable, response.ok ? undefined : requestId, parsed.error.operationId);
+        throw new ControlPlaneAdminError(parsed.error.code, parsed.error.message, parsed.error.retryable, responseOk ? undefined : requestId, parsed.error.operationId);
     }
     return parsed.result as T;
 }

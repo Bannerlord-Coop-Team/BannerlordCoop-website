@@ -1,3 +1,6 @@
+import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
+import type { VpsProviderId, VpsProviderRead } from "./vps-providers";
+
 export type ManagedServer = {
     serverId: string;
     ownerDiscordUserId: string;
@@ -41,11 +44,66 @@ export type MyServerSummary = Pick<
     accessRole: "owner" | "manager" | "support" | "admin";
     // Missing visibility is treated as private during the control-plane rollout.
     visibility?: "private" | "public";
+    // Missing maintenance fields disable these settings until the control plane is updated.
+    maintenanceSlot?: string;
+    timezone?: string;
     // CP #143 supplies these stored fields through authenticated my-servers.
     // Optional for older deployments; independent of the visibility rollout.
     connectionIp?: string | null;
     gamePorts?: number[];
 };
+
+/** A notice on one server's page that this viewer has not dismissed. Placement kinds carry typed parameters. */
+export type MyServerNotice = {
+    noticeId: string;
+    kind: "administrator" | "placement-scheduled" | "placement-completed";
+    severity: "info" | "warning";
+    title: string;
+    body: string;
+    parameters: Record<string, string | number | boolean | null>;
+    createdAt: string;
+    expiresAt: string | null;
+};
+
+/**
+ * One server's move to another machine as its page shows it: announced, under way, or finished in the
+ * last 24 hours. `step` is set only while moving or returning, `address` only once moved and
+ * `stayedOnOriginal` only when the move failed.
+ */
+export type MyServerMove = {
+    state: "scheduled" | "starting" | "moving" | "returning" | "moved" | "failed";
+    scheduledAt: string | null;
+    startedAt: string | null;
+    completedAt: string | null;
+    step: "preparing" | "saving-and-stopping" | "backing-up" | "restoring" | "switching-address" | "starting-game" | "finishing" | null;
+    address: string | null;
+    stayedOnOriginal: boolean | null;
+};
+
+export type MyServerSaveSummary = {
+    saveId: string;
+    displayName: string;
+    byteSize: number;
+    createdAt: string;
+    lastUsedAt: string | null;
+    importedBy: "system" | "owner";
+};
+
+export type MyServerSavePage = {
+    serverId: string;
+    updatedAt: string;
+    activeSaveId: string | null;
+    items: MyServerSaveSummary[];
+    nextCursor: string | null;
+};
+
+/** The active campaign's current save and earlier autosave copies; may be a few minutes stale. */
+export type {
+    RestorableSaveGeneration as MyServerRestorableSaveGeneration,
+    SaveGeneration as MyServerSaveGeneration,
+    SaveGenerationList as MyServerSaveGenerationList,
+    SaveGenerationSummary as MyServerSaveGenerationSummary,
+} from "../../../../supabase/functions/_shared/server-save-generation-contract";
 
 export type MyServerBackupSummary = {
     backupId: string;
@@ -94,8 +152,18 @@ export type HostingJob = {
     failureAcknowledgedBy?: string | null;
 };
 
+export type HostingJobProgress = Pick<HostingJob, "jobId" | "serverId" | "action" | "state"
+    | "progressStage" | "errorCode" | "attemptCount" | "maximumAttempts" | "updatedAt">;
+export type ServerProgress = {
+    server: Pick<ManagedServer, "serverId" | "updatedAt" | "operationState" | "desiredState"
+        | "observedVmState" | "observedGameState"> & { softDeletedAt: string | null };
+    activeJob: HostingJobProgress | null;
+};
+
 export type ReleaseBuild = {
     registryMetadata?: { versionTag: string; clientRevision: string; serverRevision: string };
+    container?: { manifestDigest: string } | null;
+    firstObservedAt?: string;
     currentChannel?: boolean;
     requiredClientModVersion?: string;
     buildId: string;
@@ -156,9 +224,14 @@ export type HostingServerResources = {
 };
 
 export type HostingAdminVpsHost = {
+    /** The provider that owns this host; host-scoped admin requests send it back unchanged. */
+    provider: VpsProviderId;
     name: string;
     locationId: string;
-    region: string;
+    // Provider-reported ISO country, present for every host.
+    countryCode: string;
+    // Legacy region a retained host was registered with; null for hosts registered from provider facts.
+    region: string | null;
     totalSlots: number;
     runningServers: number;
     availableServers: number;
@@ -203,14 +276,251 @@ export type HostingAdminVpsInventory = {
     liveDataIncluded?: boolean;
     controlPlaneHost: HostingAdminHostResources | null;
     hosts: HostingAdminVpsHost[];
-    availableServiceNames: string[];
+    /** Unregistered account hosts an administrator may onboard; empty when no account read was requested. */
+    availableHosts: HostingAdminVpsAvailableHost[];
+    /** One entry per enabled provider whose account was read; a failed read withholds only that provider's data. */
+    providerReads?: VpsProviderRead[];
     runnerTargetSourceCommit?: string | null;
 };
 
+/** One unregistered provider account host, labelled `<provider display name> · <service name>`. */
+export type HostingAdminVpsAvailableHost = {
+    provider: VpsProviderId;
+    serviceName: string;
+    label: string;
+};
+
+export type HostingAdminRegionRequest = {
+    requestId: string;
+    guildId: string;
+    discordUserId: string;
+    region: string;
+    status: "outstanding";
+    createdAt: string;
+    requesterEmail: string | null;
+    allocatedRegions: string[];
+    notifiedAt: string | null;
+};
+
+/** The outcome of emailing a region requester; `sent` is false when an earlier notification already went out. */
+export type HostingAdminRegionRequestNotification = {
+    requestId: string;
+    notifiedAt: string;
+    sent: boolean;
+};
+
 export type OperationsData = {
-    overview: Overview;
+    overview: Pick<Overview, "controls" | "servers" | "jobs" | "stableBuilds" | "nightlyBuilds">;
     inventory: HostingAdminVpsInventory;
+    vpsProviderError: string | null;
     selectedServer: ManagedServer | null;
+    hostingRegions: HostingRegionCatalogRead;
+};
+
+/** One stored entry as `hosting-regions` returns it, with whether it has a free admissible slot now. */
+export type HostingAdminRegionEntry = HostingRegionPayload & { available: boolean };
+
+/** The outcome of reading the stored region catalog: its entries, or the message explaining why they are unavailable. */
+export type HostingRegionCatalogRead =
+    | { regions: HostingAdminRegionEntry[]; error: null }
+    | { regions: null; error: string };
+
+/** The VPS view's data: registered hosts and the stored catalog placements that label them (null when unreadable). */
+export type VpsViewData = {
+    inventory: HostingAdminVpsInventory;
+    regionCatalog: HostingRegionPayload[] | null;
+};
+
+/** The Relocate view's data: servers, the slots they occupy, the catalog that places hosts in regions, and active jobs. */
+export type RelocateViewData = {
+    servers: HostingPage<ManagedServer>;
+    inventory: HostingAdminVpsInventory;
+    regionCatalog: HostingRegionPayload[] | null;
+    activeJobs: HostingJob[];
+};
+
+export type HostingPlacementWeekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+export type HostingPlacementAlwaysOnTargets = "any" | "single-slot" | "none";
+export type HostingPlacementPinReason =
+    | "unavailable-state"
+    | "no-provider-resource"
+    | "no-installed-build"
+    | "insufficient-history"
+    | "always-on"
+    | "no-compatible-host";
+
+/** A recurring weekly UTC window, with its next occurrence. */
+export type HostingPlacementWindow = {
+    weekday: HostingPlacementWeekday;
+    /** `HH:MM` UTC. */
+    startsAtUtc: string;
+    durationMinutes: number;
+    onlineProbability: number;
+    nextStartsAt: string;
+};
+
+/** Modelled co-tenancy totals; every value is hours per week. */
+export type HostingPlacementContention = {
+    pairHoursPerWeek: number;
+    /** Hours with at least two servers on one VPS online. */
+    contendedHoursPerWeek: number;
+    /** Hours with at least three servers on one VPS online. */
+    saturatedHoursPerWeek: number;
+    /** The history window replayed onto the placement, as pair-hours per week. */
+    observedPairHoursPerWeek: number;
+};
+
+export type HostingPlacementHostSide = HostingPlacementContention & {
+    serverIds: string[];
+    peakExpectedOnline: number;
+};
+
+export type HostingPlacementServer = {
+    serverId: string;
+    displayName: string;
+    region: string;
+    serviceName: string;
+    proposedServiceName: string;
+    pinnedReason: HostingPlacementPinReason | null;
+    /** Older control planes omit it; treat a missing value as false. */
+    alwaysOn?: boolean;
+    observedDays: number;
+    weeklyOnlineHours: number;
+    /** 168 hourly digits from Monday 00:00 UTC; digit d means online probability in [d/10, (d+1)/10). */
+    heatmap: string;
+    quietWindow: HostingPlacementWindow;
+};
+
+export type HostingPlacementHost = {
+    serviceName: string;
+    regionKeys: string[];
+    vCpu: number;
+    slots: number;
+    freeSlots: number;
+    acceptsRelocations: boolean;
+    current: HostingPlacementHostSide;
+    proposed: HostingPlacementHostSide;
+};
+
+export type HostingPlacementMove = {
+    step: number;
+    serverId: string;
+    displayName: string;
+    fromServiceName: string;
+    toServiceName: string;
+    /** The region to pass to `relocate-server` with this target VPS. */
+    targetRegion: string;
+    /** A temporary hop into a spare slot that unblocks a cycle of full VPSs. */
+    staging: boolean;
+    /** Depends on step order; one leg of a swap can save nothing on its own. */
+    gainPairHoursPerWeek: number;
+    window: HostingPlacementWindow;
+};
+
+/** The control plane's read-only `placement-plan` proposal. Nothing is relocated. */
+export type HostingAdminPlacementPlan = {
+    dryRun: true;
+    generatedAt: string;
+    options: {
+        historyDays: number;
+        halfLifeDays: number;
+        maximumMoves: number;
+        minimumGainHours: number;
+        /** Older control planes omit it; they plan as `any`. */
+        alwaysOnTargets?: HostingPlacementAlwaysOnTargets;
+    };
+    model: {
+        historyStartedAt: string;
+        binMinutes: number;
+        timeZone: "UTC";
+        minimumObservedDays: number;
+        samples: number;
+        searchEvaluations: number;
+    };
+    current: HostingPlacementContention;
+    proposed: HostingPlacementContention;
+    relocations: number;
+    servers: HostingPlacementServer[];
+    hosts: HostingPlacementHost[];
+    moves: HostingPlacementMove[];
+    unsequencedServerIds: string[];
+};
+
+export type HostingPlacementAlwaysOnPolicy = "single-slot" | "none" | "any";
+
+/** The automatic placement executor's settings; `updatedAt` is null until an administrator first saves them. */
+export type HostingPlacementExecutorSettings = {
+    enabled: boolean;
+    maximumRelocationsPerDay: number;
+    minimumGainHours: number;
+    alwaysOnPolicy: HostingPlacementAlwaysOnPolicy;
+    noticeLeadHours: number;
+    updatedBy: string | null;
+    reason: string | null;
+    updatedAt: string | null;
+};
+
+/** One automatic relocation: `offline` moves a stopped server at once, `announced` notifies the owner first. */
+export type HostingPlacementRelocation = {
+    relocationId: string;
+    serverId: string;
+    displayName: string;
+    fromServiceName: string;
+    toServiceName: string;
+    targetRegion: string;
+    mode: "offline" | "announced";
+    state: "announced" | "queued" | "succeeded" | "failed" | "cancelled";
+    gainPairHoursPerWeek: number;
+    scheduledAt: string;
+    announcementNoticeId: string | null;
+    completionNoticeId: string | null;
+    jobId: string | null;
+    errorCode: string | null;
+    createdAt: string;
+    queuedAt: string | null;
+    updatedAt: string;
+    completedAt: string | null;
+};
+
+/** The `placement-executor` read: current settings and the 50 newest automatic relocations. */
+export type HostingAdminPlacementExecutor = {
+    settings: HostingPlacementExecutorSettings;
+    relocations: HostingPlacementRelocation[];
+};
+
+export type HostingServerNoticeKind = "administrator" | "placement-scheduled" | "placement-completed";
+export type HostingServerNoticeSeverity = "info" | "warning";
+
+/** A server notice as administrators list it, with at most 20 of its target servers. */
+export type HostingAdminNotice = {
+    noticeId: string;
+    kind: HostingServerNoticeKind;
+    severity: HostingServerNoticeSeverity;
+    title: string;
+    body: string;
+    parameters: Record<string, unknown>;
+    createdAt: string;
+    expiresAt: string | null;
+    state: "active" | "expired" | "withdrawn";
+    createdBy: string;
+    reason: string | null;
+    withdrawnAt: string | null;
+    targetCount: number;
+    dismissalCount: number;
+    servers: { serverId: string; displayName: string }[];
+};
+
+/** The outcome of `create-notice`; a replayed request ID returns the first notice as `existing`. */
+export type HostingAdminNoticeCreation = { outcome: "created" | "existing"; notice: HostingAdminNotice };
+
+/** The Notices view's data: the first page of servers that a notice can target. */
+export type NoticesViewData = { servers: HostingPage<ManagedServer> };
+
+/** The Placement view's data: the slots servers occupy, the catalog that places hosts in regions, and active jobs. The plan itself loads on demand. */
+export type PlacementViewData = {
+    inventory: HostingAdminVpsInventory;
+    regionCatalog: HostingRegionPayload[] | null;
+    activeJobs: HostingJob[];
 };
 
 export type FleetSummary = {
@@ -238,7 +548,6 @@ export type FleetSummary = {
         apiHealth: string;
         capacityAvailable: boolean;
         managedInstanceCount: number | null;
-        orphanCandidateCount: number;
         ambiguousResourceCount: number;
         missingInstanceCount: number;
         mismatchedInstanceCount: number;
@@ -273,6 +582,9 @@ export type Overview = {
     nightlyBuilds: HostingPage<ReleaseBuild>;
 };
 
+/** Current data rendered by the Overview pane, without unused detail reads. */
+export type OverviewSummary = Pick<Overview, "fleet" | "controls" | "jobs">;
+
 export type ServerDashboardResult = {
     dashboard: {
         server: ManagedServer;
@@ -289,7 +601,7 @@ export type ServerDashboardResult = {
         installedBuild: ReleaseBuild | null;
         desiredBuild: ReleaseBuild | null;
         activeSave: { saveId: string; displayName: string; detectedVersion: string | null } | null;
-        activeJob: HostingJob | null;
+        activeJob: HostingJobProgress | null;
         nextMaintenanceAt: string;
     };
     backups: HostingPage<Backup>;

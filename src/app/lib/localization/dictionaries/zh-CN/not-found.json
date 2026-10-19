@@ -1,0 +1,9 @@
+{
+  "links.brandHome": "{brand} 首页",
+  "error.code": "错误 {code}",
+  "heading": "找不到此页面。",
+  "description": "您要查找的页面可能已迁移、已删除，或从未存在。返回熟悉的地方，或前往服务器列表。",
+  "links.home": "返回首页",
+  "links.servers": "浏览服务器",
+  "footer.motto": "无友相伴，战旗难扬"
+}

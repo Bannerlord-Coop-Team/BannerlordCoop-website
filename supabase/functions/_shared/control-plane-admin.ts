@@ -1,5 +1,5 @@
+import type { ControlPlaneCall, RegionRequestNotifier } from "./region-request-notification.ts";
 import { verifyWebsiteSessionContext } from "./session-context.ts";
-const RELEASE_CACHE_TTL_MILLISECONDS = 5 * 60_000;
 
 const MAXIMUM_REQUEST_BYTES = 64 * 1024;
 const MAXIMUM_AUTH_RESPONSE_BYTES = 512 * 1024;
@@ -15,12 +15,14 @@ export type ControlPlaneAdminHandlerOptions = {
     supabasePublishableKey: string;
     controlPlaneAdminUrl: string;
     fetchImplementation?: typeof fetch;
-    now?: () => number;
     authTimeoutMilliseconds?: number;
     upstreamTimeoutMilliseconds?: number;
+    /** Handles `notify-region-request`; absent when SMTP is not configured. */
+    notifyRegionRequest?: RegionRequestNotifier;
 };
+type UpstreamReply = { kind: "unreachable" } | { kind: "invalid" } | { kind: "ok"; status: number; text: string };
 
-/** Authenticates admin requests and proxies operations, caching only successful release-list pages. */
+/** Authenticates every request and forwards reads to the authoritative control plane. */
 export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandlerOptions) {
     const allowedOrigins = new Set(options.allowedOrigins.map(validateOrigin));
     if (allowedOrigins.size === 0 || allowedOrigins.size !== options.allowedOrigins.length) {
@@ -32,9 +34,6 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
         throw new Error("Supabase publishable key is invalid");
     }
     const fetchImplementation = options.fetchImplementation ?? fetch;
-    const now = options.now ?? Date.now;
-    // At most one page per channel per function instance; never store tokens or user data.
-    const releasePages = new Map<string, { key: string; expiresAt: number; result: Record<string, unknown> }>();
     const authTimeoutMilliseconds = boundedTimeout(
         options.authTimeoutMilliseconds ?? 10_000,
         MAXIMUM_AUTH_TIMEOUT_MILLISECONDS,
@@ -74,99 +73,124 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             }
             return errorResponse(400, "invalid_request", "The request is invalid.", false, cors);
         }
-        const requestId = validateEnvelope(raw);
-        if (requestId === null) {
+        const envelope = validateEnvelope(raw);
+        if (envelope === null) {
             return errorResponse(400, "invalid_request", "The request is invalid.", false, cors);
         }
+        const { requestId } = envelope;
 
+        const authenticationStarted = performance.now();
         let user: unknown;
+        const authentication = new AbortController();
+        const authSignal = AbortSignal.any([authentication.signal, AbortSignal.timeout(authTimeoutMilliseconds)]);
         try {
-            const authResponse = await fetchImplementation(userEndpoint, {
-                method: "GET",
-                redirect: "error",
-                headers: {
-                    apikey: options.supabasePublishableKey,
-                    authorization: `Bearer ${token}`,
-                },
-                signal: AbortSignal.timeout(authTimeoutMilliseconds),
-            });
-            if (!authResponse.ok) {
-                return envelopeError(401, requestId, "unauthenticated", "Authentication is required.", false, cors);
-            }
-            user = JSON.parse(await readBoundedText(authResponse, MAXIMUM_AUTH_RESPONSE_BYTES));
-            if (!isRecord(user) || typeof user.id !== "string") throw new Error("Invalid identity");
-            await verifyWebsiteSessionContext({ supabaseUrl: options.supabaseUrl, key: options.supabasePublishableKey, authorization: `Bearer ${token}`, userId: user.id, action: "control-plane-admin", requestId, fetch: fetchImplementation });
+            const userRead = (async () => {
+                const authResponse = await fetchImplementation(userEndpoint, {
+                    method: "GET", redirect: "error",
+                    headers: { apikey: options.supabasePublishableKey, authorization: `Bearer ${token}` },
+                    signal: authSignal,
+                });
+                if (authSignal.aborted || !authResponse.ok) {
+                    void authResponse.body?.cancel().catch(() => undefined);
+                    throw new Error("Invalid identity");
+                }
+                const value: unknown = JSON.parse(await readBoundedText(authResponse, MAXIMUM_AUTH_RESPONSE_BYTES, authSignal));
+                if (!isRecord(value) || typeof value.id !== "string") throw new Error("Invalid identity");
+                return { ...value, id: value.id };
+            })();
+            [user] = await Promise.all([
+                userRead,
+                verifyWebsiteSessionContext({ supabaseUrl: options.supabaseUrl, key: options.supabasePublishableKey,
+                    authorization: `Bearer ${token}`, userId: userRead.then(value => value.id), action: "control-plane-admin",
+                    requestId, fetch: fetchImplementation, signal: authSignal }),
+            ]);
         } catch {
             return envelopeError(401, requestId, "unauthenticated", "Authentication is required.", false, cors);
+        } finally {
+            authentication.abort();
         }
         if (!isRecord(user) || !isRecord(user.app_metadata) || user.app_metadata.role !== "Admin") {
             return envelopeError(403, requestId, "forbidden", "Administrator access is required.", false, cors);
         }
 
-        const releaseRequest = cacheableReleaseRequest(raw);
-        if (releaseRequest !== null) {
-            const cached = releasePages.get(releaseRequest.channel);
-            if (cached !== undefined && cached.expiresAt <= now()) releasePages.delete(releaseRequest.channel);
-            if (cached !== undefined && cached.key === releaseRequest.key && cached.expiresAt > now()) {
-                return Response.json({ version: 1, requestId, ok: true, result: cached.result }, {
-                    headers: { ...cors, "cache-control": "no-store" },
+        // Sends one envelope to the control plane and reads its bounded JSON reply.
+        const callUpstream = async (body: string): Promise<UpstreamReply> => {
+            let upstream: Response;
+            try {
+                upstream = await fetchImplementation(upstreamEndpoint, {
+                    method: "POST",
+                    redirect: "error",
+                    headers: {
+                        authorization: `Bearer ${token}`,
+                        "content-type": "application/json",
+                    },
+                    body,
+                    signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),
                 });
+            } catch {
+                return { kind: "unreachable" };
             }
+            try {
+                const text = await readBoundedText(upstream, MAXIMUM_UPSTREAM_RESPONSE_BYTES);
+                JSON.parse(text);
+                return { kind: "ok", status: upstream.status, text };
+            } catch {
+                return { kind: "invalid" };
+            }
+        };
+
+        if (envelope.operation === "notify-region-request") {
+            return notifyRegionRequest(envelope, callUpstream, cors);
         }
 
-        let upstream: Response;
+        const upstreamStarted = performance.now();
+        const authenticationMilliseconds = Math.round(upstreamStarted - authenticationStarted);
+        const reply = await callUpstream(raw);
+        if (reply.kind === "unreachable") {
+            return envelopeError(502, requestId, "control_plane_unavailable", "The control plane could not be reached.", true, cors);
+        }
+        if (reply.kind === "invalid") {
+            return envelopeError(502, requestId, "invalid_response", "The control plane returned an invalid response.", true, cors);
+        }
+        return new Response(reply.text, {
+            status: reply.status,
+            headers: {
+                ...cors, "cache-control": "no-store", "content-type": "application/json",
+                "server-timing": `edge_auth;dur=${authenticationMilliseconds}, control_plane;dur=${Math.round(performance.now() - upstreamStarted)}`,
+            },
+        });
+    };
+
+    // Dispatches `notify-region-request` to the notifier and wraps its outcome in the response envelope.
+    async function notifyRegionRequest(
+        envelope: Envelope,
+        callUpstream: (body: string) => Promise<UpstreamReply>,
+        cors: Record<string, string>,
+    ): Promise<Response> {
+        const { requestId } = envelope;
+        if (options.notifyRegionRequest === undefined) {
+            return envelopeError(503, requestId, "notifications_unavailable", "Email notifications are not configured.", false, cors);
+        }
+        const call: ControlPlaneCall = async (operation, input) => {
+            const reply = await callUpstream(JSON.stringify({ version: 1, requestId: crypto.randomUUID(), operation, input }));
+            if (reply.kind !== "ok") throw new Error("The control plane could not be reached.");
+            return { status: reply.status, body: JSON.parse(reply.text) };
+        };
+        let outcome: Awaited<ReturnType<RegionRequestNotifier>>;
         try {
-            upstream = await fetchImplementation(upstreamEndpoint, {
-                method: "POST",
-                redirect: "error",
-                headers: {
-                    authorization: `Bearer ${token}`,
-                    "content-type": "application/json",
-                },
-                body: raw,
-                signal: AbortSignal.timeout(upstreamTimeoutMilliseconds),
-            });
+            outcome = await options.notifyRegionRequest(envelope.input, call);
         } catch {
             return envelopeError(502, requestId, "control_plane_unavailable", "The control plane could not be reached.", true, cors);
         }
-        let upstreamBody: string;
-        try {
-            upstreamBody = await readBoundedText(upstream, MAXIMUM_UPSTREAM_RESPONSE_BYTES);
-        } catch {
-            return envelopeError(502, requestId, "invalid_response", "The control plane returned an invalid response.", true, cors);
+        if (!outcome.ok) {
+            const { code, message, retryable } = outcome.error;
+            return envelopeError(outcome.status, requestId, code, message, retryable, cors);
         }
-        try {
-            const envelope: unknown = JSON.parse(upstreamBody);
-            if (releaseRequest !== null && upstream.status === 200 && isRecord(envelope)
-                && envelope.version === 1 && envelope.requestId === requestId && envelope.ok === true
-                && isRecord(envelope.result) && Array.isArray(envelope.result.items)
-                && envelope.result.items.length <= releaseRequest.limit
-                && (envelope.result.nextCursor === null || typeof envelope.result.nextCursor === "string")) {
-                releasePages.set(releaseRequest.channel, {
-                    key: releaseRequest.key, expiresAt: now() + RELEASE_CACHE_TTL_MILLISECONDS, result: envelope.result,
-                });
-            }
-        } catch {
-            return envelopeError(502, requestId, "invalid_response", "The control plane returned an invalid response.", true, cors);
-        }
-        return new Response(upstreamBody, {
-            status: upstream.status,
-            headers: { ...cors, "cache-control": "no-store", "content-type": "application/json" },
-        });
-    };
-}
-
-/** Restricts caching to canonical, bounded build-list requests; everything else reaches the control plane. */
-function cacheableReleaseRequest(raw: string) {
-    const request = JSON.parse(raw) as Record<string, unknown>;
-    if (request.operation !== "builds" || !isRecord(request.input)
-        || Object.keys(request).some((key) => !["version", "requestId", "operation", "input"].includes(key))) return null;
-    const { channel, cursor, limit } = request.input;
-    if ((channel !== "stable" && channel !== "nightly")
-        || (cursor !== null && (typeof cursor !== "string" || cursor.length > 128))
-        || typeof limit !== "number" || !Number.isInteger(limit) || limit < 1 || limit > 100
-        || Object.keys(request.input).some((key) => !["channel", "cursor", "limit"].includes(key))) return null;
-    return { channel, limit, key: JSON.stringify([cursor, limit]) };
+        return Response.json(
+            { version: 1, requestId, ok: true, result: outcome.result },
+            { headers: { ...cors, "cache-control": "no-store" } },
+        );
+    }
 }
 
 function validateOrigin(raw: string): string {
@@ -188,7 +212,10 @@ function bearerToken(header: string | null) {
     return token.length >= 20 && token.length <= 8_192 && !/\s/u.test(token) ? token : null;
 }
 
-function validateEnvelope(raw: string) {
+type Envelope = { requestId: string; operation: string; input: unknown };
+
+// Reads the closed request envelope fields the proxy needs, or null when malformed.
+function validateEnvelope(raw: string): Envelope | null {
     let value: unknown;
     try {
         value = JSON.parse(raw);
@@ -197,7 +224,8 @@ function validateEnvelope(raw: string) {
     }
     if (!isRecord(value) || value.version !== 1 || typeof value.operation !== "string") return null;
     if (value.operation.length < 1 || value.operation.length > 64) return null;
-    return typeof value.requestId === "string" && REQUEST_ID.test(value.requestId) ? value.requestId : null;
+    if (typeof value.requestId !== "string" || !REQUEST_ID.test(value.requestId)) return null;
+    return { requestId: value.requestId, operation: value.operation, input: value.input };
 }
 
 function corsHeaders(origin: string) {
@@ -237,22 +265,31 @@ function envelopeError(
     );
 }
 
-async function readBoundedText(response: Request | Response, maximumBytes: number) {
+async function readBoundedText(response: Request | Response, maximumBytes: number, signal?: AbortSignal) {
     const declaredLength = response.headers.get("content-length");
     if (declaredLength !== null && Number(declaredLength) > maximumBytes) throw new ResponseTooLargeError();
     if (response.body === null) return "";
+    signal?.throwIfAborted();
     const reader = response.body.getReader();
+    const cancel = () => { void reader.cancel().catch(() => undefined); };
+    signal?.addEventListener("abort", cancel, { once: true });
     const chunks: Uint8Array[] = [];
     let total = 0;
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        total += value.byteLength;
-        if (total > maximumBytes) {
-            await reader.cancel();
-            throw new ResponseTooLargeError();
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            signal?.throwIfAborted();
+            if (done) break;
+            total += value.byteLength;
+            if (total > maximumBytes) {
+                await reader.cancel();
+                throw new ResponseTooLargeError();
+            }
+            chunks.push(value);
         }
-        chunks.push(value);
+    } finally {
+        signal?.removeEventListener("abort", cancel);
+        reader.releaseLock();
     }
     const bytes = new Uint8Array(total);
     let offset = 0;

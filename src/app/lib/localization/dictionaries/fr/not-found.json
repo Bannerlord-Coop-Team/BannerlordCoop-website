@@ -1,0 +1,9 @@
+{
+  "links.brandHome": "Accueil {brand}",
+  "error.code": "Erreur {code}",
+  "heading": "Aucune page à afficher.",
+  "description": "La page que vous cherchiez a peut-être été déplacée ou supprimée, ou n’a jamais existé. Retournez en terrain connu ou poursuivez vers l’annuaire des serveurs.",
+  "links.home": "Retourner à l’accueil",
+  "links.servers": "Parcourir les serveurs",
+  "footer.motto": "Aucune bannière ne se lève sans amis"
+}

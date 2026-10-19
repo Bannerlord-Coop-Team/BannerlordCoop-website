@@ -10,17 +10,23 @@ const server = { serverId: "aaaaaaaa-1111-4111-8111-111111111111", displayName: 
 test("public loader uses anonymous no-store route, bounded pagination, and fails closed", async () => {
     const originalUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const originalKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://supabase.test";
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "public-key";
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     try {
         let calls = 0;
         const result = await listPublicServers(async (url, init) => {
             calls++;
-            assert.equal(new URL(String(url)).pathname, "/functions/v1/public-servers");
+            assert.equal(String(url), "https://control-plane.bannerlordcoop.com/v1/public/control-plane");
             assert.equal(new Headers(init?.headers).get("authorization"), null);
+            assert.equal(new Headers(init?.headers).get("cookie"), null);
+            assert.equal(new Headers(init?.headers).get("apikey"), null);
+            assert.equal(init?.credentials, "omit");
+            assert.equal(init?.method, "POST");
             assert.equal(init?.cache, "no-store");
             assert.equal(init?.redirect, "manual");
             const requestId = new Headers(init?.headers).get("x-request-id");
+            assert.deepEqual(JSON.parse(String(init?.body)), { version: 1, requestId,
+                operation: "public-servers", input: { cursor: calls === 1 ? null : "next", limit: 100 } });
             return Response.json({ version: 1, requestId, ok: true, result: { items: calls === 1 ? [server] : [], nextCursor: calls === 1 ? "next" : null } });
         });
         assert.deepEqual(result, [server]); assert.equal(calls, 2);
@@ -45,10 +51,6 @@ test("public loader runs in workerd and rejects redirects without following them
             resolveDir: dirname(fileURLToPath(import.meta.url)),
         },
         bundle: true, format: "esm", platform: "browser", write: false,
-        define: {
-            "process.env.NEXT_PUBLIC_SUPABASE_URL": JSON.stringify("https://supabase.test"),
-            "process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": JSON.stringify("public-key"),
-        },
     });
     let redirectStatus = 0;
     const requests: string[] = [];
@@ -61,14 +63,19 @@ test("public loader runs in workerd and rejects redirects without following them
         outboundService: async request => {
             requests.push(request.url);
             const url = new URL(request.url);
-            assert.equal(url.origin, "https://supabase.test");
-            assert.equal(url.pathname, "/functions/v1/public-servers");
+            assert.equal(url.href, "https://control-plane.bannerlordcoop.com/v1/public/control-plane");
+            assert.equal(request.method, "POST");
             assert.equal(request.headers.get("authorization"), null);
-            assert.equal(request.headers.get("apikey"), "public-key");
+            assert.equal(request.headers.get("cookie"), null);
+            assert.equal(request.headers.get("apikey"), null);
+            const payload = await request.json() as { version: number; requestId: string; operation: string;
+                input: { cursor: string | null; limit: number } };
+            assert.deepEqual(payload, { version: 1, requestId: request.headers.get("x-request-id"),
+                operation: "public-servers", input: { cursor: requests.length === 1 ? null : "next", limit: 100 } });
             if (redirectStatus) return new Response(null, {
                 status: redirectStatus, headers: { location: "https://other.test/private" },
             });
-            const continuation = url.searchParams.get("cursor") === "next";
+            const continuation = payload.input.cursor === "next";
             return Response.json({ version: 1, requestId: request.headers.get("x-request-id"), ok: true,
                 result: { items: [continuation ? neighbor : family], nextCursor: continuation ? null : "next" } });
         },

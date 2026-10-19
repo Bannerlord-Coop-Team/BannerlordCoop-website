@@ -1,35 +1,78 @@
 {
   "source": {
     "repository": "https://github.com/Bannerlord-Coop-Team/BannerlordCoop",
-    "commit": "4d030c26c49b271e77676179571e120698f42f52",
+    "commit": "2ac901f91e8a852cbe59357333a3e6a2def78c39",
     "assemblies": [
       "GameInterface",
       "Missions"
     ],
     "configuration": "Release",
-    "registeredCount": 461,
-    "excludedFixtureCount": 61,
+    "registeredCount": 476,
+    "excludedFixtureCount": 62,
     "debugOnlyCommands": [
+      "coop.debug.army.objective_fixture",
+      "coop.debug.army.removal_fixture_setup",
+      "coop.debug.army.removal_fixture_state",
+      "coop.debug.army.removal_fixture_view",
       "coop.debug.battle.action_performance",
       "coop.debug.battle.animation_trace",
+      "coop.debug.battle.cancel_fixture_mission_ready",
+      "coop.debug.battle.cancel_owned_agent_drive",
       "coop.debug.battle.column_reinforcement_fixture",
+      "coop.debug.battle.defender_mission_ack",
+      "coop.debug.battle.defer_fixture_mission_ready",
+      "coop.debug.battle.drive_owned_agents",
+      "coop.debug.battle.formation_control_state",
+      "coop.debug.battle.formation_sync_fixture",
+      "coop.debug.battle.hit_sound_fixture_route",
+      "coop.debug.battle.hit_sound_fixture_state",
+      "coop.debug.battle.hit_sound_trace",
       "coop.debug.battle.item_modifier_state",
+      "coop.debug.battle.owned_agent_drive_state",
       "coop.debug.battle.replication_fixture",
+      "coop.debug.battle.siege_interaction_observe",
+      "coop.debug.battle.siege_interaction_request",
+      "coop.debug.battle.siege_interaction_target",
       "coop.debug.battle.wield_test",
+      "coop.debug.crime.apply",
+      "coop.debug.crime.coerce",
+      "coop.debug.crime.daily_tick",
+      "coop.debug.crime.preflight",
+      "coop.debug.crime.read",
+      "coop.debug.get_campaign_time",
       "coop.debug.hero_conversation.close",
       "coop.debug.hero_conversation.meeting_state",
       "coop.debug.hero_conversation.open",
       "coop.debug.hero_conversation.set_has_met",
       "coop.debug.hero_conversation.state",
+      "coop.debug.map_event.add_allied_ai_party",
+      "coop.debug.map_event.deployment_retention_state",
       "coop.debug.map_event.late_join_mode_begin_field_battle",
       "coop.debug.map_event.late_join_mode_disable_dying",
       "coop.debug.map_event.late_join_mode_exit_missions",
       "coop.debug.map_event.late_join_mode_restore",
+      "coop.debug.map_event.peace_battle_fixture_peace",
+      "coop.debug.map_event.peace_battle_fixture_restore",
+      "coop.debug.map_event.peace_battle_fixture_start",
+      "coop.debug.map_event.peace_battle_fixture_state",
       "coop.debug.map_event.post_battle_freeze_fixture_open",
       "coop.debug.map_event.post_battle_freeze_fixture_restore",
       "coop.debug.map_event.post_battle_freeze_fixture_start",
       "coop.debug.map_event.post_battle_freeze_fixture_state",
       "coop.debug.map_event.post_battle_freeze_fixture_unpause",
+      "coop.debug.map_event.restore_allied_ai_parties",
+      "coop.debug.map_event.stale_leader_fixture_prepare",
+      "coop.debug.map_event.stale_leader_fixture_restore",
+      "coop.debug.map_event.stale_leader_fixture_run",
+      "coop.debug.map_event.stale_leader_fixture_state",
+      "coop.debug.mapevent.raid_loot_warning_accept",
+      "coop.debug.mapevent.raid_loot_warning_complete_party",
+      "coop.debug.mapevent.raid_loot_warning_complete_simulation",
+      "coop.debug.mapevent.raid_loot_warning_prepare",
+      "coop.debug.mapevent.raid_loot_warning_request_raid",
+      "coop.debug.mapevent.raid_loot_warning_show",
+      "coop.debug.mapevent.raid_loot_warning_start",
+      "coop.debug.mapevent.raid_loot_warning_state",
       "coop.debug.mobile_party.battle_size_roster_begin",
       "coop.debug.mobile_party.exact_battle_roster_begin",
       "coop.debug.mobile_party.exact_battle_roster_restore",
@@ -37,9 +80,18 @@
       "coop.debug.mobile_party.large_battle_roster_begin",
       "coop.debug.mobile_party.large_battle_roster_restore",
       "coop.debug.mobile_party.large_battle_roster_status",
+      "coop.debug.mobile_party.set_prisoner_xp",
+      "coop.debug.mobileparty.clan_lord_fixture_finish",
+      "coop.debug.mobileparty.clan_lord_fixture_observe",
+      "coop.debug.mobileparty.clan_lord_fixture_restore",
+      "coop.debug.mobileparty.clan_lord_fixture_setup",
+      "coop.debug.mobileparty.clan_lord_fixture_start",
+      "coop.debug.monster.roundtrip",
       "coop.debug.movement.clear_receive_pressure",
+      "coop.debug.movement.controller_agents",
       "coop.debug.movement.force_rate",
       "coop.debug.movement.force_receiver_cap",
+      "coop.debug.movement.peer_state",
       "coop.debug.movement.simulate_receive_pressure",
       "coop.debug.movement.state",
       "coop.debug.party_visuals.fixture_state",
@@ -53,9 +105,39 @@
       "coop.debug.player_captivity.restore_ai_lord_diplomacy_fixture",
       "coop.debug.player_captivity.restore_ai_lord_fixture",
       "coop.debug.player_captivity.snapshot_ai_lord_diplomacy_fixture",
+      "coop.debug.player_list.inspect",
+      "coop.debug.player_list.preview",
+      "coop.debug.player_list.toggle",
       "coop.debug.request_time_mode",
       "coop.debug.settlements.restore_main_party_castle_teleport",
       "coop.debug.settlements.teleport_main_party_to_castle",
+      "coop.debug.siege.capture_defense_army_fixture",
+      "coop.debug.siege.defender_context_capture",
+      "coop.debug.siege.defender_context_end_missions",
+      "coop.debug.siege.defender_context_restore",
+      "coop.debug.siege.defender_context_start",
+      "coop.debug.siege.defender_context_verify_restore",
+      "coop.debug.siege.defender_fixture_capture",
+      "coop.debug.siege.defender_fixture_restore",
+      "coop.debug.siege.defender_fixture_stage",
+      "coop.debug.siege.defender_fixture_verify_restore",
+      "coop.debug.siege.defender_preassault_ack",
+      "coop.debug.siege.defender_roster_fixture_capture",
+      "coop.debug.siege.defender_roster_fixture_normalize",
+      "coop.debug.siege.defender_roster_fixture_prepare_captive_baseline",
+      "coop.debug.siege.defender_roster_fixture_readiness",
+      "coop.debug.siege.defender_roster_fixture_restore",
+      "coop.debug.siege.defender_roster_fixture_restore_captive_baseline",
+      "coop.debug.siege.defender_roster_fixture_verify_captive_baseline_restore",
+      "coop.debug.siege.defender_roster_fixture_verify_restore",
+      "coop.debug.siege.defense_army_fixture_state",
+      "coop.debug.siege.defense_army_state",
+      "coop.debug.siege.gate_melee_hit",
+      "coop.debug.siege.gate_state",
+      "coop.debug.siege.restore_defense_army_fixture",
+      "coop.debug.siege.stage_defense_army_fixture",
+      "coop.debug.siege.verify_defense_army_fixture",
+      "coop.debug.stance_link.handle_fixture",
       "coop.debug.tournaments.danustica_fixture_abort",
       "coop.debug.tournaments.danustica_fixture_begin",
       "coop.debug.tournaments.danustica_fixture_restore",
@@ -69,7 +151,7 @@
       "coop.debug.ui.map_movement_state"
     ]
   },
-  "count": 400,
+  "count": 414,
   "categories": [
     {
       "name": "Alleys",
@@ -81,7 +163,7 @@
     },
     {
       "name": "Armies",
-      "count": 7
+      "count": 8
     },
     {
       "name": "Battles",
@@ -105,7 +187,7 @@
     },
     {
       "name": "Clans",
-      "count": 22
+      "count": 23
     },
     {
       "name": "Companions",
@@ -125,7 +207,11 @@
     },
     {
       "name": "Heroes",
-      "count": 24
+      "count": 27
+    },
+    {
+      "name": "Hideouts",
+      "count": 1
     },
     {
       "name": "Inventory",
@@ -145,7 +231,7 @@
     },
     {
       "name": "Kingdoms",
-      "count": 29
+      "count": 31
     },
     {
       "name": "Locations",
@@ -157,7 +243,7 @@
     },
     {
       "name": "Map events",
-      "count": 46
+      "count": 48
     },
     {
       "name": "Metrics",
@@ -165,11 +251,11 @@
     },
     {
       "name": "Mobile parties",
-      "count": 38
+      "count": 40
     },
     {
       "name": "Mod options",
-      "count": 1
+      "count": 2
     },
     {
       "name": "Party visuals",
@@ -185,7 +271,7 @@
     },
     {
       "name": "Romance",
-      "count": 8
+      "count": 9
     },
     {
       "name": "Saves",
@@ -390,7 +476,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyRecruitDebugCommand.cs",
         "type": "AlleyRecruitConversationCoopCommand",
-        "line": 484
+        "line": 483
       },
       "category": "Alleys",
       "kind": "action",
@@ -418,7 +504,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyRecruitDebugCommand.cs",
         "type": "AlleyRecruitConversationStartCoopCommand",
-        "line": 443
+        "line": 442
       },
       "category": "Alleys",
       "kind": "action",
@@ -441,7 +527,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyRecruitDebugCommand.cs",
         "type": "AlleyRecruitInventoryCoopCommand",
-        "line": 527
+        "line": 526
       },
       "category": "Alleys",
       "kind": "action",
@@ -469,7 +555,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyRecruitDebugCommand.cs",
         "type": "AlleyRecruitOverseerStateCoopCommand",
-        "line": 409
+        "line": 408
       },
       "category": "Alleys",
       "kind": "inspect",
@@ -492,7 +578,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyRecruitDebugCommand.cs",
         "type": "AlleyRecruitRosterCoopCommand",
-        "line": 142
+        "line": 141
       },
       "category": "Alleys",
       "kind": "inspect",
@@ -515,7 +601,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyRecruitDebugCommand.cs",
         "type": "AlleyRecruitStartLooterBattleCoopCommand",
-        "line": 577
+        "line": 576
       },
       "category": "Alleys",
       "kind": "action",
@@ -654,7 +740,7 @@
       "source": {
         "path": "source/GameInterface/Services/Armies/Commands/ArmyDebugCommand.cs",
         "type": "ArmyInfoCoopCommand",
-        "line": 380
+        "line": 417
       },
       "category": "Armies",
       "kind": "inspect",
@@ -758,6 +844,39 @@
       "aliases": []
     },
     {
+      "command": "coop.debug.army.set_objective",
+      "name": "set_objective",
+      "group": "coop.debug.army",
+      "summary": "Sets an army objective, or finishes it with None.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "army_id",
+          "description": "The registered army id.",
+          "required": true
+        },
+        {
+          "name": "type",
+          "description": "Settlement, MobileParty, or None.",
+          "required": true
+        },
+        {
+          "name": "object_id",
+          "description": "The registered objective id, or none when finishing.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Armies/Commands/ArmyDebugCommand.cs",
+        "type": "ArmySetObjectiveCoopCommand",
+        "line": 374
+      },
+      "category": "Armies",
+      "kind": "action",
+      "usage": "coop.debug.army.set_objective <army_id> <type> <object_id>",
+      "aliases": []
+    },
+    {
       "command": "coop.debug.battle.capture_mount_pose",
       "name": "capture_mount_pose",
       "group": "coop.debug.battle",
@@ -773,7 +892,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "CaptureMountPoseCoopCommand",
-        "line": 1060
+        "line": 1938
       },
       "category": "Battles",
       "kind": "action",
@@ -790,7 +909,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "ChargeOwnedFormationsCoopCommand",
-        "line": 914
+        "line": 1600
       },
       "category": "Battles",
       "kind": "action",
@@ -813,7 +932,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "FocusLadderCoopCommand",
-        "line": 1786
+        "line": 2664
       },
       "category": "Battles",
       "kind": "action",
@@ -836,7 +955,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "FocusMountCoopCommand",
-        "line": 1519
+        "line": 2397
       },
       "category": "Battles",
       "kind": "action",
@@ -853,7 +972,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "HoldCavalryCoopCommand",
-        "line": 1290
+        "line": 2168
       },
       "category": "Battles",
       "kind": "action",
@@ -876,7 +995,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "LadderStateCoopCommand",
-        "line": 1701
+        "line": 2579
       },
       "category": "Battles",
       "kind": "inspect",
@@ -893,7 +1012,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "MountCameraStateCoopCommand",
-        "line": 1592
+        "line": 2470
       },
       "category": "Battles",
       "kind": "inspect",
@@ -916,7 +1035,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "MountPoseSamplesCoopCommand",
-        "line": 1107
+        "line": 1985
       },
       "category": "Battles",
       "kind": "action",
@@ -939,7 +1058,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "MountStateCoopCommand",
-        "line": 957
+        "line": 1835
       },
       "category": "Battles",
       "kind": "inspect",
@@ -962,7 +1081,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "MoveCavalryCoopCommand",
-        "line": 1213
+        "line": 2091
       },
       "category": "Battles",
       "kind": "action",
@@ -979,7 +1098,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "ReleaseLadderCameraCoopCommand",
-        "line": 1837
+        "line": 2715
       },
       "category": "Battles",
       "kind": "action",
@@ -996,7 +1115,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "ReleaseMountCameraCoopCommand",
-        "line": 1660
+        "line": 2538
       },
       "category": "Battles",
       "kind": "action",
@@ -1013,7 +1132,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "SizeStateCoopCommand",
-        "line": 865
+        "line": 1551
       },
       "category": "Battles",
       "kind": "inspect",
@@ -1030,7 +1149,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "StateCoopCommand",
-        "line": 792
+        "line": 1443
       },
       "category": "Battles",
       "kind": "inspect",
@@ -1053,7 +1172,7 @@
       "source": {
         "path": "source/Missions/Battles/BattleDebugCommands.cs",
         "type": "TurnCavalryCoopCommand",
-        "line": 1345
+        "line": 2223
       },
       "category": "Battles",
       "kind": "action",
@@ -1716,11 +1835,44 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanAddCompanionCoopCommand",
-        "line": 523
+        "line": 631
       },
       "category": "Clans",
       "kind": "action",
       "usage": "coop.debug.clan.add_companion <clan_id> <hero_id>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.clan.add_heirs",
+      "name": "add_heirs",
+      "group": "coop.debug.clan",
+      "summary": "Creates eligible heirs for a registered player clan on the server.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "clan_id",
+          "description": "The registered player clan id.",
+          "required": true
+        },
+        {
+          "name": "count",
+          "description": "The number of heirs to create, from 1 through 10.",
+          "required": true
+        },
+        {
+          "name": "parent",
+          "description": "Optional player hero id or exact name; defaults to the clan leader.",
+          "required": false
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
+        "type": "ClanAddHeirsCoopCommand",
+        "line": 300
+      },
+      "category": "Clans",
+      "kind": "action",
+      "usage": "coop.debug.clan.add_heirs <clan_id> <count> [<parent>]",
       "aliases": []
     },
     {
@@ -1744,7 +1896,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanAddInfluenceCoopCommand",
-        "line": 365
+        "line": 473
       },
       "category": "Clans",
       "kind": "action",
@@ -1772,7 +1924,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanAddRenownCoopCommand",
-        "line": 609
+        "line": 717
       },
       "category": "Clans",
       "kind": "action",
@@ -1800,7 +1952,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanChangeKingdomCoopCommand",
-        "line": 440
+        "line": 548
       },
       "category": "Clans",
       "kind": "action",
@@ -1828,7 +1980,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanChangeLeaderCoopCommand",
-        "line": 395
+        "line": 503
       },
       "category": "Clans",
       "kind": "action",
@@ -1845,7 +1997,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanCloseCoopCommand",
-        "line": 70
+        "line": 74
       },
       "category": "Clans",
       "kind": "action",
@@ -1868,7 +2020,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanDailyGoldChangeCoopCommand",
-        "line": 935
+        "line": 1042
       },
       "category": "Clans",
       "kind": "inspect",
@@ -1891,7 +2043,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanDestroyCoopCommand",
-        "line": 485
+        "line": 593
       },
       "category": "Clans",
       "kind": "action",
@@ -1914,7 +2066,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanEconomyCoopCommand",
-        "line": 660
+        "line": 767
       },
       "category": "Clans",
       "kind": "inspect",
@@ -1937,7 +2089,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanFieldDumpCoopCommand",
-        "line": 330
+        "line": 439
       },
       "category": "Clans",
       "kind": "inspect",
@@ -1965,7 +2117,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanGiveInfluenceCoopCommand",
-        "line": 861
+        "line": 968
       },
       "category": "Clans",
       "kind": "action",
@@ -1988,7 +2140,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanInfoCoopCommand",
-        "line": 898
+        "line": 1005
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2016,7 +2168,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanJoinKingdomCoopCommand",
-        "line": 735
+        "line": 842
       },
       "category": "Clans",
       "kind": "action",
@@ -2039,7 +2191,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanLeaveKingdomCoopCommand",
-        "line": 773
+        "line": 880
       },
       "category": "Clans",
       "kind": "action",
@@ -2056,7 +2208,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanListCoopCommand",
-        "line": 297
+        "line": 407
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2079,7 +2231,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanMembershipCoopCommand",
-        "line": 825
+        "line": 932
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2096,7 +2248,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanOpenCoopCommand",
-        "line": 44
+        "line": 48
       },
       "category": "Clans",
       "kind": "action",
@@ -2124,7 +2276,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanRefreshBurstCoopCommand",
-        "line": 254
+        "line": 264
       },
       "category": "Clans",
       "kind": "action",
@@ -2147,7 +2299,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanRemoveCompanionCoopCommand",
-        "line": 568
+        "line": 676
       },
       "category": "Clans",
       "kind": "action",
@@ -2164,7 +2316,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanScreenStateCoopCommand",
-        "line": 93
+        "line": 97
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2181,7 +2333,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanSelectPartiesCoopCommand",
-        "line": 118
+        "line": 128
       },
       "category": "Clans",
       "kind": "action",
@@ -2204,7 +2356,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanWageStateCoopCommand",
-        "line": 142
+        "line": 152
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2381,7 +2533,7 @@
       "source": {
         "path": "source/GameInterface/Services/Time/Commands/TimeCommands.cs",
         "type": "AdvanceTimeCoopCommand",
-        "line": 128
+        "line": 151
       },
       "category": "General",
       "kind": "action",
@@ -2618,7 +2770,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroAddPowerCoopCommand",
-        "line": 288
+        "line": 290
       },
       "category": "Heroes",
       "kind": "action",
@@ -2635,7 +2787,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroAuditCoopCommand",
-        "line": 265
+        "line": 267
       },
       "category": "Heroes",
       "kind": "audit",
@@ -2686,7 +2838,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroCreateCoopCommand",
-        "line": 216
+        "line": 218
       },
       "category": "Heroes",
       "kind": "action",
@@ -2709,7 +2861,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroGetBannerItemCoopCommand",
-        "line": 574
+        "line": 741
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2737,7 +2889,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroGetEffectiveRelationCoopCommand",
-        "line": 911
+        "line": 1073
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2760,7 +2912,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroGetIssueCoopCommand",
-        "line": 701
+        "line": 865
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2788,7 +2940,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroGetRelationCoopCommand",
-        "line": 874
+        "line": 1036
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2811,7 +2963,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroGoldStateCoopCommand",
-        "line": 377
+        "line": 379
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2834,7 +2986,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroHomeSettlementSnapshotCoopCommand",
-        "line": 94
+        "line": 96
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2865,6 +3017,29 @@
       "aliases": []
     },
     {
+      "command": "coop.debug.hero.ill_days",
+      "name": "ill_days",
+      "group": "coop.debug.hero",
+      "summary": "Reports the local player's illness duration on clients or matching heroes on the server.",
+      "side": "either",
+      "arguments": [
+        {
+          "name": "hero_name",
+          "description": "The exact hero display name required on the server. Quote multi-word values.",
+          "required": false
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
+        "type": "HeroIllDaysCoopCommand",
+        "line": 551
+      },
+      "category": "Heroes",
+      "kind": "inspect",
+      "usage": "coop.debug.hero.ill_days [<hero_name>]",
+      "aliases": []
+    },
+    {
       "command": "coop.debug.hero.info",
       "name": "info",
       "group": "coop.debug.hero",
@@ -2880,7 +3055,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroInfoCoopCommand",
-        "line": 170
+        "line": 172
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2897,11 +3072,44 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroIssuesCoopCommand",
-        "line": 611
+        "line": 777
       },
       "category": "Heroes",
       "kind": "inspect",
       "usage": "coop.debug.hero.issues",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.hero.kill_player",
+      "name": "kill_player",
+      "group": "coop.debug.hero",
+      "summary": "Kills a living registered player hero on the server.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "hero_id",
+          "description": "The registered player hero id.",
+          "required": true
+        },
+        {
+          "name": "death_detail",
+          "description": "One of old_age, battle, or execution.",
+          "required": true
+        },
+        {
+          "name": "killer_hero_id",
+          "description": "The optional registered killer hero id.",
+          "required": false
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
+        "type": "HeroKillPlayerCoopCommand",
+        "line": 495
+      },
+      "category": "Heroes",
+      "kind": "action",
+      "usage": "coop.debug.hero.kill_player <hero_id> <death_detail> [<killer_hero_id>]",
       "aliases": []
     },
     {
@@ -2920,7 +3128,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroListCoopCommand",
-        "line": 43
+        "line": 45
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2937,7 +3145,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroListBannerItemsCoopCommand",
-        "line": 543
+        "line": 711
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2960,11 +3168,39 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroRefreshVolunteersCoopCommand",
-        "line": 784
+        "line": 946
       },
       "category": "Heroes",
       "kind": "action",
       "usage": "coop.debug.hero.refresh_volunteers [<settlement_id>]",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.hero.set_age",
+      "name": "set_age",
+      "group": "coop.debug.hero",
+      "summary": "Sets the age of heroes matching a display name or registered id on the server.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "hero_name_or_id",
+          "description": "The exact hero display name or registered id. Quote multi-word values.",
+          "required": true
+        },
+        {
+          "name": "age",
+          "description": "The age in years.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
+        "type": "HeroSetAgeCoopCommand",
+        "line": 438
+      },
+      "category": "Heroes",
+      "kind": "action",
+      "usage": "coop.debug.hero.set_age <hero_name_or_id> <age>",
       "aliases": []
     },
     {
@@ -2988,7 +3224,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetBannerItemCoopCommand",
-        "line": 493
+        "line": 662
       },
       "category": "Heroes",
       "kind": "action",
@@ -3021,7 +3257,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetEffectiveRelationCoopCommand",
-        "line": 965
+        "line": 1127
       },
       "category": "Heroes",
       "kind": "action",
@@ -3049,7 +3285,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetGoldCoopCommand",
-        "line": 332
+        "line": 334
       },
       "category": "Heroes",
       "kind": "action",
@@ -3077,7 +3313,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetGoldStateCoopCommand",
-        "line": 403
+        "line": 405
       },
       "category": "Heroes",
       "kind": "action",
@@ -3105,7 +3341,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetHitpointsCoopCommand",
-        "line": 443
+        "line": 613
       },
       "category": "Heroes",
       "kind": "action",
@@ -3133,7 +3369,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetIssueCoopCommand",
-        "line": 649
+        "line": 814
       },
       "category": "Heroes",
       "kind": "action",
@@ -3166,7 +3402,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetRelationCoopCommand",
-        "line": 817
+        "line": 979
       },
       "category": "Heroes",
       "kind": "action",
@@ -3189,11 +3425,34 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroVolunteersCoopCommand",
-        "line": 736
+        "line": 899
       },
       "category": "Heroes",
       "kind": "inspect",
       "usage": "coop.debug.hero.volunteers <hero_id>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.hideout.teleport_party",
+      "name": "teleport_party",
+      "group": "coop.debug.hideout",
+      "summary": "Reveals the nearest populated hideout off cooldown and teleports the party with the given id to its entrance.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "partyId",
+          "description": "The registered party id shown by coop.debug.players.list.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Hideouts/Commands/HideoutTeleportCommand.cs",
+        "type": "HideoutTeleportCommand",
+        "line": 18
+      },
+      "category": "Hideouts",
+      "kind": "action",
+      "usage": "coop.debug.hideout.teleport_party <partyId>",
       "aliases": []
     },
     {
@@ -3502,7 +3761,7 @@
       "source": {
         "path": "source/GameInterface/Services/ItemRosters/Commands/ItemRosterDebugCommands.cs",
         "type": "ItemRostersExportCoopCommand",
-        "line": 145
+        "line": 146
       },
       "category": "Item rosters",
       "kind": "action",
@@ -3601,7 +3860,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomAddDecisionCoopCommand",
-        "line": 2120
+        "line": 2158
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -3618,7 +3877,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomAddDecisionUsageCoopCommand",
-        "line": 886
+        "line": 892
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -3693,7 +3952,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomCollectionAddCoopCommand",
-        "line": 1363
+        "line": 1369
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -3721,7 +3980,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomCollectionListCoopCommand",
-        "line": 1299
+        "line": 1305
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -3754,7 +4013,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomCollectionRemoveCoopCommand",
-        "line": 1455
+        "line": 1461
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -3805,7 +4064,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomDecisionsCoopCommand",
-        "line": 1000
+        "line": 1006
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -3833,11 +4092,39 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomDeclareWarCoopCommand",
-        "line": 1535
+        "line": 1541
       },
       "category": "Kingdoms",
       "kind": "action",
       "usage": "coop.debug.kingdom.declare_war <faction1_id> <faction2_id>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.kingdom.force_ally",
+      "name": "force_ally",
+      "group": "coop.debug.kingdom",
+      "summary": "Forms an alliance between two kingdoms on the server.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "kingdom1_id",
+          "description": "The first registered kingdom id.",
+          "required": true
+        },
+        {
+          "name": "kingdom2_id",
+          "description": "The second registered kingdom id.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
+        "type": "KingdomForceAllyCoopCommand",
+        "line": 1631
+      },
+      "category": "Kingdoms",
+      "kind": "action",
+      "usage": "coop.debug.kingdom.force_ally <kingdom1_id> <kingdom2_id>",
       "aliases": []
     },
     {
@@ -3854,7 +4141,7 @@
         },
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "The registered kingdom id, or none to restore a kingdomless clan.",
           "required": true
         }
       ],
@@ -3894,11 +4181,39 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomForcePlayerVassalageCoopCommand",
-        "line": 824
+        "line": 830
       },
       "category": "Kingdoms",
       "kind": "action",
       "usage": "coop.debug.kingdom.force_player_vassalage <controller_id> <kingdom_id> [<grant_rewards>]",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.kingdom.force_trade_agreement",
+      "name": "force_trade_agreement",
+      "group": "coop.debug.kingdom",
+      "summary": "Forms a trade agreement between two kingdoms on the server.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "kingdom1_id",
+          "description": "The first registered kingdom id.",
+          "required": true
+        },
+        {
+          "name": "kingdom2_id",
+          "description": "The second registered kingdom id.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
+        "type": "KingdomForceTradeAgreementCoopCommand",
+        "line": 1697
+      },
+      "category": "Kingdoms",
+      "kind": "action",
+      "usage": "coop.debug.kingdom.force_trade_agreement <kingdom1_id> <kingdom2_id>",
       "aliases": []
     },
     {
@@ -3962,7 +4277,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomListDecisionOutcomesCoopCommand",
-        "line": 1088
+        "line": 1094
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -3985,7 +4300,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomListDecisionsCoopCommand",
-        "line": 953
+        "line": 959
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4008,7 +4323,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomListPoliciesCoopCommand",
-        "line": 1247
+        "line": 1253
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4036,7 +4351,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomMakePeaceCoopCommand",
-        "line": 1579
+        "line": 1585
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4252,7 +4567,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomRemoveDecisionCoopCommand",
-        "line": 2188
+        "line": 2226
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4269,7 +4584,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomRemoveDecisionUsageCoopCommand",
-        "line": 925
+        "line": 931
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4297,7 +4612,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomResolveDecisionCoopCommand",
-        "line": 1206
+        "line": 1212
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4357,7 +4672,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomVoteDecisionCoopCommand",
-        "line": 1136
+        "line": 1142
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4692,7 +5007,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "BattleRewardClientStateCoopCommand",
-        "line": 1804
+        "line": 1869
       },
       "category": "Map events",
       "kind": "inspect",
@@ -4715,7 +5030,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "ChooseBattleModeCoopCommand",
-        "line": 3778
+        "line": 3966
       },
       "category": "Map events",
       "kind": "action",
@@ -4766,7 +5081,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "CompleteEncounterMeetingCoopCommand",
-        "line": 3747
+        "line": 3936
       },
       "category": "Map events",
       "kind": "action",
@@ -4789,7 +5104,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "ConversationHoldStateCoopCommand",
-        "line": 2564
+        "line": 2621
       },
       "category": "Map events",
       "kind": "inspect",
@@ -4823,11 +5138,39 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "EncounterStateCoopCommand",
-        "line": 3642
+        "line": 3832
       },
       "category": "Map events",
       "kind": "inspect",
       "usage": "coop.debug.map_event.encounter_state",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.map_event.engage_nearest_bandit",
+      "name": "engage_nearest_bandit",
+      "group": "coop.debug.map_event",
+      "summary": "Places the nearest bandit next to a player and orders it to engage them.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "controller_id",
+          "description": "The controller id.",
+          "required": true
+        },
+        {
+          "name": "excluded_party_id",
+          "description": "The excluded party id.",
+          "required": false
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
+        "type": "EngageNearestBanditCoopCommand",
+        "line": 819
+      },
+      "category": "Map events",
+      "kind": "action",
+      "usage": "coop.debug.map_event.engage_nearest_bandit <controller_id> [<excluded_party_id>]",
       "aliases": []
     },
     {
@@ -4840,7 +5183,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "EnterCurrentBattleCoopCommand",
-        "line": 2473
+        "line": 2532
       },
       "category": "Map events",
       "kind": "action",
@@ -4857,7 +5200,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "FinishCurrentEncounterCoopCommand",
-        "line": 2447
+        "line": 2507
       },
       "category": "Map events",
       "kind": "action",
@@ -4891,7 +5234,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "FinishNonBattleEncounterCoopCommand",
-        "line": 1187
+        "line": 1259
       },
       "category": "Map events",
       "kind": "action",
@@ -4914,7 +5257,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "FinishPlayerEncounterCoopCommand",
-        "line": 2514
+        "line": 2572
       },
       "category": "Map events",
       "kind": "action",
@@ -4937,7 +5280,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "GetEventCoopCommand",
-        "line": 3880
+        "line": 4067
       },
       "category": "Map events",
       "kind": "inspect",
@@ -4954,11 +5297,39 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "GetEventsCoopCommand",
-        "line": 3831
+        "line": 4018
       },
       "category": "Map events",
       "kind": "inspect",
       "usage": "coop.debug.map_event.get_events",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.map_event.hold_ai_conversation",
+      "name": "hold_ai_conversation",
+      "group": "coop.debug.map_event",
+      "summary": "Holds an AI lord party for a player's map conversation.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "controller_id",
+          "description": "The connected player's controller id.",
+          "required": true
+        },
+        {
+          "name": "hero_id",
+          "description": "The AI lord's registered hero id.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
+        "type": "HoldAiConversationCoopCommand",
+        "line": 2648
+      },
+      "category": "Map events",
+      "kind": "action",
+      "usage": "coop.debug.map_event.hold_ai_conversation <controller_id> <hero_id>",
       "aliases": []
     },
     {
@@ -4982,7 +5353,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "JoinExistingCoopCommand",
-        "line": 1215
+        "line": 1286
       },
       "category": "Map events",
       "kind": "action",
@@ -4999,7 +5370,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "KillAllButOneCoopCommand",
-        "line": 3510
+        "line": 3701
       },
       "category": "Map events",
       "kind": "action",
@@ -5067,7 +5438,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "KillRandomTroopCoopCommand",
-        "line": 3436
+        "line": 3627
       },
       "category": "Map events",
       "kind": "action",
@@ -5078,9 +5449,15 @@
       "command": "coop.debug.map_event.kms",
       "name": "kms",
       "group": "coop.debug.map_event",
-      "summary": "Runs the kms debug operation.",
+      "summary": "Removes the main agent using the current survival roll, or forces death during an active co-op battle.",
       "side": "either",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "force",
+          "description": "Use force to guarantee a killed result during an active co-op battle.",
+          "required": false
+        }
+      ],
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/KillPlayerAgentCommands.cs",
         "type": "KmsCoopCommand",
@@ -5088,7 +5465,7 @@
       },
       "category": "Map events",
       "kind": "action",
-      "usage": "coop.debug.map_event.kms",
+      "usage": "coop.debug.map_event.kms [<force>]",
       "aliases": []
     },
     {
@@ -5101,7 +5478,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "LateJoinModeCleanupCoopCommand",
-        "line": 3087
+        "line": 3283
       },
       "category": "Map events",
       "kind": "action",
@@ -5118,7 +5495,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "LateJoinModeEnterCoopCommand",
-        "line": 2812
+        "line": 3010
       },
       "category": "Map events",
       "kind": "action",
@@ -5135,7 +5512,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "LateJoinModeJoinCoopCommand",
-        "line": 2748
+        "line": 2946
       },
       "category": "Map events",
       "kind": "action",
@@ -5158,7 +5535,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "LateJoinModeStateCoopCommand",
-        "line": 3027
+        "line": 3223
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5198,7 +5575,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "LeaveSettlementCoopCommand",
-        "line": 2404
+        "line": 2465
       },
       "category": "Map events",
       "kind": "action",
@@ -5215,7 +5592,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "ListPlayerEncounterCoopCommand",
-        "line": 3603
+        "line": 3793
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5243,7 +5620,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "PeacePursuitStateCoopCommand",
-        "line": 3235
+        "line": 3427
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5260,7 +5637,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "PlayerInteractionStateCoopCommand",
-        "line": 516
+        "line": 514
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5283,7 +5660,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "PrisonerPromptCoopCommand",
-        "line": 88
+        "line": 89
       },
       "category": "Map events",
       "kind": "action",
@@ -5300,7 +5677,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "PrisonerPromptStateCoopCommand",
-        "line": 69
+        "line": 70
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5323,7 +5700,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "RequestPlayerFieldBattleCoopCommand",
-        "line": 447
+        "line": 446
       },
       "category": "Map events",
       "kind": "action",
@@ -5363,7 +5740,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "RetreatConfirmationCoopCommand",
-        "line": 3691
+        "line": 3881
       },
       "category": "Map events",
       "kind": "action",
@@ -5397,7 +5774,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "StartAttackMissionCoopCommand",
-        "line": 590
+        "line": 588
       },
       "category": "Map events",
       "kind": "action",
@@ -5414,7 +5791,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "StartLooterCoopCommand",
-        "line": 648
+        "line": 643
       },
       "category": "Map events",
       "kind": "action",
@@ -5442,7 +5819,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "StartNearestBanditAttackCoopCommand",
-        "line": 734
+        "line": 728
       },
       "category": "Map events",
       "kind": "action",
@@ -5459,7 +5836,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "StartNearestLooterCoopCommand",
-        "line": 684
+        "line": 678
       },
       "category": "Map events",
       "kind": "action",
@@ -5487,7 +5864,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "StartPlayerFieldBattleCoopCommand",
-        "line": 291
+        "line": 292
       },
       "category": "Map events",
       "kind": "action",
@@ -5510,7 +5887,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "SubmitPlayerInteractionCoopCommand",
-        "line": 539
+        "line": 537
       },
       "category": "Map events",
       "kind": "action",
@@ -5538,7 +5915,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "TestPeaceStopsPursuitCoopCommand",
-        "line": 3272
+        "line": 3464
       },
       "category": "Map events",
       "kind": "action",
@@ -5578,7 +5955,7 @@
       "source": {
         "path": "source/GameInterface/Services/Villages/Commands/RaidDebugCommands.cs",
         "type": "AllowRaidAiInterventionCoopCommand",
-        "line": 19
+        "line": 18
       },
       "category": "Map events",
       "kind": "action",
@@ -5634,7 +6011,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "AddPrisonersCoopCommand",
-        "line": 899
+        "line": 946
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -5662,7 +6039,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "AddTroopXpCoopCommand",
-        "line": 706
+        "line": 753
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -5685,7 +6062,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "AddTroopsCoopCommand",
-        "line": 750
+        "line": 797
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -5708,7 +6085,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "CharacterIdsCoopCommand",
-        "line": 294
+        "line": 341
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -5803,7 +6180,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "DeclareWarCoopCommand",
-        "line": 862
+        "line": 909
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -5831,7 +6208,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "ImprisonCompanionCoopCommand",
-        "line": 1007
+        "line": 1054
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -5882,16 +6259,21 @@
           "name": "settlement_id",
           "description": "The settlement id.",
           "required": true
+        },
+        {
+          "name": "instant",
+          "description": "Set to true to teleport instantly instead of travelling.",
+          "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "MoveToSettlementCoopCommand",
-        "line": 241
+        "line": 242
       },
       "category": "Mobile parties",
       "kind": "action",
-      "usage": "coop.debug.mobile_party.move_to_settlement <party_id> <settlement_id>",
+      "usage": "coop.debug.mobile_party.move_to_settlement <party_id> <settlement_id> [<instant>]",
       "aliases": []
     },
     {
@@ -5933,7 +6315,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "PartyScreenTroopStateCoopCommand",
-        "line": 649
+        "line": 696
       },
       "category": "Mobile parties",
       "kind": "inspect",
@@ -5979,7 +6361,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "RemovePrisonersCoopCommand",
-        "line": 959
+        "line": 1006
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6017,7 +6399,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "RestorePositionCoopCommand",
-        "line": 191
+        "line": 192
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6040,7 +6422,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "SelectPartyScreenTroopCoopCommand",
-        "line": 507
+        "line": 554
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6088,7 +6470,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "SetTroopStateCoopCommand",
-        "line": 409
+        "line": 456
       },
       "category": "Mobile parties",
       "kind": "inspect",
@@ -6121,7 +6503,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "SetTroopWoundedCoopCommand",
-        "line": 362
+        "line": 409
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6144,7 +6526,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "SiegeBuffCoopCommand",
-        "line": 813
+        "line": 860
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6167,7 +6549,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "SnapshotPrisonCoopCommand",
-        "line": 1058
+        "line": 1105
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6246,7 +6628,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "StagePartyScreenTransferCoopCommand",
-        "line": 609
+        "line": 656
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6274,7 +6656,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "UpgradePartyScreenTroopCoopCommand",
-        "line": 547
+        "line": 594
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6314,7 +6696,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "AttachmentIdsCoopCommand",
-        "line": 123
+        "line": 184
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6331,7 +6713,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "AuditPartiesCoopCommand",
-        "line": 709
+        "line": 770
       },
       "category": "Mobile parties",
       "kind": "audit",
@@ -6354,7 +6736,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "ComponentInfoCoopCommand",
-        "line": 86
+        "line": 147
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6382,7 +6764,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "CreateNewPartyCoopCommand",
-        "line": 365
+        "line": 426
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6399,7 +6781,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "DestroyAllBanditPartiesCoopCommand",
-        "line": 532
+        "line": 593
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6422,11 +6804,39 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "DestroyPartyCoopCommand",
-        "line": 488
+        "line": 549
       },
       "category": "Mobile parties",
       "kind": "action",
       "usage": "coop.debug.mobileparty.destroy_party <mobilePartyId>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.mobileparty.disorganization_cache",
+      "name": "disorganization_cache",
+      "group": "coop.debug.mobileparty",
+      "summary": "Inspects party speed cache versions, optionally evaluating the local speed cache.",
+      "side": "either",
+      "arguments": [
+        {
+          "name": "partyId",
+          "description": "The registered party id.",
+          "required": true
+        },
+        {
+          "name": "evaluate",
+          "description": "True to evaluate the local speed cache; false only observes.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
+        "type": "DisorganizationCacheCoopCommand",
+        "line": 60
+      },
+      "category": "Mobile parties",
+      "kind": "action",
+      "usage": "coop.debug.mobileparty.disorganization_cache <partyId> <evaluate>",
       "aliases": []
     },
     {
@@ -6445,7 +6855,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "InfoCoopCommand",
-        "line": 31
+        "line": 92
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6462,11 +6872,39 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "ListMobilePartiesCoopCommand",
-        "line": 575
+        "line": 636
       },
       "category": "Mobile parties",
       "kind": "inspect",
       "usage": "coop.debug.mobileparty.list",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.mobileparty.set_disorganized",
+      "name": "set_disorganized",
+      "group": "coop.debug.mobileparty",
+      "summary": "Calls the authoritative disorganization action for a registered party.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "partyId",
+          "description": "The registered party id.",
+          "required": true
+        },
+        {
+          "name": "value",
+          "description": "True or false.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
+        "type": "SetDisorganizedCoopCommand",
+        "line": 31
+      },
+      "category": "Mobile parties",
+      "kind": "action",
+      "usage": "coop.debug.mobileparty.set_disorganized <partyId> <value>",
       "aliases": []
     },
     {
@@ -6490,7 +6928,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "SetWagePaymentLimitCoopCommand",
-        "line": 609
+        "line": 670
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6518,7 +6956,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "SetUnlimitedWageToggleCoopCommand",
-        "line": 662
+        "line": 723
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6546,7 +6984,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "SpawnTestPartiesCoopCommand",
-        "line": 417
+        "line": 478
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6569,7 +7007,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "VerifyAiAuthorityCoopCommand",
-        "line": 170
+        "line": 231
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6586,11 +7024,34 @@
       "source": {
         "path": "source/GameInterface/Services/CampaignService/Commands/ModOptionsCommands.cs",
         "type": "ModConfigListCoopCommand",
-        "line": 19
+        "line": 52
       },
       "category": "Mod options",
       "kind": "inspect",
       "usage": "coop.debug.mod_config.list",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.mod_config.voice_enabled",
+      "name": "voice_enabled",
+      "group": "coop.debug.mod_config",
+      "summary": "Enables or disables voice for the entire server this session.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "value",
+          "description": "true or false",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/CampaignService/Commands/ModOptionsCommands.cs",
+        "type": "VoiceEnabledCoopCommand",
+        "line": 23
+      },
+      "category": "Mod options",
+      "kind": "action",
+      "usage": "coop.debug.mod_config.voice_enabled <value>",
       "aliases": []
     },
     {
@@ -6631,17 +7092,23 @@
       "command": "coop.unstuck",
       "name": "unstuck",
       "group": "coop",
-      "summary": "Runs the unstuck debug operation.",
-      "side": "client",
-      "arguments": [],
+      "summary": "Unsticks your own party on a client, or a connected player on the server.",
+      "side": "either",
+      "arguments": [
+        {
+          "name": "player",
+          "description": "Server only: the controller id, or the hero name in quotes. Leave it out on a client.",
+          "required": false
+        }
+      ],
       "source": {
         "path": "source/GameInterface/Services/GameDebug/Commands/UnstuckCommand.cs",
         "type": "UnstuckCoopCommand",
-        "line": 25
+        "line": 76
       },
       "category": "Player",
       "kind": "action",
-      "usage": "coop.unstuck",
+      "usage": "coop.unstuck [<player>]",
       "aliases": []
     },
     {
@@ -6654,7 +7121,7 @@
       "source": {
         "path": "source/GameInterface/Services/Players/Commands/PlayerDebugCommands.cs",
         "type": "PlayerListCoopCommand",
-        "line": 26
+        "line": 31
       },
       "category": "Players",
       "kind": "inspect",
@@ -6677,7 +7144,7 @@
       "source": {
         "path": "source/GameInterface/Services/Players/Commands/PlayerDebugCommands.cs",
         "type": "PlayerPartyStateCoopCommand",
-        "line": 74
+        "line": 81
       },
       "category": "Players",
       "kind": "inspect",
@@ -6705,7 +7172,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
         "type": "RomanceAgreeCoopCommand",
-        "line": 192
+        "line": 235
       },
       "category": "Romance",
       "kind": "action",
@@ -6733,7 +7200,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
         "type": "RomanceCompatibleCoopCommand",
-        "line": 153
+        "line": 154
       },
       "category": "Romance",
       "kind": "action",
@@ -6761,11 +7228,39 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
         "type": "RomanceDivorceCoopCommand",
-        "line": 265
+        "line": 308
       },
       "category": "Romance",
       "kind": "action",
       "usage": "coop.debug.romance.divorce <player_hero_id> <npc_hero_id>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.romance.fail_practicalities",
+      "name": "fail_practicalities",
+      "group": "coop.debug.romance",
+      "summary": "Sets a marriage fixture pair to failed in practicalities.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "first_hero_id",
+          "description": "The first registered hero id.",
+          "required": true
+        },
+        {
+          "name": "second_hero_id",
+          "description": "The second registered hero id.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
+        "type": "RomanceFailPracticalitiesCoopCommand",
+        "line": 193
+      },
+      "category": "Romance",
+      "kind": "action",
+      "usage": "coop.debug.romance.fail_practicalities <first_hero_id> <second_hero_id>",
       "aliases": []
     },
     {
@@ -6823,7 +7318,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
         "type": "RomanceMarryCoopCommand",
-        "line": 231
+        "line": 274
       },
       "category": "Romance",
       "kind": "action",
@@ -6851,7 +7346,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
         "type": "RomanceStartCoopCommand",
-        "line": 114
+        "line": 115
       },
       "category": "Romance",
       "kind": "action",
@@ -6879,7 +7374,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
         "type": "RomanceStatusCoopCommand",
-        "line": 83
+        "line": 84
       },
       "category": "Romance",
       "kind": "inspect",
@@ -7651,7 +8146,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "ArmyReliefStateCoopCommand",
-        "line": 980
+        "line": 979
       },
       "category": "Sieges",
       "kind": "action",
@@ -7674,7 +8169,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "StartAssaultCoopCommand",
-        "line": 1897
+        "line": 1972
       },
       "category": "Sieges",
       "kind": "action",
@@ -7691,7 +8186,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "AssaultEntryStateCoopCommand",
-        "line": 1173
+        "line": 1183
       },
       "category": "Sieges",
       "kind": "action",
@@ -7708,7 +8203,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "DumpEnginesCoopCommand",
-        "line": 2332
+        "line": 2407
       },
       "category": "Sieges",
       "kind": "inspect",
@@ -7731,7 +8226,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "DumpMachinesCoopCommand",
-        "line": 2418
+        "line": 2493
       },
       "category": "Sieges",
       "kind": "inspect",
@@ -7754,7 +8249,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "DumpPartyCoopCommand",
-        "line": 2260
+        "line": 2335
       },
       "category": "Sieges",
       "kind": "inspect",
@@ -7777,7 +8272,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "FocusSettlementCoopCommand",
-        "line": 2206
+        "line": 2281
       },
       "category": "Sieges",
       "kind": "action",
@@ -7800,7 +8295,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "GraphStateCoopCommand",
-        "line": 2138
+        "line": 2213
       },
       "category": "Sieges",
       "kind": "action",
@@ -7823,7 +8318,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "JoinActiveAssaultCoopCommand",
-        "line": 1096
+        "line": 1095
       },
       "category": "Sieges",
       "kind": "action",
@@ -7846,16 +8341,21 @@
           "name": "expectedPlayerCount",
           "description": "The expected player count.",
           "required": true
+        },
+        {
+          "name": "declareMissingWars",
+          "description": "Use declare-missing-wars only for a disposable debug fixture.",
+          "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "JoinPlayersCoopCommand",
-        "line": 1560
+        "line": 1575
       },
       "category": "Sieges",
       "kind": "action",
-      "usage": "coop.debug.siege.join_players <settlementId> <expectedPlayerCount>",
+      "usage": "coop.debug.siege.join_players <settlementId> <expectedPlayerCount> [<declareMissingWars>]",
       "aliases": []
     },
     {
@@ -7868,7 +8368,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "LeaveCoopCommand",
-        "line": 1272
+        "line": 1287
       },
       "category": "Sieges",
       "kind": "action",
@@ -7885,7 +8385,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "LeaveSettlementCoopCommand",
-        "line": 1303
+        "line": 1318
       },
       "category": "Sieges",
       "kind": "action",
@@ -7902,7 +8402,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "ListSiegesCoopCommand",
-        "line": 2099
+        "line": 2174
       },
       "category": "Sieges",
       "kind": "inspect",
@@ -7925,7 +8425,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "PlayerStateCoopCommand",
-        "line": 1664
+        "line": 1728
       },
       "category": "Sieges",
       "kind": "action",
@@ -7948,7 +8448,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "PrepareLaddersOnlyCoopCommand",
-        "line": 1707
+        "line": 1771
       },
       "category": "Sieges",
       "kind": "action",
@@ -7971,7 +8471,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "RequestAssaultCoopCommand",
-        "line": 1061
+        "line": 1060
       },
       "category": "Sieges",
       "kind": "action",
@@ -7994,7 +8494,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "RequestBesiegeCoopCommand",
-        "line": 1026
+        "line": 1025
       },
       "category": "Sieges",
       "kind": "action",
@@ -8017,7 +8517,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "ResolveStarvationCoopCommand",
-        "line": 2045
+        "line": 2120
       },
       "category": "Sieges",
       "kind": "action",
@@ -8040,7 +8540,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "StageMachinesCoopCommand",
-        "line": 1799
+        "line": 1863
       },
       "category": "Sieges",
       "kind": "action",
@@ -8068,7 +8568,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "StartSiegeCoopCommand",
-        "line": 1348
+        "line": 1363
       },
       "category": "Sieges",
       "kind": "action",
@@ -8101,7 +8601,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "StartArmyReliefCoopCommand",
-        "line": 857
+        "line": 856
       },
       "category": "Sieges",
       "kind": "action",
@@ -8139,7 +8639,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "StopSiegeCoopCommand",
-        "line": 1465
+        "line": 1480
       },
       "category": "Sieges",
       "kind": "action",
@@ -8162,7 +8662,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "TerminalStatusCoopCommand",
-        "line": 1973
+        "line": 2048
       },
       "category": "Sieges",
       "kind": "action",
@@ -8429,7 +8929,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "AddToTownSoldItemsCoopCommand",
-        "line": 582
+        "line": 610
       },
       "category": "Towns",
       "kind": "action",
@@ -8457,7 +8957,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ApplyGarrisonLifecycleCoopCommand",
-        "line": 256
+        "line": 284
       },
       "category": "Towns",
       "kind": "action",
@@ -8497,7 +8997,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ChangeCurrentBuildingCoopCommand",
-        "line": 987
+        "line": 1015
       },
       "category": "Towns",
       "kind": "action",
@@ -8520,7 +9020,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ChangeCurrentBuildingQueueCoopCommand",
-        "line": 1026
+        "line": 1054
       },
       "category": "Towns",
       "kind": "action",
@@ -8543,7 +9043,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "FocusGarrisonCoopCommand",
-        "line": 206
+        "line": 234
       },
       "category": "Towns",
       "kind": "action",
@@ -8566,7 +9066,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "GarrisonBacklinkCoopCommand",
-        "line": 173
+        "line": 201
       },
       "category": "Towns",
       "kind": "action",
@@ -8612,7 +9112,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ListBuildingsCoopCommand",
-        "line": 359
+        "line": 387
       },
       "category": "Towns",
       "kind": "inspect",
@@ -8669,7 +9169,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ListWorkshopsCoopCommand",
-        "line": 396
+        "line": 424
       },
       "category": "Towns",
       "kind": "inspect",
@@ -8692,7 +9192,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ViewManagementDataCoopCommand",
-        "line": 1062
+        "line": 1090
       },
       "category": "Towns",
       "kind": "action",
@@ -8766,7 +9266,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetFoodStocksCoopCommand",
-        "line": 431
+        "line": 459
       },
       "category": "Towns",
       "kind": "action",
@@ -8794,7 +9294,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownGarrisonAutoRecruitmentIsEnabledCoopCommand",
-        "line": 889
+        "line": 917
       },
       "category": "Towns",
       "kind": "action",
@@ -8822,7 +9322,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownGovernorCoopCommand",
-        "line": 482
+        "line": 510
       },
       "category": "Towns",
       "kind": "action",
@@ -8850,7 +9350,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownInRebelliousStateCoopCommand",
-        "line": 806
+        "line": 834
       },
       "category": "Towns",
       "kind": "action",
@@ -8878,7 +9378,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownLastCapturedByCoopCommand",
-        "line": 532
+        "line": 560
       },
       "category": "Towns",
       "kind": "action",
@@ -8906,7 +9406,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownLoyaltyCoopCommand",
-        "line": 707
+        "line": 735
       },
       "category": "Towns",
       "kind": "action",
@@ -8934,7 +9434,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownProsperityCoopCommand",
-        "line": 658
+        "line": 686
       },
       "category": "Towns",
       "kind": "action",
@@ -8962,7 +9462,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownSecurityCoopCommand",
-        "line": 756
+        "line": 784
       },
       "category": "Towns",
       "kind": "action",
@@ -8990,7 +9490,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTradeTaxAccumulatedCoopCommand",
-        "line": 938
+        "line": 966
       },
       "category": "Towns",
       "kind": "action",
@@ -9013,7 +9513,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "StartRebellionCoopCommand",
-        "line": 849
+        "line": 877
       },
       "category": "Towns",
       "kind": "action",
@@ -9030,7 +9530,7 @@
       "source": {
         "path": "source/GameInterface/Services/GameDebug/Commands/UiDebugCommands.cs",
         "type": "UiActiveStateCoopCommand",
-        "line": 375
+        "line": 406
       },
       "category": "UI",
       "kind": "inspect",
@@ -9081,7 +9581,7 @@
       "source": {
         "path": "source/GameInterface/Services/GameDebug/Commands/UiDebugCommands.cs",
         "type": "UiLeaveSettlementEncounterCoopCommand",
-        "line": 161
+        "line": 192
       },
       "category": "UI",
       "kind": "action",
@@ -9098,7 +9598,7 @@
       "source": {
         "path": "source/GameInterface/Services/GameDebug/Commands/UiDebugCommands.cs",
         "type": "UiLoadingWindowStateCoopCommand",
-        "line": 394
+        "line": 425
       },
       "category": "UI",
       "kind": "inspect",
@@ -9115,7 +9615,7 @@
       "source": {
         "path": "source/GameInterface/Services/GameDebug/Commands/UiDebugCommands.cs",
         "type": "UiPopStateCoopCommand",
-        "line": 348
+        "line": 379
       },
       "category": "UI",
       "kind": "inspect",
@@ -9149,7 +9649,7 @@
       "source": {
         "path": "source/GameInterface/Services/GameDebug/Commands/UiDebugCommands.cs",
         "type": "UiSavingOverlayStateCoopCommand",
-        "line": 413
+        "line": 444
       },
       "category": "UI",
       "kind": "inspect",
@@ -9172,7 +9672,7 @@
       "source": {
         "path": "source/GameInterface/Services/GameDebug/Commands/UiDebugCommands.cs",
         "type": "UiSwitchMenuCoopCommand",
-        "line": 311
+        "line": 342
       },
       "category": "UI",
       "kind": "action",

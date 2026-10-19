@@ -1,3 +1,8 @@
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import servers from "@/app/lib/localization/dictionaries/en/servers.json";
+import serverCommon from "@/app/lib/localization/dictionaries/en/server-common.json";
+import type { Dictionary } from "@/app/lib/localization/types";
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -5,16 +10,19 @@ import { ServerOnboarding } from "./ServerOnboarding";
 import { composeOnboarding, EMPTY_MEMBERSHIP } from "@/app/lib/hosting/membership-onboarding";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import { onboardingIntentKey, storeOnboardingIntent } from "@/app/servers/onboarding-intent";
-import { onboardingSummary, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID } from "../../../../tests/onboarding-fixtures";
+import { onboardingRegion, onboardingSummary, onboardingCreated, onboardingRequested, ONBOARDING_TEST_ID } from "../../../../tests/onboarding-fixtures";
 import type { OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { HOSTING_CONTINENTS, HOSTING_REGIONS } from "../../../../supabase/functions/_shared/hosting-regions";
 const mocks = vi.hoisted(() => ({ request: vi.fn(), auth: vi.fn(), refresh: vi.fn(), revalidate: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
 vi.mock("@/app/lib/hosting/my-servers", async (original) => ({ ...await original<object>(), requestServerOnboarding: mocks.request }));
 let container: HTMLDivElement; let root: Root;
+let dictionary: Dictionary;
 beforeEach(() => {
     vi.useFakeTimers(); vi.resetAllMocks(); window.sessionStorage.clear();
+    dictionary = servers;
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value() { this.open = true; } });
     Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
@@ -23,8 +31,9 @@ beforeEach(() => {
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
+/** Renders the real onboarding state machine with its delivered messages. */
 async function render(summary: OnboardingSummary | null = onboardingSummary(), userId = "account-a", strict = false) {
-    const session = <ServerOnboarding summary={summary} userId={userId} />;
+    const session = <LocalizationProvider locale="en" messages={{ servers: dictionary, "server-common": serverCommon }}><ServerOnboarding summary={summary} userId={userId} /></LocalizationProvider>;
     await act(async () => root.render(strict ? <StrictMode>{session}</StrictMode> : session));
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
 }
@@ -37,8 +46,14 @@ async function name(value: string) {
     const input = container.querySelector<HTMLInputElement>("#onboarding-server-name")!;
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
 }
+/** Website regions on one continent, in catalog order. */
+function regionsOn(continent: string) { return HOSTING_REGIONS.filter((region) => region.continent === continent).map((region) => region.key); }
+/** The English tab label of a continent. */
+function continentLabel(continent: string) { return servers[`continent.${continent}` as keyof typeof servers] as string; }
+/** The English tab label of the continent a website region belongs to. */
+function continentOf(region: string) { return continentLabel(HOSTING_REGIONS.find((entry) => entry.key === region)!.continent); }
 async function choose(region: string) {
-    await click(region.startsWith("us-") ? "North America" : "Europe");
+    await click(continentOf(region));
     await act(async () => container.querySelector<HTMLInputElement>(`input[value="${region}"]`)!.click());
 }
 async function setup() { await render(); await click("Set up server "); }
@@ -61,17 +76,89 @@ describe("ServerOnboarding real component and server-action recovery", () => {
     it("groups regions into accessible continent tabs and disables coming-soon continents", async () => {
         await setup();
         const regions = () => [...container.querySelectorAll<HTMLInputElement>('input[name="region"]')].map((input) => input.value);
-        expect(regions()).toEqual(["us-west", "us-east"]);
-        for (const label of ["South America", "Asia", "Oceana"]) expect(button(`${label}Coming soon`).disabled).toBe(true);
-        await click("Europe");
-        expect(regions()).toEqual(["france", "germany", "united-kingdom", "poland"]);
-        expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe("france");
-        expect(button("Europe").getAttribute("aria-selected")).toBe("true");
-        await act(async () => button("Europe").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
-        expect(regions()).toEqual(["us-west", "us-east"]);
-        expect(document.activeElement).toBe(button("North America"));
-        expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe("us-west");
+        const enabled = HOSTING_CONTINENTS.filter((id) => regionsOn(id).length > 0);
+        expect(regions()).toEqual(regionsOn(enabled[0]));
+        for (const id of HOSTING_CONTINENTS.filter((id) => !enabled.includes(id))) expect(button(`${continentLabel(id)}Coming soon`).disabled).toBe(true);
+        await click(continentLabel(enabled[1]));
+        expect(regions()).toEqual(regionsOn(enabled[1]));
+        expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe(regionsOn(enabled[1])[0]);
+        expect(button(continentLabel(enabled[1])).getAttribute("aria-selected")).toBe("true");
+        await act(async () => button(continentLabel(enabled[1])).dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+        const next = enabled[2 % enabled.length];
+        expect(regions()).toEqual(regionsOn(next));
+        expect(document.activeElement).toBe(button(continentLabel(next)));
+        expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe(regionsOn(next)[0]);
         expect(mocks.request).not.toHaveBeenCalled();
+    });
+    it("explains the release cadence when a release option is hovered or focused", async () => {
+        await setup();
+        const descriptions = {
+            stable: "Released to Steam every 1–4 weeks.",
+            nightly: "Released every night to supporters and testers.",
+        } as const;
+        for (const [channel, description] of Object.entries(descriptions)) {
+            const input = container.querySelector<HTMLInputElement>(`input[value="${channel}"]`)!;
+            const option = input.closest("label")!;
+            // A native title would show a second, browser-drawn tooltip under the styled one.
+            expect(option.hasAttribute("title")).toBe(false);
+            expect(input.getAttribute("aria-describedby")).toBe(`release-${channel}-description`);
+            expect(container.querySelector(`#release-${channel}-description`)?.textContent).toContain(description);
+        }
+    });
+    it("offers only stored-catalog regions the website knows, in stored order, and disables emptied continents", async () => {
+        const summary = onboardingSummary();
+        summary.regions = [{ region: "atlantis", available: true, request: null }, onboardingRegion(summary, "poland"),
+            { ...onboardingRegion(summary, "germany"), available: true }];
+        await render(summary); await click("Set up server ");
+        const regions = () => [...container.querySelectorAll<HTMLInputElement>('input[name="region"]')].map((input) => input.value);
+        expect(button("North AmericaComing soon").disabled).toBe(true);
+        expect(button("Europe").getAttribute("aria-selected")).toBe("true");
+        expect(regions()).toEqual(["poland", "germany"]);
+        expect(container.querySelector<HTMLInputElement>('input[name="region"]:checked')?.value).toBe("poland");
+        expect(container.textContent).not.toContain("Atlantis");
+        await choose("germany"); await name("My Campaign"); await click("Create server");
+        expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", region: "germany" });
+    });
+    it("offers Discard for a retained intent in a removed region only after a retry fails transiently", async () => {
+        const original = { action: "request-region", region: "spain", requestId: ONBOARDING_TEST_ID } as const;
+        storeOnboardingIntent(sessionStorage, onboardingIntentKey("account-a"), original);
+        mocks.request.mockRejectedValueOnce(new Error("lost"));
+        await render();
+        expect(container.textContent).toContain("A pending region request in Spain needs confirmation.");
+        expect(container.textContent).toContain("Spain is no longer offered.");
+        expect(container.textContent).not.toContain("Discard pending request");
+        await click("Retry pending request");
+        expect(mocks.request.mock.calls[0][1]).toEqual(original); expect(stored()).toEqual(original);
+        await click("Discard pending request");
+        expect(stored()).toBeNull(); expect(container.textContent).not.toContain("Retry pending request");
+        expect(button("Set up server ").disabled).toBe(false);
+    });
+    it("clears a retained intent in a removed region when the control plane rejects the key", async () => {
+        storeOnboardingIntent(sessionStorage, onboardingIntentKey("account-a"), { action: "request-region", region: "spain", requestId: ONBOARDING_TEST_ID });
+        mocks.request.mockRejectedValueOnce(new MyServersApiError("invalid_region", "Unknown region", false));
+        await render();
+        await click("Retry pending request");
+        expect(stored()).toBeNull();
+        expect(container.textContent).toContain("That region is no longer offered, so nothing was created or requested.");
+        expect(container.textContent).not.toContain("Discard pending request");
+    });
+    it("offers no discard for a retained intent the stored catalog still offers", async () => {
+        storeOnboardingIntent(sessionStorage, onboardingIntentKey("account-a"), { action: "request-region", region: "france", requestId: ONBOARDING_TEST_ID });
+        await render();
+        expect(container.textContent).toContain("Retry pending request");
+        expect(container.textContent).not.toContain("Discard pending request");
+    });
+    it("shows visible pending feedback while refreshing availability", async () => {
+        await setup();
+        const refresh = button("Refresh availability");
+        await act(() => { refresh.click(); });
+        expect(mocks.refresh).toHaveBeenCalledTimes(1);
+        expect(refresh.disabled).toBe(true);
+        expect(refresh.getAttribute("aria-busy")).toBe("true");
+        expect(refresh.querySelector("svg")).not.toBeNull();
+        await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+        expect(refresh.disabled).toBe(false);
+        expect(refresh.getAttribute("aria-busy")).toBe("false");
     });
     it("retains Nightly selection across an uncertain response and exact retry", async () => {
         mocks.request.mockRejectedValueOnce(new Error("response lost"));
@@ -95,41 +182,56 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         await act(async () => { submit.click(); submit.click(); });
         expect(mocks.request).toHaveBeenCalledTimes(1);
         expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", displayName: "My Campaign", region: "us-west", releaseChannel: "stable" });
-        expect(stored()).toBeNull(); expect(container.textContent).toContain("Server assigned"); expect(container.textContent).toContain("stopped at creation");
+        expect(stored()).toBeNull(); expect(container.textContent).toContain("Server assigned"); expect(container.textContent).toContain("While your server will be available in the site immediately"); expect(container.textContent).not.toContain("Setup does not start the server");
         expect(container.textContent).not.toContain("Discord owner controls");
         expect(container.textContent).not.toContain("Refresh status and My Servers");
         expect(container.querySelector("a")?.getAttribute("href")).toBe(`/servers/${ONBOARDING_TEST_ID}`);
         expect(mocks.refresh).toHaveBeenCalled();
     });
-    it.each([false, true])("blocks full regions with clear guidance, including saved requests (%s)", async (hasRequest) => {
-        const summary = onboardingSummary();
-        summary.regions[1].available = false;
-        if (hasRequest) summary.regions[1].request = { ...onboardingRequested().request, region: "us-east" };
-        await render(summary);
-        expect(container.textContent).not.toContain("outstanding");
-        await click("Set up server "); await name("My Campaign"); await choose("us-east");
-        expect(container.textContent).toContain("US-East is full—choose another region or check back later.");
-        expect(container.textContent).not.toContain("Request region");
-        expect(container.textContent).not.toContain("Requested");
-        expect(button("Create server").disabled).toBe(true);
+    it("requests a full region without a name and shows the saved request on reload", async () => {
+        mocks.request.mockResolvedValueOnce(onboardingRequested()); await setup(); await choose("france");
+        expect(container.textContent).toContain("France is full. Request it to let us know you want a server there");
+        await click("Request region");
+        expect(mocks.request.mock.calls[0][1]).toEqual({ action: "request-region", region: "france", requestId: expect.any(String) });
+        expect(stored()).toBeNull(); expect(container.textContent).toContain("Region request confirmed");
+        await click("Done"); const summary = onboardingSummary(); onboardingRegion(summary, "france").request = onboardingRequested().request;
+        await render(summary); await click("Set up server "); await choose("france");
+        expect(container.textContent).toContain("Full · Requested"); expect(container.textContent).toContain("Your request for France is saved.");
+        expect(button("Region requested").disabled).toBe(true);
         await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
-        expect(mocks.request).not.toHaveBeenCalled(); expect(stored()).toBeNull();
-        await click("Refresh availability"); expect(mocks.refresh).toHaveBeenCalled();
-        await choose("us-west"); expect(button("Create server").disabled).toBe(false);
-        expect(container.textContent).not.toContain("US-East is full—");
-        await click("Create server");
-        expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", region: "us-west" });
+        expect(mocks.request).toHaveBeenCalledTimes(1);
+        await choose("us-east"); expect(button("Create server").disabled).toBe(false);
+    });
+    it("requires explicit confirmation before replacing another pending region request", async () => {
+        const summary = onboardingSummary();
+        onboardingRegion(summary, "france").request = onboardingRequested().request;
+        await render(summary); await click("Set up server "); await choose("germany");
+        await click("Request region");
+        expect(mocks.request).not.toHaveBeenCalled();
+        expect(container.textContent).toContain("Requesting Germany will dismiss that request and replace it with this one.");
+        expect(button("Dismiss France request and request Germany").disabled).toBe(false);
+        await click("Dismiss France request and request Germany");
+        expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "request-region", region: "germany" });
+    });
+    it("confirms before replacing a pending request for a region the website no longer offers", async () => {
+        const summary = onboardingSummary();
+        summary.otherRequests = [{ ...onboardingRequested().request, region: "spain" }];
+        await render(summary); await click("Set up server "); await choose("germany");
+        await click("Request region");
+        expect(mocks.request).not.toHaveBeenCalled();
+        expect(container.textContent).toContain("Requesting Germany will dismiss that request and replace it with this one.");
+        await click("Dismiss Spain request and request Germany");
+        expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "request-region", region: "germany" });
     });
     it("allows creation after capacity returns even with an older region request", async () => {
-        const summary = onboardingSummary(); summary.regions[1].available = false;
-        summary.regions[1].request = { ...onboardingRequested().request, region: "us-east" };
+        const summary = onboardingSummary(); onboardingRegion(summary, "us-east").available = false;
+        onboardingRegion(summary, "us-east").request = { ...onboardingRequested().request, region: "us-east" };
         await render(summary); await click("Set up server "); await choose("us-east"); await name("My Campaign");
-        expect(button("Create server").disabled).toBe(true);
+        expect(button("Region requested").disabled).toBe(true);
         const refreshed = { ...summary, regions: summary.regions.map((region) => ({ ...region, available: true })) };
         await render(refreshed);
         expect(button("Create server").disabled).toBe(false);
-        expect(container.textContent).not.toContain("is full—");
-        expect(container.textContent).not.toContain("outstanding");
+        expect(container.textContent).not.toContain("is saved");
         mocks.request.mockResolvedValueOnce({ ...onboardingCreated(), region: "us-east" });
         await click("Create server");
         expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", region: "us-east" });
@@ -145,7 +247,7 @@ describe("ServerOnboarding real component and server-action recovery", () => {
         for (const call of mocks.request.mock.calls) expect(call[1]).toEqual(original);
         expect(stored()).toBeNull(); expect(container.textContent).toContain("Server assigned");
     });
-    it("recovers a legacy uncertain region request with its original UUID and account", async () => {
+    it("recovers an uncertain region request with its original UUID and account", async () => {
         const original = { action: "request-region", region: "france", requestId: ONBOARDING_TEST_ID } as const;
         storeOnboardingIntent(sessionStorage, onboardingIntentKey("account-a"), original);
         mocks.request.mockRejectedValueOnce(new Error("lost")); await render(); await click("Retry pending request");
@@ -281,8 +383,33 @@ it("membership prompts never replace a retained exact-UUID mutation, and associa
     storeOnboardingIntent(sessionStorage,onboardingIntentKey("account-a"),candidate);
     const allocation = onboardingSummary(); allocation.sources.administrativeBase=0; allocation.eligibility={eligible:false,reason:"no_grant",granted:0,used:0,remaining:0};
     const summary = composeOnboarding("account-a",null,{version:1,accountId:"account-a",hasDiscord:true,configured:true,verificationPending:false,membership:{...EMPTY_MEMBERSHIP,sync:"not_needed"}},allocation);
-    await act(async()=>root.render(<ServerOnboarding userId="account-a" summary={allocation} websiteSummary={summary} />));
+    await act(async()=>root.render(<LocalizationProvider locale="en" messages={{ servers, "server-common": serverCommon }}><ServerOnboarding userId="account-a" summary={allocation} websiteSummary={summary} /></LocalizationProvider>));
     await act(async()=>{await vi.advanceTimersByTimeAsync(0);});
     expect(container.textContent).toContain("Retry pending request"); expect(container.textContent).not.toContain("Connect Patreon");
     await click("Retry pending request"); expect(mocks.request.mock.calls[0][1]).toEqual(candidate); expect(stored()).toBeNull();
+});
+
+it("localizes region/release presentation, validation and reordered receipts without changing submitted values", async () => {
+    dictionary = {
+        ...servers,
+        "onboarding.closeLabel": "Localized close label", "onboarding.namePlaceholder": "Localized example",
+        "onboarding.invalidName": "Localized validation", "region.us-west": "Localized western region",
+        "release.nightly": "Localized nightly", "onboarding.receipt": "{region}: assigned {name}; receipt only.",
+    };
+    await render(); await click("Set up server ");
+    expect(container.querySelector('button[aria-label="Localized close label"]')).not.toBeNull();
+    expect(container.querySelector<HTMLInputElement>("#onboarding-server-name")?.placeholder).toBe("Localized example");
+    expect(container.textContent).toContain("Localized western region");
+    expect(container.textContent).toContain("Localized nightly");
+    await name("!bad"); await click("Create server");
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Localized validation");
+    expect(mocks.request).not.toHaveBeenCalled();
+    await name("My Campaign");
+    await act(async () => container.querySelector<HTMLInputElement>('input[value="nightly"]')!.click());
+    mocks.request.mockResolvedValueOnce({ ...onboardingCreated(), releaseChannel: "nightly" });
+    await click("Create server");
+    expect(mocks.request.mock.calls[0][1]).toMatchObject({ action: "create-server", displayName: "My Campaign", region: "us-west", releaseChannel: "nightly" });
+    expect(container.textContent).toContain("Localized western region: assigned My Campaign; receipt only.");
+    expect(container.querySelector("a")?.getAttribute("href")).toBe(`/servers/${ONBOARDING_TEST_ID}`);
+    expect(stored()).toBeNull();
 });

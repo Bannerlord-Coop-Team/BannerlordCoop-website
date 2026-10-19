@@ -44,3 +44,42 @@ export async function getSupabaseServerClient(options: { impersonation?: "actor"
     }
     return client;
 }
+
+/** Refreshed token and cached identity only. Callers must independently verify authority before rendering. */
+export async function getSupabaseServerReadSession() {
+    const impersonating = Boolean((await cookies()).get(IMPERSONATION_COOKIE));
+    // Preserve the full actor/target validation and redirect path for impersonation.
+    const client = impersonating ? await getSupabaseServerClient() : await createSupabaseServerClient();
+    const { data: { session }, error: sessionError } = await client.auth.getSession();
+    if (sessionError) throw sessionError;
+    return { client, session, impersonating };
+}
+
+/** Fresh read-only viewer; never retained across requests or used in place of mutation authorization. */
+export async function getSupabaseServerViewer<T = undefined>(options: {
+    /** Start only independently authorized reads. This callback does not establish identity or permission. */
+    onReadOnlySession?: (accessToken: string) => T;
+} = {}) {
+    const { client, session, impersonating } = await getSupabaseServerReadSession();
+    if (!session) return { client, user: null, accessToken: null };
+
+    // Impersonation was fully validated above. Never release page data until this
+    // function also verifies the current user and the matching session identity.
+    const read = options.onReadOnlySession?.(session.access_token);
+    const [{ data: { user }, error }] = await Promise.all([
+        // An explicit token avoids holding the SDK session lock while fetching the user.
+        client.auth.getUser(session.access_token),
+        (async () => {
+            if (impersonating) return;
+            const { data, error } = await client.rpc("website_session_context", {
+                p_action: "website.session", p_request_id: crypto.randomUUID(),
+            }).setHeader("Authorization", `Bearer ${session.access_token}`);
+            if (error || data?.impersonationId !== null) throw new Error("Session context unavailable.");
+        })(),
+    ]);
+    return {
+        ...(read === undefined ? {} : { read }),
+        client, user: error ? null : user,
+        accessToken: !error && user && session.user.id === user.id ? session.access_token : null,
+    };
+}

@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { after, before, beforeEach, test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
+import { staticCreatorToken } from "../_shared/patreon-creator-token.ts";
 import { createPatreonRoleHandler } from "../_shared/patreon-roles.ts";
 
 const campaign = "12345", tier = "28995946", patreonUser = "123";
@@ -62,7 +63,7 @@ function snapshot(id = member, identity = patreonUser, eligible = true) {
     } };
 }
 function handler(fetchImplementation: typeof fetch = async () => Response.json(snapshot())) {
-    return createPatreonRoleHandler({ campaignId: campaign, tierId: tier, creatorAccessToken: "fixture-creator-token", syncSecret, webhookSecret, rpc, fetchImplementation });
+    return createPatreonRoleHandler({ campaignId: campaign, tierId: tier, creatorToken: staticCreatorToken("fixture-creator-token"), syncSecret, webhookSecret, rpc, fetchImplementation });
 }
 async function runWorker(worker = handler()) {
     return worker(new Request(endpoint, { method: "POST", headers: { "x-patreon-sync-key": syncSecret } }));
@@ -347,7 +348,7 @@ function allocationSnapshot(amount = 5000) {
 }
 function allocationHandler(fetchImplementation: typeof fetch = async () => Response.json(allocationSnapshot())) {
     return createPatreonRoleHandler({ campaignId: campaign, tierId: tier, allocationPolicy,
-        creatorAccessToken: "fixture-creator-token", syncSecret, webhookSecret, rpc, fetchImplementation });
+        creatorToken: staticCreatorToken("fixture-creator-token"), syncSecret, webhookSecret, rpc, fetchImplementation });
 }
 async function allocationLink() {
     await known(); await link();

@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -17,7 +19,7 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 
 it("defaults missing visibility to private and requires explicit publishing confirmation", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    await act(async () => root.render(<ServerVisibilitySetting {...props} />));
+    await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} />} </TestLocalization>));
     expect(container.querySelector("summary")?.textContent).toContain("Private");
     expect(container.textContent).toContain("public directory with its game address");
     expect(container.textContent).toContain("does not grant management access or change game connection permissions");
@@ -36,35 +38,36 @@ it.each(["throw", "error"] as const)("retries the identical UUID and input after
     if (failure === "throw") mocks.update.mockRejectedValueOnce(new Error("Network lost"));
     else mocks.update.mockResolvedValueOnce({ ok: false, message: "Response could not be confirmed" });
     mocks.update.mockResolvedValueOnce({ ok: true, message: "Update acknowledged" });
-    await act(async () => root.render(<ServerVisibilitySetting {...props} />));
+    await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} />} </TestLocalization>));
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!.click());
     const first = mocks.update.mock.calls[0][0];
     expect(mocks.refresh).not.toHaveBeenCalled();
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!.click());
     expect(mocks.update.mock.calls[1][0]).toEqual(first);
     expect(mocks.refresh).toHaveBeenCalledOnce();
-    expect(container.querySelector("summary")?.textContent).toContain("Private");
+    // An acknowledgement may be a replay, so it never claims the new preference before refreshed props do.
+    expect(container.querySelector("summary")?.textContent).not.toContain("Public");
 });
 it("uses a new request after an authoritative generation change", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     mocks.update.mockResolvedValue({ ok: false, message: "Refresh required" });
-    await act(async () => root.render(<ServerVisibilitySetting {...props} />));
+    await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} />} </TestLocalization>));
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!.click());
     const first = mocks.update.mock.calls[0][0];
     const expectedUpdatedAt = "2026-09-13T12:00:00.000Z";
-    await act(async () => root.render(<ServerVisibilitySetting {...props} expectedUpdatedAt={expectedUpdatedAt} />));
+    await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} expectedUpdatedAt={expectedUpdatedAt} />} </TestLocalization>));
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!.click());
     expect(mocks.update.mock.calls[1][0].requestId).not.toBe(first.requestId);
     expect(mocks.update.mock.calls[1][0].expectedUpdatedAt).toBe(expectedUpdatedAt);
 });
 it.each(["manager", "support", "admin"] as const)("%s cannot publish or hide a server", async accessRole => {
-    await act(async () => root.render(<ServerVisibilitySetting {...props} accessRole={accessRole} visibility="public" />));
+    await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} accessRole={accessRole} visibility="public" />} </TestLocalization>));
     expect(container.querySelector("button")).toBeNull();
     expect(container.textContent).toContain("Only the server owner");
 });
 it("can make public server private and reports a stale failure without optimistic success", async () => {
     mocks.update.mockResolvedValue({ ok: false, message: "The server changed. Refresh and try again." });
-    await act(async () => root.render(<ServerVisibilitySetting {...props} visibility="public" />));
+    await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} visibility="public" />} </TestLocalization>));
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!.click());
     expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ visibility: "private" }));
     expect(container.querySelector('[role="status"]')?.textContent).toContain("The server changed");
@@ -72,7 +75,7 @@ it("can make public server private and reports a stale failure without optimisti
 });
 
 it("shows the selected choice and closes the picker with Escape", async () => {
-    await act(async () => root.render(<ServerVisibilitySetting {...props} />));
+    await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} />} </TestLocalization>));
     const picker = container.querySelector("details")!;
     const summary = container.querySelector("summary")!;
     expect(container.querySelector('[aria-pressed="true"]')?.textContent).toBe("Private");
@@ -81,3 +84,47 @@ it("shows the selected choice and closes the picker with Escape", async () => {
     expect(picker.open).toBe(false);
     expect(document.activeElement).toBe(summary);
 });
+
+it("closes the picker when the pointer or focus moves outside it, but not inside it", async () => {
+    await act(async () => root.render(<TestLocalization><button>Elsewhere</button><ServerVisibilitySetting {...props} /></TestLocalization>));
+    const picker = container.querySelector("details")!;
+    picker.open = true;
+    await act(async () => container.querySelector('button[aria-pressed="true"]')!.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    expect(picker.open).toBe(true);
+    await act(async () => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    expect(picker.open).toBe(false);
+    picker.open = true;
+    await act(async () => container.querySelector("button")!.focus());
+    expect(picker.open).toBe(false);
+});
+
+it("acknowledges a change without a lingering message, then shows the refreshed preference", async () => {
+    vi.useFakeTimers();
+    try {
+        vi.spyOn(window, "confirm").mockReturnValue(true);
+        mocks.update.mockResolvedValue({ ok: true, message: "Discovery preference update acknowledged. Refreshing the current setting." });
+        await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} />} </TestLocalization>));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!.click());
+        const announcement = [...container.querySelectorAll('[role="status"]')].find((status) => status.textContent?.includes("acknowledged"));
+        // Screen readers hear the acknowledgement; sighted users see "Saving…" in place, so nothing shifts.
+        expect(announcement?.className).toBe("sr-only");
+        expect(container.querySelector("summary")!.textContent).toContain("Saving…");
+        await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} visibility="public" expectedUpdatedAt="2026-09-14T00:00:00.000Z" />} </TestLocalization>));
+        expect(container.querySelector("summary")!.textContent).toContain("Public");
+        expect(container.textContent).not.toContain("acknowledged");
+        // A replay that leaves the preference unchanged still stops saying "Saving…" after a few seconds.
+        await act(async () => root.render(<TestLocalization>{<ServerVisibilitySetting {...props} visibility="public" expectedUpdatedAt="2026-09-14T00:00:00.000Z" />} </TestLocalization>));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!.click());
+        expect(container.querySelector("summary")!.textContent).toContain("Saving…");
+        await act(async () => vi.advanceTimersByTimeAsync(6_000));
+        expect(container.querySelector("summary")!.textContent).toContain("Public");
+        expect(container.textContent).not.toContain("acknowledged");
+    } finally { vi.useRealTimers(); }
+});
+
+// Resolves real English messages without reading cookies in standalone tests.
+vi.mock("@/app/lib/localization/server", () => ({
+    getLocale: async () => "en",
+    getMessages: async () => serverTestMessages,
+    getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
+}));

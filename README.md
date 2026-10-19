@@ -34,9 +34,11 @@ does not knowingly include code copied from another project without permission.
 
 ## Managed read-only console
 
-Managed server owner/manager pages include an explicit Connect/Disconnect live-output panel. The browser connects only to the same-origin `/api/servers/[serverId]/console` route. That route revalidates the current Supabase user/session and forwards only the bearer token and validated server UUID to the fixed server-only `CONTROL_PLANE_CONSOLE_ORIGIN`; callers cannot select an upstream destination, actor, agent, process, or path.
+Managed server owner/manager pages include a live-output panel that connects automatically. The browser connects only to the same-origin `/api/servers/[serverId]/console` route. That route revalidates the current Supabase user/session and forwards only the bearer token and validated server UUID to the fixed server-only `CONTROL_PLANE_CONSOLE_ORIGIN`; callers cannot select an upstream destination, actor, agent, process, or path.
 
-The response is private, unbuffered SSE with a five-minute maximum session and no automatic reconnect or history. The UI retains at most 128 KiB and 2,000 lines. Production enablement still requires verified OpenNext/Cloudflare streaming and disconnect behavior plus the reviewed Oracle Caddy route; local mocks do not establish those deployment properties.
+The response is private, unbuffered SSE with a five-minute maximum session; the runner follows only new output (`podman logs --follow --tail=0`), so a connection never replays history and nothing is stored. The UI keeps one connection at a time and appends each connection's output to what it already shows: it renews an expired session, or a healthy stream that ends because the runner capped its log reader, at once while the tab is visible (or when the tab is shown again) for about half an hour without page activity, then pauses with a Reconnect button until the owner interacts again; it retries other closures with a capped backoff (2 s, 5 s, 10 s, 30 s, 60 s) before offering a manual Reconnect, waits while the server is stopped, and reconnects as soon as the server is running again. Container-host logging and incomplete `@DS@` control records are hidden. The UI retains at most 128 KiB and 2,000 lines. Production enablement still requires verified OpenNext/Cloudflare streaming and disconnect behavior plus the reviewed Oracle Caddy route; local mocks do not establish those deployment properties.
+
+Each received chunk's decoded line events are appended together, and line/character retention runs once for that chunk. Each event still adds its trailing newline (including empty or multiline events), partial UTF-8/SSE frames wait for completion, and game phases are published in event order before the text update. The bounded history is still parsed when rendered, and scrolling back still pauses auto-follow. `npx tsx --test src/app/components/servers/ManagedServerConsole.test.ts` includes a full-buffer/100-event retention benchmark; it reports local synthetic timings, not production console latency.
 
 ## Local Development
 
@@ -115,7 +117,7 @@ Bootstrap administrators always retain admin access, preventing an accidental to
 
 ### Control Plane administration
 
-The protected `/admin/control-plane` page is the administrative surface for managed hosting. It reads fleet/server/job/release/audit state and submits the complete supported administrator operation set through the `control-plane-admin` Supabase Edge Function. The function reauthenticates the current Discord administrator and relays the typed request to the Oracle control-plane web adapter. The website does not query the private control-plane schema or talk directly to OVH, runners, containers, or object storage. See `docs/control-plane-admin.md` and the control-plane repository's `docs/managed-hosting/web-admin.md`.
+The protected `/admin/control-plane` page is the administrative surface for managed hosting. It reads fleet/server/job/release/audit state and submits the administrator operations it offers through the `control-plane-admin` Supabase Edge Function. The page has no form for publishing the hosting-region catalog (`set-hosting-regions`); that operation is sent through the same Edge Function by hand, as described in `docs/server-onboarding.md`. The function reauthenticates the current Discord administrator and relays the typed request to the Oracle control-plane web adapter. The website does not query the private control-plane schema or talk directly to VPS providers, runners, containers, or object storage. See `docs/control-plane-admin.md` and the control-plane repository's `docs/managed-hosting/web-admin.md`.
 
 ### Legacy server hosting preview
 
@@ -129,15 +131,13 @@ The legacy placeholder implementation (not the current authenticated My Servers/
 
 The public directory and legacy placeholder assigned-server records remain fixtures. Typed placeholder records—including fictitious account assignments—live in `src/app/lib/hosting/servers.ts`; they are not evidence of current account assignments or onboarding eligibility.
 
-A dormant IONOS adapter is retained, but its inventory panel and API calls are disabled while alternative hosting options are evaluated. The create-server Server Action rejects requests before contacting IONOS. `IONOS_MANAGEMENT_ENABLED=true` restores inventory management; billable creation additionally requires `IONOS_SERVER_CREATION_ENABLED=true`.
-
 The placeholder design is documented in `docs/server-hosting-design.md`.
 
 ### Managed-server onboarding
 
 The current `/servers` page loads authenticated managed assignments from the control plane using registered server UUIDs. New setup uses **unused explicitly granted quota**, not membership or role claims. Available regions create an assigned stopped server; full regions accept private durable requests through the existing authenticated `my-servers` Edge Function. The public directory loads the anonymous `public-servers` endpoint independently of private inventory.
 
-See [website server onboarding](docs/server-onboarding.md) for the strict contract, exact-request recovery, Discord password controls, mock-only screenshots/tests and required **schema → backend → my-servers Edge → UI** rollout order. Nothing in this implementation deploys those layers automatically.
+See [website server onboarding](docs/server-onboarding.md) for the strict contract, exact-request recovery, Discord password controls, mock-only screenshots/tests and required **schema → backend → my-servers Edge → UI** rollout order. The [Supabase hosting deployment workflow](docs/supabase-hosting-deployment.md) deploys affected managed-hosting APIs from main; schema and backend prerequisites retain their separate rollout gates.
 
 ### Managed server console
 
@@ -167,11 +167,9 @@ Server-only Supabase secret key used by protected member-role administration to 
 
 Comma-separated bootstrap administrator emails. These users always have admin access and cannot be demoted through the member administration page.
 
-### IONOS management
+### `CONTROL_PLANE_ORIGIN`
 
-`IONOS_MANAGEMENT_ENABLED` controls whether the dormant IONOS inventory is loaded and displayed. `IONOS_SERVER_CREATION_ENABLED` separately enables billable creation and has no effect unless management is enabled. Both default to disabled.
-
-`IONOS_TOKEN_ID` and `IONOS_CLOUD_API_TOKEN` are server-only provider credentials. `IONOS_LOCATION` and `IONOS_IMAGE_ALIAS` configure provisioning defaults when management and creation are explicitly enabled.
+Optional server-only origin for the website's direct control-plane reads: the administrator pane reads (`/v1/admin/control-plane`), owner inventory reads (`/v1/user/control-plane`) and the public directory (`/v1/public/control-plane`). Unset or empty uses the reviewed production origin `https://control-plane.bannerlordcoop.com`. An override must be a bare absolute `https://` origin with no credentials, path, query or fragment, for example `https://localhost:9443` for a local stack behind a trusted TLS proxy. Any other value fails closed: the read throws before a request is sent. The routes stay fixed in code; this value only selects the origin. It does not affect `CONTROL_PLANE_CONSOLE_ORIGIN` or the Edge Functions' `CONTROL_PLANE_WEB_ORIGINS`. Never use a `NEXT_PUBLIC_` variable for it.
 
 ### `CONTROL_PLANE_CONSOLE_ORIGIN`
 

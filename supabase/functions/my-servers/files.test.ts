@@ -3,13 +3,74 @@ import test from "node:test";
 import { serverLogDownloadHeaders, MAXIMUM_SERVER_LOG_BYTES } from "../_shared/server-log-contract.ts";
 import { createMyServersHandler } from "../_shared/my-servers.ts";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../_shared/managed-server-configuration.ts";
-import { parseOwnerFileMutation, parseOwnerFileDownload } from "../_shared/server-file-contract.ts";
+import { parseOwnerFileMutation, parseOwnerFileDownload, parseOwnerFileResult, OWNER_FILE_FAILURE_REASONS, OWNER_FILE_REJECTION_REASONS } from "../_shared/server-file-contract.ts";
 const requestId = "aaaaaaaa-1111-4111-8111-111111111111";
 const input = { action: "import-config", serverId: requestId, expectedUpdatedAt: "2026-09-13T00:00:00.000Z", managedConfig: DEFAULT_MANAGED_SERVER_CONFIGURATION };
 const result = { kind: "configuration", outcome: "updated", updatedAt: "2026-09-13T00:00:01.000Z" };
 const token = "original-token-with-enough-characters";
+test("rejection reasons survive submission and status checks, accepting legacy responses without leaking private fields", async () => {
+    for (const failureReason of [undefined, ...OWNER_FILE_REJECTION_REASONS]) {
+        const rejected = { kind: "rejected", ...(failureReason === undefined ? {} : { failureReason }) };
+        assert.deepEqual(parseOwnerFileResult(rejected), rejected);
+        const run = handler(async (_url, init) => {
+            const upstream = JSON.parse(String(init?.body));
+            return Response.json({ version: 1, requestId: upstream.requestId, ok: true, result: rejected });
+        });
+        for (const req of [request(input), new Request(`https://edge.test/my-servers?resource=file-transfer-status&serverId=${requestId}&transferRequestId=${requestId}`,
+            { headers: { authorization: `Bearer ${token}` } })]) {
+            const response = await run(req);
+            assert.equal(response.status, 200);
+            assert.deepEqual((await response.json()).result, rejected);
+        }
+    }
+    for (const extra of [{ failureReason: "private-token" }, { failureReason: null }, { message: "private data" }, { errorCode: "unsafe_file" }]) {
+        const rejected = { kind: "rejected", ...extra };
+        assert.throws(() => parseOwnerFileResult(rejected));
+        const response = await handler(async (_url, init) => Response.json({ version: 1,
+            requestId: JSON.parse(String(init?.body)).requestId, ok: true, result: rejected }))(request(input));
+        assert.ok(response.status >= 400);
+        assert.doesNotMatch(await response.text(), /private-token|private data/u);
+    }
+});
+test("transfer failures accept only optional closed reasons and pass through the edge unchanged", async () => {
+    const job = { kind: "job", outcome: "existing", jobId: requestId, action: "import-save", state: "failed" };
+    assert.deepEqual(parseOwnerFileResult(job), job);
+    for (const failureReason of OWNER_FILE_FAILURE_REASONS) {
+        const failed = { ...job, failureReason };
+        assert.deepEqual(parseOwnerFileResult(failed), failed);
+        const response = await handler(async (_url, init) => {
+            const upstream = JSON.parse(String(init?.body));
+            return Response.json({ version: 1, requestId: upstream.requestId, ok: true, result: failed });
+        })(new Request(`https://edge.test/my-servers?resource=file-transfer-status&serverId=${requestId}&transferRequestId=${requestId}`, { headers: { authorization: `Bearer ${token}` } }));
+        assert.equal(response.status, 200);
+        assert.deepEqual((await response.json()).result, failed);
+    }
+    for (const invalid of [{ ...job, failureReason: "https://private-object/token" }, { ...job, failureReason: null },
+        { ...job, state: "queued", failureReason: "storage-unavailable" }, { ...job, errorCode: "secret" }]) {
+        assert.throws(() => parseOwnerFileResult(invalid));
+    }
+});
 function request(body: unknown, auth = true, id = true) { return new Request("https://edge.test/my-servers?resource=file-transfer", { method: "POST", headers: { "content-type": "application/json", ...(auth ? { authorization: `Bearer ${token}` } : {}), ...(id ? { "x-request-id": requestId } : {}) }, body: JSON.stringify(body) }); }
-function handler(fetchImplementation: typeof fetch) { return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", fetchImplementation }); }
+function handler(fetchImplementation: typeof fetch) { return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", waitUntil: () => {}, fetchImplementation }); }
+
+test("save metadata and mod configuration reads accept the expanded live configuration", async () => {
+    const managedConfig = structuredClone(DEFAULT_MANAGED_SERVER_CONFIGURATION);
+    managedConfig.modConfig.voice.sceneMaximumDistance = 75;
+    managedConfig.modConfig.modOptions.coopClansEnabled = false;
+    const files = { serverId: requestId, updatedAt: input.expectedUpdatedAt, operationState: "running",
+        observedGameState: "running", activeSave: { saveId: requestId, displayName: "Default New Game" }, managedConfig };
+    const response = await handler(async (_url, init) => {
+        const upstream = JSON.parse(String(init?.body));
+        return Response.json({ version: 1, requestId: upstream.requestId, ok: true, result: files });
+    })(new Request(`https://edge.test/my-servers?resource=files&serverId=${requestId}`, { headers: { authorization: `Bearer ${token}` } }));
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).result, files);
+    const mod = { configPart: "mod", revision: "a".repeat(64), settings: managedConfig.modConfig };
+    const config = await handler(async () => Response.json({ requestId, ok: true, result: mod }))(
+        new Request(`https://edge.test/my-servers?resource=config&serverId=${requestId}&configPart=mod`, { headers: { authorization: `Bearer ${token}` } }));
+    assert.equal(config.status, 200);
+    assert.deepEqual((await config.json()).result, mod);
+});
 
 test("configuration transfer preserves verified bearer, exact input and durable request ID", async () => {
     const response = await handler(async (url, init) => {
@@ -123,4 +184,73 @@ test("direct log download preserves access errors and rejects JSON success witho
         assert.equal((await response.json()).error.code, status === 404 ? "server_not_found" : "invalid_response");
         assert.equal(calls, 1);
     }
+});
+
+const configFile = { configPart: "server", revision: "a".repeat(64), settings: DEFAULT_MANAGED_SERVER_CONFIGURATION.serverConfig };
+const configRequest = { action: "save-config", serverId: requestId, configPart: "server", expectedRevision: configFile.revision, settings: configFile.settings };
+const adapterReadId = "dddddddd-1111-4111-8111-111111111111";
+function configPost(body: unknown, id = true) {
+    return new Request("https://edge.test/my-servers", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}`, ...(id ? { "x-request-id": requestId } : {}) }, body: JSON.stringify(body) });
+}
+function configGet(query: string) {
+    return new Request(`https://edge.test/my-servers?resource=config&${query}`, { headers: { authorization: `Bearer ${token}`, "x-request-id": requestId } });
+}
+
+test("configuration read forwards a bodiless GET with the exact query and presents the website envelope", async () => {
+    const response = await handler(async (url, init) => {
+        assert.equal(String(url), `https://cp.test/api/v1/config?serverId=${requestId}&configPart=server`);
+        assert.equal(init?.method, "GET");
+        assert.equal(init?.body, undefined);
+        const headers = new Headers(init?.headers);
+        assert.equal(headers.get("authorization"), `Bearer ${token}`);
+        assert.equal(headers.get("content-type"), null);
+        return Response.json({ ok: true, requestId: adapterReadId, result: configFile });
+    })(configGet(`serverId=${requestId}&configPart=server`));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    assert.deepEqual(await response.json(), { version: 1, requestId, ok: true, result: configFile });
+});
+
+test("configuration read normalizes adapter failures correlated with its own read ID and rejects bad queries", async () => {
+    let calls = 0;
+    const run = handler(async () => {
+        calls++;
+        return Response.json({ version: 1, requestId: adapterReadId, ok: false, error: { code: "server_not_found", message: "Managed server is unavailable.", retryable: false } }, { status: 404 });
+    });
+    const response = await run(configGet(`serverId=${requestId}&configPart=mod`));
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), { version: 1, requestId, ok: false, error: { code: "server_not_found", message: "Managed server is unavailable.", retryable: false } });
+    for (const query of [`serverId=${requestId}&configPart=combined`, `serverId=${requestId}`, `serverId=${requestId}&configPart=server&path=x`]) {
+        assert.equal((await run(configGet(query))).status, 400);
+    }
+    assert.equal(calls, 1);
+});
+
+test("configuration write requires a durable request ID, forwards exact settings and rejects host fields or foreign results", async () => {
+    const written = { ...configFile, revision: "b".repeat(64) };
+    const response = await handler(async (url, init) => {
+        assert.equal(String(url), "https://cp.test/api/v1/config");
+        assert.equal(init?.method, "POST");
+        assert.equal(new Headers(init?.headers).get("x-request-id"), requestId);
+        assert.deepEqual(JSON.parse(String(init?.body)), { requestId, serverId: requestId, configPart: "server", expectedRevision: configFile.revision, settings: configFile.settings });
+        return Response.json({ ok: true, requestId, result: written });
+    })(configPost(configRequest));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { version: 1, requestId, ok: true, result: written });
+    let calls = 0;
+    const rejecting = handler(async () => { calls++; throw Error("Unexpected fetch"); });
+    for (const req of [configPost(configRequest, false), configPost({ ...configRequest, settings: { ...configFile.settings, password: "forbidden" } }),
+        configPost({ ...configRequest, expectedRevision: "stale" }), configPost({ ...configRequest, configPart: "combined" }), configPost({ ...configRequest, path: "/etc" })]) {
+        assert.equal((await rejecting(req)).status, 400);
+    }
+    assert.equal(calls, 0);
+    for (const upstream of [
+        { ok: true, requestId, result: { configPart: "mod", revision: configFile.revision, settings: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig } },
+        { ok: true, requestId: adapterReadId, result: configFile },
+        { ok: true, requestId, result: { ...configFile, settings: { ...configFile.settings, password: "leak" } } },
+        { version: 1, requestId, ok: true, result: configFile },
+    ]) assert.equal((await handler(async () => Response.json(upstream))(configPost(configRequest))).status, 502);
+    const conflict = await handler(async () => Response.json({ version: 1, requestId, ok: false, error: { code: "configuration_unavailable", message: "The runner configuration operation could not be confirmed.", retryable: false } }, { status: 409 }))(configPost(configRequest));
+    assert.equal(conflict.status, 409);
+    assert.equal((await conflict.json()).error.code, "configuration_unavailable");
 });

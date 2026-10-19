@@ -1,5 +1,20 @@
 # Source-owned account and membership onboarding
 
+Server-rendered account status uses the website's existing server-only Supabase
+account credential. Fresh Auth user and membership session-context checks overlap
+with a no-store `GET website-account`, which returns only `{version:1,configured}`
+from the Edge Function's current policy. Only after all three succeed does the
+server call the fixed `membership_status` RPC using those verified identities.
+The shared status projection checks snapshot identity and retains the same public
+DTO. Account synchronization still finishes before allocation is read. Only
+identical in-flight reads are coalesced; settled responses are never cached.
+
+The existing authenticated POST operations remain supported. During automatic
+Edge/website rollout, an older function's GET 405 uses its existing authenticated
+status POST; other failures cannot trigger that fallback. No schema, policy,
+credential or deployment configuration change is needed. New `sb_secret_` keys
+are sent only as `apikey`; legacy service-role JWTs keep their Bearer header.
+
 The edge-owned commit cutover below is pending; this change performs no deployment
 or remote schema mutation. Previously deployed Patreon JSON:API handling and safe
 callback diagnostics are retained unchanged.
@@ -35,11 +50,22 @@ paid-through deadline. No paid-through date is available in this adapter's
 supported response: `paidThroughAt` is always null. We never request or infer
 expiry from `next_charge_date`, pledge cadence, lifetime payment or last charge.
 Former/cancelled patrons without independent paid-through evidence are
-`review_required`; declined evidence is nonqualifying; missing/ambiguous fields,
-pending/unknown charge status, free trials/gifts, duplicate resources and incomplete
-pagination require review. Unexpected identity response is a failed authorization.
-The adapter deliberately refuses incomplete pages rather than following arbitrary
-provider-supplied URLs. This is safe denial, not a claim to support every account.
+`review_required`; declined evidence is nonqualifying; pending charge status,
+free trials/gifts, future charge dates, non-USD campaigns, tier/policy mapping
+disagreements and member identity conflicts require review. An incomplete or
+malformed provider read (missing or duplicate included resources, missing
+relationships or attributes, incomplete pagination) proves nothing either way: it
+is recorded as retryable `unknown` evidence, which the website presents as
+"could not be confirmed, retry" rather than "contact support". A JSON:API response
+that omits `included` for a user with no memberships is a complete nonqualifying
+read. The callback logs only the fixed adapter reason (for example `Missing tier
+amount`) and the resulting verification, never the provider body. An unexpected
+identity document is a failed authorization. The adapter deliberately refuses
+incomplete pages rather than following arbitrary provider-supplied URLs. This is
+safe denial, not a claim to support every account. Creator-authenticated allocation
+reads keep the three-state `qualifying`/`nonqualifying`/`review_required` contract
+that `patreon_role_sync` accepts; an incomplete creator read stays `review_required`
+there and is retried as a durable job.
 
 The fixed identity URL requests `identity identity.memberships`, includes
 `memberships.campaign,memberships.currently_entitled_tiers.campaign,memberships.user`,
@@ -141,7 +167,7 @@ links/receipts/outbox changes and is not an acceptable automatic rollback. Keep 
 linking paused during a failed cutover; never weaken account/generation checks to
 rescue a consumed callback. No remote DB changes or production drop occurred here.
 
-Full regions remain selectable with “[Region] is full—choose another region or check back later.” Create is disabled for full regions. The website no longer offers new region requests or displays outstanding requests; exact recovery of previously submitted uncertain requests is preserved.
+Full regions remain selectable for a private Request, without reservation or ETA.
 Create remains stopped; first Start uses the bundled default save. Password controls
 remain the documented Discord owner path, not a new web password endpoint.
 
@@ -184,11 +210,23 @@ Every snapshot authoritatively looks up the exact account via Auth admin API;
 404 becomes a tombstone, outage fails closed, identities never fall back to metadata.
 Patreon is a website-owned binding, not a Supabase provider identity.
 
+Website account operations overlap fresh Auth-user and session-context checks.
+Both must succeed, with any impersonation target matching the verified user,
+before membership reads or writes proceed. Account status still precedes
+the owner allocation read.
+
+The server directory also prepares these read-only checks and the authoritative
+configuration GET during viewer verification. Reconciliation waits for the fresh
+matching viewer, including its Discord binding; failed or discarded preparation
+cannot invoke the status RPC or legacy POST. Allocation still follows status
+reconciliation, and preparation is local to that render. Identical in-flight
+status requests still coalesce; completed status is never retained.
+
 `membership.ts` contains the exact private snapshot contract (all keys required,
 nullable semantics, decimal strings, provider ID bounds, UTC millisecond times).
 It matches CP `membership-contract.ts`. `server-onboarding-contract.ts` parses CP
-allocation **version 2**, including source breakdown and freshness, retaining all
-six ordered regions. No private provider IDs enter the public account status or
+allocation **version 3**, including source breakdown and freshness, keeping the
+control plane's stored region catalog in its order. No private provider IDs enter the public account status or
 website summary. `membership-onboarding.ts` owns strict authenticated status parsing
 and public summary v2 status/next-action composition.
 

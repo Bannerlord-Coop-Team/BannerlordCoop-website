@@ -1,6 +1,12 @@
 import "server-only";
 import type { MediaVideo } from "@/app/components/utils/types/media.types";
-import { getYouTubeVideos } from "./youtube";
+import { getYouTubeVideos, type YouTubeLabels } from "./youtube";
+
+export type HomepageVideo = MediaVideo & {
+    description_translation_key?: string | null;
+    thumbnail_alt_translation_key?: string | null;
+    category_translation_key?: string | null;
+};
 
 type HomepageVideoRow = {
     id: string;
@@ -12,16 +18,20 @@ type HomepageVideoRow = {
     thumbnail_alt: string | null;
     category: string;
     duration: string | null;
+    description_translation_key?: string | null;
+    thumbnail_alt_translation_key?: string | null;
+    category_translation_key?: string | null;
 };
 
-export async function getHomepageVideos(): Promise<MediaVideo[]> {
+// Loads ordered homepage media with explicit editorial keys and generated YouTube labels.
+export async function getHomepageVideos(labels?: YouTubeLabels): Promise<HomepageVideo[]> {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     if (!url || !key) return [];
 
     try {
         const parameters = new URLSearchParams({
-            select: "id,source,href,title,description,thumbnail,thumbnail_alt,category,duration",
+            select: "id,source,href,title,description,thumbnail,thumbnail_alt,category,duration,description_translation_key,thumbnail_alt_translation_key,category_translation_key",
             published: "eq.true",
             order: "published_at.desc.nullslast,sort_order.asc,id.asc",
         });
@@ -35,10 +45,12 @@ export async function getHomepageVideos(): Promise<MediaVideo[]> {
         const rows = (await response.json()) as HomepageVideoRow[];
         const youtubeVideos = await getYouTubeVideos(
             rows.filter((row) => row.source === "youtube").map((row) => row.href),
+            labels,
         );
         const byHref = new Map(youtubeVideos.map((video) => [video.href, video]));
 
-        return rows.flatMap((row): MediaVideo[] => {
+        // Preserve database order and custom source values while attaching their editorial identities.
+        return rows.flatMap((row): HomepageVideo[] => {
             if (row.source === "youtube") {
                 // The database accepts both youtube.com and www.youtube.com URLs.
                 const canonicalHref = `https://www.youtube.com/watch?v=${new URL(row.href).searchParams.get("v")}`;
@@ -55,6 +67,9 @@ export async function getHomepageVideos(): Promise<MediaVideo[]> {
                 thumbnailAlt: row.thumbnail_alt,
                 category: row.category,
                 duration: row.duration,
+                description_translation_key: row.description_translation_key,
+                thumbnail_alt_translation_key: row.thumbnail_alt_translation_key,
+                category_translation_key: row.category_translation_key,
             }];
         });
     } catch (error) {

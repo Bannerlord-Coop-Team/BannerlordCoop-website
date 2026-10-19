@@ -122,14 +122,11 @@ try {
     await screenshot("mock-desktop-assigned.png"); await click("Done");
     await until(`document.body.textContent.includes('My Campaign') && document.body.textContent.includes('Offline')`);
     await click("Reset mock"); await click("Set up server"); await click("Europe");
-    await until(`document.body.textContent.includes('France is full—choose another region or check back later.')`);
-    assert.equal(await evaluate(`document.querySelector('button[type="submit"]').disabled`), true);
-    await evaluate(`document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))`);
-    assert.equal(await evaluate(`sessionStorage.getItem('fixture-calls')`), null);
-    await screenshot("mock-desktop-full-region.png"); await click("Close");
-    await setFixture("fixture-requested", "yes"); await cdp("Page.reload");
-    await until(`document.body.textContent.includes('You have a server available')`);
-    assert.equal(await evaluate(`document.body.textContent.includes('outstanding region requests')`), false);
+    await until(`document.body.textContent.includes('France is full. Request it')`); await click("Request region");
+    await until(`document.body.textContent.includes('Region request confirmed')`); await screenshot("mock-desktop-requested.png"); await click("Done");
+    await cdp("Page.reload"); await until(`document.body.textContent.includes('You have a server available')`);
+    await click("Set up server"); await click("Europe"); await until(`document.body.textContent.includes('Full · Requested')`);
+    assert.equal(await evaluate(`document.querySelector('button[type="submit"]').disabled`), true); await click("Close");
     await click("Reset mock"); await setFixture("fixture-response", "race"); await click("Set up server"); await setName(); await click("Create server");
     await until(`document.body.textContent.includes('No change was made')`); await screenshot("mock-desktop-capacity-race.png"); await click("Close");
     await click("Reset mock"); await setFixture("fixture-response", "lost"); await click("Set up server"); await setName(); await click("Create server");
@@ -147,13 +144,11 @@ try {
     await screenshot("mock-mobile-banner.png"); await click("Set up server");
     assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth`), true);
     await screenshot("mock-mobile-dialog.png");
-    await click("Europe");
-    await until(`document.body.textContent.includes('France is full—choose another region or check back later.')`);
-    assert.equal(await evaluate(`document.querySelector('button[type="submit"]').disabled`), true);
-    await screenshot("mock-mobile-full-region.png"); await click("Close");
+    await click("Europe"); await click("Request region"); await until(`document.body.textContent.includes('Region request confirmed')`);
+    await screenshot("mock-mobile-requested.png"); await click("Done");
     assert.deepEqual(errors, []); assert.deepEqual(blocked, []);
     await writeFile(join(owned, "page-traffic.json"), JSON.stringify({ pageTraffic, blocked, errors }, null, 2));
-    console.log("MOCK-ONLY browser checks passed: desktop/mobile, native dialog focus/Tab/Escape/restore including pending and uncertain Escape/Close, assigned stopped inventory, full-region guidance and hidden historical requests after reload, capacity race, uncertain exact retry/reload/consumed quota/account mismatch and switch. Observed page traffic was loopback only; browser-internal egress isolation is not proved.");
+    console.log("MOCK-ONLY browser checks passed: desktop/mobile, native dialog focus/Tab/Escape/restore including pending and uncertain Escape/Close, assigned stopped inventory, full-region request and requested summary after reload, capacity race, uncertain exact retry/reload/consumed quota/account mismatch and switch. Observed page traffic was loopback only; browser-internal egress isolation is not proved.");
     await cdp("Browser.close");
 } finally {
     ws?.close();

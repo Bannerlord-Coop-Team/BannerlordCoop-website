@@ -1,17 +1,8 @@
-import type { HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
+import type { HostingAdminRegionEntry, HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
+import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE } from "../../../../supabase/functions/_shared/server-settings-contract";
+import { hostingRegionLabel, type HostingRegionPayload, type HostingRegionPlacementPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
-const SERVER_REGION_LABELS = {
-    "us-west": "US-West",
-    "us-east": "US-East",
-    france: "France",
-    germany: "Germany",
-    "united-kingdom": "United Kingdom",
-    poland: "Poland",
-} as const;
-
-const MAINTENANCE_SLOTS = ["03:00-04:00", "10:00-11:00", "18:00-19:00"] as const;
-
-export const MAINTENANCE_TIME_ZONE = "America/Chicago";
+export const MAINTENANCE_TIME_ZONE = HOSTING_TIME_ZONE;
 
 export type ControlPlaneOperationResultLink = {
     href: string;
@@ -37,9 +28,9 @@ export function releaseVersion(build: ReleaseBuild) {
 }
 
 /** Displays channel names without changing their transport values. */
-export function releaseChannelLabel(channel: string) {
-    if (channel === "stable") return "Public";
-    if (channel === "nightly") return "Nightly";
+export function releaseChannelLabel(channel: string, labels = { stable: "Public", nightly: "Nightly" }) {
+    if (channel === "stable") return labels.stable;
+    if (channel === "nightly") return labels.nightly;
     return channel;
 }
 
@@ -47,42 +38,33 @@ export function fieldRequirementLabel(required: boolean) {
     return required ? "Required" : "Optional";
 }
 
+export function slotOwnerAccountId(owner: { ownerDiscordUserId: string; ownerAccountId?: string | null }) {
+    // Older API responses can still identify new accounts by their UUID principal.
+    return owner.ownerAccountId ?? validUuid(owner.ownerDiscordUserId);
+}
+
 export function formatAccountOwner(
     owner: { ownerDiscordUserId: string; ownerAccountId?: string | null },
     accountLabels: Readonly<Record<string, string>>,
 ) {
-    // Older API responses can still identify new accounts by their UUID principal.
-    const accountId = owner.ownerAccountId ?? validUuid(owner.ownerDiscordUserId);
+    const accountId = slotOwnerAccountId(owner);
     if (accountId === null) return `Legacy owner (${owner.ownerDiscordUserId})`;
     return accountLabels[accountId] ?? `Account unavailable (${accountId})`;
 }
 
-export function serverRegionOptions() {
-    return Object.entries(SERVER_REGION_LABELS).map(([value, label]) => ({ value, label }));
-}
-
-export function createServerRegionOptions(
-    hosts: readonly Pick<HostingAdminVpsHost, "region" | "availableServers">[],
-) {
-    const regionsWithAvailableCapacity = new Set(
-        hosts
-            .filter((host) => Number.isSafeInteger(host.availableServers) && host.availableServers > 0)
-            .map((host) => host.region)
-            .filter((region): region is keyof typeof SERVER_REGION_LABELS => (
-                Object.hasOwn(SERVER_REGION_LABELS, region)
-            )),
-    );
-    return serverRegionOptions()
-        .filter(({ value }) => regionsWithAvailableCapacity.has(value as keyof typeof SERVER_REGION_LABELS));
+/** Stored-catalog regions the control plane reports as having a free admissible slot, in stored order (advisory). */
+export function createServerRegionOptions(regions: readonly Pick<HostingAdminRegionEntry, "region" | "available">[]) {
+    return regions.filter((entry) => entry.available).map(({ region }) => ({ value: region, label: hostingRegionLabel(region) }));
 }
 
 export function maintenanceSlotOptions() {
-    return MAINTENANCE_SLOTS.map((value) => ({
+    return HOSTING_MAINTENANCE_SLOTS.map((value) => ({
         value,
         label: `${value.replace("-", "–")} ${MAINTENANCE_TIME_ZONE}`,
     }));
 }
 
+/** Fills Create's default release channel, which the administrator card never asks for. */
 export function applyControlPlaneOperationDefaults(
     operation: string,
     input: Record<string, unknown>,
@@ -90,6 +72,41 @@ export function applyControlPlaneOperationDefaults(
     if (operation === "create-server" && input.releaseChannel === undefined) {
         input.releaseChannel = "stable";
     }
+}
+
+type HostPlacement = Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region">;
+
+/** Labels a host by the stored-catalog regions it serves (or its legacy region), then its provider country and zone. */
+export function hostPlacementLabel(host: HostPlacement, catalog: readonly HostingRegionPayload[] | null) {
+    return `${hostRegionsLabel(host, catalog)} · ${host.countryCode} · ${host.locationId}`;
+}
+
+/** Region keys a host serves: every stored placement it satisfies, else its legacy region. */
+export function hostServedRegionKeys(host: HostPlacement, catalog: readonly HostingRegionPayload[] | null): string[] {
+    const matched = matchedCatalogRegions(host, catalog).map((entry) => entry.region);
+    if (matched.length > 0) return matched;
+    return host.region !== null && host.region.length > 0 ? [host.region] : [];
+}
+
+/** Names the stored regions whose placement a host satisfies, else its legacy region, else none. */
+function hostRegionsLabel(host: HostPlacement, catalog: readonly HostingRegionPayload[] | null) {
+    if (catalog === null) return "Regions unavailable";
+    const regions = matchedCatalogRegions(host, catalog);
+    if (regions.length > 0) return regions.map((entry) => hostingRegionLabel(entry.region)).join(", ");
+    if (host.region === null) return "No stored region";
+    return `${hostingRegionLabel(host.region)} (legacy)`;
+}
+
+function matchedCatalogRegions(host: HostPlacement, catalog: readonly HostingRegionPayload[] | null) {
+    if (catalog === null) return [];
+    return catalog.filter((entry) => placementMatchesHost(entry.placement, host));
+}
+
+/** Whether a host's provider country (and zone, when the placement names zones) satisfies a placement.
+ *  Mirrors the control plane's `placementMatchesHost` in `src/hosting/regions.ts`, which is the source of truth. */
+function placementMatchesHost(placement: HostingRegionPlacementPayload, host: HostPlacement) {
+    if (!placement.countryCodes.includes(host.countryCode)) return false;
+    return placement.locationIds === undefined || placement.locationIds.includes(host.locationId);
 }
 
 export function operationTargetMatchesHash(hash: string, operation: string) {
@@ -180,7 +197,7 @@ export function presentControlPlaneOperationResult(
             links,
         };
     }
-    if (typeof result.reviewId === "string" || Object.hasOwn(result, "snapshot")) {
+    if (Object.hasOwn(result, "snapshot")) {
         return { message: JSON.stringify(result, null, 2).slice(0, 12_000), links };
     }
     return { message: "Operation completed and the dashboard has been refreshed.", links };

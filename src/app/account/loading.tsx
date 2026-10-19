@@ -1,15 +1,19 @@
 import { Navbar } from "@/app/components/layout/Navbar";
 import { Skeleton } from "@/app/components/ui/Skeleton";
 
-export default function AccountLoading() {
+import { getTranslations } from "@/app/lib/localization/server";
+
+/** Announces account loading in the selected request locale. */
+export default async function AccountLoading() {
+    const { t } = await getTranslations("account");
     return (
-        <div className="flex min-h-svh flex-col bg-background text-foreground" aria-busy="true" aria-label="Loading account">
+        <div className="flex min-h-svh flex-col bg-background text-foreground" aria-busy="true" aria-label={t("loading.label")}>
             <Navbar />
 
             <main className="flex-1">
                 <section className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
                     <span className="sr-only" role="status">
-                        Loading account…
+                        {t("loading.status")}
                     </span>
 
                     <Skeleton className="h-11 w-40" />
@@ -38,6 +42,7 @@ export default function AccountLoading() {
     );
 }
 
+/** Reserves the connection card layout while account status loads. */
 function AccountConnectionSkeleton() {
     return (
         <section className="border-b border-white/10 p-5 sm:p-6" aria-hidden="true">

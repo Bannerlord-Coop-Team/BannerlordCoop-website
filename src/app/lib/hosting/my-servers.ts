@@ -1,17 +1,23 @@
 import { parseReleaseMutation, parseReleaseStatus, type ReleaseMutation } from "../../../../supabase/functions/_shared/server-release-contract";
+import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSettingsMutation } from "../../../../supabase/functions/_shared/server-settings-contract";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "../../../../supabase/functions/_shared/server-visibility-contract";
+import { parseSaveGenerationList, parseSaveGenerationRestoreMutation, parseSaveGenerationRestoreResult, type RestorableSaveGeneration } from "../../../../supabase/functions/_shared/server-save-generation-contract";
 import type {
     HostingPage,
     MyServerBackupJob,
     MyServerBackupStatus,
     MyServerBackupSummary,
+    MyServerSaveGenerationList,
+    MyServerSavePage,
+    MyServerSaveSummary,
     MyServerSummary,
 } from "@/app/lib/control-plane/types";
 
-import { parseOnboardingIntent, parseOnboardingSummary, parseOnboardingResult, type OnboardingIntent, type OnboardingResult, type OnboardingSummary } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { parseOnboardingIntent, parseOnboardingResult, type OnboardingIntent, type OnboardingResult } from "../../../../supabase/functions/_shared/server-onboarding-contract";
 
 const MAXIMUM_RESPONSE_BYTES = 8 * 1_048_576;
 const MAXIMUM_PAGES = 10;
+const MAXIMUM_LIMIT = 100;
 const BACKUP_PAGE_LIMIT = 50;
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const RESOURCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -46,8 +52,17 @@ const BACKUP_JOB_STATES = new Set([
     "cancelled",
 ]);
 
+import { parseServerDeletionIntent, parseServerDeletionResult, type ServerDeletionIntent } from "../../../../supabase/functions/_shared/server-deletion-contract";
+
+export async function requestMyServerDeletion(accessToken: string, intent: ServerDeletionIntent) {
+    const { requestId, ...input } = parseServerDeletionIntent(intent);
+    const result = await requestMyServersApi(accessToken, { method: "POST",
+        body: JSON.stringify({ action: "delete-server", ...input }), requestId });
+    try { return parseServerDeletionResult(result); } catch { throw invalidResponse(); }
+}
+
 export type MyServerOperation = "start" | "stop" | "restart-game";
-export type MyServerBackupOperation = "create-backup" | "restore-backup";
+export type MyServerBackupOperation = "create-backup" | "restore-backup" | "restore-save-generation";
 
 export type MyServerOperationResult = { exitCode: 0 };
 
@@ -63,6 +78,21 @@ export type MyServerUpdateResult = {
     action: "update";
 };
 
+export type MyServerDeletionJob = {
+    jobId: string;
+    state: "queued" | "running" | "retry-wait" | "succeeded" | "failed" | "cancelled";
+    progress: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type MyServerDeletionStatus = {
+    serverId: string;
+    updatedAt: string;
+    operationState: string;
+    job: MyServerDeletionJob | null;
+};
+
 export class MyServersApiError extends Error {
     constructor(
         readonly code: string,
@@ -75,13 +105,18 @@ export class MyServersApiError extends Error {
     }
 }
 
-export async function listAllMyServers(accessToken: string): Promise<MyServerSummary[]> {
+export async function listAllMyServers(
+    accessToken: string,
+    signal?: AbortSignal,
+    readPage = requestMyServers,
+): Promise<MyServerSummary[]> {
     const servers: MyServerSummary[] = [];
     const seenIds = new Set<string>();
     let cursor: string | null = null;
 
     for (let pageIndex = 0; pageIndex < MAXIMUM_PAGES; pageIndex += 1) {
-        const result = parseServerPage(await requestMyServers(accessToken, cursor));
+        signal?.throwIfAborted();
+        const result = parseServerPage(await readPage(accessToken, cursor, signal));
         for (const server of result.items) {
             if (seenIds.has(server.serverId)) {
                 throw invalidResponse("The server API returned a duplicate server.");
@@ -131,6 +166,45 @@ export async function listAllMyServerBackups(
     );
 }
 
+export async function listAllMyServerSaves(accessToken: string, serverId: string): Promise<MyServerSavePage> {
+    if (!RESOURCE_ID.test(serverId)) throw new MyServersApiError("invalid_request", "The managed server ID is invalid.");
+    let cursor: string | null = null;
+    const items: MyServerSaveSummary[] = [];
+    for (let pageIndex = 0; pageIndex < MAXIMUM_PAGES; pageIndex += 1) {
+        const page = parseSavePage(await requestMyServerSaves(accessToken, serverId, cursor));
+        if (page.serverId !== serverId) throw invalidResponse("The save response belongs to another server.");
+        items.push(...page.items);
+        if (page.nextCursor === null) return { ...page, items };
+        cursor = page.nextCursor;
+    }
+    throw new MyServersApiError("response_too_large", "The campaign list exceeds the supported page limit.");
+}
+
+export async function selectMyServerSave(accessToken: string, input: { serverId: string; saveId: string; expectedUpdatedAt: string }, requestId: string) {
+    if (!REQUEST_ID.test(requestId) || !RESOURCE_ID.test(input.serverId) || !RESOURCE_ID.test(input.saveId) || !ISO_TIMESTAMP.test(input.expectedUpdatedAt)) throw new MyServersApiError("invalid_request", "The campaign selection request is invalid.");
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify({ action: "select-save", ...input }), requestId });
+    if (!isRecord(result) || !hasExactKeys(result, ["activeSaveId", "serverId", "updatedAt"]) || result.serverId !== input.serverId || result.activeSaveId !== input.saveId || !isTimestamp(result.updatedAt)) throw invalidResponse();
+    return result as { serverId: string; activeSaveId: string; updatedAt: string };
+}
+
+export async function deleteMyServerSave(accessToken: string, input: { serverId: string; saveId: string; expectedUpdatedAt: string; confirmationText: string }, requestId: string) {
+    if (!REQUEST_ID.test(requestId) || !RESOURCE_ID.test(input.serverId) || !RESOURCE_ID.test(input.saveId) || !ISO_TIMESTAMP.test(input.expectedUpdatedAt) || input.confirmationText.length < 1 || input.confirmationText.length > 48) throw new MyServersApiError("invalid_request", "The campaign deletion request is invalid.");
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify({ action: "delete-save", ...input }), requestId });
+    if (!isRecord(result) || !hasExactKeys(result, ["action", "jobId", "outcome"]) || result.action !== "delete-save" || typeof result.jobId !== "string" || !RESOURCE_ID.test(result.jobId) || (result.outcome !== "enqueued" && result.outcome !== "existing")) throw invalidResponse();
+    return result as { outcome: "enqueued" | "existing"; jobId: string; action: "delete-save" };
+}
+
+/** Reads the active campaign's current save and earlier autosaves; the response must name the same server and save. */
+export async function getMyServerSaveGenerations(accessToken: string, serverId: string, saveId: string): Promise<MyServerSaveGenerationList> {
+    if (!RESOURCE_ID.test(serverId) || !RESOURCE_ID.test(saveId)) throw new MyServersApiError("invalid_request", "The campaign autosave request is invalid.");
+    const result = await requestMyServersApi(accessToken, { method: "GET", configureEndpoint(endpoint) {
+        endpoint.searchParams.set("resource", "save-generations");
+        endpoint.searchParams.set("serverId", serverId);
+        endpoint.searchParams.set("saveId", saveId);
+    } });
+    try { return parseSaveGenerationList(result, serverId, saveId); } catch { throw invalidResponse(); }
+}
+
 export async function getMyServerBackupStatus(
     accessToken: string,
     serverId: string,
@@ -145,6 +219,56 @@ export async function getMyServerBackupStatus(
             endpoint.searchParams.set("serverId", serverId);
         },
     }), serverId);
+}
+
+export async function getMyServerDeletionStatus(
+    accessToken: string,
+    serverId: string,
+): Promise<MyServerDeletionStatus> {
+    if (!RESOURCE_ID.test(serverId)) {
+        throw new MyServersApiError("invalid_request", "Invalid server ID.");
+    }
+    return parseDeletionStatus(await requestMyServersApi(accessToken, {
+        method: "GET",
+        configureEndpoint(endpoint) {
+            endpoint.searchParams.set("resource", "deletion-status");
+            endpoint.searchParams.set("serverId", serverId);
+        },
+    }), serverId);
+}
+
+export async function requestMyServerSettings(accessToken: string, input: OwnerSettingsMutation, requestId: string) {
+    if (!REQUEST_ID.test(requestId)) throw new MyServersApiError("invalid_request", "Invalid settings request ID.");
+    const parsed = parseOwnerSettingsMutation(input);
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify({ action: "save-server-settings", ...parsed }), requestId });
+    try { return parseOwnerSettingsResult(result, parsed.serverId); } catch { throw invalidResponse(); }
+}
+
+export async function requestMyServerManager(accessToken: string, input: { serverId: string; managerAccountId: string; enabled: boolean; expectedUpdatedAt: string }, requestId: string) {
+    if (!REQUEST_ID.test(requestId) || !RESOURCE_ID.test(input.serverId) || !RESOURCE_ID.test(input.managerAccountId) || !ISO_TIMESTAMP.test(input.expectedUpdatedAt)) {
+        throw new MyServersApiError("invalid_request", "The manager access request is invalid.");
+    }
+    const result = await requestMyServersApi(accessToken, {
+        method: "POST",
+        body: JSON.stringify({ action: "set-server-manager", ...input }),
+        requestId,
+    });
+    if (!isRecord(result) || !hasExactKeys(result, ["changed"]) || typeof result.changed !== "boolean") throw invalidResponse();
+    return result as { changed: boolean };
+}
+
+/** Hides one notice on one server's page for the signed-in viewer; dismissing twice is harmless. */
+export async function dismissServerNotice(accessToken: string, input: { serverId: string; noticeId: string }, requestId: string) {
+    if (!REQUEST_ID.test(requestId) || !RESOURCE_ID.test(input.serverId) || !REQUEST_ID.test(input.noticeId)) {
+        throw new MyServersApiError("invalid_request", "The notice dismissal is invalid.");
+    }
+    const result = await requestMyServersApi(accessToken, {
+        method: "POST",
+        body: JSON.stringify({ action: "dismiss-server-notice", serverId: input.serverId, noticeId: input.noticeId }),
+        requestId,
+    });
+    if (!isRecord(result) || !hasExactKeys(result, ["dismissed"]) || result.dismissed !== true) throw invalidResponse();
+    return { dismissed: true as const };
 }
 
 export async function requestServerVisibility(accessToken: string, input: VisibilityMutation, requestId: string) {
@@ -223,11 +347,23 @@ export async function requestMyServerBackupOperation(
     accessToken: string,
     input:
         | { serverId: string; action: "create-backup"; expectedUpdatedAt: string }
-        | { serverId: string; backupId: string; action: "restore-backup"; expectedUpdatedAt: string },
+        | { serverId: string; backupId: string; action: "restore-backup"; expectedUpdatedAt: string }
+        | {
+            serverId: string; saveId: string; generation: RestorableSaveGeneration; action: "restore-save-generation";
+            expectedLastModifiedAt?: string; expectedUpdatedAt: string;
+        },
     requestId: string,
 ): Promise<MyServerBackupOperationResult> {
     if (!REQUEST_ID.test(requestId)) {
         throw new MyServersApiError("invalid_request", "The backup operation request ID is invalid.");
+    }
+    if (input.action === "restore-save-generation") {
+        let mutation;
+        try { mutation = parseSaveGenerationRestoreMutation(input); } catch {
+            throw new MyServersApiError("invalid_request", "The autosave restore request is invalid.");
+        }
+        const receipt = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify(mutation), requestId });
+        try { return parseSaveGenerationRestoreResult(receipt); } catch { throw invalidResponse(); }
     }
     const result = await requestMyServersApi(accessToken, {
         method: "POST",
@@ -246,14 +382,6 @@ export async function requestMyServerBackupOperation(
     return result as MyServerBackupOperationResult;
 }
 
-export async function getServerOnboarding(accessToken: string): Promise<OnboardingSummary> {
-    const result = await requestMyServersApi(accessToken, {
-        method: "GET",
-        configureEndpoint(endpoint) { endpoint.searchParams.set("resource", "onboarding"); },
-    });
-    try { return parseOnboardingSummary(result); } catch { throw invalidResponse(); }
-}
-
 export async function requestServerOnboarding(accessToken: string, intent: OnboardingIntent): Promise<OnboardingResult> {
     let parsed: OnboardingIntent;
     try { parsed = parseOnboardingIntent(intent); } catch {
@@ -264,14 +392,22 @@ export async function requestServerOnboarding(accessToken: string, intent: Onboa
     try { return parseOnboardingResult(result, input); } catch { throw invalidResponse(); }
 }
 
-async function requestMyServers(accessToken: string, cursor: string | null): Promise<unknown> {
+async function requestMyServers(accessToken: string, cursor: string | null, signal?: AbortSignal): Promise<unknown> {
     return requestMyServersApi(accessToken, {
         method: "GET",
+        signal,
         configureEndpoint(endpoint) {
             endpoint.searchParams.set("limit", "100");
             if (cursor !== null) endpoint.searchParams.set("cursor", cursor);
         },
     });
+}
+
+async function requestMyServerSaves(accessToken: string, serverId: string, cursor: string | null): Promise<unknown> {
+    return requestMyServersApi(accessToken, { method: "GET", configureEndpoint(endpoint) {
+        endpoint.searchParams.set("resource", "saves"); endpoint.searchParams.set("serverId", serverId); endpoint.searchParams.set("limit", String(BACKUP_PAGE_LIMIT));
+        if (cursor !== null) endpoint.searchParams.set("cursor", cursor);
+    } });
 }
 
 async function requestMyServerBackups(
@@ -297,6 +433,7 @@ export async function requestMyServersApi(
         body?: string;
         requestId?: string;
         maximumResponseBytes?: number;
+        signal?: AbortSignal;
         configureEndpoint?: (endpoint: URL) => void;
     },
 ): Promise<unknown> {
@@ -317,7 +454,9 @@ export async function requestMyServersApi(
             },
             ...(request.body === undefined ? {} : { body: request.body }),
             cache: "no-store",
-            signal: AbortSignal.timeout(30_000),
+            signal: request.signal
+                ? AbortSignal.any([request.signal, AbortSignal.timeout(30_000)])
+                : AbortSignal.timeout(30_000),
         });
     } catch {
         throw new MyServersApiError(
@@ -327,7 +466,16 @@ export async function requestMyServersApi(
         );
     }
 
-    const text = await readBoundedText(response, request.maximumResponseBytes ?? MAXIMUM_RESPONSE_BYTES);
+    return readMyServersResponse(response, requestId, { maximumBytes: request.maximumResponseBytes });
+}
+
+/** Shares the owner envelope contract between Edge and direct server-rendered reads. */
+export async function readMyServersResponse(
+    response: Response,
+    requestId: string,
+    options: { maximumBytes?: number; signal?: AbortSignal } = {},
+): Promise<unknown> {
+    const text = await readBoundedText(response, options.maximumBytes ?? MAXIMUM_RESPONSE_BYTES, options.signal);
     let envelope: unknown;
     try {
         envelope = JSON.parse(text);
@@ -366,30 +514,47 @@ export async function requestMyServersApi(
     throw new MyServersApiError(code, message, retryable, operationId);
 }
 
-export function myServersEndpoint() {
+// Resolves the configured endpoint with optional website presentation, preserving URL/security checks.
+export function myServersEndpoint(messages = {
+    notConfigured: "The managed-server API is not configured.",
+    invalidUrl: "The Supabase URL is invalid.",
+    invalidKey: "The Supabase publishable key is invalid.",
+}) {
     const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
     const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
     if (!rawUrl || !publishableKey) {
-        throw new MyServersApiError("server_api_not_configured", "The managed-server API is not configured.");
+        throw new MyServersApiError("server_api_not_configured", messages.notConfigured);
     }
     const endpoint = new URL(rawUrl);
     if (endpoint.protocol !== "https:" || endpoint.pathname !== "/" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
-        throw new MyServersApiError("server_api_not_configured", "The Supabase URL is invalid.");
+        throw new MyServersApiError("server_api_not_configured", messages.invalidUrl);
     }
     if (publishableKey.length < 20 || publishableKey.length > 4_096) {
-        throw new MyServersApiError("server_api_not_configured", "The Supabase publishable key is invalid.");
+        throw new MyServersApiError("server_api_not_configured", messages.invalidKey);
     }
     endpoint.pathname = "/functions/v1/my-servers";
     return { endpoint, publishableKey };
 }
 
 function parseServerPage(value: unknown): HostingPage<MyServerSummary> {
-    if (!isRecord(value) || !Array.isArray(value.items)) throw invalidResponse();
-    if (value.nextCursor !== null && typeof value.nextCursor !== "string") throw invalidResponse();
+    if (!isRecord(value) || !Array.isArray(value.items) || value.items.length > 100) throw invalidResponse();
+    if (value.nextCursor !== null && (typeof value.nextCursor !== "string"
+        || value.nextCursor.length < 1 || value.nextCursor.length > 2_048)) throw invalidResponse();
     return {
         items: value.items as MyServerSummary[],
         nextCursor: value.nextCursor as string | null,
     };
+}
+
+function parseSavePage(value: unknown): MyServerSavePage {
+    if (!isRecord(value) || !hasExactKeys(value, ["activeSaveId", "items", "nextCursor", "serverId", "updatedAt"]) || typeof value.serverId !== "string" || !RESOURCE_ID.test(value.serverId) || (value.activeSaveId !== null && (typeof value.activeSaveId !== "string" || !RESOURCE_ID.test(value.activeSaveId))) || !isTimestamp(value.updatedAt) || !Array.isArray(value.items) || value.items.length > MAXIMUM_LIMIT) throw invalidResponse();
+    if (value.nextCursor !== null && (typeof value.nextCursor !== "string" || value.nextCursor.length < 1 || value.nextCursor.length > 2_048)) throw invalidResponse();
+    return { serverId: value.serverId, updatedAt: value.updatedAt, activeSaveId: value.activeSaveId, items: value.items.map(parseSave), nextCursor: value.nextCursor };
+}
+
+function parseSave(value: unknown): MyServerSaveSummary {
+    if (!isRecord(value) || !hasExactKeys(value, ["byteSize", "createdAt", "displayName", "importedBy", "lastUsedAt", "saveId"]) || typeof value.saveId !== "string" || !RESOURCE_ID.test(value.saveId) || typeof value.displayName !== "string" || value.displayName.length < 1 || value.displayName.length > 48 || typeof value.byteSize !== "number" || !Number.isSafeInteger(value.byteSize) || value.byteSize < 0 || !isTimestamp(value.createdAt) || (value.lastUsedAt !== null && !isTimestamp(value.lastUsedAt)) || (value.importedBy !== "system" && value.importedBy !== "owner")) throw invalidResponse();
+    return value as MyServerSaveSummary;
 }
 
 function parseBackupPage(value: unknown): HostingPage<MyServerBackupSummary> {
@@ -463,6 +628,41 @@ function parseBackupStatus(value: unknown, serverId: string): MyServerBackupStat
     };
 }
 
+function parseDeletionStatus(value: unknown, serverId: string): MyServerDeletionStatus {
+    if (
+        !isRecord(value)
+        || !hasExactKeys(value, ["job", "operationState", "serverId", "updatedAt"])
+        || value.serverId !== serverId
+        || typeof value.operationState !== "string"
+        || !SAFE_STATUS_VALUE.test(value.operationState)
+        || !isTimestamp(value.updatedAt)
+    ) throw invalidResponse();
+    return {
+        serverId,
+        operationState: value.operationState,
+        updatedAt: value.updatedAt,
+        job: value.job === null ? null : parseDeletionJob(value.job),
+    };
+}
+
+function parseDeletionJob(value: unknown): MyServerDeletionJob {
+    if (
+        !isRecord(value)
+        || !hasExactKeys(value, ["createdAt", "jobId", "progress", "state", "updatedAt"])
+        || typeof value.jobId !== "string"
+        || !RESOURCE_ID.test(value.jobId)
+        || typeof value.state !== "string"
+        || !BACKUP_JOB_STATES.has(value.state)
+        || typeof value.progress !== "string"
+        || value.progress.length < 1
+        || value.progress.length > 256
+        || /[\p{Cc}\p{Cf}]/u.test(value.progress)
+        || !isTimestamp(value.createdAt)
+        || !isTimestamp(value.updatedAt)
+    ) throw invalidResponse();
+    return value as MyServerDeletionJob;
+}
+
 function parseBackupJob(value: unknown): MyServerBackupJob {
     if (
         !isRecord(value)
@@ -489,29 +689,42 @@ function isTimestamp(value: unknown): value is string {
         && Number.isFinite(Date.parse(value));
 }
 
-async function readBoundedText(response: Response, maximumBytes: number) {
+async function readBoundedText(response: Response, maximumBytes: number, signal?: AbortSignal) {
     const declaredLength = response.headers.get("content-length");
     if (declaredLength !== null && Number(declaredLength) > maximumBytes) {
+        void response.body?.cancel().catch(() => undefined);
         throw new MyServersApiError("response_too_large", "The server API response was too large.");
     }
     if (!response.body) return "";
     const reader = response.body.getReader();
+    const cancel = () => { void reader.cancel().catch(() => undefined); };
+    signal?.addEventListener("abort", cancel, { once: true });
     const decoder = new TextDecoder("utf-8", { fatal: true });
     let size = 0;
+    let chunks = 0;
     let text = "";
     try {
+        signal?.throwIfAborted();
         for (;;) {
             const chunk = await reader.read();
+            signal?.throwIfAborted();
             if (chunk.done) break;
             size += chunk.value.byteLength;
-            if (size > maximumBytes) {
-                await reader.cancel();
+            if (size > maximumBytes || ++chunks > 8_192) {
                 throw new MyServersApiError("response_too_large", "The server API response was too large.");
             }
             text += decoder.decode(chunk.value, { stream: true });
         }
         return text + decoder.decode();
-    } finally { reader.releaseLock(); }
+    } catch (error) {
+        if (error instanceof MyServersApiError) throw error;
+        throw new MyServersApiError(signal?.aborted ? "server_api_unavailable" : "invalid_response",
+            "The managed-server API response could not be read.", true);
+    } finally {
+        signal?.removeEventListener("abort", cancel);
+        cancel();
+        reader.releaseLock();
+    }
 }
 
 function invalidResponse(message = "The managed-server API returned an invalid response.") {

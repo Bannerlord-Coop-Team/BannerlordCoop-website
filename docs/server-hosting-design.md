@@ -98,16 +98,9 @@ flowchart LR
     FutureInfra -. replaces .-> Simulation
 ```
 
-## Dormant IONOS adapter
+## Live console
 
-A provider-backed IONOS adapter and management UI are retained for possible future use, but they are disabled by default while alternative hosting options are evaluated:
-
-- `/servers` does not call the IONOS inventory API or render the IONOS panel unless `IONOS_MANAGEMENT_ENABLED=true`.
-- The create-server Server Action rejects direct requests before contacting IONOS unless management and `IONOS_SERVER_CREATION_ENABLED=true` are both enabled.
-- Provider mutations reauthenticate the Supabase user and restrict billable actions to Admins.
-- Provider identifiers and website ownership markers are validated before requests can address resources.
-
-The external WebSocket server console and its gateway/node-agent deployment have been removed. Current authenticated management uses registered control-plane servers; the placeholder repository and dormant IONOS adapter remain separate.
+The external WebSocket server console and its gateway/node-agent deployment have been removed. Current authenticated management uses registered control-plane servers; the placeholder repository remains separate.
 
 ## Acceptance checks
 

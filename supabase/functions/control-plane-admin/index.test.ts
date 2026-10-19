@@ -4,6 +4,7 @@ import {
     CONTROL_PLANE_ADMIN_UPSTREAM_TIMEOUT_MILLISECONDS,
     createControlPlaneAdminHandler,
 } from "../_shared/control-plane-admin.ts";
+import { createRegionRequestNotifier, type RegionRequestNotifier } from "../_shared/region-request-notification.ts";
 
 const REQUEST_ID = "11111111-1111-4111-8111-111111111111";
 const TOKEN = "access-token-with-enough-characters";
@@ -62,6 +63,20 @@ test("reauthenticates a Discord Admin and forwards the closed envelope", async (
     assert.match(calls[1]?.body ?? "", new RegExp(REQUEST_ID, "u"));
 });
 
+test("reports only its measured authentication and complete upstream durations", async (context) => {
+    const times = [100, 127, 228];
+    context.mock.method(performance, "now", () => times.shift() ?? 228);
+    const handler = createHandler(async (input) => String(input).endsWith("/auth/v1/user")
+        ? Response.json(ADMIN)
+        : Response.json({ version: 1, requestId: REQUEST_ID, ok: true, result: {} }, {
+            headers: { "server-timing": "untrusted-secret;dur=1" },
+        }));
+    const response = await handler(adminRequest());
+    assert.equal(response.headers.get("server-timing"), "edge_auth;dur=27, control_plane;dur=101");
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.equal(response.headers.get("timing-allow-origin"), null);
+});
+
 test("rejects non-admin sessions before the upstream call", async () => {
     for (const user of [
         { ...ADMIN, app_metadata: { role: "User" } },
@@ -75,6 +90,7 @@ test("rejects non-admin sessions before the upstream call", async () => {
         });
         const response = await handler(adminRequest());
         assert.equal(response.status, 403);
+        assert.equal(response.headers.get("server-timing"), null);
         assert.equal(calls, 1);
     }
 });
@@ -102,15 +118,15 @@ test("accepts authenticated server-side calls without emitting CORS", async () =
     assert.equal(response.headers.get("access-control-allow-origin"), null);
 });
 
-/** Creates an isolated Edge handler with injected network and clock. */
-function createHandler(fetchImplementation: typeof fetch, now?: () => number) {
+/** Creates an isolated Edge handler with injected network. */
+function createHandler(fetchImplementation: typeof fetch, defaultContext = true, notifyRegionRequest?: RegionRequestNotifier) {
     return createControlPlaneAdminHandler({
         allowedOrigins: [ORIGIN, "https://bannerlordcoop.netlify.app"],
         supabaseUrl: "https://project.supabase.co",
         supabasePublishableKey: "publishable-key-with-enough-characters",
         controlPlaneAdminUrl: "https://control-plane.example.test",
-        fetchImplementation: (input, init) => String(input).endsWith("/rpc/website_session_context") ? Promise.resolve(Response.json({ impersonationId: null })) : fetchImplementation(input, init),
-        now,
+        fetchImplementation: (input, init) => defaultContext && String(input).endsWith("/rpc/website_session_context") ? Promise.resolve(Response.json({ impersonationId: null })) : fetchImplementation(input, init),
+        notifyRegionRequest,
     });
 }
 
@@ -153,29 +169,26 @@ function releaseResponse(init?: RequestInit) {
         result: { items: [{ buildId: "v0.1.5", channel: request.input.channel }], nextCursor: null } });
 }
 
-test("caches release pages for five minutes while reauthenticating and correlating each request", async () => {
-    let now = 0;
+test("reads changed releases immediately while reauthenticating and correlating each request", async () => {
     let authCalls = 0;
     let upstreamCalls = 0;
     const handler = createHandler(async (input, init) => {
         if (String(input).endsWith("/auth/v1/user")) { authCalls++; return Response.json(ADMIN); }
         upstreamCalls++;
-        return releaseResponse(init);
-    }, () => now);
+        return Response.json({ version: 1, requestId: JSON.parse(String(init?.body)).requestId, ok: true, result: { items: [{ buildId: `v0.1.${upstreamCalls}` }], nextCursor: null } });
+    });
     await handler(releaseRequest());
-    now = 299_999;
     const requestId = "33333333-3333-4333-8333-333333333333";
-    const cached = await handler(releaseRequest(requestId));
-    assert.equal((await cached.json()).requestId, requestId);
-    assert.equal(cached.headers.get("cache-control"), "no-store");
-    assert.equal(upstreamCalls, 1);
-    assert.equal(authCalls, 2);
-    now = 300_000;
-    await handler(releaseRequest());
+    const current = await handler(releaseRequest(requestId));
+    assert.deepEqual(await current.json(), { version: 1, requestId, ok: true, result: { items: [{ buildId: "v0.1.2" }], nextCursor: null } });
+    assert.equal(current.headers.get("cache-control"), "no-store");
     assert.equal(upstreamCalls, 2);
+    assert.equal(authCalls, 2);
+    await handler(releaseRequest());
+    assert.equal(upstreamCalls, 3);
 });
 
-test("never serves a warm release cache after authentication or admin access is lost", async () => {
+test("never serves releases after authentication or admin access is lost", async () => {
     let role = "Admin";
     let upstreamCalls = 0;
     const handler = createHandler(async (input, init) => {
@@ -192,7 +205,7 @@ test("never serves a warm release cache after authentication or admin access is 
     assert.equal(upstreamCalls, 1);
 });
 
-test("isolates channel, cursor and page size and bounds the cache to one page per channel", async () => {
+test("forwards every channel, cursor and page size to the current catalog", async () => {
     let upstreamCalls = 0;
     const handler = createHandler(async (input, init) => {
         if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
@@ -202,15 +215,14 @@ test("isolates channel, cursor and page size and bounds the cache to one page pe
     await handler(releaseRequest());
     await handler(releaseRequest(REQUEST_ID, "nightly"));
     await handler(releaseRequest());
-    assert.equal(upstreamCalls, 2);
+    assert.equal(upstreamCalls, 3);
     await handler(releaseRequest(REQUEST_ID, "stable", "v0.1.5"));
     await handler(releaseRequest(REQUEST_ID, "stable", "v0.1.5", 20));
     await handler(releaseRequest());
-    assert.equal(upstreamCalls, 5);
+    assert.equal(upstreamCalls, 6);
 });
 
-test("does not serve expired releases or cache failed upstream requests", async () => {
-    let now = 0;
+test("does not fall back to the preceding catalog after an upstream failure", async () => {
     let unavailable = false;
     let upstreamCalls = 0;
     const handler = createHandler(async (input, init) => {
@@ -218,9 +230,8 @@ test("does not serve expired releases or cache failed upstream requests", async 
         upstreamCalls++;
         if (unavailable) throw new Error("private upstream failure");
         return releaseResponse(init);
-    }, () => now);
+    });
     await handler(releaseRequest());
-    now = 300_000;
     unavailable = true;
     assert.equal((await handler(releaseRequest())).status, 502);
     assert.equal((await handler(releaseRequest())).status, 502);
@@ -263,4 +274,152 @@ test("does not cache lifecycle operations or requests with unknown release field
         await handler(adminRequest(raw));
     }
     assert.equal(upstreamCalls, 4);
+});
+
+
+test("starts user and context together, but never forwards until both validate", async () => {
+    let finishUser!: (response: Response) => void;
+    let finishContext!: (response: Response) => void;
+    const calls: string[] = [];
+    const handler = createHandler(async (input, init) => {
+        const url = String(input);
+        calls.push(url);
+        if (url.endsWith("/auth/v1/user")) return new Promise(resolve => { finishUser = resolve; });
+        if (url.endsWith("/rpc/website_session_context")) return new Promise(resolve => { finishContext = resolve; });
+        return releaseResponse(init);
+    }, false);
+    const pending = handler(releaseRequest());
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(calls.length, 2);
+    assert.ok(calls[0].endsWith("/auth/v1/user"));
+    assert.ok(calls[1].endsWith("/rpc/website_session_context"));
+    finishUser(Response.json(ADMIN));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(calls.length, 2);
+    finishContext(Response.json({ impersonationId: null }));
+    assert.equal((await pending).status, 200);
+    assert.equal(calls.length, 3);
+});
+
+for (const failure of ["user", "context"] as const) {
+    test(`cancels a late ignored-abort response after ${failure} rejects and never forwards`, async () => {
+        let finish!: (response: Response) => void;
+        let signal: AbortSignal | undefined;
+        let upstream = 0;
+        const handler = createHandler(async (input, init) => {
+            const url = String(input);
+            if (url.includes("control-plane.example.test")) { upstream++; return releaseResponse(init); }
+            if (url.endsWith("/user") === (failure === "user")) return new Response(null, { status: 401 });
+            signal = init?.signal ?? undefined;
+            return new Promise(resolve => { finish = resolve; });
+        }, false);
+        assert.equal((await handler(releaseRequest())).status, 401);
+        assert.equal(signal?.aborted, true);
+        let cancelled = false;
+        finish(new Response(new ReadableStream({ cancel() { cancelled = true; } })));
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(cancelled, true);
+        assert.equal(upstream, 0);
+    });
+}
+
+test("context rejection cancels and releases an in-progress user body", async () => {
+    let cancelled = false;
+    const response = new Response(new ReadableStream({ cancel() { cancelled = true; } }));
+    const handler = createHandler(async input => String(input).endsWith("/user")
+        ? response : new Response(null, { status: 403 }), false);
+    assert.equal((await handler(releaseRequest())).status, 401);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(cancelled, true);
+    assert.equal(response.body?.locked, false);
+});
+
+for (const context of [
+    {},
+    { impersonationId: REQUEST_ID, actorId: REQUEST_ID, targetId: REQUEST_ID, expiresAt: "2099-01-01T00:00:00Z" },
+    { impersonationId: REQUEST_ID, actorId: REQUEST_ID, targetId: ADMIN.id, expiresAt: "2000-01-01T00:00:00Z" },
+]) {
+    test(`rejects invalid, cross-user, or expired context before forwarding: ${JSON.stringify(context)}`, async () => {
+        let upstream = 0;
+        const handler = createHandler(async (input, init) => {
+            const url = String(input);
+            if (url.endsWith("/user")) return Response.json(ADMIN);
+            if (url.endsWith("/rpc/website_session_context")) return Response.json(context);
+            upstream++;
+            return releaseResponse(init);
+        }, false);
+        assert.equal((await handler(releaseRequest())).status, 401);
+        assert.equal(upstream, 0);
+    });
+}
+
+test("reads session revocation freshly after a successful request", async () => {
+    let active = true;
+    let upstream = 0;
+    const handler = createHandler(async (input, init) => {
+        const url = String(input);
+        if (url.endsWith("/user")) return Response.json(ADMIN);
+        if (url.endsWith("/rpc/website_session_context")) return active ? Response.json({ impersonationId: null }) : new Response(null, { status: 403 });
+        upstream++;
+        return releaseResponse(init);
+    }, false);
+    assert.equal((await handler(releaseRequest())).status, 200);
+    active = false;
+    assert.equal((await handler(releaseRequest())).status, 401);
+    assert.equal(upstream, 1);
+});
+
+
+test("a completed context is not expired by its fetch timer while the verified user is pending", async () => {
+    const originalTimeout = AbortSignal.timeout;
+    const contextDeadline = new AbortController();
+    const authDeadline = new AbortController();
+    let finishUser!: (response: Response) => void;
+    AbortSignal.timeout = milliseconds => milliseconds === 4_000 ? contextDeadline.signal : authDeadline.signal;
+    try {
+        const handler = createHandler(async (input, init) => {
+            if (String(input).endsWith("/user")) return new Promise(resolve => { finishUser = resolve; });
+            if (String(input).endsWith("/rpc/website_session_context")) return Response.json({ impersonationId: null });
+            return releaseResponse(init);
+        }, false);
+        const pending = handler(releaseRequest());
+        await new Promise(resolve => setImmediate(resolve));
+        contextDeadline.abort();
+        finishUser(Response.json(ADMIN));
+        assert.equal((await pending).status, 200);
+    } finally { AbortSignal.timeout = originalTimeout; }
+});
+
+test("notifies a region requester through internal claim operations and returns the browser envelope", async () => {
+    const upstream: Array<{ operation: string; input: unknown }> = [];
+    const sent: string[] = [];
+    const handler = createHandler(async (input, init) => {
+        if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
+        const body = JSON.parse(String(init?.body)) as { requestId: string; operation: string; input: unknown };
+        upstream.push({ operation: body.operation, input: body.input });
+        return Response.json({ version: 1, requestId: body.requestId, ok: true, result: {
+            requestId: REQUEST_ID, region: "germany", requesterEmail: "owner@example.com",
+            notifiedAt: "2026-10-10T12:00:00.000Z", claimed: true,
+        } });
+    }, true, createRegionRequestNotifier({ from: "admin@bannerlordcoop.com", siteUrl: "https://bannerlordcoop.com", send: async (message) => { sent.push(message.text); } }));
+    const response = await handler(adminRequest(JSON.stringify({
+        version: 1, requestId: REQUEST_ID, operation: "notify-region-request", input: { requestId: REQUEST_ID },
+    })));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("access-control-allow-origin"), ORIGIN);
+    assert.deepEqual(await response.json(), { version: 1, requestId: REQUEST_ID, ok: true, result: {
+        requestId: REQUEST_ID, notifiedAt: "2026-10-10T12:00:00.000Z", sent: true,
+    } });
+    assert.deepEqual(upstream, [{ operation: "claim-region-request-notification", input: { requestId: REQUEST_ID } }]);
+    assert.equal(sent.length, 1);
+    assert.match(sent[0] ?? "", /https:\/\/bannerlordcoop\.com\/servers/u);
+});
+
+test("reports unavailable notifications when SMTP is not configured", async () => {
+    const handler = createHandler(async (input) => String(input).endsWith("/auth/v1/user") ? Response.json(ADMIN) : Response.json({}));
+    const response = await handler(adminRequest(JSON.stringify({
+        version: 1, requestId: REQUEST_ID, operation: "notify-region-request", input: { requestId: REQUEST_ID },
+    })));
+    assert.equal(response.status, 503);
+    assert.equal(((await response.json()) as { error: { code: string } }).error.code, "notifications_unavailable");
 });

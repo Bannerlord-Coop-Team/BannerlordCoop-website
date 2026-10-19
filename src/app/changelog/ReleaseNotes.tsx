@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 type ReleaseNotesProps = {
     body: string;
+    emptyMessage: string;
 };
 
 type NotesBlock =
@@ -20,13 +21,14 @@ type NotesBlock =
     items: string[];
 };
 
-export function ReleaseNotes({ body }: ReleaseNotesProps) {
+/** Renders external markdown unchanged by localization, with a translated empty-notes message. */
+export function ReleaseNotes({ body, emptyMessage }: ReleaseNotesProps) {
     const blocks = parseBlocks(body);
 
     if (blocks.length === 0) {
         return (
             <p className="text-sm italic leading-7 text-foreground-dim">
-                No release notes were provided for this version.
+                {emptyMessage}
             </p>
         );
     }

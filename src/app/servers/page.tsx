@@ -1,3 +1,5 @@
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import { getLocale, getMessages, getTranslations } from "@/app/lib/localization/server";
 import { Suspense } from "react";
 import { MembershipNextStep } from "@/app/components/servers/MembershipNextStep";
 import { composeOnboarding, identityStep, type AccountStatus } from "@/app/lib/hosting/membership-onboarding";
@@ -8,64 +10,68 @@ import {
     type ManagedServerDirectoryEntry,
 } from "@/app/components/servers/ServerDirectoryTable";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
-import { getServerOnboarding, listAllMyServers } from "@/app/lib/hosting/my-servers";
-import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
+import { getServerOnboarding, listAllMyServers } from "@/app/lib/hosting/my-servers-server";
+import { prepareWebsiteAccountStatusRequest } from "@/app/lib/hosting/website-account-status";
 import { ServerOnboarding } from "@/app/components/servers/ServerOnboarding";
 import type { OnboardingSummary } from "../../../supabase/functions/_shared/server-onboarding-contract";
 import { listPublicServers } from "@/app/lib/hosting/public-servers";
 import { connectionAddress } from "@/app/lib/hosting/connection-address";
-import { getSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getSupabaseServerViewer } from "@/app/lib/supabase/server";
 import {
     LoaderCircle,
     Server,
     ShieldCheck,
 } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-    title: "Servers",
-    description: "Browse and join Bannerlord Coop servers.",
-};
+/** Resolves directory metadata from the same explicit locale as its content. */
+export async function generateMetadata(): Promise<Metadata> {
+    const { t } = await getTranslations("servers");
+    return { title: t("metadata.title"), description: t("metadata.description") };
+}
 
 /** Starts independent requests without holding the directory shell behind account status. */
-export default function ServersPage() {
+export default async function ServersPage() {
     const publicInventory = loadPublicInventory();
     const viewer = loadViewer();
-    const managedInventory = viewer.then(({ user, accessToken }) => loadManagedInventory(user, accessToken));
-    const hostingStatus = viewer.then(({ user, accessToken }) => loadHostingStatus(user, accessToken));
+    const managedInventory = viewer.then(({ user, accessToken, inventory }) => loadManagedInventory(user, accessToken, inventory));
+    const hostingStatus = viewer.then(({ user, accessToken, accountRead }) => loadHostingStatus(user, accessToken, accountRead));
+
+    const locale = await getLocale();
+    const [{ t, number }, messages] = await Promise.all([getTranslations("servers", locale), getMessages(["servers", "server-common"], locale)]);
 
     return (
-        <>
-            <Suspense fallback={<div role="status" aria-label="Loading navigation" className="h-16 border-b border-white/10 bg-background" />}>
-                <Navbar />
+        <LocalizationProvider locale={locale} messages={messages}>
+            <Suspense fallback={<div role="status" aria-label={t("page.navigation")} className="h-16 border-b border-white/10 bg-background" />}>
+                <Navbar viewer={viewer.then(({ user }) => ({ user }))} />
             </Suspense>
             <main className="min-h-svh bg-background">
                 <div className="site-container py-10 sm:py-14">
                 <section className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end" aria-labelledby="servers-heading">
                     <div>
                         <p className="font-label text-xs font-semibold uppercase tracking-[0.22em] text-gold">
-                            Campaign directory
+                            {t("page.eyebrow")}
                         </p>
                         <h1 id="servers-heading" className="mt-3 font-display text-4xl font-semibold text-foreground sm:text-5xl">
-                            Servers
+                            {t("page.heading")}
                         </h1>
                     </div>
 
-                    <Suspense fallback={<DirectoryLoading label="Loading server counts…" />}>
+                    <Suspense fallback={<DirectoryLoading label={t("page.counts")} />}>
                         {publicInventory.then(({ allServers, publicServersError }) => (
                             <dl className="grid grid-cols-2 border border-white/10 bg-surface">
-                                <DirectoryStat icon={Server} label="Public servers" value={publicServersError ? "—" : allServers.length} />
-                                <DirectoryStat icon={ShieldCheck} label="Online" value={publicServersError ? "—" : allServers.filter(server => server.status === "Online").length} />
+                                <DirectoryStat icon={Server} label={t("page.publicTotal")} value={publicServersError ? t("table.unknownPlayers") : number(allServers.length)} />
+                                <DirectoryStat icon={ShieldCheck} label={t("page.onlineTotal")} value={publicServersError ? t("table.unknownPlayers") : number(allServers.filter(server => server.status === "Online").length)} />
                             </dl>
                         ))}
                     </Suspense>
                 </section>
 
-                <Suspense fallback={<DirectoryLoading label="Loading hosting status…" />}>
+                <Suspense fallback={<DirectoryLoading label={t("page.hosting")} />}>
                     {Promise.all([hostingStatus, managedInventory]).then(([{ user, identity, account, onboarding }, { ownedIds }]) => {
                         const websiteSummary = composeOnboarding(user?.id ?? null, identity, account, onboarding, ownedIds);
                         return user ? <ServerOnboarding userId={user.id} summary={onboarding} websiteSummary={websiteSummary} /> : <MembershipNextStep summary={websiteSummary} />;
@@ -76,43 +82,43 @@ export default function ServersPage() {
                     <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
                         <div>
                             <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
-                                Your campaigns
+                                {t("page.myEyebrow")}
                             </p>
                             <h2 id="my-servers-heading" className="mt-2 font-display text-3xl font-semibold text-foreground sm:text-4xl">
-                                My Servers
+                                {t("page.myHeading")}
                             </h2>
                         </div>
                     </div>
-                    <Suspense fallback={<DirectoryLoading label="Loading your servers…" />}>
+                    <Suspense fallback={<DirectoryLoading label={t("page.managed")} />}>
                         {managedInventory.then(({ user, managedServers, managedServersError, ownedIds }) => (
                             user ? (
                                 <div>
-                                    <p className="mb-4 text-sm text-foreground-muted">{managedServers.length} {managedServers.length === 1 ? "server" : "servers"} associated with your account</p>
+                                    <p className="mb-4 text-sm text-foreground-muted">{t("page.associatedCount", { count: managedServers.length, countLabel: number(managedServers.length) })}</p>
                                     {managedServersError && (
                                         <p role="alert" className="mb-4 border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
-                                            {managedServersError}
+                                            {t(managedServersError)}
                                         </p>
                                     )}
-                                    <h3 className="mb-3 font-semibold">Owned servers</h3>
-                                    <ServerDirectoryTable servers={managedServers.filter(server => ownedIds.includes(server.id))} emptyMessage="No owned servers are currently listed." />
-                                    <h3 className="mb-3 mt-6 font-semibold">Associated servers (manager, support or administrator)</h3>
+                                    <h3 className="mb-3 font-semibold">{t("page.ownedHeading")}</h3>
+                                    <ServerDirectoryTable servers={managedServers.filter(server => ownedIds.includes(server.id))} emptyMessage={t("page.noOwned")} />
+                                    <h3 className="mb-3 mt-6 font-semibold">{t("page.associatedHeading")}</h3>
                                     <ServerDirectoryTable
                                         servers={managedServers.filter(server => !ownedIds.includes(server.id))}
                                         emptyMessage={managedServersError
-                                            ? "No managed-server data is currently available."
-                                            : "You do not own or operate any servers yet."}
+                                            ? t("page.noManaged")
+                                            : t("page.noAssociated")}
                                     />
                                 </div>
                             ) : (
                                 <div className="flex min-h-36 flex-col items-center justify-center gap-4 border border-dashed border-white/15 bg-surface px-6 text-center">
                                     <p className="text-sm text-foreground-muted">
-                                        Sign in to view servers associated with your account.
+                                        {t("page.signInHint")}
                                     </p>
                                     <Link
                                         href="/login?next=/servers"
                                         className="inline-flex min-h-10 items-center justify-center border border-gold/35 bg-gold/[0.07] px-5 font-label text-xs font-semibold uppercase tracking-[0.12em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                                     >
-                                        Sign in
+                                        {t("page.signIn")}
                                     </Link>
                                 </div>
                             )
@@ -124,27 +130,27 @@ export default function ServersPage() {
                     <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
                         <div>
                             <p className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
-                                Community campaigns
+                                {t("page.publicEyebrow")}
                             </p>
                             <h2 id="all-servers-heading" className="mt-2 font-display text-3xl font-semibold text-foreground sm:text-4xl">
-                                Public Servers
+                                {t("page.publicHeading")}
                             </h2>
                         </div>
                     </div>
-                    <Suspense fallback={<DirectoryLoading label="Loading public servers…" />}>
+                    <Suspense fallback={<DirectoryLoading label={t("page.public")} />}>
                         {publicInventory.then(({ allServers, publicServersError }) => <>
                             <p className="mb-4 text-sm text-foreground-muted">
-                                {publicServersError ? "Directory unavailable" : `${allServers.length} ${allServers.length === 1 ? "server" : "servers"} in the directory`}
+                                {publicServersError ? t("page.unavailable") : t("page.publicCount", { count: allServers.length, countLabel: number(allServers.length) })}
                             </p>
                         {publicServersError ? (
-                            <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">{publicServersError}</p>
+                            <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">{t(publicServersError)}</p>
                         ) : <AllServersDirectory servers={allServers} />}
                         </>)}
                     </Suspense>
                 </section>
                 </div>
             </main>
-        </>
+        </LocalizationProvider>
     );
 }
 
@@ -152,30 +158,44 @@ export default function ServersPage() {
 async function loadViewer() {
     let user: User | null = null;
     let accessToken: string | null = null;
+    let client: SupabaseClient | null = null;
+    let inventory: Promise<PromiseSettledResult<MyServerSummary[]>> | undefined;
+    let accountRead: Promise<PromiseSettledResult<Awaited<ReturnType<typeof prepareWebsiteAccountStatusRequest>>>> | undefined;
+    const controller = new AbortController();
 
     try {
-        const supabase = await getSupabaseServerClient();
-        const [{ data: userData }, { data: sessionData }] = await Promise.all([
-            supabase.auth.getUser(),
-            supabase.auth.getSession(),
-        ]);
-        user = userData.user;
-        accessToken = user && sessionData.session?.user.id === user.id ? sessionData.session.access_token : null;
+        const viewer = await getSupabaseServerViewer({
+            // The owner API checks its own current authority. Never render this
+            // read before the viewer also verifies the matching user/session.
+            onReadOnlySession: token => ({
+                inventory: Promise.allSettled([listAllMyServers(token, controller.signal)]).then(([result]) => result),
+                account: Promise.allSettled([prepareWebsiteAccountStatusRequest(token)]).then(([result]) => result),
+            }),
+        });
+        ({ client, user, accessToken } = viewer);
+        inventory = viewer.read?.inventory;
+        accountRead = viewer.read?.account;
+        if (!user || !accessToken) controller.abort();
     } catch {
+        controller.abort();
         // Keep the public server directory available when auth is not configured.
     }
 
-    return { user, accessToken };
+    return { user, accessToken, client, inventory, accountRead };
 }
 
 /** Keep account synchronization before allocation reads, outside either directory's path. */
-async function loadHostingStatus(user: User | null, accessToken: string | null) {
+async function loadHostingStatus(user: User | null, accessToken: string | null,
+    accountRead: Promise<PromiseSettledResult<Awaited<ReturnType<typeof prepareWebsiteAccountStatusRequest>>>> | undefined) {
     // Resolve authoritative identities before any allocation fetch. No metadata/email fallback.
     const identity = identityStep(user);
     let account: AccountStatus | null = null;
     if (user && accessToken) {
         try {
-            account = await getWebsiteAccountStatus(user.id, accessToken);
+            if (!accountRead) throw new Error("Account read was not prepared.");
+            const prepared = await accountRead;
+            if (prepared.status === "rejected") throw prepared.reason;
+            account = await prepared.value(user);
         } catch { /* Independent CP grants must remain usable during membership outages. */ }
     }
     let onboarding: OnboardingSummary | null = null;
@@ -187,18 +207,22 @@ async function loadHostingStatus(user: User | null, accessToken: string | null) 
 }
 
 /** Loads authenticated managed inventory once for all private directory sections. */
-async function loadManagedInventory(user: User | null, accessToken: string | null) {
+async function loadManagedInventory(user: User | null, accessToken: string | null,
+    inventory: Promise<PromiseSettledResult<MyServerSummary[]>> | undefined) {
     let listed: MyServerSummary[] = [];
     let managedServersError = "";
     if (user) {
         if (!accessToken) {
-            managedServersError = "Your authenticated server session is unavailable. Please sign in again.";
+            managedServersError = "page.error.sessionUnavailable";
         } else {
             try {
-                listed = await listAllMyServers(accessToken);
+                if (!inventory) throw new Error("Authenticated inventory read was not started.");
+                const result = await inventory;
+                if (result.status === "rejected") throw result.reason;
+                listed = result.value;
             } catch (error) {
                 console.error("Managed server inventory failed to load", error);
-                managedServersError = "Managed servers could not be loaded right now.";
+                managedServersError = "page.error.managedUnavailable";
             }
         }
     }
@@ -225,7 +249,7 @@ async function loadPublicInventory() {
             players: null,
         }));
     } catch {
-        publicServersError = "The public server directory could not be loaded right now. Please try again later.";
+        publicServersError = "page.error.publicUnavailable";
     }
     return { allServers, publicServersError };
 }
