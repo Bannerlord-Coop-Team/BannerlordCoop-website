@@ -30,6 +30,7 @@ function message(error: unknown): { code: string; message: string } {
         operation_in_progress: "Another server operation is still running. Wait for it to finish, then try again.",
         request_conflict: "This request conflicts with another operation. Refresh and try again.",
         operation_unavailable: "Campaign changes are not available for this server right now.",
+        first_start_required: "Start the server once before starting a new campaign. Its first start creates a fresh campaign.",
         save_not_found: "That campaign is no longer available. Refresh the list.",
         server_not_found: "This server is unavailable or your access changed.",
         rate_limited: "Too many requests were sent. Wait a moment and try again.",

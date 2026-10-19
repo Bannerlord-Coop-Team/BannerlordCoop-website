@@ -21,7 +21,10 @@ queues the control plane's `reset-campaign` job after an explicit confirmation
 dialog. The job purges every save in the runner slot, retires the campaign rows
 and seeds the packaged default campaign again, leaving the server stopped with
 the fresh campaign selected. Both changes require a stopped server with no other
-job running; the card explains that and disables the buttons otherwise. Each
+job running; the card explains that and disables the buttons otherwise. New
+campaign also stays disabled while the list is empty: a server that has never
+started has no game installed on its slot, its first Start creates the campaign,
+and the control plane refuses an earlier reset with `first_start_required`. Each
 mutation carries a durable `x-request-id` so a retry after a lost response is
 replayed rather than queued twice. While a reset is pending the card polls the
 campaign list every five seconds and reports when the selection moved to the

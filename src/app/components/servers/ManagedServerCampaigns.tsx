@@ -121,8 +121,10 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
 
     const busy = pending || resetting !== null;
     const stopHint = status === null ? "Campaign changes are unavailable until the server status loads." : stopped ? null : "Stop the server to switch campaigns or start a new one.";
-    const newCampaignDisabled = busy || !stopped || !campaigns;
-    const newCampaignHint = status === null ? "Campaign changes are unavailable until the server status loads." : !stopped ? "Stop the server before starting a new campaign." : busy ? "Finish the current campaign operation first." : "Campaigns are still loading.";
+    // A server that never started has no campaign yet; the control plane refuses a reset until its first Start creates one.
+    const noCampaignYet = campaigns !== null && campaigns.items.length === 0;
+    const newCampaignDisabled = busy || !stopped || !campaigns || noCampaignYet;
+    const newCampaignHint = status === null ? "Campaign changes are unavailable until the server status loads." : !stopped ? "Stop the server before starting a new campaign." : busy ? "Finish the current campaign operation first." : !campaigns ? "Campaigns are still loading." : "This server has no campaign yet. Starting it creates a fresh one.";
 
     return <div className="mt-4 border-t border-white/10 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
