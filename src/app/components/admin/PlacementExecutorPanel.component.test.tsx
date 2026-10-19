@@ -97,8 +97,10 @@ it("validates settings and spells out what enabling does", () => {
     expect(confirmation).toContain("relocate customer servers to other VPSs by itself, up to 3 in any 24 hours");
     expect(confirmation).toContain("changes the server's IP address and game port");
     expect(confirmation).toContain("only to one-slot VPSs, which they never share");
-    expect(confirmation).toContain("at least 48 hours ahead");
-    expect(placementExecutorEnableConfirmation({ maximumRelocationsPerDay: 3, minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "any" })).toContain("at least 1 hour ahead.");
+    expect(confirmation).toContain("A running server is moved 48 hours after a notice on its page");
+    const anywhere = placementExecutorEnableConfirmation({ maximumRelocationsPerDay: 3, minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "any" });
+    expect(anywhere).toContain("A running server is moved an hour after a notice on its page, with in-game warnings");
+    expect(anywhere).not.toContain("Always-on");
     expect(placementExecutorEnableConfirmation({ maximumRelocationsPerDay: 1, minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "none" })).toContain("Always-on servers are never moved.");
 });
 

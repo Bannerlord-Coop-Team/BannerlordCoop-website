@@ -28,7 +28,7 @@ const badgeClass = "inline-flex w-fit border px-2 py-0.5 font-label text-[0.58re
 const FIELD_HELP: Record<keyof typeof PLACEMENT_EXECUTOR_LIMITS, string> = {
     maximumRelocationsPerDay: "Relocations it may queue in any rolling 24 hours.",
     minimumGainHours: "Co-online pair-hours per week one move must save on its own.",
-    noticeLeadHours: "Hours between announcing an always-on server's move on its page and making it.",
+    noticeLeadHours: "Hours between announcing a running server's move on its page and making it.",
 };
 const STATE_BADGES: Record<HostingPlacementRelocation["state"], string> = {
     announced: "border-sky-400/30 bg-sky-400/10 text-sky-300",
@@ -166,7 +166,7 @@ export function PlacementExecutorPanel() {
                             <select name="alwaysOnPolicy" value={form.alwaysOnPolicy} disabled={pending} onChange={(event) => setForm({ ...form, alwaysOnPolicy: event.target.value })} className={inputClass}>
                                 {PLACEMENT_ALWAYS_ON_POLICIES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                             </select>
-                            <span className="mt-1 block text-[0.65rem] leading-4 text-foreground-dim">Servers online even in their quietest window move only after a notice.</span>
+                            <span className="mt-1 block text-[0.65rem] leading-4 text-foreground-dim">Where servers online even in their quietest window may move.</span>
                         </label>
                     </div>
                     <label className="mt-4 block max-w-xl">
@@ -205,7 +205,7 @@ function PlacementRelocations({ relocations }: { relocations: readonly HostingPl
                         <tr key={relocation.relocationId}>
                             <td className="p-3"><p className="font-semibold text-gold">{relocation.displayName}</p><p className="mt-1 text-foreground-muted">{hostingRegionLabel(relocation.targetRegion)}</p></td>
                             <td className="p-3 font-mono text-foreground-muted">{relocation.fromServiceName} → <span className="text-foreground">{relocation.toServiceName}</span></td>
-                            <td className="p-3 text-foreground-muted" title={relocation.mode === "announced" ? "Announced on the server's page and moved in its quiet window." : "Moved while the server was stopped."}>{relocation.mode === "announced" ? "Announced" : "Offline"}</td>
+                            <td className="p-3 text-foreground-muted" title={relocation.mode === "announced" ? "Announced on the server's page, then moved after the notice lead time." : "Moved while the server was stopped."}>{relocation.mode === "announced" ? "Announced" : "Offline"}</td>
                             <td className="p-3"><span className={`${badgeClass} ${STATE_BADGES[relocation.state] ?? STATE_BADGES.cancelled}`}>{placementRelocationStateLabel(relocation.state)}</span></td>
                             <td className="p-3 text-right font-mono text-foreground">{formatPlacementGain(relocation.gainPairHoursPerWeek)}</td>
                             <td className="p-3 text-foreground-muted"><LocalDateTime value={relocation.scheduledAt} /></td>

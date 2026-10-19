@@ -293,13 +293,14 @@ export function placementExecutorInput(form: PlacementExecutorForm, expectedUpda
 
 /** What turning the executor on does, for the confirmation an administrator must accept. */
 export function placementExecutorEnableConfirmation(input: { maximumRelocationsPerDay: number; minimumGainHours: number; noticeLeadHours: number; alwaysOnPolicy: HostingPlacementAlwaysOnPolicy }) {
+    const lead = input.noticeLeadHours === 1 ? "an hour" : `${input.noticeLeadHours} hours`;
     const alwaysOn = input.alwaysOnPolicy === "none"
-        ? "Always-on servers are never moved."
-        : `Always-on servers are moved ${input.alwaysOnPolicy === "single-slot" ? "only to one-slot VPSs, which they never share, " : ""}in their quiet window, after a notice on their page at least ${input.noticeLeadHours} ${input.noticeLeadHours === 1 ? "hour" : "hours"} ahead.`;
+        ? " Always-on servers are never moved."
+        : input.alwaysOnPolicy === "single-slot" ? " Always-on servers move only to one-slot VPSs, which they never share." : "";
     return "Turn on automatic placement?\n\n"
         + `The control plane will relocate customer servers to other VPSs by itself, up to ${input.maximumRelocationsPerDay} in any 24 hours, whenever a move saves at least ${input.minimumGainHours} pair-hours a week. `
         + "Each move stops the game for a few minutes and changes the server's IP address and game port, so players need the new address to join. "
-        + `Stopped servers move at once. ${alwaysOn}`;
+        + `Stopped servers move at once. A running server is moved ${lead} after a notice on its page, with in-game warnings an hour and ten minutes ahead; the move stops the game and starts it again on the new VPS.${alwaysOn}`;
 }
 
 /** Turns a failed executor read or save into text for the administrator. */
