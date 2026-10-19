@@ -587,11 +587,18 @@ failures keep the card with a localized retry message.
 The same pages read the owner operation `server-move-status` through
 `getMyServerMoveStatus`, in parallel with the notices and with the same
 five-second bound; any failure, including an older control plane without the
-operation, shows no move. The DTO is strict: exact keys, the six states and seven
-steps, millisecond UTC timestamps, `scheduledAt` when `scheduled`, `completedAt`
-when `moved` or `failed`, `step` only while `moving` or `returning`, `address` (a
-real IPv4 or bracketed IPv6 address with a valid port) only once `moved`, and
-`stayedOnOriginal` only when `failed`.
+operation, shows no move. The DTO is strict: exact keys, one of the six states,
+millisecond UTC timestamps, one of the seven steps, an `address` that is a real IPv4
+or bracketed IPv6 address with a valid port, and exactly these fields per state
+(anything else is rejected):
+
+| State | `scheduledAt` | `startedAt` | `completedAt` | `step` | `address` | `stayedOnOriginal` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `scheduled`, `starting` | set | null | null | null | null | null |
+| `moving` | set or null | set | null | set or null | null | null |
+| `returning` | set or null | set | null | null | null | null |
+| `moved` | null | set | set | null | set or null | null |
+| `failed` | null | set | set | null | null | set (boolean) |
 
 `ManagedServerMoveProvider` wraps the workspace and polls the
 `readManagedServerMoveStatus` server action while the page is visible: every 60 s
