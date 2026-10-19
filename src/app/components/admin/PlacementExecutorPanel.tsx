@@ -1,22 +1,19 @@
 "use client";
 
-import { Check, LoaderCircle, Save } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
+import { Check, LoaderCircle } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Empty } from "@/app/components/admin/ControlPlanePresentation";
 import { LocalDateTime, LocalTime } from "@/app/components/admin/LocalDateTime";
 import { ControlPlaneAdminError, requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
-import { operationExplanation } from "@/app/lib/control-plane/explanations";
 import {
-    alwaysOnPolicyLabel,
     formatPlacementGain,
-    PLACEMENT_ALWAYS_ON_POLICIES,
-    PLACEMENT_EXECUTOR_LIMITS,
-    placementExecutorEnableConfirmation,
+    PLACEMENT_EXECUTOR_DESCRIPTION,
+    PLACEMENT_EXECUTOR_ENABLE_CONFIRMATION,
     placementExecutorErrorMessage,
-    placementExecutorForm,
-    placementExecutorInput,
+    placementExecutorLegacyValues,
+    placementExecutorSwitchInput,
     placementRelocationStateLabel,
-    type PlacementExecutorForm,
+    type PlacementExecutorLegacyValues,
 } from "@/app/lib/control-plane/placement";
 import {
     activePlacementRelocation,
@@ -38,17 +35,11 @@ import {
     type PlacementTrackPhase,
     type PlacementTrackStep,
 } from "@/app/lib/control-plane/placement-live-moves";
-import type { HostingAdminPlacementExecutor, HostingPlacementAlwaysOnPolicy, HostingPlacementExecutorSettings, HostingPlacementRelocation } from "@/app/lib/control-plane/types";
+import type { HostingAdminPlacementExecutor, HostingPlacementExecutorSettings, HostingPlacementRelocation } from "@/app/lib/control-plane/types";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 
-const inputClass = "mt-1.5 min-h-10 w-full border border-white/15 bg-background px-3 text-xs text-foreground outline-none placeholder:text-foreground-dim focus:border-gold disabled:opacity-60";
-const labelClass = "font-label text-[0.6rem] font-semibold uppercase tracking-[0.13em] text-foreground-muted";
 const badgeClass = "inline-flex w-fit border px-2 py-0.5 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em]";
-const FIELD_HELP: Record<keyof typeof PLACEMENT_EXECUTOR_LIMITS, string> = {
-    minimumGainHours: "Co-online pair-hours per week one move must save on its own.",
-    noticeLeadHours: "Hours between announcing a running server's move on its page and making it.",
-};
 const STATE_BADGES: Record<HostingPlacementRelocation["state"], string> = {
     announced: "border-sky-400/30 bg-sky-400/10 text-sky-300",
     queued: "border-gold/40 bg-gold/10 text-gold",
@@ -89,21 +80,20 @@ async function readExecutor(): Promise<HostingAdminPlacementExecutor> {
 }
 
 /**
- * The automatic placement executor's settings and recent relocations. Turning it on lets the
- * control plane move customer servers by itself, so the current state is shown first and
- * enabling needs an explicit confirmation.
+ * Automatic placement as one switch, with what it is doing and its recent moves. Its rules are fixed by the
+ * control plane, so there is nothing else to configure. Switching it on moves customer servers by itself, so
+ * that asks for confirmation; switching it off saves at once.
  */
 export function PlacementExecutorPanel() {
     const [executor, setExecutor] = useState<HostingAdminPlacementExecutor | null>(null);
-    const [form, setForm] = useState<PlacementExecutorForm | null>(null);
     const [loadError, setLoadError] = useState("");
     const [reload, setReload] = useState(0);
     const [pending, setPending] = useState(false);
     const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
     // Polls, the stale-save reload and Retry share one read at a time.
     const [reads] = useState(() => createPlacementExecutorReads(readExecutor));
-    // The legacy compatibility field as the latest read of any kind gave it: a save sends it back unchanged.
-    const [compatibilityValue, setCompatibilityValue] = useState<unknown>(undefined);
+    // Legacy settings as the latest read of any kind gave them: a switch sends each back unchanged.
+    const [legacy, setLegacy] = useState<PlacementExecutorLegacyValues>({});
 
     // While a move is announced or queued, follow it: re-read the executor on a visible page only.
     const following = executor?.relocations.some(isActivePlacementRelocation) ?? false;
@@ -125,10 +115,10 @@ export function PlacementExecutorPanel() {
             inFlight = true;
             try {
                 const fresh = await reads.shared();
-                // Only what the executor is doing: the settings stay as read, so a save is still checked against them.
+                // Only what the executor is doing: the switch stays as read, so a switch is still checked against it.
                 if (!cancelled) {
                     setExecutor((current) => current === null ? current : { ...current, status: fresh.status, relocations: fresh.relocations });
-                    setCompatibilityValue(fresh.settings.maximumRelocationsPerDay);
+                    setLegacy(placementExecutorLegacyValues(fresh.settings));
                 }
             } catch {
                 // The moves already shown stay; the next read tries again.
@@ -163,8 +153,7 @@ export function PlacementExecutorPanel() {
         reads.fresh().then((value) => {
             if (cancelled) return;
             setExecutor(value);
-            setForm(placementExecutorForm(value.settings));
-            setCompatibilityValue(value.settings.maximumRelocationsPerDay);
+            setLegacy(placementExecutorLegacyValues(value.settings));
             setLoadError("");
         }, (cause: unknown) => {
             if (!cancelled) setLoadError(cause instanceof Error ? cause.message : "The executor settings could not be loaded.");
@@ -172,16 +161,9 @@ export function PlacementExecutorPanel() {
         return () => { cancelled = true; };
     }, [reload, reads]);
 
-    async function save(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        if (executor === null || form === null || pending) return;
-        const parsed = placementExecutorInput(form, executor.settings.updatedAt, compatibilityValue);
-        if ("error" in parsed) {
-            setResult({ ok: false, message: parsed.error });
-            return;
-        }
-        const input = parsed.input as { minimumGainHours: number; noticeLeadHours: number; alwaysOnPolicy: HostingPlacementAlwaysOnPolicy };
-        if (form.enabled && !executor.settings.enabled && !window.confirm(placementExecutorEnableConfirmation(input))) return;
+    async function toggle(enabled: boolean) {
+        if (executor === null || pending) return;
+        if (enabled && !window.confirm(PLACEMENT_EXECUTOR_ENABLE_CONFIRMATION)) return;
         setPending(true);
         setResult(null);
         try {
@@ -191,22 +173,20 @@ export function PlacementExecutorPanel() {
                 accessToken: session.access_token,
                 requestId: crypto.randomUUID(),
                 operation: "set-placement-executor",
-                input: parsed.input,
+                input: placementExecutorSwitchInput(enabled, executor.settings.updatedAt, legacy),
             });
             setExecutor((current) => current === null ? current : { ...current, settings });
-            setForm(placementExecutorForm(settings));
-            setCompatibilityValue(settings.maximumRelocationsPerDay);
-            setResult({ ok: true, message: settings.enabled ? "Saved. Automatic placement is on." : "Saved. Automatic placement is off." });
+            setLegacy(placementExecutorLegacyValues(settings));
+            setResult({ ok: true, message: settings.enabled ? "Automatic placement is on." : "Automatic placement is off." });
         } catch (cause) {
             if (cause instanceof ControlPlaneAdminError && cause.code === "stale_interaction") {
-                // Someone else saved first: show their settings rather than overwrite them.
+                // Someone else switched it first: show their state rather than overwrite it.
                 try {
-                    // A read already under way may predate their save, so this one starts after it.
+                    // A read already under way may predate their switch, so this one starts after it.
                     const fresh = await reads.fresh();
                     setExecutor(fresh);
-                    setForm(placementExecutorForm(fresh.settings));
-                    setCompatibilityValue(fresh.settings.maximumRelocationsPerDay);
-                } catch { /* The stale message below still asks for a reload. */ }
+                    setLegacy(placementExecutorLegacyValues(fresh.settings));
+                } catch { /* The stale message below still asks to try again. */ }
             }
             setResult({ ok: false, message: placementExecutorErrorMessage(cause) });
         } finally {
@@ -217,68 +197,27 @@ export function PlacementExecutorPanel() {
     const settings = executor?.settings ?? null;
     return (
         <section className={`border bg-surface p-5 ${settings?.enabled ? "border-crimson/50" : "border-white/10"}`} aria-labelledby="placement-executor-heading">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="max-w-3xl">
-                    <p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-gold">Automatic executor</p>
-                    <h2 id="placement-executor-heading" className="mt-1 font-display text-3xl font-semibold text-foreground">Automatic placement</h2>
-                    <p className="mt-2 text-xs leading-5 text-foreground-muted">{operationExplanation("set-placement-executor")}</p>
-                </div>
-                {settings !== null && (settings.enabled
-                    ? <span role="status" className="inline-flex items-center gap-2 border border-crimson/50 bg-crimson/15 px-3 py-2 font-label text-xs font-semibold uppercase tracking-[0.12em] text-red-100">On · relocating servers automatically</span>
-                    : <span role="status" className="inline-flex items-center gap-2 border border-white/15 px-3 py-2 font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground-muted">Off · nothing moves automatically</span>)}
-            </div>
+            <p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-gold">Automatic executor</p>
+            <h2 id="placement-executor-heading" className="mt-1 font-display text-3xl font-semibold text-foreground">Automatic placement</h2>
+            <p className="mt-2 max-w-3xl text-xs leading-5 text-foreground-muted">{PLACEMENT_EXECUTOR_DESCRIPTION}</p>
             {loadError && <p role="alert" className="mt-4 border-l-2 border-crimson bg-crimson/10 px-3 py-2 text-xs text-red-200">{loadError} <button type="button" className="ml-2 underline" onClick={() => setReload((value) => value + 1)}>Retry</button></p>}
-            {settings === null && !loadError && <p className="mt-4 text-xs text-foreground-muted" role="status">Loading executor settings…</p>}
-            {settings !== null && form !== null && <>
-                <p className="mt-4 text-xs text-foreground-muted">
-                    {settings.updatedAt === null
-                        ? "Never saved; these are the control plane's defaults."
-                        : <>Last changed <LocalDateTime value={settings.updatedAt} /> by <span className="font-mono text-foreground">{settings.updatedBy ?? "unknown"}</span>{settings.reason ? <>: <span className="text-foreground">{settings.reason}</span></> : null}</>}
-                </p>
-                <p className="mt-1 text-xs text-foreground-dim">
-                    Saved: at least {settings.minimumGainHours} pair-h/week each · always-on servers: {lowerFirst(alwaysOnPolicyLabel(settings.alwaysOnPolicy))} · {settings.noticeLeadHours} h notice
-                </p>
-                {executor !== null && <ExecutorStatus executor={executor} />}
-                <form onSubmit={(event) => void save(event)} className="mt-5">
-                    <label className="flex items-center gap-3 text-sm text-foreground">
-                        <input type="checkbox" name="enabled" checked={form.enabled} disabled={pending} onChange={(event) => setForm({ ...form, enabled: event.target.checked })} className="size-4 accent-crimson" />
-                        Relocate servers automatically
-                    </label>
-                    {form.enabled && !settings.enabled && <p className="mt-2 text-xs text-amber-200">Saving turns automatic relocation on. Each move stops the game for a few minutes and changes the server&apos;s address and game port.</p>}
-                    {!form.enabled && settings.enabled && <p className="mt-2 text-xs text-foreground-muted">Saving turns it off: announced moves are cancelled and their notices withdrawn; a relocation already running finishes.</p>}
-                    <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                        {(Object.keys(PLACEMENT_EXECUTOR_LIMITS) as Array<keyof typeof PLACEMENT_EXECUTOR_LIMITS>).map((name) => {
-                            const limit = PLACEMENT_EXECUTOR_LIMITS[name];
-                            return (
-                                <label key={name} className="block">
-                                    <span className={labelClass}>{limit.label}</span>
-                                    <input name={name} type="number" inputMode="numeric" min={limit.minimum} max={limit.maximum} step={1} required value={form[name]} disabled={pending}
-                                        onChange={(event) => setForm({ ...form, [name]: event.target.value })} className={inputClass} />
-                                    <span className="mt-1 block text-[0.65rem] leading-4 text-foreground-dim">{limit.minimum}–{limit.maximum}. {FIELD_HELP[name]}</span>
-                                </label>
-                            );
-                        })}
-                        <label className="block">
-                            <span className={labelClass}>Always-on servers</span>
-                            <select name="alwaysOnPolicy" value={form.alwaysOnPolicy} disabled={pending} onChange={(event) => setForm({ ...form, alwaysOnPolicy: event.target.value })} className={inputClass}>
-                                {PLACEMENT_ALWAYS_ON_POLICIES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                            </select>
-                            <span className="mt-1 block text-[0.65rem] leading-4 text-foreground-dim">Where servers online even in their quietest window may move.</span>
-                        </label>
-                    </div>
-                    <label className="mt-4 block max-w-xl">
-                        <span className={labelClass}>Reason</span>
-                        <input name="reason" value={form.reason} maxLength={1_000} disabled={pending} placeholder="Recorded in the audit history" onChange={(event) => setForm({ ...form, reason: event.target.value })} className={inputClass} />
-                    </label>
-                    <div className="mt-5 flex flex-wrap items-center gap-3">
-                        <button type="submit" disabled={pending} className="inline-flex min-h-10 items-center gap-1.5 border border-crimson bg-crimson px-5 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-white hover:bg-crimson-hover disabled:cursor-wait disabled:opacity-60">
-                            {pending ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : <Save aria-hidden="true" className="size-3.5" />}{pending ? "Saving" : "Save settings"}
-                        </button>
-                        <button type="button" disabled={pending} onClick={() => { setForm(placementExecutorForm(settings)); setResult(null); }} className="inline-flex min-h-10 items-center border border-white/15 px-4 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted hover:text-foreground disabled:opacity-40">Discard changes</button>
-                    </div>
-                    {result && <p role={result.ok ? "status" : "alert"} className={`mt-4 border-l-2 px-3 py-2 text-xs ${result.ok ? "border-emerald-500 bg-emerald-500/10 text-emerald-200" : "border-crimson bg-crimson/10 text-red-200"}`}>{result.message}</p>}
-                </form>
-                <PlacementLiveMoves relocations={executor?.relocations ?? []} />
+            {settings === null && !loadError && <p className="mt-4 text-xs text-foreground-muted" role="status">Loading automatic placement…</p>}
+            {executor !== null && settings !== null && <>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <button type="button" role="switch" aria-checked={settings.enabled} aria-label="Automatic placement" disabled={pending}
+                        onClick={() => void toggle(!settings.enabled)}
+                        className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-wait disabled:opacity-60 ${settings.enabled ? "border-crimson bg-crimson" : "border-white/20 bg-white/10"}`}>
+                        <span aria-hidden="true" className={`inline-block size-5 rounded-full bg-white shadow transition-transform ${settings.enabled ? "translate-x-6" : "translate-x-1"}`} />
+                    </button>
+                    <span className={`font-label text-xs font-semibold uppercase tracking-[0.12em] ${settings.enabled ? "text-red-100" : "text-foreground-muted"}`}>
+                        {settings.enabled ? "On · relocating servers automatically" : "Off · nothing moves automatically"}
+                    </span>
+                    {pending && <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-foreground-muted" />}
+                    {settings.updatedAt !== null && <span className="text-xs text-foreground-dim">{settings.enabled ? "On" : "Off"} since <LocalDateTime value={settings.updatedAt} /></span>}
+                </div>
+                {result && <p role={result.ok ? "status" : "alert"} className={`mt-3 border-l-2 px-3 py-2 text-xs ${result.ok ? "border-emerald-500 bg-emerald-500/10 text-emerald-200" : "border-crimson bg-crimson/10 text-red-200"}`}>{result.message}</p>}
+                <ExecutorStatus executor={executor} />
+                <PlacementLiveMoves relocations={executor.relocations} />
             </>}
         </section>
     );
@@ -350,7 +289,7 @@ function LiveMove({ relocation }: { relocation: HostingPlacementRelocation }) {
                     {shortServiceName(relocation.fromServiceName)} → <span className="text-foreground">{shortServiceName(relocation.toServiceName)}</span>
                 </span>
                 <span className="text-foreground-muted">{hostingRegionLabel(relocation.targetRegion)}</span>
-                <span className="text-foreground-muted" title={relocation.mode === "announced" ? "Announced on the server's page, then moved after the notice lead time." : "Moved while the server was stopped."}>{relocation.mode === "announced" ? "Announced" : "Offline"}</span>
+                <span className="text-foreground-muted" title={relocation.mode === "announced" ? "Announced on the server's page, then moved after an hour's notice." : "Moved while the server was stopped."}>{relocation.mode === "announced" ? "Announced" : "Offline"}</span>
                 <span className="font-mono text-foreground" title="Co-online pair-hours per week this move saves.">{formatPlacementGain(relocation.gainPairHoursPerWeek)}</span>
                 <span className={`${badgeClass} ${STATE_BADGES[relocation.state] ?? STATE_BADGES.cancelled}`}>{placementRelocationStateLabel(relocation.state)}</span>
                 {duration !== null && <span className="text-foreground-muted">Took {duration}</span>}

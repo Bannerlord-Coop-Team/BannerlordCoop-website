@@ -85,7 +85,7 @@ const OPERATION_EXPLANATIONS: Record<string, string> = {
     "set-bonus-quota": "Replaces one owner's administrative bonus quota; it does not manufacture a membership entitlement.",
     "set-build-pin": "Pins one exact validated build or clears the pin so the server follows its selected release channel.",
     "set-global-controls": "Atomically replaces all four live pause switches and records the administrator reason. Checked means that workflow is currently paused.",
-    "set-placement-executor": "Saves the automatic placement executor's four settings. While it is on, the control plane follows the placement plan by itself, one relocation at a time: stopped servers move at once, and running servers move after a notice on their page and in-game warnings, the notice lead time ahead.",
+    "set-placement-executor": "Switches the automatic placement executor on or off. While it is on, the control plane follows the placement plan by itself, one relocation at a time, under fixed rules: each move saves at least 20 pair-hours a week, a stopped server moves at once and stays stopped, a running server moves after an hour's notice on its page and in-game warnings, and always-on servers move only to one-slot VPSs.",
     "set-manager": "Grants or revokes bounded manager access. Managers do not receive ownership, deletion, export, or administrative capabilities.",
     "suspend-server": "Places an administrative hold on the server, blocks owner operations, cancels unsafe expanding jobs, and queues a graceful stop.",
     "transfer-owner": "Transfers ownership only after recipient entitlement, quota, active-job, and provider-generation checks.",

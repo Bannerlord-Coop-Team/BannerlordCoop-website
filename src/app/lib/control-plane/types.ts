@@ -457,9 +457,10 @@ export type HostingPlacementExecutorSettings = {
      * older control planes still require it. Current ones ignore it.
      */
     maximumRelocationsPerDay?: number;
-    minimumGainHours: number;
-    alwaysOnPolicy: HostingPlacementAlwaysOnPolicy;
-    noticeLeadHours: number;
+    /** Legacy settings like the field above: the rules are fixed now (20 pair-hours, an hour's notice, one-slot VPSs). */
+    minimumGainHours?: number;
+    alwaysOnPolicy?: HostingPlacementAlwaysOnPolicy;
+    noticeLeadHours?: number;
     updatedBy: string | null;
     reason: string | null;
     updatedAt: string | null;

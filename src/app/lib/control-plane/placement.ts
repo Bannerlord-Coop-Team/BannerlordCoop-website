@@ -2,9 +2,7 @@ import { ControlPlaneAdminError } from "./client";
 import { RELOCATION_JOB_ACTION } from "./relocation";
 import type {
     HostingAdminPlacementPlan,
-    HostingPlacementAlwaysOnPolicy,
     HostingPlacementAlwaysOnTargets,
-    HostingPlacementExecutorSettings,
     HostingPlacementHost,
     HostingPlacementMove,
     HostingPlacementPinReason,
@@ -242,86 +240,54 @@ export function placementMoveStatuses(
     return statuses;
 }
 
-/** Accepted executor ranges; the control plane validates them again. Moves are not rate limited. */
-export const PLACEMENT_EXECUTOR_LIMITS = {
-    minimumGainHours: { minimum: 1, maximum: 168, label: "Minimum gain" },
-    noticeLeadHours: { minimum: 1, maximum: 168, label: "Notice lead time" },
-} as const;
+/** What automatic placement does, in one sentence; its rules are fixed by the control plane. */
+export const PLACEMENT_EXECUTOR_DESCRIPTION = "When on, the control plane moves servers to quieter VPSs by itself, one at a time. "
+    + "A stopped server moves at once and stays stopped; a running server gets an hour's warning on its page and in game, then moves and starts again.";
 
-export const PLACEMENT_ALWAYS_ON_POLICIES: ReadonlyArray<{ value: HostingPlacementAlwaysOnPolicy; label: string }> = [
-    { value: "single-slot", label: "Only to one-slot VPSs (never shared)" },
-    { value: "none", label: "Never move them" },
-    { value: "any", label: "Anywhere, like other servers" },
-];
+/** The confirmation an administrator accepts to switch it on. */
+export const PLACEMENT_EXECUTOR_ENABLE_CONFIRMATION = "Turn on automatic placement? The control plane will start moving servers by itself; "
+    + "each move stops the game for a few minutes and changes the server's address and game port.";
 
-export type PlacementExecutorForm = Record<keyof typeof PLACEMENT_EXECUTOR_LIMITS | "alwaysOnPolicy" | "reason", string> & { enabled: boolean };
+/**
+ * Settings that control planes from before the switch-only panel still require on every save, and newer ones
+ * ignore. The panel never shows them: it sends each back exactly as the latest read gave it.
+ */
+export const PLACEMENT_EXECUTOR_LEGACY_KEYS = ["maximumRelocationsPerDay", "minimumGainHours", "noticeLeadHours", "alwaysOnPolicy"] as const;
+export type PlacementExecutorLegacyValues = Partial<Record<typeof PLACEMENT_EXECUTOR_LEGACY_KEYS[number], number | string>>;
 
-const MAXIMUM_ADMIN_REASON_LENGTH = 1_000;
-
-/** The form for the saved settings; the legacy compatibility field is not part of it. */
-export function placementExecutorForm(settings: HostingPlacementExecutorSettings): PlacementExecutorForm {
-    return {
-        enabled: settings.enabled,
-        minimumGainHours: String(settings.minimumGainHours),
-        noticeLeadHours: String(settings.noticeLeadHours),
-        alwaysOnPolicy: settings.alwaysOnPolicy,
-        reason: "",
-    };
+/** The legacy settings a read carried, exactly as given; a missing one is left out. */
+export function placementExecutorLegacyValues(settings: object | null | undefined): PlacementExecutorLegacyValues {
+    const values: PlacementExecutorLegacyValues = {};
+    if (typeof settings !== "object" || settings === null) return values;
+    for (const key of PLACEMENT_EXECUTOR_LEGACY_KEYS) {
+        const value = (settings as Record<string, unknown>)[key];
+        if (typeof value === "number" || typeof value === "string") values[key] = value;
+    }
+    return values;
 }
 
 /**
- * Builds the `set-placement-executor` input, guarded by the `updatedAt` last read (null when never saved).
- * The legacy compatibility field `maximumRelocationsPerDay` goes back exactly as the latest read gave it, so a
- * control plane that still requires it accepts the save; a newer one ignores it. Without it, it is left out.
+ * The `set-placement-executor` input for switching it on or off, guarded by the `updatedAt` last read (null
+ * when never saved). The control plane requires an audit reason, so each switch sends a fixed one.
  */
-export function placementExecutorInput(form: PlacementExecutorForm, expectedUpdatedAt: string | null, compatibilityValue?: unknown): { input: Record<string, boolean | number | string | null> } | { error: string } {
-    const input: Record<string, boolean | number | string | null> = { enabled: form.enabled };
-    if (typeof compatibilityValue === "number") input.maximumRelocationsPerDay = compatibilityValue;
-    for (const [name, limit] of Object.entries(PLACEMENT_EXECUTOR_LIMITS) as Array<[keyof typeof PLACEMENT_EXECUTOR_LIMITS, typeof PLACEMENT_EXECUTOR_LIMITS[keyof typeof PLACEMENT_EXECUTOR_LIMITS]]>) {
-        const text = form[name].trim();
-        const value = Number(text);
-        if (text === "" || !Number.isInteger(value) || value < limit.minimum || value > limit.maximum) {
-            return { error: `${limit.label} must be a whole number from ${limit.minimum} to ${limit.maximum}.` };
-        }
-        input[name] = value;
-    }
-    const policy = PLACEMENT_ALWAYS_ON_POLICIES.find((option) => option.value === form.alwaysOnPolicy);
-    if (policy === undefined) return { error: "Choose where always-on servers may move." };
-    input.alwaysOnPolicy = policy.value;
-    input.expectedUpdatedAt = expectedUpdatedAt;
-    const reason = form.reason.trim();
-    if (reason.length > MAXIMUM_ADMIN_REASON_LENGTH || /[\p{Cc}\p{Cf}]/u.test(reason)) return { error: `The reason must be one line of at most ${MAXIMUM_ADMIN_REASON_LENGTH} characters.` };
-    if (reason !== "") input.reason = reason;
-    return { input };
-}
-
-/** What turning the executor on does, for the confirmation an administrator must accept. */
-export function placementExecutorEnableConfirmation(input: { minimumGainHours: number; noticeLeadHours: number; alwaysOnPolicy: HostingPlacementAlwaysOnPolicy }) {
-    const lead = input.noticeLeadHours === 1 ? "an hour" : `${input.noticeLeadHours} hours`;
-    // With always-on servers excluded, the running servers that move are only the others.
-    const runningServer = input.alwaysOnPolicy === "none" ? "A running server that is not always-on" : "A running server";
-    const alwaysOn = input.alwaysOnPolicy === "none"
-        ? " Always-on servers are never moved."
-        : input.alwaysOnPolicy === "single-slot" ? " Always-on servers move only to one-slot VPSs, which they never share." : "";
-    return "Turn on automatic placement?\n\n"
-        + `The control plane will relocate customer servers to other VPSs by itself, one at a time, whenever a move saves at least ${input.minimumGainHours} pair-hours a week. `
-        + "Each move stops the game for a few minutes and changes the server's IP address and game port, so players need the new address to join. "
-        + `Stopped servers move at once. ${runningServer} is moved ${lead} after a notice on its page, with in-game warnings an hour and ten minutes ahead; the move stops the game and starts it again on the new VPS.${alwaysOn}`;
+export function placementExecutorSwitchInput(enabled: boolean, expectedUpdatedAt: string | null, legacy: PlacementExecutorLegacyValues) {
+    return {
+        ...legacy,
+        enabled,
+        expectedUpdatedAt,
+        reason: `Switched automatic placement ${enabled ? "on" : "off"} from the admin panel`,
+    };
 }
 
 /** Turns a failed executor read or save into text for the administrator. */
 export function placementExecutorErrorMessage(error: unknown) {
     if (error instanceof ControlPlaneAdminError && error.code === "stale_interaction") {
-        return "Someone else changed these settings. The current settings are shown; review them and save again.";
+        return "Someone else switched automatic placement meanwhile. Its current state is shown; switch it again if you still want to.";
     }
     if (error instanceof ControlPlaneAdminError && error.code === "relocation_provider_unsupported") {
         return "Automatic placement can only be turned on when the control plane runs in live OVH mode.";
     }
     return error instanceof Error ? error.message : "The executor settings could not be saved.";
-}
-
-export function alwaysOnPolicyLabel(value: HostingPlacementAlwaysOnPolicy) {
-    return PLACEMENT_ALWAYS_ON_POLICIES.find((option) => option.value === value)?.label ?? value;
 }
 
 const RELOCATION_STATE_LABELS: Record<HostingPlacementRelocation["state"], string> = {

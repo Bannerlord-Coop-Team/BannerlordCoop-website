@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
-import { placementExecutorEnableConfirmation, placementExecutorInput } from "@/app/lib/control-plane/placement";
+import { PLACEMENT_EXECUTOR_DESCRIPTION, PLACEMENT_EXECUTOR_ENABLE_CONFIRMATION, placementExecutorLegacyValues, placementExecutorSwitchInput } from "@/app/lib/control-plane/placement";
 import type { HostingAdminPlacementExecutor, HostingPlacementExecutorSettings, HostingPlacementRelocation, HostingPlacementRelocationProgress } from "@/app/lib/control-plane/types";
 import { PlacementExecutorPanel } from "./PlacementExecutorPanel";
 
@@ -69,63 +69,46 @@ function button(text: string) {
     return [...container.querySelectorAll("button")].find((item) => item.textContent?.trim() === text)!;
 }
 
-async function check(name: string, checked: boolean) {
-    await act(async () => {
-        const input = container.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
-        if (input.checked !== checked) input.click();
-    });
+function automaticPlacement() {
+    return container.querySelector<HTMLButtonElement>('button[role="switch"]')!;
 }
 
-async function type(name: string, value: string) {
-    await act(async () => {
-        const input = container.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+async function flip() {
+    await act(async () => automaticPlacement().click());
 }
 
-async function save() {
-    await act(async () => button("Save settings").click());
-}
+const ON_REASON = "Switched automatic placement on from the admin panel";
+const OFF_REASON = "Switched automatic placement off from the admin panel";
+const legacySettings = { maximumRelocationsPerDay: 2, minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "single-slot" } as const;
 
-it("validates settings and spells out what enabling does", () => {
-    const form = { enabled: true, minimumGainHours: "20", noticeLeadHours: "48", alwaysOnPolicy: "single-slot", reason: "  " };
-    expect(placementExecutorInput(form, null)).toEqual({ input: { enabled: true, minimumGainHours: 20, noticeLeadHours: 48, alwaysOnPolicy: "single-slot", expectedUpdatedAt: null } });
-    expect(placementExecutorInput({ ...form, reason: "Quarterly rebalance" }, saved.updatedAt)).toMatchObject({ input: { reason: "Quarterly rebalance", expectedUpdatedAt: saved.updatedAt } });
-    // The legacy compatibility field is echoed only as a number the latest read gave.
-    expect(placementExecutorInput(form, null, 3)).toEqual({ input: { enabled: true, maximumRelocationsPerDay: 3, minimumGainHours: 20, noticeLeadHours: 48, alwaysOnPolicy: "single-slot", expectedUpdatedAt: null } });
-    for (const value of [undefined, null, "3"]) expect(placementExecutorInput(form, null, value)).not.toMatchObject({ input: { maximumRelocationsPerDay: expect.anything() } });
-    expect(placementExecutorInput({ ...form, minimumGainHours: "0.5" }, null)).toEqual({ error: "Minimum gain must be a whole number from 1 to 168." });
-    expect(placementExecutorInput({ ...form, alwaysOnPolicy: "sometimes" }, null)).toEqual({ error: "Choose where always-on servers may move." });
-    const confirmation = placementExecutorEnableConfirmation({ minimumGainHours: 20, noticeLeadHours: 48, alwaysOnPolicy: "single-slot" });
-    // Moves are not rate limited, so the confirmation names no daily number.
-    expect(confirmation).toContain("relocate customer servers to other VPSs by itself, one at a time, whenever a move saves at least 20 pair-hours a week.");
-    expect(confirmation).not.toMatch(/24 hours|per day|daily/u);
-    expect(confirmation).toContain("changes the server's IP address and game port");
-    expect(confirmation).toContain("only to one-slot VPSs, which they never share");
-    expect(confirmation).toContain("A running server is moved 48 hours after a notice on its page");
-    const anywhere = placementExecutorEnableConfirmation({ minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "any" });
-    expect(anywhere).toContain("A running server is moved an hour after a notice on its page, with in-game warnings");
-    expect(anywhere).not.toContain("Always-on");
-    const never = placementExecutorEnableConfirmation({ minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "none" });
-    expect(never).toContain("Stopped servers move at once. A running server that is not always-on is moved an hour after a notice on its page, "
-        + "with in-game warnings an hour and ten minutes ahead; the move stops the game and starts it again on the new VPS. Always-on servers are never moved.");
-    expect(never).not.toContain("A running server is moved");
+it("builds a switch's input with a fixed reason and the legacy settings as last read", () => {
+    expect(placementExecutorSwitchInput(true, null, {})).toEqual({ enabled: true, expectedUpdatedAt: null, reason: ON_REASON });
+    expect(placementExecutorSwitchInput(false, saved.updatedAt, legacySettings)).toEqual({ ...legacySettings, enabled: false, expectedUpdatedAt: saved.updatedAt, reason: OFF_REASON });
+    expect(placementExecutorLegacyValues({ ...saved, maximumRelocationsPerDay: 2 })).toEqual(legacySettings);
+    expect(placementExecutorLegacyValues({ enabled: true, updatedBy: null, reason: null, updatedAt: null })).toEqual({});
+    // Each is sent back only as a value the read actually carried.
+    expect(placementExecutorLegacyValues({ enabled: true, minimumGainHours: null, noticeLeadHours: undefined, alwaysOnPolicy: "any" })).toEqual({ alwaysOnPolicy: "any" });
+    expect(placementExecutorLegacyValues(null)).toEqual({});
+    expect(PLACEMENT_EXECUTOR_ENABLE_CONFIRMATION).toBe("Turn on automatic placement? The control plane will start moving servers by itself; "
+        + "each move stops the game for a few minutes and changes the server's address and game port.");
 });
 
-it("shows the current state, its defaults and recent automatic relocations, with no moves-per-day setting", async () => {
+it("shows one switch and nothing to configure", async () => {
+    current = { ...current, settings: { ...saved, maximumRelocationsPerDay: 2 } };
     await act(async () => root.render(<PlacementExecutorPanel />));
-
     expect(calls("placement-executor")).toEqual([expect.objectContaining({ input: {} })]);
-    expect(container.textContent).toContain("Off · nothing moves automatically");
-    expect(container.textContent).toContain("Never saved; these are the control plane's defaults.");
-    expect(container.textContent).toContain("always-on servers: only to one-slot VPSs (never shared)");
-    expect(container.querySelector<HTMLInputElement>('input[name="enabled"]')!.checked).toBe(false);
-    expect(container.querySelector('input[name="maximumRelocationsPerDay"]')).toBeNull();
-    expect(container.textContent).not.toMatch(/per day|Relocations per day|daily/u);
-    // The control plane's default notice lead time is one hour.
-    expect(container.querySelector<HTMLInputElement>('input[name="noticeLeadHours"]')!.value).toBe("1");
-    expect(container.querySelector<HTMLSelectElement>('select[name="alwaysOnPolicy"]')!.value).toBe("single-slot");
+    expect(container.querySelectorAll("input, select, textarea")).toHaveLength(0);
+    expect(automaticPlacement().getAttribute("aria-checked")).toBe("true");
+    expect(automaticPlacement().getAttribute("aria-label")).toBe("Automatic placement");
+    expect(container.textContent).toContain(PLACEMENT_EXECUTOR_DESCRIPTION);
+    expect(PLACEMENT_EXECUTOR_DESCRIPTION).toBe("When on, the control plane moves servers to quieter VPSs by itself, one at a time. "
+        + "A stopped server moves at once and stays stopped; a running server gets an hour's warning on its page and in game, then moves and starts again.");
+    expect(container.textContent).toContain("On · relocating servers automatically");
+    expect(container.textContent).toContain("On since");
+    // Neither who switched it nor why, and none of the settings it used to have.
+    for (const removed of ["supabase:", "Start placement", "Last changed", "Saved:", "Minimum gain", "Notice lead", "Always-on", "Reason", "pair-h/week", "per day", "Save settings", "Discard changes"]) {
+        expect(container.textContent).not.toContain(removed);
+    }
     expect(container.textContent).toContain("Live moves");
     const rows = [...container.querySelectorAll("li")].map((row) => row.textContent);
     expect(rows[0]).toContain("The Gang");
@@ -136,72 +119,102 @@ it("shows the current state, its defaults and recent automatic relocations, with
     expect(rows[1]).toContain("Cancelled because the move could not start within its announced window. placement_window_missed");
 });
 
-it("needs explicit confirmation to turn the executor on", async () => {
+it("says only that it is off when it was never switched", async () => {
     await act(async () => root.render(<PlacementExecutorPanel />));
-    await check("enabled", true);
-    expect(container.textContent).toContain("Saving turns automatic relocation on.");
+    expect(automaticPlacement().getAttribute("aria-checked")).toBe("false");
+    expect(container.textContent).toContain("Off · nothing moves automatically");
+    expect(container.textContent).not.toContain("since");
+});
+
+it("asks before switching on, then sends the fixed reason and the legacy settings as read", async () => {
+    current = { ...current, settings: { ...defaults, maximumRelocationsPerDay: 2 } };
+    await act(async () => root.render(<PlacementExecutorPanel />));
 
     mocks.confirm.mockReturnValueOnce(false);
-    await save();
-    expect(mocks.confirm).toHaveBeenCalledOnce();
-    expect(String(mocks.confirm.mock.calls[0]?.[0])).toContain("Turn on automatic placement?");
+    await flip();
+    expect(mocks.confirm).toHaveBeenCalledExactlyOnceWith(PLACEMENT_EXECUTOR_ENABLE_CONFIRMATION);
     expect(calls("set-placement-executor")).toHaveLength(0);
+    expect(automaticPlacement().getAttribute("aria-checked")).toBe("false");
 
     mocks.confirm.mockReturnValueOnce(true);
-    await type("reason", "Start placement");
-    await save();
-    expect(calls("set-placement-executor")).toEqual([expect.objectContaining({
-        input: { enabled: true, minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "single-slot", expectedUpdatedAt: null, reason: "Start placement" },
-    })]);
+    await flip();
+    expect(calls("set-placement-executor")).toEqual([expect.objectContaining({ input: { ...legacySettings, enabled: true, expectedUpdatedAt: null, reason: ON_REASON } })]);
+    expect(automaticPlacement().getAttribute("aria-checked")).toBe("true");
     expect(container.textContent).toContain("On · relocating servers automatically");
-    expect(container.querySelector('[role="status"].border-l-2')?.textContent).toBe("Saved. Automatic placement is on.");
+    expect(container.querySelector('[role="status"].border-l-2')?.textContent).toBe("Automatic placement is on.");
 });
 
-it("turns the executor off against the generation it read, without a confirmation", async () => {
+it("switches off at once against the state it read", async () => {
     current = { ...current, settings: saved };
     await act(async () => root.render(<PlacementExecutorPanel />));
-    expect(container.textContent).toContain("On · relocating servers automatically");
-    expect(container.textContent).toContain("Start placement");
-    await check("enabled", false);
-    await save();
-
+    await flip();
     expect(mocks.confirm).not.toHaveBeenCalled();
-    expect(calls("set-placement-executor")[0]?.input).toMatchObject({ enabled: false, expectedUpdatedAt: saved.updatedAt });
-    expect(calls("set-placement-executor")[0]?.input).not.toHaveProperty("reason");
+    expect(calls("set-placement-executor")).toEqual([expect.objectContaining({
+        input: { minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "single-slot", enabled: false, expectedUpdatedAt: saved.updatedAt, reason: OFF_REASON },
+    })]);
     expect(container.textContent).toContain("Off · nothing moves automatically");
+    expect(container.querySelector('[role="status"].border-l-2')?.textContent).toBe("Automatic placement is off.");
 });
 
-it("reloads someone else's newer settings when the save is stale", async () => {
+it("sends no legacy settings when the read had none", async () => {
+    // A control plane that ignores the old settings may stop sending them.
+    current = { ...current, settings: { enabled: false, updatedBy: null, reason: null, updatedAt: null } };
     await act(async () => root.render(<PlacementExecutorPanel />));
-    await type("noticeLeadHours", "6");
+    mocks.confirm.mockReturnValueOnce(true);
+    await flip();
+    expect(calls("set-placement-executor")[0]?.input).toEqual({ enabled: true, expectedUpdatedAt: null, reason: ON_REASON });
+});
+
+it("sends back each legacy setting as the latest read gave it, polls and switches included", async () => {
+    vi.useFakeTimers();
+    current = { settings: { ...saved, maximumRelocationsPerDay: 2 }, status: { activeRelocationId: "live", queuedInLast24Hours: 1 }, relocations: [live] };
+    await act(async () => root.render(<PlacementExecutorPanel />));
+    // A poll from a control plane that sends only some of them.
+    current = { ...current, settings: { enabled: true, noticeLeadHours: 1, alwaysOnPolicy: "single-slot", updatedBy: null, reason: null, updatedAt: saved.updatedAt } };
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    expect(calls("placement-executor")).toHaveLength(2);
+    await flip();
+    expect(calls("set-placement-executor")[0]?.input).toEqual({ noticeLeadHours: 1, alwaysOnPolicy: "single-slot", enabled: false, expectedUpdatedAt: saved.updatedAt, reason: OFF_REASON });
+
+    // The switch's own response is the next read: it carries what this request sent.
+    mocks.confirm.mockReturnValueOnce(true);
+    await flip();
+    expect(calls("set-placement-executor")[1]?.input).toEqual({ noticeLeadHours: 1, alwaysOnPolicy: "single-slot", enabled: true, expectedUpdatedAt: "2026-10-18T13:00:00.000Z", reason: ON_REASON });
+
+    // A rollback to a control plane that requires them all reaches the page through a poll.
+    current = { ...current, settings: { ...saved, maximumRelocationsPerDay: 2, updatedAt: "2026-10-18T13:00:00.000Z" } };
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    await flip();
+    expect(calls("set-placement-executor")[2]?.input).toEqual({ ...legacySettings, enabled: false, expectedUpdatedAt: "2026-10-18T13:00:00.000Z", reason: OFF_REASON });
+    expect(container.querySelectorAll("input, select, textarea")).toHaveLength(0);
+});
+
+it("shows someone else's newer switch when the switch is stale", async () => {
+    current = { ...current, settings: saved };
+    await act(async () => root.render(<PlacementExecutorPanel />));
     const respond = mocks.request.getMockImplementation()!;
     mocks.request.mockImplementation(async (request: { operation: string }) => {
         if (request.operation === "set-placement-executor") {
-            current = { ...current, settings: { ...saved, enabled: false, noticeLeadHours: 4 } };
+            current = { ...current, settings: { ...saved, updatedAt: "2026-10-19T15:00:00.000Z" } };
             throw new ControlPlaneAdminError("stale_interaction", "Settings changed.", false, "request");
         }
         return respond(request);
     });
-    await save();
+    await flip();
 
     expect(calls("placement-executor")).toHaveLength(2);
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Someone else changed these settings. The current settings are shown; review them and save again.");
-    expect(container.querySelector<HTMLInputElement>('input[name="noticeLeadHours"]')!.value).toBe("4");
-    expect(container.textContent).toContain("Start placement");
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Someone else switched automatic placement meanwhile. Its current state is shown; switch it again if you still want to.");
+    expect(automaticPlacement().getAttribute("aria-checked")).toBe("true");
+    expect(container.querySelector('time[datetime="2026-10-19T15:00:00.000Z"]')).not.toBeNull();
 });
 
-it("rejects out-of-range settings before saving and retries a failed read", async () => {
+it("retries a failed read", async () => {
     mocks.request.mockRejectedValueOnce(new ControlPlaneAdminError("control_plane_unavailable", "The control plane could not be reached.", true));
     await act(async () => root.render(<PlacementExecutorPanel />));
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("The control plane could not be reached.");
+    expect(container.querySelector('button[role="switch"]')).toBeNull();
     await act(async () => button("Retry").click());
     expect(container.textContent).toContain("Off · nothing moves automatically");
-
-    await type("noticeLeadHours", "200");
-    // The browser's own range check blocks a click; dispatch the submit to reach the panel's validation.
-    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Notice lead time must be a whole number from 1 to 168.");
-    expect(calls("set-placement-executor")).toHaveLength(0);
 });
 
 // The contract's own example: a running server's move half way through, after both warnings went out.
@@ -342,39 +355,6 @@ it("still shows moves from an older control plane without progress or status", a
     expect(container.textContent).toContain("Off · nothing moves automatically");
 });
 
-it("sends the legacy compatibility field back exactly as read, without ever showing it", async () => {
-    // A control plane may send the field; an older one requires it back.
-    current = { ...current, settings: { ...defaults, maximumRelocationsPerDay: 7 } };
-    await act(async () => root.render(<PlacementExecutorPanel />));
-    expect(container.querySelector('input[name="maximumRelocationsPerDay"]')).toBeNull();
-    expect(container.textContent).not.toMatch(/per day|daily|7 in any/u);
-    await type("noticeLeadHours", "2");
-    await save();
-    expect(calls("set-placement-executor")[0]?.input).toEqual({ enabled: false, maximumRelocationsPerDay: 7, minimumGainHours: 20, noticeLeadHours: 2, alwaysOnPolicy: "single-slot", expectedUpdatedAt: null });
-    // The saved settings are the last read: while they carry it, it goes back; once they do not, it is left out.
-    const respond = mocks.request.getMockImplementation()!;
-    mocks.request.mockImplementation(async (request: { operation: string }) => {
-        const result = await respond(request);
-        if (request.operation !== "set-placement-executor") return result;
-        const settings = { ...(result as Record<string, unknown>) };
-        delete settings.maximumRelocationsPerDay;
-        return settings;
-    });
-    await save();
-    expect(calls("set-placement-executor")[1]?.input).toMatchObject({ maximumRelocationsPerDay: 7 });
-    await save();
-    expect(calls("set-placement-executor")[2]?.input).not.toHaveProperty("maximumRelocationsPerDay");
-    expect(container.textContent).not.toMatch(/per day|daily/u);
-});
-
-it("leaves the legacy compatibility field out of a save when the read had none", async () => {
-    await act(async () => root.render(<PlacementExecutorPanel />));
-    expect(container.textContent).not.toMatch(/per day|daily/u);
-    await save();
-    expect(calls("set-placement-executor")[0]?.input).toEqual({ enabled: false, minimumGainHours: 20, noticeLeadHours: 1, alwaysOnPolicy: "single-slot", expectedUpdatedAt: null });
-    expect(container.querySelector('[role="status"].border-l-2')?.textContent).toBe("Saved. Automatic placement is off.");
-});
-
 it("re-reads the executor every 15 seconds while a move is active and the page is visible", async () => {
     vi.useFakeTimers();
     visibility = "visible";
@@ -383,12 +363,12 @@ it("re-reads the executor every 15 seconds while a move is active and the page i
     await act(async () => root.render(<PlacementExecutorPanel />));
     expect(calls("placement-executor")).toHaveLength(1);
 
-    // Someone else's settings arrive with the next read, but the form keeps what it was read with.
-    current = { ...current, settings: { ...saved, noticeLeadHours: 9 }, relocations: [{ ...live, progress: { ...restoring, step: "switching-address", steps: [...restoring.steps, { step: "switching-address", reachedAt: "2026-10-19T14:55:00.000Z" }] } }] };
+    // Someone else's switch arrives with the next read, but the switch keeps what it was read with.
+    current = { ...current, settings: { ...saved, enabled: false }, relocations: [{ ...live, progress: { ...restoring, step: "switching-address", steps: [...restoring.steps, { step: "switching-address", reachedAt: "2026-10-19T14:55:00.000Z" }] } }] };
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(calls("placement-executor")).toHaveLength(2);
     expect(move("Calradia Company").querySelector('[aria-current="step"]')!.textContent).toContain("Switching address");
-    expect(container.querySelector<HTMLInputElement>('input[name="noticeLeadHours"]')!.value).toBe("1");
+    expect(automaticPlacement().getAttribute("aria-checked")).toBe("true");
 
     await setVisibility("hidden");
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
@@ -412,26 +392,6 @@ it("does not re-read the executor while no move is active", async () => {
     await act(async () => root.render(<PlacementExecutorPanel />));
     await act(async () => vi.advanceTimersByTimeAsync(120_000));
     expect(calls("placement-executor")).toHaveLength(1);
-});
-
-it("sends back the legacy compatibility field from the latest read, polls included", async () => {
-    vi.useFakeTimers();
-    current = { settings: saved, status: { activeRelocationId: "live", queuedInLast24Hours: 1 }, relocations: [live] };
-    await act(async () => root.render(<PlacementExecutorPanel />));
-    // A rollback to a control plane that requires the field reaches the page through a poll.
-    current = { ...current, settings: { ...saved, maximumRelocationsPerDay: 5 } };
-    await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(calls("placement-executor")).toHaveLength(2);
-    expect(container.textContent).not.toMatch(/per day|daily/u);
-    await save();
-    expect(calls("set-placement-executor")[0]?.input).toMatchObject({ maximumRelocationsPerDay: 5, expectedUpdatedAt: saved.updatedAt });
-
-    // A poll from a control plane that no longer sends it drops it again.
-    current = { ...current, settings: saved };
-    await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(calls("placement-executor")).toHaveLength(3);
-    await save();
-    expect(calls("set-placement-executor")[1]?.input).not.toHaveProperty("maximumRelocationsPerDay");
 });
 
 it("shows a move putting its server back as returning, not as a stalled move", async () => {
@@ -487,7 +447,7 @@ it("never runs the stale-save reload alongside a poll already reading", async ()
     const respond = mocks.request.getMockImplementation()!;
     mocks.request.mockImplementation(async (request: { operation: string }) => {
         if (request.operation === "set-placement-executor") {
-            current = { ...current, settings: { ...saved, noticeLeadHours: 4, updatedAt: "2026-10-19T15:00:00.000Z" } };
+            current = { ...current, settings: { ...saved, updatedAt: "2026-10-19T15:00:00.000Z" } };
             throw new ControlPlaneAdminError("stale_interaction", "Settings changed.", false, "request");
         }
         reading += 1;
@@ -505,14 +465,14 @@ it("never runs the stale-save reload alongside a poll already reading", async ()
     expect(calls("placement-executor")).toHaveLength(2);
     expect(releasePoll).not.toBeNull();
 
-    await save();
+    await flip();
     // The reload waits for the poll rather than reading beside it.
     expect(calls("placement-executor")).toHaveLength(2);
     await act(async () => { releasePoll!(); await vi.advanceTimersByTimeAsync(0); });
     expect(calls("placement-executor")).toHaveLength(3);
     expect(most).toBe(1);
-    expect(container.querySelector<HTMLInputElement>('input[name="noticeLeadHours"]')!.value).toBe("4");
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Someone else changed these settings. The current settings are shown; review them and save again.");
+    expect(container.querySelector('time[datetime="2026-10-19T15:00:00.000Z"]')).not.toBeNull();
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Someone else switched automatic placement meanwhile. Its current state is shown; switch it again if you still want to.");
 });
 
 it("keeps one read at a time when the page is shown again during a poll and a stale reload follows", async () => {
@@ -526,7 +486,7 @@ it("keeps one read at a time when the page is shown again during a poll and a st
     const respond = mocks.request.getMockImplementation()!;
     mocks.request.mockImplementation(async (request: { operation: string }) => {
         if (request.operation === "set-placement-executor") {
-            current = { ...current, settings: { ...saved, noticeLeadHours: 4, updatedAt: "2026-10-19T15:00:00.000Z" } };
+            current = { ...current, settings: { ...saved, updatedAt: "2026-10-19T15:00:00.000Z" } };
             throw new ControlPlaneAdminError("stale_interaction", "Settings changed.", false, "request");
         }
         reading += 1;
@@ -547,13 +507,13 @@ it("keeps one read at a time when the page is shown again during a poll and a st
     // Shown again while the poll reads: the poll will read again once this one ends.
     await setVisibility("hidden");
     await setVisibility("visible");
-    // A save is rejected as stale, so the reload queues behind the poll.
-    await save();
+    // A switch is rejected as stale, so the reload queues behind the poll.
+    await flip();
     expect(calls("placement-executor")).toHaveLength(2);
 
     // The poll's second read joins the reload's rather than starting beside it.
     await act(async () => { releasePoll!(); await vi.advanceTimersByTimeAsync(100); });
     expect(most).toBe(1);
     expect(calls("placement-executor")).toHaveLength(3);
-    expect(container.querySelector<HTMLInputElement>('input[name="noticeLeadHours"]')!.value).toBe("4");
+    expect(container.querySelector('time[datetime="2026-10-19T15:00:00.000Z"]')).not.toBeNull();
 });
