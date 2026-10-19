@@ -92,9 +92,9 @@ it("validates settings and spells out what enabling does", () => {
     const form = { enabled: true, minimumGainHours: "20", noticeLeadHours: "48", alwaysOnPolicy: "single-slot", reason: "  " };
     expect(placementExecutorInput(form, null)).toEqual({ input: { enabled: true, minimumGainHours: 20, noticeLeadHours: 48, alwaysOnPolicy: "single-slot", expectedUpdatedAt: null } });
     expect(placementExecutorInput({ ...form, reason: "Quarterly rebalance" }, saved.updatedAt)).toMatchObject({ input: { reason: "Quarterly rebalance", expectedUpdatedAt: saved.updatedAt } });
-    // The retired cap is echoed only as a number the last read gave.
+    // The legacy compatibility field is echoed only as a number the latest read gave.
     expect(placementExecutorInput(form, null, 3)).toEqual({ input: { enabled: true, maximumRelocationsPerDay: 3, minimumGainHours: 20, noticeLeadHours: 48, alwaysOnPolicy: "single-slot", expectedUpdatedAt: null } });
-    for (const retired of [undefined, null, "3"]) expect(placementExecutorInput(form, null, retired)).not.toMatchObject({ input: { maximumRelocationsPerDay: expect.anything() } });
+    for (const value of [undefined, null, "3"]) expect(placementExecutorInput(form, null, value)).not.toMatchObject({ input: { maximumRelocationsPerDay: expect.anything() } });
     expect(placementExecutorInput({ ...form, minimumGainHours: "0.5" }, null)).toEqual({ error: "Minimum gain must be a whole number from 1 to 168." });
     expect(placementExecutorInput({ ...form, alwaysOnPolicy: "sometimes" }, null)).toEqual({ error: "Choose where always-on servers may move." });
     const confirmation = placementExecutorEnableConfirmation({ minimumGainHours: 20, noticeLeadHours: 48, alwaysOnPolicy: "single-slot" });
@@ -113,7 +113,7 @@ it("validates settings and spells out what enabling does", () => {
     expect(never).not.toContain("A running server is moved");
 });
 
-it("shows the current state, its defaults and recent automatic relocations without a daily cap", async () => {
+it("shows the current state, its defaults and recent automatic relocations, with no moves-per-day setting", async () => {
     await act(async () => root.render(<PlacementExecutorPanel />));
 
     expect(calls("placement-executor")).toEqual([expect.objectContaining({ input: {} })]);
@@ -250,14 +250,14 @@ async function setVisibility(state: DocumentVisibilityState) {
 it("says what the executor is doing, with an informational count and no cap", async () => {
     current = { settings: saved, status: { activeRelocationId: "live", queuedInLast24Hours: 3 }, relocations: [stoppedMove, live] };
     await act(async () => root.render(<PlacementExecutorPanel />));
-    expect(container.textContent).toContain("Moving now: Calradia Company (vps-1a2b3c4d → vps-5e6f7a8b), restoring · 3 moves started in the last 24 hours");
+    expect(container.textContent).toContain("Moving now: Calradia Company (vps-1a2b3c4d → vps-5e6f7a8b), restoring · 3 moves queued in the last 24 hours");
     expect(container.textContent).not.toMatch(/ of 3|per day|daily|limit/u);
     await act(async () => root.unmount());
 
     root = createRoot(container);
     current = { settings: saved, status: { activeRelocationId: null, queuedInLast24Hours: 1 }, relocations: [stoppedMove] };
     await act(async () => root.render(<PlacementExecutorPanel />));
-    expect(container.textContent).toContain("No move under way · 1 move started in the last 24 hours");
+    expect(container.textContent).toContain("No move under way · 1 move queued in the last 24 hours");
 });
 
 it("follows a running move step by step, marking the current step and when each was reached", async () => {
@@ -312,9 +312,9 @@ it("shows an announced move waiting on its warnings", async () => {
     expect(warned.textContent).toContain("60 min: sent");
     expect(warned.querySelector("time")!.getAttribute("datetime")).toBe("2026-10-19T14:52:03.415Z");
     expect(warned.textContent).toContain("10 min: pending");
-    // With no job yet, the game is started only if it is still running when the move begins.
+    // With no job yet, the game is started only if it is still running when the move begins, and the stop says so in text.
     const starting = track("Game Night").find((stop) => stop.textContent?.startsWith("Starting game"))!;
-    expect(starting.getAttribute("title")).toBe("Only if the game is running when the move begins");
+    expect(starting.textContent).toBe("Starting game: not reachedOnly if the game is running when the move begins");
 });
 
 it("explains why a move failed", async () => {
@@ -337,12 +337,13 @@ it("still shows moves from an older control plane without progress or status", a
     await act(async () => root.render(<PlacementExecutorPanel />));
     expect(move("The Gang").textContent).toContain("Scheduled");
     expect(move("The Gang").querySelector("ol")).toBeNull();
-    expect(container.textContent).not.toContain("started in the last 24 hours");
+    expect(container.textContent).not.toContain("queued in the last 24 hours");
+    expect(container.querySelector('[aria-label="Servers waiting to retry"]')).toBeNull();
     expect(container.textContent).toContain("Off · nothing moves automatically");
 });
 
-it("sends the retired daily cap back exactly as read, without ever showing it", async () => {
-    // A control plane may still send the retired value; an older one requires it back.
+it("sends the legacy compatibility field back exactly as read, without ever showing it", async () => {
+    // A control plane may send the field; an older one requires it back.
     current = { ...current, settings: { ...defaults, maximumRelocationsPerDay: 7 } };
     await act(async () => root.render(<PlacementExecutorPanel />));
     expect(container.querySelector('input[name="maximumRelocationsPerDay"]')).toBeNull();
@@ -366,7 +367,7 @@ it("sends the retired daily cap back exactly as read, without ever showing it", 
     expect(container.textContent).not.toMatch(/per day|daily/u);
 });
 
-it("leaves the retired daily cap out of a save when the read had none", async () => {
+it("leaves the legacy compatibility field out of a save when the read had none", async () => {
     await act(async () => root.render(<PlacementExecutorPanel />));
     expect(container.textContent).not.toMatch(/per day|daily/u);
     await save();
@@ -411,4 +412,105 @@ it("does not re-read the executor while no move is active", async () => {
     await act(async () => root.render(<PlacementExecutorPanel />));
     await act(async () => vi.advanceTimersByTimeAsync(120_000));
     expect(calls("placement-executor")).toHaveLength(1);
+});
+
+it("sends back the legacy compatibility field from the latest read, polls included", async () => {
+    vi.useFakeTimers();
+    current = { settings: saved, status: { activeRelocationId: "live", queuedInLast24Hours: 1 }, relocations: [live] };
+    await act(async () => root.render(<PlacementExecutorPanel />));
+    // A rollback to a control plane that requires the field reaches the page through a poll.
+    current = { ...current, settings: { ...saved, maximumRelocationsPerDay: 5 } };
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    expect(calls("placement-executor")).toHaveLength(2);
+    expect(container.textContent).not.toMatch(/per day|daily/u);
+    await save();
+    expect(calls("set-placement-executor")[0]?.input).toMatchObject({ maximumRelocationsPerDay: 5, expectedUpdatedAt: saved.updatedAt });
+
+    // A poll from a control plane that no longer sends it drops it again.
+    current = { ...current, settings: saved };
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    expect(calls("placement-executor")).toHaveLength(3);
+    await save();
+    expect(calls("set-placement-executor")[1]?.input).not.toHaveProperty("maximumRelocationsPerDay");
+});
+
+it("shows a move putting its server back as returning, not as a stalled move", async () => {
+    const back = { ...live, progress: { ...restoring, step: null, returning: true } };
+    current = { settings: saved, status: { activeRelocationId: "live", queuedInLast24Hours: 1 }, relocations: [back] };
+    await act(async () => root.render(<PlacementExecutorPanel />));
+    expect(container.textContent).toContain("Returning: Calradia Company, putting the server back on its original VPS (vps-1a2b3c4d) · 1 move queued in the last 24 hours");
+    expect(container.textContent).not.toContain("Moving now");
+    expect(move("Calradia Company").textContent).toContain("Returning: putting the server back on its original VPS");
+    const currentStep = move("Calradia Company").querySelector('[aria-current="step"]')!;
+    expect(currentStep.textContent).toBe("Returning: current stepPutting the server back on its original VPS");
+    expect(track("Calradia Company").at(-1)!.textContent).toBe("Done: not reachedThe move failed, so the server goes back");
+});
+
+it.each([
+    ["failed", "Move failed", "The job failed; the executor records the outcome on its next run"],
+    ["cancelled", "Move cancelled", "The job was cancelled; the executor records the outcome on its next run"],
+] as const)("shows a queued move whose job %s before the executor recorded it", async (jobState, label, note) => {
+    const ended = { ...live, progress: { ...restoring, step: "restoring" as const, jobState, jobCompletedAt: "2026-10-19T14:56:00.000Z" } };
+    current = { settings: saved, status: { activeRelocationId: "live", queuedInLast24Hours: 1 }, relocations: [ended] };
+    await act(async () => root.render(<PlacementExecutorPanel />));
+    expect(container.textContent).toContain(`${label}: Calradia Company, ${note.charAt(0).toLowerCase()}${note.slice(1)}`);
+    expect(container.textContent).not.toContain("Moving now");
+    expect(move("Calradia Company").textContent).toContain(`${label}: ${note.charAt(0).toLowerCase()}${note.slice(1)}`);
+    expect(move("Calradia Company").querySelector('[aria-current="step"]')).toBeNull();
+    expect(track("Calradia Company").at(-1)!.textContent).toBe(`Done: not reached${note}`);
+});
+
+it("lists servers waiting to retry after a failed or cancelled move", async () => {
+    current = {
+        settings: saved,
+        status: { activeRelocationId: null, queuedInLast24Hours: 2, backedOff: [
+            { serverId: "lost-server", relocationId: "lost", until: "2026-10-20T15:10:00.000Z", errorCode: "placement_window_missed" },
+            { serverId: "unlisted-server", relocationId: "older", until: "2026-10-20T09:00:00.000Z", errorCode: null },
+        ] },
+        relocations: [relocation("lost", "Lost Job", "cancelled", { errorCode: "placement_window_missed", completedAt: "2026-10-19T15:10:00.000Z" })],
+    };
+    await act(async () => root.render(<PlacementExecutorPanel />));
+    const waiting = [...container.querySelector('[aria-label="Servers waiting to retry"]')!.querySelectorAll("li")];
+    expect(waiting.map((item) => item.textContent)).toEqual([
+        expect.stringMatching(/^Waiting to retry: Lost Job until .+ \(Cancelled because the move could not start within its announced window\)$/u),
+        expect.stringMatching(/^Waiting to retry: unlisted-server until .+[^)]$/u),
+    ]);
+    expect(waiting[0]!.querySelector("time")!.getAttribute("datetime")).toBe("2026-10-20T15:10:00.000Z");
+});
+
+it("never runs the stale-save reload alongside a poll already reading", async () => {
+    vi.useFakeTimers();
+    current = { settings: saved, status: { activeRelocationId: "live", queuedInLast24Hours: 1 }, relocations: [live] };
+    let reading = 0;
+    let most = 0;
+    let releasePoll: (() => void) | null = null;
+    const respond = mocks.request.getMockImplementation()!;
+    mocks.request.mockImplementation(async (request: { operation: string }) => {
+        if (request.operation === "set-placement-executor") {
+            current = { ...current, settings: { ...saved, noticeLeadHours: 4, updatedAt: "2026-10-19T15:00:00.000Z" } };
+            throw new ControlPlaneAdminError("stale_interaction", "Settings changed.", false, "request");
+        }
+        reading += 1;
+        most = Math.max(most, reading);
+        try {
+            // The first poll waits until the test lets it finish.
+            if (calls("placement-executor").length === 2) await new Promise<void>((resolve) => { releasePoll = resolve; });
+            return await respond(request);
+        } finally {
+            reading -= 1;
+        }
+    });
+    await act(async () => root.render(<PlacementExecutorPanel />));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    expect(calls("placement-executor")).toHaveLength(2);
+    expect(releasePoll).not.toBeNull();
+
+    await save();
+    // The reload waits for the poll rather than reading beside it.
+    expect(calls("placement-executor")).toHaveLength(2);
+    await act(async () => { releasePoll!(); await vi.advanceTimersByTimeAsync(0); });
+    expect(calls("placement-executor")).toHaveLength(3);
+    expect(most).toBe(1);
+    expect(container.querySelector<HTMLInputElement>('input[name="noticeLeadHours"]')!.value).toBe("4");
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Someone else changed these settings. The current settings are shown; review them and save again.");
 });

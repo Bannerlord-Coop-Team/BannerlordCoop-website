@@ -1,5 +1,6 @@
 import type {
     HostingAdminPlacementExecutor,
+    HostingPlacementBackoff,
     HostingPlacementMoveStep,
     HostingPlacementRelocation,
     HostingPlacementRelocationProgress,
@@ -32,13 +33,20 @@ const ERROR_LABELS: Record<string, string> = {
     placement_window_missed: "Cancelled because the move could not start within its announced window.",
     server_not_found: "Cancelled because the server no longer exists.",
     placement_job_missing: "Its relocation job could not be found.",
+    placement_job_cancelled: "Cancelled by an administrator.",
 };
 
 export type PlacementTrackPhase = "done" | "current" | "waiting" | "not-needed" | "failed" | "cancelled";
 
+/**
+ * Where a move stands. A queued move can be putting its server back after a failure, or have a job that
+ * already failed or was cancelled while the executor has not yet recorded the outcome.
+ */
+export type PlacementMoveStanding = "announced" | "moving" | "returning" | "job-failed" | "job-cancelled" | "job-succeeded" | "settled";
+
 /** One stop on a move's track, from its in-game warnings to the end. */
 export type PlacementTrackStep = {
-    id: "warned" | HostingPlacementMoveStep | "done";
+    id: "warned" | HostingPlacementMoveStep | "returning" | "done";
     label: string;
     phase: PlacementTrackPhase;
     /** When the move first reached it; null when it did not or has no single time. */
@@ -51,6 +59,29 @@ export type PlacementTrackStep = {
 
 export function isActivePlacementRelocation(relocation: Pick<HostingPlacementRelocation, "state">) {
     return relocation.state === "announced" || relocation.state === "queued";
+}
+
+/** Where a move stands, from its state and, while it is queued, its job. */
+export function placementMoveStanding(relocation: Pick<HostingPlacementRelocation, "state">, progress: HostingPlacementRelocationProgress | null): PlacementMoveStanding {
+    if (relocation.state === "announced") return "announced";
+    if (relocation.state !== "queued") return "settled";
+    if (progress?.returning === true) return "returning";
+    if (progress?.jobState === "failed") return "job-failed";
+    if (progress?.jobState === "cancelled") return "job-cancelled";
+    if (progress?.jobState === "succeeded") return "job-succeeded";
+    return "moving";
+}
+
+/** What a queued move whose job ended, or that is putting its server back, is waiting for. */
+const STANDING_NOTES: Partial<Record<PlacementMoveStanding, string>> = {
+    returning: "Putting the server back on its original VPS",
+    "job-failed": "The job failed; the executor records the outcome on its next run",
+    "job-cancelled": "The job was cancelled; the executor records the outcome on its next run",
+    "job-succeeded": "The job finished; the executor records the move on its next run",
+};
+
+export function placementMoveStandingNote(standing: PlacementMoveStanding) {
+    return STANDING_NOTES[standing] ?? null;
 }
 
 /** Moves under way first, then finished ones, each in the control plane's newest-first order. */
@@ -95,8 +126,10 @@ function warningLabel(warning: HostingPlacementRelocationWarning | undefined, an
  * its game, and with no job yet to say which, the step says it starts only a game that was running.
  */
 export function placementRelocationTrack(relocation: HostingPlacementRelocation, progress: HostingPlacementRelocationProgress): PlacementTrackStep[] {
-    const active = isActivePlacementRelocation(relocation);
-    const announced = relocation.state === "announced";
+    const standing = placementMoveStanding(relocation, progress);
+    // Only a move whose job is still working forward has a current job step.
+    const active = standing === "moving";
+    const announced = standing === "announced";
     const warned: PlacementTrackStep = relocation.mode === "offline"
         ? { id: "warned", label: "Warned", phase: "not-needed", reachedAt: null, note: "No warning needed: the server was stopped", warnings: [] }
         : {
@@ -119,8 +152,12 @@ export function placementRelocationTrack(relocation: HostingPlacementRelocation,
     const end: PlacementTrackStep = relocation.state === "succeeded" ? { id: "done", label: "Done", phase: "done", reachedAt: ended, note: null, warnings: [] }
         : relocation.state === "failed" ? { id: "done", label: "Failed", phase: "failed", reachedAt: ended, note: null, warnings: [] }
             : relocation.state === "cancelled" ? { id: "done", label: "Cancelled", phase: "cancelled", reachedAt: ended, note: null, warnings: [] }
-                : { id: "done", label: "Done", phase: "waiting", reachedAt: null, note: null, warnings: [] };
-    return [warned, ...steps, end];
+                // Not reached yet; a queued move whose job ended or is going back says why.
+                : { id: "done", label: "Done", phase: "waiting", reachedAt: null, note: standing === "returning" ? "The move failed, so the server goes back" : placementMoveStandingNote(standing), warnings: [] };
+    const returning: PlacementTrackStep[] = standing === "returning"
+        ? [{ id: "returning", label: "Returning", phase: "current", reachedAt: null, note: placementMoveStandingNote(standing), warnings: [] }]
+        : [];
+    return [warned, ...steps, ...returning, end];
 }
 
 /** "4 min 12 s" from a finished job's start to its end, or null without both times. */
@@ -135,9 +172,49 @@ export function placementRelocationDuration(progress: Pick<HostingPlacementReloc
     return minutes > 0 ? `${minutes} min ${seconds % 60} s` : `${seconds} s`;
 }
 
-/** "3 moves started in the last 24 hours"; the count is informational, as moves are not rate limited. */
-export function placementMovesStartedLabel(count: number) {
-    return `${count} ${count === 1 ? "move" : "moves"} started in the last 24 hours`;
+/** "3 moves queued in the last 24 hours"; the count is informational, as moves are not rate limited. */
+export function placementMovesQueuedLabel(count: number) {
+    return `${count} ${count === 1 ? "move" : "moves"} queued in the last 24 hours`;
+}
+
+/** The servers waiting out a failure backoff, named from the listed moves where possible, or by server ID. */
+export function placementBackoffs(executor: Pick<HostingAdminPlacementExecutor, "status" | "relocations">) {
+    const backedOff = executor.status?.backedOff;
+    if (!Array.isArray(backedOff)) return [];
+    return backedOff.map((backoff: HostingPlacementBackoff) => {
+        const relocation = executor.relocations.find((item) => item.relocationId === backoff.relocationId)
+            ?? executor.relocations.find((item) => item.serverId === backoff.serverId);
+        // Plain sentences read as a reason in parentheses without their full stop; other codes show as they are.
+        const reason = backoff.errorCode === null ? null : placementRelocationErrorLabel(backoff.errorCode)?.replace(/\.$/u, "") ?? backoff.errorCode;
+        return { serverId: backoff.serverId, displayName: relocation?.displayName ?? backoff.serverId, until: backoff.until, reason };
+    });
+}
+
+/**
+ * One executor read at a time. `shared` joins a read under way; `fresh` waits for a read under way and then
+ * reads again (callers meanwhile share that one), for a caller that needs settings newer than its own request.
+ */
+export function createPlacementExecutorReads<T>(read: () => Promise<T>) {
+    let current: Promise<T> | null = null;
+    let next: Promise<T> | null = null;
+    function start() {
+        const reading = read().finally(() => {
+            if (current === reading) current = null;
+        });
+        current = reading;
+        return reading;
+    }
+    return {
+        shared: () => current ?? start(),
+        fresh(): Promise<T> {
+            if (current === null) return start();
+            next ??= current.then(() => undefined, () => undefined).then(() => {
+                next = null;
+                return start();
+            });
+            return next;
+        },
+    };
 }
 
 /** The executor's announced or queued relocation, if the read names one it lists. */

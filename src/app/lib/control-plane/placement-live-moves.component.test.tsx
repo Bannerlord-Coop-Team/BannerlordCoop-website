@@ -1,8 +1,11 @@
 import { expect, it } from "vitest";
 import {
     activePlacementRelocation,
+    createPlacementExecutorReads,
     orderPlacementRelocations,
-    placementMovesStartedLabel,
+    placementBackoffs,
+    placementMoveStanding,
+    placementMovesQueuedLabel,
     placementRelocationDuration,
     placementRelocationErrorLabel,
     placementRelocationProgress,
@@ -115,9 +118,85 @@ it("orders moves under way first and writes names, durations and counts", () => 
     expect(placementRelocationDuration({ jobStartedAt: "2026-10-19T10:00:00.000Z", jobCompletedAt: "2026-10-19T11:03:30.000Z" })).toBe("1 h 3 min");
     expect(placementRelocationDuration({ jobStartedAt: "2026-10-19T10:00:00.000Z", jobCompletedAt: null })).toBeNull();
     expect(placementRelocationDuration({ jobStartedAt: "2026-10-19T10:00:00.000Z", jobCompletedAt: "2026-10-19T09:00:00.000Z" })).toBeNull();
-    expect(placementMovesStartedLabel(1)).toBe("1 move started in the last 24 hours");
-    expect(placementMovesStartedLabel(3)).toBe("3 moves started in the last 24 hours");
+    expect(placementMovesQueuedLabel(1)).toBe("1 move queued in the last 24 hours");
+    expect(placementMovesQueuedLabel(3)).toBe("3 moves queued in the last 24 hours");
     expect(activePlacementRelocation({ status: { activeRelocationId: "b", queuedInLast24Hours: 1 }, relocations: list })?.relocationId).toBe("b");
     expect(activePlacementRelocation({ status: { activeRelocationId: null, queuedInLast24Hours: 1 }, relocations: list })).toBeNull();
     expect(activePlacementRelocation({ relocations: list })).toBeNull();
+});
+
+it("tells a move going back, or one whose job ended unrecorded, from one moving forward", () => {
+    const going = { ...restoring, step: null, returning: true };
+    expect(placementMoveStanding(relocation("r", "queued"), going)).toBe("returning");
+    expect(placementMoveStanding(relocation("r", "queued"), { ...restoring, step: null, jobState: "failed" })).toBe("job-failed");
+    expect(placementMoveStanding(relocation("r", "queued"), { ...restoring, step: null, jobState: "cancelled" })).toBe("job-cancelled");
+    expect(placementMoveStanding(relocation("r", "queued"), restoring)).toBe("moving");
+    // An older control plane sends no returning flag.
+    expect(placementMoveStanding(relocation("r", "queued"), { ...restoring, returning: undefined })).toBe("moving");
+    expect(placementMoveStanding(relocation("r", "queued"), null)).toBe("moving");
+    expect(placementMoveStanding(relocation("r", "failed"), { ...restoring, jobState: "failed" })).toBe("settled");
+
+    const back = placementRelocationTrack(relocation("r", "queued"), going);
+    expect(summary(back)).toEqual([
+        "Warned:done", "Starting:done", "Saving & stopping:done", "Restore point:done", "Restoring:done",
+        "Switching address:waiting", "Starting game:waiting", "Finishing:waiting", "Returning:current", "Done:waiting",
+    ]);
+    expect(back.at(-2)!.note).toBe("Putting the server back on its original VPS");
+    expect(back.at(-1)!.note).toBe("The move failed, so the server goes back");
+
+    for (const [jobState, note] of [
+        ["failed", "The job failed; the executor records the outcome on its next run"],
+        ["cancelled", "The job was cancelled; the executor records the outcome on its next run"],
+    ] as const) {
+        const ended = placementRelocationTrack(relocation("r", "queued"), { ...restoring, step: "restoring", jobState });
+        // A job that ended has no current step, even if it still names the one it stopped at.
+        expect(ended.some((step) => step.phase === "current")).toBe(false);
+        expect(ended.at(-1)).toMatchObject({ label: "Done", phase: "waiting", note });
+    }
+});
+
+it("names servers waiting to retry from the listed moves, with a plain reason", () => {
+    const list = [relocation("a", "failed", { serverId: "s-a", displayName: "Lost Job" }), relocation("b", "succeeded", { serverId: "s-b", displayName: "Back Again" })];
+    expect(placementBackoffs({
+        status: { activeRelocationId: null, queuedInLast24Hours: 0, backedOff: [
+            { serverId: "s-a", relocationId: "a", until: "2026-10-20T15:10:00.000Z", errorCode: "placement_job_cancelled" },
+            { serverId: "s-b", relocationId: "old", until: "2026-10-20T12:00:00.000Z", errorCode: "relocation_cutover_failed" },
+            { serverId: "s-gone", relocationId: "gone", until: "2026-10-20T11:00:00.000Z", errorCode: null },
+        ] },
+        relocations: list,
+    })).toEqual([
+        { serverId: "s-a", displayName: "Lost Job", until: "2026-10-20T15:10:00.000Z", reason: "Cancelled by an administrator" },
+        { serverId: "s-b", displayName: "Back Again", until: "2026-10-20T12:00:00.000Z", reason: "relocation_cutover_failed" },
+        { serverId: "s-gone", displayName: "s-gone", until: "2026-10-20T11:00:00.000Z", reason: null },
+    ]);
+    expect(placementBackoffs({ status: { activeRelocationId: null, queuedInLast24Hours: 0 }, relocations: list })).toEqual([]);
+    expect(placementBackoffs({ relocations: list })).toEqual([]);
+    expect(placementRelocationErrorLabel("placement_job_cancelled")).toBe("Cancelled by an administrator.");
+});
+
+it("keeps executor reads one at a time", async () => {
+    const pending: Array<(value: number) => void> = [];
+    let concurrent = 0;
+    let most = 0;
+    const read = () => new Promise<number>((resolve) => {
+        concurrent += 1;
+        most = Math.max(most, concurrent);
+        pending.push((value) => { concurrent -= 1; resolve(value); });
+    });
+    const reads = createPlacementExecutorReads(read);
+    const poll = reads.shared();
+    // A second poll joins the first; a caller needing newer data waits for it and reads again.
+    expect(reads.shared()).toBe(poll);
+    const recovery = reads.fresh();
+    const another = reads.fresh();
+    expect(pending).toHaveLength(1);
+    pending.shift()!(1);
+    expect(await poll).toBe(1);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(pending).toHaveLength(1);
+    pending.shift()!(2);
+    expect(await recovery).toBe(2);
+    expect(await another).toBe(2);
+    expect(most).toBe(1);
 });

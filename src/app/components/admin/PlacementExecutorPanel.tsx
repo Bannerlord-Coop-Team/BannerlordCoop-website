@@ -20,16 +20,21 @@ import {
 } from "@/app/lib/control-plane/placement";
 import {
     activePlacementRelocation,
+    createPlacementExecutorReads,
     isActivePlacementRelocation,
     orderPlacementRelocations,
     PLACEMENT_LIVE_POLL_MILLISECONDS,
+    placementBackoffs,
+    placementMoveStanding,
+    placementMoveStandingNote,
     placementMoveStepLabel,
-    placementMovesStartedLabel,
+    placementMovesQueuedLabel,
     placementRelocationDuration,
     placementRelocationErrorLabel,
     placementRelocationProgress,
     placementRelocationTrack,
     shortServiceName,
+    type PlacementMoveStanding,
     type PlacementTrackPhase,
     type PlacementTrackStep,
 } from "@/app/lib/control-plane/placement-live-moves";
@@ -60,6 +65,13 @@ const TRACK_PHASES: Record<PlacementTrackPhase, { className: string; label: stri
     failed: { className: "border-crimson/50 bg-crimson/10 text-red-200", label: "failed" },
     cancelled: { className: "border-white/15 text-foreground-muted", label: "cancelled" },
 };
+// How a queued move that is not simply moving forward reads, on the status line and its row.
+const STANDING_LABELS: Partial<Record<PlacementMoveStanding, string>> = {
+    returning: "Returning",
+    "job-failed": "Move failed",
+    "job-cancelled": "Move cancelled",
+    "job-succeeded": "Move finished",
+};
 
 async function readExecutor(): Promise<HostingAdminPlacementExecutor> {
     const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
@@ -88,6 +100,10 @@ export function PlacementExecutorPanel() {
     const [reload, setReload] = useState(0);
     const [pending, setPending] = useState(false);
     const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+    // Polls, the stale-save reload and Retry share one read at a time.
+    const [reads] = useState(() => createPlacementExecutorReads(readExecutor));
+    // The legacy compatibility field as the latest read of any kind gave it: a save sends it back unchanged.
+    const [compatibilityValue, setCompatibilityValue] = useState<unknown>(undefined);
 
     // While a move is announced or queued, follow it: re-read the executor on a visible page only.
     const following = executor?.relocations.some(isActivePlacementRelocation) ?? false;
@@ -108,9 +124,12 @@ export function PlacementExecutorPanel() {
             }
             inFlight = true;
             try {
-                const fresh = await readExecutor();
+                const fresh = await reads.shared();
                 // Only what the executor is doing: the settings stay as read, so a save is still checked against them.
-                if (!cancelled) setExecutor((current) => current === null ? current : { ...current, status: fresh.status, relocations: fresh.relocations });
+                if (!cancelled) {
+                    setExecutor((current) => current === null ? current : { ...current, status: fresh.status, relocations: fresh.relocations });
+                    setCompatibilityValue(fresh.settings.maximumRelocationsPerDay);
+                }
             } catch {
                 // The moves already shown stay; the next read tries again.
             } finally {
@@ -137,25 +156,26 @@ export function PlacementExecutorPanel() {
             window.clearTimeout(timer);
             document.removeEventListener("visibilitychange", pollOnReturn);
         };
-    }, [following]);
+    }, [following, reads]);
 
     useEffect(() => {
         let cancelled = false;
-        readExecutor().then((value) => {
+        reads.fresh().then((value) => {
             if (cancelled) return;
             setExecutor(value);
             setForm(placementExecutorForm(value.settings));
+            setCompatibilityValue(value.settings.maximumRelocationsPerDay);
             setLoadError("");
         }, (cause: unknown) => {
             if (!cancelled) setLoadError(cause instanceof Error ? cause.message : "The executor settings could not be loaded.");
         });
         return () => { cancelled = true; };
-    }, [reload]);
+    }, [reload, reads]);
 
     async function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (executor === null || form === null || pending) return;
-        const parsed = placementExecutorInput(form, executor.settings.updatedAt, executor.settings.maximumRelocationsPerDay);
+        const parsed = placementExecutorInput(form, executor.settings.updatedAt, compatibilityValue);
         if ("error" in parsed) {
             setResult({ ok: false, message: parsed.error });
             return;
@@ -175,14 +195,17 @@ export function PlacementExecutorPanel() {
             });
             setExecutor((current) => current === null ? current : { ...current, settings });
             setForm(placementExecutorForm(settings));
+            setCompatibilityValue(settings.maximumRelocationsPerDay);
             setResult({ ok: true, message: settings.enabled ? "Saved. Automatic placement is on." : "Saved. Automatic placement is off." });
         } catch (cause) {
             if (cause instanceof ControlPlaneAdminError && cause.code === "stale_interaction") {
                 // Someone else saved first: show their settings rather than overwrite them.
                 try {
-                    const fresh = await readExecutor();
+                    // A read already under way may predate their save, so this one starts after it.
+                    const fresh = await reads.fresh();
                     setExecutor(fresh);
                     setForm(placementExecutorForm(fresh.settings));
+                    setCompatibilityValue(fresh.settings.maximumRelocationsPerDay);
                 } catch { /* The stale message below still asks for a reload. */ }
             }
             setResult({ ok: false, message: placementExecutorErrorMessage(cause) });
@@ -266,22 +289,37 @@ function lowerFirst(text: string) {
     return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
-/** What the executor is doing now: its one move under way, if any, and how many moves started recently. */
+/** What the executor is doing now: its one move under way, if any, how many moves were queued recently and who waits to retry. */
 function ExecutorStatus({ executor }: { executor: HostingAdminPlacementExecutor }) {
     const status = executor.status;
     // An older control plane sends no status; the moves list still shows what it is doing.
     if (typeof status !== "object" || status === null) return null;
     const active = activePlacementRelocation(executor);
-    const step = active === null ? null : placementRelocationProgress(active)?.step ?? null;
+    const progress = active === null ? null : placementRelocationProgress(active);
+    const standing = active === null ? null : placementMoveStanding(active, progress);
+    const backoffs = placementBackoffs(executor);
     return (
-        <p className="mt-1 text-xs text-foreground-muted">
-            {active !== null
-                ? active.state === "announced"
-                    ? <>Announced: <span className="text-foreground">{active.displayName}</span> moves <LocalDateTime value={active.scheduledAt} /></>
-                    : <>Moving now: <span className="text-foreground">{active.displayName}</span> ({shortServiceName(active.fromServiceName)} → {shortServiceName(active.toServiceName)}){step !== null && <>, {placementMoveStepLabel(step).toLowerCase()}</>}</>
-                : status.activeRelocationId !== null ? "A move is under way" : "No move under way"}
-            {" · "}{placementMovesStartedLabel(status.queuedInLast24Hours)}
-        </p>
+        <>
+            <p className="mt-1 text-xs text-foreground-muted">
+                {active === null
+                    ? status.activeRelocationId !== null ? "A move is under way" : "No move under way"
+                    : standing === "announced"
+                        ? <>Announced: <span className="text-foreground">{active.displayName}</span> moves <LocalDateTime value={active.scheduledAt} /></>
+                        : standing === "moving"
+                            ? <>Moving now: <span className="text-foreground">{active.displayName}</span> ({shortServiceName(active.fromServiceName)} → {shortServiceName(active.toServiceName)}){progress?.step && <>, {placementMoveStepLabel(progress.step).toLowerCase()}</>}</>
+                            : <>{STANDING_LABELS[standing!]}: <span className="text-foreground">{active.displayName}</span>, {lowerFirst(placementMoveStandingNote(standing!)!)}{standing === "returning" && <> ({shortServiceName(active.fromServiceName)})</>}</>}
+                {" · "}{placementMovesQueuedLabel(status.queuedInLast24Hours)}
+            </p>
+            {backoffs.length > 0 && (
+                <ul aria-label="Servers waiting to retry" className="mt-1 space-y-0.5 text-xs text-foreground-muted">
+                    {backoffs.map((backoff) => (
+                        <li key={backoff.serverId}>
+                            Waiting to retry: <span className="text-foreground">{backoff.displayName}</span> until <LocalDateTime value={backoff.until} />{backoff.reason !== null && <> ({backoff.reason})</>}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </>
     );
 }
 
@@ -300,6 +338,8 @@ function PlacementLiveMoves({ relocations }: { relocations: readonly HostingPlac
 
 function LiveMove({ relocation }: { relocation: HostingPlacementRelocation }) {
     const progress = placementRelocationProgress(relocation);
+    const standing = placementMoveStanding(relocation, progress);
+    const standingLabel = STANDING_LABELS[standing];
     const duration = progress !== null && !isActivePlacementRelocation(relocation) ? placementRelocationDuration(progress) : null;
     const explanation = relocation.errorCode === null ? null : placementRelocationErrorLabel(relocation.errorCode);
     return (
@@ -315,6 +355,7 @@ function LiveMove({ relocation }: { relocation: HostingPlacementRelocation }) {
                 <span className={`${badgeClass} ${STATE_BADGES[relocation.state] ?? STATE_BADGES.cancelled}`}>{placementRelocationStateLabel(relocation.state)}</span>
                 {duration !== null && <span className="text-foreground-muted">Took {duration}</span>}
             </div>
+            {standingLabel !== undefined && <p className="mt-2 text-amber-200">{standingLabel}: {lowerFirst(placementMoveStandingNote(standing)!)}</p>}
             {progress === null
                 // An older control plane sends no progress: the move's own times stand in for the track.
                 ? <p className="mt-2 text-foreground-muted">Scheduled <LocalDateTime value={relocation.scheduledAt} /> · queued <LocalDateTime value={relocation.queuedAt} empty="—" /> · completed <LocalDateTime value={relocation.completedAt} empty="—" /></p>
@@ -335,14 +376,13 @@ function MoveTrack({ name, steps }: { name: string; steps: readonly PlacementTra
                 return (
                     <Fragment key={step.id}>
                         {index > 0 && <li aria-hidden="true" className="self-center text-foreground-dim">→</li>}
-                        <li aria-current={step.phase === "current" ? "step" : undefined} title={step.note ?? undefined}
-                            className={`min-w-0 border px-2 py-1 ${phase.className}`}>
+                        <li aria-current={step.phase === "current" ? "step" : undefined} className={`min-w-0 border px-2 py-1 ${phase.className}`}>
                             <span className="flex items-center gap-1 font-medium">
                                 {step.phase === "done" && <Check aria-hidden="true" className="size-3 text-emerald-300" />}
                                 {step.label}<span className="sr-only">: {phase.label}</span>
                             </span>
                             {step.reachedAt !== null && <span className="block font-mono text-[0.62rem] text-foreground-muted"><LocalTime value={step.reachedAt} /></span>}
-                            {step.note !== null && step.id === "warned" && <span className="block text-[0.62rem] text-foreground-muted">{step.note}</span>}
+                            {step.note !== null && <span className="block max-w-48 text-[0.62rem] text-foreground-muted">{step.note}</span>}
                             {step.warnings.map((warning) => (
                                 <span key={warning.minutes} className="block text-[0.62rem] text-foreground-muted">
                                     {warning.minutes} min: {warning.label}{warning.sentAt !== null && <> <LocalTime value={warning.sentAt} /></>}

@@ -258,7 +258,7 @@ export type PlacementExecutorForm = Record<keyof typeof PLACEMENT_EXECUTOR_LIMIT
 
 const MAXIMUM_ADMIN_REASON_LENGTH = 1_000;
 
-/** The form for the saved settings; a retired `maximumRelocationsPerDay` from an older control plane is ignored. */
+/** The form for the saved settings; the legacy compatibility field is not part of it. */
 export function placementExecutorForm(settings: HostingPlacementExecutorSettings): PlacementExecutorForm {
     return {
         enabled: settings.enabled,
@@ -271,12 +271,12 @@ export function placementExecutorForm(settings: HostingPlacementExecutorSettings
 
 /**
  * Builds the `set-placement-executor` input, guarded by the `updatedAt` last read (null when never saved).
- * The retired `maximumRelocationsPerDay` goes back exactly as last read when the read had one, so a control
- * plane that still requires it accepts the save; a newer one ignores it. It is left out when the read had none.
+ * The legacy compatibility field `maximumRelocationsPerDay` goes back exactly as the latest read gave it, so a
+ * control plane that still requires it accepts the save; a newer one ignores it. Without it, it is left out.
  */
-export function placementExecutorInput(form: PlacementExecutorForm, expectedUpdatedAt: string | null, retiredMaximumRelocationsPerDay?: unknown): { input: Record<string, boolean | number | string | null> } | { error: string } {
+export function placementExecutorInput(form: PlacementExecutorForm, expectedUpdatedAt: string | null, compatibilityValue?: unknown): { input: Record<string, boolean | number | string | null> } | { error: string } {
     const input: Record<string, boolean | number | string | null> = { enabled: form.enabled };
-    if (typeof retiredMaximumRelocationsPerDay === "number") input.maximumRelocationsPerDay = retiredMaximumRelocationsPerDay;
+    if (typeof compatibilityValue === "number") input.maximumRelocationsPerDay = compatibilityValue;
     for (const [name, limit] of Object.entries(PLACEMENT_EXECUTOR_LIMITS) as Array<[keyof typeof PLACEMENT_EXECUTOR_LIMITS, typeof PLACEMENT_EXECUTOR_LIMITS[keyof typeof PLACEMENT_EXECUTOR_LIMITS]]>) {
         const text = form[name].trim();
         const value = Number(text);

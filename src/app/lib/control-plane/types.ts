@@ -449,12 +449,12 @@ export type HostingAdminPlacementPlan = {
 export type HostingPlacementAlwaysOnPolicy = "single-slot" | "none" | "any";
 
 /** The automatic placement executor's settings; `updatedAt` is null until an administrator first saves them. */
-/** Moves are not rate limited: the former `maximumRelocationsPerDay` cap is retired. */
+/** The executor's settings; moves are not rate limited. */
 export type HostingPlacementExecutorSettings = {
     enabled: boolean;
     /**
-     * The retired cap's stored value, which control planes may still send. It is never shown, only sent back
-     * unchanged on save, because older control planes still require it.
+     * A legacy compatibility field: never shown, only sent back on save as the latest read gave it, because
+     * older control planes still require it. Current ones ignore it.
      */
     maximumRelocationsPerDay?: number;
     minimumGainHours: number;
@@ -501,8 +501,10 @@ export type HostingPlacementRelocationWarning = {
 };
 
 export type HostingPlacementRelocationProgress = {
-    /** The job's current step; null without a job or once it finished. */
+    /** The job's current step; null without a job, once it finished or while it puts the server back. */
     step: HostingPlacementMoveStep | null;
+    /** True while the unfinished job puts the server back on its original VPS after a failure; older control planes omit it. */
+    returning?: boolean;
     /** Each step the job reached, in step order, with the first time it reached it. */
     steps: { step: HostingPlacementMoveStep; reachedAt: string }[];
     jobState: "queued" | "running" | "retry-wait" | "succeeded" | "failed" | "cancelled" | null;
@@ -514,6 +516,14 @@ export type HostingPlacementRelocationProgress = {
     warnings: HostingPlacementRelocationWarning[];
 };
 
+/** A server the executor leaves alone until `until`, because its latest automatic move failed or was cancelled. */
+export type HostingPlacementBackoff = {
+    serverId: string;
+    relocationId: string;
+    until: string;
+    errorCode: string | null;
+};
+
 /** The `placement-executor` read: current settings, what it is doing and the 50 newest automatic relocations. */
 export type HostingAdminPlacementExecutor = {
     settings: HostingPlacementExecutorSettings;
@@ -523,6 +533,8 @@ export type HostingAdminPlacementExecutor = {
         activeRelocationId: string | null;
         /** Relocations queued in the last 24 hours. Informational: moves are not rate limited. */
         queuedInLast24Hours: number;
+        /** Servers not moved automatically until `until` after a failed or cancelled move, newest first; older control planes omit it. */
+        backedOff?: HostingPlacementBackoff[];
     };
     relocations: HostingPlacementRelocation[];
 };
