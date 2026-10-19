@@ -126,7 +126,7 @@ const data: PlacementViewData = {
 };
 
 const executor = {
-    settings: { enabled: false, maximumRelocationsPerDay: 2, minimumGainHours: 20, alwaysOnPolicy: "single-slot", noticeLeadHours: 24, updatedBy: null, reason: null, updatedAt: null },
+    settings: { enabled: false, maximumRelocationsPerDay: 2, minimumGainHours: 20, alwaysOnPolicy: "single-slot", noticeLeadHours: 1, updatedBy: null, reason: null, updatedAt: null },
     relocations: [],
 };
 

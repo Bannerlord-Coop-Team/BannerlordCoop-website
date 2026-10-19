@@ -295,7 +295,7 @@ export function placementExecutorInput(form: PlacementExecutorForm, expectedUpda
 export function placementExecutorEnableConfirmation(input: { maximumRelocationsPerDay: number; minimumGainHours: number; noticeLeadHours: number; alwaysOnPolicy: HostingPlacementAlwaysOnPolicy }) {
     const alwaysOn = input.alwaysOnPolicy === "none"
         ? "Always-on servers are never moved."
-        : `Always-on servers are moved ${input.alwaysOnPolicy === "single-slot" ? "only to one-slot VPSs, which they never share, " : ""}in their quiet window, after a notice on their page at least ${input.noticeLeadHours} hours ahead.`;
+        : `Always-on servers are moved ${input.alwaysOnPolicy === "single-slot" ? "only to one-slot VPSs, which they never share, " : ""}in their quiet window, after a notice on their page at least ${input.noticeLeadHours} ${input.noticeLeadHours === 1 ? "hour" : "hours"} ahead.`;
     return "Turn on automatic placement?\n\n"
         + `The control plane will relocate customer servers to other VPSs by itself, up to ${input.maximumRelocationsPerDay} in any 24 hours, whenever a move saves at least ${input.minimumGainHours} pair-hours a week. `
         + "Each move stops the game for a few minutes and changes the server's IP address and game port, so players need the new address to join. "
