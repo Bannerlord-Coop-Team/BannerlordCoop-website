@@ -513,7 +513,9 @@ history start, samples and unsequenced servers, then these sections:
   (naming up to three servers, counting more), the summary ends with that note and
   each cell's title with "· estimated". This is worked out separately for **Now**
   and **After plan**. A VPS holding a server without a usable heatmap, or one the
-  plan does not list, shows "Unavailable" instead of a strip. The computations live
+  plan does not list, shows "Unavailable" instead of a strip, without an estimate
+  note or all-busy hours: a full VPS shows "—" there, one with a free slot still
+  shows its free slots. The computations live
   in `lib/control-plane/placement-overlap.ts`.
 - **VPS hosts**, most contended first, with capacity, whether relocation may target
   them, current and proposed contention and their servers.
