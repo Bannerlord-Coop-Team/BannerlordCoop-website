@@ -574,12 +574,14 @@ confirmation that the control plane will start moving servers by itself and
 that each move stops the game for a few minutes and changes the server's address
 and game port; switching off saves at once. The settings read can also carry
 `maximumRelocationsPerDay`, `minimumGainHours`, `noticeLeadHours` and
-`alwaysOnPolicy`, legacy fields that control planes from before the switch still
-require on every save and newer ones ignore. The panel never shows them: each
+`alwaysOnPolicy`, legacy fields: control planes before #516 require them on every
+save (#514 already accepts the cap as optional and ignores it), and #516 and later
+ignore all four. The panel never shows them: each
 switch sends each one back exactly as the latest read of any kind gave it (the
 first read, a poll, the stale reload or the previous switch's response) and
-leaves out any that read did not carry, so either deploy order and a rollback
-keep working. A `stale_interaction` rejection reloads the state someone else saved
+leaves out any that read did not carry, so a save succeeds in either deploy order
+and after a rollback. The panel still deploys after #516, so the fixed rules it
+states hold. A `stale_interaction` rejection reloads the state someone else saved
 and asks the administrator to switch again if they still want to;
 `relocation_provider_unsupported` explains that enabling needs live OVH mode.
 
@@ -626,7 +628,7 @@ poll joins a read under way, and the stale reload waits for it and then reads
 again, since a read that started before the rejected switch may predate the other
 administrator's. If that reload fails, the message says the current state could
 not be loaded and asks for a page reload before switching again. The track scrolls
-in a focusable region (labelled "*server* move steps"), so a keyboard can reach
+in a focusable group (labelled "*server* move steps"), so a keyboard can reach
 stops past the panel's edge.
 
 ## Server notices

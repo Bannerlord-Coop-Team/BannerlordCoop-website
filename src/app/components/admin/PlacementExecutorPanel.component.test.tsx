@@ -230,7 +230,7 @@ it("lays a move's stops out as equal columns whose text wraps inside them", asyn
         expect(list.parentElement!.className).toContain("overflow-x-auto");
         // The scrolling track itself takes focus, so a keyboard can scroll to later stops.
         expect(list.parentElement!.getAttribute("tabindex")).toBe("0");
-        expect(list.parentElement!.getAttribute("role")).toBe("region");
+        expect(list.parentElement!.getAttribute("role")).toBe("group");
         expect(list.parentElement!.getAttribute("aria-label")).toBe(`${name} move steps`);
         expect(list.parentElement!.className).toContain("focus-visible:outline-2");
         const stops = [...list.children];

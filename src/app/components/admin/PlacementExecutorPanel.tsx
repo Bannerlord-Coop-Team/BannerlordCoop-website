@@ -317,7 +317,7 @@ function LiveMove({ relocation }: { relocation: HostingPlacementRelocation }) {
 function MoveTrack({ name, steps }: { name: string; steps: readonly PlacementTrackStep[] }) {
     return (
         // Focusable, so a keyboard can scroll a track wider than the panel; the stops have nothing to focus.
-        <div role="region" tabIndex={0} aria-label={`${name} move steps`} className="mt-2 overflow-x-auto pb-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold">
+        <div role="group" tabIndex={0} aria-label={`${name} move steps`} className="mt-2 overflow-x-auto pb-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold">
             <ol aria-label={`${name}: move steps`} className="grid gap-x-3" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(5.5rem, 1fr))` }}>
                 {steps.map((step, index) => {
                     const phase = TRACK_PHASES[step.phase];
