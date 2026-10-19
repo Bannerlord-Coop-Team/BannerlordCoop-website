@@ -313,6 +313,41 @@ it("keeps managed backup load failures distinct from missing onboarding", async 
 });
 
 it.each([
+    ["rate-limited", new MyServersApiError("rate_limited", "Too many My Servers requests were submitted.", true), 1],
+    ["busy", new MyServersApiError("busy", "Authentication capacity is busy.", true), 1],
+    ["unavailable", new Error("History unavailable"), 2],
+] as const)("retries a %s backup history read only when it was not rate limited", async (_case, failure, calls) => {
+    mocks.backups.mockRejectedValue(failure);
+    mocks.backupStatus.mockResolvedValue(null);
+    mocks.files.mockResolvedValue(null);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+        const files = await findServerElement(await page(), "ManagedServerFiles");
+        expect(files?.props).toMatchObject({ backups: [], loadError: expect.stringContaining("It will reload automatically") });
+        expect(mocks.backups).toHaveBeenCalledTimes(calls);
+        expect(mocks.backupStatus).toHaveBeenCalledOnce();
+    } finally { error.mockRestore(); }
+});
+
+it.each([
+    ["fails briefly", new Error("Status unavailable"), 2, false],
+    ["is rate limited", new MyServersApiError("rate_limited", "Too many My Servers requests were submitted.", true), 1, true],
+] as const)("handles a backup status read that %s inside the shared reader", async (_case, failure, calls, failed) => {
+    // React.cache shares this reader with the header only inside a server render; here the section reads alone.
+    const status = { serverId: managedId, updatedAt: "2026-09-22T10:00:00.000Z", operationState: "running", observedGameState: "running", job: null };
+    mocks.backups.mockResolvedValue([]);
+    mocks.backupStatus.mockRejectedValueOnce(failure).mockResolvedValue(status);
+    mocks.files.mockResolvedValue(null);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+        const files = await findServerElement(await page(), "ManagedServerFiles");
+        expect(files?.props).toMatchObject({ status: failed ? null : status, loadError: failed ? expect.any(String) : undefined });
+        expect(mocks.backupStatus).toHaveBeenCalledTimes(calls);
+        expect(mocks.backups).toHaveBeenCalledOnce();
+    } finally { error.mockRestore(); }
+});
+
+it.each([
     ["owner", "Create backup", "create-backup"],
     ["manager", "Restore save", "restore-backup"],
 ])("connects mapped %s backup history and %s to the existing authenticated operation", async (accessRole, label, action) => {

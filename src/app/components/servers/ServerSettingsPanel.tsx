@@ -53,6 +53,10 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
     const [progressError, setProgressError] = useState("");
     const releaseRequest = useRef<{ serverId: string; releaseChannel: ReleaseChannel; expectedUpdatedAt: string; requestId: string; previousChannel: ReleaseChannel } | null>(null);
     const expectedJob = useRef<string | null>(null);
+    const followedReleaseJob = useRef(false);
+    // Read when a check finishes, so a refreshed channel does not restart the check that refreshed it.
+    const renderedChannel = useRef(releaseAccess?.channel);
+    useEffect(() => { renderedChannel.current = releaseAccess?.channel; });
     const releaseServerId = releaseAccess?.serverId;
     const canReadRelease = releaseAccess?.canEdit === true;
     useEffect(() => {
@@ -70,9 +74,18 @@ export function ServerSettingsPanel({ name, visibility, renameServerId, visibili
                 setProgressError("");
                 // A job seen running on this page makes its eventual outcome worth reporting.
                 const activeJobId = status.job && ACTIVE_RELEASE_JOB_STATES.has(status.job.state) ? status.job.jobId : null;
-                if (activeJobId) setWatchedReleaseJobs(current => withReleaseJob(current, activeJobId));
+                if (activeJobId) {
+                    followedReleaseJob.current = true;
+                    setWatchedReleaseJobs(current => withReleaseJob(current, activeJobId));
+                }
                 if (!status.job || ["succeeded", "failed", "cancelled"].includes(status.job.state)) {
-                    router.refresh();
+                    // Every page load lands here with no update running, and the page it rendered is current.
+                    // Re-render only after a job this page followed or requested, or for a channel it does not show.
+                    const changed = followedReleaseJob.current || expectedJob.current !== null
+                        || status.releaseChannel !== renderedChannel.current;
+                    followedReleaseJob.current = false;
+                    expectedJob.current = null;
+                    if (changed) router.refresh();
                     return;
                 }
             } else setProgressError(t("settingsPanel.updateProgressIsUnavailableTheOperationMayStillBeRunning"));
