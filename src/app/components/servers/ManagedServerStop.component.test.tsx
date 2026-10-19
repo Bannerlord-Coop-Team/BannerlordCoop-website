@@ -250,6 +250,63 @@ it("re-renders the page only when the compact server status changes", async () =
     expect(readStatus).toHaveBeenCalledWith(server.serverId);
 });
 
+it("opens a polling session within 1.5 s when the status read is slow", async () => {
+    const readStatus = vi.fn<ManagedServerStatusReader>(() => new Promise(() => undefined));
+    await renderWithProbe(readStatus);
+    await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt));
+    await act(async () => vi.advanceTimersByTimeAsync(1_499));
+    expect(router.refresh).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(router.refresh).toHaveBeenCalledOnce();
+});
+
+it("keeps the polling baseline when a backup request's job attaches", async () => {
+    const readStatus = vi.fn<ManagedServerStatusReader>().mockResolvedValue({ ok: true, fingerprint: "running" });
+    await renderWithProbe(readStatus);
+    await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt, undefined, "backup"));
+    expect(router.refresh).toHaveBeenCalledOnce();
+    await act(async () => polling.attachJob(server.serverId, "33333333-3333-4333-8333-333333333333"));
+    expect(router.refresh).toHaveBeenCalledOnce();
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(readStatus).toHaveBeenCalledTimes(2);
+    expect(router.refresh).toHaveBeenCalledOnce();
+});
+
+it("still opens with a refresh when a job attaches during the opening status read", async () => {
+    const readStatus = vi.fn<ManagedServerStatusReader>()
+        .mockImplementationOnce(() => new Promise(() => undefined))
+        .mockResolvedValue({ ok: true, fingerprint: "running" });
+    await renderWithProbe(readStatus);
+    await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt, undefined, "backup"));
+    expect(router.refresh).not.toHaveBeenCalled();
+    await act(async () => polling.attachJob(server.serverId, "33333333-3333-4333-8333-333333333333"));
+    expect(readStatus).toHaveBeenCalledTimes(2);
+    expect(router.refresh).toHaveBeenCalledOnce();
+});
+
+it("shares one status read when a shown tab's catch-up and a scheduled check overlap", async () => {
+    let visibility: DocumentVisibilityState = "visible";
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
+    try {
+        const readStatus = vi.fn<ManagedServerStatusReader>().mockResolvedValue({ ok: true, fingerprint: "running" });
+        await renderWithProbe(readStatus);
+        await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt));
+        visibility = "hidden";
+        await act(async () => vi.advanceTimersByTimeAsync(4_000));
+        expect(readStatus).toHaveBeenCalledOnce();
+        let release!: (value: { ok: true; fingerprint: string }) => void;
+        readStatus.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+        visibility = "visible";
+        await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+        await act(async () => vi.advanceTimersByTimeAsync(4_000));
+        expect(readStatus).toHaveBeenCalledTimes(2);
+        await act(async () => release({ ok: true, fingerprint: "stopping" }));
+        expect(router.refresh).toHaveBeenCalledTimes(2);
+    } finally {
+        Reflect.deleteProperty(document, "visibilityState");
+    }
+});
+
 it("releases the controls after two minutes when a backup request's job never appears", async () => {
     await renderWithProbe();
     await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt, undefined, "backup"));

@@ -206,6 +206,20 @@ it("re-renders the page when the channel moved since it rendered", async () => {
     expect(mocks.router.refresh).toHaveBeenCalledOnce();
 });
 
+it("re-renders the page when a release change it requested finishes before any check sees it run", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const jobId = "22222222-2222-4222-8222-222222222222";
+    mocks.status.mockResolvedValue({ serverId, releaseChannel: "stable", job: null });
+    await render();
+    expect(mocks.router.refresh).not.toHaveBeenCalled();
+    mocks.release.mockResolvedValue({ ok: true, jobId, message: "Release queued." });
+    mocks.status.mockResolvedValue({ serverId, releaseChannel: "stable", job: { jobId, state: "failed", progress: "Failed." } });
+    await change("#settings-release-channel", "nightly");
+    await submit();
+    // The accepted save refreshes once; the requested job's quick failure refreshes again.
+    expect(mocks.router.refresh).toHaveBeenCalledTimes(2);
+});
+
 it("re-renders the page once after an update it followed finishes", async () => {
     vi.useFakeTimers();
     try {
