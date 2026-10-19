@@ -586,6 +586,44 @@ if ((Get-NightlyDeviceSessionShape $jsonSession) -notmatch 'type=PSCustomObject 
 if ((Get-NightlyDeviceSessionShape ([string][char]0xFEFF + '{"device_code":"secret"}')) -notmatch 'text length=.+ start=bom') {
     throw 'A leading BOM was not identified without exposing response text.'
 }
+
+# Case-insensitive matching under Turkish culture lowercases 'I' to dotless i
+# (U+0131), which [A-Za-z] does not contain, so a random code with a capital I
+# was rejected. Regexes are cached with the culture they were first built under,
+# so this runs in a fresh process that starts in Turkish culture.
+$turkishCheck = @'
+$ErrorActionPreference = 'Stop'
+[Threading.Thread]::CurrentThread.CurrentCulture = 'tr-TR'
+if ('I'.ToLower() -cne [string][char]0x0131) { throw 'The Turkish culture check could not switch culture.' }
+$env:BANNERLORDCOOP_INSTALLER_TEST = '1'
+. '__INSTALLER__'
+$code = 'I' + ('d' * 41) + 'I'
+$session = [pscustomobject]@{
+    device_code = $code
+    user_code = 'AB2D-EF3H'
+    verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H'
+    expires_in = 600
+    interval = 3
+}
+if (-not (Test-NightlyDeviceSessionResponse $session) -or
+    (Get-NightlyDeviceSessionShape $session) -notmatch 'device_valid=true user_length=9 user_valid=true') {
+    throw 'A device code containing a capital I was rejected under Turkish culture.'
+}
+$token = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ token_type = 'Bearer'; access_token = $code; expires_in = 3600 })
+if ($token.Action -cne 'Accept' -or $token.Token -cne $code) {
+    throw 'An access token containing a capital I was rejected under Turkish culture.'
+}
+$env:BANNERLORDCOOP_INSTALLER_PIN = $code
+if ((Get-InstallerPin) -cne $code) {
+    throw 'An installer pin containing a capital I was rejected under Turkish culture.'
+}
+'Turkish culture codes accepted.'
+'@
+$turkishCheck = $turkishCheck.Replace('__INSTALLER__', $installer.Replace("'", "''"))
+$turkishOutput = & (Get-Process -Id $PID).Path -NoProfile -NonInteractive -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($turkishCheck))) 2>&1
+if ($LASTEXITCODE -ne 0 -or ($turkishOutput | Out-String) -notmatch 'Turkish culture codes accepted\.') {
+    throw "Nightly codes containing a capital I were rejected under Turkish culture: $($turkishOutput | Out-String)"
+}
 $script:NightlyAuthorizationSkipLiveProbes = $false
 $script:NightlySessionRetrySeconds = 0
 function Get-NightlyGatewayTlsIssuer { return '' }
