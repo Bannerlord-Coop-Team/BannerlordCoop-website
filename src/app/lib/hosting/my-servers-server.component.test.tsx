@@ -4,7 +4,7 @@ import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getMyServerNotices, getMyServerSummary, getMyServerStartStatus, getServerOnboarding, listAllMyServers } from "./my-servers-server";
+import { getMyServerMoveStatus, getMyServerNotices, getMyServerSummary, getMyServerStartStatus, getServerOnboarding, listAllMyServers } from "./my-servers-server";
 import { onboardingRegion, onboardingSummary } from "../../../../tests/onboarding-fixtures";
 
 const TOKEN = "access-token-with-enough-characters";
@@ -376,5 +376,89 @@ it("validates the server ID and token before reading notices", async () => {
     const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
     await expect(getMyServerNotices(TOKEN, "invalid")).rejects.toMatchObject({ code: "invalid_request" });
     await expect(getMyServerNotices("short", server.serverId)).rejects.toMatchObject({ code: "invalid_request" });
+    expect(fetch).not.toHaveBeenCalled();
+});
+
+const moving = {
+    state: "moving", scheduledAt: "2026-10-19T03:00:00.000Z", startedAt: "2026-10-19T03:01:00.000Z", completedAt: null,
+    step: "restoring", address: null, stayedOnOriginal: null,
+};
+const scheduledMove = { ...moving, state: "scheduled", startedAt: null, step: null };
+const moved = { ...moving, state: "moved", completedAt: "2026-10-19T03:20:00.000Z", step: null, address: "203.0.113.20:4201" };
+const failed = { ...moved, state: "failed", address: null, stayedOnOriginal: true };
+
+it("reads the server's move status through the closed owner read", async () => {
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = input(init);
+        expect(request).toEqual({ version: 1, requestId: expect.any(String), operation: "server-move-status", input: { serverId: server.serverId } });
+        expect(init).toMatchObject({ cache: "no-store", redirect: "manual", credentials: "omit" });
+        expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${TOKEN}`);
+        return accepted(request, { serverId: server.serverId, move: moving });
+    });
+    vi.stubGlobal("fetch", fetch);
+    expect(await getMyServerMoveStatus(TOKEN, server.serverId)).toEqual(moving);
+    // An older control plane rejects the unknown operation; callers treat that as no move.
+    fetch.mockImplementation(async (_url, init) => Response.json({ version: 1, requestId: input(init).requestId, ok: false,
+        error: { code: "invalid_request", message: "Unknown operation", retryable: false } }, { status: 400 }));
+    await expect(getMyServerMoveStatus(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_request" });
+    expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+    null,
+    scheduledMove,
+    { ...scheduledMove, state: "starting" },
+    { ...moving, step: null },
+    { ...moving, state: "returning", step: "switching-address" },
+    { ...moving, scheduledAt: null },
+    moved,
+    { ...moved, address: "[2001:db8::1]:4201" },
+    { ...moved, address: null },
+    failed,
+    { ...failed, stayedOnOriginal: false },
+    { ...failed, stayedOnOriginal: null },
+])("accepts the move status %j", async move => {
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { serverId: server.serverId, move }));
+    expect(await getMyServerMoveStatus(TOKEN, server.serverId)).toEqual(move);
+});
+
+it.each([
+    null,
+    { serverId: "22222222-2222-4222-8222-222222222222", move: null },
+    { serverId: server.serverId },
+    { serverId: server.serverId, move: null, notices: [] },
+    { serverId: server.serverId, move: [] },
+    { serverId: server.serverId, move: { ...moving, jobId: "33333333-3333-4333-8333-333333333333" } },
+    { serverId: server.serverId, move: { state: "moving", step: "restoring" } },
+    { serverId: server.serverId, move: { ...moving, state: "paused" } },
+    { serverId: server.serverId, move: { ...moving, step: "copying" } },
+    { serverId: server.serverId, move: { ...moved, step: "finishing" } },
+    { serverId: server.serverId, move: { ...moving, startedAt: "2026-10-19 03:01" } },
+    { serverId: server.serverId, move: { ...moving, startedAt: "2026-10-19T03:01:00Z" } },
+    { serverId: server.serverId, move: { ...moving, scheduledAt: 1_760_000_000_000 } },
+    { serverId: server.serverId, move: { ...moved, completedAt: "2026-02-30T03:20:00.000Z" } },
+    { serverId: server.serverId, move: { ...scheduledMove, scheduledAt: null } },
+    { serverId: server.serverId, move: { ...moved, completedAt: null } },
+    { serverId: server.serverId, move: { ...moving, address: "203.0.113.20:4201" } },
+    { serverId: server.serverId, move: { ...moved, address: "javascript:alert(1)" } },
+    { serverId: server.serverId, move: { ...moved, address: "203.0.113.300:4201" } },
+    { serverId: server.serverId, move: { ...moved, address: "203.0.113.20:70000" } },
+    { serverId: server.serverId, move: { ...moved, address: "203.0.113.20:0" } },
+    { serverId: server.serverId, move: { ...moved, address: "203.0.113.20" } },
+    { serverId: server.serverId, move: { ...moved, address: "2001:db8::1:4201" } },
+    { serverId: server.serverId, move: { ...moved, address: "[2001:db8::zz]:4201" } },
+    { serverId: server.serverId, move: { ...moved, address: "play.example.com:4201" } },
+    { serverId: server.serverId, move: { ...moved, address: 4201 } },
+    { serverId: server.serverId, move: { ...moved, stayedOnOriginal: true } },
+    { serverId: server.serverId, move: { ...failed, stayedOnOriginal: "yes" } },
+])("rejects malformed or wrong-server move status %j", async result => {
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
+    await expect(getMyServerMoveStatus(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
+});
+
+it("validates the server ID and token before reading move status", async () => {
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    await expect(getMyServerMoveStatus(TOKEN, "invalid")).rejects.toMatchObject({ code: "invalid_request" });
+    await expect(getMyServerMoveStatus("short", server.serverId)).rejects.toMatchObject({ code: "invalid_request" });
     expect(fetch).not.toHaveBeenCalled();
 });

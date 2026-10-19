@@ -65,6 +65,21 @@ export type MyServerNotice = {
     expiresAt: string | null;
 };
 
+/**
+ * One server's move to another machine as its page shows it: announced, under way, or finished in the
+ * last 24 hours. `step` is set only while moving or returning, `address` only once moved and
+ * `stayedOnOriginal` only when the move failed.
+ */
+export type MyServerMove = {
+    state: "scheduled" | "starting" | "moving" | "returning" | "moved" | "failed";
+    scheduledAt: string | null;
+    startedAt: string | null;
+    completedAt: string | null;
+    step: "preparing" | "saving-and-stopping" | "backing-up" | "restoring" | "switching-address" | "starting-game" | "finishing" | null;
+    address: string | null;
+    stayedOnOriginal: boolean | null;
+};
+
 export type MyServerSaveSummary = {
     saveId: string;
     displayName: string;
