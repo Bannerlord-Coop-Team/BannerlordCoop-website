@@ -595,10 +595,11 @@ is not part of `progress`. In both cases **Done** is not reached and says why. A
 finished move shows how long its job took; a failed or cancelled one shows its
 `errorCode`, with a plain explanation for the executor's own codes
 (`placement_disabled`, `placement_window_missed`, `server_not_found`,
-`placement_job_missing`, `placement_job_cancelled`). A relocation without
-`progress` (or without `returning`), or a read without `status` (or without
-`backedOff`), from an older control plane shows the move's scheduled, queued and
-completed times instead of a track, or treats the missing field as empty.
+`placement_job_missing`, `placement_job_cancelled`). For an older control plane,
+a relocation without usable `progress` shows the move's scheduled, queued and
+completed times instead of a track; `progress` without `returning` is treated
+as not returning; a read without `status` shows no status line, and one without
+`backedOff` shows no servers waiting to retry.
 
 While any relocation is announced or queued, the panel reads `placement-executor`
 again every 15 seconds, only while the page is visible; showing the page again
