@@ -490,8 +490,8 @@ history start, samples and unsequenced servers, then these sections:
   of its hourly online probability (Monday first, UTC). Each square has a title and
   the grid has a text summary for assistive technology.
 - **Host overlap**, when a VPS's slots are busy at the same time, for every VPS with
-  more than one slot (a one-slot VPS cannot overlap), grouped by region in the hosts
-  table's order. **Now** and **After plan** (`aria-pressed`) switch between each
+  more than one slot (a one-slot VPS cannot overlap), grouped by region (alphabetical,
+  hosts without a region last) with rows in the hosts table's order. **Now** and **After plan** (`aria-pressed`) switch between each
   host's `current` and `proposed` servers and pair-hours. Each row shows the VPS,
   its slot count and servers, a 168-cell strip of the week (Monday first, UTC, a
   hairline between days) and its pair-hours per week with "~N h/wk all K busy", or
@@ -506,8 +506,9 @@ history start, samples and unsequenced servers, then these sections:
   VPS, the all-busy hours and busiest hour; with a free slot, the free slots and
   busiest hour; with no servers, the free slots and "no servers". A VPS holding a
   server with fewer observed days than the plan's `model.minimumObservedDays` is an
-  estimate, because the control plane fills such a server's heatmap from the
-  fleet's typical week (entirely with no history): its row says so in words, such
+  estimate, because the control plane shrinks such a server's heatmap toward the
+  fleet's overall online fraction (with no history, entirely, so its heatmap is flat):
+  its row says so in words, such
   as "Estimated: Game Night has under 7 days of history" or "… has no history yet"
   (naming up to three servers, counting more), the summary ends with that note and
   each cell's title with "· estimated". This is worked out separately for **Now**

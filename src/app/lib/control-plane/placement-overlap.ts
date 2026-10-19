@@ -32,8 +32,9 @@ export type PlacementOverlapRow = {
     /** Null while a server on it has no learned weekly activity. */
     overlap: HostOverlap | null;
     /**
-     * Servers with less history than the planner's minimum. Their heatmaps lean on the fleet's
-     * typical week (entirely, with no history), so the row is an estimate; null when there are none.
+     * Servers with less history than the planner's minimum. Their heatmaps are shrunk toward the
+     * fleet's overall online fraction (flat, with no history), so the row is an estimate; null when
+     * there are none.
      */
     estimate: string | null;
 };
