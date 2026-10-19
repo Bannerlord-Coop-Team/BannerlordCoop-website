@@ -3,10 +3,13 @@ import { TestLocalization, serverTestMessages } from "@/app/components/servers/M
 import { act, StrictMode, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { MyServerMove } from "@/app/lib/control-plane/types";
 import { MAXIMUM_IDLE_CONSOLE_RENEWALS, ManagedServerConsole } from "./ManagedServerConsole";
+import { ManagedServerMoveProvider } from "./ManagedServerMoveStatus";
 import { ManagedServerPollingProvider, useManagedConsoleSignals, type ManagedConsoleSignal } from "./ManagedServerPollingProvider";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("@/app/servers/managed-server-move-actions", () => ({ readManagedServerMoveStatus: async () => ({ ok: false }) }));
 
 let root: Root;
 let container: HTMLDivElement;
@@ -246,6 +249,22 @@ it("waits while the server is stopped and reconnects as soon as it is running", 
     await renderConsole("preview", { operationState: "starting", observedGameState: "stopped" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(output()).toContain("Reconnecting to live output");
+});
+
+it.each([
+    ["moving", "Your server is moving to a new machine. Output will appear here when it is running again."],
+    ["returning", "Your server is moving to a new machine. Output will appear here when it is running again."],
+    ["scheduled", "The server is stopped. Output will appear here when it starts."],
+] as const)("explains the stopped output while a %s move holds the server", async (state, message) => {
+    vi.useFakeTimers();
+    const first = liveStream();
+    fetchMock.mockResolvedValueOnce(first.response).mockReturnValue(new Promise<Response>(() => {}));
+    const move: MyServerMove = { state, scheduledAt: "2026-10-19T03:00:00.000Z", startedAt: state === "scheduled" ? null : "2026-10-19T03:01:00.000Z",
+        completedAt: null, step: state === "moving" ? "restoring" : null, address: null, stayedOnOriginal: null };
+    await act(async () => root.render(<TestLocalization><ManagedServerMoveProvider serverId="preview" initialMove={move}>
+        <ManagedServerConsole serverId="preview" operationState="maintenance" observedGameState="stopped" /></ManagedServerMoveProvider></TestLocalization>));
+    await first.end("ended");
+    expect(output()).toBe(message);
 });
 
 it("cancels a pending retry when the server stops and resumes when it is running again", async () => {

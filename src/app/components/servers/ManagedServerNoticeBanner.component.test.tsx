@@ -2,12 +2,15 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
-import type { MyServerNotice } from "@/app/lib/control-plane/types";
+import type { MyServerMove, MyServerNotice } from "@/app/lib/control-plane/types";
 import { createTranslator } from "@/app/lib/localization/translator";
+import { ManagedServerMoveProvider } from "./ManagedServerMoveStatus";
 import { ManagedServerNoticeBanner, noticeText } from "./ManagedServerNoticeBanner";
 
 const dismiss = vi.hoisted(() => vi.fn());
 vi.mock("@/app/servers/server-notice-actions", () => ({ dismissManagedServerNotice: dismiss }));
+vi.mock("@/app/servers/managed-server-move-actions", () => ({ readManagedServerMoveStatus: async () => ({ ok: false }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const messages = serverTestMessages["managed-server"];
 const serverId = "11111111-1111-4111-8111-111111111111";
@@ -122,4 +125,25 @@ it("keeps the notice and explains why when it cannot be dismissed", async () => 
 it("renders nothing without notices", async () => {
     await render([]);
     expect(container.innerHTML).toBe("");
+});
+
+const move = (state: MyServerMove["state"]): MyServerMove => ({
+    state, scheduledAt: "2026-10-19T03:00:00.000Z", startedAt: null, step: null, address: null, stayedOnOriginal: null,
+    completedAt: state === "moved" || state === "failed" ? "2026-10-19T03:20:00.000Z" : null,
+});
+
+it.each([
+    [null, [true, true]],
+    ["scheduled", [false, true]],
+    ["starting", [false, true]],
+    ["moving", [false, true]],
+    ["returning", [false, true]],
+    ["moved", [true, false]],
+    ["failed", [true, true]],
+] as const)("leaves the placement notices that a %s move's status card covers to it", async (state, [scheduledShown, completedShown]) => {
+    await act(async () => root.render(<TestLocalization><ManagedServerMoveProvider serverId={serverId} initialMove={state === null ? null : move(state)}>
+        <ManagedServerNoticeBanner serverId={serverId} notices={[administrator, scheduled, completed]} /></ManagedServerMoveProvider></TestLocalization>));
+    expect(card("Maintenance")).toBeDefined();
+    expect(card(messages["notices.placementScheduledTitle"]) !== undefined).toBe(scheduledShown);
+    expect(card(messages["notices.placementCompletedTitle"]) !== undefined).toBe(completedShown);
 });

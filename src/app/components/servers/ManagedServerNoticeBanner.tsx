@@ -1,33 +1,33 @@
 "use client";
 
 import { Info, LoaderCircle, TriangleAlert, X } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import type { MyServerNotice } from "@/app/lib/control-plane/types";
 import { useTranslations } from "@/app/lib/localization/client";
 import type { Translator } from "@/app/lib/localization/types";
 import { dismissManagedServerNotice } from "@/app/servers/server-notice-actions";
+import { moveCoversNotice, useManagedServerMove } from "./managed-server-move-context";
+import { useViewerTimeZone, ZONED_DATE_TIME_FORMAT as START_FORMAT } from "./viewer-time-zone";
 
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 // An IPv4 or bracketed IPv6 address with its game port, as the control plane reports a moved server.
 const JOIN_ADDRESS = /^(?:\d{1,3}(?:\.\d{1,3}){3}|\[[0-9A-Fa-f:.]+\]):\d{1,5}$/u;
-// Times carry a zone label because they render in UTC on the server and the viewer's zone after hydration.
-const START_FORMAT: Intl.DateTimeFormatOptions = { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" };
 const END_FORMAT: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit", timeZoneName: "short" };
-const subscribeToTimeZone = () => () => undefined;
-const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 /**
  * Each undismissed notice on this server's page as a card. Administrator notices are shown as
  * written, as plain text; placement notices are written from their parameters in the viewer's
  * language and time zone, falling back to the stored English text when the parameters are unusable.
+ * Placement notices that the move status card already covers are left to it.
  */
 export function ManagedServerNoticeBanner({ serverId, notices }: { serverId: string; notices: readonly MyServerNotice[] }) {
     const { t, date } = useTranslations("managed-server");
-    const timeZone = useSyncExternalStore(subscribeToTimeZone, browserTimeZone, () => "UTC");
+    const timeZone = useViewerTimeZone();
+    const move = useManagedServerMove();
     const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
     const [pending, setPending] = useState<string | null>(null);
     const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
-    const visible = notices.filter((notice) => !hidden.has(notice.noticeId));
+    const visible = notices.filter((notice) => !hidden.has(notice.noticeId) && !moveCoversNotice(notice, move));
     if (visible.length === 0) return null;
 
     async function dismiss(noticeId: string) {

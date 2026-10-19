@@ -41,15 +41,17 @@ import {
     type LiveConsoleServer,
 } from "@/app/lib/console/servers";
 import { hasServerFleetAccess } from "@/app/lib/auth/roles";
-import type { MyServerNotice, MyServerSummary } from "@/app/lib/control-plane/types";
+import type { MyServerMove, MyServerNotice, MyServerSummary } from "@/app/lib/control-plane/types";
 import {
     getMyServerBackupStatus,
     MyServersApiError,
     listAllMyServerBackups,
     type MyServerDeletionStatus,
 } from "@/app/lib/hosting/my-servers";
-import { getMyServerDeletionStatus, getMyServerNotices, getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerDeletionStatus, getMyServerMoveStatus, getMyServerNotices, getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
+import { isMoveInProgress } from "@/app/lib/hosting/server-move";
 import { ManagedServerNoticeBanner } from "@/app/components/servers/ManagedServerNoticeBanner";
+import { ManagedServerMoveProvider, ManagedServerMoveStatus } from "@/app/components/servers/ManagedServerMoveStatus";
 import { getServerDisplayNames } from "@/app/lib/hosting/server-settings";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -189,11 +191,12 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
     const { t } = await getTranslations("managed-server");
     // Region names live with onboarding in the servers namespace, so both pages share one translation.
     const { t: tServers } = await getTranslations("servers");
-    const [deletionStatus, notices] = await Promise.all([
+    const [deletionStatus, notices, move] = await Promise.all([
         server.accessRole === "owner"
             ? getMyServerDeletionStatus(accessToken, server.serverId, AbortSignal.timeout(5_000)).catch(() => null)
             : null,
         readServerNotices(accessToken, server.serverId),
+        readServerMoveStatus(accessToken, server.serverId),
     ]);
     const initializing = INITIALIZING_SERVER_STATES.has(server.operationState);
     const managedAccessLabels: Record<MyServerSummary["accessRole"], string> = {
@@ -203,23 +206,23 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
         support: t("page.readOnlySupport"),
     };
 
-    return <ServerManagementWorkspace
+    return <ManagedServerMoveProvider serverId={server.serverId} initialMove={move}><ServerManagementWorkspace
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.displayName}</h1>}
-        banner={noticeBanner(server.serverId, notices)}
+        banner={managedBanner(server.serverId, notices)}
         initialSection={initializing ? "Console" : initialSection}
         interactionLocked={initializing}
         address={connectionAddress(server.connectionIp ?? null, server.gamePorts ?? [])}
         visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} disabled={initializing} />}
         summary={t("page.managedSummary", { region: localizedRegionLabel(tServers, server.friendlyRegion), access: managedAccessLabels[server.accessRole] })}
-        status={<Suspense fallback={<ManagedServerStatus accessToken={accessToken} server={server} checkBackup={false} />}>
-            <ManagedServerStatus accessToken={accessToken} server={server} checkBackup={server.accessRole === "owner" || server.accessRole === "manager"} />
+        status={<Suspense fallback={<ManagedServerStatus accessToken={accessToken} server={server} move={move} checkBackup={false} />}>
+            <ManagedServerStatus accessToken={accessToken} server={server} move={move} checkBackup={server.accessRole === "owner" || server.accessRole === "manager"} />
         </Suspense>}
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} deletionStatus={deletionStatus} />
         <ServerWorkspacePanel section="Settings">
             <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} managerAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
         </ServerWorkspacePanel>
-    </ServerManagementWorkspace>;
+    </ServerManagementWorkspace></ManagedServerMoveProvider>;
 }
 
 // Keeps managed controls and output in the console workspace without duplicating an existing live console.
@@ -409,15 +412,16 @@ async function LiveServerManagementPage({
         }
     }
 
-    const [deletionStatus, notices] = await Promise.all([
+    const [deletionStatus, notices, move] = await Promise.all([
         managedServer?.accessRole === "owner"
             ? getMyServerDeletionStatus(accessToken, managedServer.serverId, AbortSignal.timeout(5_000)).catch(() => null)
             : null,
         managedServer !== null ? readServerNotices(accessToken, managedServer.serverId) : null,
+        managedServer !== null ? readServerMoveStatus(accessToken, managedServer.serverId) : null,
     ]);
 
-    return <ServerManagementWorkspace
-        banner={managedServer !== null ? noticeBanner(managedServer.serverId, notices) : undefined}
+    const workspace = <ServerManagementWorkspace
+        banner={managedServer !== null ? managedBanner(managedServer.serverId, notices) : undefined}
         name={<EditableServerName key={server.name} canEdit={canManageAssignments && managedServer === null} initialName={server.name} serverId={server.id} />}
         address={server.address}
         visibility={managedServer !== null
@@ -474,6 +478,7 @@ async function LiveServerManagementPage({
                 )}
         </ServerWorkspacePanel>
     </ServerManagementWorkspace>;
+    return managedServer !== null ? <ManagedServerMoveProvider serverId={managedServer.serverId} initialMove={move}>{workspace}</ManagedServerMoveProvider> : workspace;
 }
 
 // Reads can fail briefly while the server restarts, so backup reads retry once before reporting anything.
@@ -500,15 +505,26 @@ function readServerNotices(accessToken: string, serverId: string) {
     return getMyServerNotices(accessToken, serverId, AbortSignal.timeout(5_000)).catch(() => null);
 }
 
+// A move status is optional page content too: any failure, including a control plane without the read, shows no move.
+function readServerMoveStatus(accessToken: string, serverId: string) {
+    return getMyServerMoveStatus(accessToken, serverId, AbortSignal.timeout(5_000)).catch(() => null);
+}
+
 function noticeBanner(serverId: string, notices: MyServerNotice[] | null) {
     return notices !== null && notices.length > 0 ? <ManagedServerNoticeBanner serverId={serverId} notices={notices} /> : undefined;
+}
+
+// The move status card follows a move that starts while the page is open, so it is always present above the notices.
+function managedBanner(serverId: string, notices: MyServerNotice[] | null) {
+    return <><ManagedServerMoveStatus notices={notices ?? []} />{noticeBanner(serverId, notices)}</>;
 }
 
 const ACTIVE_BACKUP_STATES = new Set(["queued", "running", "retry-wait"]);
 
 // Lists the header status. A running-server backup stops the game inside the runner without changing the
-// recorded lifecycle, so an active backup job is shown here rather than an unchanged "Running".
-async function ManagedServerStatus({ accessToken, server, checkBackup }: { accessToken: string; server: MyServerSummary; checkBackup: boolean }) {
+// recorded lifecycle, so an active backup job is shown here rather than an unchanged "Running"; a move to
+// another machine is likewise named rather than shown as a generic "Maintenance".
+async function ManagedServerStatus({ accessToken, server, move, checkBackup }: { accessToken: string; server: MyServerSummary; move: MyServerMove | null; checkBackup: boolean }) {
     const { t } = await getTranslations("managed-server");
     let backup: "active" | "paused" | null = null;
     if (checkBackup && server.operationState === "running") {
@@ -517,7 +533,8 @@ async function ManagedServerStatus({ accessToken, server, checkBackup }: { acces
     }
     const entries = [
         [t("page.gameState"), backup === "paused" ? t("page.pausedForBackup") : formatManagedValue(server.observedGameState, t)],
-        [t("page.lifecycle"), backup !== null ? t("page.backingUp") : formatManagedValue(server.operationState, t)],
+        [t("page.lifecycle"), isMoveInProgress(move) ? t(move.state === "returning" ? "move.lifecycleReturning" : "move.lifecycleMoving")
+            : backup !== null ? t("page.backingUp") : formatManagedValue(server.operationState, t)],
         [t("page.releaseChannel"), releaseChannelLabel(server.releaseChannel, { stable: t("page.releaseStable"), nightly: t("page.releaseNightly") })],
     ];
     const initializing = INITIALIZING_SERVER_STATES.has(server.operationState);

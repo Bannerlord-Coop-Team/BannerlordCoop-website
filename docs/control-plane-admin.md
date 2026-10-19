@@ -582,6 +582,40 @@ since that notice is not for this server. An administrator impersonating a user
 gets HTTP 403 `impersonation_read_only` and a short localized explanation; other
 failures keep the card with a localized retry message.
 
+### Owner move status
+
+The same pages read the owner operation `server-move-status` through
+`getMyServerMoveStatus`, in parallel with the notices and with the same
+five-second bound; any failure, including an older control plane without the
+operation, shows no move. The DTO is strict: exact keys, the six states and seven
+steps, millisecond UTC timestamps, `scheduledAt` when `scheduled`, `completedAt`
+when `moved` or `failed`, `step` only while `moving` or `returning`, `address` (a
+real IPv4 or bracketed IPv6 address with a valid port) only once `moved`, and
+`stayedOnOriginal` only when `failed`.
+
+`ManagedServerMoveProvider` wraps the workspace and polls the
+`readManagedServerMoveStatus` server action while the page is visible: every 60 s
+with no move or a finished one, every 30 s while one is scheduled, and every 5 s
+from two minutes before `scheduledAt`, while `starting` and while `moving` or
+`returning`. A failed read keeps the status shown and backs off to at most five
+minutes; a hidden page reads as soon as it is shown again. A new state, address or
+completion time calls `router.refresh()` once so the header, address and notices
+follow; a new step alone does not.
+
+`ManagedServerMoveStatus` is the first card in the `banner` slot: a countdown and
+the start time in the viewer's zone while scheduled, the steps with the current
+one and the elapsed time while moving, a progress line while returning, and the
+new address with **Copy address** once moved; a failed move says whether the
+server stayed on its original machine. Only finished moves can be dismissed. The
+dismissal is remembered in this browser by `completedAt` under
+`bannerlordcoop.servers.moveDismissed.<serverId>`, and dismissing a moved card
+also dismisses the `placement-completed` notices it covers. The notice banner
+hides `placement-scheduled` notices while a move is pending or running and
+`placement-completed` ones once moved. While `moving` or `returning` the header
+lifecycle names the move instead of "Maintenance", Start, Stop, Restart and
+Update now are disabled with an explanation, and the stopped console says the
+server is moving.
+
 Deploy the control plane that adds these operations before merging this website
 change. Merging to main redeploys `my-servers` through the Supabase hosting API
 workflow; the notice read degrades to no banner against an older control plane,

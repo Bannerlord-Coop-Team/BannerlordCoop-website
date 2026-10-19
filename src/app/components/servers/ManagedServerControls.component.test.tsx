@@ -5,7 +5,9 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import * as serverActions from "@/app/servers/managed-server-actions";
 import { ManagedServerControls, ManagedServerPassword } from "./ManagedServerControls";
+import { ManagedServerMoveProvider } from "./ManagedServerMoveStatus";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
+import type { MyServerMove } from "@/app/lib/control-plane/types";
 
 const { request, requestUpdate, requestPassword, beginPolling, startStatus, router, statusSlot } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn(), startStatus: vi.fn(), router: { refresh: vi.fn() }, statusSlot: { current: undefined as HTMLElement | null | undefined } }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -24,6 +26,7 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
     requestMyServerUpdate: requestUpdate,
     requestMyServerPassword: requestPassword,
 }));
+vi.mock("@/app/servers/managed-server-move-actions", () => ({ readManagedServerMoveStatus: async () => ({ ok: false }) }));
 vi.mock("./ManagedServerPollingProvider", () => ({
     useManagedServerPolling: () => ({ session: null, timedOutSession: null, beginPolling, endPolling: vi.fn() }),
     useManagedConsoleSignals: () => null,
@@ -445,6 +448,29 @@ it("renders lifecycle progress in the console toolbar's status row when one is p
         await act(async () => root.unmount());
         statusSlot.current = undefined;
     }
+});
+
+it.each([
+    ["moving", true],
+    ["returning", true],
+    ["scheduled", false],
+    ["starting", false],
+] as const)("explains lifecycle controls held by a %s move to a new machine: unavailable=%s", async (state, unavailable) => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    const move: MyServerMove = { state, scheduledAt: "2026-10-19T03:00:00.000Z", startedAt: unavailable ? "2026-10-19T03:01:00.000Z" : null,
+        completedAt: null, step: state === "moving" ? "restoring" : null, address: null, stayedOnOriginal: null };
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerMoveProvider serverId={serverId} initialMove={move}>
+            <ManagedServerControls serverId={serverId} displayName="Campaign" accessRole="owner" operationState="running" observedGameState="running" expectedUpdatedAt="2026-09-20T12:00:00.000Z" />
+        </ManagedServerMoveProvider></TestLocalization>));
+        const buttons = Object.fromEntries([...container.querySelectorAll("button")].map(button => [button.textContent, button.disabled]));
+        expect(buttons).toEqual({ Start: true, Stop: unavailable, Restart: unavailable, "Update now": unavailable });
+        const hint = container.querySelector('[role="tooltip"]');
+        expect(hint?.textContent ?? null).toBe(unavailable ? "Unavailable while your server moves to a new machine" : null);
+    } finally { await act(async () => root.unmount()); }
 });
 
 // Resolves real English messages without reading cookies in standalone tests.
