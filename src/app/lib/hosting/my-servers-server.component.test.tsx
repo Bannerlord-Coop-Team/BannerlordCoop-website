@@ -384,7 +384,8 @@ const moving = {
     step: "restoring", address: null, stayedOnOriginal: null,
 };
 const scheduledMove = { ...moving, state: "scheduled", startedAt: null, step: null };
-const moved = { ...moving, state: "moved", completedAt: "2026-10-19T03:20:00.000Z", step: null, address: "203.0.113.20:4201" };
+const returning = { ...moving, state: "returning", step: null };
+const moved = { ...moving, state: "moved", scheduledAt: null, completedAt: "2026-10-19T03:20:00.000Z", step: null, address: "203.0.113.20:4201" };
 const failed = { ...moved, state: "failed", address: null, stayedOnOriginal: true };
 
 it("reads the server's move status through the closed owner read", async () => {
@@ -409,14 +410,14 @@ it.each([
     scheduledMove,
     { ...scheduledMove, state: "starting" },
     { ...moving, step: null },
-    { ...moving, state: "returning", step: "switching-address" },
     { ...moving, scheduledAt: null },
+    returning,
+    { ...returning, scheduledAt: null },
     moved,
     { ...moved, address: "[2001:db8::1]:4201" },
     { ...moved, address: null },
     failed,
     { ...failed, stayedOnOriginal: false },
-    { ...failed, stayedOnOriginal: null },
 ])("accepts the move status %j", async move => {
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { serverId: server.serverId, move }));
     expect(await getMyServerMoveStatus(TOKEN, server.serverId)).toEqual(move);
@@ -440,6 +441,25 @@ it.each([
     { serverId: server.serverId, move: { ...scheduledMove, scheduledAt: null } },
     { serverId: server.serverId, move: { ...moved, completedAt: null } },
     { serverId: server.serverId, move: { ...moving, address: "203.0.113.20:4201" } },
+    // Each state carries exactly its own fields.
+    { serverId: server.serverId, move: { ...scheduledMove, startedAt: "2026-10-19T03:01:00.000Z" } },
+    { serverId: server.serverId, move: { ...scheduledMove, completedAt: "2026-10-19T03:20:00.000Z" } },
+    { serverId: server.serverId, move: { ...scheduledMove, step: "preparing" } },
+    { serverId: server.serverId, move: { ...scheduledMove, state: "starting", scheduledAt: null } },
+    { serverId: server.serverId, move: { ...scheduledMove, state: "starting", startedAt: "2026-10-19T03:01:00.000Z" } },
+    { serverId: server.serverId, move: { ...moving, startedAt: null } },
+    { serverId: server.serverId, move: { ...moving, completedAt: "2026-10-19T03:20:00.000Z" } },
+    { serverId: server.serverId, move: { ...moving, stayedOnOriginal: false } },
+    { serverId: server.serverId, move: { ...returning, step: "switching-address" } },
+    { serverId: server.serverId, move: { ...returning, startedAt: null } },
+    { serverId: server.serverId, move: { ...returning, completedAt: "2026-10-19T03:20:00.000Z" } },
+    { serverId: server.serverId, move: { ...moved, scheduledAt: "2026-10-19T03:00:00.000Z" } },
+    { serverId: server.serverId, move: { ...moved, startedAt: null } },
+    { serverId: server.serverId, move: { ...failed, scheduledAt: "2026-10-19T03:00:00.000Z" } },
+    { serverId: server.serverId, move: { ...failed, startedAt: null } },
+    { serverId: server.serverId, move: { ...failed, completedAt: null } },
+    { serverId: server.serverId, move: { ...failed, stayedOnOriginal: null } },
+    { serverId: server.serverId, move: { ...failed, address: "203.0.113.20:4201" } },
     { serverId: server.serverId, move: { ...moved, address: "javascript:alert(1)" } },
     { serverId: server.serverId, move: { ...moved, address: "203.0.113.300:4201" } },
     { serverId: server.serverId, move: { ...moved, address: "203.0.113.20:70000" } },

@@ -190,19 +190,32 @@ export async function getMyServerMoveStatus(accessToken: string, serverId: strin
     return value.move;
 }
 
-// Each field is set only in the states that use it, so the page never shows a step, address or outcome out of place.
+type MoveField = Exclude<keyof MyServerMove, "state">;
+/** Which fields each state carries, exactly as the control plane sends them: required, optional (null allowed) or null. */
+const MOVE_FIELDS: Record<MyServerMove["state"], Record<MoveField, "required" | "optional" | "null">> = {
+    scheduled: { scheduledAt: "required", startedAt: "null", completedAt: "null", step: "null", address: "null", stayedOnOriginal: "null" },
+    starting: { scheduledAt: "required", startedAt: "null", completedAt: "null", step: "null", address: "null", stayedOnOriginal: "null" },
+    moving: { scheduledAt: "optional", startedAt: "required", completedAt: "null", step: "optional", address: "null", stayedOnOriginal: "null" },
+    returning: { scheduledAt: "optional", startedAt: "required", completedAt: "null", step: "null", address: "null", stayedOnOriginal: "null" },
+    moved: { scheduledAt: "null", startedAt: "required", completedAt: "required", step: "null", address: "optional", stayedOnOriginal: "null" },
+    failed: { scheduledAt: "null", startedAt: "required", completedAt: "required", step: "null", address: "null", stayedOnOriginal: "required" },
+};
+const MOVE_FIELD_VALUES: Record<MoveField, (value: unknown) => boolean> = {
+    scheduledAt: timestamp,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    step: (value) => SERVER_MOVE_STEPS.includes(value as NonNullable<MyServerMove["step"]>),
+    address: isJoinAddress,
+    stayedOnOriginal: (value) => typeof value === "boolean",
+};
+
+// Each state carries only its own fields, so the page never shows a time, step, address or outcome out of place.
 function isMyServerMove(value: unknown): value is MyServerMove {
-    if (!isRecord(value) || !hasExactKeys(value, ["state", "scheduledAt", "startedAt", "completedAt", "step", "address", "stayedOnOriginal"])) return false;
-    const state = value.state as MyServerMove["state"];
-    const optionalTimestamp = (field: unknown) => field === null || timestamp(field);
-    return SERVER_MOVE_STATES.includes(state)
-        && optionalTimestamp(value.scheduledAt) && optionalTimestamp(value.startedAt) && optionalTimestamp(value.completedAt)
-        && (state !== "scheduled" || value.scheduledAt !== null)
-        && ((state !== "moved" && state !== "failed") || value.completedAt !== null)
-        && (value.step === null || ((state === "moving" || state === "returning")
-            && SERVER_MOVE_STEPS.includes(value.step as NonNullable<MyServerMove["step"]>)))
-        && (value.address === null || (state === "moved" && isJoinAddress(value.address)))
-        && (value.stayedOnOriginal === null || (state === "failed" && typeof value.stayedOnOriginal === "boolean"));
+    if (!isRecord(value) || !hasExactKeys(value, ["state", ...Object.keys(MOVE_FIELD_VALUES)])) return false;
+    if (!SERVER_MOVE_STATES.includes(value.state as MyServerMove["state"])) return false;
+    return Object.entries(MOVE_FIELDS[value.state as MyServerMove["state"]]).every(([field, presence]) => value[field] === null
+        ? presence !== "required"
+        : presence !== "null" && MOVE_FIELD_VALUES[field as MoveField](value[field]));
 }
 
 // Accepts only a real IPv4 or IPv6 address and a valid port, so the page can show the address as players type it.
