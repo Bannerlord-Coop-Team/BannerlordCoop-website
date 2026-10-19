@@ -234,12 +234,12 @@ async function loadManagedInventory(user: User | null, accessToken: string | nul
     };
 }
 
-/** Loads public inventory independently, keeping failures inside its section. */
+/** Loads joinable public inventory (offline servers hidden) independently, keeping failures inside its section. */
 async function loadPublicInventory() {
     let allServers: ManagedServerDirectoryEntry[] = [];
     let publicServersError = "";
     try {
-        allServers = (await listPublicServers()).map(server => ({
+        allServers = (await listPublicServers()).map((server): ManagedServerDirectoryEntry => ({
             id: server.serverId,
             name: server.displayName,
             status: server.observedGameState === "running" ? "Online" : server.observedGameState === "stopped" ? "Offline" : "Unknown",
@@ -247,7 +247,7 @@ async function loadPublicInventory() {
             joinUrl: "",
             connectionAddress: connectionAddress(server.connectionIp, server.gamePorts),
             players: null,
-        }));
+        })).filter(server => server.status !== "Offline");
     } catch {
         publicServersError = "page.error.publicUnavailable";
     }

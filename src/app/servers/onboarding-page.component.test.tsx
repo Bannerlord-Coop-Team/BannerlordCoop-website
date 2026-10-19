@@ -2,7 +2,7 @@ vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined })
 import { renderToReadableStream } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { onboardingSummary, ONBOARDING_TEST_ID } from "../../../tests/onboarding-fixtures";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn(), publicList: vi.fn(), prepareAccount: vi.fn(), account: vi.fn(), navbar: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), onboarding: vi.fn(), publicList: vi.fn(), directory: vi.fn(), prepareAccount: vi.fn(), account: vi.fn(), navbar: vi.fn() }));
 vi.mock("@/app/lib/hosting/website-account-status", () => ({ getWebsiteAccountStatus: mocks.account, prepareWebsiteAccountStatusRequest: mocks.prepareAccount }));
 vi.mock("@/app/lib/hosting/public-servers", () => ({ listPublicServers: mocks.publicList }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: async (options?: { onReadOnlySession?: (token: string) => unknown }) => {
@@ -15,7 +15,7 @@ vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerViewer: async (op
 vi.mock("@/app/lib/hosting/my-servers-server", () => ({ listAllMyServers: mocks.list, getServerOnboarding: mocks.onboarding }));
 vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: (props: unknown) => { mocks.navbar(props); return <nav>Navigation</nav>; } }));
 vi.mock("@/app/components/servers/ServerOnboarding", () => ({ ServerOnboarding: ({ userId, summary }: { userId: string; summary: unknown }) => <div data-user={userId}>{summary ? "Trusted onboarding snapshot" : "Unavailable snapshot"}</div>, GamePasswordNotice: () => <p>Discord password controls</p> }));
-vi.mock("@/app/components/servers/AllServersDirectory", () => ({ AllServersDirectory: () => <div>Public directory</div> }));
+vi.mock("@/app/components/servers/AllServersDirectory", () => ({ AllServersDirectory: (props: unknown) => { mocks.directory(props); return <div>Public directory</div>; } }));
 import ServersPage, { generateMetadata } from "./page";
 import ServersLoading from "./loading";
 import { localeDefinitions } from "@/app/lib/localization/registry";
@@ -74,6 +74,14 @@ it("public directory failure does not hide private inventory or fall back to pla
     expect(html).not.toContain("Public directory</div>");
     expect(html).toContain("Assigned campaign");
     expect(html).toContain("Trusted onboarding snapshot");
+});
+it("public directory and its totals omit offline servers", async () => {
+    const publicServer = (serverId: string, observedGameState: string | null) => ({ serverId, displayName: `Campaign ${serverId}`, friendlyRegion: "Europe", observedGameState, connectionIp: "203.0.113.4", gamePorts: [4200] });
+    mocks.publicList.mockResolvedValue([publicServer("running", "running"), publicServer("stopped", "stopped"), publicServer("unknown", null)]);
+    const html = await renderPage();
+    const listed = mocks.directory.mock.calls[0][0].servers as { id: string; status: string }[];
+    expect(listed.map(server => [server.id, server.status])).toEqual([["running", "Online"], ["unknown", "Unknown"]]);
+    expect(html).toContain("2 servers in the directory");
 });
 it("summary failure remains unavailable rather than false eligibility or false full regions", async () => {
     mocks.onboarding.mockRejectedValue(new Error("edge not deployed"));
