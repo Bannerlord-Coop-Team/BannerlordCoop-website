@@ -7,6 +7,7 @@ import {
     useContext,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type ReactNode,
 } from "react";
@@ -15,9 +16,13 @@ import {
 const POLL_DEADLINE_MILLISECONDS = 15 * 60_000;
 /** A backup request whose job never appears releases the lifecycle controls sooner. */
 const UNATTACHED_BACKUP_DEADLINE_MILLISECONDS = 2 * 60_000;
+/** The owner just acted, so the opening refresh waits at most this long for the status fingerprint. */
+const OPENING_FINGERPRINT_WAIT_MILLISECONDS = 1_500;
 const INITIALIZING_SERVER_STATES = new Set(["provisioning", "configuring"]);
 
 type PollingSession = {
+    /** Distinguishes sessions begun in the same millisecond; attaching a job keeps it. */
+    sequence: number;
     serverId: string;
     initialUpdatedAt: string;
     jobId: string | null;
@@ -127,6 +132,11 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
     const [timedOutSession, setTimedOutSession] = useState<PollingSession | null>(null);
     const [consoleSignals] = useState(createManagedConsoleSignals);
     const [savesInFlight, setSavesInFlight] = useState<ReadonlyMap<string, number>>(() => new Map());
+    const sessionSequence = useRef(0);
+    const pollingBaseline = useRef<{
+        sequence: number; fingerprint: string | null; opened: boolean;
+        read: Promise<Awaited<ReturnType<ManagedServerStatusReader>> | null> | null;
+    } | null>(null);
 
     const beginSave = useCallback((serverId: string) => {
         const adjust = (change: number) => setSavesInFlight((current) => {
@@ -157,8 +167,10 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         statusSource: PollingSession["statusSource"] = "server",
     ) => {
         const startedAt = Date.now();
+        sessionSequence.current += 1;
         setTimedOutSession(null);
         setSession({
+            sequence: sessionSequence.current,
             serverId,
             initialUpdatedAt,
             jobId: jobId ?? null,
@@ -167,8 +179,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
             deadline: startedAt + (statusSource === "backup" && jobId === undefined
                 ? UNATTACHED_BACKUP_DEADLINE_MILLISECONDS : POLL_DEADLINE_MILLISECONDS),
         });
-        router.refresh();
-    }, [router]);
+    }, []);
 
     const attachJob = useCallback((serverId: string, jobId: string) => {
         setSession((current) => current?.serverId === serverId
@@ -185,39 +196,66 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
 
     useEffect(() => {
         if (session === null) return;
-        const { serverId, startedAt } = session;
+        const { serverId, startedAt, sequence } = session;
+        // Attaching a job replaces the session object; the same session keeps its baseline.
+        const polled = pollingBaseline.current?.sequence === sequence
+            ? pollingBaseline.current : { sequence, fingerprint: null, opened: false, read: null };
+        pollingBaseline.current = polled;
         let timer: number | undefined;
         let refreshWhenVisible = false;
         let cancelled = false;
-        let lastFingerprint: string | null = null;
+        let checking: Promise<void> | null = null;
 
         // Full page renders are expensive on the edge runtime, so unchanged status skips them.
         // The fingerprint is read before refreshing, so a change after it is caught next time.
-        async function refreshIfChanged() {
+        // A bounded wait refreshes without a baseline when the read is slow; the next check then renders.
+        async function refreshIfChanged(waitMilliseconds?: number) {
             if (readStatus) {
-                const result = await readStatus(serverId).catch(() => null);
+                // A read outlasting the opening wait stays shared until it settles, so no check starts a second one.
+                const read = polled.read ??= readStatus(serverId).catch(() => null).finally(() => { polled.read = null; });
+                let timeout: number | undefined;
+                const result = waitMilliseconds === undefined ? await read : await Promise.race([
+                    read,
+                    new Promise<null>((resolve) => { timeout = window.setTimeout(() => resolve(null), waitMilliseconds); }),
+                ]).finally(() => window.clearTimeout(timeout));
                 if (cancelled) return;
-                if (result?.ok && result.fingerprint === lastFingerprint) return;
-                lastFingerprint = result?.ok ? result.fingerprint : null;
+                if (result?.ok && result.fingerprint === polled.fingerprint) return;
+                polled.fingerprint = result?.ok ? result.fingerprint : null;
             }
             router.refresh();
+        }
+
+        // One check at a time: a tab shown just before a scheduled tick shares that tick's read.
+        function check(waitMilliseconds?: number) {
+            checking ??= refreshIfChanged(waitMilliseconds).finally(() => { checking = null; });
+            return checking;
+        }
+
+        function schedule() {
+            if (!cancelled) timer = window.setTimeout(tick, managedServerPollDelay(Date.now() - startedAt));
         }
 
         // Checks on a widening schedule; a hidden tab defers its check until it is shown again.
         async function tick() {
             if (document.visibilityState === "hidden") refreshWhenVisible = true;
-            else await refreshIfChanged();
-            if (!cancelled) timer = window.setTimeout(tick, managedServerPollDelay(Date.now() - startedAt));
+            else await check();
+            schedule();
         }
 
         // Catches up immediately when the owner returns to a tab that skipped checks.
         function refreshOnReturn() {
             if (document.visibilityState !== "visible" || !refreshWhenVisible) return;
             refreshWhenVisible = false;
-            void refreshIfChanged();
+            void check();
         }
 
-        timer = window.setTimeout(tick, managedServerPollDelay(Date.now() - startedAt));
+        // The session's first refresh also records the baseline, so an unchanged first tick skips its render.
+        if (polled.opened) schedule();
+        else void check(OPENING_FINGERPRINT_WAIT_MILLISECONDS).then(() => {
+            if (cancelled) return;
+            polled.opened = true;
+            schedule();
+        });
         const deadline = window.setTimeout(() => {
             setTimedOutSession(session);
             setSession((current) => current?.deadline === session.deadline ? null : current);

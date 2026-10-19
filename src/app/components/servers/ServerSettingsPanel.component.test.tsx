@@ -190,6 +190,58 @@ it("pins the save bar to the viewport only while there are unsaved changes", asy
     expect(container.querySelector("[data-unsaved-bar]")).toBeNull();
 });
 
+it.each([
+    ["no update job", null],
+    ["an update that finished before the page loaded", { jobId: "22222222-2222-4222-8222-222222222222", state: "succeeded", progress: "Done." }],
+] as const)("does not re-render the page when its first release check finds %s", async (_case, job) => {
+    mocks.status.mockResolvedValue({ serverId, releaseChannel: "stable", job });
+    await render();
+    expect(mocks.status).toHaveBeenCalledExactlyOnceWith(serverId);
+    expect(mocks.router.refresh).not.toHaveBeenCalled();
+});
+
+it("re-renders the page when the channel moved since it rendered", async () => {
+    mocks.status.mockResolvedValue({ serverId, releaseChannel: "nightly", job: null });
+    await render();
+    expect(mocks.router.refresh).toHaveBeenCalledOnce();
+});
+
+it("re-renders the page when a release change it requested finishes before any check sees it run", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const jobId = "22222222-2222-4222-8222-222222222222";
+    mocks.status.mockResolvedValue({ serverId, releaseChannel: "stable", job: null });
+    await render();
+    expect(mocks.router.refresh).not.toHaveBeenCalled();
+    mocks.release.mockResolvedValue({ ok: true, jobId, message: "Release queued." });
+    mocks.status.mockResolvedValue({ serverId, releaseChannel: "stable", job: { jobId, state: "failed", progress: "Failed." } });
+    await change("#settings-release-channel", "nightly");
+    await submit();
+    // The accepted save refreshes once; the requested job's quick failure refreshes again.
+    expect(mocks.router.refresh).toHaveBeenCalledTimes(2);
+});
+
+it("re-renders the page once after an update it followed finishes", async () => {
+    vi.useFakeTimers();
+    try {
+        const jobId = "22222222-2222-4222-8222-222222222222";
+        mocks.status.mockResolvedValue({ serverId, releaseChannel: "stable", job: { jobId, state: "running", progress: "Updating." } });
+        await render();
+        await act(async () => vi.advanceTimersByTimeAsync(4_000));
+        expect(mocks.status).toHaveBeenCalledTimes(2);
+        expect(mocks.router.refresh).not.toHaveBeenCalled();
+        mocks.status.mockResolvedValue({ serverId, releaseChannel: "nightly", job: { jobId, state: "succeeded", progress: "Done." } });
+        await act(async () => vi.advanceTimersByTimeAsync(4_000));
+        expect(mocks.router.refresh).toHaveBeenCalledOnce();
+        // The refresh delivers the new channel; it must not start another release check.
+        await render({ ...props, releaseAccess: { ...props.releaseAccess!, channel: "nightly" } });
+        await act(async () => vi.advanceTimersByTimeAsync(60_000));
+        expect(mocks.status).toHaveBeenCalledTimes(3);
+        expect(mocks.router.refresh).toHaveBeenCalledOnce();
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
 // Resolves real English messages without reading cookies in standalone tests.
 vi.mock("@/app/lib/localization/server", () => ({
     getLocale: async () => "en",
