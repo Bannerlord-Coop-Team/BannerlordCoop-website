@@ -514,3 +514,46 @@ it("never runs the stale-save reload alongside a poll already reading", async ()
     expect(container.querySelector<HTMLInputElement>('input[name="noticeLeadHours"]')!.value).toBe("4");
     expect(container.querySelector('[role="alert"]')?.textContent).toBe("Someone else changed these settings. The current settings are shown; review them and save again.");
 });
+
+it("keeps one read at a time when the page is shown again during a poll and a stale reload follows", async () => {
+    vi.useFakeTimers();
+    visibility = "visible";
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
+    current = { settings: saved, status: { activeRelocationId: "live", queuedInLast24Hours: 1 }, relocations: [live] };
+    let reading = 0;
+    let most = 0;
+    let releasePoll: (() => void) | null = null;
+    const respond = mocks.request.getMockImplementation()!;
+    mocks.request.mockImplementation(async (request: { operation: string }) => {
+        if (request.operation === "set-placement-executor") {
+            current = { ...current, settings: { ...saved, noticeLeadHours: 4, updatedAt: "2026-10-19T15:00:00.000Z" } };
+            throw new ControlPlaneAdminError("stale_interaction", "Settings changed.", false, "request");
+        }
+        reading += 1;
+        most = Math.max(most, reading);
+        try {
+            if (calls("placement-executor").length === 2) await new Promise<void>((resolve) => { releasePoll = resolve; });
+            // Later reads take a moment, so two started together would be seen reading at once.
+            else if (calls("placement-executor").length > 2) await new Promise<void>((resolve) => { setTimeout(resolve, 50); });
+            return await respond(request);
+        } finally {
+            reading -= 1;
+        }
+    });
+    await act(async () => root.render(<PlacementExecutorPanel />));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    expect(releasePoll).not.toBeNull();
+
+    // Shown again while the poll reads: the poll will read again once this one ends.
+    await setVisibility("hidden");
+    await setVisibility("visible");
+    // A save is rejected as stale, so the reload queues behind the poll.
+    await save();
+    expect(calls("placement-executor")).toHaveLength(2);
+
+    // The poll's second read joins the reload's rather than starting beside it.
+    await act(async () => { releasePoll!(); await vi.advanceTimersByTimeAsync(100); });
+    expect(most).toBe(1);
+    expect(calls("placement-executor")).toHaveLength(3);
+    expect(container.querySelector<HTMLInputElement>('input[name="noticeLeadHours"]')!.value).toBe("4");
+});

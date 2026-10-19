@@ -191,8 +191,9 @@ export function placementBackoffs(executor: Pick<HostingAdminPlacementExecutor, 
 }
 
 /**
- * One executor read at a time. `shared` joins a read under way; `fresh` waits for a read under way and then
- * reads again (callers meanwhile share that one), for a caller that needs settings newer than its own request.
+ * One executor read at a time. `shared` joins a read under way, or the one queued to follow it; `fresh` waits
+ * for a read under way and then reads again (callers meanwhile share that one), for a caller that needs
+ * settings newer than its own request. A read is only ever started when none is under way or queued.
  */
 export function createPlacementExecutorReads<T>(read: () => Promise<T>) {
     let current: Promise<T> | null = null;
@@ -205,10 +206,11 @@ export function createPlacementExecutorReads<T>(read: () => Promise<T>) {
         return reading;
     }
     return {
-        shared: () => current ?? start(),
+        // Between a read ending and the queued one starting, a caller joins the queued one rather than racing it.
+        shared: () => current ?? next ?? start(),
         fresh(): Promise<T> {
-            if (current === null) return start();
-            next ??= current.then(() => undefined, () => undefined).then(() => {
+            if (current === null && next === null) return start();
+            next ??= current!.then(() => undefined, () => undefined).then(() => {
                 next = null;
                 return start();
             });

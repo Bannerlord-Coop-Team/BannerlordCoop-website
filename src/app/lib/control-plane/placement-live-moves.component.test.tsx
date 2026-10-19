@@ -200,3 +200,34 @@ it("keeps executor reads one at a time", async () => {
     expect(await another).toBe(2);
     expect(most).toBe(1);
 });
+
+it("joins the read queued after one that just ended instead of starting another beside it", async () => {
+    const pending: Array<() => void> = [];
+    let concurrent = 0;
+    let most = 0;
+    let started = 0;
+    const reads = createPlacementExecutorReads(() => new Promise<number>((resolve) => {
+        started += 1;
+        concurrent += 1;
+        most = Math.max(most, concurrent);
+        const value = started;
+        pending.push(() => { concurrent -= 1; resolve(value); });
+    }));
+    const poll = reads.shared();
+    // The poll's own follow-up runs as soon as its read ends: after that read is no longer under way, but
+    // before the read the stale reload queued has started.
+    let followUp: Promise<number> | null = null;
+    const pollFollowedUp = poll.then(() => { followUp = reads.shared(); });
+    const reload = reads.fresh();
+    pending.shift()!();
+    await pollFollowedUp;
+    // A fresh read asked for in that gap joins the queued one too.
+    const another = reads.fresh();
+    for (let turn = 0; turn < 5; turn += 1) await Promise.resolve();
+    expect(started).toBe(2);
+    pending.shift()!();
+    expect(await reload).toBe(2);
+    expect(await followUp!).toBe(2);
+    expect(await another).toBe(2);
+    expect(most).toBe(1);
+});
