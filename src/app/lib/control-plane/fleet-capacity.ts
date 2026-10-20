@@ -415,9 +415,10 @@ export function staticRuleComparison(capacity: Pick<HostingAdminFleetCapacity, "
     const memoryShare = Math.round((memory.value / rule.staticBurstMemoryBytesPerServer) * 100);
     const uses = `${reserves} A running server uses ${formatCores(cpu.value)} at ${cpu.key} (${cpuShare}% of ${rule.staticBurstVcpuPerServer} vCPU) and ${formatGiB(memory.value)} at ${memory.key} (${memoryShare}% of ${ruleGiB(rule.staticBurstMemoryBytesPerServer)}).`;
     if (rule.cpuBurstPercent === null) return uses;
-    const planned = burstCores(cpu.value, rule.cpuBurstPercent);
+    // Rounded to three decimals as the control plane rounds each VPS's planned CPU, and shown with them.
+    const planned = Math.round(burstCores(cpu.value, rule.cpuBurstPercent) * 1_000) / 1_000;
     const plannedShare = Math.round((planned / rule.staticBurstVcpuPerServer) * 100);
-    return `${uses} With ${rule.cpuBurstPercent}% burst headroom above that stable use, the model plans ${formatCores(planned)} per server (${plannedShare}% of ${rule.staticBurstVcpuPerServer} vCPU).`;
+    return `${uses} With ${rule.cpuBurstPercent}% burst headroom above that stable use, the model plans ${formatCoresExact(planned)} per server (${plannedShare}% of ${rule.staticBurstVcpuPerServer} vCPU).`;
 }
 
 export type FleetCapacityDataState = "empty" | "sparse" | "ready";

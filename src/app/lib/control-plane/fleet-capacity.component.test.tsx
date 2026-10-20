@@ -417,8 +417,10 @@ it("compares modelled servers with today's slots", () => {
 });
 
 it("compares the fleet's needs with the static rule, or says there is not enough data", () => {
-    expect(staticRuleComparison(parseFleetCapacity(capacity)!)).toBe("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB). With 66% burst headroom above that stable use, the model plans 1.41 cores per server (71% of 2 vCPU).");
+    expect(staticRuleComparison(parseFleetCapacity(capacity)!)).toBe("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB). With 66% burst headroom above that stable use, the model plans 1.411 cores per server (71% of 2 vCPU).");
     expect(staticRuleComparison(parseFleetCapacity({ ...capacity, model: { ...model, cpuPercentile: 99 } })!)).toContain("1.60 cores at p99 (80% of 2 vCPU)");
+    // The control plane's own example: 0.6 stable cores plan for 0.996, never "1.00".
+    expect(staticRuleComparison(parseFleetCapacity(example)!)).toContain("the model plans 0.996 cores per server (50% of 2 vCPU).");
     expect(staticRuleComparison(parseFleetCapacity(blank)!)).toBe("Today's static rule reserves 2 vCPU · 3 GiB per server. There is not enough data yet to compare it with what servers use.");
 });
 

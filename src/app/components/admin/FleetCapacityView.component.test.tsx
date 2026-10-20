@@ -238,7 +238,7 @@ it("shows what a server needs and compares it with the static rule", async () =>
         ["CPU p50", "0.85 cores"], ["CPU p95", "1.20 cores"], ["CPU max", "1.95 cores"], ["Running server-hours", "412.5 server-h"],
         ["Memory p50", "1.40 GiB"], ["Memory p95", "1.80 GiB"], ["Memory max", "2.00 GiB"], ["Throttled", "1.2%"],
     ]);
-    expect(needs.textContent).toContain("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB). With 66% burst headroom above that stable use, the model plans 1.41 cores per server (71% of 2 vCPU).");
+    expect(needs.textContent).toContain("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB). With 66% burst headroom above that stable use, the model plans 1.411 cores per server (71% of 2 vCPU).");
 });
 
 it("compares providers' steal and per-server needs", async () => {
