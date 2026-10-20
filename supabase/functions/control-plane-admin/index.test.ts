@@ -277,6 +277,47 @@ test("does not cache lifecycle operations or requests with unknown release field
 });
 
 
+test("forwards manual VPS onboarding byte-for-byte and relays the control plane's validation verdict", async () => {
+    // The Edge keeps no operation allowlist: the control plane alone validates the strict manual-entry input.
+    const raw = JSON.stringify({ version: 1, requestId: REQUEST_ID, operation: "onboard-manual-vps-host", input: {
+        provider: "hosthatch-vps", serviceName: "hosthatch-ams-1", sshLogin: "root@45.91.20.7",
+        hostPublicKey: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI${"A".repeat(43)} root@ams-1`, vCpu: 8, region: "benelux",
+        countryCode: "NL", locationId: "ams", publicHostname: null, datacenter: null,
+    } });
+    const bodies: string[] = [];
+    let reply: unknown = { version: 1, requestId: REQUEST_ID, ok: true, result: { onboarding: { state: "queued", progressStage: "queued" } } };
+    let status = 200;
+    const handler = createHandler(async (input, init) => {
+        if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
+        bodies.push(String(init?.body));
+        return Response.json(reply, { status });
+    });
+    const accepted = await handler(adminRequest(raw));
+    assert.equal(accepted.status, 200);
+    assert.deepEqual(await accepted.json(), reply);
+    assert.deepEqual(bodies, [raw]);
+
+    reply = { version: 1, requestId: REQUEST_ID, ok: false, error: { code: "invalid_input", message: "The host key is invalid.", retryable: false } };
+    status = 400;
+    const rejected = await handler(adminRequest(raw));
+    assert.equal(rejected.status, 400);
+    assert.deepEqual(await rejected.json(), reply);
+    assert.equal(rejected.headers.get("cache-control"), "no-store");
+    assert.deepEqual(bodies, [raw, raw]);
+});
+
+test("never forwards manual VPS onboarding for a non-admin session", async () => {
+    let upstreamCalls = 0;
+    const handler = createHandler(async (input) => {
+        if (String(input).endsWith("/auth/v1/user")) return Response.json({ ...ADMIN, app_metadata: { role: "User" } });
+        upstreamCalls++;
+        return Response.json({});
+    });
+    const response = await handler(adminRequest(JSON.stringify({ version: 1, requestId: REQUEST_ID, operation: "onboard-manual-vps-host", input: {} })));
+    assert.equal(response.status, 403);
+    assert.equal(upstreamCalls, 0);
+});
+
 test("starts user and context together, but never forwards until both validate", async () => {
     let finishUser!: (response: Response) => void;
     let finishContext!: (response: Response) => void;

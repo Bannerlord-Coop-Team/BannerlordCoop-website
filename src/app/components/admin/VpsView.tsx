@@ -49,8 +49,11 @@ export function VpsView({ inventory: initialInventory, regionCatalog, accounts }
             {billing.error && <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {billing.error} {billing.result ? "Showing the last billing readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={billing.refreshReadings}>Retry billing</button></p>}
             <VpsSlotSummary hosts={hosts} regionCatalog={regionCatalog} />
             <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
-                <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased VPS. The durable workflow verifies account ownership, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
-                <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="shrink-0 border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
+                <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased VPS, from a provider account (OVHcloud, Contabo) or by manual entry for a provider without an account API. The durable workflow verifies the host, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                    <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
+                    <Link href="/admin/control-plane?view=operations#onboard-manual-vps-host" className="border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Add manual VPS</Link>
+                </div>
             </div>
             <div className="mt-6">
                 {oracle.error && <p role="alert" className="mb-3 text-xs text-red-200">Oracle readings unavailable. {oracle.error} {oracle.result?.controlPlaneHost ? "Showing the last Oracle readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={oracle.refreshReadings}>Retry Oracle readings</button></p>}

@@ -24,6 +24,10 @@ test("explains reconciliation and VPS assignment boundaries", () => {
     assert.match(operationExplanation("onboard-vps-host"), /never orders/iu);
     assert.match(operationExplanation("onboard-vps-host"), /first contact/iu);
     assert.match(operationExplanation("onboard-vps-host"), /no browser-supplied host identity/iu);
+    assert.match(operationExplanation("onboard-manual-vps-host"), /without an account API/iu);
+    assert.match(operationExplanation("onboard-manual-vps-host"), /refuses any host whose Ed25519 key differs from the pasted one/iu);
+    assert.match(operationExplanation("onboard-manual-vps-host"), /floor\(vCPU \/ 2\)/u);
+    assert.match(operationExplanation("onboard-manual-vps-host"), /never orders/iu);
     assert.match(operationExplanation("update-vps-runner"), /every isolated slot/iu);
     assert.match(operationExplanation("update-vps-runner"), /no browser-supplied ssh/iu);
 });

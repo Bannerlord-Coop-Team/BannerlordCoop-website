@@ -84,7 +84,7 @@ remain compatible with the API's original full Overview response.
 The page provides:
 
 - clickable fleet health summaries, exact registered-VPS/managed-server/slot capacity, reconciliation, and global controls;
-- registered VPS capacity (OVHcloud and Contabo) plus reviewed location IDs and live read-only cost, expiration, and auto-renew metadata;
+- registered VPS capacity (OVHcloud and Contabo account inventory, plus manually entered hosts such as HostHatch) and reviewed location IDs and live read-only cost, expiration, and auto-renew metadata;
 - searchable servers with Discord usernames, durable state explanations, desired/observed state, runtime, release, save, backup, and audit detail;
 - durable job state and action explanations plus retry/cancellation controls;
 - installable validated Stable and Nightly release catalogs, source commit revisions, and validation/revocation actions;
@@ -99,7 +99,35 @@ The website does not query the private `control_plane` schema, call a VPS provid
 
 The administrator presentation resolves Discord usernames only from bounded Supabase Auth accounts that signed in with Discord. Numeric Discord IDs remain visible and accepted as a fallback. Dates and provider-check times render only after browser hydration so they use the administrator's browser locale and time zone rather than the Netlify or Oracle server time zone.
 
-The Operations page's **Onboard existing VPS** card is the normal additive host-ingestion path. Its choices are the inventory's `availableHosts` (unregistered hosts from every enabled provider account, labelled `<provider> · <service name>`); each option carries that host's `provider` and `serviceName`, and the card sends both. The inventory's `providerReads` reports each enabled provider's account read; a failed read withholds only that provider's unregistered hosts and billing, and the Operations and VPS views name the failed provider. The control plane verifies that the already-purchased service belongs to that provider's account, derives the reviewed image within the control plane, records `floor(vCPU / 2)` empty slots, and writes an administrative audit event. It never purchases, renews, or powers the VPS. The VPS view's per-host **Onboard runner**, **Retry onboarding**, and **Update runner** buttons send the host row's own `provider` with its service name; the control plane requires it and rejects a provider that differs from the stored host. Server creation assigns an existing prepared VPS slot in the selected region; it never orders a VPS, and unavailable capacity fails without creating or billing anything. The Region choices are the stored-catalog entries that `hosting-regions` reports `available: true` (a free slot admissible under the owner admission rules), in stored order, labelled from the website catalog or the humanized key. That flag is advisory: only the region key (`friendlyRegion`) is sent, and the control plane revalidates capacity. If the stored catalog cannot be read, Create server is shown unavailable with the read error. The VPS view also reads the stored catalog and labels each host with every stored region whose placement its provider-reported country and zone satisfy, then the country and zone. A host no stored placement covers is labelled **No stored region** until a catalog entry is published, and **Regions unavailable** when the catalog cannot be read. The normal Releases view hides non-validated history, but pending, rejected, and revoked receipts remain retained for explicit inspection and audit rather than being deleted.
+The Operations page's **Onboard provider-account VPS** card is the normal additive host-ingestion path for providers with an account API (OVHcloud and Contabo). Its choices are the inventory's `availableHosts` (unregistered hosts from every enabled provider account, labelled `<provider> · <service name>`); each option carries that host's `provider` and `serviceName`, and the card sends both. The inventory's `providerReads` reports each enabled provider's account read; a failed read withholds only that provider's unregistered hosts and billing, and the Operations and VPS views name the failed provider. The control plane verifies that the already-purchased service belongs to that provider's account, derives the reviewed image within the control plane, records `floor(vCPU / 2)` empty slots, and writes an administrative audit event. It never purchases, renews, or powers the VPS. The VPS view's per-host **Onboard runner**, **Retry onboarding**, and **Update runner** buttons send the host row's own `provider` with its service name; the control plane requires it and rejects a provider that differs from the stored host. Server creation assigns an existing prepared VPS slot in the selected region; it never orders a VPS, and unavailable capacity fails without creating or billing anything. The Region choices are the stored-catalog entries that `hosting-regions` reports `available: true` (a free slot admissible under the owner admission rules), in stored order, labelled from the website catalog or the humanized key. That flag is advisory: only the region key (`friendlyRegion`) is sent, and the control plane revalidates capacity. If the stored catalog cannot be read, Create server is shown unavailable with the read error. The VPS view also reads the stored catalog and labels each host with every stored region whose placement its provider-reported country and zone satisfy, then the country and zone. A host no stored placement covers is labelled **No stored region** until a catalog entry is published, and **Regions unavailable** when the catalog cannot be read. The normal Releases view hides non-validated history, but pending, rejected, and revoked receipts remain retained for explicit inspection and audit rather than being deleted.
+
+A provider without an account API (first: HostHatch) is onboarded with the
+**Add manual VPS** card (`#onboard-manual-vps-host`), which the VPS view's
+**Add manual VPS** button also opens. Its providers are the `vps-hosts`
+result's `manualEntryProviders` (`{ provider, displayName }`); a backend that
+omits the field is treated as offering none, and the card then explains that it
+is unavailable instead of showing the form. The administrator types the host's
+facts from the provider panel: a permanent server name
+(`^[A-Za-z\d][A-Za-z\d.-]{0,63}$`), the SSH login as exactly `root@<public IPv4>`,
+the host key (the single `ssh-ed25519` line printed by
+`cat /etc/ssh/ssh_host_ed25519_key.pub` in the provider console), the vCPU count
+(2–64; the card shows the resulting `floor(vCPU / 2)` game slots), a region from
+the stored catalog (every region, not only those with free capacity), a country
+limited to that region's placement countries, a location chosen from the
+region's location IDs when it names them and otherwise typed as a short code
+such as `ams`, and the optional player hostname and datacenter label. The card
+validates these grammars in the browser, asks the administrator to confirm the
+IPv4 address once more, and sends `onboard-manual-vps-host` with exactly those
+ten fields; blank optional fields are sent as `null`. The control plane remains
+authoritative for every check. It refuses a host that presents any other host
+key, so a mistyped address cannot silently enroll a different machine. Success
+opens the VPS view, and a failed attempt is retried there with the existing
+**Retry onboarding** button, which sends `onboard-vps-host` with the host row's
+own provider, its service name and `mode: "retry"`. The `control-plane-admin`
+Edge Function forwards the envelope unchanged, so it needs no redeploy; deploy
+the control-plane release that adds `onboard-manual-vps-host` and
+`manualEntryProviders` before this website change. Against an older backend the
+card stays unavailable.
 
 Deploy the Edge Function from the repository root:
 
