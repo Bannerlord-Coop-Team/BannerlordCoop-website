@@ -409,7 +409,8 @@ export function burstCores(peakCores: number, burstVcpu: number) {
  * One sentence comparing what a running server uses at the model's percentiles with today's static rule, and, with a
  * burst target, what the model plans for each server instead. Each VPS plans the target or the peak of its own demand
  * source, and no source peaks above the fleet, so the fleet's peak bounds every plan: at or under the target every VPS
- * plans the target, and above it the plans range from the target to that peak.
+ * plans the target, and above it the plans range from the target to that peak. No source has run long enough while the
+ * fleet itself has not, so until then nothing is planned and the sentence stops at what servers use.
  */
 export function staticRuleComparison(capacity: Pick<HostingAdminFleetCapacity, "model" | "fleet">) {
     const { model: rule, fleet } = capacity;
@@ -421,7 +422,7 @@ export function staticRuleComparison(capacity: Pick<HostingAdminFleetCapacity, "
     const cpuShare = Math.round((cpu.value / rule.staticBurstVcpuPerServer) * 100);
     const memoryShare = Math.round((memory.value / rule.staticBurstMemoryBytesPerServer) * 100);
     const uses = `${reserves} A running server uses ${formatCores(cpu.value)} at ${cpu.key} (${cpuShare}% of ${rule.staticBurstVcpuPerServer} vCPU) and ${formatGiB(memory.value)} at ${memory.key} (${memoryShare}% of ${ruleGiB(rule.staticBurstMemoryBytesPerServer)}).`;
-    if (rule.cpuBurstVcpu === null) return uses;
+    if (rule.cpuBurstVcpu === null || fleet.demand.runningServerHours < rule.minimumRunningHours) return uses;
     const burst = `${uses} Every online server is planned to burst to ${rule.cpuBurstVcpu} vCPU at once, or to its VPS's measured peak where higher.`;
     // Rounded to three decimals as the control plane rounds each VPS's planned CPU, and shown with them.
     const highest = Math.round(burstCores(cores.max, rule.cpuBurstVcpu) * 1_000) / 1_000;

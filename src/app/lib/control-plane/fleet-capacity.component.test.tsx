@@ -448,6 +448,9 @@ it("says when there is no data or not enough yet", () => {
     expect(fleetCapacityDataNote(parseFleetCapacity(blank)!)).toMatch(/^Not enough data yet: no resource samples have arrived\./u);
     const sparse = parseFleetCapacity(withDemand({ runningServerHours: 3.25 }))!;
     expect(fleetCapacityDataState(sparse)).toBe("sparse");
+    // Nothing is planned yet, so the summary says what servers use and plans nothing.
+    expect(staticRuleComparison(sparse)).toBe("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB).");
+    expect(staticRuleComparison(parseFleetCapacity(withDemand({ runningServerHours: 6 }))!)).toContain("so VPSs plan from 1.600 cores to 1.950 cores per server");
     expect(fleetCapacityDataNote(sparse)).toBe("Not enough data yet: the fleet has 3.3 server-h of running data, and the model plans with a VPS's own servers', an instance type's or the whole fleet's figures only once it has 6.0 server-h. Until then no VPS is modelled, and figures without data show —.");
     expect(fleetCapacityDataState(parseFleetCapacity(capacity)!)).toBe("ready");
     expect(fleetCapacityDataNote(parseFleetCapacity(capacity)!)).toBeNull();
