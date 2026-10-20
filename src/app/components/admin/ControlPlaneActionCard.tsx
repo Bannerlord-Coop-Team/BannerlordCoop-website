@@ -60,14 +60,13 @@ export function ControlPlaneActionCard({
     unavailableReason?: string;
 }) {
     const router = useRouter();
-    const cardRef = useRef<HTMLElement>(null);
+    const { cardRef, isTargeted } = useOperationTarget(operation);
     const [pending, setPending] = useState(false);
     const [result, setResult] = useState<{
         ok: boolean;
         message: string;
         links: ControlPlaneOperationResultLink[];
     } | null>(null);
-    const [isTargeted, setIsTargeted] = useState(false);
     const serverField = fields.find((field) => field.kind === "server");
     const [serverValue, setServerValue] = useState(String(serverField?.defaultValue ?? ""));
     const [backupReady, setBackupReady] = useState(false);
@@ -84,35 +83,6 @@ export function ControlPlaneActionCard({
     ));
     const blockedReason = unavailableReason
         ?? (unavailableField ? `No eligible ${unavailableField.label.toLowerCase()} is currently available.` : null);
-
-    useEffect(() => {
-        let animationFrame: number | null = null;
-        let highlightTimer: number | null = null;
-
-        function revealTarget() {
-            if (!operationTargetMatchesHash(window.location.hash, operation)) return;
-            if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
-            if (highlightTimer !== null) window.clearTimeout(highlightTimer);
-            setIsTargeted(false);
-            animationFrame = window.requestAnimationFrame(() => {
-                const card = cardRef.current;
-                if (!card) return;
-                const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-                card.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
-                card.focus({ preventScroll: true });
-                setIsTargeted(true);
-                highlightTimer = window.setTimeout(() => setIsTargeted(false), 2_600);
-            });
-        }
-
-        revealTarget();
-        window.addEventListener("hashchange", revealTarget);
-        return () => {
-            window.removeEventListener("hashchange", revealTarget);
-            if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
-            if (highlightTimer !== null) window.clearTimeout(highlightTimer);
-        };
-    }, [operation]);
 
     async function submit(formData: FormData) {
         if (pending) return;
@@ -236,6 +206,42 @@ export function ControlPlaneActionCard({
         </article>
     );
 }
+/** Scrolls to, focuses and briefly highlights an operation card whenever the URL hash names its operation. */
+export function useOperationTarget(operation: string) {
+    const cardRef = useRef<HTMLElement>(null);
+    const [isTargeted, setIsTargeted] = useState(false);
+    useEffect(() => {
+        let animationFrame: number | null = null;
+        let highlightTimer: number | null = null;
+
+        function revealTarget() {
+            if (!operationTargetMatchesHash(window.location.hash, operation)) return;
+            if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
+            if (highlightTimer !== null) window.clearTimeout(highlightTimer);
+            setIsTargeted(false);
+            animationFrame = window.requestAnimationFrame(() => {
+                const card = cardRef.current;
+                if (!card) return;
+                const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                card.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+                card.focus({ preventScroll: true });
+                setIsTargeted(true);
+                highlightTimer = window.setTimeout(() => setIsTargeted(false), 2_600);
+            });
+        }
+
+        revealTarget();
+        window.addEventListener("hashchange", revealTarget);
+        return () => {
+            window.removeEventListener("hashchange", revealTarget);
+            if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
+            if (highlightTimer !== null) window.clearTimeout(highlightTimer);
+        };
+    }, [operation]);
+
+    return { cardRef, isTargeted };
+}
+
 /** Renders one administrator-editable form control for a field definition. */
 function ActionField({ field }: { field: AdminActionField }) {
     const [targetValue, setTargetValue] = useState(String(field.defaultValue ?? ""));
@@ -324,7 +330,8 @@ function currentTargetValue(field: AdminActionField, value: string) {
     return option ? adminActionOptionValue(field.kind, option) : "";
 }
 
-function FieldRequirement({ required }: { required: boolean }) {
+/** Marks a form label as required or optional. */
+export function FieldRequirement({ required }: { required: boolean }) {
     return <span className={`border px-1.5 py-0.5 text-[0.5rem] tracking-[0.08em] ${required ? "border-gold/30 text-gold" : "border-white/10 text-foreground-dim"}`}>{fieldRequirementLabel(required)}</span>;
 }
 
@@ -363,10 +370,12 @@ function buildInput(fields: AdminActionField[], formData: FormData) {
     return input;
 }
 
-function HelpIcon({ label, help }: { label: string; help: string }) {
+/** Shows a focusable help icon whose tooltip explains a card or field. */
+export function HelpIcon({ label, help }: { label: string; help: string }) {
     return <span className="group relative inline-flex" tabIndex={0}><CircleHelp aria-label={label} className="size-3.5 shrink-0 cursor-help text-gold/70" /><Tooltip>{help}</Tooltip></span>;
 }
 
+/** Floating tooltip text revealed when its icon group is hovered or focused. */
 function Tooltip({ children }: { children: React.ReactNode }) {
     return <span role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-64 -translate-x-1/2 border border-white/15 bg-background px-3 py-2 font-sans text-[0.7rem] font-normal normal-case leading-5 tracking-normal text-foreground shadow-xl group-hover:block group-focus:block">{children}</span>;
 }
