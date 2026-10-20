@@ -54,6 +54,7 @@ const BACKUP_JOB_STATES = new Set([
 
 import { parseServerDeletionIntent, parseServerDeletionResult, type ServerDeletionIntent } from "../../../../supabase/functions/_shared/server-deletion-contract";
 import { isPermittedOriginScheme } from "../control-plane/loopback-origin";
+import { fetchMyServersEdge } from "../control-plane/transport";
 
 export async function requestMyServerDeletion(accessToken: string, intent: ServerDeletionIntent) {
     const { requestId, ...input } = parseServerDeletionIntent(intent);
@@ -452,7 +453,7 @@ export async function requestMyServersApi(
 
     let response: Response;
     try {
-        response = await fetch(endpoint, {
+        response = await fetchMyServersEdge(endpoint, {
             method: request.method,
             headers: {
                 accept: "application/json",
