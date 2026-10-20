@@ -49,5 +49,6 @@
   "section.console": "控制台",
   "section.settings": "设置",
   "section.backups": "备份",
-  "section.saveConfig": "存档与配置"
+  "section.saveConfig": "存档与配置",
+  "section.mods": "模组"
 }

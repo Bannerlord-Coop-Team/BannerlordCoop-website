@@ -9,6 +9,8 @@ import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, require
 import { MAXIMUM_CAMPAIGN_LIMIT, parseCampaignMutation, parseCampaignPage, parseCampaignResetResult, parseCampaignSelection } from "./server-campaign-contract.ts";
 import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
 import { hasExactKeys, isRecord } from "./dto-validation.ts";
+import { errorResponse, isControlPlaneEnvelope, readBoundedText, RequestTooLargeError, type ControlPlaneEnvelope } from "./edge-http.ts";
+import { createModsForwarder, isModsEdgeRequest } from "./my-servers-mods.ts";
 
 const MAXIMUM_URL_LENGTH = 4_096;
 const MAXIMUM_REQUEST_BYTES = 16 * 1_024;
@@ -20,7 +22,6 @@ const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const SERVER_OPERATIONS = new Set(["start", "stop", "restart-game"]);
-const SAFE_ERROR_CODE = /^[a-z][a-z0-9_-]{0,63}$/u;
 const SAFE_STATUS_VALUE = /^[a-z][a-z0-9-]{0,63}$/u;
 
 import { parseServerDeletionInput, parseServerDeletionResult, type ServerDeletionInput } from "./server-deletion-contract.ts";
@@ -31,6 +32,9 @@ export type MyServersHandlerOptions = {
     controlPlaneUrl: string;
     fetchImplementation?: typeof fetch;
     upstreamTimeoutMilliseconds?: number;
+    // Custom-mods routes wait longer than other operations: about 120 s for a chunk relay, 90 s for JSON routes.
+    modsJsonTimeoutMilliseconds?: number;
+    modsChunkTimeoutMilliseconds?: number;
     // Keeps optional alert work alive after returning the durable receipt.
     waitUntil: (task: Promise<void>) => void;
     // Invoked after the backend durably accepts a new region request; failures never alter the receipt.
@@ -90,6 +94,12 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
     );
     const fetchImplementation = options.fetchImplementation ?? fetch;
     const upstreamTimeoutMilliseconds = boundedTimeout(options.upstreamTimeoutMilliseconds ?? 30_000);
+    const forwardMods = createModsForwarder({
+        controlPlaneOrigin: controlPlaneEndpoint.origin,
+        fetchImplementation,
+        jsonTimeoutMilliseconds: options.modsJsonTimeoutMilliseconds,
+        chunkTimeoutMilliseconds: options.modsChunkTimeoutMilliseconds,
+    });
 
     // Sends one request to a control-plane route with the caller's bearer and request ID, never following redirects.
     function sendUpstream(endpoint: URL, token: string, requestId: string, upstream: { method?: "GET" | "POST"; body?: string; accept?: string; signal?: AbortSignal }) {
@@ -146,6 +156,10 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
         }
         if (request.url.length > MAXIMUM_URL_LENGTH) {
             return errorResponse(414, requestId, "request_too_large", "The request URL is too large.", false, cors);
+        }
+        // Mods routes have their own allowlist, body bounds and deadlines, including the only binary PUT.
+        if (isModsEdgeRequest(request)) {
+            return forwardMods(request, { token, headerRequestId: request.headers.get("x-request-id"), cors });
         }
 
         let upstreamRequest: UpstreamRequest;
@@ -670,66 +684,13 @@ function bearerToken(header: string | null) {
 
 function corsHeaders(origin: string) {
     return {
-        "access-control-allow-headers": "authorization, apikey, content-type, x-client-info, x-request-id",
-        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "authorization, apikey, content-type, x-chunk-sha256, x-client-info, x-request-id",
+        "access-control-allow-methods": "GET, POST, PUT, OPTIONS",
         "access-control-allow-origin": origin,
         "access-control-expose-headers": "x-request-id, content-disposition, content-length",
         "access-control-max-age": "600",
         vary: "Origin",
     };
-}
-
-function errorResponse(
-    status: number,
-    requestId: string,
-    code: string,
-    message: string,
-    retryable: boolean,
-    headers: Record<string, string> = {},
-) {
-    return Response.json(
-        { version: 1, requestId, ok: false, error: { code, message, retryable } },
-        {
-            status,
-            headers: {
-                ...headers,
-                "cache-control": "private, no-store",
-                "x-request-id": requestId,
-            },
-        },
-    );
-}
-
-async function readBoundedText(
-    source: { headers: Headers; body: ReadableStream<Uint8Array> | null },
-    maximumBytes: number,
-) {
-    const declaredLength = source.headers.get("content-length");
-    if (
-        declaredLength !== null
-        && (!/^(?:0|[1-9][0-9]*)$/u.test(declaredLength) || Number(declaredLength) > maximumBytes)
-    ) throw new RequestTooLargeError();
-    if (source.body === null) return "";
-    const reader = source.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        total += value.byteLength;
-        if (total > maximumBytes) {
-            await reader.cancel();
-            throw new RequestTooLargeError();
-        }
-        chunks.push(value);
-    }
-    const bytes = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-        bytes.set(chunk, offset);
-        offset += chunk.byteLength;
-    }
-    return new TextDecoder().decode(bytes);
 }
 
 // Direct routes have no public operation ID; keep the Edge envelope for website callers.
@@ -783,29 +744,6 @@ function configurationEnvelope(value: unknown, requestId: string, status: number
     return normalized;
 }
 
-/** A correlated control-plane envelope: a result on success, a safe error otherwise. */
-type ControlPlaneEnvelope = { version: 1; requestId: string } & ({ ok: true; result: unknown } | { ok: false; error: Record<string, unknown> });
-
-/** Whether a value is a well-formed envelope for this request ID with a safe error shape. */
-function isControlPlaneEnvelope(value: unknown, requestId: string): value is ControlPlaneEnvelope {
-    if (!isRecord(value) || value.version !== 1 || value.requestId !== requestId || typeof value.ok !== "boolean") {
-        return false;
-    }
-    if (value.ok) return hasExactKeys(value, ["ok", "requestId", "result", "version"]);
-    if (!hasExactKeys(value, ["error", "ok", "requestId", "version"]) || !isRecord(value.error)
-        || !hasExactKeys(value.error, value.error.operationId === undefined
-            ? ["code", "message", "retryable"] : ["code", "message", "operationId", "retryable"])) return false;
-    if (value.error.operationId !== undefined
-        && (typeof value.error.operationId !== "string" || !REQUEST_ID.test(value.error.operationId))) return false;
-    return typeof value.error.code === "string"
-        && SAFE_ERROR_CODE.test(value.error.code)
-        && typeof value.error.message === "string"
-        && value.error.message.length >= 1
-        && value.error.message.length <= 512
-        && !/[\p{Cc}\p{Cf}]/u.test(value.error.message)
-        && typeof value.error.retryable === "boolean";
-}
-
 /** Serializes one versioned operation envelope for the control plane's user endpoint. */
 function operationBody(requestId: string, request: { operation: string; input: unknown }) {
     return JSON.stringify({ version: 1, requestId, operation: request.operation, input: request.input });
@@ -818,6 +756,5 @@ function checkedEnvelope(value: unknown, requestId: string, httpOk: boolean): Co
     return value;
 }
 
-class RequestTooLargeError extends Error {}
 class ContentTypeError extends Error {}
 class MethodNotAllowedError extends Error {}

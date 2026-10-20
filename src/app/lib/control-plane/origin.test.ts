@@ -29,6 +29,19 @@ test("invalid overrides fail closed", () => {
     }
 });
 
+test("loopback HTTP is accepted only under next dev; non-loopback HTTP never", () => {
+    assert.equal(controlPlaneOrigin("http://127.0.0.1:8796", "development"), "http://127.0.0.1:8796");
+    assert.equal(controlPlaneOrigin("http://localhost:8796/", "development"), "http://localhost:8796");
+    assert.equal(controlPlaneOrigin("http://[::1]:8796", "development"), "http://[::1]:8796");
+    for (const nodeEnv of ["production", "test", undefined]) {
+        assert.throws(() => controlPlaneOrigin("http://127.0.0.1:8796", nodeEnv), ControlPlaneOriginError, String(nodeEnv));
+    }
+    for (const value of ["http://control-plane.example.com", "http://192.168.1.10:8796", "http://localhost.:8796",
+        "http://127.0.0.1:8796/v1", "http://user@127.0.0.1:8796", "http://127.0.0.1:8796/?x=1"]) {
+        assert.throws(() => controlPlaneOrigin(value, "development"), ControlPlaneOriginError, value);
+    }
+});
+
 test("the public loader uses the override and sends no request when it is invalid", async () => {
     const original = process.env.CONTROL_PLANE_ORIGIN;
     try {

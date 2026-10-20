@@ -53,6 +53,8 @@ const BACKUP_JOB_STATES = new Set([
 ]);
 
 import { parseServerDeletionIntent, parseServerDeletionResult, type ServerDeletionIntent } from "../../../../supabase/functions/_shared/server-deletion-contract";
+import { isPermittedOriginScheme } from "../control-plane/loopback-origin";
+import { fetchMyServersEdge } from "../control-plane/transport";
 
 export async function requestMyServerDeletion(accessToken: string, intent: ServerDeletionIntent) {
     const { requestId, ...input } = parseServerDeletionIntent(intent);
@@ -426,13 +428,19 @@ async function requestMyServerBackups(
     });
 }
 
+/**
+ * Sends one owner request to the my-servers Edge Function and reads its envelope. JSON bodies are strings;
+ * only a mod upload chunk sends raw bytes (with its digest), and only mods routes wait longer than 30 s.
+ */
 export async function requestMyServersApi(
     accessToken: string,
     request: {
-        method: "GET" | "POST";
-        body?: string;
+        method: "GET" | "POST" | "PUT";
+        body?: string | Uint8Array<ArrayBuffer>;
+        chunkSha256?: string;
         requestId?: string;
         maximumResponseBytes?: number;
+        timeoutMilliseconds?: number;
         signal?: AbortSignal;
         configureEndpoint?: (endpoint: URL) => void;
     },
@@ -440,23 +448,24 @@ export async function requestMyServersApi(
     const { endpoint, publishableKey } = myServersEndpoint();
     request.configureEndpoint?.(endpoint);
     const requestId = request.requestId ?? crypto.randomUUID();
+    const timeout = AbortSignal.timeout(request.timeoutMilliseconds ?? 30_000);
+    const contentType = request.body === undefined ? null : typeof request.body === "string" ? "application/json" : "application/octet-stream";
 
     let response: Response;
     try {
-        response = await fetch(endpoint, {
+        response = await fetchMyServersEdge(endpoint, {
             method: request.method,
             headers: {
                 accept: "application/json",
                 apikey: publishableKey,
                 authorization: `Bearer ${accessToken}`,
-                ...(request.body === undefined ? {} : { "content-type": "application/json" }),
+                ...(contentType === null ? {} : { "content-type": contentType }),
+                ...(request.chunkSha256 === undefined ? {} : { "x-chunk-sha256": request.chunkSha256 }),
                 "x-request-id": requestId,
             },
             ...(request.body === undefined ? {} : { body: request.body }),
             cache: "no-store",
-            signal: request.signal
-                ? AbortSignal.any([request.signal, AbortSignal.timeout(30_000)])
-                : AbortSignal.timeout(30_000),
+            signal: request.signal ? AbortSignal.any([request.signal, timeout]) : timeout,
         });
     } catch {
         throw new MyServersApiError(
@@ -515,18 +524,19 @@ export async function readMyServersResponse(
 }
 
 // Resolves the configured endpoint with optional website presentation, preserving URL/security checks.
+// HTTPS only, except loopback HTTP under `next dev` (the local Supabase stack); `nodeEnv` is injectable for tests.
 export function myServersEndpoint(messages = {
     notConfigured: "The managed-server API is not configured.",
     invalidUrl: "The Supabase URL is invalid.",
     invalidKey: "The Supabase publishable key is invalid.",
-}) {
+}, nodeEnv: string | undefined = process.env.NODE_ENV) {
     const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
     const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
     if (!rawUrl || !publishableKey) {
         throw new MyServersApiError("server_api_not_configured", messages.notConfigured);
     }
     const endpoint = new URL(rawUrl);
-    if (endpoint.protocol !== "https:" || endpoint.pathname !== "/" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
+    if (!isPermittedOriginScheme(endpoint, nodeEnv) || endpoint.pathname !== "/" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
         throw new MyServersApiError("server_api_not_configured", messages.invalidUrl);
     }
     if (publishableKey.length < 20 || publishableKey.length > 4_096) {

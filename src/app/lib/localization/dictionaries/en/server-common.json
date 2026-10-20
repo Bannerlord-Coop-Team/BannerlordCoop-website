@@ -49,5 +49,6 @@
   "section.console": "Console",
   "section.settings": "Settings",
   "section.backups": "Backups",
-  "section.saveConfig": "Save & config"
+  "section.saveConfig": "Save & config",
+  "section.mods": "Mods"
 }

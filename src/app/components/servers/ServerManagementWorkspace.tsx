@@ -4,7 +4,7 @@ import { useTranslations } from "@/app/lib/localization/client";
 
 import { createContext, useContext, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, Eye, EyeOff, FileJson, Play, RotateCw, Search, Settings2, Square, Terminal } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronDown, ChevronRight, Copy, Database, Eye, EyeOff, FileJson, Play, Puzzle, RotateCw, Search, Settings2, Square, Terminal } from "lucide-react";
 
 import commandsData from "@/app/cheats/commands.json";
 import { isPublishedCheat } from "@/app/cheats/debugOnly";
@@ -17,6 +17,7 @@ const sections = [
     { name: "Console", label: "section.console", icon: Terminal },
     { name: "Backups", label: "section.backups", icon: Database },
     { name: "Save & config", label: "section.saveConfig", icon: FileJson },
+    { name: "Mods", label: "section.mods", icon: Puzzle },
     { name: "Settings", label: "section.settings", icon: Settings2 },
 ] as const;
 type Section = ServerWorkspaceSection;
@@ -27,11 +28,16 @@ const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-m
 
 // Keeps inactive panels mounted while following the current section identity.
 export function ServerWorkspacePanel({ section, children }: { section: Section; children: ReactNode }) {
+    const shown = useServerWorkspaceSectionShown(section);
+    // Preserve console connections, pending operations and transfer drafts across tabs.
+    return <div hidden={!shown} className="space-y-5">{children}</div>;
+}
+
+/** Whether a workspace section is the one currently shown, so a panel can defer loading until it is opened. */
+export function useServerWorkspaceSectionShown(section: Section) {
     const { current, initial } = useContext(WorkspaceContext);
     // Streamed panels must first match their server HTML, even if the hash already changed tabs.
-    const visibleSection = useSyncExternalStore(subscribe, () => current, () => initial);
-    // Preserve console connections, pending operations and transfer drafts across tabs.
-    return <div hidden={visibleSection !== section} className="space-y-5">{children}</div>;
+    return useSyncExternalStore(subscribe, () => current, () => initial) === section;
 }
 
 /** Reveals the join address when a live start has been confirmed. */
@@ -193,6 +199,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
             if (target === "#server-visibility") setSection("Settings");
             if (target === "#server-backups") setSection("Backups");
             if (target === "#server-files") setSection("Save & config");
+            if (target === "#server-mods") setSection("Mods");
             if (target === "#server-lifecycle") setSection("Console");
         }
         followTab();
@@ -253,7 +260,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
                 </div>
                 {status && <div className="mt-4">{status}</div>}
             </header>
-            <nav aria-label={t("managementWorkspace.serverWorkspace")} className="mb-4 grid grid-cols-4 border-b border-white/10 sm:flex sm:gap-1">
+            <nav aria-label={t("managementWorkspace.serverWorkspace")} className="mb-4 grid grid-cols-5 border-b border-white/10 sm:flex sm:gap-1">
                 {sections.map(({ name: label, label: messageKey, icon: Icon }) => <button key={label} disabled={interactionLocked && label !== "Console"} aria-current={activeSection === label ? "page" : undefined} onClick={() => selectSection(label)} className={`inline-flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border-b-2 px-1 py-2 text-xs sm:min-h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 ${activeSection === label ? "border-gold text-gold" : "border-transparent text-foreground-muted hover:text-foreground"}`}><Icon className="size-4" aria-hidden="true" />{t(messageKey)}</button>)}
             </nav>
             <div className="space-y-5">{children}</div>

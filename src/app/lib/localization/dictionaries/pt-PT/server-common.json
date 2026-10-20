@@ -49,5 +49,6 @@
   "section.console": "Consola",
   "section.settings": "Definições",
   "section.backups": "Cópias de segurança",
-  "section.saveConfig": "Jogo guardado e configuração"
+  "section.saveConfig": "Jogo guardado e configuração",
+  "section.mods": "Mods"
 }

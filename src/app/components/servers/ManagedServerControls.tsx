@@ -12,6 +12,7 @@ import {
 import { operateManagedServer, readManagedServerStartStatus, setManagedServerPassword } from "@/app/servers/managed-server-actions";
 import { useRouter } from "next/navigation";
 import type { ManagedStartStatus } from "@/app/lib/hosting/my-servers-server";
+import { modLoadFailureMessage } from "./server-mods-messages";
 import { Check, Download, LoaderCircle, Play, RotateCw, Square } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -39,7 +40,7 @@ const RESTART_WATCH_MILLISECONDS = 5 * 60_000;
 /** An unconfirmed request is checked for at least this long before the observed state is reported. */
 const VERIFY_WINDOW_MILLISECONDS = 20_000;
 
-type StartProgressStatus = Pick<ManagedStartStatus, "state" | "phase" | "progress">;
+type StartProgressStatus = Pick<ManagedStartStatus, "state" | "phase" | "progress" | "modLoadFailure">;
 
 type Operation = "start" | "stop" | "restart-game" | "update-now";
 
@@ -525,7 +526,8 @@ function StartProgress({ status, paused }: { status: StartProgressStatus | null;
         labels={labels}
         current={phases.indexOf(status?.phase ?? "queued")}
         outcome={outcome}
-        footer={failed ? [status.progress, t("controls.youCanPressActionToTryAgain", { action: t("controls.start") })].filter(Boolean).join(" ")
+        footer={failed && status.modLoadFailure ? modLoadFailureMessage(status.modLoadFailure, t)
+            : failed ? [status.progress, t("controls.youCanPressActionToTryAgain", { action: t("controls.start") })].filter(Boolean).join(" ")
             : status?.state === "retry-wait" ? t("controls.waitingToRetrySafelyProgress", { progress: status.progress })
                 : status?.state === "succeeded" ? <>{status.progress ?? t("controls.yourServerIsReadyToJoin")} <span className="mt-1 block">{t("controls.connectWithIpAddress")}</span></>
                     : status?.progress ?? t("controls.waitingForTheHostingServiceToAcceptYourRequest")}

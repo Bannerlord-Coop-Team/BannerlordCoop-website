@@ -5,6 +5,7 @@ export const SERVER_WORKSPACE_TABS = {
     console: "Console",
     backups: "Backups",
     "save-config": "Save & config",
+    mods: "Mods",
     settings: "Settings",
 } as const;
 

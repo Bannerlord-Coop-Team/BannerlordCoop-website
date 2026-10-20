@@ -1,6 +1,8 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import type { Translator } from "@/app/lib/localization/types";
+import { modLoadFailureMessage } from "@/app/components/servers/server-mods-messages";
 
 import {
     getMyServerBackupStatus,
@@ -71,6 +73,13 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         if (code === "container_command_failed" && error instanceof MyServersApiError) {
             return { ok: false, message: error.message };
         }
+        // A diagnosed mod-load failure or an open crash breaker is terminal for this Start; retrying would not help.
+        if (parsed.action === "start" && code === "mod_load_failed" && error instanceof MyServersApiError) {
+            return { ok: false, message: await startModLoadFailureMessage(accessToken, parsed.serverId, error, t) };
+        }
+        if (parsed.action === "start" && code === "crash_loop_cooldown" && error instanceof MyServersApiError) {
+            return { ok: false, message: error.message };
+        }
         if (parsed.action === "start" && code === "operation_timeout"
             && error instanceof MyServersApiError && error.operationId !== undefined) {
             return { ok: true, operationId: error.operationId, message: t("action.actions.startAcceptedFollowingYourServerSProgress") };
@@ -98,6 +107,16 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         if (parsed.action === "stop") return { ok: false, checkStatus: true, message: t("controls.checkingWhetherYourServerHasStopped") };
         return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThatYourOperationRequestWentThrough", { operation: operationLabel(parsed.action, t) }) };
     }
+}
+
+/**
+ * Names the mod a failed Start could not load, from its recorded diagnosis when the Start status still has it;
+ * otherwise uses the control plane's own owner copy from the refusal.
+ */
+async function startModLoadFailureMessage(accessToken: string, serverId: string, error: MyServersApiError, t: Translator["t"]) {
+    if (error.operationId === undefined) return error.message;
+    const status = await getMyServerStartStatus(accessToken, serverId, error.operationId).catch(() => null);
+    return status?.modLoadFailure ? modLoadFailureMessage(status.modLoadFailure, t) : error.message;
 }
 
 // Validates the existing lifecycle request without changing accepted inputs.

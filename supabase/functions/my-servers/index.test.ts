@@ -14,7 +14,8 @@ test("allows only configured browser origins", async () => {
     }));
     assert.equal(allowed.status, 204);
     assert.equal(allowed.headers.get("access-control-allow-origin"), ORIGIN);
-    assert.equal(allowed.headers.get("access-control-allow-methods"), "GET, POST, OPTIONS");
+    assert.equal(allowed.headers.get("access-control-allow-methods"), "GET, POST, PUT, OPTIONS");
+    assert.match(allowed.headers.get("access-control-allow-headers") ?? "", /x-chunk-sha256/);
 
     const denied = await handler(new Request("https://function.example.test", {
         method: "OPTIONS",

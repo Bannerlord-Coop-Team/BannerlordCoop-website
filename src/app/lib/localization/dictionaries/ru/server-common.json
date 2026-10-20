@@ -49,5 +49,6 @@
   "section.console": "Консоль",
   "section.settings": "Настройки",
   "section.backups": "Резервные копии",
-  "section.saveConfig": "Сохранение и настройки"
+  "section.saveConfig": "Сохранение и настройки",
+  "section.mods": "Моды"
 }

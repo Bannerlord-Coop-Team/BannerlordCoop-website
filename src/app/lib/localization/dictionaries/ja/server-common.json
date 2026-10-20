@@ -49,5 +49,6 @@
   "section.console": "コンソール",
   "section.settings": "設定",
   "section.backups": "バックアップ",
-  "section.saveConfig": "セーブデータと設定"
+  "section.saveConfig": "セーブデータと設定",
+  "section.mods": "MOD"
 }

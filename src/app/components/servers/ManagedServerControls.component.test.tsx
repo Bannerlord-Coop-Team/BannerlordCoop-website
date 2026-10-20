@@ -291,6 +291,43 @@ it.each(["failed", "cancelled"])("stops following a %s Start without claiming re
     } finally { await act(async () => root.unmount()); }
 });
 
+it("names the mod a failed Start could not load, from its recorded diagnosis", async () => {
+    vi.useFakeTimers();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockResolvedValue({ ...progress("starting", "failed", "Mod OffTheClock failed to load."),
+        modLoadFailure: { modId: "OffTheClock.RichMerchants", reason: "missing-assembly", assembly: "TaleWorlds.CampaignSystem.ViewModelCollection" } });
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="stopped" {...progressProps} />} </TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        expect(container.textContent).toContain("Server could not start");
+        expect(container.textContent).toContain("Mod OffTheClock.RichMerchants failed to load (missing assembly TaleWorlds.CampaignSystem.ViewModelCollection). Disable it in Mods and start again.");
+        expect(container.textContent).not.toContain("You can press Start to try again.");
+    } finally { await act(async () => root.unmount()); }
+});
+
+it.each([
+    ["mod_load_failed", { modId: "Broken.Mod", reason: "missing-dll" }, "Mod Broken.Mod failed to load (a DLL its SubModule.xml lists is missing). Disable it in Mods and start again."],
+    ["mod_load_failed", null, "A custom mod failed to load. Disable recently enabled mods and start again."],
+    ["crash_loop_cooldown", null, "The server crashed repeatedly while starting, so Start is paused for about 25 minutes. Changing its enabled mods ends the pause now."],
+])("shows a terminal %s Start refusal without following status", async (code, diagnosis, message) => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    beginPolling.mockClear();
+    const ownerCopy = code === "crash_loop_cooldown" ? message : "A custom mod failed to load. Disable recently enabled mods and start again.";
+    request.mockReset().mockRejectedValue(new MyServersApiError(code, ownerCopy, false, progressJobId));
+    startStatus.mockReset().mockResolvedValue({ ...progress("starting", "failed", ownerCopy), ...(diagnosis ? { modLoadFailure: diagnosis } : {}) });
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="stopped" {...progressProps} />} </TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        expect(container.textContent).toContain(message);
+        expect(beginPolling).not.toHaveBeenCalled();
+        expect(startStatus).toHaveBeenCalledTimes(code === "mod_load_failed" ? 1 : 0);
+        expect(container.querySelector("button")!.disabled).toBe(false);
+    } finally { await act(async () => root.unmount()); }
+});
+
 it("reconnects progress reads, shows retry wait, and resumes the same job after the bounded watch", async () => {
     vi.useFakeTimers();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });

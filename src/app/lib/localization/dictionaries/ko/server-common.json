@@ -49,5 +49,6 @@
   "section.console": "콘솔",
   "section.settings": "설정",
   "section.backups": "백업",
-  "section.saveConfig": "저장 파일 및 설정"
+  "section.saveConfig": "저장 파일 및 설정",
+  "section.mods": "모드"
 }

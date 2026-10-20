@@ -247,6 +247,26 @@ it("reads only the exact accepted Start afresh and propagates access revocation"
     expect(fetch).toHaveBeenCalledTimes(2);
 });
 
+it("accepts a failed Start's mod-load diagnosis only in its closed shape", async () => {
+    const failed = { ...startStatus, state: "failed", progress: "Mod Broken.Mod failed to load. Disable it and start again." };
+    for (const modLoadFailure of [{ modId: "Broken.Mod", reason: "load-error" }, { modId: "Broken.Mod", reason: "missing-dll" },
+        { modId: "Broken.Mod", reason: "missing-assembly", assembly: "TaleWorlds.CampaignSystem.ViewModelCollection" }]) {
+        vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...failed, modLoadFailure }));
+        expect(await getMyServerStartStatus(TOKEN, server.serverId, startJobId)).toEqual({ ...failed, modLoadFailure });
+    }
+    for (const result of [
+        { ...startStatus, modLoadFailure: { modId: "Broken.Mod", reason: "load-error" } },
+        { ...failed, modLoadFailure: { modId: "Broken.Mod", reason: "missing-assembly" } },
+        { ...failed, modLoadFailure: { modId: "Broken.Mod", reason: "load-error", assembly: "X" } },
+        { ...failed, modLoadFailure: { modId: "../etc", reason: "load-error" } },
+        { ...failed, modLoadFailure: { modId: "Broken.Mod", reason: "unknown" } },
+        { ...failed, modLoadFailure: null },
+    ]) {
+        vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
+        await expect(getMyServerStartStatus(TOKEN, server.serverId, startJobId)).rejects.toMatchObject({ code: "invalid_response" });
+    }
+});
+
 it.each([
     { ...startStatus, serverId: startJobId }, { ...startStatus, jobId: server.serverId },
     { ...startStatus, phase: "ready" }, { ...startStatus, state: "succeeded" },

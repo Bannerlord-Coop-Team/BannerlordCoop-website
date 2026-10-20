@@ -8,6 +8,7 @@ import { HOSTING_MAINTENANCE_SLOTS, type MaintenanceSlot } from "../../../../sup
 import { controlPlaneEndpoint } from "@/app/lib/control-plane/origin";
 import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse, type MyServerDeletionStatus } from "./my-servers";
 import { onboardingSummaryRequest, parseOnboardingSummary, type OnboardingSummaryRequest } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { isModId } from "../../../../supabase/functions/_shared/server-mods-contract";
 import { SERVER_MOVE_STATES, SERVER_MOVE_STEPS } from "./server-move";
 import { isJoinAddress } from "./connection-address";
 
@@ -78,13 +79,28 @@ export async function getMyServerDeletionStatus(accessToken: string, serverId: s
     return value as MyServerDeletionStatus;
 }
 
+/** The control plane's diagnosis of a Start that failed because an enabled mod did not load. */
+export type ModLoadFailure = { modId: string; reason: "missing-assembly" | "load-error" | "missing-dll"; assembly?: string };
+
 export type ManagedStartStatus = {
     serverId: string;
     jobId: string;
     state: "queued" | "running" | "retry-wait" | "succeeded" | "failed" | "cancelled";
     phase: "queued" | "preparing" | "starting" | "verifying" | "ready";
     progress: string;
+    /** Only on a failed Start whose enabled mod did not load; `progress` then holds the control plane's English copy. */
+    modLoadFailure?: ModLoadFailure;
 };
+
+const START_STATUS_KEYS = ["serverId", "jobId", "state", "phase", "progress"];
+const ASSEMBLY_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/u;
+
+/** Whether a value is the closed mod-load diagnosis: an assembly name exactly when the reason is a missing assembly. */
+function isModLoadFailure(value: unknown): value is ModLoadFailure {
+    if (!isRecord(value) || !isModId(value.modId)) return false;
+    if (value.reason === "missing-assembly") return hasExactKeys(value, ["modId", "reason", "assembly"]) && typeof value.assembly === "string" && ASSEMBLY_NAME.test(value.assembly);
+    return (value.reason === "load-error" || value.reason === "missing-dll") && hasExactKeys(value, ["modId", "reason"]);
+}
 
 /** Reads one accepted Start without dispatching another operation. */
 export async function getMyServerStartStatus(accessToken: string, serverId: string, jobId: string): Promise<ManagedStartStatus> {
@@ -94,7 +110,9 @@ export async function getMyServerStartStatus(accessToken: string, serverId: stri
         ownerReadSignal(accessToken, AbortSignal.timeout(10_000)));
     if (!result || typeof result !== "object" || Array.isArray(result)) throw new MyServersApiError("invalid_response", "Invalid Start status.");
     const value = result as Record<string, unknown>;
-    if (Object.keys(value).length !== 5 || !["serverId", "jobId", "state", "phase", "progress"].every(key => Object.hasOwn(value, key))
+    const diagnosed = Object.hasOwn(value, "modLoadFailure");
+    if (!hasExactKeys(value, diagnosed ? [...START_STATUS_KEYS, "modLoadFailure"] : START_STATUS_KEYS)
+        || (diagnosed && (value.state !== "failed" || !isModLoadFailure(value.modLoadFailure)))
         || value.serverId !== serverId || value.jobId !== jobId
         || !["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"].includes(value.state as string)
         || !["queued", "preparing", "starting", "verifying", "ready"].includes(value.phase as string)
