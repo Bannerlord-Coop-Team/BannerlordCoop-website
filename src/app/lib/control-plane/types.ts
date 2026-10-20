@@ -425,8 +425,8 @@ export type HostingPlacementOverlapOccupant = {
     hoursWithData: number;
 };
 
-/** One VPS with more than one slot, measured over the window from its current occupants' samples. */
-export type HostingPlacementOverlapHost = {
+/** What both shapes of the measured overlap report for one VPS with more than one slot. */
+type HostingPlacementOverlapHostMeasure = {
     serviceName: string;
     regionKeys: string[];
     vCpu: number;
@@ -435,15 +435,42 @@ export type HostingPlacementOverlapHost = {
     occupants: HostingPlacementOverlapOccupant[];
     /** 168 hours, oldest first: the sum of the occupants' online fractions, or null when none has data. */
     online: (number | null)[];
-    /** 168 characters, oldest first: `1` full and all busy, `0` full and measured but not all busy, `-` unknown or not full. */
-    allBusy: string;
-    allBusyHours: number;
     measuredPairHours: number;
     /** Share of the hours in which every occupant has data, 0 to 1. */
     coverage: number;
 };
 
-/** The `placement-overlap` read: how the current placement was online together, hour by hour, over the last week. */
+/**
+ * One VPS with more than one slot, measured over the window from its current occupants' samples, with how many
+ * of its servers can each burst to 2 vCPU and 3 GiB at once.
+ */
+export type HostingPlacementOverlapBurstHost = HostingPlacementOverlapHostMeasure & {
+    /** The VPS's RAM, or null when the runner's could not be read. */
+    memoryBytes: number | null;
+    /** min(floor(vCpu / 2), floor(memoryBytes / 3 GiB)), or floor(vCpu / 2) when memoryBytes is null. */
+    burstServers: number;
+    /**
+     * 168 characters, oldest first: `1` more servers online at least half the hour than burstServers, `-` unknown
+     * because servers without data could make it more, `0` otherwise. A VPS with no more servers than
+     * burstServers is all `0`.
+     */
+    overBurst: string;
+    overBurstHours: number;
+};
+
+/** One VPS as a control plane that predates burst capacity (98d1f12a) reports it, with its all-busy verdict. */
+export type HostingPlacementOverlapLegacyHost = HostingPlacementOverlapHostMeasure & {
+    /** 168 characters, oldest first: `1` full and all busy, `0` full and measured but not all busy, `-` unknown or not full. */
+    allBusy: string;
+    allBusyHours: number;
+};
+
+export type HostingPlacementOverlapHost = HostingPlacementOverlapBurstHost | HostingPlacementOverlapLegacyHost;
+
+/**
+ * The `placement-overlap` read: how the current placement was online together, hour by hour, over the last week.
+ * Its hosts are all of one shape, burst capacity or legacy, never a mix.
+ */
 export type HostingAdminPlacementOverlap = {
     generatedAt: string;
     /** The window is [windowStartedAt, windowEndedAt): 168 whole UTC hours ending at the current hour boundary. */

@@ -476,32 +476,80 @@ The tab's first pane, **Host overlap** ("Measured over the last 7 days"), sends
 same `control-plane-admin` Edge Function as `placement-executor`. That function
 forwards any administrator's operation to the control plane without an
 allowlist, so no Edge Function change is needed. It needs control plane #517 or
-later, which must be deployed first; an older control plane rejects the unknown
-operation as `invalid_request`, and the pane then says the control plane does not
-report measured overlap yet. The read is kept while the tab stays open and is not
+later; an older control plane rejects the unknown operation as
+`invalid_request`, and the pane then says the control plane does not report
+measured overlap yet. The read is kept while the tab stays open and is not
 polled: **Refresh** reads it again (one read at a time), and the control plane
 allows each administrator six reads per five minutes (`rate_limited`, with retry
 text). While it loads the pane says so; a failed read shows its message with
 **Retry**, keeps any overlap it already showed and never affects the rest of the
-tab. The response is parsed strictly: exact keys, `hours` 168, a window of exactly
-168 hours whose bounds fall on whole UTC hours, millisecond UTC times, 168
-`online` entries that are null or finite and non-negative, `allBusy` matching
-`^[01-]{168}$` with `allBusyHours` its count of `1`, `hoursWithData` 0–168, and
-finite measured pair-hours and coverage (0–1). It also checks what the control
-plane's definitions allow between fields: no more occupants than slots, each
-server on one VPS only, no hour with more online than occupants, a `0` or `1` only
-for a full VPS (at least one occupant and as many as slots) in an hour with data,
-and a `1` only when `online` is at least half the number of occupants (every one
-of them was online at least half the hour). Online counts
-are rounded to two decimals, so those bounds allow 0.01. It does not check slots
-against vCPUs: the control plane owns slot capacity. Anything else is shown as an
-unexpected response.
+tab.
+
+#### Burst capacity
+
+A server averages about 1.2 vCPU and 1.5 GB of RAM, so sharing a VPS only hurts
+when servers that are online together cannot burst. Each server needs room to
+burst to 2 vCPU and 3 GiB, and a VPS has room for `burstServers` of them at once:
+`min(floor(vCpu / 2), floor(memoryBytes / 3 GiB))`, or `floor(vCpu / 2)` when the
+runner's RAM could not be read. An hour is red when more of a VPS's servers were
+online than that, because if they all burst at the same time they would be
+throttled. Per hour, with *k* the occupants with data that were online at least
+half the hour and *u* the occupants without data, `overBurst` is `1` when *k* is
+more than `burstServers`, `-` when *k* is not but *k* + *u* is, and `0`
+otherwise; a VPS with no more occupants than `burstServers` is all `0`, and
+`overBurstHours` counts the `1` hours.
+
+Today every VPS's `burstServers` equals its slots (4 vCPU and 7.58 GiB give 2,
+6 vCPU and 11.41 GiB give 3), so no VPS can be red. Red appears once a VPS holds
+more servers than its burst capacity, such as the planned four on 6 vCPU.
+
+#### Response shapes
+
+The response is parsed strictly, in one of two shapes, and every host in a
+response has the same one; a mix is an unexpected response. Both shapes need
+exact keys, `hours` 168, a window of exactly 168 hours whose bounds fall on whole
+UTC hours, millisecond UTC times, 168 `online` entries that are null or finite
+and non-negative, `hoursWithData` 0–168, finite measured pair-hours and coverage
+(0–1), no more occupants than slots, each server on one VPS only and no hour with
+more online than occupants. Online counts are rounded to two decimals, so the
+online bounds allow 0.01. The parser does not check slots against vCPUs: the
+control plane owns slot capacity.
+
+- **Burst capacity**, from control plane `ao/placement-burst-overlap` on. Each
+  host has, in order, `serviceName`, `regionKeys`, `vCpu`, `memoryBytes`,
+  `slots`, `burstServers`, `occupants`, `online`, `overBurst`, `overBurstHours`,
+  `measuredPairHours` and `coverage`. `memoryBytes` is null or a positive safe
+  integer. `burstServers` is a non-negative integer no more than
+  `floor(vCpu / 2)` and, when `memoryBytes` is not null, no more than
+  `floor(memoryBytes / 3 GiB)`. `overBurst` matches `^[01-]{168}$` and
+  `overBurstHours` is its count of `1`. A VPS with no more occupants than
+  `burstServers` must be all `0`. On any other VPS a `0` or `1` hour needs data
+  (`online` not null), and a `1` hour needs `online` of at least half of one more
+  than `burstServers`, less 0.01, because each of those servers was online at
+  least half the hour.
+- **Legacy**, from control plane #517 (`98d1f12a`) before burst capacity, kept so
+  that a control-plane rollback still renders. Each host has `allBusy` and
+  `allBusyHours` in place of `memoryBytes`, `burstServers`, `overBurst` and
+  `overBurstHours`. `allBusy` matches `^[01-]{168}$` with `allBusyHours` its
+  count of `1`; a `0` or `1` is only for a VPS with as many occupants as slots in
+  an hour with data, and a `1` needs `online` of at least half the number of
+  occupants, less 0.01. The pane does not draw this verdict.
+
+Deploy this website change first, then control plane
+`ao/placement-burst-overlap`. The website renders the legacy response the
+current control plane sends and the burst-capacity one as soon as the control
+plane updates; the other order would show the new response as unexpected until
+the website caught up.
+
+#### What the pane shows
 
 Every VPS with more than one slot is listed, empty ones too, grouped by region
 (alphabetical, hosts without a region last). Each row shows the service name
 without `.vps.ovh.net` (the full name in its title), its slots and current servers
-(or **Empty**), a 168-cell strip and, on the right, "N h all busy" (or **Not full**
-while a slot is free), the measured pair-hours and the coverage ("71% measured").
+(or **Empty**), a 168-cell strip and, on the right, "N h over burst" for a VPS
+with more occupants than `burstServers` (**Bursts fit** for any other), the
+measured pair-hours, the coverage ("71% measured") and the burst capacity
+("3 × 2 vCPU · 3 GiB at once", with "(RAM unknown)" when `memoryBytes` is null).
 The strip is the window's real hours, oldest first, under a day axis of UTC dates.
 A window that starts mid-day begins and ends with part of a day, and every date
 segment gets a label that fits it: "Mon 12 Oct" from 14 hours, "12 Oct" from 8, the
@@ -509,11 +557,22 @@ day of the month ("12") from 3, and no visible text for a one- or two-hour slive
 Each segment's title gives its full date.
 Each cell is shaded by `online` over slots on the heatmap's ten bands, and an hour
 with no data (`online` null) is hatched, never the shade of an hour with nobody
-online. Under a full VPS a thin row marks the `1` hours of `allBusy` in crimson,
-shows `0` hours as a faint measured cell and hatches `-` hours (a server without
-data). Each cell's title gives its date and hour, the online count and the
-all-busy state, and each strip has a text summary (slots filled, all-busy hours or
-"not full", the busiest hour and the coverage, or "empty"). A footer reads
+online. Only under a VPS with more occupants than `burstServers`, the only kind
+that can be red, a thin row marks the `1` hours of `overBurst` in red, shows `0`
+hours as a faint measured cell and hatches `-` hours (servers without data could
+have put it over). Each cell's title gives its date and hour, the online count and
+how many can burst together ("Wed 14 Oct 20:00 UTC · 4 online; 3 can burst
+together"), adding "over burst capacity" on a red hour. Each strip has a text
+summary (slots filled, how many can burst together, the hours over burst or
+"bursts fit", the busiest hour and the coverage, or "empty"). After its shading
+and no-data keys the legend adds "Red: more servers online than can each burst
+to 2 vCPU and 3 GiB".
+
+A legacy response is shaded the same way but has no red row, no red legend
+entry, no "over burst" or "Bursts fit" and no burst capacity; the legend keeps
+its shading and no-data keys, and the pane's opening sentence leaves out the
+hours over burst. The pane notes "This control plane predates burst capacity;
+red hours appear after it updates." A footer reads
 "Measured *start*–*end* UTC · generated *time*".
 
 ### Dry run

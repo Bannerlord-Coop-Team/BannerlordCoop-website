@@ -129,9 +129,9 @@ const data: PlacementViewData = {
 const measuredOverlap = {
     generatedAt: "2026-10-19T00:07:31.552Z", windowStartedAt: "2026-10-12T00:00:00.000Z", windowEndedAt: "2026-10-19T00:00:00.000Z", hours: 168,
     hosts: [{
-        serviceName: "vps-uk-a", regionKeys: ["united-kingdom"], vCpu: 4, slots: 2,
+        serviceName: "vps-uk-a", regionKeys: ["united-kingdom"], vCpu: 4, memoryBytes: 8_138_963_026, slots: 2, burstServers: 2,
         occupants: [{ serverId: "gang", displayName: "The Gang", hoursWithData: 168 }, { serverId: "knights", displayName: "Calradian Knights", hoursWithData: 168 }],
-        online: Array.from({ length: 168 }, () => 0.5), allBusy: "0".repeat(168), allBusyHours: 0, measuredPairHours: 0, coverage: 1,
+        online: Array.from({ length: 168 }, () => 0.5), overBurst: "0".repeat(168), overBurstHours: 0, measuredPairHours: 0, coverage: 1,
     }],
 };
 
