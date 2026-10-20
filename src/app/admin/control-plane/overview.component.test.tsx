@@ -157,6 +157,23 @@ it("keeps Operations usable when the stored hosting-region catalog cannot be rea
 });
 
 
+it("registers Capacity after Placement and leaves the rate-limited capacity read to the browser", async () => {
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "capacity" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    const tabs = [...html.matchAll(/<a [^>]*href="\/admin\/control-plane\?view=([a-z]+)"[^>]*>/gu)];
+    expect(tabs.map(([, view]) => view)).toEqual(["overview", "vps", "servers", "jobs", "releases", "audit", "operations", "relocate", "placement", "capacity", "notices"]);
+    expect(tabs.find(([, view]) => view === "capacity")![0]).toContain('aria-current="page"');
+    expect(html).toMatch(/view=capacity"[^>]*>(?:<svg[^]*?<\/svg>)?\s*(?:<!-- -->)?\s*Capacity<\/a>/u);
+    expect(html).toContain("Fleet capacity");
+    expect(html).toContain("Loading fleet capacity…");
+    expect(html).not.toContain("The control plane view could not be loaded");
+    // The control plane authorizes the page through a small read, as for every other view.
+    expect(mocks.request.mock.calls.map(([request]) => [request.operation, request.input])).toEqual([["hosting-regions", {}]]);
+    expect(mocks.auth).not.toHaveBeenCalled();
+    expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
 it("withholds the page and account directory until Oracle confirms fresh identity and authority", async () => {
     const gate = Promise.withResolvers<void>();
     mocks.request.mockImplementation(async request => {
@@ -196,7 +213,7 @@ it("consumes early read failures and preserves the ordinary error UI after authe
 });
 
 
-it.each(["overview", "servers", "server", "vps", "jobs", "releases", "audit", "operations"])("cancels every %s request on failed viewer validation and starts only read operations", async view => {
+it.each(["overview", "servers", "server", "vps", "jobs", "releases", "audit", "operations", "capacity"])("cancels every %s request on failed viewer validation and starts only read operations", async view => {
     mocks.request.mockRejectedValue(new Error("Oracle did not confirm authority"));
     mocks.auth.mockRejectedValue(new Error("session context unavailable"));
     await expect(ControlPlaneAdminPage({ searchParams: Promise.resolve({ view, serverId: "test-server" }) })).rejects.toThrow("session context unavailable");

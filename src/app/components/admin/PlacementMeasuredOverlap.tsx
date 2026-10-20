@@ -1,7 +1,7 @@
 "use client";
 
 import { LoaderCircle, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Empty, SectionHeading } from "@/app/components/admin/ControlPlanePresentation";
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
@@ -27,13 +27,11 @@ import { shortServiceName } from "@/app/lib/control-plane/placement-live-moves";
 import type { HostingAdminPlacementOverlap, HostingPlacementOverlapHost } from "@/app/lib/control-plane/types";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { MetricHint } from "./MetricHint";
-import { HEATMAP_CLASSES } from "./placement-heatmap-classes";
+import { HEATMAP_CLASSES, HEATMAP_NO_DATA as NO_DATA } from "./placement-heatmap-classes";
 
 const buttonClass = "inline-flex min-h-9 items-center gap-1.5 border border-white/15 px-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40";
 // Name and servers, the week (168 quarter-rem hours with a hairline between UTC days), and the totals.
 const ROW_GRID = "grid grid-cols-[13rem_43rem_11rem] items-start gap-x-5";
-/** An hour without data is hatched, so it never reads as an hour in which nobody was online. */
-const NO_DATA: CSSProperties = { backgroundImage: "repeating-linear-gradient(135deg, rgb(255 255 255 / 0.22) 0 1px, transparent 1px 3px)" };
 
 async function readOverlap(signal: AbortSignal): Promise<HostingAdminPlacementOverlap> {
     const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
