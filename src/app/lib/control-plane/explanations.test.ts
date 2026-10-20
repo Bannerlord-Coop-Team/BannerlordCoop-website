@@ -30,6 +30,12 @@ test("explains reconciliation and VPS assignment boundaries", () => {
     assert.match(operationExplanation("onboard-manual-vps-host"), /never orders/iu);
     assert.match(operationExplanation("update-vps-runner"), /every isolated slot/iu);
     assert.match(operationExplanation("update-vps-runner"), /no browser-supplied ssh/iu);
+    assert.match(operationExplanation("raise-vps-slot-capacity"), /never lowering it/iu);
+    assert.match(operationExplanation("raise-vps-slot-capacity"), /reserves no cores/iu);
+    assert.match(operationExplanation("raise-vps-slot-capacity"), /HOSTING_DYNAMIC_SLOT_CAPACITY/u);
+    assert.match(auditActionExplanation("hosting.admin.ovhcloud_vps_slot_capacity_raised"), /raised a VPS's slot capacity/u);
+    assert.equal(auditActionExplanation("hosting.admin.manual_vps_slot_capacity_raised"),
+        auditActionExplanation("hosting.admin.ovhcloud_vps_slot_capacity_raised"));
 });
 
 test("gives destructive cards a concrete warning", () => {

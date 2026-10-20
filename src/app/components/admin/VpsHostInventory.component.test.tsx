@@ -7,6 +7,11 @@ import { diskPressureLevel, VpsHostInventory } from "./VpsHostInventory";
 vi.mock("@/app/components/admin/RunnerOnboardingStatus", () => ({
     RunnerOnboardingStatus: ({ compact }: { compact?: boolean }) => <button type="button">{compact ? "Runner current" : "Runner details"}</button>,
 }));
+vi.mock("@/app/components/admin/VpsSlotCapacityRaise", () => ({
+    VpsSlotCapacityRaise: ({ host, onRefresh }: { host: { name: string; totalSlots: number }; onRefresh?: () => void }) => (
+        <form aria-label={`Raise the slot capacity of ${host.name}`} data-total-slots={host.totalSlots} data-refresh={onRefresh ? "parent" : "router"} />
+    ),
+}));
 
 const ACCOUNT_ID = "44444444-4444-4444-8444-444444444444";
 
@@ -63,6 +68,9 @@ describe("compact VPS host inventory", () => {
         const firstToggle = container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-a"]')!;
         await act(async () => firstToggle.click());
         expect(firstToggle.getAttribute("aria-expanded")).toBe("true");
+        // The slot capacity raise sits in the open host's details only.
+        expect([...container.querySelectorAll("form")].map((form) => form.getAttribute("aria-label")))
+            .toEqual(["Raise the slot capacity of host-a"]);
         expect(container.textContent).toContain("Slot 1 · UDP 4200");
         expect(container.textContent).toContain("owner@example.com");
         expect(container.textContent).toContain("Player / Server");
