@@ -123,7 +123,28 @@ function hint(name: string, label: string) {
     return { trigger, tooltip: document.getElementById(trigger.getAttribute("aria-describedby")!)! };
 }
 
-const COVERAGE_HINT = "Share of the last 168 hours in which every server now on this VPS had at least one counted check, wherever it ran then. "
+/** A pointer event; jsdom has no PointerEvent, so it is a mouse event carrying the pointer's type. */
+function pointer(target: EventTarget, type: string, pointerType: "mouse" | "touch", init: MouseEventInit = {}) {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, ...init });
+    Object.defineProperty(event, "pointerType", { value: pointerType });
+    target.dispatchEvent(event);
+}
+
+/** A tap: Android focuses the tapped button between the press and the click, iOS Safari does not. */
+async function tap(target: HTMLElement, { focuses }: { focuses: boolean }) {
+    await act(async () => {
+        pointer(target, "pointerdown", "touch");
+        if (focuses && document.activeElement !== target) target.focus();
+        target.click();
+    });
+}
+
+/** The hints showing anywhere on the page. */
+function shownHints() {
+    return [...document.querySelectorAll<HTMLElement>('[role="tooltip"]')].filter((tooltip) => !tooltip.hidden);
+}
+
+const COVERAGE_HINT = "Share of the last 168 hours in which every server now on this VPS had at least one counted check, wherever it ran then; a VPS with no servers shows 0%. "
     + "The control plane checks each server about every 5 minutes: running counts as online; stopped, awaiting save or failed as offline; "
     + "drifted or degraded is not counted. A server's online share in an hour is its running checks over its counted ones. A server with no "
     + "counted check in an hour (it didn't exist yet, or its checks were skipped while another job ran on it) is unknown there, not offline; "
@@ -261,18 +282,75 @@ it.each([
     expect(tooltip.hidden).toBe(true);
     await act(async () => trigger.blur());
 
-    await act(async () => { trigger.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); });
+    await act(async () => pointer(trigger, "pointerover", "mouse"));
     expect(tooltip.hidden).toBe(false);
-    await act(async () => { trigger.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body })); });
+    await act(async () => pointer(trigger, "pointerout", "mouse", { relatedTarget: document.body }));
     expect(tooltip.hidden).toBe(true);
 
     // A tap shows it too, and scrolling the page closes it rather than leaving it behind.
-    await act(async () => trigger.click());
+    await tap(trigger, { focuses: false });
     expect(tooltip.hidden).toBe(false);
     await act(async () => { window.dispatchEvent(new Event("scroll")); });
     expect(tooltip.hidden).toBe(true);
     // Every row has its own, so each figure is described by its own hint.
     expect(hint("vps-de-fit", "100% measured").tooltip).not.toBe(hint("vps-uk-half", "100% measured").tooltip);
+});
+
+it("says on an empty VPS's coverage that a VPS with no servers shows 0%", async () => {
+    await open();
+    const { tooltip } = hint("vps-spare", "0% measured");
+    expect(tooltip.textContent).toBe(COVERAGE_HINT);
+    expect(tooltip.textContent).toContain("a VPS with no servers shows 0%");
+});
+
+it("shows one hint at a time: hovering a figure closes the hint a focused one opened", async () => {
+    await open();
+    const focused = hint("vps-1a2b3c4d", "71% measured");
+    const hovered = hint("vps-de-fit", "40.0 pair-h measured");
+    await act(async () => focused.trigger.focus());
+    expect(shownHints()).toEqual([focused.tooltip]);
+    await act(async () => pointer(hovered.trigger, "pointerover", "mouse"));
+    expect(shownHints()).toEqual([hovered.tooltip]);
+    // Focusing another figure moves the one open hint again.
+    const next = hint("vps-uk-half", "100% measured");
+    await act(async () => next.trigger.focus());
+    expect(shownHints()).toEqual([next.tooltip]);
+});
+
+it("closes an open hint when the window resizes, since its position would be stale", async () => {
+    await open();
+    const { trigger, tooltip } = hint("vps-1a2b3c4d", "71% measured");
+    await act(async () => trigger.focus());
+    expect(tooltip.hidden).toBe(false);
+    await act(async () => { window.dispatchEvent(new Event("resize")); });
+    expect(tooltip.hidden).toBe(true);
+});
+
+it.each([
+    ["focuses the button (Android)", true],
+    ["leaves focus alone (iOS Safari)", false],
+] as const)("closes a tapped hint on a second tap when a tap %s", async (_case, focuses) => {
+    await open();
+    const { trigger, tooltip } = hint("vps-1a2b3c4d", "7.5 pair-h measured");
+    await tap(trigger, { focuses });
+    expect(tooltip.hidden).toBe(false);
+    await tap(trigger, { focuses });
+    expect(tooltip.hidden).toBe(true);
+    await tap(trigger, { focuses });
+    expect(tooltip.hidden).toBe(false);
+});
+
+it("closes a tapped hint when a tap lands anywhere outside it", async () => {
+    await open();
+    const { trigger, tooltip } = hint("vps-1a2b3c4d", "71% measured");
+    // No focus and no pointer leaving, as on iOS Safari: only the outside press can close it.
+    await tap(trigger, { focuses: false });
+    expect(tooltip.hidden).toBe(false);
+    await act(async () => pointer(row("vps-de-fit"), "pointerdown", "touch"));
+    expect(tooltip.hidden).toBe(true);
+    await tap(trigger, { focuses: false });
+    await act(async () => pointer(document.body, "pointerdown", "touch"));
+    expect(tooltip.hidden).toBe(true);
 });
 
 it("shades an older control plane's read without red hours, and says why", async () => {

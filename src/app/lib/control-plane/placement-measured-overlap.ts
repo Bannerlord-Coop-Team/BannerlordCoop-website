@@ -271,7 +271,7 @@ export function overlapBurstLabel(host: HostingPlacementOverlapHost) {
 
 /** What the coverage figure measures, in the control plane's terms: its reconcile checks and the states they count. */
 export const OVERLAP_COVERAGE_HINT = "Share of the last 168 hours in which every server now on this VPS had at least one counted check, "
-    + "wherever it ran then. The control plane checks each server about every 5 minutes: running counts as online; stopped, "
+    + "wherever it ran then; a VPS with no servers shows 0%. The control plane checks each server about every 5 minutes: running counts as online; stopped, "
     + "awaiting save or failed as offline; drifted or degraded is not counted. A server's online share in an hour is its running "
     + "checks over its counted ones. A server with no counted check in an hour (it didn't exist yet, or its checks were skipped "
     + "while another job ran on it) is unknown there, not offline; an hour with no data from any of them is hatched.";

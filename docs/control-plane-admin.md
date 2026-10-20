@@ -553,15 +553,22 @@ a VPS with more occupants than `burstServers` (**Bursts fit** for any other), th
 measured pair-hours ("7.5 pair-h measured") and the coverage ("71% measured").
 The burst capacity itself is not shown.
 
-The pair-hours and coverage figures are buttons, each described by a tooltip
-(`role="tooltip"`, linked with `aria-describedby`, so a screen reader announces
-it with the figure). The tooltip shows on hover, on keyboard focus and on a tap,
-hides on Escape and when the pointer or focus leaves, and closes when the page or
-the strips scroll. It is fixed to the window, right-aligned with its figure,
-below it or above it near the window's foot, so the strips' scroll box never
-clips it. The coverage tooltip says what is measured: the share of the 168 hours
-in which every current server had at least one counted check, wherever it ran
-then; the control plane's check about every five minutes (`running` online;
+The pair-hours and coverage figures are `MetricHint` buttons
+(`src/app/components/admin/MetricHint.tsx`, shared with other admin views), each
+described by a tooltip (`role="tooltip"`, linked with `aria-describedby`, so a
+screen reader announces it with the figure). A tooltip opens when a mouse hovers
+the figure (a tap's emulated hover does not count), when the figure takes
+keyboard focus, and on a tap. It closes when the mouse leaves, focus leaves,
+Escape is pressed, the figure is tapped again (or activated again with Enter or
+Space), anything outside the figure is pressed, or the window or the strips
+scroll or the window resizes. Only one tooltip is open on the page at a time:
+opening one, by hover, focus or tap, closes any other. It is fixed to the window,
+right-aligned with its figure, below it or above it near the window's foot, so
+the strips' scroll box never clips it. The coverage tooltip says what is
+measured: the share of the 168 hours in which every current server had at least
+one counted check, wherever it ran then, with 0% for a VPS with no servers (the
+control plane reports `coverage` 0 for an empty VPS); the control plane's check
+about every five minutes (`running` online;
 `stopped`, `awaiting-save` or `failed` offline; `drifted` or `degraded` not
 counted); a server's online share in an hour as its running checks over its
 counted ones; and an hour without a counted check as unknown, not offline, with
