@@ -15,7 +15,7 @@ const SOURCE_COMMIT = /^[a-f\d]{40}$/u;
 const REFUSAL_MESSAGES: Record<string, string> = {
     vps_slot_capacity_disabled: "Raising a slot capacity is switched off on the control plane (HOSTING_DYNAMIC_SLOT_CAPACITY).",
     vps_slot_capacity_unavailable: "The control plane is not in live VPS mode, so no slot capacity can be raised.",
-    vps_slot_capacity_provider_invalid: "This VPS's provider is not enabled on the control plane. Refresh the VPS list and try again.",
+    vps_slot_capacity_provider_invalid: "This VPS's provider is not enabled on the control plane. Enable it in the control plane's configuration before raising this VPS's slot capacity.",
     vps_slot_capacity_host_key_invalid: "The control plane has no registered VPS by this name. Refresh the VPS list; it may have been removed.",
     vps_slot_capacity_runner_scope_active: "A temporary runner update scope pauses commissioning. Clear it before raising a slot capacity.",
     vps_slot_capacity_source_unavailable: "The control plane could not resolve its runner revision. Try again shortly.",

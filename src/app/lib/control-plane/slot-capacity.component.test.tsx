@@ -89,8 +89,9 @@ describe("the slot capacity form", () => {
         expect(slotCapacityErrorMessage(new ControlPlaneAdminError("vps_slot_capacity_shrink", "raw"))).toMatch(/never lowered/u);
         expect(slotCapacityErrorMessage(new ControlPlaneAdminError("vps_slot_capacity_runner_not_current", "raw")))
             .toMatch(/current runner revision/u);
-        // A host or provider the control plane no longer knows asks for a fresh VPS list.
-        expect(slotCapacityErrorMessage(new ControlPlaneAdminError("vps_slot_capacity_provider_invalid", "raw"))).toMatch(/provider is not enabled.*Refresh the VPS list/u);
+        // A disabled provider needs the control plane configured; a host it no longer knows needs a fresh VPS list.
+        expect(slotCapacityErrorMessage(new ControlPlaneAdminError("vps_slot_capacity_provider_invalid", "raw")))
+            .toMatch(/provider is not enabled.*Enable it in the control plane's configuration/u);
         expect(slotCapacityErrorMessage(new ControlPlaneAdminError("vps_slot_capacity_host_key_invalid", "raw"))).toMatch(/no registered VPS by this name.*Refresh the VPS list/u);
         // An older control plane rejects the unknown operation; the administrator is told it needs a newer one.
         expect(slotCapacityErrorMessage(new ControlPlaneAdminError("unsupported_operation", "raw"))).toMatch(/cannot raise a slot capacity yet/u);
