@@ -37,7 +37,7 @@ export function errorResponse(
 export async function readBoundedBytes(
     source: { headers: Headers; body: ReadableStream<Uint8Array> | null },
     maximumBytes: number,
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
     const declaredLength = source.headers.get("content-length");
     if (
         declaredLength !== null

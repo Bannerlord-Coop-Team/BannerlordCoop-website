@@ -92,7 +92,7 @@ export function createModsForwarder(options: ModsForwarderOptions) {
         if (request.method !== "PUT") return errorResponse(405, requestId, "method_not_allowed", "Mod chunks accept only PUT.", false, context.cors);
         let target: { uploadId: string; index: number };
         let digest: string;
-        let bytes: Uint8Array;
+        let bytes: Uint8Array<ArrayBuffer>;
         try {
             const query = exactQuery(new URL(request.url), ["resource", "uploadId", "index"]);
             target = parseModChunkQuery(query.uploadId, query.index);
@@ -128,7 +128,7 @@ export function createModsForwarder(options: ModsForwarderOptions) {
 
 type RelayRequest = {
     endpoint: URL;
-    init: { method: "POST" | "PUT"; headers: Record<string, string>; body: string | Uint8Array };
+    init: { method: "POST" | "PUT"; headers: Record<string, string>; body: string | Uint8Array<ArrayBuffer> };
     token: string;
     requestId: string;
     timeoutMilliseconds: number;

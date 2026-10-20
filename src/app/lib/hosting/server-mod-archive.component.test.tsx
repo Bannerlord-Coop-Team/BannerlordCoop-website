@@ -1,10 +1,8 @@
-import assert from "node:assert/strict";
-import test from "node:test";
 import { unzipSync } from "fflate";
-import { JSDOM } from "jsdom";
+import { expect, it as test } from "vitest";
 import { buildModArchive, compress, ModArchiveError, zipEntrySizes, type ModArchiveProblem, type ModFolderFile } from "./server-mod-archive";
 
-const parseXml = (text: string) => new new JSDOM().window.DOMParser().parseFromString(text, "application/xml");
+// Runs under jsdom so SubModule.xml is parsed with the browser's DOMParser, as in production.
 const MIB = 1_048_576;
 
 /** Builds a SubModule.xml body; pass `null` to omit a field. */
@@ -23,7 +21,7 @@ function folder(entries: Record<string, string | Uint8Array>, sizes: Record<stri
 
 /** Asserts that building rejects with this problem. */
 async function rejects(files: ModFolderFile[], problem: ModArchiveProblem) {
-    await assert.rejects(buildModArchive(files, { parseXml }), (error: unknown) => error instanceof ModArchiveError && error.problem === problem, problem);
+    await expect(buildModArchive(files)).rejects.toMatchObject({ name: "ModArchiveError", problem });
 }
 
 test("zips the picked folder under its SubModule.xml Id with the manifest the upload declares", async () => {
@@ -32,22 +30,22 @@ test("zips the picked folder under its SubModule.xml Id with the manifest the up
         "ButterLib-v2.9.18/bin/Win64_Shipping_Client/Bannerlord.ButterLib.dll": new Uint8Array([1, 2, 3]),
         "ButterLib-v2.9.18/ModuleData/Languages/ru/strings.xml": "<strings/>",
     });
-    const archive = await buildModArchive(files, { parseXml });
-    assert.deepEqual(archive.manifest, { id: "Bannerlord.ButterLib", name: "Butter Lib", version: "v2.9.18" });
-    assert.equal(archive.fileCount, 3);
+    const archive = await buildModArchive(files);
+    expect(archive.manifest).toEqual({ id: "Bannerlord.ButterLib", name: "Butter Lib", version: "v2.9.18" });
+    expect(archive.fileCount).toBe(3);
     const entries = unzipSync(archive.bytes);
-    assert.deepEqual(Object.keys(entries).sort(), [
+    expect(Object.keys(entries).sort()).toEqual([
         "Bannerlord.ButterLib/ModuleData/Languages/ru/strings.xml",
         "Bannerlord.ButterLib/SubModule.xml",
         "Bannerlord.ButterLib/bin/Win64_Shipping_Client/Bannerlord.ButterLib.dll",
     ]);
-    assert.deepEqual([...entries["Bannerlord.ButterLib/bin/Win64_Shipping_Client/Bannerlord.ButterLib.dll"]], [1, 2, 3]);
+    expect([...entries["Bannerlord.ButterLib/bin/Win64_Shipping_Client/Bannerlord.ButterLib.dll"]]).toEqual([1, 2, 3]);
     const again = await buildModArchive(folder({
         "ButterLib-v2.9.18/ModuleData/Languages/ru/strings.xml": "<strings/>",
         "ButterLib-v2.9.18/bin/Win64_Shipping_Client/Bannerlord.ButterLib.dll": new Uint8Array([1, 2, 3]),
         "ButterLib-v2.9.18/SubModule.xml": submodule(),
-    }), { parseXml });
-    assert.deepEqual(again.bytes, archive.bytes, "the same folder yields the same archive");
+    }));
+    expect(again.bytes, "the same folder yields the same archive").toEqual(archive.bytes);
 });
 
 test("requires exactly one picked module folder with SubModule.xml at its top level", async () => {
@@ -79,8 +77,8 @@ test("reads Id, Name and Version with the runner's rules", async () => {
     for (const [xml, problem] of cases) await rejects(folder({ "ButterLib/SubModule.xml": xml }), problem);
     const invalidUtf8 = folder({ "ButterLib/SubModule.xml": new Uint8Array([0x3c, 0xff, 0xfe]) });
     await rejects(invalidUtf8, "submodule-invalid");
-    const community = await buildModArchive(folder({ "ButterLib/SubModule.xml": submodule({ extra: '<ModuleType value="Community"/><Official value="false"/>' }) }), { parseXml });
-    assert.equal(community.manifest.id, "Bannerlord.ButterLib");
+    const community = await buildModArchive(folder({ "ButterLib/SubModule.xml": submodule({ extra: '<ModuleType value="Community"/><Official value="false"/>' }) }));
+    expect(community.manifest.id).toBe("Bannerlord.ButterLib");
 });
 
 test("enforces path, count and size bounds before reading file contents", async () => {
@@ -101,9 +99,10 @@ test("stores large entries that would exceed the compression ratio and refuses a
     const zeros = new Uint8Array(2 * MIB);
     const stored = zipEntrySizes(compress({ "SomeMod/SubModule.xml": new TextEncoder().encode("<Module/>"), "SomeMod/zeros.bin": zeros }));
     const entry = stored.find(item => item.name === "SomeMod/zeros.bin")!;
-    assert.equal(entry.uncompressed, 2 * MIB);
-    assert.equal(entry.compressed, 2 * MIB, "stored rather than deflated past 100:1");
+    expect(entry.uncompressed).toBe(2 * MIB);
+    expect(entry.compressed, "stored rather than deflated past 100:1").toBe(2 * MIB);
     const bomb: Record<string, Uint8Array> = {};
     for (let index = 0; index < 17; index += 1) bomb[`SomeMod/part${index}.bin`] = new Uint8Array(MIB);
-    assert.throws(() => compress(bomb), (error: unknown) => error instanceof ModArchiveError && error.problem === "compression-ratio");
+    expect(() => compress(bomb)).toThrow(ModArchiveError);
+    expect(() => compress(bomb)).toThrow("compression-ratio");
 });

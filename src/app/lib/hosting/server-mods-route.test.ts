@@ -58,7 +58,7 @@ function jsonRequest(route: string, body: unknown, headers: Record<string, strin
 }
 
 /** A same-origin chunk PUT. */
-function chunkRequest(bytes: Uint8Array, query = `uploadId=${UPLOAD_ID}&index=0`, headers: Record<string, string> = {}) {
+function chunkRequest(bytes: Uint8Array<ArrayBuffer>, query = `uploadId=${UPLOAD_ID}&index=0`, headers: Record<string, string> = {}) {
     return [new Request(`${SITE}/api/servers/${SERVER_ID}/mods/chunk?${query}`, {
         method: "PUT", headers: { "content-type": "application/octet-stream", origin: SITE, "x-chunk-sha256": "e".repeat(64), ...headers }, body: bytes,
     }), { params: Promise.resolve({ serverId: SERVER_ID }) }] as const;

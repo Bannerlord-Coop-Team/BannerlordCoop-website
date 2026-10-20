@@ -79,7 +79,7 @@ export function createServerModChunkHandler(dependencies: ServerModsRouteDepende
         if (request.headers.get("content-type")?.toLowerCase().split(";")[0]?.trim() !== "application/octet-stream") return failure("invalid_content_type", false);
         let bytes: Uint8Array<ArrayBuffer>;
         try {
-            bytes = await readBoundedBytes(request, MOD_UPLOAD_CHUNK_BYTES) as Uint8Array<ArrayBuffer>;
+            bytes = await readBoundedBytes(request, MOD_UPLOAD_CHUNK_BYTES);
         } catch (error) {
             return failure(error instanceof RequestTooLargeError ? "request_too_large" : "invalid_request", false);
         }
