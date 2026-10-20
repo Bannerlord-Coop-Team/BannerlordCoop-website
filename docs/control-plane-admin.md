@@ -556,13 +556,19 @@ The burst capacity itself is not shown.
 The pair-hours and coverage figures are `MetricHint` buttons
 (`src/app/components/admin/MetricHint.tsx`, shared with other admin views), each
 described by a tooltip (`role="tooltip"`, linked with `aria-describedby`, so a
-screen reader announces it with the figure). A tooltip opens when a mouse hovers
-the figure (a tap's emulated hover does not count), when the figure takes
-keyboard focus, and on a tap. It closes when the mouse leaves, focus leaves,
-Escape is pressed, the figure is tapped again (or activated again with Enter or
-Space), anything outside the figure is pressed, or the window or the strips
-scroll or the window resizes. Only one tooltip is open on the page at a time:
-opening one, by hover, focus or tap, closes any other. It is fixed to the window,
+screen reader announces it with the figure). A tooltip opens when a mouse or pen
+hovers the figure (a finger does not hover, and a tap's emulated hover does not
+count), when the figure takes keyboard focus, and on a tap. It closes when the
+mouse or pen leaves, focus leaves, Escape is pressed (wherever focus is, through
+one capture-phase `keydown` listener held only while a tooltip is open), the
+figure is tapped again, anything outside the figure is pressed, or the window or
+the strips scroll or the window resizes. Enter or Space toggles it by its own
+state and never by an earlier pointer press; a press that never becomes a click
+(a right-click, a cancelled touch, a press dragged off before release, or one
+whose figure lost focus) is forgotten, so it cannot sway a later activation. A
+finger leaving the figure between its release and its click still counts as a
+tap. Only one tooltip is open on the page at a time: opening one, by hover, focus
+or tap, closes any other. It is fixed to the window,
 right-aligned with its figure, below it or above it near the window's foot, so
 the strips' scroll box never clips it. The coverage tooltip says what is
 measured: the share of the 168 hours in which every current server had at least

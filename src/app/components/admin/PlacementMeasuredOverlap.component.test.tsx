@@ -130,12 +130,17 @@ function pointer(target: EventTarget, type: string, pointerType: "mouse" | "touc
     target.dispatchEvent(event);
 }
 
-/** A tap: Android focuses the tapped button between the press and the click, iOS Safari does not. */
+/**
+ * A tap as a browser sends it: press, focus (Android focuses the tapped button, iOS Safari does not), release,
+ * the finger leaving, then a click that counts one press (`detail` 1).
+ */
 async function tap(target: HTMLElement, { focuses }: { focuses: boolean }) {
     await act(async () => {
         pointer(target, "pointerdown", "touch");
         if (focuses && document.activeElement !== target) target.focus();
-        target.click();
+        pointer(target, "pointerup", "touch");
+        pointer(target, "pointerout", "touch", { relatedTarget: document.body });
+        target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
     });
 }
 
