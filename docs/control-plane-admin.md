@@ -484,18 +484,29 @@ allows each administrator six reads per five minutes (`rate_limited`, with retry
 text). While it loads the pane says so; a failed read shows its message with
 **Retry**, keeps any overlap it already showed and never affects the rest of the
 tab. The response is parsed strictly: exact keys, `hours` 168, a window of exactly
-168 hours, millisecond UTC times, 168 `online` entries that are null or finite and
-non-negative, `allBusy` matching `^[01-]{168}$` with `allBusyHours` its count of
-`1`, and finite measured pair-hours and coverage (0–1); anything else is shown as
-an unexpected response.
+168 hours whose bounds fall on whole UTC hours, millisecond UTC times, 168
+`online` entries that are null or finite and non-negative, `allBusy` matching
+`^[01-]{168}$` with `allBusyHours` its count of `1`, `hoursWithData` 0–168, and
+finite measured pair-hours and coverage (0–1). It also checks what the control
+plane's definitions allow between fields: no more occupants than slots, each
+server on one VPS only, no hour with more online than occupants, a `0` or `1` only
+for a full VPS (at least one occupant and as many as slots) in an hour with data,
+and a `1` only when `online` is at least half the number of occupants (every one
+of them was online at least half the hour). Online counts
+are rounded to two decimals, so those bounds allow 0.01. It does not check slots
+against vCPUs: the control plane owns slot capacity. Anything else is shown as an
+unexpected response.
 
 Every VPS with more than one slot is listed, empty ones too, grouped by region
 (alphabetical, hosts without a region last). Each row shows the service name
 without `.vps.ovh.net` (the full name in its title), its slots and current servers
 (or **Empty**), a 168-cell strip and, on the right, "N h all busy" (or **Not full**
 while a slot is free), the measured pair-hours and the coverage ("71% measured").
-The strip is the window's real hours, oldest first, under a day axis of UTC dates
-("Mon 12 Oct"); a window that starts mid-day begins and ends with part of a day.
+The strip is the window's real hours, oldest first, under a day axis of UTC dates.
+A window that starts mid-day begins and ends with part of a day, and every date
+segment gets a label that fits it: "Mon 12 Oct" from 14 hours, "12 Oct" from 8, the
+day of the month ("12") from 3, and no visible text for a one- or two-hour sliver.
+Each segment's title gives its full date.
 Each cell is shaded by `online` over slots on the heatmap's ten bands, and an hour
 with no data (`online` null) is hatched, never the shade of an hour with nobody
 online. Under a full VPS a thin row marks the `1` hours of `allBusy` in crimson,

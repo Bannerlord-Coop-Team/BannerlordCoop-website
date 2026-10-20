@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { ControlPlaneAdminError } from "./client";
 import {
     overlapBand,
+    overlapDayAxisLabel,
     overlapDays,
     overlapGroups,
     overlapHourLabel,
@@ -36,6 +37,11 @@ const overlap = {
 it("accepts the measured overlap exactly as the contract describes it", () => {
     expect(parsePlacementOverlap(overlap)).toBe(overlap);
     expect(parsePlacementOverlap({ ...overlap, hosts: [] })).not.toBeNull();
+    // Rounded to two decimals, a full hour reads up to 0.01 over and an all-busy one up to 0.01 under its bound.
+    const rounded = { ...host, online: week((hour) => hour < 2 ? null : hour % 24 === 20 ? 0.99 : hour === 100 ? 2.01 : 0.25) };
+    expect(parsePlacementOverlap({ ...overlap, hosts: [rounded] })).not.toBeNull();
+    // A full VPS may still have unknown hours, and a VPS with a free slot has data but no verdict.
+    expect(parsePlacementOverlap({ ...overlap, hosts: [{ ...host, slots: 3, allBusy: "-".repeat(168), allBusyHours: 0 }] })).not.toBeNull();
 });
 
 it.each([
@@ -60,6 +66,17 @@ it.each([
     ["a region key that is not text", { ...overlap, hosts: [{ ...host, regionKeys: [7] }] }],
     ["an extra occupant key", { ...overlap, hosts: [{ ...host, occupants: [{ ...host.occupants[0]!, ownerId: "x" }] }] }],
     ["an occupant with more than 168 hours of data", { ...overlap, hosts: [{ ...host, occupants: [{ ...host.occupants[0]!, hoursWithData: 169 }] }] }],
+    ["an occupant with negative hours of data", { ...overlap, hosts: [{ ...host, occupants: [{ ...host.occupants[0]!, hoursWithData: -1 }] }] }],
+    // What the control plane's definitions rule out between fields.
+    ["more servers than slots", { ...overlap, hosts: [{ ...host, occupants: [...host.occupants, { ...host.occupants[0]!, serverId: "44444444-4444-4444-8444-444444444444" }] }] }],
+    ["one server on two VPSs", { ...overlap, hosts: [host, { ...host, serviceName: "vps-other", occupants: [host.occupants[1]!, { ...host.occupants[0]!, serverId: "55555555-5555-4555-8555-555555555555" }] }] }],
+    ["more online than servers", { ...overlap, hosts: [{ ...host, online: week((hour) => hour === 100 ? 2.02 : 0.25) }] }],
+    ["an all-busy verdict on a VPS with a free slot", { ...overlap, hosts: [{ ...host, slots: 3 }] }],
+    ["an all-busy verdict on an empty VPS", { ...overlap, hosts: [{ ...host, occupants: [], online: week(() => null), allBusy: `0${"-".repeat(167)}`, allBusyHours: 0, coverage: 0 }] }],
+    ["an all-busy verdict in an hour without data", { ...overlap, hosts: [{ ...host, online: week((hour) => hour === 100 ? null : hour < 2 ? null : hour % 24 === 20 ? 2 : 0.25) }] }],
+    ["an all-busy hour with a server under half online", { ...overlap, hosts: [{ ...host, online: week((hour) => hour < 2 ? null : hour % 24 === 20 ? 0.98 : 0.25) }] }],
+    ["a window that starts on the half hour", { ...overlap, windowStartedAt: "2026-10-12T00:30:00.000Z", windowEndedAt: "2026-10-19T00:30:00.000Z" }],
+    ["a window that ends a second past the hour", { ...overlap, windowStartedAt: "2026-10-12T00:00:01.000Z", windowEndedAt: "2026-10-19T00:00:01.000Z" }],
 ])("rejects %s", (_case, value) => {
     expect(parsePlacementOverlap(value)).toBeNull();
 });
@@ -84,4 +101,13 @@ it("shades by online servers over slots, groups by region and explains failed re
     expect(placementOverlapErrorMessage(new ControlPlaneAdminError("invalid_request", "Invalid.", false))).toBe("This control plane does not report measured overlap yet.");
     expect(placementOverlapErrorMessage(new ControlPlaneAdminError("placement_history_unavailable", "Host overlap history is unavailable.", true))).toBe("Host overlap history is unavailable.");
     expect(placementOverlapErrorMessage("boom")).toBe("The measured overlap could not be loaded.");
+});
+
+it("labels each date segment of the axis as fits its width, keeping the full date in its title", () => {
+    expect(overlapDayAxisLabel({ label: "Mon 12 Oct", hours: Array.from({ length: 24 }, (_, hour) => hour) })).toEqual({ text: "Mon 12 Oct", title: "Mon 12 Oct" });
+    expect(overlapDayAxisLabel({ label: "Mon 12 Oct", hours: Array.from({ length: 14 }, (_, hour) => hour) }).text).toBe("Mon 12 Oct");
+    expect(overlapDayAxisLabel({ label: "Mon 12 Oct", hours: Array.from({ length: 8 }, (_, hour) => hour) }).text).toBe("12 Oct");
+    expect(overlapDayAxisLabel({ label: "Mon 12 Oct", hours: [0, 1, 2, 3, 4] }).text).toBe("12");
+    expect(overlapDayAxisLabel({ label: "Mon 12 Oct", hours: [0, 1, 2] }).text).toBe("12");
+    expect(overlapDayAxisLabel({ label: "Mon 12 Oct", hours: [0, 1] })).toEqual({ text: "", title: "Mon 12 Oct" });
 });

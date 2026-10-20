@@ -10,6 +10,7 @@ import {
     overlapBand,
     overlapCellLabel,
     overlapCoverageLabel,
+    overlapDayAxisLabel,
     overlapDays,
     overlapGroups,
     overlapIsFull,
@@ -149,11 +150,15 @@ function OverlapLegend() {
 function DayAxis({ windowStartedAt }: { windowStartedAt: string }) {
     return (
         <div aria-hidden="true" className="flex gap-0.5">
-            {overlapDays(windowStartedAt).map((day) => (
-                <span key={day.label} className="overflow-hidden font-mono text-[0.55rem] whitespace-nowrap text-foreground-dim" style={{ width: `${day.hours.length * 0.25}rem` }}>
-                    {day.hours.length >= 14 ? day.label : ""}
-                </span>
-            ))}
+            {overlapDays(windowStartedAt).map((day) => {
+                // Every date gets a label that fits its width; a sliver keeps the date in its title.
+                const label = overlapDayAxisLabel(day);
+                return (
+                    <span key={day.label} title={label.title} className="overflow-hidden font-mono text-[0.55rem] whitespace-nowrap text-foreground-dim" style={{ width: `${day.hours.length * 0.25}rem` }}>
+                        {label.text}
+                    </span>
+                );
+            })}
         </div>
     );
 }

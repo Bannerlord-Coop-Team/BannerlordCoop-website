@@ -206,3 +206,17 @@ it("keeps what it showed when a refresh fails, and rejects a malformed read", as
     await act(async () => button("Retry").click());
     expect(container.querySelector('[role="alert"]')!.textContent).toBe("The control plane returned an unexpected host overlap. Retry");
 });
+
+it.each([
+    ["19:00", ["12", "Tue 13 Oct", "Wed 14 Oct", "Thu 15 Oct", "Fri 16 Oct", "Sat 17 Oct", "Sun 18 Oct", "Mon 19 Oct"]],
+    ["16:00", ["12 Oct", "Tue 13 Oct", "Wed 14 Oct", "Thu 15 Oct", "Fri 16 Oct", "Sat 17 Oct", "Sun 18 Oct", "Mon 19 Oct"]],
+    // A two-hour sliver shows no text but keeps its date in its title.
+    ["22:00", ["", "Tue 13 Oct", "Wed 14 Oct", "Thu 15 Oct", "Fri 16 Oct", "Sat 17 Oct", "Sun 18 Oct", "Mon 19 Oct"]],
+] as const)("labels every date of a window starting at %s UTC, short ones in short", async (start, labels) => {
+    mocks.request.mockResolvedValueOnce({ ...overlap, windowStartedAt: `2026-10-12T${start}:00.000Z`, windowEndedAt: `2026-10-19T${start}:00.000Z` });
+    await open();
+    const axis = container.querySelector("h3 + div")!;
+    expect([...axis.children].map((day) => day.textContent)).toEqual(labels);
+    expect([...axis.children].map((day) => day.getAttribute("title"))).toEqual(["Mon 12 Oct", "Tue 13 Oct", "Wed 14 Oct", "Thu 15 Oct", "Fri 16 Oct", "Sat 17 Oct", "Sun 18 Oct", "Mon 19 Oct"]);
+    expect(cells("vps-1a2b3c4d").shading[0]!.getAttribute("title")).toBe(`Mon 12 Oct ${start} UTC · no data`);
+});

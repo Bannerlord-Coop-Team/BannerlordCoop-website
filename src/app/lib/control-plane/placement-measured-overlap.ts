@@ -8,6 +8,8 @@ import type { HostingAdminPlacementOverlap, HostingPlacementOverlapHost } from "
 export const PLACEMENT_OVERLAP_HOURS = 168;
 
 const HOUR_MILLISECONDS = 3_600_000;
+/** Allowance for figures the control plane rounds to two decimals. */
+const ROUNDING = 0.01;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const ALL_BUSY = /^[01-]{168}$/u;
 // "Mon 12 Oct", as the strip's day labels and hour titles read the window's real dates.
@@ -15,6 +17,11 @@ const DAY_FORMAT = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "nu
 
 function timestamp(value: unknown): value is string {
     return typeof value === "string" && TIMESTAMP.test(value) && new Date(value).toISOString() === value;
+}
+
+/** A time on a whole UTC hour, as the window's bounds always are. */
+function hourBoundary(value: unknown): value is string {
+    return timestamp(value) && Date.parse(value) % HOUR_MILLISECONDS === 0;
 }
 
 function count(value: unknown, maximum: number) {
@@ -43,16 +50,40 @@ function isOverlapHost(value: unknown): value is HostingPlacementOverlapHost {
         // The count is of the all-busy hours the string marks.
         && count(value.allBusyHours, PLACEMENT_OVERLAP_HOURS) && value.allBusyHours === value.allBusy.split("1").length - 1
         && amount(value.measuredPairHours)
-        && amount(value.coverage, 1);
+        && amount(value.coverage, 1)
+        && consistentHours(value as HostingPlacementOverlapHost);
+}
+
+/**
+ * What the control plane's definitions allow between a host's fields: no more servers than slots, never more
+ * online than servers, and an all-busy verdict (`0` or `1`) only for a full VPS in an hour with data, a `1`
+ * needing every server online at least half the hour. Online counts are rounded, so each bound allows 0.01.
+ */
+function consistentHours(host: HostingPlacementOverlapHost) {
+    const occupants = host.occupants.length;
+    if (occupants > host.slots) return false;
+    const full = occupants > 0 && occupants === host.slots;
+    for (let hour = 0; hour < PLACEMENT_OVERLAP_HOURS; hour += 1) {
+        const online = host.online[hour]!;
+        if (online !== null && online > occupants + ROUNDING) return false;
+        const busy = host.allBusy[hour];
+        if (busy === "-") continue;
+        if (!full || online === null) return false;
+        if (busy === "1" && online < 0.5 * occupants - ROUNDING) return false;
+    }
+    return true;
 }
 
 /** The `placement-overlap` result, checked key by key; null when anything is not as the contract says. */
 export function parsePlacementOverlap(value: unknown): HostingAdminPlacementOverlap | null {
     if (!isRecord(value) || !hasExactKeys(value, ["generatedAt", "windowStartedAt", "windowEndedAt", "hours", "hosts"])) return null;
-    if (!timestamp(value.generatedAt) || !timestamp(value.windowStartedAt) || !timestamp(value.windowEndedAt)) return null;
+    if (!timestamp(value.generatedAt) || !hourBoundary(value.windowStartedAt) || !hourBoundary(value.windowEndedAt)) return null;
     if (value.hours !== PLACEMENT_OVERLAP_HOURS) return null;
     if (Date.parse(value.windowEndedAt) - Date.parse(value.windowStartedAt) !== PLACEMENT_OVERLAP_HOURS * HOUR_MILLISECONDS) return null;
     if (!Array.isArray(value.hosts) || !value.hosts.every(isOverlapHost)) return null;
+    // A server occupies one slot, so it appears once in the whole read.
+    const serverIds = value.hosts.flatMap((host: HostingPlacementOverlapHost) => host.occupants.map((occupant) => occupant.serverId));
+    if (new Set(serverIds).size !== serverIds.length) return null;
     return value as HostingAdminPlacementOverlap;
 }
 
@@ -98,6 +129,17 @@ export function overlapDays(windowStartedAt: string) {
         else days.push({ label, hours: [hour] });
     }
     return days;
+}
+
+/**
+ * A date segment's axis label sized to its width: "Mon 12 Oct" from 14 hours, "12 Oct" from 8, the day of the
+ * month from 3, and nothing visible for a one- or two-hour sliver; `title` always gives the full date.
+ */
+export function overlapDayAxisLabel(day: { label: string; hours: readonly number[] }) {
+    const [, date = "", month = ""] = day.label.split(" ");
+    const hours = day.hours.length;
+    const text = hours >= 14 ? day.label : hours >= 8 ? `${date} ${month}` : hours >= 3 ? date : "";
+    return { text, title: day.label };
 }
 
 function oneDecimal(value: number) {
