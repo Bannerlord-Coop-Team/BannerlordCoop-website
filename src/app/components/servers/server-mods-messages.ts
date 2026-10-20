@@ -1,6 +1,7 @@
 import type { Translator } from "@/app/lib/localization/types";
 import type { ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
 import type { ServerModsError } from "@/app/lib/hosting/server-mods";
+import type { ModLoadFailure } from "@/app/lib/hosting/my-servers-server";
 
 // Owner-facing copy for the Mods tab: installed-mod notes, API refusals and folder problems, each from a
 // closed code. Codes the website does not know fall back to a generic message rather than raw API text.
@@ -83,4 +84,13 @@ export function archiveProblemMessage(error: ModArchiveError, t: Translate): str
         case "duplicate-path": return t("mods.archive.duplicatePath", { path: detail });
         case "compression-ratio": return t("mods.archive.compressionRatio");
     }
+}
+
+/** Explains a Start that failed because an enabled mod did not load, naming the mod and any missing assembly. */
+export function modLoadFailureMessage(failure: ModLoadFailure, t: Translate): string {
+    if (failure.reason === "missing-assembly" && failure.assembly !== undefined) {
+        return t("controls.modLoadFailedMissingAssembly", { modId: failure.modId, assembly: failure.assembly });
+    }
+    if (failure.reason === "missing-dll") return t("controls.modLoadFailedMissingDll", { modId: failure.modId });
+    return t("controls.modLoadFailed", { modId: failure.modId });
 }

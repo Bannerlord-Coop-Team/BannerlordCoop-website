@@ -939,5 +939,8 @@
   "mods.archive.tooLarge": "圧縮したフォルダーが100 MiBを超えています。",
   "mods.archive.invalidPath": "{path}はアップロードできません。パスが長すぎるか、階層が深すぎるか、使用できない文字が含まれています。",
   "mods.archive.duplicatePath": "{path}は、大文字・小文字やアクセントの違いだけで別のファイルと重複しています。",
-  "mods.archive.compressionRatio": "フォルダーの圧縮率が100:1を超えているため、サーバーが受け付けません。"
+  "mods.archive.compressionRatio": "フォルダーの圧縮率が100:1を超えているため、サーバーが受け付けません。",
+  "controls.modLoadFailedMissingAssembly": "MOD {modId}を読み込めませんでした（アセンブリ{assembly}がありません）。「MOD」で無効にしてから、もう一度起動してください。",
+  "controls.modLoadFailedMissingDll": "MOD {modId}を読み込めませんでした（SubModule.xmlに記載されたDLLがありません）。「MOD」で無効にしてから、もう一度起動してください。",
+  "controls.modLoadFailed": "MOD {modId}を読み込めませんでした。「MOD」で無効にしてから、もう一度起動してください。"
 }

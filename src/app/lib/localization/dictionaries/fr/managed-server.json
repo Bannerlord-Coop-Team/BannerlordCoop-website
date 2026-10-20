@@ -940,5 +940,8 @@
   "mods.archive.tooLarge": "Le dossier compressé dépasse 100 Mio.",
   "mods.archive.invalidPath": "{path} ne peut pas être téléversé : son chemin est trop long, trop profond ou contient des caractères non pris en charge.",
   "mods.archive.duplicatePath": "{path} ne diffère d'un autre fichier que par la casse ou les accents.",
-  "mods.archive.compressionRatio": "Le dossier se compresse à plus de 100:1, ce que le serveur refuse."
+  "mods.archive.compressionRatio": "Le dossier se compresse à plus de 100:1, ce que le serveur refuse.",
+  "controls.modLoadFailedMissingAssembly": "Le mod {modId} n'a pas pu être chargé (assembly {assembly} manquant). Désactivez-le dans Mods, puis redémarrez.",
+  "controls.modLoadFailedMissingDll": "Le mod {modId} n'a pas pu être chargé (une DLL indiquée dans son SubModule.xml est manquante). Désactivez-le dans Mods, puis redémarrez.",
+  "controls.modLoadFailed": "Le mod {modId} n'a pas pu être chargé. Désactivez-le dans Mods, puis redémarrez."
 }

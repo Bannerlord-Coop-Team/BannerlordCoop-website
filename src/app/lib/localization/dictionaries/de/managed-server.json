@@ -940,5 +940,8 @@
   "mods.archive.tooLarge": "Der gepackte Ordner ist größer als 100 MiB.",
   "mods.archive.invalidPath": "{path} kann nicht hochgeladen werden: Der Pfad ist zu lang, zu tief verschachtelt oder enthält nicht unterstützte Zeichen.",
   "mods.archive.duplicatePath": "{path} unterscheidet sich von einer anderen Datei nur durch Groß-/Kleinschreibung oder Akzente.",
-  "mods.archive.compressionRatio": "Der Ordner lässt sich stärker als 100:1 komprimieren; das lehnt der Server ab."
+  "mods.archive.compressionRatio": "Der Ordner lässt sich stärker als 100:1 komprimieren; das lehnt der Server ab.",
+  "controls.modLoadFailedMissingAssembly": "Der Mod {modId} konnte nicht geladen werden (fehlende Assembly {assembly}). Deaktiviere ihn unter Mods und starte erneut.",
+  "controls.modLoadFailedMissingDll": "Der Mod {modId} konnte nicht geladen werden (eine in seiner SubModule.xml aufgeführte DLL fehlt). Deaktiviere ihn unter Mods und starte erneut.",
+  "controls.modLoadFailed": "Der Mod {modId} konnte nicht geladen werden. Deaktiviere ihn unter Mods und starte erneut."
 }

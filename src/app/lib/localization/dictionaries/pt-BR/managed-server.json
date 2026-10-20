@@ -940,5 +940,8 @@
   "mods.archive.tooLarge": "A pasta compactada tem mais de 100 MiB.",
   "mods.archive.invalidPath": "Não é possível enviar {path}: o caminho é longo ou profundo demais, ou usa caracteres não aceitos.",
   "mods.archive.duplicatePath": "{path} difere de outro arquivo apenas por maiúsculas, minúsculas ou acentos.",
-  "mods.archive.compressionRatio": "A pasta compacta mais de 100:1, o que o servidor recusa."
+  "mods.archive.compressionRatio": "A pasta compacta mais de 100:1, o que o servidor recusa.",
+  "controls.modLoadFailedMissingAssembly": "O mod {modId} não carregou (falta o assembly {assembly}). Desative-o em Mods e inicie novamente.",
+  "controls.modLoadFailedMissingDll": "O mod {modId} não carregou (falta uma DLL listada no SubModule.xml). Desative-o em Mods e inicie novamente.",
+  "controls.modLoadFailed": "O mod {modId} não carregou. Desative-o em Mods e inicie novamente."
 }

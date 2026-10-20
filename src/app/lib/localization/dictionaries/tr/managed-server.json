@@ -940,5 +940,8 @@
   "mods.archive.tooLarge": "Sıkıştırılmış klasör 100 MiB'den büyük.",
   "mods.archive.invalidPath": "{path} yüklenemiyor: yolu çok uzun, çok derin veya desteklenmeyen karakterler içeriyor.",
   "mods.archive.duplicatePath": "{path}, başka bir dosyadan yalnızca harf büyüklüğü veya aksanlarla ayrılıyor.",
-  "mods.archive.compressionRatio": "Klasör 100:1'den fazla sıkışıyor; sunucu bunu reddeder."
+  "mods.archive.compressionRatio": "Klasör 100:1'den fazla sıkışıyor; sunucu bunu reddeder.",
+  "controls.modLoadFailedMissingAssembly": "{modId} modu yüklenemedi ({assembly} derlemesi eksik). Modlar bölümünden devre dışı bırakıp yeniden başlatın.",
+  "controls.modLoadFailedMissingDll": "{modId} modu yüklenemedi (SubModule.xml dosyasında listelenen bir DLL eksik). Modlar bölümünden devre dışı bırakıp yeniden başlatın.",
+  "controls.modLoadFailed": "{modId} modu yüklenemedi. Modlar bölümünden devre dışı bırakıp yeniden başlatın."
 }

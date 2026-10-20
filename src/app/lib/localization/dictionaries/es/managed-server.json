@@ -940,5 +940,8 @@
   "mods.archive.tooLarge": "La carpeta comprimida ocupa más de 100 MiB.",
   "mods.archive.invalidPath": "No se puede subir {path}: su ruta es demasiado larga o profunda, o usa caracteres no admitidos.",
   "mods.archive.duplicatePath": "{path} solo se diferencia de otro archivo en mayúsculas, minúsculas o acentos.",
-  "mods.archive.compressionRatio": "La carpeta se comprime más de 100:1, y el servidor lo rechaza."
+  "mods.archive.compressionRatio": "La carpeta se comprime más de 100:1, y el servidor lo rechaza.",
+  "controls.modLoadFailedMissingAssembly": "El mod {modId} no se pudo cargar (falta el ensamblado {assembly}). Desactívalo en Mods e inicia de nuevo.",
+  "controls.modLoadFailedMissingDll": "El mod {modId} no se pudo cargar (falta una DLL que indica su SubModule.xml). Desactívalo en Mods e inicia de nuevo.",
+  "controls.modLoadFailed": "El mod {modId} no se pudo cargar. Desactívalo en Mods e inicia de nuevo."
 }
