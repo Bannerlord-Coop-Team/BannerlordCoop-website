@@ -28,16 +28,15 @@ const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-m
 
 // Keeps inactive panels mounted while following the current section identity.
 export function ServerWorkspacePanel({ section, children }: { section: Section; children: ReactNode }) {
-    const { current, initial } = useContext(WorkspaceContext);
-    // Streamed panels must first match their server HTML, even if the hash already changed tabs.
-    const visibleSection = useSyncExternalStore(subscribe, () => current, () => initial);
+    const shown = useServerWorkspaceSectionShown(section);
     // Preserve console connections, pending operations and transfer drafts across tabs.
-    return <div hidden={visibleSection !== section} className="space-y-5">{children}</div>;
+    return <div hidden={!shown} className="space-y-5">{children}</div>;
 }
 
 /** Whether a workspace section is the one currently shown, so a panel can defer loading until it is opened. */
 export function useServerWorkspaceSectionShown(section: Section) {
     const { current, initial } = useContext(WorkspaceContext);
+    // Streamed panels must first match their server HTML, even if the hash already changed tabs.
     return useSyncExternalStore(subscribe, () => current, () => initial) === section;
 }
 
