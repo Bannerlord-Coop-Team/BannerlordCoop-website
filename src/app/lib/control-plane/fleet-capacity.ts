@@ -354,6 +354,14 @@ export function formatGiB(bytes: number) {
     return `${(bytes / GIB).toFixed(2)} GiB`;
 }
 
+/**
+ * Whether a memory peak reads as above its burst target. Memory is planned to the byte but shown to two decimals, so
+ * a peak a few MiB over the target counts as at it, as a CPU peak is compared at the three decimals it is shown with.
+ */
+function memoryPeakAbove(peakBytes: number, targetBytes: number) {
+    return peakBytes > targetBytes && formatGiB(peakBytes) !== formatGiB(targetBytes);
+}
+
 /** A percent (0–100) with one decimal, "<0.1%" for a sliver above zero. */
 export function formatPercent(value: number) {
     if (value > 0 && value < 0.05) return "<0.1%";
@@ -459,13 +467,11 @@ export function staticRuleComparison(capacity: Pick<HostingAdminFleetCapacity, "
     const cpuPlan = highest === rule.cpuBurstVcpu
         ? `no CPU peak is above its target (the fleet's highest is ${formatCoresExact(cores.max)}), so every VPS plans ${formatCoresExact(highest)} per server (${share(highest)})`
         : `the fleet's highest CPU peak is ${formatCoresExact(cores.max)}, so VPSs plan from ${formatCoresExact(rule.cpuBurstVcpu)} to ${formatCoresExact(highest)} per server (${share(highest)} at most)`;
-    const memoryPlan = highestBytes === rule.memoryBurstBytes
+    const memoryAbove = memoryPeakAbove(highestBytes, rule.memoryBurstBytes);
+    const memoryPlan = !memoryAbove
         ? `no memory peak is above its target (the fleet's highest is ${formatGiB(bytes.max)}), so every VPS plans ${formatGiB(highestBytes)} per server (${memoryShareOf(highestBytes)})`
-        // A peak only a few MiB above the target shows as the same two decimals, so it is named rather than ranged.
-        : formatGiB(highestBytes) === formatGiB(rule.memoryBurstBytes)
-            ? `the fleet's highest memory peak is just above its target, so VPSs plan ${formatGiB(rule.memoryBurstBytes)} per server, a little more where a peak is above it (${memoryShareOf(highestBytes)} at most)`
-            : `the fleet's highest memory peak is ${formatGiB(bytes.max)}, so VPSs plan from ${formatGiB(rule.memoryBurstBytes)} to ${formatGiB(highestBytes)} per server (${memoryShareOf(highestBytes)} at most)`;
-    const own = highest === rule.cpuBurstVcpu && highestBytes === rule.memoryBurstBytes ? "" : "; each VPS's own is in its per-server column";
+        : `the fleet's highest memory peak is ${formatGiB(bytes.max)}, so VPSs plan from ${formatGiB(rule.memoryBurstBytes)} to ${formatGiB(highestBytes)} per server (${memoryShareOf(highestBytes)} at most)`;
+    const own = highest === rule.cpuBurstVcpu && !memoryAbove ? "" : "; each VPS's own is in its per-server column";
     return `${uses} Every online server is planned to burst to ${rule.cpuBurstVcpu} vCPU and ${ruleGiB(rule.memoryBurstBytes)} at once, or to its VPS's measured peaks where higher; ${cpuPlan}, and ${memoryPlan}${own}.`;
 }
 
@@ -556,7 +562,7 @@ export function perServerSourceLabel(host: Pick<HostingFleetCapacityHost, "deman
         const peak = `peak ${formatCoresExact(host.peakCpuCores).replace(/ cores$/u, "")}`;
         return cpuTarget === null ? `${source} · ${peak}` : `${source} · ${cpuTarget} burst · ${peak}`;
     }
-    const memoryTarget = host.peakMemoryBytes > capacityModel.memoryBurstBytes ? null : ruleGiB(capacityModel.memoryBurstBytes);
+    const memoryTarget = memoryPeakAbove(host.peakMemoryBytes, capacityModel.memoryBurstBytes) ? null : ruleGiB(capacityModel.memoryBurstBytes);
     const targets = [cpuTarget, memoryTarget].filter((target) => target !== null);
     const peaks = `peaks ${formatCoresExact(host.peakCpuCores)}, ${formatGiB(host.peakMemoryBytes)}`;
     return targets.length === 0 ? `${source} · ${peaks}` : `${source} · ${targets.join(", ")} burst · ${peaks}`;

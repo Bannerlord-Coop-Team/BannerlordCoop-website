@@ -622,11 +622,11 @@ control plane owns slot capacity.
   an hour with data, and a `1` needs `online` of at least half the number of
   occupants, less 0.01. The pane does not draw this verdict.
 
-Deploy this website change first, then control plane
-`ao/placement-burst-overlap`. The website renders the legacy response the
-current control plane sends and the burst-capacity one as soon as the control
-plane updates; the other order would show the new response as unexpected until
-the website caught up.
+The control plane sends the burst-capacity response. Until control plane #529
+its `burstServers` counts 3 GiB per server; from #529 it counts 2.5 GiB, which
+counts more servers on a VPS whose memory, not CPU, is the limit (none today).
+Deploy this website (#357) before #529: it accepts both counts, while the
+website before it bounds `burstServers` by 3 GiB and would reject a higher one.
 
 #### What the pane shows
 

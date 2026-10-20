@@ -255,6 +255,8 @@ it("labels each VPS's per-server source with the burst targets it plans and both
     // Memory above its target, CPU within; and both above.
     expect(perServerSourceLabel({ ...measured!, peakCpuCores: 1.372, peakMemoryBytes: 2.6 * GIB }, parsed.model)).toBe("This VPS · 1.6 vCPU burst · peaks 1.372 cores, 2.60 GiB");
     expect(perServerSourceLabel({ ...measured!, peakMemoryBytes: 2.6 * GIB }, parsed.model)).toBe("This VPS · peaks 1.950 cores, 2.60 GiB");
+    // A memory peak a few MiB above the target prints as 2.50 GiB, so the label keeps the target it reads as.
+    expect(perServerSourceLabel({ ...measured!, peakCpuCores: 1.372, peakMemoryBytes: 2.5 * GIB + 5 * 2 ** 20 }, parsed.model)).toBe("This VPS · 1.6 vCPU, 2.5 GiB burst · peaks 1.372 cores, 2.50 GiB");
     expect(perServerSourceLabel(unmeasured!, parsed.model)).toBe("None yet");
     // An occupant's memory peak is shown beside its p95, as it is what the plan follows.
     expect(occupantDemandLabel(demand, parsed.model)).toBe("0.85 cores stable (p50), peak 1.95 · 1.80 GiB at p95, peak 2.00");
@@ -502,9 +504,11 @@ it("bounds each VPS's planned CPU and memory by the fleet's peaks with a memory 
         ...exampleDemand, cpuCores: { ...exampleDemand.cpuCores, max: cpuMax }, memoryBytes: { ...exampleDemand.memoryBytes, max: memoryMax } } } })!);
     // A memory peak above its target ranges the plans from the target to that peak; one exactly at it plans the target.
     expect(withPeaks(1.2, 2.75 * GIB)).toContain("no CPU peak is above its target (the fleet's highest is 1.200 cores), so every VPS plans 1.600 cores per server (80% of 2 vCPU), and the fleet's highest memory peak is 2.75 GiB, so VPSs plan from 2.50 GiB to 2.75 GiB per server (92% of 3 GiB at most); each VPS's own is in its per-server column.");
-    // A peak a byte above the target rounds to the same two decimals: named, never shown as a range from 2.50 to 2.50.
-    expect(withPeaks(1.2, 2.5 * GIB + 1)).toContain("and the fleet's highest memory peak is just above its target, so VPSs plan 2.50 GiB per server, a little more where a peak is above it (83% of 3 GiB at most); each VPS's own is in its per-server column.");
-    expect(withPeaks(1.2, 2.5 * GIB + 1)).not.toContain("from 2.50 GiB to 2.50 GiB");
+    // A peak a few MiB above the target shows as the same two decimals, so it reads as at the target, never as a range
+    // from 2.50 to 2.50; one that shows differently is above it.
+    expect(withPeaks(1.2, 2.5 * GIB + 1)).toContain("and no memory peak is above its target (the fleet's highest is 2.50 GiB), so every VPS plans 2.50 GiB per server (83% of 3 GiB).");
+    expect(withPeaks(1.2, 2.5 * GIB + 5 * 2 ** 20)).not.toContain("from 2.50 GiB to 2.50 GiB");
+    expect(withPeaks(1.2, 2.5 * GIB + 16 * 2 ** 20)).toContain("the fleet's highest memory peak is 2.52 GiB, so VPSs plan from 2.50 GiB to 2.52 GiB per server");
     expect(withPeaks(1.2, 2.5 * GIB)).toContain("and no memory peak is above its target (the fleet's highest is 2.50 GiB), so every VPS plans 2.50 GiB per server (83% of 3 GiB).");
     // A CPU peak above its target alone, and both.
     expect(withPeaks(1.95, 2 * GIB)).toContain("the fleet's highest CPU peak is 1.950 cores, so VPSs plan from 1.600 cores to 1.950 cores per server (98% of 2 vCPU at most), and no memory peak is above its target (the fleet's highest is 2.00 GiB), so every VPS plans 2.50 GiB per server (83% of 3 GiB); each VPS's own is in its per-server column.");
