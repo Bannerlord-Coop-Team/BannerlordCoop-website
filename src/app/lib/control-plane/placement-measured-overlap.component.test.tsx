@@ -19,6 +19,9 @@ function without<T extends object>(value: T, key: keyof T) {
 }
 
 const week = <T,>(value: (hour: number) => T) => Array.from({ length: 168 }, (_, hour) => value(hour));
+const GIB = 1024 ** 3;
+
+// The legacy shape, from a control plane that predates burst capacity (98d1f12a).
 const host = {
     serviceName: "vps-1a2b3c4d.vps.ovh.net", regionKeys: ["germany"], vCpu: 4, slots: 2,
     occupants: [
@@ -34,7 +37,46 @@ const overlap = {
     hosts: [host, { ...host, serviceName: "vps-spare", regionKeys: [], occupants: [], online: week(() => null), allBusy: "-".repeat(168), allBusyHours: 0, measuredPairHours: 0, coverage: 0 }],
 };
 
-it("accepts the measured overlap exactly as the contract describes it", () => {
+// The burst-capacity shape: four servers on a 6 vCPU, 12 GiB VPS, where three can each burst to 2 vCPU and 3 GiB at
+// once, so the hours all four were online at least half the hour are over.
+const burstHost = {
+    serviceName: "vps-1a2b3c4d.vps.ovh.net", regionKeys: ["germany"], vCpu: 6, memoryBytes: 12 * GIB, slots: 4, burstServers: 3,
+    occupants: [
+        ...host.occupants,
+        { serverId: "55555555-5555-4555-8555-555555555555", displayName: "Vlandia Rising", hoursWithData: 150 },
+        { serverId: "66666666-6666-4666-8666-666666666666", displayName: "Aserai Sands", hoursWithData: 140 },
+    ],
+    online: week((hour) => hour < 2 ? null : hour % 24 === 20 ? 4 : 0.25),
+    overBurst: week((hour) => hour < 48 ? "-" : hour % 24 === 20 ? "1" : "0").join(""),
+    overBurstHours: 5, measuredPairHours: 7.5, coverage: 0.714,
+};
+// An empty VPS whose RAM could not be read: two can burst at once by its vCPUs, and it can never be over.
+const burstSpare = {
+    serviceName: "vps-spare", regionKeys: [], vCpu: 4, memoryBytes: null, slots: 2, burstServers: 2, occupants: [],
+    online: week(() => null), overBurst: "0".repeat(168), overBurstHours: 0, measuredPairHours: 0, coverage: 0,
+};
+const burstOverlap = { ...overlap, hosts: [burstHost, burstSpare] };
+/** The over-burst hour on Wed 14 Oct 20:00 UTC, and a measured hour within capacity. */
+const OVER_HOUR = 2 * 24 + 20;
+const MEASURED_HOUR = 100;
+
+it("accepts the burst-capacity shape exactly as the contract describes it", () => {
+    expect(parsePlacementOverlap(burstOverlap)).toBe(burstOverlap);
+    expect(parsePlacementOverlap({ ...burstOverlap, hosts: [burstSpare] })).not.toBeNull();
+    // Rounded to two decimals, an over-burst hour reads up to 0.01 under its bound and a full hour up to 0.01 over.
+    const rounded = { ...burstHost, online: burstHost.online.map((online, hour) => hour === OVER_HOUR ? 1.99 : hour === MEASURED_HOUR ? 4.01 : online) };
+    expect(parsePlacementOverlap({ ...burstOverlap, hosts: [rounded] })).not.toBeNull();
+    // burstServers at both its vCPU and its RAM bound at once, and memoryBytes at its largest.
+    expect(parsePlacementOverlap({ ...burstOverlap, hosts: [{ ...burstHost, vCpu: 7, memoryBytes: 9 * GIB }] })).not.toBeNull();
+    expect(parsePlacementOverlap({ ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: Number.MAX_SAFE_INTEGER }] })).not.toBeNull();
+    // No server can burst on one vCPU or the smallest RAM, so any measured hour with one online at least half of it is over.
+    expect(parsePlacementOverlap({ ...burstOverlap, hosts: [{ ...burstHost, vCpu: 1, burstServers: 0 }] })).not.toBeNull();
+    expect(parsePlacementOverlap({ ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: 1, burstServers: 0 }] })).not.toBeNull();
+    // A VPS with as many servers as can burst together is all 0, even in hours without data.
+    expect(parsePlacementOverlap({ ...burstOverlap, hosts: [{ ...burstHost, vCpu: 8, burstServers: 4, overBurst: "0".repeat(168), overBurstHours: 0 }] })).not.toBeNull();
+});
+
+it("accepts the legacy shape exactly as the contract describes it", () => {
     expect(parsePlacementOverlap(overlap)).toBe(overlap);
     expect(parsePlacementOverlap({ ...overlap, hosts: [] })).not.toBeNull();
     // Rounded to two decimals, a full hour reads up to 0.01 over and an all-busy one up to 0.01 under its bound.
@@ -78,6 +120,39 @@ it.each([
     ["a window that starts on the half hour", { ...overlap, windowStartedAt: "2026-10-12T00:30:00.000Z", windowEndedAt: "2026-10-19T00:30:00.000Z" }],
     ["a window that ends a second past the hour", { ...overlap, windowStartedAt: "2026-10-12T00:00:01.000Z", windowEndedAt: "2026-10-19T00:00:01.000Z" }],
 ])("rejects %s", (_case, value) => {
+    expect(parsePlacementOverlap(value)).toBeNull();
+});
+
+it.each([
+    // The read is all one shape or the other.
+    ["a burst-capacity host beside a legacy one", { ...burstOverlap, hosts: [burstHost, overlap.hosts[1]] }],
+    ["a legacy host beside a burst-capacity one", { ...overlap, hosts: [host, burstSpare] }],
+    ["a host with both shapes' keys", { ...burstOverlap, hosts: [{ ...burstHost, allBusy: "-".repeat(168), allBusyHours: 0 }] }],
+    ["a host without memoryBytes", { ...burstOverlap, hosts: [without(burstHost, "memoryBytes")] }],
+    ["a host without overBurstHours", { ...burstOverlap, hosts: [without(burstHost, "overBurstHours")] }],
+    ["memoryBytes of 0", { ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: 0 }] }],
+    ["negative memoryBytes", { ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: -GIB }] }],
+    ["fractional memoryBytes", { ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: 12 * GIB + 0.5 }] }],
+    ["memoryBytes given as text", { ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: String(12 * GIB) }] }],
+    ["memoryBytes beyond the safe integers", { ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: 2 ** 53 }] }],
+    ["a negative burstServers", { ...burstOverlap, hosts: [{ ...burstHost, burstServers: -1 }] }],
+    ["a fractional burstServers", { ...burstOverlap, hosts: [{ ...burstHost, burstServers: 2.5 }] }],
+    ["more burstServers than its vCPUs allow", { ...burstOverlap, hosts: [{ ...burstHost, vCpu: 5 }] }],
+    ["more burstServers than its RAM allows", { ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: 9 * GIB - 1 }] }],
+    ["more burstServers than its vCPUs allow when its RAM is unknown", { ...burstOverlap, hosts: [{ ...burstHost, vCpu: 5, memoryBytes: null }] }],
+    ["an over-burst character other than 1, 0 or -", { ...burstOverlap, hosts: [{ ...burstHost, overBurst: `x${burstHost.overBurst.slice(1)}` }] }],
+    ["an over-burst string of 167 hours", { ...burstOverlap, hosts: [{ ...burstHost, overBurst: burstHost.overBurst.slice(1) }] }],
+    ["an over-burst count that does not match its string", { ...burstOverlap, hosts: [{ ...burstHost, overBurstHours: 6 }] }],
+    // What the burst definitions rule out between fields.
+    ["an over-burst hour on a VPS whose servers can all burst at once", { ...burstOverlap, hosts: [{ ...burstHost, vCpu: 8, burstServers: 4 }] }],
+    ["an unknown hour on a VPS whose servers can all burst at once", { ...burstOverlap, hosts: [{ ...burstSpare, overBurst: `-${"0".repeat(167)}` }] }],
+    ["an over-burst hour without data", { ...burstOverlap, hosts: [{ ...burstHost, online: burstHost.online.map((online, hour) => hour === OVER_HOUR ? null : online) }] }],
+    ["an over-burst hour with too few online", { ...burstOverlap, hosts: [{ ...burstHost, online: burstHost.online.map((online, hour) => hour === OVER_HOUR ? 1.98 : online) }] }],
+    ["a measured hour without data on a VPS that can be over", { ...burstOverlap, hosts: [{ ...burstHost, online: burstHost.online.map((online, hour) => hour === MEASURED_HOUR ? null : online) }] }],
+    ["more servers than slots", { ...burstOverlap, hosts: [{ ...burstHost, slots: 3 }] }],
+    ["more online than servers", { ...burstOverlap, hosts: [{ ...burstHost, online: burstHost.online.map((online, hour) => hour === MEASURED_HOUR ? 4.02 : online) }] }],
+    ["one server on two VPSs", { ...burstOverlap, hosts: [burstHost, { ...burstSpare, burstServers: 1, occupants: [burstHost.occupants[3]!], online: week(() => 0.5) }] }],
+])("rejects a burst-capacity read with %s", (_case, value) => {
     expect(parsePlacementOverlap(value)).toBeNull();
 });
 

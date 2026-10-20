@@ -6,15 +6,17 @@ import { Empty, SectionHeading } from "@/app/components/admin/ControlPlanePresen
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import {
-    overlapAllBusyLabel,
     overlapBand,
+    overlapBurstCapacityLabel,
+    overlapBurstLabel,
+    overlapBurstRow,
     overlapCellLabel,
     overlapCoverageLabel,
     overlapDayAxisLabel,
     overlapDays,
     overlapGroups,
-    overlapIsFull,
     overlapPairHoursLabel,
+    overlapPredatesBurst,
     overlapSummary,
     overlapWindowLabel,
     parsePlacementOverlap,
@@ -27,7 +29,7 @@ import { HEATMAP_CLASSES } from "./placement-heatmap-classes";
 
 const buttonClass = "inline-flex min-h-9 items-center gap-1.5 border border-white/15 px-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40";
 // Name and servers, the week (168 quarter-rem hours with a hairline between UTC days), and the totals.
-const ROW_GRID = "grid grid-cols-[13rem_43rem_11rem] items-start gap-x-5";
+const ROW_GRID = "grid grid-cols-[13rem_43rem_13rem] items-start gap-x-5";
 /** An hour without data is hatched, so it never reads as an hour in which nobody was online. */
 const NO_DATA: CSSProperties = { backgroundImage: "repeating-linear-gradient(135deg, rgb(255 255 255 / 0.22) 0 1px, transparent 1px 3px)" };
 
@@ -102,7 +104,7 @@ export function PlacementMeasuredOverlap() {
                 </button>
             </div>
             <p className="mt-2 max-w-3xl text-xs leading-5 text-foreground-muted">
-                How the servers on each VPS with more than one slot were online together in each of the last 168 hours, from their own status samples. Nothing here is modelled.
+                How the servers on each VPS with more than one slot were online together in each of the last 168 hours, from their own status samples, and the hours in which more of them were online than could each burst to 2 vCPU and 3 GiB at once. Nothing here is modelled.
             </p>
             {state.kind === "loading" && <p role="status" className="mt-4 text-xs text-foreground-muted">Loading measured overlap…</p>}
             {state.kind === "error" && (
@@ -112,6 +114,7 @@ export function PlacementMeasuredOverlap() {
             )}
             {overlap !== null && <>
                 <OverlapLegend />
+                {overlapPredatesBurst(overlap) && <p className="mt-2 text-[0.65rem] text-foreground-muted">This control plane predates burst capacity; red hours appear after it updates.</p>}
                 <div className="mt-4 overflow-x-auto border border-white/10">
                     {groups.length === 0
                         ? <Empty>No VPS has more than one slot, so no two servers share one.</Empty>
@@ -141,7 +144,7 @@ function OverlapLegend() {
             <span aria-hidden="true" className="ml-2 size-2.5 border border-white/10" style={NO_DATA} />
             <span>No data</span>
             <span aria-hidden="true" className="ml-2 h-1 w-4 bg-crimson" />
-            <span>All slots busy, on the thin row under a full VPS</span>
+            <span>Red: more servers online than can each burst to 2 vCPU and 3 GiB</span>
         </div>
     );
 }
@@ -164,6 +167,9 @@ function DayAxis({ windowStartedAt }: { windowStartedAt: string }) {
 }
 
 function OverlapRow({ host, windowStartedAt }: { host: HostingPlacementOverlapHost; windowStartedAt: string }) {
+    // Both are null for a control plane that predates burst capacity.
+    const burst = overlapBurstLabel(host);
+    const capacity = overlapBurstCapacityLabel(host);
     return (
         <li className={`${ROW_GRID} py-3`}>
             <div className="min-w-0 text-xs">
@@ -172,18 +178,23 @@ function OverlapRow({ host, windowStartedAt }: { host: HostingPlacementOverlapHo
                 <p className="mt-1 break-words text-foreground">{host.occupants.length === 0 ? "Empty" : host.occupants.map((occupant) => occupant.displayName).join(", ")}</p>
             </div>
             <OverlapStrip host={host} windowStartedAt={windowStartedAt} />
-            <div className="text-right font-mono text-xs">
-                <p className="text-foreground">{overlapAllBusyLabel(host)}</p>
-                <p className="mt-1 text-foreground-muted">{overlapPairHoursLabel(host)}</p>
-                <p className="mt-1 text-foreground-muted">{overlapCoverageLabel(host)}</p>
+            <div className="space-y-1 text-right font-mono text-xs">
+                {burst !== null && <p className="text-foreground">{burst}</p>}
+                <p className="text-foreground-muted">{overlapPairHoursLabel(host)}</p>
+                <p className="text-foreground-muted">{overlapCoverageLabel(host)}</p>
+                {capacity !== null && <p className="text-foreground-muted">{capacity}</p>}
             </div>
         </li>
     );
 }
 
-/** The week's hours shaded by online servers over slots; a full VPS adds a row marking its all-busy hours. */
+/**
+ * The week's hours shaded by online servers over slots. A VPS with more servers than can each burst at once adds
+ * a row marking the hours more of them were online than that; no other VPS can have one.
+ */
 function OverlapStrip({ host, windowStartedAt }: { host: HostingPlacementOverlapHost; windowStartedAt: string }) {
     const days = overlapDays(windowStartedAt);
+    const overBurst = overlapBurstRow(host);
     return (
         <div role="img" aria-label={overlapSummary(host, windowStartedAt)} className="flex flex-col gap-0.5">
             <div className="flex gap-0.5">{days.map((day) => (
@@ -194,12 +205,12 @@ function OverlapStrip({ host, windowStartedAt }: { host: HostingPlacementOverlap
                         : <span key={hour} title={overlapCellLabel(host, windowStartedAt, hour)} className={`h-5 w-1 ${HEATMAP_CLASSES[overlapBand(online, host.slots)]}`} />;
                 })}</span>
             ))}</div>
-            {/* Only a full VPS can have every slot busy; an hour a server has no data for is hatched, not blank. */}
-            {overlapIsFull(host) && <div className="flex gap-0.5">{days.map((day) => (
+            {/* An hour that servers without data could have put over is hatched, not blank. */}
+            {overBurst !== null && <div className="flex gap-0.5">{days.map((day) => (
                 <span key={day.label} className="flex">{day.hours.map((hour) => {
-                    const busy = host.allBusy[hour];
-                    return busy === "1" ? <span key={hour} className="h-1 w-1 bg-crimson" />
-                        : busy === "0" ? <span key={hour} className="h-1 w-1 bg-white/10" />
+                    const verdict = overBurst[hour];
+                    return verdict === "1" ? <span key={hour} className="h-1 w-1 bg-crimson" />
+                        : verdict === "0" ? <span key={hour} className="h-1 w-1 bg-white/10" />
                             : <span key={hour} className="h-1 w-1" style={NO_DATA} />;
                 })}</span>
             ))}</div>}
