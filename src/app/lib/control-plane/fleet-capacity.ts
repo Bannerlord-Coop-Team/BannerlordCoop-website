@@ -231,12 +231,15 @@ export function decodeHourly(hex: string): Array<number | null> {
     });
 }
 
-/** The 0–9 shading band of an hour's steal in permille: under 0.5%, 0.5%, 1%, 2%, 3%, 5%, 7.5%, 10%, 15%, then 20% or more. */
+/**
+ * The 0–9 shading band of an hour's steal in permille, from least to most steal: under 0.5%, 0.5%, 1%, 2%, 3%, 5%,
+ * 7.5%, 10%, 15%, then 20% or more.
+ */
 export function stealBand(permille: number) {
     return STEAL_BANDS_PERMILLE.filter((threshold) => permille >= threshold).length;
 }
 
-/** The 0–9 shading band of an hour's busy percent: a band per 10%, 90% and over the full shade. */
+/** The 0–9 shading band of an hour's busy percent, from least to most busy: a band per 10%, 90% and over the full shade. */
 export function busyBand(percent: number) {
     return Math.min(9, Math.max(0, Math.floor(percent / 10)));
 }
@@ -518,7 +521,7 @@ export function fleetCapacityHints(capacityModel: HostingAdminFleetCapacity["mod
         modelled: `Servers at once: how many servers the VPS could run together at their ${cpu} CPU and ${memory} memory, floor(min(usable cores ÷ per-server cores, usable memory ÷ per-server memory)), unknown until its steal, overhead and memory are measured and its instance type or the fleet has enough running data. Compared with today's slots from the static rule (${rule}): fewer is at risk when they all run at once, more is headroom.`,
         slots: `Slots today: floor(vCPU ÷ ${capacityModel.staticBurstVcpuPerServer}), from the static rule of ${rule}.`,
         limitedBy: "Whether CPU or memory runs out first in the model.",
-        hourly: "Mean steal and busy share of each UTC hour, oldest first. Darker is more; a hatched hour has no data.",
+        hourly: "Mean steal and busy share of each UTC hour, oldest first. The fuller the gold, the more; a hatched hour has no data.",
     };
 }
 

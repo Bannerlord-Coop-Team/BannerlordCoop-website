@@ -427,7 +427,10 @@ function HeatmapLegend() {
     );
 }
 
-/** A 7×24 grid of the 168-digit hourly profile; the label carries the summary, each square its own hour. */
+/**
+ * A 7×24 grid of the 168-digit hourly profile; the label carries the summary, each square its own hour. Each digit
+ * is a band of online probability: the faintest square is the least likely to be online, full gold the most.
+ */
 export function PlacementHeatmap({ server }: { server: Pick<HostingPlacementServer, "displayName" | "heatmap" | "weeklyOnlineHours"> }) {
     const rows = parsePlacementHeatmap(server.heatmap);
     if (rows === null) return <span className="text-xs text-foreground-dim">Unavailable</span>;

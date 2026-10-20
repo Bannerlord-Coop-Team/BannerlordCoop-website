@@ -174,7 +174,7 @@ export function placementOverlapErrorMessage(error: unknown) {
     return error instanceof Error ? error.message : "The measured overlap could not be loaded.";
 }
 
-/** The 0–9 shading band for an hour: how much of the VPS's slot capacity was online. */
+/** The 0–9 shading band for an hour: how much of the VPS's slot capacity was online, from none to all of it. */
 export function overlapBand(online: number, slots: number) {
     if (!(slots > 0) || !Number.isFinite(online)) return 0;
     // The small allowance keeps exact tenths, such as 0.9 of 3 slots, from rounding down a band.
