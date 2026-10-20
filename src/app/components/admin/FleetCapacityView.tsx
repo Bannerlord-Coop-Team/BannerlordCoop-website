@@ -462,7 +462,7 @@ const HostRow = memo(function HostRow({ host, model, days, hourLabels }: {
             <td className="p-3 text-right font-mono whitespace-nowrap"><TwoLine cores={host.overheadCores} bytes={host.overheadMemoryBytes} /></td>
             <td className="p-3 text-right font-mono whitespace-nowrap"><TwoLine cores={host.usableCores} bytes={host.usableMemoryBytes} /></td>
             <td className="p-3 text-right font-mono whitespace-nowrap">
-                <TwoLine cores={host.demandCpuCores} bytes={host.demandMemoryBytes} exact={model.cpuBurstVcpu !== null} />
+                <TwoLine cores={host.demandCpuCores} bytes={host.demandMemoryBytes} exact />
                 <span className="mt-0.5 block font-sans text-foreground-dim">{perServerSourceLabel(host, model)}</span>
             </td>
             <td className="p-3">
