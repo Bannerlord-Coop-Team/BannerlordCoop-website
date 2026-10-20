@@ -12,6 +12,7 @@ import {
     FLEET_CAPACITY_LIMITS,
     FLEET_CAPACITY_PROVIDERS,
     fleetCapacityProviderLabel,
+    fleetCapacityTypeLabel,
     fleetCapacityHints,
     fleetCapacityHostNote,
     formatPercent,
@@ -64,7 +65,7 @@ const spare = {
     stealHourly: "--".repeat(168), busyHourly: "--".repeat(168),
 };
 const instanceType = {
-    key: SIX_KEY, provider: "ovhcloud-vps", vCpu: 6, memoryBytes: 12 * GIB, cpuModel: "Intel Core Processor (Haswell, no TSX)", cpuMhz: 2399.996,
+    key: SIX_KEY, provider: "ovhcloud-vps" as const, vCpu: 6, memoryBytes: 12 * GIB, cpuModel: "Intel Core Processor (Haswell, no TSX)", cpuMhz: 2399.996,
     hosts: 1, servers: 1, demand, steal, modelledServers: 4, demandSource: "type",
 };
 const provider = { provider: "ovhcloud-vps", hosts: 2, servers: 1, demand, steal, busyCores: busy };
@@ -259,6 +260,12 @@ it("caps each list well above the control plane's own bounds", () => {
 it("knows exactly the control plane's VPS providers, each with a readable name", () => {
     expect(FLEET_CAPACITY_PROVIDERS).toEqual(["ovhcloud-vps", "contabo-vps", "hosthatch-vps"]);
     expect(FLEET_CAPACITY_PROVIDERS.map(fleetCapacityProviderLabel)).toEqual(["OVHcloud", "Contabo", "HostHatch"]);
+});
+
+it("describes an instance type in words, never by its raw key", () => {
+    expect(fleetCapacityTypeLabel(instanceType)).toBe("OVHcloud · 6 vCPU · 12 GiB · Intel Core Processor (Haswell, no TSX) · 2,400 MHz");
+    expect(fleetCapacityTypeLabel({ ...instanceType, provider: "hosthatch-vps", memoryBytes: null, cpuModel: null, cpuMhz: 0 })).toBe("HostHatch · 6 vCPU · RAM unknown · CPU model unknown · MHz unknown");
+    expect(fleetCapacityTypeLabel({ ...instanceType, provider: "contabo-vps", cpuMhz: null })).toBe("Contabo · 6 vCPU · 12 GiB · Intel Core Processor (Haswell, no TSX) · MHz unknown");
 });
 
 it.each(FLEET_CAPACITY_PROVIDERS)("accepts %s as a provider, an instance type's and a VPS's", (id) => {

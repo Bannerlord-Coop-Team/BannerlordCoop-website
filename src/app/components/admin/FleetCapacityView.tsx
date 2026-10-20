@@ -21,6 +21,7 @@ import {
     fleetCapacityHostGroups,
     fleetCapacityHostNote,
     fleetCapacityProviderLabel,
+    fleetCapacityTypeLabel,
     formatCores,
     formatGiB,
     formatMhz,
@@ -304,8 +305,8 @@ function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCap
                         <tbody className="divide-y divide-white/10 text-foreground">
                             {capacity.instanceTypes.map((entry) => (
                                 <tr key={entry.key}>
-                                    {/* The key, provider|vCpu|GiB|CPU model|MHz, repeats the row's columns, so it is only the title. */}
-                                    <th scope="row" title={entry.key} className="p-3 align-top font-medium">{fleetCapacityProviderLabel(entry.provider)}</th>
+                                    {/* The type in words, never its raw key with the provider id. */}
+                                    <th scope="row" title={fleetCapacityTypeLabel(entry)} className="p-3 align-top font-medium">{fleetCapacityProviderLabel(entry.provider)}</th>
                                     <td className="p-3 text-right align-top font-mono">{entry.vCpu}</td>
                                     <td className="p-3 text-right align-top font-mono">{figure(entry.memoryBytes, formatGiB)}</td>
                                     <td className="max-w-56 p-3 align-top break-words">{entry.cpuModel ?? <NoData />}</td>

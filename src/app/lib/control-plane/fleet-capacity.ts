@@ -9,6 +9,7 @@ import type {
     HostingFleetCapacityDemand,
     HostingFleetCapacityDemandSource,
     HostingFleetCapacityHost,
+    HostingFleetCapacityInstanceType,
     HostingFleetCapacityMemoryBytes,
     HostingFleetCapacityProviderId,
 } from "./types";
@@ -488,6 +489,21 @@ export function busyStripSummary(serviceName: string, values: readonly (number |
 /** HostHatch is not in the website's own provider list yet, so its label lives here. */
 export function fleetCapacityProviderLabel(provider: HostingFleetCapacityProviderId) {
     return provider === "hosthatch-vps" ? "HostHatch" : vpsProviderLabel(provider);
+}
+
+/**
+ * An instance type as people read it, "OVHcloud · 6 vCPU · 12 GiB · Intel Core Processor (Haswell, no TSX) ·
+ * 2,400 MHz": the parts of its key, without the raw provider id, RAM in the key's whole GiB.
+ */
+export function fleetCapacityTypeLabel(entry: Pick<HostingFleetCapacityInstanceType, "provider" | "vCpu" | "memoryBytes" | "cpuModel" | "cpuMhz">) {
+    const mhzKnown = knownMhz(entry.cpuMhz);
+    return [
+        fleetCapacityProviderLabel(entry.provider),
+        `${entry.vCpu} vCPU`,
+        entry.memoryBytes === null ? "RAM unknown" : `${Math.round(entry.memoryBytes / GIB)} GiB`,
+        entry.cpuModel ?? "CPU model unknown",
+        mhzKnown === null ? "MHz unknown" : formatMhz(mhzKnown),
+    ].join(" · ");
 }
 
 export type FleetCapacityHostGroup = { label: string; hosts: HostingFleetCapacityHost[] };
