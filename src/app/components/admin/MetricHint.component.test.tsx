@@ -249,6 +249,53 @@ it("keeps a released tap's toggle for its click when the click comes", async () 
     }
 });
 
+it("closes a hovered hint when focus moves to another control", async () => {
+    const { trigger, tooltip } = await render("71% measured", "Share of the hours with data.");
+    const other = document.createElement("button");
+    other.textContent = "Relocate";
+    document.body.append(other);
+    try {
+        await act(async () => pointer(trigger, "pointerover", "mouse"));
+        expect(tooltip.hidden).toBe(false);
+        // The pointer stays over the figure; Tab moves focus to another control.
+        await act(async () => other.focus());
+        expect(tooltip.hidden).toBe(true);
+    } finally {
+        other.remove();
+    }
+});
+
+it("closes a hovered hint before a dialog opened from elsewhere takes focus", async () => {
+    const { trigger, tooltip } = await render("71% measured", "Share of the hours with data.");
+    // jsdom has no showModal(); it opens the dialog and moves focus into it, as this does.
+    const dialog = document.createElement("dialog");
+    const confirm = document.createElement("button");
+    confirm.textContent = "Relocate";
+    dialog.append(confirm);
+    document.body.append(dialog);
+    try {
+        await act(async () => pointer(trigger, "pointerover", "mouse"));
+        expect(tooltip.hidden).toBe(false);
+        await act(async () => { dialog.setAttribute("open", ""); confirm.focus(); });
+        expect(document.activeElement).toBe(confirm);
+        expect(tooltip.hidden).toBe(true);
+        // With no hint open, Escape in the dialog is the dialog's, untouched.
+        const dialogEscapes: KeyboardEvent[] = [];
+        dialog.addEventListener("keydown", (event) => { if (event.key === "Escape") dialogEscapes.push(event); });
+        await act(async () => { escape(confirm); });
+        expect(dialogEscapes).toHaveLength(1);
+    } finally {
+        dialog.remove();
+    }
+});
+
+it("stays open while focus moves onto its own figure", async () => {
+    const { trigger, tooltip } = await render("71% measured", "Share of the hours with data.");
+    await act(async () => pointer(trigger, "pointerover", "mouse"));
+    await act(async () => trigger.focus());
+    expect(tooltip.hidden).toBe(false);
+});
+
 it("keeps one hint open across the page, even in separate React roots", async () => {
     const first = await render("71% measured", "Share of the hours with data.");
     const second = await render("7.5 pair-h measured", "Pairs online together.");

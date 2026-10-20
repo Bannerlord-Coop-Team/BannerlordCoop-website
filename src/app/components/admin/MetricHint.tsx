@@ -51,11 +51,15 @@ export type MetricHintProps = {
  * would go; it renders the button and its tooltip as siblings, both phrasing content.
  *
  * The tooltip opens when a mouse or pen hovers the figure, when the figure takes keyboard focus, and on a tap. It
- * closes when the mouse or pen leaves, focus leaves, Escape is pressed (wherever focus is), the figure is tapped
- * again or activated again with Enter or Space, anything outside the figure is pressed, or the window scrolls or
- * resizes. Escape closes only the hint, not a dialog or menu under it, which closes on the next Escape. Only one
- * is open on a page at a time: opening one closes any other. The tooltip is fixed to the window, right-aligned with
- * its figure and below it (above it near the window's foot), so a scroll box around the figure never clips it.
+ * closes when the mouse or pen leaves, focus leaves the figure or moves to any other control, Escape is pressed
+ * (wherever focus is), the figure is tapped again or activated again with Enter or Space, anything outside the
+ * figure is pressed, or the window scrolls or resizes. Because focus moving anywhere else closes it, it is never
+ * left open over a dialog opened from another control: `showModal()` moves focus into the dialog first. Escape
+ * with a hint open closes only the hint and stops the key there, so Escape handlers further along (a menu, a
+ * panel) act only on the next Escape; a native modal dialog that the hint itself sits in still closes too, by its
+ * own `cancel` event. Only one is open on a page at a time: opening one closes any other. The tooltip is fixed to
+ * the window, right-aligned with its figure and below it (above it near the window's foot), so a scroll box around
+ * the figure never clips it.
  */
 export function MetricHint({ label, hint }: MetricHintProps) {
     const id = useId();
@@ -107,12 +111,14 @@ export function MetricHint({ label, hint }: MetricHintProps) {
         if (!isOpen) return;
         // A scroll or resize would leave the hint behind its figure, so it closes instead.
         const close = () => closeHint(id);
-        const pressOutside = (event: Event) => {
+        const outside = (event: Event) => {
             if (!(event.target instanceof Node) || !trigger.current?.contains(event.target)) close();
         };
         // Escape closes the open hint wherever focus is: it may have opened by hover, by a tap that left focus
         // elsewhere, or in place of a focused figure's hint. The hint is the topmost layer, so that Escape stops
-        // here and a dialog or menu under it closes only on the next one.
+        // here and Escape handlers further along act only on the next one. Focus moving to any other control
+        // (`outside` on focusin) has already closed a hint before a dialog opened from elsewhere takes focus, so
+        // the dialog's own Escape, its `cancel` event, never meets an open hint.
         const escape = (event: KeyboardEvent) => {
             if (event.key !== "Escape" || openHint?.id !== id) return;
             event.stopPropagation();
@@ -120,12 +126,14 @@ export function MetricHint({ label, hint }: MetricHintProps) {
         };
         window.addEventListener("scroll", close, true);
         window.addEventListener("resize", close);
-        document.addEventListener("pointerdown", pressOutside, true);
+        document.addEventListener("pointerdown", outside, true);
+        document.addEventListener("focusin", outside, true);
         document.addEventListener("keydown", escape, true);
         return () => {
             window.removeEventListener("scroll", close, true);
             window.removeEventListener("resize", close);
-            document.removeEventListener("pointerdown", pressOutside, true);
+            document.removeEventListener("pointerdown", outside, true);
+            document.removeEventListener("focusin", outside, true);
             document.removeEventListener("keydown", escape, true);
         };
     }, [isOpen, id]);
