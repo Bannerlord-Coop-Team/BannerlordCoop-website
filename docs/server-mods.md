@@ -17,7 +17,8 @@ the website's side of it.
   the bottom. Bannerlord Coop can be moved but stays enabled. Owner mods can be
   dragged by their handle or moved with the arrow keys, and toggled with the gold
   switch. Each change saves itself: a toggle saves at once, a drag when it ends,
-  and arrow-key moves 600 ms after the last key. Every save sends the complete
+  and arrow-key moves 600 ms after the last key (or at once if the owner leaves
+  the page sooner). Every save sends the complete
   list (`load-order`) against the last confirmed revision; one save runs at a
   time, and edits made meanwhile are saved next against the revision it returned
   (a drag or arrow-key run still in progress is saved when it ends).

@@ -138,6 +138,20 @@ it("moves with arrow keys, keeps focus, announces the position and saves once th
     expect(container.textContent).toContain("Load order saved.");
 });
 
+it("saves a pending arrow-key move when the panel unmounts before the delay ends", async () => {
+    const catalog = createMockServerModCatalog(mods());
+    const save = vi.spyOn(catalog, "saveServerModOrder");
+    await render(catalog);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const handle = container.querySelector<HTMLButtonElement>('[aria-label="Reorder Coop"]')!;
+    await act(async () => { handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
+    expect(save).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    expect(save).toHaveBeenCalledOnce();
+    expect(save.mock.calls[0][2].map(entry => entry.id).slice(3, 5)).toEqual(["Alpha", "Coop"]);
+});
+
 it("leaves focus alone after an arrow key that cannot move the mod", async () => {
     await render(createMockServerModCatalog(mods()));
     const handle = container.querySelector<HTMLButtonElement>('[aria-label="Reorder Coop"]')!;

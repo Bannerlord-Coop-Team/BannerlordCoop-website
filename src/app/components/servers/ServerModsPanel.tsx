@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
 import { FlaskConical, Lock, Menu, RefreshCw, Trash2, Upload } from "lucide-react";
 
 import { useTranslations } from "@/app/lib/localization/client";
@@ -57,8 +57,6 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
     const [draggingId, setDraggingId] = useState<string | null>(null);
     const [announcement, setAnnouncement] = useState("");
     const [notice, setNotice] = useState<Notice | null>(null);
-
-    useEffect(() => () => { if (keyboardSaveTimer.current !== null) clearTimeout(keyboardSaveTimer.current); }, []);
 
     useEffect(() => {
         const id = pendingFocusId.current;
@@ -175,6 +173,15 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
             void persist();
         }, KEYBOARD_SAVE_DELAY_MS);
     }
+
+    // Saves an arrow-key run whose delay has not ended, so leaving the page right after a move keeps it.
+    const flushKeyboardSave = useEffectEvent(() => {
+        if (keyboardSaveTimer.current === null) return;
+        clearTimeout(keyboardSaveTimer.current);
+        keyboardSaveTimer.current = null;
+        void persist();
+    });
+    useEffect(() => () => flushKeyboardSave(), []);
 
     /** Moves a mod in the draft and announces its new position for screen readers; returns whether it moved. */
     function move(fromIndex: number, toIndex: number): boolean {
