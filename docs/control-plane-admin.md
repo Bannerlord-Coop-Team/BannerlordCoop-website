@@ -572,9 +572,10 @@ tab.
 
 A server averages about 1.2 vCPU and 1.5 GB of RAM, so sharing a VPS only hurts
 when servers that are online together cannot burst. Each server needs room to
-burst to 2 vCPU and 3 GiB, and a VPS has room for `burstServers` of them at once:
-`min(floor(vCpu / 2), floor(memoryBytes / 3 GiB))`, or `floor(vCpu / 2)` when the
-runner's RAM could not be read. An hour is red when more of a VPS's servers were
+burst to 1.6 vCPU and 2.5 GiB, the fleet capacity model's burst targets, and a VPS
+has room for `burstServers` of them at once:
+`min(floor(vCpu / 1.6), floor(memoryBytes / 2.5 GiB))`, or `floor(vCpu / 1.6)` when
+the runner's RAM could not be read. An hour is red when more of a VPS's servers were
 online than that, because if they all burst at the same time they would be
 throttled. Per hour, with *k* the occupants with data that were online at least
 half the hour and *u* the occupants without data, `overBurst` is `1` when *k* is
@@ -604,8 +605,10 @@ control plane owns slot capacity.
   `slots`, `burstServers`, `occupants`, `online`, `overBurst`, `overBurstHours`,
   `measuredPairHours` and `coverage`. `memoryBytes` is null or a positive safe
   integer. `burstServers` is a non-negative integer no more than
-  `floor(vCpu / 2)` and, when `memoryBytes` is not null, no more than
-  `floor(memoryBytes / 3 GiB)`. `overBurst` matches `^[01-]{168}$` and
+  `floor(vCpu / 1.6)` and, when `memoryBytes` is not null, no more than
+  `floor(memoryBytes / 2.5 GiB)`. Earlier control planes counted 2 vCPU or 3 GiB
+  per server, which never gives more, so their responses still parse.
+  `overBurst` matches `^[01-]{168}$` and
   `overBurstHours` is its count of `1`. A VPS with no more occupants than
   `burstServers` must be all `0`. On any other VPS a `0` or `1` hour needs data
   (`online` not null), and a `1` hour needs `online` of at least half of one more
@@ -696,7 +699,7 @@ together"), adding "over burst capacity" on a red hour. Each strip has a text
 summary (slots filled, how many can burst together, the hours over burst or
 "bursts fit", the busiest hour and the coverage, or "empty"). After its shading
 and no-data keys the legend adds "Red: more servers online than can each burst
-to 2 vCPU and 3 GiB".
+to 1.6 vCPU and 2.5 GiB".
 
 A legacy response is shaded the same way but has no red row, no red legend
 entry and no "over burst" or "Bursts fit"; the legend keeps its shading and
@@ -886,9 +889,10 @@ figure; the tab presents them as follows.
   number of cores it used in the interval, its memory its working set at the
   interval's end, and the figures are nearest-rank percentiles over those
   intervals: CPU p50, p90, p95, p99 and max, memory p50, p95 and max. p95 means
-  95% of the intervals were at or below it, and the model sizes servers at the
-  percentiles in `model` (p95 for both), so short spikes above them are
-  expected. **Throttled** is the share of running time in which a server's CPU
+  95% of the intervals were at or below it. The model takes the CPU p50
+  (`model.cpuPercentile`) as a server's stable use and shows the memory p95
+  (`model.memoryPercentile`) for comparison; what it plans is under **Per
+  server**. **Throttled** is the share of running time in which a server's CPU
   quota throttled it. **Running server-hours** sums the hours servers ran, as a
   sense of how much the figures can be trusted.
 - **Steal** is the share of a VPS's CPU time that the hypervisor gave to other
@@ -901,10 +905,18 @@ figure; the tab presents them as follows.
 - **Usable** is what is left for game servers: vCPU × (1 − steal p95 ÷ 100) −
   overhead cores, and RAM − overhead memory, each clamped at zero by the control
   plane.
-- **Per server** is the demand a VPS is modelled with: its instance type's own
-  p95 figures once the type's servers have run `minimumRunningHours` (six today)
-  in the window (**Type**), else the whole fleet's once it has that much
-  (**Fleet**), else none yet (**None yet**).
+- **Per server** is the demand a VPS is modelled with: every online server
+  bursting at once to `model.cpuBurstVcpu` (1.6 vCPU) and
+  `model.memoryBurstBytes` (2.5 GiB), or to the peak CPU and peak working set of
+  its demand source where those are higher. The source is the servers that ran on
+  the VPS itself once they have run `minimumRunningHours` (six today) in the
+  window (**This VPS**), else its instance type's once they have (**Type**), else
+  the whole fleet's (**Fleet**), else none yet (**None yet**). Under the figures
+  the source says how they are made, leaving out a target whose peak is above it:
+  "This VPS · 1.6 vCPU, 2.5 GiB burst · peaks 1.372 cores, 2.26 GiB". A control
+  plane without a memory burst target plans memory at the source's p95 instead,
+  and the label describes the CPU only ("This VPS · 1.6 vCPU burst · peak
+  1.372").
 - **Servers at once (modelled)** is floor(min(usable cores ÷ per-server cores,
   usable memory ÷ per-server memory)), and **Limited by** says whether CPU or
   memory runs out first. It is compared with today's slots, floor(vCPU ÷ 2) from
@@ -913,8 +925,8 @@ figure; the tab presents them as follows.
   slots is **At risk** (the VPS cannot run all its slots' servers at their needs
   at once), more is **Headroom**, equal is **Matches**. It is null, and shown as
   not modelled, while the VPS's steal, overhead or memory is unknown, or while
-  neither its instance type nor the fleet has `minimumRunningHours` of running
-  data (`demandSource` `none`).
+  none of its own servers, its instance type and the fleet has
+  `minimumRunningHours` of running data (`demandSource` `none`).
 - An **instance type** is a provider, vCPU count, RAM rounded to whole GiB, CPU
   model and clock rounded to 100 MHz, keyed `provider|vCpu|GiB|model|MHz`, for
   example `ovhcloud-vps|6|12|Intel Core Processor (Haswell, no TSX)|2400`. A VPS
@@ -928,9 +940,17 @@ figure; the tab presents them as follows.
    note saying so (see below).
 2. **What a server needs**: the fleet's per-server CPU p50, p95 and max in
    cores, memory p50, p95 and max in GiB, running server-hours and throttled
-   share, and a sentence comparing the model's percentiles with the static rule
-   ("A running server uses 1.20 cores at p95 (60% of 2 vCPU) and 1.80 GiB at p95
-   (60% of 3 GiB).").
+   share, and a sentence comparing them with the static rule and saying what is
+   planned ("A running server uses 1.18 cores at p50 (59% of 2 vCPU) and 1.73 GiB
+   at p95 (58% of 3 GiB). Every online server is planned to burst to 1.6 vCPU and
+   2.5 GiB at once, or to its VPS's measured peaks where higher; no CPU peak is
+   above its target (the fleet's highest is 1.492 cores), so every VPS plans 1.600
+   cores per server (80% of 2 vCPU), and no memory peak is above its target (the
+   fleet's highest is 2.26 GiB), so every VPS plans 2.50 GiB per server (83% of
+   3 GiB)."). No VPS's source peaks above the fleet, so above a target the plans
+   range from the target to the fleet's peak, and the sentence says each VPS's own
+   is in its per-server column. Until the fleet has `minimumRunningHours` nothing
+   is planned and the sentence stops after what a server uses.
 3. **Providers**: VPSs, servers, steal mean, p95 and max, and per-server CPU p50
    and p95 and memory p95, one row per provider. Providers are named OVHcloud,
    Contabo and HostHatch here and in the other tables and VPS groups.
@@ -943,7 +963,9 @@ figure; the tab presents them as follows.
    0 (no observation on them carried server or host counters yet) last in their
    group and marked "no data yet". Each row has the service name without
    `.vps.ovh.net` (the full name in its title), size, CPU model and MHz, its
-   servers and slots, and each server's own p95 CPU and memory; servers at once
+   servers and slots, and each server's own stable and peak CPU and p95 memory,
+   with its memory peak once there is a memory burst target ("0.55 cores stable
+   (p50), peak 1.10 · 1.65 GiB at p95, peak 1.65"); servers at once
    against its slots, limited by, steal mean · p95 · max, busy cores p95 of its
    vCPU, overhead, usable and per-server cores and GiB with their source; and
    two 168-cell strips, steal and busy, one cell per UTC hour oldest first under
@@ -959,6 +981,9 @@ figure; the tab presents them as follows.
 Every figure's label is a button with a tooltip explaining it (steal, busy
 cores, overhead, usable, p50/p95/max, per server and its source, servers at
 once, limited by, throttled share, running server-hours and the hourly strips).
+The memory tooltips say that the model plans memory at the burst target, or the
+peak where higher, and that the p95 is shown for comparison; without a memory
+burst target they say that the p95 is planned.
 A tooltip opens on hover, focus or a tap and closes on Escape, when the pointer
 or focus leaves, or when the window scrolls or resizes; only one is open at a
 time. These are the shared `MetricHint` buttons described under the measured
@@ -1013,8 +1038,9 @@ memory are null or non-negative, as the control plane clamps them.
 Every `provider`, in the provider list, on an instance type and on a VPS, is one
 of the control plane's closed `VPS_PROVIDER_IDS`: `ovhcloud-vps`,
 `contabo-vps` or `hosthatch-vps` (the parser's `FLEET_CAPACITY_PROVIDERS`).
-`demandSource` is `type`, `fleet` or `none` and `limitedBy` null, `cpu` or
-`memory`. `stealHourly` and `busyHourly` are 336 characters, 168 hours of two
+A VPS's `demandSource` is `vps`, `type`, `fleet` or `none`, an instance type's
+`type`, `fleet` or `none`, and `limitedBy` null, `cpu` or `memory`.
+`stealHourly` and `busyHourly` are 336 characters, 168 hours of two
 lowercase hex digits or `--`; steal is permille capped at 255 (`ff` is 25.5% or
 more) and busy is a percent no more than 100 (`64`). Each provider,
 instance-type key and VPS service name appears once. So that a malformed
@@ -1022,15 +1048,41 @@ response cannot make the tab draw thousands of rows of 336 cells, a read holds
 at most 256 VPSs, 64 servers and 32 regions on any one VPS, and 256 instance
 types (`FLEET_CAPACITY_LIMITS`). These are well above the control plane's own
 bounds, 64 VPSs and 512 placed servers today, so they leave room for them to
-rise. Providers need no cap: each appears once and is one of the three ids. Nothing else between fields is checked: an unknown
-`instanceTypeKey`, occupants beyond slots or fleet totals that do not add up
-still render.
+rise. Providers need no cap: each appears once and is one of the three ids.
+
+The read comes in one of two shapes, every part of it in the same one; a mix is
+unexpected. Both have `model.cpuBurstVcpu`, above 0 and at most 256, and each
+VPS's `stableCpuCores` and `peakCpuCores`.
+
+- **Memory burst**, from control plane `ao/memory-burst` on, adds
+  `model.memoryBurstBytes`, a positive safe integer of at most 64 GiB, and each
+  VPS's `peakMemoryBytes`, null or a non-negative integer.
+- **Earlier**, from control plane #524 to `47c881b3`, has neither and plans
+  memory at its p95. The website reads it with `memoryBurstBytes` and every
+  `peakMemoryBytes` null.
+
+A VPS without a source (`none`) has every per-server figure null, and one with a
+source has every one, with a stable CPU above 0 and a CPU peak no lower. Its
+`demandCpuCores` is `max(cpuBurstVcpu, peakCpuCores)` within 0.001, and in the
+memory-burst shape its `demandMemoryBytes` is exactly
+`max(memoryBurstBytes, peakMemoryBytes)`. A read from before the CPU burst target,
+without `cpuBurstVcpu`, is no longer sent by any control plane and is unexpected.
+Nothing else between fields is checked: an unknown `instanceTypeKey`, occupants
+beyond slots or fleet totals that do not add up still render.
 
 ### Deploy order
 
 Deploy the control plane's `fleet-capacity` operation first, then this website
 change. Deployed the other way round, the tab only says the control plane does
 not report fleet capacity yet until the control plane catches up.
+
+The memory burst target goes the other way: deploy this website change
+(`ao/memory-burst`) first, then control plane `ao/memory-burst`. The website
+reads the current control plane's capacity and overlap and the new ones; deployed
+the other way round, an older website shows the new capacity read as unexpected,
+and would reject the overlap of any VPS whose memory lets more servers burst at
+2.5 GiB than at 3 GiB (none of today's). Roll back in the other order: the control
+plane first.
 
 A VPS provider the control plane adds to `VPS_PROVIDER_IDS` needs a website
 update first: add it to `FLEET_CAPACITY_PROVIDERS` (and
