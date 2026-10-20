@@ -112,8 +112,9 @@ function positiveBytes(value: unknown) {
     return count(value, 1);
 }
 
+/** A VPS may report a clock of 0 MHz, and an instance type rounds anything under 50 MHz to 0; both read as unknown. */
 function mhz(value: unknown) {
-    return typeof value === "number" && Number.isFinite(value) && value > 0;
+    return amount(value);
 }
 
 function percentile(value: unknown) {
@@ -282,6 +283,11 @@ export function formatServerHours(value: number) {
 /** "2,400 MHz". */
 export function formatMhz(value: number) {
     return `${Math.round(value).toLocaleString("en-US")} MHz`;
+}
+
+/** A clock to show, or null when it is unknown: not reported, or reported (or rounded) as 0 MHz. */
+export function knownMhz(value: number | null) {
+    return value === null || value <= 0 ? null : value;
 }
 
 /** "3 GiB" for the static rule's whole gibibytes, two decimals at most otherwise. */
@@ -470,12 +476,12 @@ export function fleetCapacityHints(capacityModel: HostingAdminFleetCapacity["mod
         steal: "Steal: the share of the VPS's CPU time that the hypervisor gave to other tenants of the same physical machine, in percent. A VPS with high steal really has fewer cores than it is sold with.",
         stealP95: "Steal p95: 95% of the VPS's intervals of about 5 minutes had at most this much steal. The model takes it off the vCPUs.",
         stealMax: "The highest steal of any interval in the week.",
-        busyCores: "Busy cores at p95: how many of the VPS's cores were busy (user, system and interrupt time), game servers and everything else together, in 95% of its intervals.",
+        busyCores: "Busy cores at p95: how many of the VPS's cores were busy (user, nice, system and interrupt time), game servers and everything else together, in 95% of its intervals.",
         overhead: "Overhead: the median cores and memory in use beyond the game servers' own, from the operating system, the runner and anything else on the VPS.",
         usable: "Usable: what is left for game servers, never below 0. Cores are vCPU × (1 − steal p95 ÷ 100) − overhead cores; memory is RAM − overhead memory.",
         perServer: `Per server: the ${cpu} CPU and ${memory} memory one server is modelled to need on this VPS, from the source shown.`,
         demandSource: `Where the per-server needs come from: Type uses the instance type's own figures once its servers have run ${formatServerHours(capacityModel.minimumRunningHours)} in the week; Fleet uses the whole fleet's once it has; None yet means neither has enough data.`,
-        modelled: `Servers at once: how many servers the VPS could run together at their ${cpu} CPU and ${memory} memory, floor(min(usable cores ÷ per-server cores, usable memory ÷ per-server memory)), unknown until its steal, overhead and memory are measured. Compared with today's slots from the static rule (${rule}): fewer is at risk when they all run at once, more is headroom.`,
+        modelled: `Servers at once: how many servers the VPS could run together at their ${cpu} CPU and ${memory} memory, floor(min(usable cores ÷ per-server cores, usable memory ÷ per-server memory)), unknown until its steal, overhead and memory are measured and its instance type or the fleet has enough running data. Compared with today's slots from the static rule (${rule}): fewer is at risk when they all run at once, more is headroom.`,
         slots: `Slots today: floor(vCPU ÷ ${capacityModel.staticBurstVcpuPerServer}), from the static rule of ${rule}.`,
         limitedBy: "Whether CPU or memory runs out first in the model.",
         hourly: "Mean steal and busy share of each UTC hour, oldest first. Darker is more; a hatched hour has no data.",

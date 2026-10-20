@@ -805,7 +805,7 @@ figure; the tab presents them as follows.
 - **Steal** is the share of a VPS's CPU time that the hypervisor gave to other
   tenants of the same physical machine, in percent (time-weighted mean, p95 and
   max over the week's intervals).
-- **Busy cores** is how many of a VPS's cores were busy (user, system and
+- **Busy cores** is how many of a VPS's cores were busy (user, nice, system and
   interrupt time), game servers and everything else together.
 - **Overhead** is the median cores and memory in use beyond the game servers'
   own: the operating system, the runner and anything else on the VPS.
@@ -823,8 +823,9 @@ figure; the tab presents them as follows.
   worked out the same way from `model.staticBurstVcpuPerServer`). Fewer than its
   slots is **At risk** (the VPS cannot run all its slots' servers at their needs
   at once), more is **Headroom**, equal is **Matches**. It is null, and shown as
-  not modelled, while there is no per-server demand or the VPS's steal, overhead
-  or memory is unknown.
+  not modelled, while the VPS's steal, overhead or memory is unknown, or while
+  neither its instance type nor the fleet has `minimumRunningHours` of running
+  data (`demandSource` `none`).
 - An **instance type** is a provider, vCPU count, RAM rounded to whole GiB, CPU
   model and clock rounded to 100 MHz, keyed `provider|vCpu|GiB|model|MHz`, for
   example `ovhcloud-vps|6|12|Intel Core Processor (Haswell, no TSX)|2400`. A VPS
@@ -901,7 +902,9 @@ percentiles are above 0 and at most 100, `minimumRunningHours` is a finite
 non-negative number, `staticBurstVcpuPerServer` is positive and
 `staticBurstMemoryBytesPerServer` a positive integer. Counts (hosts, servers,
 samples, slots, modelled servers) are non-negative integers, vCPU at least 1;
-bytes are non-negative integers and RAM positive; MHz is positive. Text is
+bytes are non-negative integers and RAM positive; MHz is non-negative, and 0 (a
+VPS that reports no clock, or an instance type whose clock rounds to 0) shows as
+unknown ("—"). Text is
 1–256 characters, and an instance-type key, which holds a whole CPU model, up to
 512; its format is not checked. A demand's
 running server-hours is a finite non-negative number, its CPU percentiles and

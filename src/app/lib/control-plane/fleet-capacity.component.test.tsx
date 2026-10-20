@@ -9,7 +9,9 @@ import {
     fleetCapacityDataState,
     fleetCapacityErrorMessage,
     fleetCapacityHostGroups,
+    fleetCapacityHints,
     formatPercent,
+    knownMhz,
     modelledVerdict,
     parseFleetCapacity,
     staticRuleComparison,
@@ -148,6 +150,9 @@ it("accepts what the contract does not rule out", () => {
     expect(parseFleetCapacity({ ...capacity, fleet: { hosts: 0, servers: 99, demand } })).not.toBeNull();
     expect(parseFleetCapacity(withHost({ instanceTypeKey: "not-in-the-read", demandSource: "none", demandCpuCores: 1.2 }))).not.toBeNull();
     expect(parseFleetCapacity({ ...capacity, model: { ...model, cpuPercentile: 90, minimumRunningHours: 12.5, staticBurstVcpuPerServer: 1.5 } })).not.toBeNull();
+    // A VPS may report a clock of 0 MHz, and a type rounds anything under 50 MHz to 0.
+    expect(parseFleetCapacity(withHost({ cpuMhz: 0 }))).not.toBeNull();
+    expect(parseFleetCapacity({ ...capacity, instanceTypes: [{ ...instanceType, key: "ovhcloud-vps|6|12|Intel Core Processor (Haswell, no TSX)|0", cpuMhz: 0 }] })).not.toBeNull();
 });
 
 it.each([
@@ -192,7 +197,10 @@ it.each([
     ["one instance type twice", { ...capacity, instanceTypes: [instanceType, instanceType] }],
     ["an instance type of 0 vCPU", { ...capacity, instanceTypes: [{ ...instanceType, vCpu: 0 }] }],
     ["an instance type of 0 bytes", { ...capacity, instanceTypes: [{ ...instanceType, memoryBytes: 0 }] }],
-    ["a CPU of 0 MHz", { ...capacity, instanceTypes: [{ ...instanceType, cpuMhz: 0 }] }],
+    ["a negative clock on an instance type", { ...capacity, instanceTypes: [{ ...instanceType, cpuMhz: -100 }] }],
+    ["a negative clock on a VPS", withHost({ cpuMhz: -1 })],
+    ["an infinite clock", withHost({ cpuMhz: Number.POSITIVE_INFINITY })],
+    ["a clock given as text", withHost({ cpuMhz: "2400" })],
     ["an empty CPU model", { ...capacity, instanceTypes: [{ ...instanceType, cpuModel: "" }] }],
     ["an unknown demand source", { ...capacity, instanceTypes: [{ ...instanceType, demandSource: "host" }] }],
     ["fractional modelled servers", { ...capacity, instanceTypes: [{ ...instanceType, modelledServers: 1.5 }] }],
@@ -283,6 +291,18 @@ it("says when there is no data or not enough yet", () => {
     expect(fleetCapacityDataNote(sparse)).toBe("Not enough data yet: the fleet has 3.3 server-h of running data, and the model plans with an instance type's or the whole fleet's figures only once it has 6.0 server-h. Until then no VPS is modelled, and figures without data show —.");
     expect(fleetCapacityDataState(parseFleetCapacity(capacity)!)).toBe("ready");
     expect(fleetCapacityDataNote(parseFleetCapacity(capacity)!)).toBeNull();
+});
+
+it("reads a clock of 0 MHz as unknown", () => {
+    expect([null, 0, 2400].map(knownMhz)).toEqual([null, null, 2400]);
+});
+
+it("explains busy cores and modelled servers as the control plane computes them", () => {
+    const hints = fleetCapacityHints(model);
+    // Busy is user + nice + system + irq + softirq time.
+    expect(hints.busyCores).toContain("(user, nice, system and interrupt time)");
+    // Nothing is modelled while the type and the fleet are under minimumRunningHours.
+    expect(hints.modelled).toContain("unknown until its steal, overhead and memory are measured and its instance type or the fleet has enough running data.");
 });
 
 it("formats a sliver of a percent and explains failed reads", () => {

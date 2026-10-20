@@ -253,7 +253,7 @@ it("groups VPSs by provider then region, with VPSs without data last", async () 
     ]);
     expect(hostRow("vps-1a2b3c4d").querySelector("th p")!.getAttribute("title")).toBe("vps-1a2b3c4d.vps.ovh.net");
     expect(hostRow("vps-de-quiet").querySelector("th")!.textContent).toContain("0 servers · 2 slots · no data yet");
-    expect(hostRow("vps-spare").querySelector("th")!.textContent).toContain("4 vCPU · RAM unknownCPU model unknown");
+    expect(hostRow("vps-spare").querySelector("th")!.textContent).toContain(`4 vCPU · RAM unknownCPU model unknown${NO_DATA}`);
     // One observation with counters but no interval yet: listed with the measured VPSs, its strips still hatched.
     expect(hostRow("vmi123456.contaboserver.net").querySelector("th")!.textContent).not.toContain("no data yet");
     expect(strips("vmi123456.contaboserver.net").steal.getAttribute("aria-label")).toBe("vmi123456.contaboserver.net steal by hour: no data yet");
@@ -272,6 +272,22 @@ it("shows each VPS's figures and its servers' own needs", async () => {
     expect(cellTexts(row).slice(0, 7)).toEqual(["4 / 3 slotsHeadroom +1", "CPU", "0.4% · 1.2% · 6.5%", "2.40 coresof 6 vCPU", "0.35 cores1.10 GiB", "5.58 cores10.90 GiB", "1.20 cores1.80 GiBType p95"]);
     expect(cellTexts(hostRow("vps-de-risk")).slice(0, 3)).toEqual(["1 / 2 slotsAt risk −1", "Memory", "1.8% · 3.4% · 12.5%"]);
     expect(cellTexts(hostRow("vps-spare")).slice(0, 7)).toEqual([`${NO_DATA} / 2 slots`, NO_DATA, NO_DATA, `${NO_DATA}of 4 vCPU`, `${NO_DATA}${NO_DATA}`, `${NO_DATA}${NO_DATA}`, `${NO_DATA}${NO_DATA}None yet`]);
+});
+
+it("shows a clock of 0 MHz as unknown on a VPS and an instance type", async () => {
+    mocks.request.mockResolvedValueOnce({
+        ...capacity,
+        instanceTypes: [{ ...ovhSix, key: `ovhcloud-vps|6|12|${HASWELL}|0`, cpuMhz: 0 }, ovhFour, contaboEight],
+        hosts: capacity.hosts.map((host) => host === roomy ? { ...roomy, cpuMhz: 0, instanceTypeKey: `ovhcloud-vps|6|12|${HASWELL}|0` } : host),
+    });
+    await open();
+    expect(cellTexts(typeRow(`ovhcloud-vps|6|12|${HASWELL}|0`))[3]).toBe(NO_DATA);
+    const name = hostRow("vps-1a2b3c4d").querySelector("th")!.textContent!;
+    expect(name).toContain(`${HASWELL}${NO_DATA}`);
+    expect(name).not.toContain("0 MHz");
+    // A known clock still reads in MHz.
+    expect(cellTexts(typeRow(FOUR_KEY))[3]).toBe("2,400 MHz");
+    expect(hostRow("vps-de-risk").querySelector("th")!.textContent).toContain(`${HASWELL}2,400 MHz`);
 });
 
 it("marks VPSs with room for fewer servers than slots apart from those with headroom, not by colour alone", async () => {

@@ -25,6 +25,7 @@ import {
     formatPercent,
     formatServerHours,
     formatShare,
+    knownMhz,
     limitedByLabel,
     modelledVerdict,
     occupantDemandLabel,
@@ -304,7 +305,7 @@ function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCap
                                     <td className="p-3 text-right align-top font-mono">{entry.vCpu}</td>
                                     <td className="p-3 text-right align-top font-mono">{figure(entry.memoryBytes, formatGiB)}</td>
                                     <td className="max-w-56 p-3 align-top break-words">{entry.cpuModel ?? <NoData />}</td>
-                                    <td className="p-3 text-right align-top font-mono">{figure(entry.cpuMhz, formatMhz)}</td>
+                                    <td className="p-3 text-right align-top font-mono">{figure(knownMhz(entry.cpuMhz), formatMhz)}</td>
                                     <td className="p-3 text-right align-top font-mono">{entry.hosts}</td>
                                     <td className="p-3 text-right align-top font-mono">{entry.servers}</td>
                                     <td className="p-3 text-right align-top font-mono">{figure(entry.demand.cpuCores?.p50, formatCores)}</td>
@@ -428,7 +429,7 @@ const HostRow = memo(function HostRow({ host, model, days, hourLabels }: {
                     <p className="mt-1 text-foreground-muted">{capacitySizeLabel(host)}</p>
                     <p className="mt-0.5 text-foreground-muted">
                         <span className="block truncate" title={host.cpuModel ?? undefined}>{host.cpuModel ?? "CPU model unknown"}</span>
-                        {host.cpuMhz !== null && <span className="block font-mono">{formatMhz(host.cpuMhz)}</span>}
+                        <span className="block font-mono">{figure(knownMhz(host.cpuMhz), formatMhz)}</span>
                     </p>
                     <p className="mt-1 text-foreground-muted">{servers} {servers === 1 ? "server" : "servers"} · {host.slots} {host.slots === 1 ? "slot" : "slots"}{host.samples === 0 && " · no data yet"}</p>
                     {servers > 0 && (
