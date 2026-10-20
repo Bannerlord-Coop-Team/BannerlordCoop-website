@@ -294,7 +294,7 @@ function LiveMove({ relocation }: { relocation: HostingPlacementRelocation }) {
                 </span>
                 <span className="text-foreground-muted">{hostingRegionLabel(relocation.targetRegion)}</span>
                 <span className="text-foreground-muted" title={relocation.mode === "announced" ? "Announced on the server's page, then moved after an hour's notice." : "Moved while the server was stopped."}>{relocation.mode === "announced" ? "Announced" : "Offline"}</span>
-                <span className="font-mono text-foreground" title="Co-online pair-hours per week this move saves.">{formatPlacementGain(relocation.gainPairHoursPerWeek)}</span>
+                <span className="font-mono text-foreground" title="Co-online pair-hours per week this move saves. A move made to relieve a CPU shortage can show 0.0.">{formatPlacementGain(relocation.gainPairHoursPerWeek)}</span>
                 <span className={`${badgeClass} ${STATE_BADGES[relocation.state] ?? STATE_BADGES.cancelled}`}>{placementRelocationStateLabel(relocation.state)}</span>
                 {duration !== null && <span className="text-foreground-muted">Took {duration}</span>}
             </div>

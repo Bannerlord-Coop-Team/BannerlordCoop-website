@@ -101,7 +101,7 @@ it("shows one switch and nothing to configure", async () => {
     expect(automaticPlacement().getAttribute("aria-checked")).toBe("true");
     expect(automaticPlacement().getAttribute("aria-label")).toBe("Automatic placement");
     expect(container.textContent).toContain(PLACEMENT_EXECUTOR_DESCRIPTION);
-    expect(PLACEMENT_EXECUTOR_DESCRIPTION).toBe("When on, the control plane moves servers to quieter VPSs by itself, one at a time. "
+    expect(PLACEMENT_EXECUTOR_DESCRIPTION).toBe("When on, the control plane moves servers to quieter VPSs, or to relieve a CPU shortage, by itself, one at a time. "
         + "A stopped server moves at once and stays stopped; a running server gets an hour's warning on its page and in game, then moves and starts again.");
     expect(container.textContent).toContain("On · relocating servers automatically");
     expect(container.textContent).toContain("On since");
@@ -114,6 +114,9 @@ it("shows one switch and nothing to configure", async () => {
     expect(rows[0]).toContain("The Gang");
     expect(rows[0]).toContain("Moved");
     expect(rows[0]).toContain("+24.5");
+    // The gain is pair-hours only; a move made for the CPU shortage it removes can show 0.0.
+    expect(container.querySelector("li")!.querySelector('span[title^="Co-online pair-hours"]')!.getAttribute("title"))
+        .toBe("Co-online pair-hours per week this move saves. A move made to relieve a CPU shortage can show 0.0.");
     expect(rows[1]).toContain("Announced");
     expect(rows[1]).toContain("Failed");
     expect(rows[1]).toContain("Cancelled because the move could not start within its announced window. placement_window_missed");

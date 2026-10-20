@@ -38,6 +38,8 @@ test("explains server notices and the automatic executor instead of retired owne
     assert.match(operationExplanation("create-notice"), /not an email or a Discord message/iu);
     assert.match(operationExplanation("withdraw-notice"), /for everyone/iu);
     assert.match(operationExplanation("set-placement-executor"), /by itself/iu);
+    // Capacity-aware since control plane #522: pair-hours, CPU shortage removed, or a mix.
+    assert.match(operationExplanation("set-placement-executor"), /at least 20 pair-hours a week or removes at least 1 core-hour a week of expected CPU shortage \(or a mix of the two\)/u);
     assert.match(destructiveExplanation("set-placement-executor"), /address/iu);
     assert.doesNotMatch(operationExplanation("announce-owners"), /notification campaign/iu);
 });
@@ -45,6 +47,7 @@ test("explains server notices and the automatic executor instead of retired owne
 test("explains that a placement plan relocates nothing by itself", () => {
     assert.match(operationExplanation("placement-plan"), /dry run/iu);
     assert.match(operationExplanation("placement-plan"), /nothing is reserved, queued or relocated/iu);
+    assert.match(operationExplanation("placement-plan"), /where measured, each VPS has the CPU its servers need/u);
     assert.match(operationExplanation("relocate-server"), /address and game port change/iu);
 });
 

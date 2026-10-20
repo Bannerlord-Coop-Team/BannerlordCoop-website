@@ -121,7 +121,7 @@ export function formatPlacementChange(current: number, proposed: number) {
     return signed(Number(proposed.toFixed(1)) - Number(current.toFixed(1)));
 }
 
-/** A step's own saving: positive saves pair-hours, zero or negative is an enabling leg of a swap. */
+/** A step's own pair-hour saving: zero or negative is an enabling leg of a swap or a move made to relieve a CPU shortage. */
 export function formatPlacementGain(value: number) {
     return Number.isFinite(value) ? signed(Number(value.toFixed(1))) : "—";
 }
@@ -241,7 +241,7 @@ export function placementMoveStatuses(
 }
 
 /** What automatic placement does, in one sentence; its rules are fixed by the control plane. */
-export const PLACEMENT_EXECUTOR_DESCRIPTION = "When on, the control plane moves servers to quieter VPSs by itself, one at a time. "
+export const PLACEMENT_EXECUTOR_DESCRIPTION = "When on, the control plane moves servers to quieter VPSs, or to relieve a CPU shortage, by itself, one at a time. "
     + "A stopped server moves at once and stays stopped; a running server gets an hour's warning on its page and in game, then moves and starts again.";
 
 /** The confirmation an administrator accepts to switch it on. */

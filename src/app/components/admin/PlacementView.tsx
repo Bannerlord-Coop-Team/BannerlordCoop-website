@@ -74,7 +74,7 @@ const FORM_HELP: Record<keyof typeof PLACEMENT_PLAN_LIMITS, string> = {
     historyDays: "Days of reconcile history to learn from.",
     halfLifeDays: "Age at which an observation counts half as much as one from now.",
     maximumMoves: "Most servers the plan may relocate; 0 analyzes only.",
-    minimumGainHours: "Pair-hours per week each relocation step must be worth, staging hops included.",
+    minimumGainHours: "Pair-hours per week each relocation step must be worth, staging hops included; 1 core-hour a week of CPU shortage removed counts as 20.",
 };
 
 /**
@@ -227,7 +227,7 @@ function PlacementPlanResult({ plan, data }: { plan: HostingAdminPlacementPlan; 
 
 function PlacementTotals({ current, proposed }: { current: HostingPlacementContention; proposed: HostingPlacementContention }) {
     const rows: Array<{ key: keyof HostingPlacementContention; label: string; help: string }> = [
-        { key: "pairHoursPerWeek", label: "Co-online pair-hours", help: "Model: expected pair-hours per week that two servers on one VPS are online together. The planner minimizes this." },
+        { key: "pairHoursPerWeek", label: "Co-online pair-hours", help: "Model: expected pair-hours per week that two servers on one VPS are online together. The planner minimizes this and, where measured, the expected CPU shortage." },
         { key: "contendedHoursPerWeek", label: "Hours with 2+ online", help: "Model: expected hours per week in which at least two servers on one VPS are online." },
         { key: "saturatedHoursPerWeek", label: "Hours with 3+ online", help: "Model: expected hours per week in which at least three servers on one VPS are online." },
         { key: "observedPairHoursPerWeek", label: "Observed replay pair-hours", help: "The history window replayed onto the placement. In-sample evidence, not a forecast." },
@@ -310,7 +310,7 @@ function PlacementMoves({ plan, data }: { plan: HostingAdminPlacementPlan; data:
             <div className="mt-5 overflow-x-auto border border-white/10 bg-surface">
                 <table className="w-full min-w-260 text-left text-sm">
                     <thead className={tableHeadClass}>
-                        <tr><th className="p-4">Step</th><th className="p-4">Server</th><th className="p-4">VPS</th><th className="p-4">Region</th><th className="p-4 text-right" title="Co-online pair-hours per week this step saves on its own, in step order.">Gain</th><th className="p-4">Quiet window</th><th className="p-4">Status</th><th className="p-4"><span className="sr-only">Relocate</span></th></tr>
+                        <tr><th className="p-4">Step</th><th className="p-4">Server</th><th className="p-4">VPS</th><th className="p-4">Region</th><th className="p-4 text-right" title="Co-online pair-hours per week this step saves on its own, in step order. Steps are ordered by pair-hours and CPU shortage removed together.">Gain</th><th className="p-4">Quiet window</th><th className="p-4">Status</th><th className="p-4"><span className="sr-only">Relocate</span></th></tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">{moves.map((move) => {
                         const status: PlacementMoveStatus = statuses.get(move.step) ?? { kind: "blocked", reason: "" };
@@ -323,7 +323,7 @@ function PlacementMoves({ plan, data }: { plan: HostingAdminPlacementPlan; data:
                                 </td>
                                 <td className="p-4 font-mono text-xs text-foreground-muted">{move.fromServiceName} → <span className="text-foreground">{move.toServiceName}</span></td>
                                 <td className="p-4 text-xs text-foreground">{hostingRegionLabel(move.targetRegion)}</td>
-                                <td className={`p-4 text-right font-mono text-xs ${move.gainPairHoursPerWeek > 0 ? "text-emerald-300" : "text-foreground-muted"}`} title={move.gainPairHoursPerWeek > 0 ? undefined : "This step saves nothing on its own; it enables a later step, such as one leg of a swap."}>{formatPlacementGain(move.gainPairHoursPerWeek)}</td>
+                                <td className={`p-4 text-right font-mono text-xs ${move.gainPairHoursPerWeek > 0 ? "text-emerald-300" : "text-foreground-muted"}`} title={move.gainPairHoursPerWeek > 0 ? undefined : "This step saves no pair-hours on its own: it enables a later step, such as one leg of a swap, or relieves a CPU shortage."}>{formatPlacementGain(move.gainPairHoursPerWeek)}</td>
                                 <td className="p-4 text-xs text-foreground-muted">
                                     <p className="text-foreground">{formatPlacementWindow(move.window)}</p>
                                     <p className="mt-1">Next <LocalDateTime value={move.window.nextStartsAt} /> · {formatProbability(move.window.onlineProbability)} online</p>
