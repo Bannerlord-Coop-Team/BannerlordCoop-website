@@ -92,7 +92,7 @@ export function PlacementMeasuredOverlap() {
 
     const overlap = state.kind === "ready" ? state.overlap : state.previous;
     const groups = overlap === null ? [] : overlapGroups(overlap.hosts);
-    // An older control plane's read has no red hours, so neither its legend nor its rows mention them.
+    // An older control plane's read has no red hours, so neither the intro, its legend nor its rows mention them.
     const predatesBurst = overlap !== null && overlapPredatesBurst(overlap);
     return (
         <section aria-label="Host overlap" className="border border-white/10 bg-surface p-5">
@@ -106,7 +106,8 @@ export function PlacementMeasuredOverlap() {
                 </button>
             </div>
             <p className="mt-2 max-w-3xl text-xs leading-5 text-foreground-muted">
-                How the servers on each VPS with more than one slot were online together in each of the last 168 hours, from their own status samples, and the hours in which more of them were online than could each burst to 2 vCPU and 3 GiB at once. Nothing here is modelled.
+                How the servers on each VPS with more than one slot were online together in each of the last 168 hours, from their own status samples
+                {!predatesBurst && ", and the hours in which more of them were online than could each burst to 2 vCPU and 3 GiB at once"}. Nothing here is modelled.
             </p>
             {state.kind === "loading" && <p role="status" className="mt-4 text-xs text-foreground-muted">Loading measured overlap…</p>}
             {state.kind === "error" && (

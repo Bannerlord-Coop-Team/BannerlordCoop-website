@@ -114,6 +114,11 @@ function rightColumn(name: string) {
     return [...row(name).children[2]!.querySelectorAll("p")].map((line) => line.textContent);
 }
 
+/** The sentence under the heading that says what the pane shows. */
+function intro() {
+    return [...container.querySelectorAll("p")].find((item) => item.textContent?.startsWith("How the servers"))!;
+}
+
 /** The key above the strips. */
 function legend() {
     return [...container.querySelectorAll("div")].find((item) => item.firstElementChild?.textContent === "One cell per UTC hour, oldest first. Online:")!;
@@ -179,7 +184,7 @@ it("marks in red the hours more servers were online than can each burst, and dra
     expect(strip("vps-1a2b3c4d").getAttribute("aria-label")).toBe("vps-1a2b3c4d: 4 of 4 slots; 3 can burst together; over burst 10 hours in the week; busiest Wed 14 Oct 20:00 UTC, 4 online; 71% measured");
     expect(legend().textContent).toContain("Red: more servers online than can each burst to 2 vCPU and 3 GiB");
     expect(legend().querySelector('span[aria-hidden="true"].bg-crimson')).not.toBeNull();
-    expect(container.textContent).toContain("more of them were online than could each burst to 2 vCPU and 3 GiB at once");
+    expect(intro().textContent).toBe("How the servers on each VPS with more than one slot were online together in each of the last 168 hours, from their own status samples, and the hours in which more of them were online than could each burst to 2 vCPU and 3 GiB at once. Nothing here is modelled.");
     expect(container.textContent).not.toContain("All slots busy");
     expect(container.textContent).not.toContain(NOTE);
 });
@@ -216,6 +221,9 @@ it("shades an older control plane's read without red hours, and says why", async
     expect(legend().textContent).toBe("One cell per UTC hour, oldest first. Online:0all slotsNo data");
     expect(legend().querySelectorAll('span[aria-hidden="true"]')).toHaveLength(2);
     expect(container.querySelector(".bg-crimson")).toBeNull();
+    // The intro does not promise hours over burst either; only the note mentions burst capacity.
+    expect(intro().textContent).toBe("How the servers on each VPS with more than one slot were online together in each of the last 168 hours, from their own status samples. Nothing here is modelled.");
+    expect(container.textContent).not.toMatch(/could each burst|burst to 2 vCPU/u);
     expect(cells("vps-1a2b3c4d").shading[2 * 24 + 20]!.classList.contains("bg-gold")).toBe(true);
     expect(cells("vps-1a2b3c4d").shading[2 * 24 + 20]!.getAttribute("title")).toBe("Wed 14 Oct 20:00 UTC · 2 online");
     expect(rightColumn("vps-1a2b3c4d")).toEqual(["7.5 pair-h measured", "71% measured"]);

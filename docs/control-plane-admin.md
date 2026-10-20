@@ -570,8 +570,9 @@ to 2 vCPU and 3 GiB".
 
 A legacy response is shaded the same way but has no red row, no red legend
 entry, no "over burst" or "Bursts fit" and no burst capacity; the legend keeps
-its shading and no-data keys, and the pane notes "This control plane predates
-burst capacity; red hours appear after it updates." A footer reads
+its shading and no-data keys, and the pane's opening sentence leaves out the
+hours over burst. The pane notes "This control plane predates burst capacity;
+red hours appear after it updates." A footer reads
 "Measured *start*–*end* UTC · generated *time*".
 
 ### Dry run
