@@ -19,11 +19,13 @@ function modState() {
 /** Runs `body` with the given environment and a recording global fetch, then restores both. */
 async function withEnvironment(environment: Partial<Record<(typeof VARIABLES)[number], string>>,
     reply: (request: Request) => Response, body: (calls: Request[]) => Promise<void>) {
-    const saved = Object.fromEntries(VARIABLES.map((name) => [name, process.env[name]]));
+    // Next types NODE_ENV as read-only; tests write it through a plain record.
+    const variables = process.env as Record<string, string | undefined>;
+    const saved = Object.fromEntries(VARIABLES.map((name) => [name, variables[name]]));
     const originalFetch = globalThis.fetch;
     const calls: Request[] = [];
-    for (const name of VARIABLES) delete process.env[name];
-    Object.assign(process.env, environment);
+    for (const name of VARIABLES) delete variables[name];
+    Object.assign(variables, environment);
     globalThis.fetch = async (input, init) => {
         const request = new Request(input, init);
         calls.push(request.clone());
@@ -32,8 +34,8 @@ async function withEnvironment(environment: Partial<Record<(typeof VARIABLES)[nu
     try { await body(calls); } finally {
         globalThis.fetch = originalFetch;
         for (const name of VARIABLES) {
-            if (saved[name] === undefined) delete process.env[name];
-            else process.env[name] = saved[name];
+            if (saved[name] === undefined) delete variables[name];
+            else variables[name] = saved[name];
         }
     }
 }
