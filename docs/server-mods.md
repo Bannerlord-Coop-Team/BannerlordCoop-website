@@ -21,7 +21,9 @@ the website's side of it.
   list (`load-order`) against the last confirmed revision; one save runs at a
   time, and edits made meanwhile are saved next against the revision it returned.
   A refused save shows the saved list again with the reason; a stale revision or
-  an unknown outcome reloads it. At most 32 owner mods can be enabled.
+  an unknown outcome reloads it. If that reload fails too, the tab shows the last
+  confirmed list with the error and keeps Refresh available. At most 32 owner
+  mods can be enabled.
 - **Upload mod folder** opens a folder picker. The browser zips the folder (see
   below), confirms before replacing an installed Id, and shows the upload phases
   with a percentage while chunks are sent. The control plane installs a new mod

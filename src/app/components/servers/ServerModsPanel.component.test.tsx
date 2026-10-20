@@ -262,6 +262,20 @@ it("reloads the list after a stale save and shows the saved list again after a p
     expect(list).toHaveBeenCalledOnce();
 });
 
+it("shows the saved list and offers Refresh when the reload after an unknown save outcome also fails", async () => {
+    const catalog = createMockServerModCatalog(mods());
+    await render(catalog);
+    vi.spyOn(catalog, "saveServerModOrder").mockRejectedValueOnce(new ServerModsError("control_plane_unavailable", true));
+    vi.spyOn(catalog, "listServerMods").mockRejectedValueOnce(new ServerModsError("control_plane_unavailable", true));
+    await click(checkbox("Beta"));
+    expect(checkbox("Beta").checked).toBe(false);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("could not be reached");
+    expect(button("Refresh")?.disabled).toBe(false);
+    expect(container.querySelector('[aria-label="Delete Alpha"]')).toHaveProperty("disabled", false);
+    await click(button("Refresh")!);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
 it("offers a retry when the list cannot be loaded", async () => {
     const catalog = createMockServerModCatalog(mods());
     vi.spyOn(catalog, "listServerMods").mockRejectedValueOnce(new ServerModsError("runner_unsupported"));

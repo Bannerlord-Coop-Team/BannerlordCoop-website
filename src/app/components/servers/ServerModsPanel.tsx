@@ -78,20 +78,21 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         setLoaded(state);
     }
 
-    /** Replaces the list and any edits not yet saved with a confirmed state. */
+    /** Replaces the list and any edits not yet saved with a confirmed state, clearing an earlier load failure. */
     function apply(state: ServerModsState) {
         recordConfirmed(state);
         updateDraft(state.mods);
+        setLoadFailed(null);
     }
 
-    /** Reads the list; a failure keeps the last list (if any) and offers a retry. */
+    /** Reads the list; a failure shows the last confirmed list (if any) again and offers a retry. */
     async function load() {
         setBusy("loading");
         try {
             apply(await catalog.listServerMods(serverId));
-            setLoadFailed(null);
         } catch (error) {
             setLoadFailed(error instanceof ServerModsError ? modsErrorMessage(error, t) : t("mods.error.other"));
+            if (loadedRef.current) updateDraft(loadedRef.current.mods);
         } finally {
             setBusy(null);
         }
@@ -131,8 +132,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
             updateDraft(loadedRef.current.mods);
             return;
         }
-        setBusy("loading");
-        try { apply(await catalog.listServerMods(serverId)); } catch { /* The notice already explains the failure. */ } finally { setBusy(null); }
+        await load();
     }
 
     /** Saves the shown order and enabled flags, then again for edits made mid-save; only one save runs at a time. */
