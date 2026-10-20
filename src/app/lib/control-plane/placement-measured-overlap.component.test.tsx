@@ -37,7 +37,7 @@ const overlap = {
     hosts: [host, { ...host, serviceName: "vps-spare", regionKeys: [], occupants: [], online: week(() => null), allBusy: "-".repeat(168), allBusyHours: 0, measuredPairHours: 0, coverage: 0 }],
 };
 
-// The burst-capacity shape: four servers on a 6 vCPU, 12 GiB VPS, where three can each burst to 2 vCPU and 3 GiB at
+// The burst-capacity shape: four servers on a 6 vCPU, 12 GiB VPS, where three can each burst to 1.6 vCPU and 3 GiB at
 // once, so the hours all four were online at least half the hour are over.
 const burstHost = {
     serviceName: "vps-1a2b3c4d.vps.ovh.net", regionKeys: ["germany"], vCpu: 6, memoryBytes: 12 * GIB, slots: 4, burstServers: 3,
@@ -67,7 +67,7 @@ it("accepts the burst-capacity shape exactly as the contract describes it", () =
     const rounded = { ...burstHost, online: burstHost.online.map((online, hour) => hour === OVER_HOUR ? 1.99 : hour === MEASURED_HOUR ? 4.01 : online) };
     expect(parsePlacementOverlap({ ...burstOverlap, hosts: [rounded] })).not.toBeNull();
     // burstServers at both its vCPU and its RAM bound at once, and memoryBytes at its largest.
-    expect(parsePlacementOverlap({ ...burstOverlap, hosts: [{ ...burstHost, vCpu: 7, memoryBytes: 9 * GIB }] })).not.toBeNull();
+    expect(parsePlacementOverlap({ ...burstOverlap, hosts: [{ ...burstHost, vCpu: 5, memoryBytes: 9 * GIB }] })).not.toBeNull();
     expect(parsePlacementOverlap({ ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: Number.MAX_SAFE_INTEGER }] })).not.toBeNull();
     // No server can burst on one vCPU or the smallest RAM, so any measured hour with one online at least half of it is over.
     expect(parsePlacementOverlap({ ...burstOverlap, hosts: [{ ...burstHost, vCpu: 1, burstServers: 0 }] })).not.toBeNull();
@@ -137,9 +137,9 @@ it.each([
     ["memoryBytes beyond the safe integers", { ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: 2 ** 53 }] }],
     ["a negative burstServers", { ...burstOverlap, hosts: [{ ...burstHost, burstServers: -1 }] }],
     ["a fractional burstServers", { ...burstOverlap, hosts: [{ ...burstHost, burstServers: 2.5 }] }],
-    ["more burstServers than its vCPUs allow", { ...burstOverlap, hosts: [{ ...burstHost, vCpu: 5 }] }],
+    ["more burstServers than its vCPUs allow", { ...burstOverlap, hosts: [{ ...burstHost, vCpu: 4 }] }],
     ["more burstServers than its RAM allows", { ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: 9 * GIB - 1 }] }],
-    ["more burstServers than its vCPUs allow when its RAM is unknown", { ...burstOverlap, hosts: [{ ...burstHost, vCpu: 5, memoryBytes: null }] }],
+    ["more burstServers than its vCPUs allow when its RAM is unknown", { ...burstOverlap, hosts: [{ ...burstHost, vCpu: 4, memoryBytes: null }] }],
     ["an over-burst character other than 1, 0 or -", { ...burstOverlap, hosts: [{ ...burstHost, overBurst: `x${burstHost.overBurst.slice(1)}` }] }],
     ["an over-burst string of 167 hours", { ...burstOverlap, hosts: [{ ...burstHost, overBurst: burstHost.overBurst.slice(1) }] }],
     ["an over-burst count that does not match its string", { ...burstOverlap, hosts: [{ ...burstHost, overBurstHours: 6 }] }],

@@ -445,12 +445,15 @@ type HostingPlacementOverlapHostMeasure = {
 
 /**
  * One VPS with more than one slot, measured over the window from its current occupants' samples, with how many
- * of its servers can each burst to 2 vCPU and 3 GiB at once.
+ * of its servers can each burst to 1.6 vCPU and 3 GiB at once.
  */
 export type HostingPlacementOverlapBurstHost = HostingPlacementOverlapHostMeasure & {
     /** The VPS's RAM, or null when the runner's could not be read. */
     memoryBytes: number | null;
-    /** min(floor(vCpu / 2), floor(memoryBytes / 3 GiB)), or floor(vCpu / 2) when memoryBytes is null. */
+    /**
+     * min(floor(vCpu / 1.6), floor(memoryBytes / 3 GiB)), or floor(vCpu / 1.6) when memoryBytes is null. An older
+     * control plane counted floor(vCpu / 2), never more.
+     */
     burstServers: number;
     /**
      * 168 characters, oldest first: `1` more servers online at least half the hour than burstServers, `-` unknown
@@ -510,8 +513,11 @@ export type HostingFleetCapacityStat = { samples: number; mean: number; p95: num
  */
 export type HostingFleetCapacityProviderId = "ovhcloud-vps" | "contabo-vps" | "hosthatch-vps";
 
-/** Whose per-server demand a VPS is modelled with: its instance type's, the fleet's, or none yet. */
-export type HostingFleetCapacityDemandSource = "type" | "fleet" | "none";
+/**
+ * Whose per-server demand a VPS is modelled with: the servers that ran on the VPS itself, its instance type's, the
+ * fleet's, or none yet. An instance type's is never `vps`.
+ */
+export type HostingFleetCapacityDemandSource = "vps" | "type" | "fleet" | "none";
 
 export type HostingFleetCapacityProvider = {
     provider: HostingFleetCapacityProviderId;
@@ -569,7 +575,17 @@ export type HostingFleetCapacityHost = {
     /** vCpu × (1 − steal p95 ÷ 100) − overhead cores, and RAM less overhead memory, each clamped at zero. */
     usableCores: number | null;
     usableMemoryBytes: number | null;
-    /** The per-server demand this VPS is modelled with, from `demandSource`. */
+    /**
+     * A server's stable CPU on this VPS, the median of `demandSource`'s demand. Null without a source, and from an
+     * older control plane that planned for a percentile.
+     */
+    stableCpuCores: number | null;
+    /** A server's peak CPU on this VPS, the highest interval of `demandSource`'s demand; null as `stableCpuCores` is. */
+    peakCpuCores: number | null;
+    /**
+     * The per-server demand this VPS is modelled with, from `demandSource`: the model's burst target, or the peak where
+     * that is higher.
+     */
     demandCpuCores: number | null;
     demandMemoryBytes: number | null;
     demandSource: HostingFleetCapacityDemandSource;
@@ -595,7 +611,13 @@ export type HostingAdminFleetCapacity = {
     windowEndedAt: string;
     hours: number;
     model: {
+        /** The CPU percentile taken as a server's stable use (50); an older control plane planned for it directly. */
         cpuPercentile: number;
+        /**
+         * The vCPUs every online server is planned to burst to at once, or its measured peak where that is higher;
+         * null from an older control plane, which planned for `cpuPercentile` without it.
+         */
+        cpuBurstVcpu: number | null;
         memoryPercentile: number;
         /** Running server-hours an instance type, or else the fleet, needs before the model plans with its demand. */
         minimumRunningHours: number;

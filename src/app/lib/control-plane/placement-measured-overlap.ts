@@ -11,8 +11,8 @@ import type {
 
 /** The measured window: one week of whole UTC hours. */
 export const PLACEMENT_OVERLAP_HOURS = 168;
-/** What one server bursting needs: 2 vCPU and 3 GiB of RAM. */
-export const BURST_VCPU = 2;
+/** What one server bursting needs: 1.6 vCPU, the fleet capacity model's burst target, and 3 GiB of RAM. */
+export const BURST_VCPU = 1.6;
 export const BURST_MEMORY_BYTES = 3 * 1024 ** 3;
 
 const HOUR_MILLISECONDS = 3_600_000;
@@ -77,7 +77,8 @@ function isBurstHost(value: unknown): value is HostingPlacementOverlapBurstHost 
     if (!isRecord(value) || !hasExactKeys(value, BURST_HOST_KEYS) || !measuredFields(value)) return false;
     const memory = value.memoryBytes;
     return (memory === null || (Number.isSafeInteger(memory) && (memory as number) > 0))
-        // Each server bursting takes 2 vCPU and 3 GiB, so no more can at once than the VPS has room for.
+        // Each server bursting takes 1.6 vCPU and 3 GiB, so no more can at once than the VPS has room for. An older
+        // control plane counted 2 vCPU per server, never more servers than this allows.
         && count(value.burstServers, Math.floor((value.vCpu as number) / BURST_VCPU))
         && (memory === null || (value.burstServers as number) <= Math.floor((memory as number) / BURST_MEMORY_BYTES))
         && verdicts(value.overBurst, value.overBurstHours)
