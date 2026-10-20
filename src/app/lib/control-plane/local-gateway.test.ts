@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createUpstreamFetch, LocalControlPlaneUrlError, localControlPlaneDestination } from "./local-gateway";
-import { requestServerMods } from "../hosting/server-mods-api";
+import { putServerModChunk, requestServerMods } from "../hosting/server-mods-api";
 
 const SERVER_ID = "22222222-2222-4222-8222-222222222222";
 const TOKEN = "local-session-token-with-enough-characters";
+const UPLOAD_ID = "33333333-3333-4333-8333-333333333333";
 const REVISION = "a".repeat(64);
 const VARIABLES = ["NODE_ENV", "CONTROL_PLANE_URL", "NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] as const;
 
@@ -65,10 +66,27 @@ test("the upstream fetch rewrites only the Edge handler's placeholder origin", a
         return new Response(null, { status: 204 });
     });
     await upstream("https://local-control-plane.invalid/api/v1/mods/list", { method: "POST" });
-    assert.deepEqual(seen, ["http://127.0.0.1:8796/api/v1/mods/list"]);
+    await upstream(new URL(`https://local-control-plane.invalid/api/v1/mods/uploads/chunk?uploadId=${UPLOAD_ID}&index=3`), { method: "PUT" });
+    assert.deepEqual(seen, ["http://127.0.0.1:8796/api/v1/mods/list", `http://127.0.0.1:8796/api/v1/mods/uploads/chunk?uploadId=${UPLOAD_ID}&index=3`]);
     await assert.rejects(upstream("https://control-plane.bannerlordcoop.com/api/v1/mods/list"), /Unexpected upstream origin/u);
     await assert.rejects(upstream(new Request("https://local-control-plane.invalid/api/v1/mods/list")), /Unexpected upstream request/u);
-    assert.equal(seen.length, 1);
+    assert.equal(seen.length, 2);
+});
+
+test("under next dev a mod chunk keeps its uploadId and index query all the way to the local adapter", async () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    await withEnvironment({
+        NODE_ENV: "development", CONTROL_PLANE_URL: "http://127.0.0.1:8796",
+        NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:55421", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key-with-enough-characters",
+    }, (request) => adapterSuccess(request, { receivedChunks: 1, receivedBytes: 3 }), async (calls) => {
+        const receipt = await putServerModChunk(TOKEN, { uploadId: UPLOAD_ID, index: 0, sha256: "c".repeat(64), bytes });
+        assert.deepEqual(receipt, { receivedChunks: 1, receivedBytes: 3 });
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].method, "PUT");
+        assert.equal(calls[0].url, `http://127.0.0.1:8796/api/v1/mods/uploads/chunk?uploadId=${UPLOAD_ID}&index=0`);
+        assert.equal(calls[0].headers.get("x-chunk-sha256"), "c".repeat(64));
+        assert.deepEqual(new Uint8Array(await calls[0].arrayBuffer()), new Uint8Array([1, 2, 3]));
+    });
 });
 
 test("under next dev a mods read runs the Edge handler in process and reaches the local adapter", async () => {

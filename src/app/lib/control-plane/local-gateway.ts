@@ -32,13 +32,14 @@ export function localControlPlaneDestination(environment: LocalGatewayEnvironmen
     return destination;
 }
 
-/** Sends the Edge handler's placeholder-origin calls to the local destination; any other target is refused. */
+/** Sends the Edge handler's placeholder-origin calls (path and query) to the local destination; any other target is refused. */
 export function createUpstreamFetch(destination: URL, fetchImplementation: typeof fetch): typeof fetch {
     return (input, init) => {
         if (typeof input !== "string" && !(input instanceof URL)) return Promise.reject(new Error("Unexpected upstream request"));
         const url = new URL(input);
         if (url.origin !== PLACEHOLDER_ORIGIN) return Promise.reject(new Error("Unexpected upstream origin"));
-        return fetchImplementation(new URL(url.pathname, destination), init);
+        // The query carries routing identity, such as the chunk's `uploadId` and `index`.
+        return fetchImplementation(new URL(`${url.pathname}${url.search}`, destination), init);
     };
 }
 
