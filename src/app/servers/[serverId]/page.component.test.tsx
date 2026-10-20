@@ -122,6 +122,7 @@ it.each<[string | string[], string | undefined]>([
     ["settings", "Settings"],
     ["backups", "Backups"],
     [["save-config", "settings"], "Save & config"],
+    ["mods", "Mods"],
     ["../../admin", undefined],
     ["unknown", undefined],
 ])("opens the managed workspace tab remembered as %j", async (tab, section) => {

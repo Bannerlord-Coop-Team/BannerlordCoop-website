@@ -49,5 +49,6 @@
   "section.console": "Konsol",
   "section.settings": "Ayarlar",
   "section.backups": "Yedekler",
-  "section.saveConfig": "Kayıt dosyası ve yapılandırma"
+  "section.saveConfig": "Kayıt dosyası ve yapılandırma",
+  "section.mods": "Modlar"
 }

@@ -16,6 +16,7 @@ import { getMyServerSaveGenerations, listAllMyServerSaves } from "@/app/lib/host
 import { ManagedServerControls, ManagedServerPassword } from "@/app/components/servers/ManagedServerControls";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import { ManagedServerDelete } from "@/app/components/servers/ManagedServerDelete";
+import { ManagedServerMods } from "@/app/components/servers/ServerModsPanel";
 import { readManagedServerStatusFingerprint } from "@/app/servers/managed-server-actions";
 import { getMemberRole, hasHostedServerAccess } from "@/app/lib/auth/access";
 import { hasServerFleetAccess } from "@/app/lib/auth/roles";
@@ -127,6 +128,7 @@ async function UnavailableFileWorkspaces() {
         <ServerWorkspacePanel section="Save & config">
             <ServerSaveConfigPanels />
         </ServerWorkspacePanel>
+        <ServerWorkspacePanel section="Mods"><UnavailableServerPanel title={t("mods.heading")} actions={[t("mods.upload")]} /></ServerWorkspacePanel>
     </>;
 }
 
@@ -167,6 +169,9 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
         </Suspense>}
     >
         <ManagedServerSections userId={userId} accessToken={accessToken} server={server} deletionStatus={deletionStatus} />
+        <ServerWorkspacePanel section="Mods">
+            <ManagedServerMods key={`${userId}:${server.serverId}`} serverId={server.serverId} canManage={server.accessRole === "owner" || server.accessRole === "manager"} />
+        </ServerWorkspacePanel>
         <ServerWorkspacePanel section="Settings">
             <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} managerAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
         </ServerWorkspacePanel>

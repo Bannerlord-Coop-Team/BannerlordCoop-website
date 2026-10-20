@@ -49,5 +49,6 @@
   "section.console": "Console",
   "section.settings": "Paramètres",
   "section.backups": "Copies de sauvegarde",
-  "section.saveConfig": "Sauvegarde et configuration"
+  "section.saveConfig": "Sauvegarde et configuration",
+  "section.mods": "Mods"
 }
