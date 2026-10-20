@@ -222,6 +222,8 @@ it("formats windows, changes and gains, and parses the hourly heatmap", () => {
     expect(formatPlacementChange(1, 1.04)).toBe("0.0");
     expect(formatPlacementGain(-0.4)).toBe("−0.4");
     expect(formatPlacementGain(12)).toBe("+12.0");
+    // A move made only for the CPU shortage it removes saves no pair-hours.
+    expect(formatPlacementGain(0)).toBe("0.0");
     const rows = parsePlacementHeatmap(weekendHeatmap)!;
     expect(rows).toHaveLength(7);
     expect(rows.every((day) => day.length === 24)).toBe(true);
@@ -299,6 +301,15 @@ it("runs the dry run only when asked, with progress, and renders the plan", asyn
     expect(steps).toEqual(["1", "2", "3"]);
     expect(moveRow(2).textContent).toContain("Staging");
     expect(moveRow(2).textContent).toContain("−0.4");
+    // A step that saves no pair-hours can enable a later step or relieve a CPU shortage; the gain counts pair-hours only.
+    expect(moveRow(2).querySelectorAll("td")[4]!.getAttribute("title")).toBe("This step saves no pair-hours on its own: it enables a later step, such as one leg of a swap, or relieves a CPU shortage.");
+    expect(moveRow(1).querySelectorAll("td")[4]!.hasAttribute("title")).toBe(false);
+    expect(container.querySelector('th[title^="Co-online pair-hours per week this step saves"]')!.getAttribute("title"))
+        .toBe("Co-online pair-hours per week this step saves on its own, in step order. Steps are ordered by pair-hours and CPU shortage removed together.");
+    expect(container.querySelector('[title^="Model: expected pair-hours per week"]')!.getAttribute("title"))
+        .toBe("Model: expected pair-hours per week that two servers on one VPS are online together. The planner minimizes this and, where measured, the expected CPU shortage.");
+    expect(container.querySelector('[title^="Pair-hours per week each relocation step"]')!.getAttribute("title"))
+        .toBe("Pair-hours per week each relocation step must be worth, staging hops included; 1 core-hour a week of CPU shortage removed counts as 20.");
     expect(button(moveRow(1), "Relocate").disabled).toBe(false);
     expect(moveRow(1).textContent).toContain("Next");
     expect(button(moveRow(2), "Relocate").disabled).toBe(true);

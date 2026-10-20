@@ -466,8 +466,23 @@ actually happened on each shared VPS over the last week), the **automatic
 placement** panel (its switch, status, waiting-to-retry list and live moves) and
 the control plane's co-tenancy planner, which learns from reconcile history when
 each OVH slot server is usually online and proposes which servers should share a
-VPS so fewer of them are online at once. See the control-plane repository's
+VPS so fewer of them are online at once and, where measured, so each VPS has the
+CPU its online servers need. See the control-plane repository's
 `docs/managed-hosting/placement-planner.md` for the model and the measured overlap.
+
+Since control plane #522 the planner and the automatic executor are
+capacity-aware: they minimize pair-hours plus 20 times the expected CPU shortage
+in core-hours a week, from each server's measured CPU demand against each VPS's
+measured usable cores. Without those measurements they plan exactly as before.
+The responses keep their shapes, and every gain the tab shows
+(`gainPairHoursPerWeek`) is still pair-hours only, so a move made for the CPU
+shortage it removes can show a small, zero or negative gain; the executor stores
+it as at least 0, shown as 0.0. The tab's texts say so: the dry run's gain
+titles, the minimum-gain help and the totals' pair-hours help, the executor's
+description and `set-placement-executor` explanation, and the live moves' gain
+title. Deploy control plane #522 first, then this wording. The control plane
+change needs no website change, and the wording reads true of a control plane
+that already plans on capacity.
 
 ### Measured host overlap
 
@@ -639,9 +654,11 @@ The result shows current and proposed fleet totals (co-online pair-hours, hours
 with two and three servers online, and the observed replay), the plan's options,
 history start, samples and unsequenced servers, then these sections:
 
-- **Moves** in step order, with the from and to VPS, target region, the step's own
-  gain (zero or negative for an enabling leg of a swap), a staging badge, and the
-  server's quiet window in UTC with its next occurrence in local time.
+- **Moves** in step order (by pair-hours and weighted CPU shortage removed
+  together), with the from and to VPS, target region, the step's own gain in
+  pair-hours (zero or negative for an enabling leg of a swap or for a move made to
+  relieve a CPU shortage, which its title says), a staging badge, and the server's
+  quiet window in UTC with its next occurrence in local time.
 - **Servers**, moving ones first, with current and proposed VPS, why a server is
   pinned, an always-on badge, weekly online hours, observed days and a 7×24 heatmap
   of its hourly online probability (Monday first, UTC). Each square has a title and
@@ -676,7 +693,9 @@ a heading, one sentence on what it does, a single **Automatic placement** switch
 nothing moves automatically** beside it and "On since" or "Off since" the
 settings' `updatedAt`), the status line, the waiting-to-retry list and **Live
 moves**. It never shows who switched it or why. The rules are fixed by the
-control plane: a move must save at least 20 pair-hours a week, a stopped server
+control plane: a move must save at least 20 pair-hours a week, remove at least 1
+core-hour a week of expected CPU shortage, or a mix of the two (control plane
+#522; before it, 20 pair-hours alone), a stopped server
 moves at once and stays stopped, a running server gets an hour's notice on its
 page and in-game warnings before it moves and starts again, and always-on
 servers move only to one-slot VPSs, which they never share.
@@ -718,7 +737,8 @@ and asks the administrator to switch again if they still want to;
 **Live moves** lists the 50 newest automatic relocations, those
 announced or queued first. Each shows the server, its from and to VPS (without the
 `.vps.ovh.net` suffix; the full names are in the title), target region, mode,
-gain and state, and a track from each relocation's `progress`: **Warned** →
+gain in pair-hours (its title says a move made to relieve a CPU shortage can show
+0.0) and state, and a track from each relocation's `progress`: **Warned** →
 **Starting** → **Saving & stopping** → **Restore point** → **Restoring** →
 **Switching address** → **Starting game** → **Finishing** → **Done**. Each step
 the job reached shows when it first reached it, in the viewer's time zone with

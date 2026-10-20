@@ -412,7 +412,10 @@ export type HostingPlacementMove = {
     targetRegion: string;
     /** A temporary hop into a spare slot that unblocks a cycle of full VPSs. */
     staging: boolean;
-    /** Depends on step order; one leg of a swap can save nothing on its own. */
+    /**
+     * Pair-hours only, and depends on step order: one leg of a swap, or a move made for the CPU shortage it removes
+     * (control plane #522), can save none on its own.
+     */
     gainPairHoursPerWeek: number;
     window: HostingPlacementWindow;
 };
@@ -645,7 +648,8 @@ export type HostingPlacementExecutorSettings = {
     /**
      * Legacy compatibility fields, never shown and only sent back on save as the latest read gave them: control
      * planes before #516 require them (#514 already accepts the cap as optional and ignores it), and #516 and later
-     * ignore all four. The rules are fixed now (20 pair-hours, an hour's notice, one-slot VPSs).
+     * ignore all four. The rules are fixed now (a gain of 20: pair-hours, plus 20 per core-hour of CPU shortage removed
+     * from #522; an hour's notice; one-slot VPSs).
      */
     maximumRelocationsPerDay?: number;
     minimumGainHours?: number;
