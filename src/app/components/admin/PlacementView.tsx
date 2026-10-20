@@ -6,7 +6,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "
 import { Definition, Empty, Panel, SectionHeading } from "@/app/components/admin/ControlPlanePresentation";
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { PlacementExecutorPanel } from "@/app/components/admin/PlacementExecutorPanel";
-import { PlacementHostOverlap } from "@/app/components/admin/PlacementHostOverlap";
+import { PlacementMeasuredOverlap } from "@/app/components/admin/PlacementMeasuredOverlap";
 import { HEATMAP_CLASSES } from "@/app/components/admin/placement-heatmap-classes";
 import { RelocateDialog } from "@/app/components/admin/RelocateView";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
@@ -132,6 +132,8 @@ export function PlacementView({ data }: { data: PlacementViewData }) {
     const running = startedAt !== null;
     return (
         <section className="mt-8 space-y-8">
+            {/* What actually happened comes first, then what the executor is doing, then the plan. */}
+            <PlacementMeasuredOverlap />
             <PlacementExecutorPanel />
             <form onSubmit={(event) => void run(event)} className="border border-white/10 bg-surface p-5" aria-labelledby="placement-plan-heading">
                 <div className="flex flex-wrap items-end justify-between gap-4">
@@ -218,7 +220,6 @@ function PlacementPlanResult({ plan, data }: { plan: HostingAdminPlacementPlan; 
             </div>
             <PlacementMoves plan={plan} data={data} />
             <PlacementServers plan={plan} />
-            <PlacementHostOverlap plan={plan} />
             <PlacementHosts plan={plan} names={names} />
         </div>
     );
