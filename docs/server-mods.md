@@ -102,6 +102,9 @@ routes:
   unreadable gateway replies, network loss) back off 1, 2, 4, 8 and then 15 seconds
   for at least 150 seconds. A plain list gives up after about 20 seconds and offers
   **Try again**.
+- A reply without the website route's envelope is retried only when its status is
+  `2xx` (a result that broke the contract), `408`, `429` or `5xx`. Any other status,
+  such as the route's own `404` for a cross-site or malformed request, ends the call.
 - One chunk is sent at a time, in order.
 - After `complete`, `status` is polled after 2 s, growing to every 10 s, for up to
   12 minutes. `installed` returns the new list; `rejected`, `failed` and `expired`

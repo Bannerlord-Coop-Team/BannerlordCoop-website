@@ -53,14 +53,13 @@ async function attempt(request: () => Promise<Response>): Promise<{ ok: true; va
     }
 }
 
-/** Reads the route's envelope; a reply without one is retryable when it looks like a gateway or deadline failure. */
+/** Reads the route's envelope; a reply without one is retryable only when it looks like a gateway, deadline or rate failure. */
 async function readResult<T>(response: Response, parse: (value: unknown) => T): Promise<ServerModsCallResult<T>> {
     let body: unknown;
     try {
         body = await response.json();
     } catch {
-        const unavailable = response.status === 408 || response.status >= 500;
-        return { ok: false, error: { code: unavailable ? "server_api_unavailable" : "invalid_response", retryable: true, modId: null } };
+        return { ok: false, error: unenvelopedFailure(response) };
     }
     if (isRecord(body) && body.ok === true && response.ok) {
         try {
@@ -73,7 +72,17 @@ async function readResult<T>(response: Response, parse: (value: unknown) => T): 
         && typeof body.error.retryable === "boolean" && (body.error.modId === null || (typeof body.error.modId === "string" && MODULE_ID.test(body.error.modId)))) {
         return { ok: false, error: { code: body.error.code, retryable: body.error.retryable, modId: body.error.modId as string | null } };
     }
-    return { ok: false, error: { code: "invalid_response", retryable: true, modId: null } };
+    return { ok: false, error: unenvelopedFailure(response) };
+}
+
+/**
+ * Classifies a reply without the route's envelope. A success that broke the contract and gateway, deadline or rate
+ * replies may succeed on an identical resend; any other status (such as the route's own 404) is a refusal.
+ */
+function unenvelopedFailure(response: Response): ServerModsCallFailure {
+    if (response.status === 408 || response.status >= 500) return { code: "server_api_unavailable", retryable: true, modId: null };
+    if (response.status === 429) return { code: "rate_limited", retryable: true, modId: null };
+    return { code: "invalid_response", retryable: response.ok, modId: null };
 }
 
 /** Whether a value is a plain object. */
