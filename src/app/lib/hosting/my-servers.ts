@@ -426,13 +426,19 @@ async function requestMyServerBackups(
     });
 }
 
+/**
+ * Sends one owner request to the my-servers Edge Function and reads its envelope. JSON bodies are strings;
+ * only a mod upload chunk sends raw bytes (with its digest), and only mods routes wait longer than 30 s.
+ */
 export async function requestMyServersApi(
     accessToken: string,
     request: {
-        method: "GET" | "POST";
-        body?: string;
+        method: "GET" | "POST" | "PUT";
+        body?: string | Uint8Array<ArrayBuffer>;
+        chunkSha256?: string;
         requestId?: string;
         maximumResponseBytes?: number;
+        timeoutMilliseconds?: number;
         signal?: AbortSignal;
         configureEndpoint?: (endpoint: URL) => void;
     },
@@ -440,6 +446,8 @@ export async function requestMyServersApi(
     const { endpoint, publishableKey } = myServersEndpoint();
     request.configureEndpoint?.(endpoint);
     const requestId = request.requestId ?? crypto.randomUUID();
+    const timeout = AbortSignal.timeout(request.timeoutMilliseconds ?? 30_000);
+    const contentType = request.body === undefined ? null : typeof request.body === "string" ? "application/json" : "application/octet-stream";
 
     let response: Response;
     try {
@@ -449,14 +457,13 @@ export async function requestMyServersApi(
                 accept: "application/json",
                 apikey: publishableKey,
                 authorization: `Bearer ${accessToken}`,
-                ...(request.body === undefined ? {} : { "content-type": "application/json" }),
+                ...(contentType === null ? {} : { "content-type": contentType }),
+                ...(request.chunkSha256 === undefined ? {} : { "x-chunk-sha256": request.chunkSha256 }),
                 "x-request-id": requestId,
             },
             ...(request.body === undefined ? {} : { body: request.body }),
             cache: "no-store",
-            signal: request.signal
-                ? AbortSignal.any([request.signal, AbortSignal.timeout(30_000)])
-                : AbortSignal.timeout(30_000),
+            signal: request.signal ? AbortSignal.any([request.signal, timeout]) : timeout,
         });
     } catch {
         throw new MyServersApiError(

@@ -1,4 +1,5 @@
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
+import { sameOriginRequest } from "@/app/lib/auth/same-origin";
 
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const SESSION_MILLISECONDS = 5 * 60_000;
@@ -138,11 +139,4 @@ export function consoleStreamEndpoint(rawOrigin: string | undefined): URL {
     }
     endpoint.pathname = "/v1/user/console-stream";
     return endpoint;
-}
-
-function sameOriginRequest(request: Request): boolean {
-    const site = request.headers.get("sec-fetch-site");
-    if (site !== null && site !== "same-origin" && site !== "none") return false;
-    const origin = request.headers.get("origin");
-    return origin === null || origin === new URL(request.url).origin;
 }
