@@ -486,7 +486,7 @@ export function fleetCapacityHostNote(capacity: Pick<HostingAdminFleetCapacity, 
 export type ModelledVerdict = { kind: "risk" | "headroom" | "match" | "unknown"; label: string; description: string };
 
 /**
- * Modelled servers against today's slots: fewer is at risk when they all run at once, more is headroom. `label`
+ * Modelled servers against a VPS's slots: fewer is at risk when they all run at once, more is headroom. `label`
  * is the short cue ("At risk −1"), `description` the sentence behind it.
  */
 export function modelledVerdict(modelled: number | null, slots: number): ModelledVerdict {
@@ -672,8 +672,8 @@ function legacyHints(capacityModel: HostingAdminFleetCapacity["model"]) {
         perServer: `Per server: the ${cpu} CPU and ${memory} memory one server is modelled to need on this VPS, from the source shown.`,
         demandSource: `Where the per-server needs come from: Type uses the instance type's own figures once its servers have run ${formatServerHours(capacityModel.minimumRunningHours)} in the week; Fleet uses the whole fleet's once it has; None yet means neither has enough data.`,
         typeDemandSource: `Where the per-server needs come from: Type uses the instance type's own figures once its servers have run ${formatServerHours(capacityModel.minimumRunningHours)} in the week; Fleet uses the whole fleet's once it has; None yet means neither has enough data.`,
-        modelled: `Servers at once: how many servers the VPS could run together at their ${cpu} CPU and ${memory} memory, floor(min(usable cores ÷ per-server cores, usable memory ÷ per-server memory)), unknown until its steal, overhead and memory are measured and its instance type or the fleet has enough running data. Compared with today's slots from the static rule (${rule}): fewer is at risk when they all run at once, more is headroom.`,
-        slots: `Slots today: floor(vCPU ÷ ${capacityModel.staticBurstVcpuPerServer}), from the static rule of ${rule}.`,
+        modelled: `Servers at once: how many servers the VPS could run together at their ${cpu} CPU and ${memory} memory, floor(min(usable cores ÷ per-server cores, usable memory ÷ per-server memory)), unknown until its steal, overhead and memory are measured and its instance type or the fleet has enough running data. Compared with its slots (for an instance type, the static rule's ${rule}): fewer is at risk when they all run at once, more is headroom.`,
+        slots: "Slots: the VPS's slot capacity, floor(vCPU ÷ 2) when it is registered and more once an administrator raises it, since a slot reserves no cores.",
         limitedBy: "Whether CPU or memory runs out first in the model.",
         hourly: "Mean steal and busy share of each UTC hour, oldest first. The fuller the gold, the more; a hatched hour has no data.",
     };
