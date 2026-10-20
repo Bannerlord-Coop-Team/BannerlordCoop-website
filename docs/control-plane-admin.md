@@ -543,13 +543,59 @@ the website caught up.
 
 #### What the pane shows
 
-Every VPS with more than one slot is listed, empty ones too, grouped by region
-(alphabetical, hosts without a region last). Each row shows the service name
-without `.vps.ovh.net` (the full name in its title), its slots and current servers
-(or **Empty**), a 168-cell strip and, on the right, "N h over burst" for a VPS
-with more occupants than `burstServers` (**Bursts fit** for any other), the
-measured pair-hours, the coverage ("71% measured") and the burst capacity
-("3 × 2 vCPU · 3 GiB at once", with "(RAM unknown)" when `memoryBytes` is null).
+The pane opens with one sentence for both response shapes: "How the servers on
+each VPS with more than one slot were online together in each of the last 168
+hours." Every VPS with more than one slot is listed, empty ones too, grouped by
+region (alphabetical, hosts without a region last). Each row shows the service
+name without `.vps.ovh.net` (the full name in its title), its slots and current
+servers (or **Empty**), a 168-cell strip and, on the right, "N h over burst" for
+a VPS with more occupants than `burstServers` (**Bursts fit** for any other), the
+measured pair-hours ("7.5 pair-h measured") and the coverage ("71% measured").
+The burst capacity itself is not shown.
+
+The pair-hours and coverage figures are `MetricHint` buttons
+(`src/app/components/admin/MetricHint.tsx`, shared with other admin views), each
+described by a tooltip (`role="tooltip"`, linked with `aria-describedby`, so a
+screen reader announces it with the figure). A tooltip opens when a mouse or pen
+hovers the figure (a finger does not hover, and a tap's emulated hover does not
+count), when the figure takes keyboard focus, and on a tap. It closes when the
+mouse or pen leaves, focus leaves the figure or moves to any other control (a
+capture-phase `focusin` outside the figure), Escape is pressed (wherever focus
+is, through one capture-phase `keydown` listener held only while a tooltip is
+open), the figure is tapped again, anything outside the figure is pressed, or the
+window or the strips scroll or the window resizes. Because focus moving elsewhere
+closes it, a tooltip is never left open over a dialog opened from another
+control, such as the Placement tab's relocate dialog: `showModal()` moves focus
+into the dialog, which closes the tooltip before the dialog's own Escape (its
+`cancel` event) can matter. Escape with a tooltip open closes only the tooltip
+and stops the key there (`stopPropagation`, without `preventDefault`), so Escape
+handlers further along, such as a menu's, act only on the next Escape, which the
+tooltip leaves untouched. A native modal dialog that a tooltip itself sits in
+still closes on that Escape too, through its `cancel` event, which stopping the
+key cannot block. Enter or Space toggles it by its own state and never by an
+earlier pointer press; a press that never becomes a click (a right-click, a
+cancelled touch, a press dragged off before release, or one whose figure lost
+focus) is forgotten, so it cannot sway a later activation. A finger leaving the
+figure between its release and its click still counts as a tap, but a released
+press waits for its click only until a scroll, a press anywhere else or one
+second passes, any of which forgets it. Only one tooltip is open on the page at a
+time: opening one, by hover, focus or tap, closes any other. It is fixed to the
+window, right-aligned with its figure, below it or above it near the window's
+foot, so the strips' scroll box never clips it. The coverage tooltip says what
+is measured: the share of the 168 hours in which every current server had at least
+one counted check, wherever it ran then, with 0% for a VPS with no servers (the
+control plane reports `coverage` 0 for an empty VPS); the control plane's check
+about every five minutes (`running` online;
+`stopped`, `awaiting-save` or `failed` offline; `drifted` or `degraded` not
+counted); a server's online share in an hour as its running checks over its
+counted ones; and an hour without a counted check as unknown, not offline, with
+an hour no server has data for hatched. The pair-hours tooltip says they add up,
+for every pair of servers that both have data in an hour, the product of their
+online shares (1 for both online all hour, 0.25 for both online half of it), with
+examples, and that lower means less overlap and less competition for the VPS.
+These match the control plane's `coverage` and `measuredPairHours` definitions in
+its `docs/managed-hosting/placement-planner.md`.
+
 The strip is the window's real hours, oldest first, under a day axis of UTC dates.
 A window that starts mid-day begins and ends with part of a day, and every date
 segment gets a label that fits it: "Mon 12 Oct" from 14 hours, "12 Oct" from 8, the
@@ -569,10 +615,10 @@ and no-data keys the legend adds "Red: more servers online than can each burst
 to 2 vCPU and 3 GiB".
 
 A legacy response is shaded the same way but has no red row, no red legend
-entry, no "over burst" or "Bursts fit" and no burst capacity; the legend keeps
-its shading and no-data keys, and the pane's opening sentence leaves out the
-hours over burst. The pane notes "This control plane predates burst capacity;
-red hours appear after it updates." A footer reads
+entry and no "over burst" or "Bursts fit"; the legend keeps its shading and
+no-data keys, and the pair-hours and coverage tooltips are the same. The pane
+notes "This control plane predates burst capacity; red hours appear after it
+updates." A footer reads
 "Measured *start*–*end* UTC · generated *time*".
 
 ### Dry run

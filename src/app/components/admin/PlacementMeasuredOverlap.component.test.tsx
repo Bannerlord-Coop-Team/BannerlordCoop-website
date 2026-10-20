@@ -110,9 +110,55 @@ function cells(name: string) {
     return { shading: shading!, burst };
 }
 
+/** The figures on a row's right, each without the hint it carries. */
 function rightColumn(name: string) {
-    return [...row(name).children[2]!.querySelectorAll("p")].map((line) => line.textContent);
+    return [...row(name).children[2]!.querySelectorAll("p")].map((line) => [...line.childNodes]
+        .filter((node) => !(node instanceof HTMLElement && node.getAttribute("role") === "tooltip"))
+        .map((node) => node.textContent).join(""));
 }
+
+/** A figure's button and the tooltip that describes it. */
+function hint(name: string, label: string) {
+    const trigger = [...row(name).querySelectorAll("button")].find((item) => item.textContent === label)!;
+    return { trigger, tooltip: document.getElementById(trigger.getAttribute("aria-describedby")!)! };
+}
+
+/** A pointer event; jsdom has no PointerEvent, so it is a mouse event carrying the pointer's type. */
+function pointer(target: EventTarget, type: string, pointerType: "mouse" | "touch", init: MouseEventInit = {}) {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, ...init });
+    Object.defineProperty(event, "pointerType", { value: pointerType });
+    target.dispatchEvent(event);
+}
+
+/**
+ * A tap as a browser sends it: press, focus (Android focuses the tapped button, iOS Safari does not), release,
+ * the finger leaving, then a click that counts one press (`detail` 1).
+ */
+async function tap(target: HTMLElement, { focuses }: { focuses: boolean }) {
+    await act(async () => {
+        pointer(target, "pointerdown", "touch");
+        if (focuses && document.activeElement !== target) target.focus();
+        pointer(target, "pointerup", "touch");
+        pointer(target, "pointerout", "touch", { relatedTarget: document.body });
+        target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+    });
+}
+
+/** The hints showing anywhere on the page. */
+function shownHints() {
+    return [...document.querySelectorAll<HTMLElement>('[role="tooltip"]')].filter((tooltip) => !tooltip.hidden);
+}
+
+const COVERAGE_HINT = "Share of the last 168 hours in which every server now on this VPS had at least one counted check, wherever it ran then; a VPS with no servers shows 0%. "
+    + "The control plane checks each server about every 5 minutes: running counts as online; stopped, awaiting save or failed as offline; "
+    + "drifted or degraded is not counted. A server's online share in an hour is its running checks over its counted ones. A server with no "
+    + "counted check in an hour (it didn't exist yet, or its checks were skipped while another job ran on it) is unknown there, not offline; "
+    + "an hour with no data from any of them is hatched.";
+const PAIR_HOURS_HINT = "Pair-hours add up, over every pair of servers on this VPS, how much they were online together: each hour counts the "
+    + "product of the two servers' online shares, so both online all hour counts 1 and both online for half of it counts 0.25. Only hours in "
+    + "which both have data count. Two servers online together for 10 hours make 10 pair-hours; three servers all online for 1 hour make 3. "
+    + "Lower means their online times overlap less, so they compete less for the VPS.";
+const INTRO = "How the servers on each VPS with more than one slot were online together in each of the last 168 hours.";
 
 /** The sentence under the heading that says what the pane shows. */
 function intro() {
@@ -180,11 +226,11 @@ it("marks in red the hours more servers were online than can each burst, and dra
     expect(burst[10]!.style.backgroundImage).toContain("repeating-linear-gradient");
     expect(burst[50]!.className).toContain("bg-white/10");
     expect(burst[50]!.style.backgroundImage).toBe("");
-    expect(rightColumn("vps-1a2b3c4d")).toEqual(["10 h over burst", "7.5 pair-h measured", "71% measured", "3 × 2 vCPU · 3 GiB at once"]);
+    expect(rightColumn("vps-1a2b3c4d")).toEqual(["10 h over burst", "7.5 pair-h measured", "71% measured"]);
     expect(strip("vps-1a2b3c4d").getAttribute("aria-label")).toBe("vps-1a2b3c4d: 4 of 4 slots; 3 can burst together; over burst 10 hours in the week; busiest Wed 14 Oct 20:00 UTC, 4 online; 71% measured");
     expect(legend().textContent).toContain("Red: more servers online than can each burst to 2 vCPU and 3 GiB");
     expect(legend().querySelector('span[aria-hidden="true"].bg-crimson')).not.toBeNull();
-    expect(intro().textContent).toBe("How the servers on each VPS with more than one slot were online together in each of the last 168 hours, from their own status samples, and the hours in which more of them were online than could each burst to 2 vCPU and 3 GiB at once. Nothing here is modelled.");
+    expect(intro().textContent).toBe(INTRO);
     expect(container.textContent).not.toContain("All slots busy");
     expect(container.textContent).not.toContain(NOTE);
 });
@@ -192,23 +238,124 @@ it("marks in red the hours more servers were online than can each burst, and dra
 it("draws no red row under a VPS whose servers can all burst at once, and says an empty one is empty", async () => {
     await open();
     expect(cells("vps-de-fit").burst).toBeUndefined();
-    expect(rightColumn("vps-de-fit")).toEqual(["Bursts fit", "40.0 pair-h measured", "100% measured", "2 × 2 vCPU · 3 GiB at once"]);
+    expect(rightColumn("vps-de-fit")).toEqual(["Bursts fit", "40.0 pair-h measured", "100% measured"]);
     expect(cells("vps-de-fit").shading[20]!.getAttribute("title")).toBe("Mon 12 Oct 20:00 UTC · 2 online; 2 can burst together");
     expect(strip("vps-de-fit").getAttribute("aria-label")).toBe("vps-de-fit: 2 of 2 slots; 2 can burst together; bursts fit; busiest Mon 12 Oct 20:00 UTC, 2 online; 100% measured");
     expect(cells("vps-spare").burst).toBeUndefined();
     expect(row("vps-spare").textContent).toContain("Empty");
-    expect(rightColumn("vps-spare")).toEqual(["Bursts fit", "0.0 pair-h measured", "0% measured", "2 × 2 vCPU · 3 GiB at once"]);
+    expect(rightColumn("vps-spare")).toEqual(["Bursts fit", "0.0 pair-h measured", "0% measured"]);
     expect(strip("vps-spare").getAttribute("aria-label")).toBe("vps-spare: 0 of 2 slots; empty");
     expect(cells("vps-spare").shading.every((cell) => cell.style.backgroundImage.includes("repeating-linear-gradient"))).toBe(true);
 });
 
-it("says when a VPS's burst capacity counts vCPUs only because its RAM could not be read", async () => {
+it("shows a VPS whose RAM could not be read like any other, with no burst capacity line", async () => {
     await open();
     expect(cells("vps-uk-half").burst).toBeUndefined();
     expect(row("vps-uk-half").textContent).toContain("Lone Wolf");
-    expect(rightColumn("vps-uk-half")).toEqual(["Bursts fit", "0.0 pair-h measured", "100% measured", "3 × 2 vCPU · 3 GiB at once (RAM unknown)"]);
+    expect(rightColumn("vps-uk-half")).toEqual(["Bursts fit", "0.0 pair-h measured", "100% measured"]);
     expect(cells("vps-uk-half").shading[0]!.getAttribute("title")).toBe("Mon 12 Oct 00:00 UTC · 0.5 online; 3 can burst together");
     expect(strip("vps-uk-half").getAttribute("aria-label")).toBe("vps-uk-half: 1 of 3 slots; 3 can burst together; bursts fit; busiest Mon 12 Oct 00:00 UTC, 0.5 online; 100% measured");
+});
+
+it("drops the burst capacity line and the longer intro", async () => {
+    await open();
+    expect(intro().textContent).toBe(INTRO);
+    expect(container.textContent).not.toMatch(/vCPU · 3 GiB at once|RAM unknown|status samples|Nothing here is modelled/u);
+    // Hours over burst (or "Bursts fit"), pair-hours and coverage, and nothing after them.
+    for (const name of ["vps-1a2b3c4d", "vps-de-fit", "vps-uk-half", "vps-spare"]) expect(row(name).children[2]!.querySelectorAll("p")).toHaveLength(3);
+});
+
+it.each([
+    ["coverage", "71% measured", COVERAGE_HINT],
+    ["pair-hours", "7.5 pair-h measured", PAIR_HOURS_HINT],
+] as const)("explains %s in a hint a keyboard reaches and a screen reader announces", async (_figure, label, text) => {
+    await open();
+    const { trigger, tooltip } = hint("vps-1a2b3c4d", label);
+    // A real control, not a bare title: focusable, and described by the hint.
+    expect(trigger.tagName).toBe("BUTTON");
+    expect(trigger.type).toBe("button");
+    expect(trigger.tabIndex).toBe(0);
+    expect(trigger.hasAttribute("title")).toBe(false);
+    expect(tooltip.getAttribute("role")).toBe("tooltip");
+    expect(tooltip.textContent).toBe(text);
+    expect(tooltip.hidden).toBe(true);
+
+    await act(async () => trigger.focus());
+    expect(document.activeElement).toBe(trigger);
+    expect(tooltip.hidden).toBe(false);
+    await act(async () => { trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(tooltip.hidden).toBe(true);
+    await act(async () => trigger.blur());
+
+    await act(async () => pointer(trigger, "pointerover", "mouse"));
+    expect(tooltip.hidden).toBe(false);
+    await act(async () => pointer(trigger, "pointerout", "mouse", { relatedTarget: document.body }));
+    expect(tooltip.hidden).toBe(true);
+
+    // A tap shows it too, and scrolling the page closes it rather than leaving it behind.
+    await tap(trigger, { focuses: false });
+    expect(tooltip.hidden).toBe(false);
+    await act(async () => { window.dispatchEvent(new Event("scroll")); });
+    expect(tooltip.hidden).toBe(true);
+    // Every row has its own, so each figure is described by its own hint.
+    expect(hint("vps-de-fit", "100% measured").tooltip).not.toBe(hint("vps-uk-half", "100% measured").tooltip);
+});
+
+it("says on an empty VPS's coverage that a VPS with no servers shows 0%", async () => {
+    await open();
+    const { tooltip } = hint("vps-spare", "0% measured");
+    expect(tooltip.textContent).toBe(COVERAGE_HINT);
+    expect(tooltip.textContent).toContain("a VPS with no servers shows 0%");
+});
+
+it("shows one hint at a time: hovering a figure closes the hint a focused one opened", async () => {
+    await open();
+    const focused = hint("vps-1a2b3c4d", "71% measured");
+    const hovered = hint("vps-de-fit", "40.0 pair-h measured");
+    await act(async () => focused.trigger.focus());
+    expect(shownHints()).toEqual([focused.tooltip]);
+    await act(async () => pointer(hovered.trigger, "pointerover", "mouse"));
+    expect(shownHints()).toEqual([hovered.tooltip]);
+    // Focusing another figure moves the one open hint again.
+    const next = hint("vps-uk-half", "100% measured");
+    await act(async () => next.trigger.focus());
+    expect(shownHints()).toEqual([next.tooltip]);
+});
+
+it("closes an open hint when the window resizes, since its position would be stale", async () => {
+    await open();
+    const { trigger, tooltip } = hint("vps-1a2b3c4d", "71% measured");
+    await act(async () => trigger.focus());
+    expect(tooltip.hidden).toBe(false);
+    await act(async () => { window.dispatchEvent(new Event("resize")); });
+    expect(tooltip.hidden).toBe(true);
+});
+
+it.each([
+    ["focuses the button (Android)", true],
+    ["leaves focus alone (iOS Safari)", false],
+] as const)("closes a tapped hint on a second tap when a tap %s", async (_case, focuses) => {
+    await open();
+    const { trigger, tooltip } = hint("vps-1a2b3c4d", "7.5 pair-h measured");
+    await tap(trigger, { focuses });
+    expect(tooltip.hidden).toBe(false);
+    await tap(trigger, { focuses });
+    expect(tooltip.hidden).toBe(true);
+    await tap(trigger, { focuses });
+    expect(tooltip.hidden).toBe(false);
+});
+
+it("closes a tapped hint when a tap lands anywhere outside it", async () => {
+    await open();
+    const { trigger, tooltip } = hint("vps-1a2b3c4d", "71% measured");
+    // No focus and no pointer leaving, as on iOS Safari: only the outside press can close it.
+    await tap(trigger, { focuses: false });
+    expect(tooltip.hidden).toBe(false);
+    await act(async () => pointer(row("vps-de-fit"), "pointerdown", "touch"));
+    expect(tooltip.hidden).toBe(true);
+    await tap(trigger, { focuses: false });
+    await act(async () => pointer(document.body, "pointerdown", "touch"));
+    expect(tooltip.hidden).toBe(true);
 });
 
 it("shades an older control plane's read without red hours, and says why", async () => {
@@ -221,12 +368,14 @@ it("shades an older control plane's read without red hours, and says why", async
     expect(legend().textContent).toBe("One cell per UTC hour, oldest first. Online:0all slotsNo data");
     expect(legend().querySelectorAll('span[aria-hidden="true"]')).toHaveLength(2);
     expect(container.querySelector(".bg-crimson")).toBeNull();
-    // The intro does not promise hours over burst either; only the note mentions burst capacity.
-    expect(intro().textContent).toBe("How the servers on each VPS with more than one slot were online together in each of the last 168 hours, from their own status samples. Nothing here is modelled.");
+    // The intro is the same for both shapes; only the note mentions burst capacity.
+    expect(intro().textContent).toBe(INTRO);
     expect(container.textContent).not.toMatch(/could each burst|burst to 2 vCPU/u);
     expect(cells("vps-1a2b3c4d").shading[2 * 24 + 20]!.classList.contains("bg-gold")).toBe(true);
     expect(cells("vps-1a2b3c4d").shading[2 * 24 + 20]!.getAttribute("title")).toBe("Wed 14 Oct 20:00 UTC · 2 online");
     expect(rightColumn("vps-1a2b3c4d")).toEqual(["7.5 pair-h measured", "71% measured"]);
+    expect(hint("vps-1a2b3c4d", "71% measured").tooltip.textContent).toBe(COVERAGE_HINT);
+    expect(hint("vps-1a2b3c4d", "7.5 pair-h measured").tooltip.textContent).toBe(PAIR_HOURS_HINT);
     expect(strip("vps-1a2b3c4d").getAttribute("aria-label")).toBe("vps-1a2b3c4d: 2 of 2 slots; busiest Wed 14 Oct 20:00 UTC, 2 online; 71% measured");
 });
 

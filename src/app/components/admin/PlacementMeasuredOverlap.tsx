@@ -6,8 +6,9 @@ import { Empty, SectionHeading } from "@/app/components/admin/ControlPlanePresen
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import {
+    OVERLAP_COVERAGE_HINT,
+    OVERLAP_PAIR_HOURS_HINT,
     overlapBand,
-    overlapBurstCapacityLabel,
     overlapBurstLabel,
     overlapBurstRow,
     overlapCellLabel,
@@ -25,11 +26,12 @@ import {
 import { shortServiceName } from "@/app/lib/control-plane/placement-live-moves";
 import type { HostingAdminPlacementOverlap, HostingPlacementOverlapHost } from "@/app/lib/control-plane/types";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
+import { MetricHint } from "./MetricHint";
 import { HEATMAP_CLASSES } from "./placement-heatmap-classes";
 
 const buttonClass = "inline-flex min-h-9 items-center gap-1.5 border border-white/15 px-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40";
 // Name and servers, the week (168 quarter-rem hours with a hairline between UTC days), and the totals.
-const ROW_GRID = "grid grid-cols-[13rem_43rem_13rem] items-start gap-x-5";
+const ROW_GRID = "grid grid-cols-[13rem_43rem_11rem] items-start gap-x-5";
 /** An hour without data is hatched, so it never reads as an hour in which nobody was online. */
 const NO_DATA: CSSProperties = { backgroundImage: "repeating-linear-gradient(135deg, rgb(255 255 255 / 0.22) 0 1px, transparent 1px 3px)" };
 
@@ -92,7 +94,7 @@ export function PlacementMeasuredOverlap() {
 
     const overlap = state.kind === "ready" ? state.overlap : state.previous;
     const groups = overlap === null ? [] : overlapGroups(overlap.hosts);
-    // An older control plane's read has no red hours, so neither the intro, its legend nor its rows mention them.
+    // An older control plane's read has no red hours, so neither its legend nor its rows mention them.
     const predatesBurst = overlap !== null && overlapPredatesBurst(overlap);
     return (
         <section aria-label="Host overlap" className="border border-white/10 bg-surface p-5">
@@ -106,8 +108,7 @@ export function PlacementMeasuredOverlap() {
                 </button>
             </div>
             <p className="mt-2 max-w-3xl text-xs leading-5 text-foreground-muted">
-                How the servers on each VPS with more than one slot were online together in each of the last 168 hours, from their own status samples
-                {!predatesBurst && ", and the hours in which more of them were online than could each burst to 2 vCPU and 3 GiB at once"}. Nothing here is modelled.
+                How the servers on each VPS with more than one slot were online together in each of the last 168 hours.
             </p>
             {state.kind === "loading" && <p role="status" className="mt-4 text-xs text-foreground-muted">Loading measured overlap…</p>}
             {state.kind === "error" && (
@@ -172,9 +173,8 @@ function DayAxis({ windowStartedAt }: { windowStartedAt: string }) {
 }
 
 function OverlapRow({ host, windowStartedAt }: { host: HostingPlacementOverlapHost; windowStartedAt: string }) {
-    // Both are null for a control plane that predates burst capacity.
+    // Null for a control plane that predates burst capacity.
     const burst = overlapBurstLabel(host);
-    const capacity = overlapBurstCapacityLabel(host);
     return (
         <li className={`${ROW_GRID} py-3`}>
             <div className="min-w-0 text-xs">
@@ -185,9 +185,8 @@ function OverlapRow({ host, windowStartedAt }: { host: HostingPlacementOverlapHo
             <OverlapStrip host={host} windowStartedAt={windowStartedAt} />
             <div className="space-y-1 text-right font-mono text-xs">
                 {burst !== null && <p className="text-foreground">{burst}</p>}
-                <p className="text-foreground-muted">{overlapPairHoursLabel(host)}</p>
-                <p className="text-foreground-muted">{overlapCoverageLabel(host)}</p>
-                {capacity !== null && <p className="text-foreground-muted">{capacity}</p>}
+                <p className="text-foreground-muted"><MetricHint label={overlapPairHoursLabel(host)} hint={OVERLAP_PAIR_HOURS_HINT} /></p>
+                <p className="text-foreground-muted"><MetricHint label={overlapCoverageLabel(host)} hint={OVERLAP_COVERAGE_HINT} /></p>
             </div>
         </li>
     );
