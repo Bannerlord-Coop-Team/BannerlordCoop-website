@@ -1,5 +1,6 @@
 import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 import type { VpsProviderId, VpsProviderRead } from "./vps-providers";
+import type { ManualEntryProvider } from "./manual-vps";
 
 export type ManagedServer = {
     serverId: string;
@@ -272,6 +273,20 @@ export type HostingAdminVpsHost = {
     } | null;
 };
 
+/** The control plane's result of `raise-vps-slot-capacity` for one VPS. */
+export type HostingRaiseVpsSlotCapacityResult = {
+    /** `raised` grew the capacity and queued the onboarding that commissions the new slots; `unchanged` already had it. */
+    outcome: "raised" | "unchanged";
+    provider: VpsProviderId;
+    serviceName: string;
+    vCpu: number;
+    /** Equal to `slotCapacity` when unchanged. */
+    previousSlotCapacity: number;
+    slotCapacity: number;
+    /** As the VPS table shows it; null only for an unchanged VPS that was never onboarded. */
+    runnerOnboarding: HostingAdminVpsHost["runnerOnboarding"];
+};
+
 export type HostingAdminVpsInventory = {
     liveDataIncluded?: boolean;
     controlPlaneHost: HostingAdminHostResources | null;
@@ -280,6 +295,8 @@ export type HostingAdminVpsInventory = {
     availableHosts: HostingAdminVpsAvailableHost[];
     /** One entry per enabled provider whose account was read; a failed read withholds only that provider's data. */
     providerReads?: VpsProviderRead[];
+    /** Providers without an account API whose hosts are onboarded by manual entry; absent from older backends. Read it through `manualEntryProviders`. */
+    manualEntryProviders?: ManualEntryProvider[];
     runnerTargetSourceCommit?: string | null;
 };
 
@@ -563,7 +580,7 @@ export type HostingFleetCapacityHost = {
     cpuMhz: number | null;
     /** Null until the VPS's first host sample. */
     instanceTypeKey: string | null;
-    /** Today's static slots: floor(vCpu / 2). */
+    /** The VPS's slot capacity: floor(vCpu / 2) when registered, more once an administrator raises it. */
     slots: number;
     occupants: HostingFleetCapacityOccupant[];
     steal: HostingFleetCapacityStat | null;

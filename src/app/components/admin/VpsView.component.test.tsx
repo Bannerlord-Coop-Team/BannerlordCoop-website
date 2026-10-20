@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({ request: vi.fn(), resources: vi.fn(), billing:
 vi.mock("@/app/lib/control-plane/client", () => ({ requestControlPlaneAdmin: mocks.request }));
 vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({ auth: { getSession: mocks.session } }) }));
 vi.mock("./RunnerOnboardingStatus", () => ({ RunnerOnboardingStatus: () => <span>Runner current</span> }));
+vi.mock("./VpsSlotCapacityRaise", () => ({ VpsSlotCapacityRaise: () => <span>Raise slots</span> }));
 let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
