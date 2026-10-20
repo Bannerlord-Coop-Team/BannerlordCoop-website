@@ -124,12 +124,17 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     const html = await new Response(stream).text();
     expect(html).not.toContain("Hosting regions");
     expect(html).not.toContain("Publish website regions");
-    expect(html).toContain("Onboard existing VPS");
+    expect(html).toContain("Onboard provider-account VPS");
     expect(html).toContain("OVHcloud VPS · vps-available.vps.ovh.us");
     // The option value carries the listed provider so onboarding never guesses it.
     expect(html).toContain("{&quot;provider&quot;:&quot;ovhcloud-vps&quot;,&quot;serviceName&quot;:&quot;vps-available.vps.ovh.us&quot;}");
-    expect(html.match(/<option value="us-east">US-East<\/option>/gu) ?? []).toHaveLength(1);
-    expect(html).not.toContain('value="us-west"');
+    const createCard = cardHtml(html, "create-server");
+    expect(createCard.match(/<option value="us-east">US-East<\/option>/gu) ?? []).toHaveLength(1);
+    expect(createCard).not.toContain('value="us-west"');
+    // This older inventory has no manualEntryProviders, so the manual card explains why it is unavailable.
+    const manualCard = cardHtml(html, "onboard-manual-vps-host");
+    expect(manualCard).toContain("Add manual VPS");
+    expect(manualCard).toContain("No provider currently accepts manual entry.");
     expect(html).not.toContain("The control plane view could not be loaded");
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual([[{
         accessToken: "test-admin-token", operation: "vps-hosts", signal: expect.any(AbortSignal), expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function),
@@ -152,10 +157,40 @@ it("keeps Operations usable when the stored hosting-region catalog cannot be rea
     const html = await new Response(stream).text();
     expect(html).toContain("The operation is not supported.");
     expect(html).not.toContain("Publish website regions");
-    expect(html).toContain("Onboard existing VPS");
+    expect(html).toContain("Onboard provider-account VPS");
     expect(html).toContain("Regions are unavailable: The operation is not supported.");
 });
 
+
+it("offers every stored region and the listed manual-entry providers on Add manual VPS", async () => {
+    mocks.accounts.mockResolvedValue({ users: [], truncated: false });
+    mocks.request.mockImplementation(async request => {
+        if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
+        if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
+        if (request.operation === "vps-hosts") return { availableHosts: [], hosts: [],
+            manualEntryProviders: [{ provider: "hosthatch-vps", displayName: "HostHatch VPS" }] };
+        if (request.operation === "hosting-regions") return { regions: hostingRegionCatalogPayload()
+            .filter((entry) => entry.region === "us-west" || entry.region === "us-east")
+            .map((entry) => ({ ...entry, available: false })) };
+        throw new Error("Unexpected read");
+    });
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));
+    await stream.allReady;
+    const manualCard = cardHtml(await new Response(stream).text(), "onboard-manual-vps-host");
+    expect(manualCard).toContain('<option value="hosthatch-vps" selected="">HostHatch VPS</option>');
+    // Onboarding adds capacity, so regions without a free slot are offered too.
+    expect(manualCard).toContain('value="us-east"');
+    expect(manualCard).toContain('value="us-west"');
+    expect(manualCard).not.toContain("No provider currently accepts manual entry.");
+    expect(manualCard).toContain("cat /etc/ssh/ssh_host_ed25519_key.pub");
+});
+
+/** The server-rendered markup of one operation card, located by its anchor id. */
+function cardHtml(html: string, operation: string) {
+    const start = html.indexOf(`id="${operation}"`);
+    expect(start).toBeGreaterThan(-1);
+    return html.slice(start, html.indexOf("</article>", start));
+}
 
 it("registers Capacity after Placement and leaves the rate-limited capacity read to the browser", async () => {
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "capacity" }) }));

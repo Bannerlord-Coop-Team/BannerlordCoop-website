@@ -14,6 +14,7 @@ import { RelocateView } from "@/app/components/admin/RelocateView";
 import { PlacementView } from "@/app/components/admin/PlacementView";
 import { FleetCapacityView } from "@/app/components/admin/FleetCapacityView";
 import { NoticesView } from "@/app/components/admin/NoticesView";
+import { ManualVpsOnboardingCard } from "@/app/components/admin/ManualVpsOnboardingCard";
 import { AuditTable, Panel, Definition, SectionHeading, State, Empty, ReleaseMetadata, shortId } from "@/app/components/admin/ControlPlanePresentation";
 import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
 import { hasAdminAccess } from "@/app/lib/auth/access";
@@ -24,6 +25,7 @@ import { readOperationsVpsInventory } from "@/app/lib/control-plane/operations-i
 import { readHostingRegionCatalog } from "@/app/lib/control-plane/hosting-region-catalog";
 import { recordReleaseFirstObservations } from "@/app/lib/control-plane/release-observations";
 import { vpsHostSelectionValue } from "@/app/lib/control-plane/vps-providers";
+import { MANUAL_VPS_OPERATION, manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
 import {
     destructiveExplanation,
     operationExplanation,
@@ -81,7 +83,7 @@ import {
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import {
     ControlPlaneViewSkeleton,
     type ControlPlaneView,
@@ -632,10 +634,15 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     const reasonField: AdminActionField = { name: "reason", label: "Reason", kind: "textarea", placeholder: "Optional context for this action", help: "Optional context stored in the immutable administrative audit event. When blank, the control plane records a fixed portal-action reason." };
     const serverField: AdminActionField = { name: "serverId", label: "Server", kind: "server", required: true, options: serverOptions, defaultValue: selectedServerOption === undefined ? "" : adminActionOptionValue("server", selectedServerOption), help: "The selected row carries its current update generation so a stale action fails safely." };
     const plainServerField: AdminActionField = { name: "serverId", label: "Server", kind: "select", required: true, options: serverPlainOptions, defaultValue: selectedServerOption?.value ?? "" };
-    const cards: Array<{ group: string; operation: string; title: string; description: string; fields: AdminActionField[]; destructive?: boolean; layoutPriority?: number; unavailableReason?: string }> = [
-        { group: "Fleet", operation: "onboard-vps-host", title: "Onboard existing VPS", description: "Choose one already-purchased VPS, then click Onboard VPS. The control plane revalidates it against its provider account (identity, location, vCPU capacity, and primary IPv4); acquires and pins its Ed25519 host identity; uses the preinstalled fleet-operator key; installs and hardens every managed runner slot; establishes private mTLS routes; and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.", fields: [
-            { name: "host", label: "Available VPS", kind: "select", required: true, options: availableVpsOptions, defaultValue: availableVpsOptions.length === 1 ? availableVpsOptions[0]!.value : "", help: "Only unregistered VPS products discovered in the authenticated provider accounts are shown, each with its provider. Select the saved bannerlord-fleet-operator key when installing the VPS; no SSH key, IP address, vCPU count, region, or audit reason is entered here." },
+    // Providers without an account API whose hosts are typed in by hand; an older backend omits the list.
+    const manualProviders = manualEntryProviders(inventory);
+    // `custom` replaces the generic card for forms whose fields depend on each other; its `fields` only size the layout.
+    const cards: Array<{ group: string; operation: string; title: string; description: string; fields: AdminActionField[]; destructive?: boolean; layoutPriority?: number; unavailableReason?: string; custom?: ReactNode }> = [
+        { group: "Fleet", operation: "onboard-vps-host", title: "Onboard provider-account VPS", description: "For OVHcloud and Contabo, whose account APIs list purchased VPSes. Choose one already-purchased VPS, then click Onboard VPS. The control plane revalidates it against its provider account (identity, location, vCPU capacity, and primary IPv4); acquires and pins its Ed25519 host identity; uses the preinstalled fleet-operator key; installs and hardens every managed runner slot; establishes private mTLS routes; and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.", fields: [
+            { name: "host", label: "Available VPS", kind: "select", required: true, options: availableVpsOptions, defaultValue: availableVpsOptions.length === 1 ? availableVpsOptions[0]!.value : "", help: "Only unregistered VPS products discovered in the authenticated provider accounts are shown, each with its provider. Select the saved bannerlord-fleet-operator key when installing the VPS; no SSH key, IP address, vCPU count, region, or audit reason is entered here. For a provider without an account API, use Add manual VPS." },
         ] },
+        { group: "Fleet", operation: MANUAL_VPS_OPERATION, title: "Add manual VPS", description: "", fields: [],
+            custom: <ManualVpsOnboardingCard key={MANUAL_VPS_OPERATION} providers={manualProviders} regions={hostingRegions.regions} regionsError={hostingRegions.error} help={operationExplanation(MANUAL_VPS_OPERATION)} /> },
         { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered VPS capacity in stopped state. New servers use Public by default; choose Nightly later with Change release settings if needed. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from an explicit administrator grant. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.",
             ...createUnavailable,
             fields: [
@@ -670,12 +677,12 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     ];
     const groups = [...new Set(cards.map((card) => card.group))];
     return <div className="mt-8 space-y-12">{vpsProviderError && <div role="status" className="border-l-2 border-gold bg-gold/10 px-4 py-3 text-sm text-foreground">
-        <p>Provider account inventory is unavailable, so unregistered VPS products cannot be listed for onboarding. Other operations still work.</p>
+        <p>Provider account inventory is unavailable, so unregistered VPS products cannot be listed for onboarding. Other operations, including Add manual VPS, still work.</p>
         <p className="mt-1 text-xs text-foreground-muted">{vpsProviderError}</p>
     </div>}{groups.map((group) => {
         const groupCards = cards.filter((card) => card.group === group);
         const rows = operationCardRows(groupCards, group === "Fleet" ? 2 : 0);
-        return <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={groupCards.length} /><div className="mt-5 space-y-5">{rows.map((row) => <div key={row.map((card) => card.operation).join(":")} className={`grid gap-5 ${operationCardRowClass(row.length)}`}>{row.map((card) => <ControlPlaneActionCard key={card.operation} {...card} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div>)}</div></section>;
+        return <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={groupCards.length} /><div className="mt-5 space-y-5">{rows.map((row) => <div key={row.map((card) => card.operation).join(":")} className={`grid gap-5 ${operationCardRowClass(row.length)}`}>{row.map((card) => card.custom ?? <ControlPlaneActionCard key={card.operation} {...card} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div>)}</div></section>;
     })}</div>;
 }
 
