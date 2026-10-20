@@ -78,8 +78,3 @@ export function findServerMod(mods: readonly ServerMod[], id: string): ServerMod
     const folded = id.toLowerCase();
     return mods.find(mod => mod.id.toLowerCase() === folded);
 }
-
-/** Lists the enabled owner mods players must install with the same id and version to join. */
-export function playerRequiredMods(mods: readonly ServerMod[]): ServerMod[] {
-    return mods.filter(mod => isOwnerMod(mod) && mod.enabled);
-}

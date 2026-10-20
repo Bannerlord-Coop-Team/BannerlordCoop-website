@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 import { ServerModsPanel } from "./ServerModsPanel";
-import { moveServerMod, playerRequiredMods, ServerModsError, toggleServerMod, type ServerModCatalog } from "@/app/lib/hosting/server-mods";
+import { moveServerMod, ServerModsError, toggleServerMod, type ServerModCatalog } from "@/app/lib/hosting/server-mods";
 import { createMockServerModCatalog, sampleOwnerMod, sampleServerMods } from "@/app/lib/hosting/server-mods-mock";
 
 const SERVER_ID = "22222222-2222-4222-8222-222222222222";
@@ -14,7 +14,7 @@ beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 /** The baseline list with three owner mods: Alpha (enabled), Beta (disabled, depends on Alpha) and Gamma. */
 function mods() {
@@ -79,7 +79,6 @@ it("keeps movable mods between the pinned head and tail modules", () => {
     expect(ids(moveServerMod(list, 7, 3))).toEqual(ids(list));
     expect(toggleServerMod(list, "Coop").find(mod => mod.id === "Coop")?.enabled).toBe(true);
     expect(toggleServerMod(list, "Beta").find(mod => mod.id === "Beta")?.enabled).toBe(true);
-    expect(playerRequiredMods(list).map(mod => mod.id)).toEqual(["Alpha", "Gamma"]);
 });
 
 it("loads only once the tab is shown", async () => {
@@ -91,9 +90,10 @@ it("loads only once the tab is shown", async () => {
     expect(list).toHaveBeenCalledOnce();
     expect(order()).toEqual(["Native", "SandBoxCore", "SandBox", "Coop", "Alpha", "Beta", "Gamma", "DedicatedServer.Linux"]);
     expect(container.textContent).toContain("0Harmony.dll was removed; the server provides its own copy.");
+    expect(container.textContent).toContain("Mod support is experimental and may have bugs.");
 });
 
-it("reorders by dragging a handle and saves the complete order against the loaded revision", async () => {
+it("saves the complete order against the loaded revision when a drag ends", async () => {
     const catalog = createMockServerModCatalog(mods());
     const save = vi.spyOn(catalog, "saveServerModOrder");
     await render(catalog);
@@ -104,36 +104,72 @@ it("reorders by dragging a handle and saves the complete order against the loade
     const coopRow = container.querySelectorAll("ol li")[3];
     await act(async () => { coopRow.dispatchEvent(Object.assign(new Event("dragover", { bubbles: true, cancelable: true }), { dataTransfer })); });
     expect(order()).toEqual(["Native", "SandBoxCore", "SandBox", "Gamma", "Coop", "Alpha", "Beta", "DedicatedServer.Linux"]);
-    expect(container.textContent).toContain("You have unsaved load-order changes.");
+    expect(save).not.toHaveBeenCalled();
     expect(button("Upload mod folder")?.disabled).toBe(true);
-    await click(button("Save load order")!);
+    await act(async () => { handle.dispatchEvent(Object.assign(new Event("dragend", { bubbles: true }), { dataTransfer })); });
+    expect(save).toHaveBeenCalledOnce();
     expect(save).toHaveBeenCalledWith(SERVER_ID, revision, expect.arrayContaining([{ id: "Gamma", enabled: true }]));
     expect(save.mock.calls[0][2].map(entry => entry.id)).toEqual(["Native", "SandBoxCore", "SandBox", "Gamma", "Coop", "Alpha", "Beta", "DedicatedServer.Linux"]);
     expect(container.textContent).toContain("Load order saved.");
-    expect(container.textContent).not.toContain("You have unsaved load-order changes.");
+    expect(button("Upload mod folder")?.disabled).toBe(false);
+    expect(button("Save load order")).toBeUndefined();
 });
 
-it("moves with arrow keys, keeps focus, announces the position and can discard the draft", async () => {
-    await render(createMockServerModCatalog(mods()));
+it("moves with arrow keys, keeps focus, announces the position and saves once the owner pauses", async () => {
+    const catalog = createMockServerModCatalog(mods());
+    const save = vi.spyOn(catalog, "saveServerModOrder");
+    await render(catalog);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const handle = container.querySelector<HTMLButtonElement>('[aria-label="Reorder Coop"]')!;
     handle.focus();
     await act(async () => { handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
     expect(order().slice(3, 6)).toEqual(["Alpha", "Coop", "Beta"]);
     expect(document.activeElement?.getAttribute("aria-label")).toBe("Reorder Coop");
     expect(container.querySelector('p[role="status"].sr-only')?.textContent).toBe("Moved Coop to position 5 of 8.");
-    for (let step = 0; step < 3; step += 1) await act(async () => { handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })); });
-    expect(order().slice(0, 5)).toEqual(["Native", "SandBoxCore", "SandBox", "Coop", "Alpha"]);
-    await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Reorder Gamma"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
-    expect(order().slice(-2)).toEqual(["Gamma", "DedicatedServer.Linux"]);
     await act(async () => { handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
-    await click(button("Discard changes")!);
-    expect(order()).toEqual(["Native", "SandBoxCore", "SandBox", "Coop", "Alpha", "Beta", "Gamma", "DedicatedServer.Linux"]);
+    await act(async () => { vi.advanceTimersByTime(300); });
+    await act(async () => { handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
+    await act(async () => { vi.advanceTimersByTime(300); });
+    expect(save).not.toHaveBeenCalled();
+    await act(async () => { vi.advanceTimersByTime(300); });
+    expect(save).toHaveBeenCalledOnce();
+    expect(save.mock.calls[0][2].map(entry => entry.id).slice(3, 7)).toEqual(["Alpha", "Beta", "Gamma", "Coop"]);
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Reorder Coop");
+    expect(container.textContent).toContain("Load order saved.");
+});
+
+it("saves edits made during a save afterwards against the newer revision", async () => {
+    const catalog = createMockServerModCatalog(mods());
+    const original = catalog.saveServerModOrder.bind(catalog);
+    let release = () => {};
+    const save = vi.spyOn(catalog, "saveServerModOrder").mockImplementationOnce(async (...args) => {
+        await new Promise<void>(resolve => { release = resolve; });
+        return original(...args);
+    });
+    await render(catalog);
+    const firstRevision = catalog.state.revision;
+    await click(checkbox("Beta"));
+    expect(container.textContent).toContain("Saving…");
+    expect(container.querySelector('[aria-label="Delete Alpha"]')).toHaveProperty("disabled", true);
+    await click(checkbox("Gamma"));
+    expect(save).toHaveBeenCalledOnce();
+    await act(async () => { release(); });
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save.mock.calls[0][1]).toBe(firstRevision);
+    expect(save.mock.calls[1][1]).not.toBe(firstRevision);
+    expect(save.mock.calls[1][2]).toEqual(expect.arrayContaining([{ id: "Beta", enabled: true }, { id: "Gamma", enabled: false }]));
+    expect(checkbox("Beta").checked).toBe(true);
+    expect(checkbox("Gamma").checked).toBe(false);
+    expect(container.textContent).toContain("Load order saved.");
 });
 
 it("toggles owner mods only and enforces the enabled limit", async () => {
-    await render(createMockServerModCatalog(mods()));
+    const catalog = createMockServerModCatalog(mods());
+    const save = vi.spyOn(catalog, "saveServerModOrder");
+    await render(catalog);
     await click(checkbox("Beta"));
     expect(checkbox("Beta").checked).toBe(true);
+    expect(save).toHaveBeenCalledWith(SERVER_ID, expect.anything(), expect.arrayContaining([{ id: "Beta", enabled: true }]));
     for (const name of ["Native", "Coop", "DedicatedServer.Linux"]) expect(checkbox(name).disabled).toBe(true);
     expect(container.querySelector('[aria-label="Reorder Native"]')).toBeNull();
     expect(container.querySelector('[aria-label="Reorder DedicatedServer.Linux"]')).toBeNull();
@@ -164,7 +200,6 @@ it("uploads a picked module folder and reports where it was installed", async ()
     expect(order().slice(-2)).toEqual(["Calradia Expanded", "DedicatedServer.Linux"]);
     expect(container.textContent).toContain("Installed Calradia Expanded v3.1.0.");
     expect(container.textContent).toContain("The running game still uses the previous mods.");
-    expect(container.textContent).toContain("Calradia v3.1.0");
 });
 
 it("confirms before replacing an installed mod and keeps its place", async () => {
@@ -211,21 +246,19 @@ it("deletes a mod only after confirmation and names a dependent that blocks it",
     expect(container.textContent).toContain("Deleted Beta.");
 });
 
-it("reloads the list after a stale save and keeps the draft after a plain refusal", async () => {
+it("reloads the list after a stale save and shows the saved list again after a plain refusal", async () => {
     const catalog = createMockServerModCatalog(mods());
     await render(catalog);
     const list = vi.spyOn(catalog, "listServerMods");
     vi.spyOn(catalog, "saveServerModOrder").mockRejectedValueOnce(new ServerModsError("revision_conflict"))
         .mockRejectedValueOnce(new ServerModsError("mod_order_invalid", false, "Beta"));
     await click(checkbox("Beta"));
-    await click(button("Save load order")!);
     expect(list).toHaveBeenCalledOnce();
     expect(container.textContent).toContain("The mod list changed since it was loaded.");
     expect(checkbox("Beta").checked).toBe(false);
     await click(checkbox("Beta"));
-    await click(button("Save load order")!);
     expect(container.textContent).toContain("This order breaks a load rule for Beta.");
-    expect(checkbox("Beta").checked).toBe(true);
+    expect(checkbox("Beta").checked).toBe(false);
     expect(list).toHaveBeenCalledOnce();
 });
 
@@ -238,15 +271,13 @@ it("offers a retry when the list cannot be loaded", async () => {
     expect(order()).toHaveLength(8);
 });
 
-it("lists the mods players need", async () => {
+it("describes keyboard reordering to assistive technology without visible help text", async () => {
     await render(createMockServerModCatalog(mods()));
-    const players = container.querySelector('section section')!;
-    expect(players.textContent).toContain("Players must install these mods with the same Id and version to join.");
-    expect([...players.querySelectorAll("li")].map(item => item.textContent)).toEqual(["Alpha Alpha v1.0.0", "Gamma Gamma v1.0.0"]);
-    await act(async () => root.unmount());
-    root = createRoot(container);
-    await render(createMockServerModCatalog(sampleServerMods()));
-    expect(container.textContent).toContain("Players need only Bannerlord Coop.");
+    const handle = container.querySelector<HTMLButtonElement>('[aria-label="Reorder Alpha"]')!;
+    const help = document.getElementById(handle.getAttribute("aria-describedby")!)!;
+    expect(help.className).toBe("sr-only");
+    expect(help.textContent).toBe("Use the up and down arrow keys to move this mod.");
+    expect(container.textContent).not.toContain("Mods players need");
 });
 
 it("is read-only without mod access and never loads the list", async () => {
@@ -255,6 +286,7 @@ it("is read-only without mod access and never loads the list", async () => {
     await render(catalog, { canEdit: false });
     expect(list).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Only the server owner and managers can view and change mods.");
+    expect(container.textContent).toContain("Mod support is experimental and may have bugs.");
     expect(button("Upload mod folder")).toBeUndefined();
     expect(container.querySelector("ol")).toBeNull();
 });

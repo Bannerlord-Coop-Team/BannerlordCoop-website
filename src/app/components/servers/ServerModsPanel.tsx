@@ -1,27 +1,31 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
-import { Lock, Menu, RefreshCw, Trash2, Upload } from "lucide-react";
+import { FlaskConical, Lock, Menu, RefreshCw, Trash2, Upload } from "lucide-react";
 
 import { useTranslations } from "@/app/lib/localization/client";
 import { buildModArchive, ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
 import {
-    enabledOwnerModCount, findServerMod, isOwnerMod, moveServerMod, playerRequiredMods, sameServerModOrder, serverModLoadOrder, ServerModsError, toggleServerMod,
+    enabledOwnerModCount, findServerMod, isOwnerMod, moveServerMod, sameServerModOrder, serverModLoadOrder, ServerModsError, toggleServerMod,
     type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModsState, type ServerModUploadProgress,
 } from "@/app/lib/hosting/server-mods";
 import { createBrowserServerModCatalog } from "@/app/lib/hosting/server-mods-transport";
 import { MOD_MAXIMUM_ENABLED_OWNER_MODS } from "../../../../supabase/functions/_shared/server-mods-contract";
 import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
 import { archiveProblemMessage, describeModIssue, modsErrorMessage } from "./server-mods-messages";
-import { fileButtonClass, filePrimaryButtonClass } from "./server-file-styles";
+import { fileButtonClass } from "./server-file-styles";
 
 const iconButtonClass = "inline-flex size-10 shrink-0 items-center justify-center rounded-md text-foreground-muted hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
 const badgeClass = "shrink-0 rounded-sm border border-white/10 px-2 py-0.5 font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted";
 
 /** The owner declined to replace an installed mod; nothing was sent. */
 const CANCELLED = "cancelled";
+/** Keyboard moves wait this long after the last arrow key so a run of steps saves once. */
+const KEYBOARD_SAVE_DELAY_MS = 600;
+/** Refusals that leave the saved list unchanged, so the panel can show it again without a reload. */
+const PLAIN_REFUSALS = ["mod_order_invalid", "mod_dependency_unsatisfied", "mod_reserved_id", "upload_busy", "unauthenticated", "server_not_found", "runner_unsupported"];
 
-type Busy = null | "loading" | "saving" | "deleting" | "preparing" | "uploading";
+type Busy = null | "loading" | "deleting" | "preparing" | "uploading";
 type Notice = { tone: "info" | "error"; text: string };
 
 /** The managed page's Mods tab: owners and managers load the list when the tab first opens; others see why they cannot. */
@@ -31,7 +35,7 @@ export function ManagedServerMods({ serverId, canManage }: { serverId: string; c
     return <ServerModsPanel serverId={serverId} catalog={catalog} canEdit={canManage} active={shown} />;
 }
 
-/** Lists a server's mods and edits load order, enabled flags, uploads and deletes through a catalog. */
+/** Lists a server's mods and saves each load-order or enabled change as it is made; uploads and deletes use the same catalog. */
 export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: { serverId: string; catalog: ServerModCatalog; canEdit: boolean; active?: boolean }) {
     const { t } = useTranslations("managed-server");
     const idPrefix = useId();
@@ -39,22 +43,21 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
     const uploadRef = useRef<HTMLInputElement>(null);
     const pendingFocusId = useRef<string | null>(null);
     const requested = useRef(false);
+    const loadedRef = useRef<ServerModsState | null>(null);
+    const draftRef = useRef<ServerMod[]>([]);
+    const savingRef = useRef(false);
+    const keyboardSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [loaded, setLoaded] = useState<ServerModsState | null>(null);
     const [draft, setDraft] = useState<ServerMod[]>([]);
     const [busy, setBusy] = useState<Busy>(null);
+    const [saving, setSaving] = useState(false);
     const [loadFailed, setLoadFailed] = useState<string | null>(null);
     const [progress, setProgress] = useState<ServerModUploadProgress | null>(null);
     const [draggingId, setDraggingId] = useState<string | null>(null);
     const [announcement, setAnnouncement] = useState("");
     const [notice, setNotice] = useState<Notice | null>(null);
 
-    useEffect(() => {
-        if (!active || !canEdit || requested.current) return;
-        requested.current = true;
-        void load();
-        // Loads once, when the tab is first shown; later loads follow edits or the Refresh button.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [active, canEdit]);
+    useEffect(() => () => { if (keyboardSaveTimer.current !== null) clearTimeout(keyboardSaveTimer.current); }, []);
 
     useEffect(() => {
         const id = pendingFocusId.current;
@@ -63,10 +66,22 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         [...listRef.current?.querySelectorAll<HTMLButtonElement>("[data-mod-handle]") ?? []].find(handle => handle.dataset.modHandle === id)?.focus();
     }, [draft]);
 
-    /** Replaces the list and any unsaved edits with a confirmed state. */
-    function apply(state: ServerModsState) {
+    /** Shows a list and keeps it readable by saves that finish later. */
+    function updateDraft(next: ServerMod[]) {
+        draftRef.current = next;
+        setDraft(next);
+    }
+
+    /** Records a confirmed state without touching the shown list. */
+    function recordConfirmed(state: ServerModsState) {
+        loadedRef.current = state;
         setLoaded(state);
-        setDraft(state.mods);
+    }
+
+    /** Replaces the list and any edits not yet saved with a confirmed state. */
+    function apply(state: ServerModsState) {
+        recordConfirmed(state);
+        updateDraft(state.mods);
     }
 
     /** Reads the list; a failure keeps the last list (if any) and offers a retry. */
@@ -82,7 +97,15 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         }
     }
 
-    /** Runs one change; refusals that leave the list uncertain or stale reload it so the owner sees the truth. */
+    useEffect(() => {
+        if (!active || !canEdit || requested.current) return;
+        requested.current = true;
+        void load();
+        // Loads once, when the tab is first shown; later loads follow edits or the Refresh button.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [active, canEdit]);
+
+    /** Runs one upload or delete; refusals that leave the list uncertain or stale reload it so the owner sees the truth. */
     async function change(kind: Exclude<Busy, null | "loading">, run: () => Promise<ServerModsState>, success: (state: ServerModsState) => string) {
         setBusy(kind);
         setNotice(null);
@@ -101,13 +124,47 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         }
     }
 
-    /** Reloads after a stale edit or an unknown outcome; plain refusals keep the owner's draft. */
+    /** Shows the saved list again after a failure: plain refusals reuse it, stale edits and unknown outcomes reload it. */
     async function reconcile(error: unknown) {
-        const keepDraft = error instanceof ServerModsError && !error.retryable
-            && ["mod_order_invalid", "mod_dependency_unsatisfied", "mod_reserved_id", "upload_busy", "unauthenticated", "server_not_found", "runner_unsupported"].includes(error.code);
-        if (keepDraft) return;
+        const unchanged = error instanceof ServerModsError && !error.retryable && PLAIN_REFUSALS.includes(error.code);
+        if (unchanged && loadedRef.current) {
+            updateDraft(loadedRef.current.mods);
+            return;
+        }
         setBusy("loading");
-        try { apply(await catalog.listServerMods(serverId)); } catch { /* The notice already explains the failure. */ }
+        try { apply(await catalog.listServerMods(serverId)); } catch { /* The notice already explains the failure. */ } finally { setBusy(null); }
+    }
+
+    /** Saves the shown order and enabled flags, then again for edits made mid-save; only one save runs at a time. */
+    async function persist() {
+        if (savingRef.current || !loadedRef.current || sameServerModOrder(draftRef.current, loadedRef.current.mods)) return;
+        savingRef.current = true;
+        setSaving(true);
+        setNotice(null);
+        try {
+            for (let base = loadedRef.current; base && !sameServerModOrder(draftRef.current, base.mods); base = loadedRef.current) {
+                const sent = draftRef.current;
+                const state = await catalog.saveServerModOrder(serverId, base.revision, serverModLoadOrder(sent));
+                recordConfirmed(state);
+                if (draftRef.current === sent) updateDraft(state.mods);
+            }
+            setNotice({ tone: "info", text: t("mods.saved") });
+        } catch (error) {
+            setNotice({ tone: "error", text: error instanceof ServerModsError ? modsErrorMessage(error, t) : t("mods.error.other") });
+            await reconcile(error);
+        } finally {
+            savingRef.current = false;
+            setSaving(false);
+        }
+    }
+
+    /** Saves once the owner pauses between arrow-key moves. */
+    function persistSoon() {
+        if (keyboardSaveTimer.current !== null) clearTimeout(keyboardSaveTimer.current);
+        keyboardSaveTimer.current = setTimeout(() => {
+            keyboardSaveTimer.current = null;
+            void persist();
+        }, KEYBOARD_SAVE_DELAY_MS);
     }
 
     /** Moves a mod in the draft and announces its new position for screen readers. */
@@ -116,7 +173,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         const moved = draft[fromIndex];
         const position = next.indexOf(moved);
         if (position === fromIndex) return;
-        setDraft(next);
+        updateDraft(next);
         setAnnouncement(t("mods.moved", { name: moved.name, position: position + 1, total: next.length }));
     }
 
@@ -146,21 +203,23 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         event.preventDefault();
         pendingFocusId.current = draft[index].id;
         move(index, index + step);
+        persistSoon();
     }
 
-    /** Flips an owner mod in the draft, refusing to enable more than the control plane allows. */
+    /** Ends a drag and saves wherever the mod was left. */
+    function endDrag() {
+        setDraggingId(null);
+        void persist();
+    }
+
+    /** Flips an owner mod and saves it, refusing to enable more than the control plane allows. */
     function toggle(mod: ServerMod) {
-        if (!mod.enabled && enabledOwnerModCount(draft) >= MOD_MAXIMUM_ENABLED_OWNER_MODS) {
+        if (!mod.enabled && enabledOwnerModCount(draftRef.current) >= MOD_MAXIMUM_ENABLED_OWNER_MODS) {
             setNotice({ tone: "error", text: t("mods.enabledLimit", { limit: MOD_MAXIMUM_ENABLED_OWNER_MODS }) });
             return;
         }
-        setDraft(current => toggleServerMod(current, mod.id));
-    }
-
-    /** Saves the draft order and enabled flags against the revision they were based on. */
-    function save() {
-        if (!loaded) return;
-        void change("saving", () => catalog.saveServerModOrder(serverId, loaded.revision, serverModLoadOrder(draft)), () => t("mods.saved"));
+        updateDraft(toggleServerMod(draftRef.current, mod.id));
+        void persist();
     }
 
     /** Deletes an owner mod after the owner confirms. */
@@ -198,29 +257,26 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
     }
 
     const busyNow = busy !== null;
-    const dirty = loaded !== null && !sameServerModOrder(draft, loaded.mods);
-    const players = loaded ? playerRequiredMods(loaded.mods) : [];
+    // Refresh, upload and delete wait for pending saves so they start from the list the owner sees.
+    const settled = !saving && loaded !== null && sameServerModOrder(draft, loaded.mods);
 
-    return <section aria-labelledby={`${idPrefix}-heading`} aria-busy={busyNow} className="min-w-0 rounded-lg border border-white/10 bg-surface">
+    return <section aria-labelledby={`${idPrefix}-heading`} aria-busy={busyNow || saving} className="min-w-0 rounded-lg border border-white/10 bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
             <div>
                 <h2 id={`${idPrefix}-heading`} className="text-base font-semibold">{t("mods.heading")}</h2>
-                <p className="mt-1 text-sm leading-6 text-foreground-muted">{canEdit ? t("mods.description") : t("mods.readOnly")}</p>
+                {!canEdit && <p className="mt-1 text-sm leading-6 text-foreground-muted">{t("mods.readOnly")}</p>}
             </div>
             {canEdit && <div className="flex flex-wrap items-center gap-3">
                 <input ref={input => { uploadRef.current = input; if (input) input.webkitdirectory = true; }} type="file" hidden aria-label={t("mods.folderInput")} onChange={upload} />
-                <button type="button" disabled={busyNow || loaded === null} onClick={() => void load()} className={fileButtonClass}><RefreshCw className="size-4" aria-hidden="true" />{t("mods.refresh")}</button>
-                <button type="button" disabled={busyNow || loaded === null || dirty} title={dirty ? t("mods.saveFirst") : undefined} onClick={() => uploadRef.current?.click()} className={fileButtonClass}><Upload className="size-4" aria-hidden="true" />{t("mods.upload")}</button>
+                <button type="button" disabled={busyNow || !settled} onClick={() => void load()} className={fileButtonClass}><RefreshCw className="size-4" aria-hidden="true" />{t("mods.refresh")}</button>
+                <button type="button" disabled={busyNow || !settled} onClick={() => uploadRef.current?.click()} className={fileButtonClass}><Upload className="size-4" aria-hidden="true" />{t("mods.upload")}</button>
             </div>}
+            <p className="flex w-full items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-foreground-muted"><FlaskConical className="size-4 shrink-0" aria-hidden="true" />{t("mods.experimental")}</p>
             {loaded?.restartRequired && <p role="status" className="w-full rounded-md border border-gold/30 bg-gold/[0.06] px-3 py-2 text-sm text-foreground">{t("mods.restartRequired")}</p>}
             {progress && <UploadProgress progress={progress} />}
             {busy === "preparing" && <p role="status" className="w-full text-sm text-foreground-muted">{t("mods.phase.preparing")}</p>}
-            {notice && <p aria-live="polite" className={`w-full text-sm ${notice.tone === "error" ? "text-red-300" : "text-foreground-muted"}`}>{notice.text}</p>}
-            {dirty && <div className="flex w-full flex-wrap items-center gap-3 rounded-md border border-white/10 bg-white/[0.02] px-3 py-2">
-                <p className="mr-auto text-sm text-foreground">{t("mods.unsavedChanges")}</p>
-                <button type="button" disabled={busyNow} onClick={() => loaded && setDraft(loaded.mods)} className={fileButtonClass}>{t("mods.discard")}</button>
-                <button type="button" disabled={busyNow} onClick={save} className={filePrimaryButtonClass}>{t("mods.save")}</button>
-            </div>}
+            {saving && <p role="status" className="w-full text-sm text-foreground-muted">{t("mods.saving")}</p>}
+            {notice && !saving && <p aria-live="polite" className={`w-full text-sm ${notice.tone === "error" ? "text-red-300" : "text-foreground-muted"}`}>{notice.text}</p>}
         </div>
         {canEdit && loaded === null && <div className="p-5 text-sm text-foreground-muted">
             {loadFailed === null ? <p role="status">{t("mods.loading")}</p> : <>
@@ -231,16 +287,11 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         {loaded !== null && <>
             {loadFailed !== null && <p role="alert" className="border-b border-white/10 px-5 py-3 text-sm text-red-300">{loadFailed}</p>}
             <ol ref={listRef} aria-label={t("mods.loadOrder")} className="divide-y divide-white/10">
-                {draft.map((mod, index) => <ModRow key={mod.id} mod={mod} index={index} idPrefix={idPrefix} editable={canEdit && !busyNow} canDelete={!dirty} dragging={draggingId === mod.id}
-                    onDragStart={event => startDrag(event, mod)} onDragEnd={() => setDraggingId(null)} onDragOver={event => dragOver(event, index)}
+                {draft.map((mod, index) => <ModRow key={mod.id} mod={mod} index={index} idPrefix={idPrefix} editable={canEdit && !busyNow} canDelete={settled} dragging={draggingId === mod.id}
+                    onDragStart={event => startDrag(event, mod)} onDragEnd={endDrag} onDragOver={event => dragOver(event, index)}
                     onKeyDown={event => handleKey(event, index)} onToggle={() => toggle(mod)} onDelete={() => remove(mod)} />)}
             </ol>
-            <p id={`${idPrefix}-reorder-help`} className="border-t border-white/10 px-5 py-4 text-xs leading-5 text-foreground-muted">{t("mods.help")}</p>
-            <section aria-labelledby={`${idPrefix}-players`} className="border-t border-white/10 px-5 py-4">
-                <h3 id={`${idPrefix}-players`} className="text-sm font-semibold">{t("mods.playersHeading")}</h3>
-                <p className="mt-1 text-xs leading-5 text-foreground-muted">{players.length === 0 ? t("mods.playersNone") : t("mods.playersDescription")}</p>
-                {players.length > 0 && <ul className="mt-2 space-y-1 text-sm">{players.map(mod => <li key={mod.id}><span className="text-foreground">{mod.name}</span> <code className="text-xs text-foreground-muted">{mod.id} {mod.version}</code></li>)}</ul>}
-            </section>
+            <p id={`${idPrefix}-reorder-help`} className="sr-only">{t("mods.reorderHelp")}</p>
         </>}
         <p role="status" className="sr-only">{announcement}</p>
     </section>;
@@ -271,7 +322,7 @@ function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragSta
         {mod.pinned ? <span className={badgeClass}>{t("mods.core")}</span> : mod.required && <span className={badgeClass}>{t("mods.required")}</span>}
         <ModSwitch id={checkboxId} checked={mod.enabled} disabled={!editable || !owner} onChange={onToggle} />
         {editable && owner
-            ? <button type="button" disabled={!canDelete} title={canDelete ? undefined : t("mods.saveFirst")} aria-label={t("mods.delete", { name: mod.name })} onClick={onDelete} className={`${iconButtonClass} hover:!text-red-300`}><Trash2 className="size-4" aria-hidden="true" /></button>
+            ? <button type="button" disabled={!canDelete} aria-label={t("mods.delete", { name: mod.name })} onClick={onDelete} className={`${iconButtonClass} hover:!text-red-300`}><Trash2 className="size-4" aria-hidden="true" /></button>
             : <span className="size-10 shrink-0" aria-hidden="true" />}
     </li>;
 }
@@ -292,7 +343,7 @@ function ModSwitch({ id, checked, disabled, onChange }: { id: string; checked: b
     return <span className="relative inline-flex shrink-0">
         <input id={id} type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={onChange} className="peer absolute inset-0 m-0 size-full cursor-pointer opacity-0 disabled:cursor-not-allowed" />
         <span aria-hidden="true" className={`pointer-events-none relative h-6 w-11 rounded-full border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-gold peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-surface peer-disabled:opacity-50 ${checked ? "border-gold bg-gold/80" : "border-white/20 bg-background"}`}>
-            <span className={`absolute top-0.5 left-0 size-4 rounded-full bg-foreground shadow-sm transition-transform ${checked ? "translate-x-6" : "translate-x-0.5"}`} />
+            <span className={`absolute top-0.75 left-0 size-4 rounded-full bg-foreground shadow-sm transition-transform ${checked ? "translate-x-6" : "translate-x-0.5"}`} />
         </span>
     </span>;
 }

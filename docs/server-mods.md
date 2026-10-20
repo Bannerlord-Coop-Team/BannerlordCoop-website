@@ -8,15 +8,20 @@ the website's side of it.
 
 ## What owners see
 
+- A banner at the top of the tab says that mod support is experimental and may
+  have bugs; everyone who opens the tab sees it.
 - Owners and managers (the control plane's `manage-mods` capability) load the list
   when the tab is first opened. Support and administrator roles see that only owners
   and managers can view and change mods; the website sends no request for them.
 - Native, SandBoxCore and SandBox are pinned at the top and DedicatedServer.Linux at
   the bottom. Bannerlord Coop can be moved but stays enabled. Owner mods can be
   dragged by their handle or moved with the arrow keys, and toggled with the gold
-  switch. These edits form a draft: **Save load order** sends the complete list
-  (`load-order`) against the revision it was loaded with, and **Discard changes**
-  restores it. At most 32 owner mods can be enabled.
+  switch. Each change saves itself: a toggle saves at once, a drag when it ends,
+  and arrow-key moves 600 ms after the last key. Every save sends the complete
+  list (`load-order`) against the last confirmed revision; one save runs at a
+  time, and edits made meanwhile are saved next against the revision it returned.
+  A refused save shows the saved list again with the reason; a stale revision or
+  an unknown outcome reloads it. At most 32 owner mods can be enabled.
 - **Upload mod folder** opens a folder picker. The browser zips the folder (see
   below), confirms before replacing an installed Id, and shows the upload phases
   with a percentage while chunks are sent. The control plane installs a new mod
@@ -24,12 +29,13 @@ the website's side of it.
   enabled limit leaves it disabled; the panel says which happened.
 - Deleting asks for confirmation. Pinned modules and Coop have no delete button.
 - Each mod shows its notes (stripped assemblies, missing or misordered
-  dependencies, removed dedicated-server tags). The **Mods players need** list shows
-  the enabled owner mods players must install with the same Id and version.
+  dependencies, removed dedicated-server tags). The tab shows no other help text;
+  the reorder handles carry a screen-reader-only arrow-key hint.
 - When the running game uses an older list (`restartRequired`), the tab says that a
   restart applies the changes. Nothing restarts the server automatically.
-- Upload and delete are disabled while the order has unsaved changes, so every
-  mutation is based on the list the owner sees.
+- Saving changes nothing in a running game, so it needs no confirmation; the
+  restart that applies it is the owner's choice. Refresh, upload and delete wait
+  until pending saves finish, so every mutation is based on the list the owner sees.
 
 ## Transport
 
