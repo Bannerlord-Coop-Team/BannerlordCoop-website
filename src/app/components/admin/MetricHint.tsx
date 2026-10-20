@@ -59,7 +59,8 @@ export type MetricHintProps = {
  * panel) act only on the next Escape; a native modal dialog that the hint itself sits in still closes too, by its
  * own `cancel` event. Only one is open on a page at a time: opening one closes any other. The tooltip is fixed to
  * the window, right-aligned with its figure and below it (above it near the window's foot), so a scroll box around
- * the figure never clips it.
+ * the figure never clips it. It reads as plain sentences even where the figure inherits an upper-case, spaced-out
+ * label style, such as a table header.
  */
 export function MetricHint({ label, hint }: MetricHintProps) {
     const id = useId();
@@ -193,7 +194,7 @@ export function MetricHint({ label, hint }: MetricHintProps) {
         >
             {label}
         </button>
-        <span id={id} role="tooltip" hidden={!isOpen} style={open?.style} className="pointer-events-none fixed z-50 w-80 max-w-[calc(100vw-1rem)] border border-white/15 bg-background px-3 py-2 text-left font-sans text-xs leading-5 text-foreground shadow-xl">
+        <span id={id} role="tooltip" hidden={!isOpen} style={open?.style} className="pointer-events-none fixed z-50 w-80 max-w-[calc(100vw-1rem)] border border-white/15 bg-background px-3 py-2 text-left font-sans text-xs leading-5 font-normal tracking-normal normal-case text-foreground shadow-xl">
             {hint}
         </span>
     </>;

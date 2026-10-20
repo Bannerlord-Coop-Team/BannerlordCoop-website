@@ -30,6 +30,8 @@ const week = <T,>(value: (hour: number) => T) => Array.from({ length: 168 }, (_,
 /** Hourly values as the control plane encodes them: two hex digits, `--` without data. */
 const hex = (values: Array<number | null>) => values.map((value) => value === null ? "--" : value.toString(16).padStart(2, "0")).join("");
 
+/** An instance type's key: provider, vCPUs, whole GiB, CPU model and MHz rounded to 100. */
+const SIX_KEY = "ovhcloud-vps|6|12|Intel Core Processor (Haswell, no TSX)|2400";
 const demand = {
     runningServerHours: 412.5, samples: 4950,
     cpuCores: { p50: 0.85, p90: 1.1, p95: 1.2, p99: 1.6, max: 1.95 },
@@ -41,7 +43,7 @@ const steal = { samples: 2016, mean: 0.4, p95: 1.2, max: 6.5 };
 const busy = { samples: 2016, mean: 1.1, p95: 2.4, max: 4.8 };
 const host = {
     serviceName: "vps-1a2b3c4d.vps.ovh.net", provider: "ovhcloud-vps", regionKeys: ["germany"], vCpu: 6, memoryBytes: 12 * GIB,
-    cpuModel: "Intel Core Processor (Haswell, no TSX)", cpuMhz: 2399.996, instanceTypeKey: "ovh-6-12-haswell", slots: 3,
+    cpuModel: "Intel Core Processor (Haswell, no TSX)", cpuMhz: 2399.996, instanceTypeKey: SIX_KEY, slots: 3,
     occupants: [{ serverId: "22222222-2222-4222-8222-222222222222", displayName: "Calradia Company", demand }],
     steal, busyCores: busy, cpuPressureShare: 0.02, overheadCores: 0.35, overheadMemoryBytes: 1_181_116_006,
     usableCores: 5.58, usableMemoryBytes: 11_703_786_240, demandCpuCores: 1.2, demandMemoryBytes: 1_932_735_283,
@@ -56,11 +58,11 @@ const spare = {
     stealHourly: "--".repeat(168), busyHourly: "--".repeat(168),
 };
 const instanceType = {
-    key: "ovh-6-12-haswell", provider: "ovhcloud-vps", vCpu: 6, memoryBytes: 12 * GIB, cpuModel: "Intel Core Processor (Haswell, no TSX)", cpuMhz: 2399.996,
+    key: SIX_KEY, provider: "ovhcloud-vps", vCpu: 6, memoryBytes: 12 * GIB, cpuModel: "Intel Core Processor (Haswell, no TSX)", cpuMhz: 2399.996,
     hosts: 1, servers: 1, demand, steal, modelledServers: 4, demandSource: "type",
 };
 const provider = { provider: "ovhcloud-vps", hosts: 2, servers: 1, demand, steal, busyCores: busy };
-const model = { cpuPercentile: 95, memoryPercentile: 95, minimumRunningHours: 24, staticBurstVcpuPerServer: 2, staticBurstMemoryBytesPerServer: 3 * GIB };
+const model = { cpuPercentile: 95, memoryPercentile: 95, minimumRunningHours: 6, staticBurstVcpuPerServer: 2, staticBurstMemoryBytesPerServer: 3 * GIB };
 const capacity = {
     generatedAt: "2026-10-19T00:07:31.552Z", windowStartedAt: "2026-10-12T00:00:00.000Z", windowEndedAt: "2026-10-19T00:00:00.000Z", hours: 168,
     model, fleet: { hosts: 2, servers: 1, demand }, providers: [provider], instanceTypes: [instanceType], hosts: [host, spare],
@@ -86,9 +88,55 @@ it("accepts the sparse first read, with every figure null", () => {
     expect(parseFleetCapacity({ ...capacity, hosts: [{ ...spare, occupants: [{ serverId: "33333333-3333-4333-8333-333333333333", displayName: "New", demand: noDemand }] }] })).not.toBeNull();
 });
 
+// The control plane's own example (docs/managed-hosting/web-admin.md#fleet-capacity), its elisions filled in.
+const exampleDemand = {
+    runningServerHours: 335.833, samples: 4030,
+    cpuCores: { p50: 0.6, p90: 1.2, p95: 1.2, p99: 1.2, max: 1.2 },
+    memoryBytes: { p50: 1073741824, p95: 1610612736, max: 1610612736 },
+    throttledShare: 0, cpuPressureShare: null,
+};
+const exampleSteal = { samples: 2015, mean: 5, p95: 5, max: 5 };
+const exampleKey = "ovhcloud-vps|6|12|Intel Core Processor (Haswell, no TSX)|2400";
+const example = {
+    generatedAt: "2026-10-17T00:20:00.000Z", windowStartedAt: "2026-10-10T00:00:00.000Z", windowEndedAt: "2026-10-17T00:00:00.000Z", hours: 168,
+    model: { cpuPercentile: 95, memoryPercentile: 95, minimumRunningHours: 6, staticBurstVcpuPerServer: 2, staticBurstMemoryBytesPerServer: 3221225472 },
+    fleet: { hosts: 1, servers: 2, demand: exampleDemand },
+    providers: [{ provider: "ovhcloud-vps", hosts: 1, servers: 2, demand: exampleDemand, steal: exampleSteal, busyCores: { samples: 2015, mean: 2.1, p95: 2.1, max: 2.1 } }],
+    instanceTypes: [{
+        key: exampleKey, provider: "ovhcloud-vps", vCpu: 6, memoryBytes: 12884901888, cpuModel: "Intel Core Processor (Haswell, no TSX)", cpuMhz: 2400,
+        hosts: 1, servers: 2, demand: exampleDemand, steal: exampleSteal, modelledServers: 4, demandSource: "type",
+    }],
+    hosts: [{
+        serviceName: "vps-1a2b3c4d.vps.ovh.net", provider: "ovhcloud-vps", regionKeys: ["germany"],
+        vCpu: 6, memoryBytes: 12884901888, cpuModel: "Intel Core Processor (Haswell, no TSX)", cpuMhz: 2394,
+        instanceTypeKey: exampleKey, slots: 3,
+        occupants: [
+            { serverId: "22222222-2222-4222-8222-222222222222", displayName: "Calradia Company", demand: {
+                runningServerHours: 167.917, samples: 2015, cpuCores: { p50: 1.2, p90: 1.2, p95: 1.2, p99: 1.2, max: 1.2 },
+                memoryBytes: { p50: 1610612736, p95: 1610612736, max: 1610612736 }, throttledShare: 0, cpuPressureShare: null } },
+            { serverId: "33333333-3333-4333-8333-333333333333", displayName: "Sturgia Nights", demand: {
+                runningServerHours: 167.917, samples: 2015, cpuCores: { p50: 0.6, p90: 0.6, p95: 0.6, p99: 0.6, max: 0.6 },
+                memoryBytes: { p50: 1073741824, p95: 1073741824, max: 1073741824 }, throttledShare: 0, cpuPressureShare: null } },
+        ],
+        steal: exampleSteal, busyCores: { samples: 2015, mean: 2.1, p95: 2.1, max: 2.1 },
+        cpuPressureShare: null, overheadCores: 0.3, overheadMemoryBytes: 1610612736,
+        usableCores: 5.4, usableMemoryBytes: 11274289152,
+        demandCpuCores: 1.2, demandMemoryBytes: 1610612736, demandSource: "type",
+        modelledServers: 4, limitedBy: "cpu", samples: 4032,
+        stealHourly: "32".repeat(168), busyHourly: "23".repeat(168),
+    }],
+};
+
+it("accepts the control plane's documented example", () => {
+    expect(parseFleetCapacity(example)).toBe(example);
+});
+
 it("accepts what the contract does not rule out", () => {
-    // A starved VPS: usable cores and memory below zero once steal and overhead are taken off.
-    expect(parseFleetCapacity(withHost({ usableCores: -0.25, usableMemoryBytes: -1024, modelledServers: 0 }))).not.toBeNull();
+    // A starved VPS: the control plane clamps usable cores and memory at zero once steal and overhead are taken off.
+    expect(parseFleetCapacity(withHost({ usableCores: 0, usableMemoryBytes: 0, modelledServers: 0 }))).not.toBeNull();
+    // A key holds a whole CPU model, so it may be longer than other text.
+    const longModel = "x".repeat(256);
+    expect(parseFleetCapacity({ ...capacity, instanceTypes: [{ ...instanceType, key: `ovhcloud-vps|6|12|${longModel}|2400`, cpuModel: longModel }] })).not.toBeNull();
     // A window that does not start on the hour still covers 168 hours.
     expect(parseFleetCapacity({ ...capacity, windowStartedAt: "2026-10-12T19:30:00.000Z", windowEndedAt: "2026-10-19T19:30:00.000Z" })).not.toBeNull();
     // Percentiles rounded to three decimals may cross by 0.001.
@@ -160,6 +208,9 @@ it.each([
     ["negative overhead cores", withHost({ overheadCores: -0.1 })],
     ["fractional overhead memory", withHost({ overheadMemoryBytes: 1.5 })],
     ["infinite usable cores", withHost({ usableCores: Number.POSITIVE_INFINITY })],
+    ["usable cores below zero", withHost({ usableCores: -0.25 })],
+    ["usable memory below zero", withHost({ usableMemoryBytes: -1024 })],
+    ["an instance type key longer than 512 characters", { ...capacity, instanceTypes: [{ ...instanceType, key: "k".repeat(513) }] }],
     ["fractional usable memory", withHost({ usableMemoryBytes: 0.5 })],
     ["negative per-server demand", withHost({ demandCpuCores: -1 })],
     ["limited by something else", withHost({ limitedBy: "disk" })],
@@ -226,10 +277,10 @@ it("compares the fleet's needs with the static rule, or says there is not enough
 
 it("says when there is no data or not enough yet", () => {
     expect(fleetCapacityDataState(parseFleetCapacity(blank)!)).toBe("empty");
-    expect(fleetCapacityDataNote(parseFleetCapacity(blank)!)).toMatch(/^Not enough data yet: no samples have arrived\./u);
+    expect(fleetCapacityDataNote(parseFleetCapacity(blank)!)).toMatch(/^Not enough data yet: no resource samples have arrived\./u);
     const sparse = parseFleetCapacity(withDemand({ runningServerHours: 3.25 }))!;
     expect(fleetCapacityDataState(sparse)).toBe("sparse");
-    expect(fleetCapacityDataNote(sparse)).toBe("Not enough data yet: the fleet has 3.3 server-h of running data, and an instance type needs 24.0 server-h before its own figures are used. Until then VPSs are modelled with the fleet's figures, or not at all, and figures without data show —.");
+    expect(fleetCapacityDataNote(sparse)).toBe("Not enough data yet: the fleet has 3.3 server-h of running data, and the model plans with an instance type's or the whole fleet's figures only once it has 6.0 server-h. Until then no VPS is modelled, and figures without data show —.");
     expect(fleetCapacityDataState(parseFleetCapacity(capacity)!)).toBe("ready");
     expect(fleetCapacityDataNote(parseFleetCapacity(capacity)!)).toBeNull();
 });

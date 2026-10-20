@@ -299,10 +299,8 @@ function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCap
                         <tbody className="divide-y divide-white/10 text-foreground">
                             {capacity.instanceTypes.map((entry) => (
                                 <tr key={entry.key}>
-                                    <th scope="row" className="p-3 align-top font-medium">
-                                        {vpsProviderLabel(entry.provider)}
-                                        <span className="mt-0.5 block font-mono text-[0.6rem] font-normal text-foreground-dim">{entry.key}</span>
-                                    </th>
+                                    {/* The key, provider|vCpu|GiB|CPU model|MHz, repeats the row's columns, so it is only the title. */}
+                                    <th scope="row" title={entry.key} className="p-3 align-top font-medium">{vpsProviderLabel(entry.provider)}</th>
                                     <td className="p-3 text-right align-top font-mono">{entry.vCpu}</td>
                                     <td className="p-3 text-right align-top font-mono">{figure(entry.memoryBytes, formatGiB)}</td>
                                     <td className="max-w-56 p-3 align-top break-words">{entry.cpuModel ?? <NoData />}</td>

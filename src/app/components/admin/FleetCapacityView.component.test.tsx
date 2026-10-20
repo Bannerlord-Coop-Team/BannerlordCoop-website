@@ -36,8 +36,14 @@ const fleetDemand: HostingFleetCapacityDemand = {
     memoryBytes: { p50: 1_503_238_553, p95: 1_932_735_283, max: 2 * GIB },
     throttledShare: 0.012, cpuPressureShare: 0.034,
 };
-const model: HostingAdminFleetCapacity["model"] = { cpuPercentile: 95, memoryPercentile: 95, minimumRunningHours: 24, staticBurstVcpuPerServer: 2, staticBurstMemoryBytesPerServer: 3 * GIB };
+const model: HostingAdminFleetCapacity["model"] = { cpuPercentile: 95, memoryPercentile: 95, minimumRunningHours: 6, staticBurstVcpuPerServer: 2, staticBurstMemoryBytesPerServer: 3 * GIB };
 const HASWELL = "Intel Core Processor (Haswell, no TSX)";
+const EPYC = "AMD EPYC 7282 16-Core Processor";
+// Instance type keys: provider, vCPUs, whole GiB, CPU model and MHz rounded to 100.
+const SIX_KEY = `ovhcloud-vps|6|12|${HASWELL}|2400`;
+const FOUR_KEY = `ovhcloud-vps|4|4|${HASWELL}|2400`;
+const MATCH_KEY = `ovhcloud-vps|4|8|${HASWELL}|2400`;
+const CONTABO_KEY = `contabo-vps|8|16|${EPYC}|2800`;
 
 const empty: Omit<HostingFleetCapacityHost, "serviceName" | "provider" | "regionKeys" | "vCpu" | "slots"> = {
     memoryBytes: null, cpuModel: null, cpuMhz: null, instanceTypeKey: null, occupants: [], steal: null, busyCores: null, cpuPressureShare: null,
@@ -49,7 +55,7 @@ const quiet: HostingFleetCapacityHost = { ...empty, serviceName: "vps-de-quiet.v
 // Room for one more server than its slots; its steal peaks over the cap on Wed 14 Oct 20:00 UTC.
 const roomy: HostingFleetCapacityHost = {
     serviceName: "vps-1a2b3c4d.vps.ovh.net", provider: "ovhcloud-vps", regionKeys: ["germany"], vCpu: 6, memoryBytes: 12 * GIB,
-    cpuModel: HASWELL, cpuMhz: 2399.996, instanceTypeKey: "ovh-6-12-haswell", slots: 3,
+    cpuModel: HASWELL, cpuMhz: 2399.996, instanceTypeKey: SIX_KEY, slots: 3,
     occupants: [
         { serverId: "22222222-2222-4222-8222-222222222222", displayName: "Calradia Company", demand: demandOf(1.1, 1_771_674_010) },
         { serverId: "33333333-3333-4333-8333-333333333333", displayName: "Sturgia Nights", demand: noDemand },
@@ -65,7 +71,7 @@ const roomy: HostingFleetCapacityHost = {
 // High steal leaves room for fewer servers than its slots.
 const risky: HostingFleetCapacityHost = {
     serviceName: "vps-de-risk.vps.ovh.net", provider: "ovhcloud-vps", regionKeys: ["germany"], vCpu: 4, memoryBytes: 4 * GIB,
-    cpuModel: HASWELL, cpuMhz: 2399.996, instanceTypeKey: "ovh-4-4-haswell", slots: 2,
+    cpuModel: HASWELL, cpuMhz: 2399.996, instanceTypeKey: FOUR_KEY, slots: 2,
     occupants: [
         { serverId: "77777777-7777-4777-8777-777777777777", displayName: "Battania Woods", demand: demandOf(1.5, 2.5 * GIB) },
         { serverId: "88888888-8888-4888-8888-888888888888", displayName: "Khuzait Plains", demand: demandOf(1.3, 2 * GIB) },
@@ -76,29 +82,30 @@ const risky: HostingFleetCapacityHost = {
     stealHourly: hex(week(() => 60)), busyHourly: hex(week(() => 70)),
 };
 const matching: HostingFleetCapacityHost = {
-    ...risky, serviceName: "vps-uk-match.vps.ovh.net", regionKeys: ["united-kingdom"], memoryBytes: 8 * GIB, instanceTypeKey: "ovh-4-8-haswell",
+    ...risky, serviceName: "vps-uk-match.vps.ovh.net", regionKeys: ["united-kingdom"], memoryBytes: 8 * GIB, instanceTypeKey: MATCH_KEY,
     occupants: [{ serverId: "44444444-4444-4444-8444-444444444444", displayName: "Lone Wolf", demand: demandOf(0.6, GIB) }],
     steal: { samples: 2016, mean: 0.1, p95: 0.2, max: 0.9 }, demandSource: "type", modelledServers: 2, limitedBy: "cpu",
     stealHourly: hex(week(() => 1)), busyHourly: hex(week(() => 20)),
 };
-// RAM unknown, so it is not modelled.
+// Its first observation with counters has arrived, but no interval yet, so it is not modelled.
 const contabo: HostingFleetCapacityHost = {
-    ...empty, serviceName: "vmi123456.contaboserver.net", provider: "contabo-vps", regionKeys: ["germany"], vCpu: 8, slots: 4, instanceTypeKey: "contabo-8",
+    ...empty, serviceName: "vmi123456.contaboserver.net", provider: "contabo-vps", regionKeys: ["germany"], vCpu: 8, slots: 4,
+    memoryBytes: 16 * GIB, cpuModel: EPYC, cpuMhz: 2794.748, instanceTypeKey: CONTABO_KEY,
     occupants: [{ serverId: "99999999-9999-4999-8999-999999999999", displayName: "Aserai Sands", demand: demandOf(1.4, 2 * GIB) }],
-    busyCores: { samples: 2016, mean: 0.8, p95: 1, max: 2.2 }, samples: 2016, busyHourly: hex(week(() => 15)),
+    samples: 1,
 };
 const spare: HostingFleetCapacityHost = { ...empty, serviceName: "vps-spare", provider: "ovhcloud-vps", regionKeys: [], vCpu: 4, slots: 2 };
 
 const ovhSix: HostingFleetCapacityInstanceType = {
-    key: "ovh-6-12-haswell", provider: "ovhcloud-vps", vCpu: 6, memoryBytes: 12 * GIB, cpuModel: HASWELL, cpuMhz: 2399.996,
+    key: SIX_KEY, provider: "ovhcloud-vps", vCpu: 6, memoryBytes: 12 * GIB, cpuModel: HASWELL, cpuMhz: 2399.996,
     hosts: 3, servers: 4, demand: fleetDemand, steal: { samples: 6048, mean: 0.4, p95: 1.2, max: 6.5 }, modelledServers: 4, demandSource: "type",
 };
 const ovhFour: HostingFleetCapacityInstanceType = {
-    ...ovhSix, key: "ovh-4-4-haswell", vCpu: 4, memoryBytes: 4 * GIB, hosts: 1, servers: 2, demand: demandOf(1.5, 2.5 * GIB),
+    ...ovhSix, key: FOUR_KEY, vCpu: 4, memoryBytes: 4 * GIB, hosts: 1, servers: 2, demand: demandOf(1.5, 2.5 * GIB),
     steal: { samples: 2016, mean: 1.8, p95: 3.4, max: 12.5 }, modelledServers: 1, demandSource: "fleet",
 };
 const contaboEight: HostingFleetCapacityInstanceType = {
-    key: "contabo-8", provider: "contabo-vps", vCpu: 8, memoryBytes: null, cpuModel: null, cpuMhz: null,
+    key: CONTABO_KEY, provider: "contabo-vps", vCpu: 8, memoryBytes: 16 * GIB, cpuModel: EPYC, cpuMhz: 2794.748,
     hosts: 1, servers: 1, demand: noDemand, steal: null, modelledServers: null, demandSource: "none",
 };
 
@@ -108,7 +115,7 @@ const capacity: HostingAdminFleetCapacity = {
     fleet: { hosts: 6, servers: 7, demand: fleetDemand },
     providers: [
         { provider: "ovhcloud-vps", hosts: 5, servers: 6, demand: fleetDemand, steal: { samples: 10_080, mean: 0.4, p95: 1.2, max: 6.5 }, busyCores: { samples: 10_080, mean: 1.1, p95: 2.4, max: 4.8 } },
-        { provider: "contabo-vps", hosts: 1, servers: 1, demand: demandOf(1.4, 2 * GIB), steal: null, busyCores: { samples: 2016, mean: 0.8, p95: 1, max: 2.2 } },
+        { provider: "contabo-vps", hosts: 1, servers: 1, demand: demandOf(1.4, 2 * GIB), steal: null, busyCores: null },
     ],
     instanceTypes: [ovhSix, ovhFour, contaboEight],
     hosts: [quiet, roomy, risky, matching, contabo, spare],
@@ -172,6 +179,11 @@ function cellTexts(row: Element) {
     return [...row.querySelectorAll(":scope > td")].map((cell) => cell.textContent);
 }
 
+/** An instance type's row by its key, which titles its row header. */
+function typeRow(key: string) {
+    return [...pane("Instance types").querySelectorAll("tbody tr")].find((row) => row.querySelector('th[scope="row"]')?.getAttribute("title") === key)!;
+}
+
 /** A VPS row by its short name. */
 function hostRow(name: string) {
     return [...pane("VPSs").querySelectorAll("tbody tr")].find((row) => row.querySelector('th[scope="row"] p')?.textContent === name)!;
@@ -224,10 +236,12 @@ it("compares providers' steal and per-server needs", async () => {
 
 it("models each instance type against its static slots", async () => {
     await open();
-    expect(tableRow("Instance types", "OVHcloud").querySelector("th")!.textContent).toBe("OVHcloudovh-6-12-haswell");
-    expect(cellTexts(tableRow("Instance types", "OVHcloudovh-6"))).toEqual(["6", "12.00 GiB", HASWELL, "2,400 MHz", "3", "4", "0.85 cores", "1.20 cores", "1.80 GiB", "1.2%", "4 / 3 slotsHeadroom +1", "Type"]);
-    expect(cellTexts(tableRow("Instance types", "OVHcloudovh-4"))).toEqual(["4", "4.00 GiB", HASWELL, "2,400 MHz", "1", "2", "0.75 cores", "1.50 cores", "2.50 GiB", "3.4%", "1 / 2 slotsAt risk −1", "Fleet"]);
-    expect(cellTexts(tableRow("Instance types", "Contabo"))).toEqual(["8", NO_DATA, NO_DATA, NO_DATA, "1", "1", NO_DATA, NO_DATA, NO_DATA, NO_DATA, `${NO_DATA} / 4 slots`, "None yet"]);
+    expect([...pane("Instance types").querySelectorAll('tbody th[scope="row"]')].map((name) => [name.textContent, name.getAttribute("title")])).toEqual([
+        ["OVHcloud", SIX_KEY], ["OVHcloud", FOUR_KEY], ["Contabo", CONTABO_KEY],
+    ]);
+    expect(cellTexts(typeRow(SIX_KEY))).toEqual(["6", "12.00 GiB", HASWELL, "2,400 MHz", "3", "4", "0.85 cores", "1.20 cores", "1.80 GiB", "1.2%", "4 / 3 slotsHeadroom +1", "Type"]);
+    expect(cellTexts(typeRow(FOUR_KEY))).toEqual(["4", "4.00 GiB", HASWELL, "2,400 MHz", "1", "2", "0.75 cores", "1.50 cores", "2.50 GiB", "3.4%", "1 / 2 slotsAt risk −1", "Fleet"]);
+    expect(cellTexts(typeRow(CONTABO_KEY))).toEqual(["8", "16.00 GiB", EPYC, "2,795 MHz", "1", "1", NO_DATA, NO_DATA, NO_DATA, NO_DATA, `${NO_DATA} / 4 slots`, "None yet"]);
 });
 
 it("groups VPSs by provider then region, with VPSs without data last", async () => {
@@ -239,6 +253,10 @@ it("groups VPSs by provider then region, with VPSs without data last", async () 
     ]);
     expect(hostRow("vps-1a2b3c4d").querySelector("th p")!.getAttribute("title")).toBe("vps-1a2b3c4d.vps.ovh.net");
     expect(hostRow("vps-de-quiet").querySelector("th")!.textContent).toContain("0 servers · 2 slots · no data yet");
+    expect(hostRow("vps-spare").querySelector("th")!.textContent).toContain("4 vCPU · RAM unknownCPU model unknown");
+    // One observation with counters but no interval yet: listed with the measured VPSs, its strips still hatched.
+    expect(hostRow("vmi123456.contaboserver.net").querySelector("th")!.textContent).not.toContain("no data yet");
+    expect(strips("vmi123456.contaboserver.net").steal.getAttribute("aria-label")).toBe("vmi123456.contaboserver.net steal by hour: no data yet");
 });
 
 it("shows each VPS's figures and its servers' own needs", async () => {
@@ -320,6 +338,8 @@ it("explains each figure in a tooltip that keyboard and pointer users can reach"
     expect(tooltipOf(stealHint).textContent).toBe(hints.stealP95);
     await act(async () => stealHint.focus());
     expect(tooltipOf(stealHint).hidden).toBe(false);
+    // In an upper-case table header the hint still reads as a sentence.
+    expect(tooltipOf(stealHint).classList.contains("normal-case")).toBe(true);
     await act(async () => { stealHint.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
     expect(tooltipOf(stealHint).hidden).toBe(true);
 
@@ -343,14 +363,14 @@ it("explains each figure in a tooltip that keyboard and pointer users can reach"
     ] as const) {
         expect(tooltipOf(button(label, vpss)).textContent).toBe(hint);
     }
-    expect(tooltipOf(button("Demand source", pane("Instance types"))).textContent).toContain("Type uses the instance type's own figures once it has 24.0 server-h of running data");
+    expect(tooltipOf(button("Demand source", pane("Instance types"))).textContent).toContain("Type uses the instance type's own figures once its servers have run 6.0 server-h in the week; Fleet uses the whole fleet's once it has");
     expect(tooltipOf(button("CPU p95", pane("What a server needs"))).textContent).toBe(`${hints.cpu} ${hints.p95}`);
 });
 
 it("says there is not enough data yet instead of looking broken before the first samples", async () => {
     mocks.request.mockResolvedValueOnce(blank);
     await open();
-    expect(pane("Fleet capacity").textContent).toContain("Not enough data yet: no samples have arrived.");
+    expect(pane("Fleet capacity").textContent).toContain("Not enough data yet: no resource samples have arrived.");
     const needs = pane("What a server needs");
     expect([...needs.querySelectorAll("dd")].map((value) => value.textContent)).toEqual([NO_DATA, NO_DATA, NO_DATA, "0.0 server-h", NO_DATA, NO_DATA, NO_DATA, NO_DATA]);
     expect(needs.textContent).toContain("There is not enough data yet to compare it with what servers use.");
@@ -363,7 +383,7 @@ it("says there is not enough data yet instead of looking broken before the first
 it("says while the fleet has less running data than an instance type needs", async () => {
     mocks.request.mockResolvedValueOnce({ ...capacity, fleet: { ...capacity.fleet, demand: { ...fleetDemand, runningServerHours: 3.25 } } });
     await open();
-    expect(pane("Fleet capacity").textContent).toContain("Not enough data yet: the fleet has 3.3 server-h of running data, and an instance type needs 24.0 server-h before its own figures are used.");
+    expect(pane("Fleet capacity").textContent).toContain("Not enough data yet: the fleet has 3.3 server-h of running data, and the model plans with an instance type's or the whole fleet's figures only once it has 6.0 server-h. Until then no VPS is modelled");
     expect(pane("What a server needs").textContent).toContain("1.20 cores");
 });
 

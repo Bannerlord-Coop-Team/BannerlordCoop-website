@@ -480,10 +480,10 @@ export type HostingAdminPlacementOverlap = {
     hosts: HostingPlacementOverlapHost[];
 };
 
-/** Percentiles of the CPU cores one server used, averaged over each 5-minute interval while it ran. */
+/** Nearest-rank percentiles of the CPU cores one server used, averaged over each interval (about 5 minutes) while it ran. */
 export type HostingFleetCapacityCpuCores = { p50: number; p90: number; p95: number; p99: number; max: number };
 
-/** Percentiles of the memory one server used while it ran, in bytes. */
+/** Nearest-rank percentiles of one server's working set at the end of each running interval, in bytes. */
 export type HostingFleetCapacityMemoryBytes = { p50: number; p95: number; max: number };
 
 /** What one server needs while it runs, from the 5-minute intervals of the servers it covers; null without data. */
@@ -492,9 +492,9 @@ export type HostingFleetCapacityDemand = {
     samples: number;
     cpuCores: HostingFleetCapacityCpuCores | null;
     memoryBytes: HostingFleetCapacityMemoryBytes | null;
-    /** Share of running intervals in which the server's CPU was throttled, 0 to 1. */
+    /** Share of running time the server's CPU quota throttled it, time-weighted, 0 to 1. */
     throttledShare: number | null;
-    /** Share of running intervals in which the server waited for CPU (pressure), 0 to 1. */
+    /** Share of running time some of the server's tasks waited for CPU (PSI some), time-weighted, 0 to 1. */
     cpuPressureShare: number | null;
 };
 
@@ -513,8 +513,9 @@ export type HostingFleetCapacityProvider = {
     busyCores: HostingFleetCapacityStat | null;
 };
 
-/** VPSs of one provider with the same vCPUs, RAM and CPU. */
+/** VPSs of one provider with the same vCPUs, whole GiB of RAM, CPU model and clock to 100 MHz. */
 export type HostingFleetCapacityInstanceType = {
+    /** `provider|vCpu|GiB|cpu model|MHz rounded to 100`, such as `ovhcloud-vps|6|12|Intel Core Processor (Haswell, no TSX)|2400`. */
     key: string;
     provider: string;
     vCpu: number;
@@ -525,7 +526,7 @@ export type HostingFleetCapacityInstanceType = {
     servers: number;
     demand: HostingFleetCapacityDemand;
     steal: HostingFleetCapacityStat | null;
-    /** How many servers one VPS of this type can run at once at their modelled needs. */
+    /** How many servers a typical VPS of this type can run at once at their modelled needs. */
     modelledServers: number | null;
     demandSource: HostingFleetCapacityDemandSource;
 };
@@ -541,9 +542,11 @@ export type HostingFleetCapacityHost = {
     provider: string;
     regionKeys: string[];
     vCpu: number;
+    /** From the VPS's latest host sample in the window; null without one. */
     memoryBytes: number | null;
     cpuModel: string | null;
     cpuMhz: number | null;
+    /** Null until the VPS's first host sample. */
     instanceTypeKey: string | null;
     /** Today's static slots: floor(vCpu / 2). */
     slots: number;
@@ -551,19 +554,20 @@ export type HostingFleetCapacityHost = {
     steal: HostingFleetCapacityStat | null;
     busyCores: HostingFleetCapacityStat | null;
     cpuPressureShare: number | null;
-    /** What the OS and the runner use beyond the game servers. */
+    /** The median cores and memory in use beyond the game servers' own. */
     overheadCores: number | null;
     overheadMemoryBytes: number | null;
-    /** vCpu × (1 − steal p95) − overhead, and RAM less overhead: what is left for game servers. */
+    /** vCpu × (1 − steal p95 ÷ 100) − overhead cores, and RAM less overhead memory, each clamped at zero. */
     usableCores: number | null;
     usableMemoryBytes: number | null;
     /** The per-server demand this VPS is modelled with, from `demandSource`. */
     demandCpuCores: number | null;
     demandMemoryBytes: number | null;
     demandSource: HostingFleetCapacityDemandSource;
-    /** floor(min(usableCores / demandCpuCores, usableMemoryBytes / demandMemoryBytes)). */
+    /** floor(min(usableCores / demandCpuCores, usableMemoryBytes / demandMemoryBytes)); null while an input is unknown. */
     modelledServers: number | null;
     limitedBy: "cpu" | "memory" | null;
+    /** Observations taken on this VPS in the window that carried server or host counters. */
     samples: number;
     /** 168 hours oldest first, two lowercase hex digits each or `--` without data: mean steal in permille, capped at 255. */
     stealHourly: string;
@@ -584,7 +588,7 @@ export type HostingAdminFleetCapacity = {
     model: {
         cpuPercentile: number;
         memoryPercentile: number;
-        /** Running server-hours an instance type needs before its own demand is used instead of the fleet's. */
+        /** Running server-hours an instance type, or else the fleet, needs before the model plans with its demand. */
         minimumRunningHours: number;
         staticBurstVcpuPerServer: number;
         staticBurstMemoryBytesPerServer: number;

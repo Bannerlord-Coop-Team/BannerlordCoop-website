@@ -53,8 +53,13 @@ function amount(value: unknown, maximum = Number.MAX_SAFE_INTEGER) {
     return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= maximum;
 }
 
-function text(value: unknown) {
-    return typeof value === "string" && value.length > 0 && value.length <= 256;
+function text(value: unknown, maximum = 256) {
+    return typeof value === "string" && value.length > 0 && value.length <= maximum;
+}
+
+/** An instance type's key, `provider|vCpu|GiB|cpu model|MHz`, holds a whole CPU model, so it may be longer. */
+function typeKey(value: unknown) {
+    return text(value, 512);
 }
 
 function nullable(value: unknown, check: (value: unknown) => boolean) {
@@ -111,15 +116,6 @@ function mhz(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
-/** Usable cores and memory are what is left after steal and overhead, so they may be below 0 on a starved VPS. */
-function finite(value: unknown) {
-    return typeof value === "number" && Number.isFinite(value);
-}
-
-function signedBytes(value: unknown) {
-    return Number.isSafeInteger(value);
-}
-
 function percentile(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 100;
 }
@@ -140,7 +136,7 @@ function provider(value: unknown) {
 
 function instanceType(value: unknown) {
     return isRecord(value) && hasExactKeys(value, INSTANCE_TYPE_KEYS)
-        && text(value.key) && text(value.provider) && count(value.vCpu, 1)
+        && typeKey(value.key) && text(value.provider) && count(value.vCpu, 1)
         && nullable(value.memoryBytes, positiveBytes) && nullable(value.cpuModel, text) && nullable(value.cpuMhz, mhz)
         && count(value.hosts) && count(value.servers) && demand(value.demand)
         && nullable(value.steal, percentStat)
@@ -160,15 +156,16 @@ function hourly(value: unknown, maximum: number) {
 function host(value: unknown) {
     return isRecord(value) && hasExactKeys(value, HOST_KEYS)
         && text(value.serviceName) && text(value.provider)
-        && Array.isArray(value.regionKeys) && value.regionKeys.every(text)
+        && Array.isArray(value.regionKeys) && value.regionKeys.every((key) => text(key))
         && count(value.vCpu, 1) && nullable(value.memoryBytes, positiveBytes)
-        && nullable(value.cpuModel, text) && nullable(value.cpuMhz, mhz) && nullable(value.instanceTypeKey, text)
+        && nullable(value.cpuModel, text) && nullable(value.cpuMhz, mhz) && nullable(value.instanceTypeKey, typeKey)
         && count(value.slots)
         && Array.isArray(value.occupants) && value.occupants.every(occupant)
         && nullable(value.steal, percentStat) && nullable(value.busyCores, coresStat)
         && nullable(value.cpuPressureShare, share)
         && nullable(value.overheadCores, (cores) => amount(cores)) && nullable(value.overheadMemoryBytes, (bytes) => count(bytes))
-        && nullable(value.usableCores, finite) && nullable(value.usableMemoryBytes, signedBytes)
+        // The control plane clamps what is left after steal and overhead at zero.
+        && nullable(value.usableCores, (cores) => amount(cores)) && nullable(value.usableMemoryBytes, (bytes) => count(bytes))
         && nullable(value.demandCpuCores, (cores) => amount(cores)) && nullable(value.demandMemoryBytes, (bytes) => count(bytes))
         && demandSource(value.demandSource)
         && nullable(value.modelledServers, (servers) => count(servers))
@@ -351,11 +348,11 @@ export function fleetCapacityDataState(capacity: Pick<HostingAdminFleetCapacity,
 export function fleetCapacityDataNote(capacity: Pick<HostingAdminFleetCapacity, "model" | "fleet" | "hosts">) {
     const state = fleetCapacityDataState(capacity);
     if (state === "empty") {
-        return "Not enough data yet: no samples have arrived. Collection starts when the control plane begins reporting fleet capacity, and figures fill in from the first 5-minute samples. Until then every figure shows —.";
+        return "Not enough data yet: no resource samples have arrived. They start once the runners report resource counters, and figures fill in from the first 5-minute samples. Until then every figure shows —.";
     }
     if (state === "sparse") {
         const hours = capacity.fleet.demand.runningServerHours;
-        return `Not enough data yet: the fleet has ${formatServerHours(hours)} of running data, and an instance type needs ${formatServerHours(capacity.model.minimumRunningHours)} before its own figures are used. Until then VPSs are modelled with the fleet's figures, or not at all, and figures without data show —.`;
+        return `Not enough data yet: the fleet has ${formatServerHours(hours)} of running data, and the model plans with an instance type's or the whole fleet's figures only once it has ${formatServerHours(capacity.model.minimumRunningHours)}. Until then no VPS is modelled, and figures without data show —.`;
     }
     return null;
 }
@@ -463,22 +460,22 @@ export function fleetCapacityHints(capacityModel: HostingAdminFleetCapacity["mod
     const memory = `p${capacityModel.memoryPercentile}`;
     const rule = staticRuleLabel(capacityModel);
     return {
-        cpu: "CPU cores one server used, averaged over each 5-minute interval while it was running.",
-        memory: "Memory one server used while it was running, in GiB.",
-        p50: "p50: the median. Half of the 5-minute intervals were at or below this.",
-        p95: "p95: 95% of the 5-minute intervals were at or below this. The model sizes servers at this level, so brief spikes above it are expected.",
-        max: "The highest 5-minute interval in the week.",
+        cpu: "CPU cores one server used, averaged over each interval between its samples (about 5 minutes) while it was running.",
+        memory: "Memory one server used (its working set) at the end of each running interval of about 5 minutes, in GiB.",
+        p50: "p50: the median. Half of the intervals were at or below this.",
+        p95: "p95: 95% of the intervals were at or below this. The model sizes servers at this level, so brief spikes above it are expected.",
+        max: "The highest interval in the week.",
         runningHours: "Hours that servers were running in the week, summed over servers. The more of them, the more the figures can be trusted.",
-        throttled: "Share of a server's running 5-minute intervals in which it hit its CPU limit and was throttled.",
+        throttled: "Share of a server's running time in which its CPU quota throttled it.",
         steal: "Steal: the share of the VPS's CPU time that the hypervisor gave to other tenants of the same physical machine, in percent. A VPS with high steal really has fewer cores than it is sold with.",
-        stealP95: "Steal p95: 95% of the VPS's 5-minute samples had at most this much steal. The model takes it off the vCPUs.",
-        stealMax: "The highest steal of any 5-minute sample in the week.",
-        busyCores: "Busy cores at p95: how many of the VPS's cores were busy, game servers and everything else together, in 95% of its 5-minute samples.",
-        overhead: "Overhead: the cores and memory the operating system and the runner use beyond the game servers.",
-        usable: `Usable: what is left for game servers. Cores are vCPU × (1 − steal p95) − overhead cores; memory is RAM − overhead memory.`,
+        stealP95: "Steal p95: 95% of the VPS's intervals of about 5 minutes had at most this much steal. The model takes it off the vCPUs.",
+        stealMax: "The highest steal of any interval in the week.",
+        busyCores: "Busy cores at p95: how many of the VPS's cores were busy (user, system and interrupt time), game servers and everything else together, in 95% of its intervals.",
+        overhead: "Overhead: the median cores and memory in use beyond the game servers' own, from the operating system, the runner and anything else on the VPS.",
+        usable: "Usable: what is left for game servers, never below 0. Cores are vCPU × (1 − steal p95 ÷ 100) − overhead cores; memory is RAM − overhead memory.",
         perServer: `Per server: the ${cpu} CPU and ${memory} memory one server is modelled to need on this VPS, from the source shown.`,
-        demandSource: `Where the per-server needs come from: Type uses the instance type's own figures once it has ${formatServerHours(capacityModel.minimumRunningHours)} of running data; Fleet uses the whole fleet's until then; None yet means there is no data.`,
-        modelled: `Servers at once: how many servers the VPS could run together at their ${cpu} CPU and ${memory} memory, floor(min(usable cores ÷ per-server cores, usable memory ÷ per-server memory)). Compared with today's slots from the static rule (${rule}): fewer is at risk when they all run at once, more is headroom.`,
+        demandSource: `Where the per-server needs come from: Type uses the instance type's own figures once its servers have run ${formatServerHours(capacityModel.minimumRunningHours)} in the week; Fleet uses the whole fleet's once it has; None yet means neither has enough data.`,
+        modelled: `Servers at once: how many servers the VPS could run together at their ${cpu} CPU and ${memory} memory, floor(min(usable cores ÷ per-server cores, usable memory ÷ per-server memory)), unknown until its steal, overhead and memory are measured. Compared with today's slots from the static rule (${rule}): fewer is at risk when they all run at once, more is headroom.`,
         slots: `Slots today: floor(vCPU ÷ ${capacityModel.staticBurstVcpuPerServer}), from the static rule of ${rule}.`,
         limitedBy: "Whether CPU or memory runs out first in the model.",
         hourly: "Mean steal and busy share of each UTC hour, oldest first. Darker is more; a hatched hour has no data.",

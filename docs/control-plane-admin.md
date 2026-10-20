@@ -789,34 +789,46 @@ contract below reads "The control plane returned an unexpected fleet capacity."
 
 ### The model
 
-- **Per-server demand** comes from the 5-minute intervals in which a server was
-  running. Its CPU is the average number of cores it used in the interval, its
-  memory what it used, and the figures are percentiles over those intervals:
-  CPU p50, p90, p95, p99 and max, memory p50, p95 and max. p95 means 95% of the
-  intervals were at or below it, and the model sizes servers at the percentiles
-  in `model` (p95 for both today), so short spikes above them are expected.
-  **Throttled** is the share of running intervals in which a server hit its CPU
-  limit. **Running server-hours** sums the hours servers ran, as a sense of how
-  much the figures can be trusted.
+The control plane's `docs/managed-hosting/fleet-capacity.md` defines every
+figure; the tab presents them as follows.
+
+- **Per-server demand** comes from the intervals, about 5 minutes each, between
+  a server's resource samples while it was running. Its CPU is the average
+  number of cores it used in the interval, its memory its working set at the
+  interval's end, and the figures are nearest-rank percentiles over those
+  intervals: CPU p50, p90, p95, p99 and max, memory p50, p95 and max. p95 means
+  95% of the intervals were at or below it, and the model sizes servers at the
+  percentiles in `model` (p95 for both), so short spikes above them are
+  expected. **Throttled** is the share of running time in which a server's CPU
+  quota throttled it. **Running server-hours** sums the hours servers ran, as a
+  sense of how much the figures can be trusted.
 - **Steal** is the share of a VPS's CPU time that the hypervisor gave to other
-  tenants of the same physical machine, in percent (mean, p95 and max over the
-  week's samples).
-- **Busy cores** is how many of a VPS's cores were busy, game servers and
-  everything else together.
-- **Overhead** is the cores and memory the operating system and the runner use
-  beyond the game servers.
-- **Usable** is what is left for game servers: vCPU × (1 − steal p95) − overhead
-  cores, and RAM − overhead memory. It can be below zero on a starved VPS.
+  tenants of the same physical machine, in percent (time-weighted mean, p95 and
+  max over the week's intervals).
+- **Busy cores** is how many of a VPS's cores were busy (user, system and
+  interrupt time), game servers and everything else together.
+- **Overhead** is the median cores and memory in use beyond the game servers'
+  own: the operating system, the runner and anything else on the VPS.
+- **Usable** is what is left for game servers: vCPU × (1 − steal p95 ÷ 100) −
+  overhead cores, and RAM − overhead memory, each clamped at zero by the control
+  plane.
 - **Per server** is the demand a VPS is modelled with: its instance type's own
-  figures once the type has `minimumRunningHours` of running data (**Type**),
-  the fleet's until then (**Fleet**), or none yet (**None yet**).
+  p95 figures once the type's servers have run `minimumRunningHours` (six today)
+  in the window (**Type**), else the whole fleet's once it has that much
+  (**Fleet**), else none yet (**None yet**).
 - **Servers at once (modelled)** is floor(min(usable cores ÷ per-server cores,
   usable memory ÷ per-server memory)), and **Limited by** says whether CPU or
   memory runs out first. It is compared with today's slots, floor(vCPU ÷ 2) from
   the static rule of 2 vCPU and 3 GiB per server (an instance type's slots are
   worked out the same way from `model.staticBurstVcpuPerServer`). Fewer than its
   slots is **At risk** (the VPS cannot run all its slots' servers at their needs
-  at once), more is **Headroom**, equal is **Matches**.
+  at once), more is **Headroom**, equal is **Matches**. It is null, and shown as
+  not modelled, while there is no per-server demand or the VPS's steal, overhead
+  or memory is unknown.
+- An **instance type** is a provider, vCPU count, RAM rounded to whole GiB, CPU
+  model and clock rounded to 100 MHz, keyed `provider|vCpu|GiB|model|MHz`, for
+  example `ovhcloud-vps|6|12|Intel Core Processor (Haswell, no TSX)|2400`. A VPS
+  has none until its first host sample.
 
 ### What the tab shows
 
@@ -831,12 +843,14 @@ contract below reads "The control plane returned an unexpected fleet capacity."
    (60% of 3 GiB).").
 3. **Providers**: VPSs, servers, steal mean, p95 and max, and per-server CPU p50
    and p95 and memory p95, one row per provider.
-4. **Instance types**: provider (and the type's key), vCPU, RAM, CPU model,
-   MHz, VPSs, servers, per-server CPU p50 and p95, memory p95, steal p95, servers
-   at once against the type's static slots, and the demand source.
+4. **Instance types**: provider, vCPU, RAM, CPU model, MHz, VPSs, servers,
+   per-server CPU p50 and p95, memory p95, steal p95, servers at once against the
+   type's static slots, and the demand source. The type's key repeats those
+   columns, so it is only the provider cell's title.
 5. **VPSs**: one row per VPS, grouped by provider and then region (alphabetical,
-   hosts without a region last in their provider), with VPSs that have no
-   samples yet last in their group. Each row has the service name without
+   hosts without a region last in their provider), with VPSs whose `samples` is
+   0 (no observation on them carried server or host counters yet) last in their
+   group and marked "no data yet". Each row has the service name without
    `.vps.ovh.net` (the full name in its title), size, CPU model and MHz, its
    servers and slots, and each server's own p95 CPU and memory; servers at once
    against its slots, limited by, steal mean · p95 · max, busy cores p95 of its
@@ -856,19 +870,26 @@ cores, overhead, usable, p50/p95/max, per server and its source, servers at
 once, limited by, throttled share, running server-hours and the hourly strips).
 A tooltip opens on hover, focus or a tap and closes on Escape, when the pointer
 or focus leaves, or when the window scrolls or resizes; only one is open at a
-time. Units are on every value: cores, GiB, %, MHz and server-h. A figure
-without data shows "—" (read out as "No data yet").
+time. These are the shared `MetricHint` buttons described under the measured
+host overlap; their tooltip resets the text case, weight and letter spacing, so a
+hint in an upper-case table header still reads as a sentence. Units are on every
+value: cores, GiB, %, MHz and server-h. A figure without data shows "—" (read
+out as "No data yet").
 
 ### Sparse data
 
-Data collection starts when the control plane's `fleet-capacity` deploys, so
-the first reads have few samples and many nulls. Before any sample arrives the
-header says "Not enough data yet: no samples have arrived" and every figure
-shows "—"; tables and rows are still listed, servers at once shows "— / N
-slots" without a badge, and every strip is hatched. While the fleet has less
-running data than `minimumRunningHours` (or no demand figures), the note says
-how many server-hours it has against what an instance type needs, and that VPSs
-are modelled with the fleet's figures or not at all until then.
+The figures come from resource counters that runners only report from the
+release that adds them, so the first reads have few samples and many nulls. The
+control plane leaves out a malformed sample as if its observation had no
+counters and only logs it; the response has no field for skipped samples, so the
+tab cannot show them. Before any sample arrives (the fleet's demand and every
+VPS's `samples` are 0) the header says "Not enough data yet: no resource samples
+have arrived" and every figure shows "—"; tables and rows are still listed,
+servers at once shows "— / N slots" without a badge, and every strip is hatched.
+While the fleet has less running data than `minimumRunningHours` (or no demand
+figures), the note says how many server-hours it has against what the model
+needs and that no VPS is modelled until then. A VPS with an observation but no
+interval yet is listed with the measured VPSs, its strips still hatched.
 
 ### Response shape
 
@@ -880,14 +901,15 @@ percentiles are above 0 and at most 100, `minimumRunningHours` is a finite
 non-negative number, `staticBurstVcpuPerServer` is positive and
 `staticBurstMemoryBytesPerServer` a positive integer. Counts (hosts, servers,
 samples, slots, modelled servers) are non-negative integers, vCPU at least 1;
-bytes are non-negative integers and RAM positive; MHz is positive. A demand's
+bytes are non-negative integers and RAM positive; MHz is positive. Text is
+1–256 characters, and an instance-type key, which holds a whole CPU model, up to
+512; its format is not checked. A demand's
 running server-hours is a finite non-negative number, its CPU percentiles and
 memory percentiles are null or ordered p50 ≤ p90 ≤ p95 ≤ p99 ≤ max (memory
 p50 ≤ p95 ≤ max), and its shares are null or 0–1. A steal stat is 0–100 and a
 busy-cores stat non-negative, each with its mean and p95 at most its max. Figures
 are rounded to three decimals, so each ordering allows 0.001. Usable cores and
-memory are null or any finite number, since steal and overhead can leave less
-than nothing. `demandSource` is `type`, `fleet` or `none` and `limitedBy` null,
+memory are null or non-negative, as the control plane clamps them. `demandSource` is `type`, `fleet` or `none` and `limitedBy` null,
 `cpu` or `memory`. `stealHourly` and `busyHourly` are 336 characters, 168 hours
 of two lowercase hex digits or `--`; steal is permille capped at 255 (`ff` is
 25.5% or more) and busy is a percent no more than 100 (`64`). Each provider,
