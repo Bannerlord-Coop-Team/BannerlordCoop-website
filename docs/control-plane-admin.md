@@ -99,7 +99,7 @@ The website does not query the private `control_plane` schema, call a VPS provid
 
 The administrator presentation resolves Discord usernames only from bounded Supabase Auth accounts that signed in with Discord. Numeric Discord IDs remain visible and accepted as a fallback. Dates and provider-check times render only after browser hydration so they use the administrator's browser locale and time zone rather than the Netlify or Oracle server time zone.
 
-The Operations page's **Onboard provider-account VPS** card is the normal additive host-ingestion path for providers with an account API (OVHcloud and Contabo). Its choices are the inventory's `availableHosts` (unregistered hosts from every enabled provider account, labelled `<provider> · <service name>`); each option carries that host's `provider` and `serviceName`, and the card sends both. The inventory's `providerReads` reports each enabled provider's account read; a failed read withholds only that provider's unregistered hosts and billing, and the Operations and VPS views name the failed provider. The control plane verifies that the already-purchased service belongs to that provider's account, derives the reviewed image within the control plane, records `floor(vCPU / 2)` empty slots, and writes an administrative audit event. It never purchases, renews, or powers the VPS. The VPS view's per-host **Onboard runner**, **Retry onboarding**, and **Update runner** buttons send the host row's own `provider` with its service name; the control plane requires it and rejects a provider that differs from the stored host. Server creation assigns an existing prepared VPS slot in the selected region; it never orders a VPS, and unavailable capacity fails without creating or billing anything. The Region choices are the stored-catalog entries that `hosting-regions` reports `available: true` (a free slot admissible under the owner admission rules), in stored order, labelled from the website catalog or the humanized key. That flag is advisory: only the region key (`friendlyRegion`) is sent, and the control plane revalidates capacity. If the stored catalog cannot be read, Create server is shown unavailable with the read error. The VPS view also reads the stored catalog and labels each host with every stored region whose placement its provider-reported country and zone satisfy, then the country and zone. A host no stored placement covers is labelled **No stored region** until a catalog entry is published, and **Regions unavailable** when the catalog cannot be read. The normal Releases view hides non-validated history, but pending, rejected, and revoked receipts remain retained for explicit inspection and audit rather than being deleted.
+The Operations page's **Onboard provider-account VPS** card is the normal additive host-ingestion path for providers with an account API (OVHcloud and Contabo). Its choices are the inventory's `availableHosts` (unregistered hosts from every enabled provider account, labelled `<provider> · <service name>`); each option carries that host's `provider` and `serviceName`, and the card sends both. The inventory's `providerReads` reports each enabled provider's account read; a failed read withholds only that provider's unregistered hosts and billing, and the Operations and VPS views name the failed provider. The control plane verifies that the already-purchased service belongs to that provider's account, derives the reviewed image within the control plane, records `floor(vCPU / 2)` empty slots (more after a [slot capacity raise](#raising-a-vps-slot-capacity)), and writes an administrative audit event. It never purchases, renews, or powers the VPS. The VPS view's per-host **Onboard runner**, **Retry onboarding**, and **Update runner** buttons send the host row's own `provider` with its service name; the control plane requires it and rejects a provider that differs from the stored host. Server creation assigns an existing prepared VPS slot in the selected region; it never orders a VPS, and unavailable capacity fails without creating or billing anything. The Region choices are the stored-catalog entries that `hosting-regions` reports `available: true` (a free slot admissible under the owner admission rules), in stored order, labelled from the website catalog or the humanized key. That flag is advisory: only the region key (`friendlyRegion`) is sent, and the control plane revalidates capacity. If the stored catalog cannot be read, Create server is shown unavailable with the read error. The VPS view also reads the stored catalog and labels each host with every stored region whose placement its provider-reported country and zone satisfy, then the country and zone. A host no stored placement covers is labelled **No stored region** until a catalog entry is published, and **Regions unavailable** when the catalog cannot be read. The normal Releases view hides non-validated history, but pending, rejected, and revoked receipts remain retained for explicit inspection and audit rather than being deleted.
 
 A provider without an account API (first: HostHatch) is onboarded with the
 **Add manual VPS** card (`#onboard-manual-vps-host`), which the VPS view's
@@ -355,6 +355,30 @@ backend that honors explicit provider exclusion before this website change.
 No Edge Function deployment is needed. This isolates the provider failure; it does
 not establish or repair the cause of the slow provider call.
 
+### Raising a VPS slot capacity
+
+Each expanded VPS row ends with a **Slot capacity** field and a **Raise slots**
+button. It sends `raise-vps-slot-capacity` with the row's own `provider` and
+service name, the entered `slotCapacity` and a fixed audit reason, after a
+confirmation. A slot reserves no cores: the placement planner keeps the servers
+online together within the VPS's cores, so a VPS may hold more servers than its
+vCPUs suggest. The field takes a whole number above the current capacity and at
+most 32, since a capacity is never lowered; the control plane checks the same
+bounds against the stored host. The button is disabled until the row's runner
+onboarding has succeeded and once the VPS holds 32 slots.
+
+The control plane refuses the request unless it runs with
+`HOSTING_DYNAMIC_SLOT_CAPACITY` on, which is off by default, and while the VPS's
+onboarding, runner revision, runner update, slots or relocations are not settled.
+The form shows each refusal as a sentence naming what to do. A success is accepted
+only when the result names the requested host and capacity
+(`parseRaiseVpsSlotCapacityResult` in `src/app/lib/control-plane/slot-capacity.ts`);
+anything else is reported as an unexpected result. After a raise the row's runner
+onboarding is queued again and refreshes automatically while the new slots are
+commissioned; the VPS takes no new server until it succeeds, and its current
+servers keep running. Deploy the control plane that has the operation first: an
+older one rejects the unknown operation.
+
 ### Unused VPS renewal alert
 
 The `vps-renewal-alert` Edge Function emails the administrators about unused
@@ -544,7 +568,8 @@ otherwise; a VPS with no more occupants than `burstServers` is all `0`, and
 
 Today every VPS's `burstServers` equals its slots (4 vCPU and 7.58 GiB give 2,
 6 vCPU and 11.41 GiB give 3), so no VPS can be red. Red appears once a VPS holds
-more servers than its burst capacity, such as the planned four on 6 vCPU.
+more servers than its burst capacity, such as four on 6 vCPU after a
+[slot capacity raise](#raising-a-vps-slot-capacity).
 
 #### Response shapes
 

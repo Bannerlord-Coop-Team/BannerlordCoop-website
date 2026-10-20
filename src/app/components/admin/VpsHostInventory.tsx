@@ -2,6 +2,7 @@
 
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
+import { VpsSlotCapacityRaise } from "@/app/components/admin/VpsSlotCapacityRaise";
 import { formatAccountOwner, hostPlacementLabel } from "@/app/lib/control-plane/presentation";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import { vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
@@ -117,7 +118,7 @@ export function VpsHostInventory({
                                         <ChevronDown aria-hidden="true" className={`size-5 transition-transform ${expanded ? "rotate-180" : "-rotate-90"}`} />
                                     </button></div>
                                 </div>
-                                {expanded && <ExpandedHost id={panelId} host={host} ownerLabels={ownerLabels} runnerTargetSourceCommit={runnerTargetSourceCommit} pending={liveDataPending} />}
+                                {expanded && <ExpandedHost id={panelId} host={host} ownerLabels={ownerLabels} runnerTargetSourceCommit={runnerTargetSourceCommit} pending={liveDataPending} onRefresh={onRefresh} />}
                             </section>
                         );
                     })}
@@ -179,7 +180,7 @@ function SystemSummary({ resources, pending }: { resources: HostingAdminHostReso
     </dl>;
 }
 
-function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit, pending }: { pending: boolean; id: string; host: HostingAdminVpsHost; ownerLabels: Record<string, string>; runnerTargetSourceCommit: string | null }) {
+function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit, pending, onRefresh }: { pending: boolean; id: string; host: HostingAdminVpsHost; ownerLabels: Record<string, string>; runnerTargetSourceCommit: string | null; onRefresh?: () => void }) {
     const slots = Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
     return (
         <div role="row" className="min-w-0">
@@ -202,6 +203,7 @@ function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit, pending
                             </div>)}
                         </div>
                     </div> : <p className="px-6 py-4 text-xs text-foreground-muted">No occupied slots.</p>}
+                    <VpsSlotCapacityRaise host={host} onRefresh={onRefresh} />
                     <HostDetailFooter host={host} runnerTargetSourceCommit={runnerTargetSourceCommit} />
                 </div>
             </div>
