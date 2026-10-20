@@ -492,15 +492,16 @@ export function fleetCapacityProviderLabel(provider: HostingFleetCapacityProvide
 }
 
 /**
- * An instance type as people read it, "OVHcloud · 6 vCPU · 12 GiB · Intel Core Processor (Haswell, no TSX) ·
- * 2,400 MHz": the parts of its key, without the raw provider id, RAM in the key's whole GiB.
+ * An instance type as people read it, "OVHcloud · 6 vCPU · 11.68 GiB · Intel Core Processor (Haswell, no TSX) ·
+ * 2,400 MHz": the parts of its key without the raw provider id. RAM uses `formatGiB`, as the row's RAM cell does,
+ * so the two always agree; MemTotal is never a whole GiB, unlike the key's rounded figure.
  */
 export function fleetCapacityTypeLabel(entry: Pick<HostingFleetCapacityInstanceType, "provider" | "vCpu" | "memoryBytes" | "cpuModel" | "cpuMhz">) {
     const mhzKnown = knownMhz(entry.cpuMhz);
     return [
         fleetCapacityProviderLabel(entry.provider),
         `${entry.vCpu} vCPU`,
-        entry.memoryBytes === null ? "RAM unknown" : `${Math.round(entry.memoryBytes / GIB)} GiB`,
+        entry.memoryBytes === null ? "RAM unknown" : formatGiB(entry.memoryBytes),
         entry.cpuModel ?? "CPU model unknown",
         mhzKnown === null ? "MHz unknown" : formatMhz(mhzKnown),
     ].join(" · ");

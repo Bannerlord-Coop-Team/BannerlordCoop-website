@@ -45,9 +45,9 @@ const FOUR_KEY = `ovhcloud-vps|4|4|${HASWELL}|2400`;
 const MATCH_KEY = `ovhcloud-vps|4|8|${HASWELL}|2400`;
 const CONTABO_KEY = `contabo-vps|8|16|${EPYC}|2800`;
 // The same types as their row headers describe them.
-const SIX_TYPE = `OVHcloud · 6 vCPU · 12 GiB · ${HASWELL} · 2,400 MHz`;
-const FOUR_TYPE = `OVHcloud · 4 vCPU · 4 GiB · ${HASWELL} · 2,400 MHz`;
-const CONTABO_TYPE = `Contabo · 8 vCPU · 16 GiB · ${EPYC} · 2,795 MHz`;
+const SIX_TYPE = `OVHcloud · 6 vCPU · 12.00 GiB · ${HASWELL} · 2,400 MHz`;
+const FOUR_TYPE = `OVHcloud · 4 vCPU · 3.82 GiB · ${HASWELL} · 2,400 MHz`;
+const CONTABO_TYPE = `Contabo · 8 vCPU · 16.00 GiB · ${EPYC} · 2,795 MHz`;
 
 const empty: Omit<HostingFleetCapacityHost, "serviceName" | "provider" | "regionKeys" | "vCpu" | "slots"> = {
     memoryBytes: null, cpuModel: null, cpuMhz: null, instanceTypeKey: null, occupants: [], steal: null, busyCores: null, cpuPressureShare: null,
@@ -104,8 +104,9 @@ const ovhSix: HostingFleetCapacityInstanceType = {
     key: SIX_KEY, provider: "ovhcloud-vps", vCpu: 6, memoryBytes: 12 * GIB, cpuModel: HASWELL, cpuMhz: 2399.996,
     hosts: 3, servers: 4, demand: fleetDemand, steal: { samples: 6048, mean: 0.4, p95: 1.2, max: 6.5 }, modelledServers: 4, demandSource: "type",
 };
+// Its MemTotal, the median of its VPSs', is not a whole GiB, as a real VPS's never is.
 const ovhFour: HostingFleetCapacityInstanceType = {
-    ...ovhSix, key: FOUR_KEY, vCpu: 4, memoryBytes: 4 * GIB, hosts: 1, servers: 2, demand: demandOf(1.5, 2.5 * GIB),
+    ...ovhSix, key: FOUR_KEY, vCpu: 4, memoryBytes: Math.round(3.82 * GIB), hosts: 1, servers: 2, demand: demandOf(1.5, 2.5 * GIB),
     steal: { samples: 2016, mean: 1.8, p95: 3.4, max: 12.5 }, modelledServers: 1, demandSource: "fleet",
 };
 const contaboEight: HostingFleetCapacityInstanceType = {
@@ -250,7 +251,12 @@ it("models each instance type against its static slots", async () => {
         ["OVHcloud", SIX_TYPE], ["OVHcloud", FOUR_TYPE], ["Contabo", CONTABO_TYPE],
     ]);
     expect(cellTexts(typeRow(SIX_TYPE))).toEqual(["6", "12.00 GiB", HASWELL, "2,400 MHz", "3", "4", "0.85 cores", "1.20 cores", "1.80 GiB", "1.2%", "4 / 3 slotsHeadroom +1", "Type"]);
-    expect(cellTexts(typeRow(FOUR_TYPE))).toEqual(["4", "4.00 GiB", HASWELL, "2,400 MHz", "1", "2", "0.75 cores", "1.50 cores", "2.50 GiB", "3.4%", "1 / 2 slotsAt risk −1", "Fleet"]);
+    expect(cellTexts(typeRow(FOUR_TYPE))).toEqual(["4", "3.82 GiB", HASWELL, "2,400 MHz", "1", "2", "0.75 cores", "1.50 cores", "2.50 GiB", "3.4%", "1 / 2 slotsAt risk −1", "Fleet"]);
+    // A row's title says its RAM, CPU model and MHz exactly as its cells do, even for RAM that is not a whole GiB.
+    for (const row of pane("Instance types").querySelectorAll("tbody tr")) {
+        const [, , memory, model, mhz] = row.querySelector('th[scope="row"]')!.getAttribute("title")!.split(" · ");
+        expect([memory, model, mhz]).toEqual(cellTexts(row).slice(1, 4));
+    }
     expect(cellTexts(typeRow(CONTABO_TYPE))).toEqual(["8", "16.00 GiB", EPYC, "2,795 MHz", "1", "1", NO_DATA, NO_DATA, NO_DATA, NO_DATA, `${NO_DATA} / 4 slots`, "None yet"]);
 });
 
@@ -291,7 +297,7 @@ it("shows a clock of 0 MHz as unknown on a VPS and an instance type", async () =
         hosts: capacity.hosts.map((host) => host === roomy ? { ...roomy, cpuMhz: 0, instanceTypeKey: `ovhcloud-vps|6|12|${HASWELL}|0` } : host),
     });
     await open();
-    expect(cellTexts(typeRow(`OVHcloud · 6 vCPU · 12 GiB · ${HASWELL} · MHz unknown`))[3]).toBe(NO_DATA);
+    expect(cellTexts(typeRow(`OVHcloud · 6 vCPU · 12.00 GiB · ${HASWELL} · MHz unknown`))[3]).toBe(NO_DATA);
     const name = hostRow("vps-1a2b3c4d").querySelector("th")!.textContent!;
     expect(name).toContain(`${HASWELL}${NO_DATA}`);
     expect(name).not.toContain("0 MHz");
@@ -331,7 +337,7 @@ it("names every provider the control plane knows, HostHatch included", async () 
     });
     await open();
     expect([...pane("Providers").querySelectorAll('tbody th[scope="row"]')].map((name) => name.textContent)).toEqual(["OVHcloud", "Contabo", "HostHatch"]);
-    expect(typeRow(`HostHatch · 4 vCPU · 4 GiB · ${HASWELL} · 2,400 MHz`).querySelector("th")!.textContent).toBe("HostHatch");
+    expect(typeRow(`HostHatch · 4 vCPU · 3.82 GiB · ${HASWELL} · 2,400 MHz`).querySelector("th")!.textContent).toBe("HostHatch");
     expect([...pane("VPSs").querySelectorAll('th[scope="rowgroup"]')].map((heading) => heading.textContent)).toContain("HostHatch · Netherlands");
     // No raw provider id anywhere on the tab: not in its text, nor in any title or ARIA attribute, hints included.
     const attributes = describingAttributes();
