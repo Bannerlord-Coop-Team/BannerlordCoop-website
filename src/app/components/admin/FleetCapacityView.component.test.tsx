@@ -5,14 +5,19 @@ import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 import { fleetCapacityHints } from "@/app/lib/control-plane/fleet-capacity";
 import type {
     HostingAdminFleetCapacity,
+    HostingAdminSlotSizing,
     HostingFleetCapacityDemand,
     HostingFleetCapacityHost,
     HostingFleetCapacityInstanceType,
 } from "@/app/lib/control-plane/types";
 import { FleetCapacityView } from "./FleetCapacityView";
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), session: vi.fn() }));
-vi.mock("@/app/lib/control-plane/client", async (original) => ({ ...await original<typeof import("@/app/lib/control-plane/client")>(), requestControlPlaneAdmin: mocks.request }));
+// The slot sizing pane reads its own operation; `request` answers fleet capacity and `sizing` slot sizing.
+const mocks = vi.hoisted(() => ({ request: vi.fn(), sizing: vi.fn(), session: vi.fn() }));
+vi.mock("@/app/lib/control-plane/client", async (original) => ({
+    ...await original<typeof import("@/app/lib/control-plane/client")>(),
+    requestControlPlaneAdmin: (request: { operation: string }) => request.operation === "slot-sizing" ? mocks.sizing(request) : mocks.request(request),
+}));
 vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({ auth: { getSession: mocks.session } }) }));
 
 const GIB = 1024 ** 3;
@@ -142,6 +147,21 @@ const blank: HostingAdminFleetCapacity = {
     hosts: [quiet, spare],
 };
 const hints = fleetCapacityHints(model);
+/** Slot sizing for two of the VPSs: one grows, one is unmeasured. */
+const sizing: HostingAdminSlotSizing = {
+    generatedAt: "2026-10-19T00:07:40.123Z",
+    model: { cpuShortageBudgetCoreHoursPerWeek: 1, memoryOverflowShare: 0.01, cpuBurstVcpu: 1.6, memoryBurstBytes: 2.5 * GIB, historyDays: 28, halfLifeDays: 14,
+        minimumObservedDays: 7, maximumSlots: 32, typicalWeeklyOnlineHours: 41.37, capacityErrorCode: null },
+    hosts: [
+        { serviceName: "vps-1a2b3c4d.vps.ovh.net", provider: "ovhcloud-vps", regionKeys: ["germany"], vCpu: 6, slots: 3, occupants: 3, acceptsRelocations: true,
+            usableCores: 5.58, usableMemoryBytes: 11_703_786_240, capacitySource: "measured", memoryBytesPerServer: 2.5 * GIB, recommendedSlots: 5, reason: "cpu",
+            expectedShortageCoreHoursPerWeek: 0.842, memoryOverflowShare: 0.0021, serversToMove: 0, freeRecommendedSlots: 2 },
+        { serviceName: "vps-spare", provider: "ovhcloud-vps", regionKeys: [], vCpu: 4, slots: 2, occupants: 0, acceptsRelocations: true, usableCores: null,
+            usableMemoryBytes: null, capacitySource: "none", memoryBytesPerServer: 2.5 * GIB, recommendedSlots: null, reason: "unmeasured",
+            expectedShortageCoreHoursPerWeek: null, memoryOverflowShare: null, serversToMove: 0, freeRecommendedSlots: 0 },
+    ],
+    regions: [{ regionKey: "germany", serversToMove: 0, freeRecommendedSlots: 2, shortfallServers: 0 }],
+};
 
 let container: HTMLDivElement;
 let root: Root;
@@ -151,6 +171,7 @@ beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     mocks.session.mockResolvedValue({ data: { session: { access_token: "test-only" } } });
     mocks.request.mockResolvedValue(capacity);
+    mocks.sizing.mockResolvedValue(sizing);
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -177,6 +198,11 @@ function calls() {
 
 function button(text: string, scope: ParentNode = container) {
     return [...scope.querySelectorAll("button")].find((item) => item.textContent?.trim() === text)!;
+}
+
+/** The capacity read's own panes: every section but slot sizing, which has its own read. */
+function capacityPanes() {
+    return container.querySelectorAll('section:not([aria-label="Slot sizing"])');
 }
 
 function pane(title: string) {
@@ -230,7 +256,7 @@ it("reads fleet capacity once when it opens and says what it measured", async ()
     expect(header.textContent).toContain("Measured 12 Oct 00:00 – 19 Oct 00:00 UTC · 7 servers on 6 VPSs · generated");
     expect(header.querySelector('time[datetime="2026-10-19T00:07:31.552Z"]')).not.toBeNull();
     expect(header.textContent).not.toContain("Not enough data yet");
-    expect([...container.querySelectorAll("h2")].map((heading) => heading.textContent)).toEqual(["Fleet capacity", "What a server needs", "Providers", "Instance types", "VPSs"]);
+    expect([...container.querySelectorAll("h2")].map((heading) => heading.textContent)).toEqual(["Fleet capacity", "What a server needs", "Providers", "Instance types", "Slot sizing", "VPSs"]);
     // Kept while the tab stays open: nothing reads it again by itself.
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
     expect(calls()).toHaveLength(1);
@@ -369,7 +395,7 @@ it("rejects a read with more VPSs than the tab will draw", async () => {
     mocks.request.mockResolvedValueOnce({ ...capacity, hosts });
     await open();
     expect(container.querySelector('[role="alert"]')!.textContent).toBe("The control plane returned an unexpected fleet capacity. Retry");
-    expect(container.querySelectorAll("section")).toHaveLength(1);
+    expect(capacityPanes()).toHaveLength(1);
 });
 
 it("marks VPSs with room for fewer servers than slots apart from those with headroom, not by colour alone", async () => {
@@ -545,7 +571,8 @@ it("says there is not enough data yet instead of looking broken before the first
     expect(needs.textContent).toContain("There is not enough data yet to compare it with what servers use.");
     expect(cellTexts(tableRow("Providers", "OVHcloud"))).toEqual(["2", "0", NO_DATA, NO_DATA, NO_DATA, NO_DATA, NO_DATA, NO_DATA]);
     expect(cellTexts(tableRow("Instance types", "OVHcloud")).slice(-2)).toEqual([`${NO_DATA} / 3 slots`, "None yet"]);
-    expect(container.querySelector(".border-crimson\\/40, .border-emerald-500\\/30")).toBeNull();
+    // No verdict on the capacity panes; slot sizing has its own badges.
+    expect([...capacityPanes()].some((section) => section.querySelector(".border-crimson\\/40, .border-emerald-500\\/30") !== null)).toBe(false);
     expect(strips("vps-de-quiet").busy.getAttribute("aria-label")).toBe("vps-de-quiet busy by hour: no data yet");
 });
 
@@ -570,7 +597,7 @@ it("shows a loading state, then refreshes on request without stacking reads", as
     await open();
     expect(container.querySelector('[role="status"]')?.textContent).toBe("Loading fleet capacity…");
     expect(button("Refresh").disabled).toBe(true);
-    expect(container.querySelectorAll("section")).toHaveLength(1);
+    expect(capacityPanes()).toHaveLength(1);
     await act(async () => finish!(capacity));
     expect(container.querySelector('[role="status"]')).toBeNull();
     expect(button("Refresh").disabled).toBe(false);
@@ -596,7 +623,7 @@ it.each([
     mocks.request.mockRejectedValueOnce(error);
     await open();
     expect(container.querySelector('[role="alert"]')!.textContent).toBe(`${message} Retry`);
-    expect(container.querySelectorAll("section")).toHaveLength(1);
+    expect(capacityPanes()).toHaveLength(1);
     await act(async () => button("Retry").click());
     await settle();
     expect(calls()).toHaveLength(2);
@@ -617,4 +644,39 @@ it("keeps what it showed when a refresh fails, and rejects a malformed read", as
     await settle();
     expect(container.querySelector('[role="alert"]')!.textContent).toBe("The control plane returned an unexpected fleet capacity. Retry");
     expect(hostRow("vps-1a2b3c4d")).toBeDefined();
+});
+
+it("reads slot sizing beside fleet capacity and shows it just above the VPSs, with its own reads", async () => {
+    await open();
+    expect(mocks.sizing.mock.calls.map(([request]) => request)).toEqual([expect.objectContaining({ operation: "slot-sizing", input: {}, accessToken: "test-only" })]);
+    expect(calls()).toHaveLength(1);
+    const sections = [...container.querySelectorAll("section")].map((section) => section.getAttribute("aria-label"));
+    expect(sections.slice(-2)).toEqual(["Slot sizing", "VPSs"]);
+    const slotSizing = container.querySelector('section[aria-label="Slot sizing"]')!;
+    expect(slotSizing.textContent).toContain("Recommendations only · nothing is applied");
+    expect(slotSizing.querySelector("tbody tr th[scope=\"row\"] p")!.textContent).toBe("vps-1a2b3c4d");
+    // Refreshing the capacity read leaves slot sizing, with its own budget, alone.
+    await act(async () => button("Refresh").click());
+    await settle();
+    expect(calls()).toHaveLength(2);
+    expect(mocks.sizing).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the rest of the tab working on a control plane without slot sizing", async () => {
+    // Control plane main rejects the operation it does not know as an invalid request.
+    mocks.sizing.mockRejectedValue(new ControlPlaneAdminError("invalid_request", "The control plane request is invalid.", false));
+    await open();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.querySelector('section[aria-label="Slot sizing"]')!.textContent).toContain("Slot sizing is not available on this control plane yet.");
+    expect([...container.querySelectorAll("h2")].map((heading) => heading.textContent)).toEqual(["Fleet capacity", "What a server needs", "Providers", "Instance types", "Slot sizing", "VPSs"]);
+    expect(hostRow("vps-1a2b3c4d")).toBeDefined();
+    expect(pane("Fleet capacity").textContent).not.toContain("not available");
+});
+
+it("still shows slot sizing when the capacity read fails", async () => {
+    mocks.request.mockRejectedValueOnce(new ControlPlaneAdminError("capacity_history_unavailable", "Capacity history is unavailable.", true));
+    await open();
+    expect(pane("Fleet capacity").querySelector('[role="alert"]')!.textContent).toBe("Capacity history is unavailable. Retry");
+    expect(capacityPanes()).toHaveLength(1);
+    expect(container.querySelector('section[aria-label="Slot sizing"] table')).not.toBeNull();
 });

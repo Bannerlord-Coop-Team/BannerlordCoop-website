@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode
 import { Empty, SectionHeading } from "@/app/components/admin/ControlPlanePresentation";
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { MetricHint } from "@/app/components/admin/MetricHint";
+import { SlotSizingView } from "@/app/components/admin/SlotSizingView";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import {
     busyBand,
@@ -140,7 +141,7 @@ export function FleetCapacityView() {
                     </button>
                 </div>
                 <p className="mt-2 max-w-3xl text-xs leading-5 text-foreground-muted">
-                    How much CPU and memory a game server needs while it runs, how much CPU each VPS loses to other tenants, and how many servers each instance type and VPS could run at once at those needs, from 5-minute samples. Nothing on this tab changes anything.
+                    How much CPU and memory a game server needs while it runs, how much CPU each VPS loses to other tenants, how many servers each instance type and VPS could run at once at those needs, from 5-minute samples, and how many slots each VPS is recommended. Nothing on this tab changes anything.
                 </p>
                 {state.kind === "loading" && <p role="status" className="mt-4 text-xs text-foreground-muted">Loading fleet capacity…</p>}
                 {state.kind === "error" && (
@@ -159,8 +160,10 @@ export function FleetCapacityView() {
                 <ServerNeeds capacity={capacity} hints={hints} />
                 <ProvidersPane capacity={capacity} hints={hints} />
                 <InstanceTypesPane capacity={capacity} hints={hints} />
-                <HostsPane capacity={capacity} hints={hints} />
             </>}
+            {/* Its own read, budget and states, shown whatever the capacity read does, just above the VPSs' servers at once. */}
+            <SlotSizingView />
+            {capacity !== null && hints !== null && <HostsPane capacity={capacity} hints={hints} />}
         </div>
     );
 }
