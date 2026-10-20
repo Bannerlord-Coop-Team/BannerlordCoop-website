@@ -70,15 +70,13 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
     }
 
     /** Reads the list; a failure keeps the last list (if any) and offers a retry. */
-    async function load(): Promise<boolean> {
+    async function load() {
         setBusy("loading");
         try {
             apply(await catalog.listServerMods(serverId));
             setLoadFailed(null);
-            return true;
         } catch (error) {
             setLoadFailed(error instanceof ServerModsError ? modsErrorMessage(error, t) : t("mods.error.other"));
-            return false;
         } finally {
             setBusy(null);
         }
