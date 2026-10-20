@@ -105,6 +105,24 @@ test("relays a list end to end through the Edge Function to the fixed adapter pa
     assert.equal(upstream[0].headers.get("authorization"), `Bearer ${TOKEN}`);
 });
 
+test("relays a mutation end to end under the body requestId, which the Edge Function requires in the header", async () => {
+    const upstream: { url: string; requestId: string | null; body: unknown }[] = [];
+    const edge = createMyServersHandler({
+        allowedOrigins: [SITE], controlPlaneUrl: "https://control-plane.example.test", waitUntil: () => {},
+        fetchImplementation: async (input, init) => {
+            const request = new Request(input, init);
+            upstream.push({ url: request.url, requestId: request.headers.get("x-request-id"), body: await request.json() });
+            return Response.json({ ok: true, requestId: request.headers.get("x-request-id"), result: state() });
+        },
+    });
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => edge(new Request(String(input), init))) as typeof fetch;
+    const { json } = handlers(serverModsApi);
+    const body = { requestId: REQUEST_ID, serverId: SERVER_ID, expectedRevision: REVISION, modId: "Bannerlord.ButterLib" };
+    const response = await json(...jsonRequest("delete", body));
+    assert.deepEqual(await response.json(), { ok: true, result: state() });
+    assert.deepEqual(upstream, [{ url: "https://control-plane.example.test/api/v1/mods/delete", requestId: REQUEST_ID, body }]);
+});
+
 test("relays a chunk end to end with its exact bytes, digest and query", async () => {
     const upstream: { url: string; digest: string | null; bytes: number[] }[] = [];
     const edge = createMyServersHandler({
