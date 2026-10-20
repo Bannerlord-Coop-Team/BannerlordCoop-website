@@ -1,5 +1,5 @@
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
-import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
+import { hostingRegionLabel, MAXIMUM_REGIONS } from "../../../../supabase/functions/_shared/hosting-regions";
 import { ControlPlaneAdminError } from "./client";
 import { shortServiceName } from "./placement-live-moves";
 import type {
@@ -13,6 +13,12 @@ import type {
 
 /** The measured window: one week of hours. */
 export const FLEET_CAPACITY_HOURS = 168;
+/**
+ * The most of each list a read may hold, so a malformed response cannot make the tab draw thousands of rows of
+ * 336 cells. Each is well above the control plane's own bounds (64 VPSs and 512 placed servers today), which may
+ * rise.
+ */
+export const FLEET_CAPACITY_LIMITS = { hosts: 256, occupantsPerHost: 64, instanceTypes: 256, providers: 16, regionsPerHost: MAXIMUM_REGIONS } as const;
 
 const HOUR_MILLISECONDS = 3_600_000;
 const GIB = 1024 ** 3;
@@ -157,11 +163,11 @@ function hourly(value: unknown, maximum: number) {
 function host(value: unknown) {
     return isRecord(value) && hasExactKeys(value, HOST_KEYS)
         && text(value.serviceName) && text(value.provider)
-        && Array.isArray(value.regionKeys) && value.regionKeys.every((key) => text(key))
+        && within(value.regionKeys, FLEET_CAPACITY_LIMITS.regionsPerHost) && value.regionKeys.every((key) => text(key))
         && count(value.vCpu, 1) && nullable(value.memoryBytes, positiveBytes)
         && nullable(value.cpuModel, text) && nullable(value.cpuMhz, mhz) && nullable(value.instanceTypeKey, typeKey)
         && count(value.slots)
-        && Array.isArray(value.occupants) && value.occupants.every(occupant)
+        && within(value.occupants, FLEET_CAPACITY_LIMITS.occupantsPerHost) && value.occupants.every(occupant)
         && nullable(value.steal, percentStat) && nullable(value.busyCores, coresStat)
         && nullable(value.cpuPressureShare, share)
         && nullable(value.overheadCores, (cores) => amount(cores)) && nullable(value.overheadMemoryBytes, (bytes) => count(bytes))
@@ -175,14 +181,19 @@ function host(value: unknown) {
         && hourly(value.stealHourly, STEAL_CAP_PERMILLE) && hourly(value.busyHourly, 100);
 }
 
+/** A list of at most `maximum` entries. */
+function within(value: unknown, maximum: number): value is unknown[] {
+    return Array.isArray(value) && value.length <= maximum;
+}
+
 function unique(values: readonly string[]) {
     return new Set(values).size === values.length;
 }
 
 /**
  * The `fleet-capacity` result, checked key by key; null when anything is not as the contract says. Beyond each
- * field's range and its percentiles' order it checks only what the view keys on: each provider, instance type
- * and VPS appears once.
+ * field's range and its percentiles' order it checks only what the view keys on, that each provider, instance type
+ * and VPS appears once, and that no list is longer than `FLEET_CAPACITY_LIMITS`.
  */
 export function parseFleetCapacity(value: unknown): HostingAdminFleetCapacity | null {
     if (!isRecord(value) || !hasExactKeys(value, TOP_KEYS)) return null;
@@ -192,9 +203,9 @@ export function parseFleetCapacity(value: unknown): HostingAdminFleetCapacity | 
     if (!model(value.model)) return null;
     const fleet = value.fleet;
     if (!isRecord(fleet) || !hasExactKeys(fleet, ["hosts", "servers", "demand"]) || !count(fleet.hosts) || !count(fleet.servers) || !demand(fleet.demand)) return null;
-    if (!Array.isArray(value.providers) || !value.providers.every(provider)) return null;
-    if (!Array.isArray(value.instanceTypes) || !value.instanceTypes.every(instanceType)) return null;
-    if (!Array.isArray(value.hosts) || !value.hosts.every(host)) return null;
+    if (!within(value.providers, FLEET_CAPACITY_LIMITS.providers) || !value.providers.every(provider)) return null;
+    if (!within(value.instanceTypes, FLEET_CAPACITY_LIMITS.instanceTypes) || !value.instanceTypes.every(instanceType)) return null;
+    if (!within(value.hosts, FLEET_CAPACITY_LIMITS.hosts) || !value.hosts.every(host)) return null;
     const capacity = value as HostingAdminFleetCapacity;
     if (!unique(capacity.providers.map((entry) => entry.provider)) || !unique(capacity.instanceTypes.map((entry) => entry.key))
         || !unique(capacity.hosts.map((entry) => entry.serviceName))) return null;
@@ -361,6 +372,29 @@ export function fleetCapacityDataNote(capacity: Pick<HostingAdminFleetCapacity, 
         return `Not enough data yet: the fleet has ${formatServerHours(hours)} of running data, and the model plans with an instance type's or the whole fleet's figures only once it has ${formatServerHours(capacity.model.minimumRunningHours)}. Until then no VPS is modelled, and figures without data show —.`;
     }
     return null;
+}
+
+/**
+ * Whether a VPS lacks host metrics: its steal and busy cores come from host counters, which a VPS can lack while
+ * its servers report their own. Without them its overhead, usable capacity and servers at once are unknown too.
+ */
+export function hostMetricsMissing(host: Pick<HostingFleetCapacityHost, "steal" | "busyCores">) {
+    return host.steal === null || host.busyCores === null;
+}
+
+/** What a VPS without host metrics says in place of them. */
+export const HOST_METRICS_MISSING = "Host metrics not measured yet";
+
+/**
+ * The note shown when some VPSs lack host metrics while there is other data, or null. Before any sample arrives
+ * the empty-state note already says so for every VPS.
+ */
+export function fleetCapacityHostNote(capacity: Pick<HostingAdminFleetCapacity, "model" | "fleet" | "hosts">) {
+    if (fleetCapacityDataState(capacity) === "empty") return null;
+    const missing = capacity.hosts.filter(hostMetricsMissing).length;
+    if (missing === 0) return null;
+    const of = `${missing} of ${capacity.hosts.length} ${capacity.hosts.length === 1 ? "VPS" : "VPSs"}`;
+    return `${HOST_METRICS_MISSING} on ${of}: their runners have not reported host counters in the window, so their steal, busy cores, overhead, usable capacity and servers at once show — even where their servers' own needs are measured.`;
 }
 
 export type ModelledVerdict = { kind: "risk" | "headroom" | "match" | "unknown"; label: string; description: string };

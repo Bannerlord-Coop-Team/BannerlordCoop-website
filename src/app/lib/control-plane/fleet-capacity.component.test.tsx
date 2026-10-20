@@ -9,8 +9,11 @@ import {
     fleetCapacityDataState,
     fleetCapacityErrorMessage,
     fleetCapacityHostGroups,
+    FLEET_CAPACITY_LIMITS,
     fleetCapacityHints,
+    fleetCapacityHostNote,
     formatPercent,
+    hostMetricsMissing,
     knownMhz,
     modelledVerdict,
     parseFleetCapacity,
@@ -232,6 +235,46 @@ it.each([
     ["an hourly series that is not text", withHost({ busyHourly: week(() => 30) })],
 ])("rejects %s", (_case, value) => {
     expect(parseFleetCapacity(value)).toBeNull();
+});
+
+/** `count` copies of `entry`, each with its own `key` from its index, so lists can be built at any length. */
+const many = <T extends object>(count: number, entry: T, key: keyof T, name: (index: number) => string) =>
+    Array.from({ length: count }, (_, index) => ({ ...entry, [key]: name(index) }));
+
+it.each([
+    ["VPSs", (count: number) => ({ ...capacity, hosts: many(count, spare, "serviceName", (index) => `vps-${index}`) }), FLEET_CAPACITY_LIMITS.hosts],
+    ["servers on one VPS", (count: number) => withHost({ occupants: many(count, host.occupants[0]!, "serverId", (index) => `server-${index}`) }), FLEET_CAPACITY_LIMITS.occupantsPerHost],
+    ["instance types", (count: number) => ({ ...capacity, instanceTypes: many(count, instanceType, "key", (index) => `type-${index}`) }), FLEET_CAPACITY_LIMITS.instanceTypes],
+    ["providers", (count: number) => ({ ...capacity, providers: many(count, provider, "provider", (index) => `provider-${index}`) }), FLEET_CAPACITY_LIMITS.providers],
+    ["regions on one VPS", (count: number) => withHost({ regionKeys: Array.from({ length: count }, (_, index) => `region-${index}`) }), FLEET_CAPACITY_LIMITS.regionsPerHost],
+] as const)("accepts as many %s as the cap and rejects one more", (_case, build, limit) => {
+    expect(parseFleetCapacity(build(limit))).not.toBeNull();
+    expect(parseFleetCapacity(build(limit + 1))).toBeNull();
+});
+
+it("caps each list well above the control plane's own bounds", () => {
+    expect(FLEET_CAPACITY_LIMITS).toEqual({ hosts: 256, occupantsPerHost: 64, instanceTypes: 256, providers: 16, regionsPerHost: 32 });
+});
+
+it("notes VPSs whose servers report but whose host metrics are not measured yet", () => {
+    // Enough server demand, but one VPS has no host counters: no sparse note, so this note explains its nulls.
+    const unmeasured = { ...host, serviceName: "vps-no-host", steal: null, busyCores: null, cpuPressureShare: null, overheadCores: null, overheadMemoryBytes: null,
+        usableCores: null, usableMemoryBytes: null, modelledServers: null, limitedBy: null, stealHourly: "--".repeat(168), busyHourly: "--".repeat(168) };
+    const parsed = parseFleetCapacity({ ...capacity, hosts: [host, unmeasured, spare] })!;
+    expect(fleetCapacityDataState(parsed)).toBe("ready");
+    expect(fleetCapacityDataNote(parsed)).toBeNull();
+    expect(parsed.hosts.map(hostMetricsMissing)).toEqual([false, true, true]);
+    expect(fleetCapacityHostNote(parsed)).toBe("Host metrics not measured yet on 2 of 3 VPSs: their runners have not reported host counters in the window, so their steal, busy cores, overhead, usable capacity and servers at once show — even where their servers' own needs are measured.");
+    expect(fleetCapacityHostNote(parseFleetCapacity(withHost({}))!)).toBeNull();
+    // Either host figure missing counts.
+    expect(hostMetricsMissing({ steal: host.steal, busyCores: null })).toBe(true);
+    expect(hostMetricsMissing({ steal: null, busyCores: host.busyCores })).toBe(true);
+    // Before any sample arrives the empty-state note covers every VPS on its own.
+    expect(fleetCapacityHostNote(parseFleetCapacity(blank)!)).toBeNull();
+    // While the fleet is still short of running data, both notes show.
+    const sparse = parseFleetCapacity({ ...withDemand({ runningServerHours: 3.25 }), hosts: [host, unmeasured] })!;
+    expect(fleetCapacityDataNote(sparse)).not.toBeNull();
+    expect(fleetCapacityHostNote(sparse)).toMatch(/^Host metrics not measured yet on 1 of 2 VPSs:/u);
 });
 
 it("decodes hourly hex oldest first, with hours without data as null", () => {

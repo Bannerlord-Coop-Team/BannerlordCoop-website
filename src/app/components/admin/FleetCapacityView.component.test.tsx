@@ -290,6 +290,34 @@ it("shows a clock of 0 MHz as unknown on a VPS and an instance type", async () =
     expect(hostRow("vps-de-risk").querySelector("th")!.textContent).toContain(`${HASWELL}2,400 MHz`);
 });
 
+it("says which VPSs lack host metrics, with a header note, even when the fleet has enough demand data", async () => {
+    // contabo reports its servers' counters but no host interval yet; quiet and spare report nothing.
+    await open();
+    const header = pane("Fleet capacity");
+    const notes = [...header.querySelectorAll("p.border-l-2")].map((note) => note.textContent);
+    expect(notes).toEqual(["Host metrics not measured yet on 3 of 6 VPSs: their runners have not reported host counters in the window, so their steal, busy cores, overhead, usable capacity and servers at once show — even where their servers' own needs are measured."]);
+    const missing = (name: string) => hostRow(name).querySelector("th")!.textContent!.includes("Host metrics not measured yet");
+    expect(["vmi123456.contaboserver.net", "vps-de-quiet", "vps-spare"].map(missing)).toEqual([true, true, true]);
+    expect(["vps-1a2b3c4d", "vps-de-risk", "vps-uk-match"].map(missing)).toEqual([false, false, false]);
+    expect(cellTexts(hostRow("vmi123456.contaboserver.net")).slice(0, 6)).toEqual([`${NO_DATA} / 4 slots`, NO_DATA, NO_DATA, `${NO_DATA}of 8 vCPU`, `${NO_DATA}${NO_DATA}`, `${NO_DATA}${NO_DATA}`]);
+
+    // With host metrics everywhere there is no host note and no per-VPS line.
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    mocks.request.mockResolvedValueOnce({ ...capacity, hosts: [roomy, risky, matching] });
+    await open();
+    expect(pane("Fleet capacity").querySelectorAll("p.border-l-2")).toHaveLength(0);
+    expect(pane("VPSs").textContent).not.toContain("Host metrics not measured yet");
+});
+
+it("rejects a read with more VPSs than the tab will draw", async () => {
+    const hosts = Array.from({ length: 257 }, (_, index) => ({ ...spare, serviceName: `vps-${index}` }));
+    mocks.request.mockResolvedValueOnce({ ...capacity, hosts });
+    await open();
+    expect(container.querySelector('[role="alert"]')!.textContent).toBe("The control plane returned an unexpected fleet capacity. Retry");
+    expect(container.querySelectorAll("section")).toHaveLength(1);
+});
+
 it("marks VPSs with room for fewer servers than slots apart from those with headroom, not by colour alone", async () => {
     await open();
     const badge = (name: string) => hostRow(name).querySelector("td span[title]");
@@ -387,6 +415,7 @@ it("says there is not enough data yet instead of looking broken before the first
     mocks.request.mockResolvedValueOnce(blank);
     await open();
     expect(pane("Fleet capacity").textContent).toContain("Not enough data yet: no resource samples have arrived.");
+    expect([...pane("Fleet capacity").querySelectorAll("p.border-l-2")]).toHaveLength(1);
     const needs = pane("What a server needs");
     expect([...needs.querySelectorAll("dd")].map((value) => value.textContent)).toEqual([NO_DATA, NO_DATA, NO_DATA, "0.0 server-h", NO_DATA, NO_DATA, NO_DATA, NO_DATA]);
     expect(needs.textContent).toContain("There is not enough data yet to compare it with what servers use.");

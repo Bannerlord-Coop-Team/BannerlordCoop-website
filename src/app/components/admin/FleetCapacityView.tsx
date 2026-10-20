@@ -19,12 +19,15 @@ import {
     fleetCapacityErrorMessage,
     fleetCapacityHints,
     fleetCapacityHostGroups,
+    fleetCapacityHostNote,
     formatCores,
     formatGiB,
     formatMhz,
     formatPercent,
     formatServerHours,
     formatShare,
+    HOST_METRICS_MISSING,
+    hostMetricsMissing,
     knownMhz,
     limitedByLabel,
     modelledVerdict,
@@ -119,7 +122,8 @@ export function FleetCapacityView() {
 
     const capacity = state.kind === "ready" ? state.capacity : state.previous;
     const hints = useMemo(() => capacity === null ? null : fleetCapacityHints(capacity.model), [capacity]);
-    const note = capacity === null ? null : fleetCapacityDataNote(capacity);
+    // Too little data overall, and VPSs without host metrics, each get their own note.
+    const notes = capacity === null ? [] : [fleetCapacityDataNote(capacity), fleetCapacityHostNote(capacity)].filter((note) => note !== null);
     return (
         <div className="mt-8 space-y-8">
             <section aria-label="Fleet capacity" className={paneClass}>
@@ -141,7 +145,7 @@ export function FleetCapacityView() {
                         {state.message} <button type="button" className="ml-2 underline" onClick={() => void load()}>Retry</button>
                     </p>
                 )}
-                {note !== null && <p className="mt-4 max-w-3xl border-l-2 border-gold/60 bg-gold/8 px-3 py-2 text-xs leading-5 text-foreground">{note}</p>}
+                {notes.map((note) => <p key={note} className="mt-4 max-w-3xl border-l-2 border-gold/60 bg-gold/8 px-3 py-2 text-xs leading-5 text-foreground">{note}</p>)}
                 {capacity !== null && (
                     <p className="mt-3 text-[0.65rem] text-foreground-dim">
                         Measured {capacityWindowLabel(capacity)} · {capacity.fleet.servers} {capacity.fleet.servers === 1 ? "server" : "servers"} on {capacity.fleet.hosts} {capacity.fleet.hosts === 1 ? "VPS" : "VPSs"} · generated <LocalDateTime value={capacity.generatedAt} />
@@ -432,6 +436,8 @@ const HostRow = memo(function HostRow({ host, model, days, hourLabels }: {
                         <span className="block font-mono">{figure(knownMhz(host.cpuMhz), formatMhz)}</span>
                     </p>
                     <p className="mt-1 text-foreground-muted">{servers} {servers === 1 ? "server" : "servers"} · {host.slots} {host.slots === 1 ? "slot" : "slots"}{host.samples === 0 && " · no data yet"}</p>
+                    {/* Its steal, busy, overhead, usable and modelled figures are all — for this one reason. */}
+                    {hostMetricsMissing(host) && <p className="mt-1 text-amber-300">{HOST_METRICS_MISSING}</p>}
                     {servers > 0 && (
                         <ul aria-label={`Servers on ${shortServiceName(host.serviceName)}`} className="mt-2 space-y-1">
                             {host.occupants.map((occupant) => (
