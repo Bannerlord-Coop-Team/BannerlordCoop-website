@@ -136,7 +136,8 @@ clearer feedback; the runner remains authoritative.
 - A fixed timestamp makes the same folder produce the same archive and sha256.
 
 Mods that use Harmony cannot run yet, and mods that need client-only assemblies fail
-the boot (custom-mods.md "Known limitations"); the tab's help text says so.
+the boot (custom-mods.md "Known limitations"). The tab does not say so; it shows no
+help text (see above).
 
 ## Start failures caused by mods
 
@@ -147,7 +148,7 @@ the boot (custom-mods.md "Known limitations"); the tab's help text says so.
   and falls back to the control plane's own message.
 - `crash_loop_cooldown` shows the control plane's message, which carries the
   remaining wait ("Start is paused for about N minutes. Changing its enabled mods
-  ends the pause now."). Neither refusal starts a status check or a retry.
+  ends the pause now."). Neither refusal starts status polling or a retry.
 
 ## Rollout
 
