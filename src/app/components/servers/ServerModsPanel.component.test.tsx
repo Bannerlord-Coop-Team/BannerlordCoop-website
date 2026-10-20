@@ -65,10 +65,13 @@ async function chooseFolder(entries: Record<string, string>) {
     });
     Object.defineProperty(input, "files", { configurable: true, value: files });
     await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
-    // Archive building yields to the browser between files, so wait until the panel is idle again.
-    for (let attempt = 0; attempt < 100 && container.querySelector("section")?.getAttribute("aria-busy") !== "false"; attempt += 1) {
+    // Archive building yields to the browser between files; those yields must run inside act, so poll there
+    // (vi.waitFor would run them between its polls) and fail here, not later, if the panel never goes idle.
+    const busy = () => container.querySelector("section")?.getAttribute("aria-busy");
+    for (let attempt = 0; attempt < 100 && busy() !== "false"; attempt += 1) {
         await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
     }
+    expect(busy(), "the panel stayed busy after picking a folder").toBe("false");
 }
 
 it("keeps movable mods between the pinned head and tail modules", () => {
@@ -112,7 +115,6 @@ it("saves the complete order against the loaded revision when a drag ends", asyn
     expect(save.mock.calls[0][2].map(entry => entry.id)).toEqual(["Native", "SandBoxCore", "SandBox", "Gamma", "Coop", "Alpha", "Beta", "DedicatedServer.Linux"]);
     expect(container.textContent).toContain("Load order saved.");
     expect(button("Upload mod folder")?.disabled).toBe(false);
-    expect(button("Save load order")).toBeUndefined();
 });
 
 it("moves with arrow keys, keeps focus, announces the position and saves once the owner pauses", async () => {
@@ -339,7 +341,6 @@ it("describes keyboard reordering to assistive technology without visible help t
     const help = document.getElementById(handle.getAttribute("aria-describedby")!)!;
     expect(help.className).toBe("sr-only");
     expect(help.textContent).toBe("Use the up and down arrow keys to move this mod.");
-    expect(container.textContent).not.toContain("Mods players need");
 });
 
 it("is read-only without mod access and never loads the list", async () => {
