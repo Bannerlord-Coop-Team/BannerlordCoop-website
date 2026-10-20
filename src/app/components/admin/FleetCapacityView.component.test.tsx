@@ -285,9 +285,9 @@ it("shows each VPS's figures and its servers' own needs", async () => {
     expect(name.textContent).toContain(`${HASWELL}2,400 MHz`);
     expect(name.textContent).toContain("3 servers · 3 slots");
     expect([...name.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
-        "Calradia Company0.55 cores stable · 1.65 GiB at p95", "Sturgia Nightsno data yet", "Vlandia Rising0.45 cores stable · memory — at p95",
+        "Calradia Company0.55 cores stable (p50) · 1.65 GiB at p95", "Sturgia Nightsno data yet", "Vlandia Rising0.45 cores stable (p50) · memory —",
     ]);
-    expect(cellTexts(row).slice(0, 7)).toEqual(["4 / 3 slotsHeadroom +1", "CPU", "0.4% · 1.2% · 6.5%", "2.40 coresof 6 vCPU", "0.35 cores1.10 GiB", "5.58 cores10.90 GiB", "1.20 cores1.80 GiBType · 0.72 cores stable + 66%"]);
+    expect(cellTexts(row).slice(0, 7)).toEqual(["4 / 3 slotsHeadroom +1", "CPU", "0.4% · 1.2% · 6.5%", "2.40 coresof 6 vCPU", "0.35 cores1.10 GiB", "5.58 cores10.90 GiB", "1.200 cores1.80 GiBType · 0.723 cores stable + 66%"]);
     expect(cellTexts(hostRow("vps-de-risk")).slice(0, 3)).toEqual(["1 / 2 slotsAt risk −1", "Memory", "1.8% · 3.4% · 12.5%"]);
     expect(cellTexts(hostRow("vps-spare")).slice(0, 7)).toEqual([`${NO_DATA} / 2 slots`, NO_DATA, NO_DATA, `${NO_DATA}of 4 vCPU`, `${NO_DATA}${NO_DATA}`, `${NO_DATA}${NO_DATA}`, `${NO_DATA}${NO_DATA}None yet`]);
 });
@@ -453,15 +453,25 @@ it("explains each figure in a tooltip that keyboard and pointer users can reach"
     ] as const) {
         expect(tooltipOf(button(label, vpss)).textContent).toBe(hint);
     }
-    expect(tooltipOf(button("Demand source", pane("Instance types"))).textContent).toContain("This VPS uses the servers that ran on this VPS once they have run 6.0 server-h there in the week; Type uses the instance type's servers once they have; Fleet uses the whole fleet's once it has");
-    expect(tooltipOf(button("CPU p95", pane("What a server needs"))).textContent).toBe(`${hints.cpu} ${hints.p95}`);
+    // An instance type is never planned from one VPS, so its tooltip names only its own sources.
+    expect(tooltipOf(button("Demand source", pane("Instance types"))).textContent).toBe(hints.typeDemandSource);
+    expect(hints.typeDemandSource).toContain("Type uses its own servers once they have run 6.0 server-h in the week; Fleet uses the whole fleet's once it has");
+    expect(hints.typeDemandSource).not.toContain("This VPS");
+    expect(hints.demandSource).toContain("This VPS uses the servers that ran on this VPS once they have run 6.0 server-h there in the week");
+    expect(tooltipOf(button("CPU p95", pane("What a server needs"))).textContent).toBe(`${hints.cpu} ${hints.cpuP95}`);
+    // Memory is planned at its p95, so its tooltips never describe the CPU rule.
+    expect(tooltipOf(button("Memory p50", pane("What a server needs"))).textContent).toBe(`${hints.memory} ${hints.p50}`);
+    expect(tooltipOf(button("Memory p95", pane("What a server needs"))).textContent).toBe(`${hints.memory} ${hints.p95}`);
+    expect(`${hints.p50} ${hints.p95}`).not.toContain("stable");
+    expect(hints.p95).toContain("The model sizes servers at this level");
+    expect(tooltipOf(button("CPU p50", pane("What a server needs"))).textContent).toContain("stable CPU use and plans 66% above it");
 });
 
 it("plans each VPS from its own servers when they have run long enough", async () => {
     const own: HostingFleetCapacityHost = { ...roomy, demandSource: "vps", stableCpuCores: 0.9, demandCpuCores: 1.494 };
     mocks.request.mockResolvedValue({ ...capacity, hosts: [own] });
     await open();
-    expect(cellTexts(hostRow("vps-1a2b3c4d"))[6]).toBe("1.49 cores1.80 GiBThis VPS · 0.90 cores stable + 66%");
+    expect(cellTexts(hostRow("vps-1a2b3c4d"))[6]).toBe("1.494 cores1.80 GiBThis VPS · 0.900 cores stable + 66%");
 });
 
 it("still shows an older control plane's read, planned at a percentile without burst headroom", async () => {

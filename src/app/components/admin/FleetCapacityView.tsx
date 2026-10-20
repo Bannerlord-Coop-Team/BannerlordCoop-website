@@ -23,6 +23,7 @@ import {
     fleetCapacityProviderLabel,
     fleetCapacityTypeLabel,
     formatCores,
+    formatCoresExact,
     formatGiB,
     formatMhz,
     formatPercent,
@@ -187,8 +188,8 @@ function ServerNeeds({ capacity, hints }: { capacity: HostingAdminFleetCapacity;
     const cpu = demand.cpuCores;
     const memory = demand.memoryBytes;
     const tiles: Array<{ label: string; hint: string; value: ReactNode }> = [
-        { label: "CPU p50", hint: `${hints.cpu} ${hints.p50}`, value: figure(cpu?.p50, formatCores) },
-        { label: "CPU p95", hint: `${hints.cpu} ${hints.p95}`, value: figure(cpu?.p95, formatCores) },
+        { label: "CPU p50", hint: `${hints.cpu} ${hints.cpuP50}`, value: figure(cpu?.p50, formatCores) },
+        { label: "CPU p95", hint: `${hints.cpu} ${hints.cpuP95}`, value: figure(cpu?.p95, formatCores) },
         { label: "CPU max", hint: `${hints.cpu} ${hints.max}`, value: figure(cpu?.max, formatCores) },
         { label: "Running server-hours", hint: hints.runningHours, value: formatServerHours(demand.runningServerHours) },
         { label: "Memory p50", hint: `${hints.memory} ${hints.p50}`, value: figure(memory?.p50, formatGiB) },
@@ -235,8 +236,8 @@ function ProvidersPane({ capacity, hints }: { capacity: HostingAdminFleetCapacit
                                 <th className="p-3 text-right"><MetricHint label="Steal mean" hint={hints.steal} /></th>
                                 <th className="p-3 text-right"><MetricHint label="Steal p95" hint={hints.stealP95} /></th>
                                 <th className="p-3 text-right"><MetricHint label="Steal max" hint={hints.stealMax} /></th>
-                                <th className="p-3 text-right"><MetricHint label="CPU p50" hint={`${hints.cpu} ${hints.p50}`} /></th>
-                                <th className="p-3 text-right"><MetricHint label="CPU p95" hint={`${hints.cpu} ${hints.p95}`} /></th>
+                                <th className="p-3 text-right"><MetricHint label="CPU p50" hint={`${hints.cpu} ${hints.cpuP50}`} /></th>
+                                <th className="p-3 text-right"><MetricHint label="CPU p95" hint={`${hints.cpu} ${hints.cpuP95}`} /></th>
                                 <th className="p-3 text-right"><MetricHint label="Memory p95" hint={`${hints.memory} ${hints.p95}`} /></th>
                             </tr>
                         </thead>
@@ -295,12 +296,12 @@ function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCap
                                 <th className="p-3 text-right">MHz</th>
                                 <th className="p-3 text-right">VPSs</th>
                                 <th className="p-3 text-right">Servers</th>
-                                <th className="p-3 text-right"><MetricHint label="CPU p50" hint={`${hints.cpu} ${hints.p50}`} /></th>
-                                <th className="p-3 text-right"><MetricHint label="CPU p95" hint={`${hints.cpu} ${hints.p95}`} /></th>
+                                <th className="p-3 text-right"><MetricHint label="CPU p50" hint={`${hints.cpu} ${hints.cpuP50}`} /></th>
+                                <th className="p-3 text-right"><MetricHint label="CPU p95" hint={`${hints.cpu} ${hints.cpuP95}`} /></th>
                                 <th className="p-3 text-right"><MetricHint label="Memory p95" hint={`${hints.memory} ${hints.p95}`} /></th>
                                 <th className="p-3 text-right"><MetricHint label="Steal p95" hint={hints.stealP95} /></th>
                                 <th className="p-3 text-right"><MetricHint label="Servers at once (modelled)" hint={`${hints.modelled} ${hints.slots}`} /></th>
-                                <th className="p-3"><MetricHint label="Demand source" hint={hints.demandSource} /></th>
+                                <th className="p-3"><MetricHint label="Demand source" hint={hints.typeDemandSource} /></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/10 text-foreground">
@@ -407,9 +408,9 @@ function DayAxis({ days }: { days: Days }) {
     );
 }
 
-function TwoLine({ cores, bytes }: { cores: number | null; bytes: number | null }) {
+function TwoLine({ cores, bytes, exact = false }: { cores: number | null; bytes: number | null; exact?: boolean }) {
     return <>
-        <span className="block">{figure(cores, formatCores)}</span>
+        <span className="block">{figure(cores, exact ? formatCoresExact : formatCores)}</span>
         <span className="block text-foreground-muted">{figure(bytes, formatGiB)}</span>
     </>;
 }
@@ -461,7 +462,7 @@ const HostRow = memo(function HostRow({ host, model, days, hourLabels }: {
             <td className="p-3 text-right font-mono whitespace-nowrap"><TwoLine cores={host.overheadCores} bytes={host.overheadMemoryBytes} /></td>
             <td className="p-3 text-right font-mono whitespace-nowrap"><TwoLine cores={host.usableCores} bytes={host.usableMemoryBytes} /></td>
             <td className="p-3 text-right font-mono whitespace-nowrap">
-                <TwoLine cores={host.demandCpuCores} bytes={host.demandMemoryBytes} />
+                <TwoLine cores={host.demandCpuCores} bytes={host.demandMemoryBytes} exact={model.cpuBurstPercent !== null} />
                 <span className="mt-0.5 block font-sans text-foreground-dim">{perServerSourceLabel(host, model)}</span>
             </td>
             <td className="p-3">

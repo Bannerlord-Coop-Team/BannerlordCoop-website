@@ -14,6 +14,7 @@ import {
     FLEET_CAPACITY_PROVIDERS,
     fleetCapacityProviderLabel,
     fleetCapacityTypeLabel,
+    formatCoresExact,
     formatGiB,
     fleetCapacityHints,
     fleetCapacityHostNote,
@@ -168,6 +169,14 @@ it.each([
     ["burst headroom given as text", { ...capacity, model: { ...model, cpuBurstPercent: "66" } }],
     ["a null burst headroom", { ...capacity, model: { ...model, cpuBurstPercent: null } }],
     ["negative stable CPU", withHost({ stableCpuCores: -0.1 })],
+    ["no source but figures", withHost({ demandSource: "none" })],
+    ["no source but a stable CPU alone", withHost({ demandSource: "none", stableCpuCores: 0.85, demandCpuCores: null, demandMemoryBytes: null })],
+    ["a source without a stable CPU", withHost({ stableCpuCores: null })],
+    ["a source with zero stable CPU", withHost({ stableCpuCores: 0, demandCpuCores: 0 })],
+    ["a source without planned memory", withHost({ demandMemoryBytes: null })],
+    ["a planned CPU that is not its stable CPU plus the headroom", withHost({ demandCpuCores: 1.2 })],
+    ["an older VPS without a source but with figures", { ...legacy, hosts: [{ ...legacyHost(host), demandSource: "none" }] }],
+    ["an older VPS with a source but no planned CPU", { ...legacy, hosts: [{ ...legacyHost(host), demandCpuCores: null }] }],
 ])("rejects %s, mixing the two shapes or out of range", (_case, value) => {
     expect(parseFleetCapacity(value)).toBeNull();
 });
@@ -175,10 +184,15 @@ it.each([
 it("labels each VPS's per-server source with its stable CPU and the headroom", () => {
     const parsed = parseFleetCapacity(capacity)!;
     const [measured, unmeasured] = parsed.hosts;
-    expect(perServerSourceLabel(measured!, parsed.model)).toBe("This VPS · 0.85 cores stable + 66%");
-    expect(perServerSourceLabel({ ...measured!, demandSource: "fleet", stableCpuCores: 1.2 }, parsed.model)).toBe("Fleet · 1.20 cores stable + 66%");
+    expect(perServerSourceLabel(measured!, parsed.model)).toBe("This VPS · 0.850 cores stable + 66%");
+    // Three decimals, as the planned figure has: 0.6 cores plus 66% is 0.996, which two decimals would show as 1.00.
+    expect(perServerSourceLabel({ ...measured!, demandSource: "fleet", stableCpuCores: 0.6 }, parsed.model)).toBe("Fleet · 0.600 cores stable + 66%");
+    expect(formatCoresExact(0.996)).toBe("0.996 cores");
     expect(perServerSourceLabel(unmeasured!, parsed.model)).toBe("None yet");
-    expect(occupantDemandLabel(demand, parsed.model)).toBe("0.85 cores stable · 1.80 GiB at p95");
+    // Each figure names its own percentile: the median CPU and the p95 memory.
+    expect(occupantDemandLabel(demand, parsed.model)).toBe("0.85 cores stable (p50) · 1.80 GiB at p95");
+    expect(occupantDemandLabel({ ...demand, memoryBytes: null }, parsed.model)).toBe("0.85 cores stable (p50) · memory —");
+    expect(occupantDemandLabel({ ...demand, cpuCores: null }, parsed.model)).toBe("CPU — · 1.80 GiB at p95");
     expect(occupantDemandLabel(noDemand, parsed.model)).toBe("no data yet");
     expect(burstCores(1.2, 66)).toBeCloseTo(1.992, 9);
 });
@@ -198,7 +212,10 @@ it("accepts what the contract does not rule out", () => {
     expect(parseFleetCapacity(withHost({ steal: { samples: 1, mean: 100, p95: 100, max: 100 }, stealHourly: hex(week(() => 255)), busyHourly: hex(week(() => 100)) }))).not.toBeNull();
     expect(parseFleetCapacity(withHost({ vCpu: 1, slots: 0, occupants: [host.occupants[0], { ...host.occupants[0], serverId: "44444444-4444-4444-8444-444444444444" }] }))).not.toBeNull();
     expect(parseFleetCapacity({ ...capacity, fleet: { hosts: 0, servers: 99, demand } })).not.toBeNull();
-    expect(parseFleetCapacity(withHost({ instanceTypeKey: "not-in-the-read", demandSource: "none", demandCpuCores: 1.2 }))).not.toBeNull();
+    expect(parseFleetCapacity(withHost({ instanceTypeKey: "not-in-the-read", demandSource: "none", stableCpuCores: null, demandCpuCores: null,
+        demandMemoryBytes: null }))).not.toBeNull();
+    // A planned CPU within the control plane's rounding of its stable CPU plus 66%.
+    expect(parseFleetCapacity(withHost({ stableCpuCores: 1.165, demandCpuCores: 1.934 }))).not.toBeNull();
     expect(parseFleetCapacity({ ...capacity, model: { ...model, cpuPercentile: 90, minimumRunningHours: 12.5, staticBurstVcpuPerServer: 1.5 } })).not.toBeNull();
     // A VPS may report a clock of 0 MHz, and a type rounds anything under 50 MHz to 0.
     expect(parseFleetCapacity(withHost({ cpuMhz: 0 }))).not.toBeNull();
@@ -427,7 +444,8 @@ it("explains busy cores and modelled servers as the control plane computes them"
     expect(hints.modelled).toContain("unknown until its steal, overhead and memory are measured and its own servers, its instance type or the fleet have enough running data.");
     // Each server bursts 66% above its stable p50 at once.
     expect(hints.modelled).toContain("if each bursts 66% above its stable p50 CPU at once, with p95 memory");
-    expect(hints.p50).toContain("The model takes the p50 as a server's stable CPU use.");
+    expect(hints.cpuP50).toContain("The model takes the p50 as a server's stable CPU use and plans 66% above it.");
+    expect(hints.p50).not.toContain("stable");
 });
 
 it("formats a sliver of a percent and explains failed reads", () => {
