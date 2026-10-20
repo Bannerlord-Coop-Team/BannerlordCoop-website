@@ -24,6 +24,10 @@ const REFUSAL_MESSAGES: Record<string, string> = {
     vps_slot_capacity_runner_update_active: "This VPS has a runner update in progress or awaiting recovery. Raise its slot capacity once it resolves.",
     vps_slot_capacity_slots_unsettled: "Every slot of this VPS must be ready or assigned before its slot capacity is raised.",
     vps_slot_capacity_relocation_active: "A server on this VPS is being relocated. Raise its slot capacity once the move settles.",
+    // A control plane from before the raise rejects the operation it does not know.
+    unsupported_operation: "This control plane cannot raise a slot capacity yet. Deploy a control plane with slot capacity raises first.",
+    // The form only sends a whole number up to 32, so an invalid request is most likely an older control plane.
+    invalid_request: "The control plane refused the request as invalid. It may predate slot capacity raises, which need a newer control plane; a capacity must also be a whole number from 1 to 32.",
 };
 
 /**

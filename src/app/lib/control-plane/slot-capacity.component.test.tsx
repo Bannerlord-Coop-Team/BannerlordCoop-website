@@ -89,6 +89,10 @@ describe("the slot capacity form", () => {
         expect(slotCapacityErrorMessage(new ControlPlaneAdminError("vps_slot_capacity_shrink", "raw"))).toMatch(/never lowered/u);
         expect(slotCapacityErrorMessage(new ControlPlaneAdminError("vps_slot_capacity_runner_not_current", "raw")))
             .toMatch(/current runner revision/u);
+        // An older control plane rejects the unknown operation; the administrator is told it needs a newer one.
+        expect(slotCapacityErrorMessage(new ControlPlaneAdminError("unsupported_operation", "raw"))).toMatch(/cannot raise a slot capacity yet/u);
+        expect(slotCapacityErrorMessage(new ControlPlaneAdminError("invalid_request", "The control plane request is invalid.")))
+            .toMatch(/may predate slot capacity raises/u);
         expect(slotCapacityErrorMessage(new ControlPlaneAdminError("request_conflict", "VPS slot capacity request conflicted")))
             .toBe("VPS slot capacity request conflicted");
         expect(slotCapacityErrorMessage("nope")).toBe("The slot capacity could not be raised.");

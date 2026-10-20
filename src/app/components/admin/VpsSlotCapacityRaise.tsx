@@ -16,7 +16,7 @@ import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 
 /** The audit reason the control plane requires; the form sends this fixed one. */
-const RAISE_REASON = "Raised the VPS slot capacity from the admin panel; placement keeps the servers online together within its cores.";
+const RAISE_REASON = "Raised the VPS slot capacity from the admin panel; placement weighs the servers online together, which can still share its cores.";
 
 /**
  * Raises one VPS's slot capacity from its detail panel. The control plane refuses it unless it runs with
@@ -73,7 +73,7 @@ export function VpsSlotCapacityRaise({
         ? `This VPS already holds the most slots, ${MAXIMUM_VPS_SLOT_CAPACITY}.`
         : host.runnerOnboarding?.state !== "succeeded"
             ? "Available once this VPS's runner onboarding has succeeded."
-            : "A slot reserves no cores: placement keeps the servers online together within the VPS's cores. Refused unless the control plane runs with HOSTING_DYNAMIC_SLOT_CAPACITY on.";
+            : "A slot reserves no cores: placement prefers VPSs whose servers are rarely online together, but when more are online at once than its cores fit they slow each other. Refused unless the control plane runs with HOSTING_DYNAMIC_SLOT_CAPACITY on.";
     return (
         <form onSubmit={raise} noValidate aria-label={`Raise the slot capacity of ${host.name}`} className="flex flex-wrap items-end gap-x-4 gap-y-2 border-t border-white/10 px-6 py-3 text-xs">
             <div>
