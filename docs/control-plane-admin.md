@@ -868,7 +868,8 @@ needs while it runs, how much CPU each VPS loses to other tenants (steal), and
 how many servers each instance type and each VPS could run at once at those
 needs, against today's slots. It compares providers too, so CPU-steal hotspots
 and weak VPSs stand out, for example when deciding whether to keep a provider.
-Nothing on the tab moves or changes anything.
+It also shows the control plane's recommended slot count for each VPS
+([slot sizing](#slot-sizing)). Nothing on the tab moves or changes anything.
 
 ### Reading it
 
@@ -965,7 +966,9 @@ figure; the tab presents them as follows.
    per-server CPU p50 and p95, memory p95, steal p95, servers at once against the
    type's static slots, and the demand source. The type's key repeats those
    columns, so it is only the provider cell's title.
-5. **VPSs**: one row per VPS, grouped by provider and then region (alphabetical,
+5. **Slot sizing**: the recommended slots per VPS and region, from its own read
+   (see [slot sizing](#slot-sizing)), just above the VPSs' servers at once.
+6. **VPSs**: one row per VPS, grouped by provider and then region (alphabetical,
    hosts without a region last in their provider), with VPSs whose `samples` is
    0 (no observation on them carried server or host counters yet) last in their
    group and marked "no data yet". Each row has the service name without
@@ -1096,6 +1099,157 @@ update first: add it to `FLEET_CAPACITY_PROVIDERS` (and
 `HostingFleetCapacityProviderId`) with a readable name in
 `fleetCapacityProviderLabel`, and deploy that before the control plane reports
 the provider. Until then the read is an unexpected response.
+
+### Slot sizing
+
+The **Slot sizing** pane, between **Instance types** and **VPSs**, shows the
+control plane's read-only `slot-sizing` recommendation (control plane #530): how
+many slots each VPS could have so that servers rarely online together share it.
+A slot reserves no cores, so a VPS may hold more servers than it runs at once.
+The control plane's `docs/managed-hosting/placement-planner.md` ("Slot sizing
+(recommendation)") defines every figure; this section says how the pane shows
+them.
+
+**It is a recommendation only.** The pane has no apply, raise or lower action,
+nothing on the website or the control plane acts on the read, and no slot count,
+server or placement changes until automatic sizing is built and turned on.
+**Raise slots** in the VPS view ([Raising a VPS slot
+capacity](#raising-a-vps-slot-capacity)) stays the separate, manual action.
+
+#### Reading slot sizing
+
+The pane sends `slot-sizing` with `{}` from the browser when the tab opens,
+beside `fleet-capacity` and through the same `control-plane-admin` Edge
+Function, which needs no change. It has its own state: it shows whatever the
+capacity read does, and the capacity panes show whatever it does. It is not
+polled. Its own **Refresh** reads it again (one read at a time, keeping what it
+showed while it loads). The control plane allows each administrator six reads
+per five minutes, a budget separate from fleet capacity's, and answers more with
+`rate_limited`, which the pane shows as "You can read slot sizing six times
+every five minutes. Wait a few minutes, then refresh." with **Retry**. Any other
+failure, such as `slot_sizing_unavailable` without an enabled VPS provider,
+shows the control plane's message with **Retry** and keeps what the pane
+already showed. A response that does not match the shape below reads "The
+control plane returned an unexpected slot sizing."
+
+#### What the slot sizing pane shows
+
+- What the pane is and that it is a recommendation only, then the two budgets
+  and the typical new server, each from the read's `model`: "Each VPS gets the
+  most slots, from floor(vCPU ÷ 2) to 32, at which its servers now plus typical
+  new servers in the rest keep two budgets: at most 1 core-hour a week of
+  expected CPU shortage, and more servers online at once than its memory holds
+  in under 1% of the week." and "A typical new server needs 1.6 vCPU and 2.5 GiB
+  while online and is online 41.37 hours a week, the mean of servers' weeks over
+  the last 28 days (14-day half-life). A server observed for under 7 days counts
+  with that typical week."
+- When `model.capacityErrorCode` is set, a note: "Capacity samples could not be
+  read (*code*), so no VPS's usable cores or memory are known: every VPS is
+  unmeasured and has no recommendation."
+- **Recommended slots per VPS**, grouped by provider and then region as the VPSs
+  table groups them, in the read's order within a group. A provider the website
+  does not know (the control plane leaves its VPSs unmeasured) is named by its
+  id. Each row has the service name without `.vps.ovh.net`, its vCPUs and, for a
+  VPS that does not accept relocations, "Takes no moved servers". Its columns:
+  - **Slots** (its stored slot capacity now) and **Servers** (servers in its
+    slots now);
+  - **Recommended**, with a badge against its slots now: **+N**, **−N** or
+    **same**, each with an icon and a title sentence, so it does not rely on
+    colour alone;
+  - **Reason** in words with a sentence for the VPS: **CPU budget** or
+    **Memory budget** (one more slot would break that budget), **Floor** (the
+    budgets allow fewer slots, but a VPS always keeps floor(vCPU ÷ 2)),
+    **Maximum** (32 slots keep both budgets), **Drain** ("Its 5 servers alone
+    break a budget, so 2 would move.") and **Unmeasured** (no usable cores or
+    memory are measured or borrowable);
+  - **CPU shortage / week** in core-hours with the control plane's three
+    decimals ("0.842 core-h") and **Memory over** as a percent with its four
+    decimals of share ("0.21%"), each marked **Over budget** above its budget,
+    which only Drain and Floor can be;
+  - **To move** and **Free recommended** slots;
+  - **Capacity**: Measured, Borrowed by type, Borrowed by provider and vCPU or
+    None, with the usable cores and memory ("Measured · 5.580 cores, 10.90 GiB
+    usable").
+
+  An unmeasured VPS shows "—" (read out as "Unmeasured") for its
+  recommendation, shortage and memory over.
+- **By region**: each region the read lists, in its order, with **To move**,
+  **Free recommended** and **Shortfall**. A shortfall above zero reads "*N*
+  servers without a slot" with a warning icon. The read reports servers, not how
+  many VPSs a shortfall needs, so the pane names no VPS count.
+
+Every column label is a `MetricHint` button whose tooltip explains it as the
+control plane computes it, with the read's own budgets and targets: the slots
+now, the recommendation and how occupants and typical servers count, each
+reason, the shortage (the cores that servers online together are expected to
+want beyond the usable cores, summed over the week's half-hours), memory over
+(the expected share of the week with more online than floor(usable memory ÷
+memory per server)), servers to move, free recommended slots (and that only a
+VPS accepting relocations offers them to its region), where the capacity comes
+from with the planned memory per server, and each region figure (regions
+overlap, so a VPS in several offers the same slots to each).
+
+#### Slot sizing response shape
+
+`parseSlotSizing` in `src/app/lib/control-plane/slot-sizing.ts` parses the read
+strictly against the control plane's `HostingAdminSlotSizing`
+(`src/hosting/fleet/slot-sizing-contract.ts`), checking only what the control
+plane's `sizeVpsSlots` and `readSlotSizing` guarantee; anything else is an
+unexpected response. Every object has exactly its keys, and `generatedAt` is a
+millisecond UTC time.
+
+- **Model**: the CPU budget is finite and non-negative, the memory budget above
+  0 and at most 1, `cpuBurstVcpu` above 0 and at most 256, `memoryBurstBytes` a
+  positive integer of at most 64 GiB, `historyDays`, `halfLifeDays` and
+  `maximumSlots` positive integers, `minimumObservedDays` a non-negative integer,
+  `typicalWeeklyOnlineHours` 0 to 168 with at most two decimals, and
+  `capacityErrorCode` null or text.
+- **Each VPS**: its service name and provider are text (any provider id: one the
+  control plane does not know is unmeasured), it has at most 32 region keys and
+  at least 2 vCPUs, its counts are non-negative integers with no more servers
+  than `maximumSlots`, usable cores have at most three decimals, usable memory
+  is whole bytes, and memory per server is whole bytes no less than
+  `memoryBurstBytes`. Its `reason` and `capacitySource` are in their enums.
+- **Reason against figures**:
+  - `unmeasured` exactly when its usable cores or memory are null, and then the
+    source is `none`, `recommendedSlots`, the shortage and memory over are null,
+    and servers to move and free slots are 0. Otherwise the source is not
+    `none`;
+  - otherwise `recommendedSlots` is an integer from floor(vCPU ÷ 2) to
+    `maximumSlots`, the shortage is non-negative with at most three decimals and
+    memory over is 0 to 1 with at most four;
+  - only `drain` has servers to move: at least one, with the recommendation
+    equal to its servers less them, and no free slots;
+  - `floor` recommends exactly floor(vCPU ÷ 2), with free slots no more than the
+    recommendation less its servers;
+  - `cpu`, `memory` and `maximum` keep both budgets as rounded, have free slots
+    equal to the recommendation less its servers, and `maximum` recommends
+    `maximumSlots`, the other two fewer.
+- When `capacityErrorCode` is set, every VPS is `unmeasured`.
+- **Each region**: its key is text and its counts are non-negative integers. Its
+  shortfall is at most its servers to move and at least its servers to move less
+  its free slots. Its servers to move are at most all VPSs' servers to move, and
+  its free slots at most those of all VPSs that accept relocations.
+- Each service name and region key appears once, and a read holds at most 256
+  VPSs and 32 regions (`SLOT_SIZING_LIMITS`), as the capacity read caps its
+  VPSs.
+
+#### Slot sizing deploy order
+
+This website change deploys **before** control plane #530. Control plane `main`
+has no `slot-sizing`: after authenticating the administrator it fails the
+request's operation schema and answers HTTP 400 `invalid_request` ("The control
+plane request is invalid."), with an empty request id because the Edge Function
+forwards no `x-request-id`, so the browser client reads the bare error. The pane
+shows `invalid_request` (and `unsupported_operation`) as a calm note, not an
+alert, with no tables: "Slot sizing is not available on this control plane yet.
+It appears here once the control plane that recommends slot counts is deployed;
+the rest of this tab does not depend on it." The capacity panes work as before.
+The pane always sends `{}`, which #530 accepts, so `invalid_request` here only
+means the operation is unknown. Once #530 deploys, **Refresh** or reopening the
+tab shows the recommendations. Rolling #530 back returns the pane to the note.
+A later change to the slot sizing contract, such as a new reason, key or rule,
+needs the website updated first, or the read is unexpected.
 
 ## Server notices
 
