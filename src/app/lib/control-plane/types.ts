@@ -450,7 +450,10 @@ type HostingPlacementOverlapHostMeasure = {
 export type HostingPlacementOverlapBurstHost = HostingPlacementOverlapHostMeasure & {
     /** The VPS's RAM, or null when the runner's could not be read. */
     memoryBytes: number | null;
-    /** min(floor(vCpu / 2), floor(memoryBytes / 3 GiB)), or floor(vCpu / 2) when memoryBytes is null. */
+    /**
+     * min(floor(vCpu / 1.6), floor(memoryBytes / 3 GiB)), or floor(vCpu / 1.6) when memoryBytes is null. An older
+     * control plane counted floor(vCpu / 2), never more.
+     */
     burstServers: number;
     /**
      * 168 characters, oldest first: `1` more servers online at least half the hour than burstServers, `-` unknown
