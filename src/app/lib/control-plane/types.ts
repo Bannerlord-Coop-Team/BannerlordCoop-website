@@ -510,8 +510,11 @@ export type HostingFleetCapacityStat = { samples: number; mean: number; p95: num
  */
 export type HostingFleetCapacityProviderId = "ovhcloud-vps" | "contabo-vps" | "hosthatch-vps";
 
-/** Whose per-server demand a VPS is modelled with: its instance type's, the fleet's, or none yet. */
-export type HostingFleetCapacityDemandSource = "type" | "fleet" | "none";
+/**
+ * Whose per-server demand a VPS is modelled with: the servers that ran on the VPS itself, its instance type's, the
+ * fleet's, or none yet. An instance type's is never `vps`.
+ */
+export type HostingFleetCapacityDemandSource = "vps" | "type" | "fleet" | "none";
 
 export type HostingFleetCapacityProvider = {
     provider: HostingFleetCapacityProviderId;
@@ -569,7 +572,12 @@ export type HostingFleetCapacityHost = {
     /** vCpu × (1 − steal p95 ÷ 100) − overhead cores, and RAM less overhead memory, each clamped at zero. */
     usableCores: number | null;
     usableMemoryBytes: number | null;
-    /** The per-server demand this VPS is modelled with, from `demandSource`. */
+    /**
+     * A server's stable CPU on this VPS, the median of `demandSource`'s demand, that `demandCpuCores` adds the
+     * burst headroom to. Null without a source, and from an older control plane that planned for a percentile.
+     */
+    stableCpuCores: number | null;
+    /** The per-server demand this VPS is modelled with, from `demandSource`: stable CPU plus the burst headroom. */
     demandCpuCores: number | null;
     demandMemoryBytes: number | null;
     demandSource: HostingFleetCapacityDemandSource;
@@ -595,7 +603,13 @@ export type HostingAdminFleetCapacity = {
     windowEndedAt: string;
     hours: number;
     model: {
+        /** The CPU percentile taken as a server's stable use (50); an older control plane planned for it directly. */
         cpuPercentile: number;
+        /**
+         * The headroom, in percent, the model plans above stable CPU so that every online server can burst at once;
+         * null from an older control plane, which planned for `cpuPercentile` without it.
+         */
+        cpuBurstPercent: number | null;
         memoryPercentile: number;
         /** Running server-hours an instance type, or else the fleet, needs before the model plans with its demand. */
         minimumRunningHours: number;

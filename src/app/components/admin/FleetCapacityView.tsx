@@ -34,6 +34,7 @@ import {
     limitedByLabel,
     modelledVerdict,
     occupantDemandLabel,
+    perServerSourceLabel,
     parseFleetCapacity,
     staticRuleComparison,
     staticSlots,
@@ -444,7 +445,7 @@ const HostRow = memo(function HostRow({ host, model, days, hourLabels }: {
                             {host.occupants.map((occupant) => (
                                 <li key={occupant.serverId}>
                                     <span className="block break-words text-foreground">{occupant.displayName}</span>
-                                    <span className="block font-mono text-[0.65rem] text-foreground-muted">{occupantDemandLabel(occupant.demand)}</span>
+                                    <span className="block font-mono text-[0.65rem] text-foreground-muted">{occupantDemandLabel(occupant.demand, model)}</span>
                                 </li>
                             ))}
                         </ul>
@@ -461,7 +462,7 @@ const HostRow = memo(function HostRow({ host, model, days, hourLabels }: {
             <td className="p-3 text-right font-mono whitespace-nowrap"><TwoLine cores={host.usableCores} bytes={host.usableMemoryBytes} /></td>
             <td className="p-3 text-right font-mono whitespace-nowrap">
                 <TwoLine cores={host.demandCpuCores} bytes={host.demandMemoryBytes} />
-                <span className="mt-0.5 block font-sans text-foreground-dim">{demandSourceLabel(host.demandSource)}{host.demandSource === "none" ? "" : ` p${model.cpuPercentile}`}</span>
+                <span className="mt-0.5 block font-sans text-foreground-dim">{perServerSourceLabel(host, model)}</span>
             </td>
             <td className="p-3">
                 <div className="space-y-1">
