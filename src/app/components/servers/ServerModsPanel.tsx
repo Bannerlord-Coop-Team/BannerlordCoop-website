@@ -104,13 +104,13 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         }
     }
 
-    useEffect(() => {
+    // Loads once, when the tab is first shown; later loads follow edits or the Refresh button.
+    const loadOnce = useEffectEvent(() => {
         if (!active || !canEdit || requested.current) return;
         requested.current = true;
         void load();
-        // Loads once, when the tab is first shown; later loads follow edits or the Refresh button.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [active, canEdit]);
+    });
+    useEffect(() => loadOnce(), [active, canEdit]);
 
     /** Runs one upload or delete; refusals that leave the list uncertain or stale reload it so the owner sees the truth. */
     async function change(kind: Exclude<Busy, null | "loading">, run: () => Promise<ServerModsState>, success: (state: ServerModsState) => string) {
