@@ -433,10 +433,13 @@ it("compares modelled servers with today's slots", () => {
 });
 
 it("compares the fleet's needs with the static rule, or says there is not enough data", () => {
-    expect(staticRuleComparison(parseFleetCapacity(capacity)!)).toBe("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB). Every online server is planned to burst to 1.6 vCPU at once, or to its peak where higher; with the fleet's peak at 1.950 cores, the model plans 1.950 cores per server (98% of 2 vCPU).");
+    expect(staticRuleComparison(parseFleetCapacity(capacity)!)).toBe("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB). Every online server is planned to burst to 1.6 vCPU at once, or to its VPS's measured peak where higher. The fleet's highest peak is 1.950 cores, so VPSs plan from 1.600 cores to 1.950 cores per server (98% of 2 vCPU at most); each VPS's own is in its per-server column.");
     expect(staticRuleComparison(parseFleetCapacity({ ...capacity, model: { ...model, cpuPercentile: 99 } })!)).toContain("1.60 cores at p99 (80% of 2 vCPU)");
-    // The control plane's own example: a 1.2-core peak plans the 1.6 vCPU target.
-    expect(staticRuleComparison(parseFleetCapacity(example)!)).toContain("with the fleet's peak at 1.200 cores, the model plans 1.600 cores per server (80% of 2 vCPU).");
+    // The control plane's own example: no peak is above the target, so every VPS plans the 1.6 vCPU target.
+    expect(staticRuleComparison(parseFleetCapacity(example)!)).toContain("No peak is above the target (the fleet's highest is 1.200 cores), so every VPS plans 1.600 cores per server (80% of 2 vCPU).");
+    // A fleet peak exactly at the target still plans the target everywhere.
+    const atTarget = { ...example, fleet: { ...example.fleet, demand: { ...exampleDemand, cpuCores: { ...exampleDemand.cpuCores, max: 1.6 } } } };
+    expect(staticRuleComparison(parseFleetCapacity(atTarget)!)).toContain("so every VPS plans 1.600 cores per server");
     expect(staticRuleComparison(parseFleetCapacity(blank)!)).toBe("Today's static rule reserves 2 vCPU · 3 GiB per server. There is not enough data yet to compare it with what servers use.");
 });
 
@@ -466,7 +469,8 @@ it("explains busy cores and modelled servers as the control plane computes them"
     expect(hints.cpuP50).toContain("a server's stable CPU use, shown for comparison. The model plans CPU from the 1.6 vCPU burst target and the peak");
     // The CPU peak is a 5-minute interval's mean, and what the model plans at above the target.
     expect(hints.cpuMax).toContain("Each interval averages about 5 minutes, so shorter spikes are averaged in.");
-    expect(hints.cpuMax).toContain("at the 1.6 vCPU burst target, or at this peak where it is higher");
+    expect(hints.cpuMax).toContain("Each VPS plans every online server at the 1.6 vCPU burst target, or at the peak of its own demand source");
+    expect(hints.cpuMax).toContain("no source peaks above this");
     expect(hints.max).toBe("The highest interval in the week.");
     expect(hints.p50).not.toContain("stable");
 });

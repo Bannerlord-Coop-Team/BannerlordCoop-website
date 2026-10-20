@@ -407,7 +407,9 @@ export function burstCores(peakCores: number, burstVcpu: number) {
 
 /**
  * One sentence comparing what a running server uses at the model's percentiles with today's static rule, and, with a
- * burst target, what the model plans for each server instead.
+ * burst target, what the model plans for each server instead. Each VPS plans the target or the peak of its own demand
+ * source, and no source peaks above the fleet, so the fleet's peak bounds every plan: at or under the target every VPS
+ * plans the target, and above it the plans range from the target to that peak.
  */
 export function staticRuleComparison(capacity: Pick<HostingAdminFleetCapacity, "model" | "fleet">) {
     const { model: rule, fleet } = capacity;
@@ -420,10 +422,14 @@ export function staticRuleComparison(capacity: Pick<HostingAdminFleetCapacity, "
     const memoryShare = Math.round((memory.value / rule.staticBurstMemoryBytesPerServer) * 100);
     const uses = `${reserves} A running server uses ${formatCores(cpu.value)} at ${cpu.key} (${cpuShare}% of ${rule.staticBurstVcpuPerServer} vCPU) and ${formatGiB(memory.value)} at ${memory.key} (${memoryShare}% of ${ruleGiB(rule.staticBurstMemoryBytesPerServer)}).`;
     if (rule.cpuBurstVcpu === null) return uses;
+    const burst = `${uses} Every online server is planned to burst to ${rule.cpuBurstVcpu} vCPU at once, or to its VPS's measured peak where higher.`;
     // Rounded to three decimals as the control plane rounds each VPS's planned CPU, and shown with them.
-    const planned = Math.round(burstCores(cores.max, rule.cpuBurstVcpu) * 1_000) / 1_000;
-    const plannedShare = Math.round((planned / rule.staticBurstVcpuPerServer) * 100);
-    return `${uses} Every online server is planned to burst to ${rule.cpuBurstVcpu} vCPU at once, or to its peak where higher; with the fleet's peak at ${formatCoresExact(cores.max)}, the model plans ${formatCoresExact(planned)} per server (${plannedShare}% of ${rule.staticBurstVcpuPerServer} vCPU).`;
+    const highest = Math.round(burstCores(cores.max, rule.cpuBurstVcpu) * 1_000) / 1_000;
+    const share = (value: number) => `${Math.round((value / rule.staticBurstVcpuPerServer) * 100)}% of ${rule.staticBurstVcpuPerServer} vCPU`;
+    if (highest === rule.cpuBurstVcpu) {
+        return `${burst} No peak is above the target (the fleet's highest is ${formatCoresExact(cores.max)}), so every VPS plans ${formatCoresExact(highest)} per server (${share(highest)}).`;
+    }
+    return `${burst} The fleet's highest peak is ${formatCoresExact(cores.max)}, so VPSs plan from ${formatCoresExact(rule.cpuBurstVcpu)} to ${formatCoresExact(highest)} per server (${share(highest)} at most); each VPS's own is in its per-server column.`;
 }
 
 export type FleetCapacityDataState = "empty" | "sparse" | "ready";
@@ -630,7 +636,7 @@ export function fleetCapacityHints(capacityModel: HostingAdminFleetCapacity["mod
             ...legacyHints(capacityModel),
             cpuP50: `p50: the median. Half of the intervals were at or below this: a server's stable CPU use, shown for comparison. The model plans CPU from the ${burst} vCPU burst target and the peak, not from this.`,
             cpuP95: `p95: 95% of the intervals were at or below this. The model plans CPU from the ${burst} vCPU burst target and the peak, not from this.`,
-            cpuMax: `The highest interval in the week. Each interval averages about 5 minutes, so shorter spikes are averaged in. The model plans every online server at the ${burst} vCPU burst target, or at this peak where it is higher.`,
+            cpuMax: `The highest interval in the week. Each interval averages about 5 minutes, so shorter spikes are averaged in. Each VPS plans every online server at the ${burst} vCPU burst target, or at the peak of its own demand source (its own servers, its instance type or the fleet) where that is higher, as its per-server column shows; no source peaks above this.`,
             perServer: `Per server: what one server is modelled to need on this VPS when every server on it bursts at once: ${burst} vCPU, or the peak CPU of the source shown where that is higher, and its ${memory} memory.`,
             demandSource: `Where the per-server needs come from: This VPS uses the servers that ran on this VPS once they have run ${hours} there in the week; Type uses the instance type's servers once they have; Fleet uses the whole fleet's once it has; None yet means none has enough data.`,
             typeDemandSource: `Where the type's per-server needs come from: Type uses its own servers once they have run ${hours} in the week; Fleet uses the whole fleet's once it has; None yet means neither has enough data.`,

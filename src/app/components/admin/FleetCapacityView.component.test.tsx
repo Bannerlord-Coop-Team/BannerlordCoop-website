@@ -240,7 +240,7 @@ it("shows what a server needs and compares it with the static rule", async () =>
         ["CPU p50", "0.85 cores"], ["CPU p95", "1.20 cores"], ["CPU max", "1.95 cores"], ["Running server-hours", "412.5 server-h"],
         ["Memory p50", "1.40 GiB"], ["Memory p95", "1.80 GiB"], ["Memory max", "2.00 GiB"], ["Throttled", "1.2%"],
     ]);
-    expect(needs.textContent).toContain("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB). Every online server is planned to burst to 1.6 vCPU at once, or to its peak where higher; with the fleet's peak at 1.950 cores, the model plans 1.950 cores per server (98% of 2 vCPU).");
+    expect(needs.textContent).toContain("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB). Every online server is planned to burst to 1.6 vCPU at once, or to its VPS's measured peak where higher. The fleet's highest peak is 1.950 cores, so VPSs plan from 1.600 cores to 1.950 cores per server (98% of 2 vCPU at most); each VPS's own is in its per-server column.");
 });
 
 it("compares providers' steal and per-server needs", async () => {
