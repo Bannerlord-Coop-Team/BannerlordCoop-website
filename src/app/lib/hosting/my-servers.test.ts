@@ -10,6 +10,7 @@ import {
     listAllMyServerBackups,
     listAllMyServers,
     MyServersApiError,
+    myServersEndpoint,
     requestMyServerBackupOperation,
     requestMyServerOperation,
     requestMyServerUpdate,
@@ -40,6 +41,25 @@ const SECOND_SERVER = {
     observedGameState: "unknown" as const,
     releaseChannel: "nightly" as const,
 };
+
+test("the Edge endpoint admits loopback HTTP only under next dev and never non-loopback HTTP", () => {
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "publishable-key-with-enough-characters";
+    // Asserts the current URL is refused as unconfigured under `nodeEnv`.
+    const rejected = (nodeEnv: string | undefined) => assert.throws(() => myServersEndpoint(undefined, nodeEnv),
+        (error: unknown) => error instanceof MyServersApiError && error.code === "server_api_not_configured", String(nodeEnv));
+    try {
+        process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:55421";
+        assert.equal(myServersEndpoint(undefined, "development").endpoint.href, "http://127.0.0.1:55421/functions/v1/my-servers");
+        rejected("production");
+        rejected(undefined);
+        for (const url of ["http://project.supabase.co", "http://192.168.1.10:55421", "http://127.0.0.1:55421/rest", "http://user@localhost:55421"]) {
+            process.env.NEXT_PUBLIC_SUPABASE_URL = url;
+            rejected("development");
+        }
+        process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project.supabase.co";
+        assert.equal(myServersEndpoint(undefined, "production").endpoint.href, "https://project.supabase.co/functions/v1/my-servers");
+    } finally { restoreEnvironment(); }
+});
 
 test("caller cancellation reaches an in-flight owner inventory request", async () => {
     configureEnvironment();
