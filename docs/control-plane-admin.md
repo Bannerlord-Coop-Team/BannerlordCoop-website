@@ -543,13 +543,35 @@ the website caught up.
 
 #### What the pane shows
 
-Every VPS with more than one slot is listed, empty ones too, grouped by region
-(alphabetical, hosts without a region last). Each row shows the service name
-without `.vps.ovh.net` (the full name in its title), its slots and current servers
-(or **Empty**), a 168-cell strip and, on the right, "N h over burst" for a VPS
-with more occupants than `burstServers` (**Bursts fit** for any other), the
-measured pair-hours, the coverage ("71% measured") and the burst capacity
-("3 × 2 vCPU · 3 GiB at once", with "(RAM unknown)" when `memoryBytes` is null).
+The pane opens with one sentence for both response shapes: "How the servers on
+each VPS with more than one slot were online together in each of the last 168
+hours." Every VPS with more than one slot is listed, empty ones too, grouped by
+region (alphabetical, hosts without a region last). Each row shows the service
+name without `.vps.ovh.net` (the full name in its title), its slots and current
+servers (or **Empty**), a 168-cell strip and, on the right, "N h over burst" for
+a VPS with more occupants than `burstServers` (**Bursts fit** for any other), the
+measured pair-hours ("7.5 pair-h measured") and the coverage ("71% measured").
+The burst capacity itself is not shown.
+
+The pair-hours and coverage figures are buttons, each described by a tooltip
+(`role="tooltip"`, linked with `aria-describedby`, so a screen reader announces
+it with the figure). The tooltip shows on hover, on keyboard focus and on a tap,
+hides on Escape and when the pointer or focus leaves, and closes when the page or
+the strips scroll. It is fixed to the window, right-aligned with its figure,
+below it or above it near the window's foot, so the strips' scroll box never
+clips it. The coverage tooltip says what is measured: the share of the 168 hours
+in which every current server had at least one counted check, wherever it ran
+then; the control plane's check about every five minutes (`running` online;
+`stopped`, `awaiting-save` or `failed` offline; `drifted` or `degraded` not
+counted); a server's online share in an hour as its running checks over its
+counted ones; and an hour without a counted check as unknown, not offline, with
+an hour no server has data for hatched. The pair-hours tooltip says they add up,
+for every pair of servers that both have data in an hour, the product of their
+online shares (1 for both online all hour, 0.25 for both online half of it), with
+examples, and that lower means less overlap and less competition for the VPS.
+These match the control plane's `coverage` and `measuredPairHours` definitions in
+its `docs/managed-hosting/placement-planner.md`.
+
 The strip is the window's real hours, oldest first, under a day axis of UTC dates.
 A window that starts mid-day begins and ends with part of a day, and every date
 segment gets a label that fits it: "Mon 12 Oct" from 14 hours, "12 Oct" from 8, the
@@ -569,10 +591,10 @@ and no-data keys the legend adds "Red: more servers online than can each burst
 to 2 vCPU and 3 GiB".
 
 A legacy response is shaded the same way but has no red row, no red legend
-entry, no "over burst" or "Bursts fit" and no burst capacity; the legend keeps
-its shading and no-data keys, and the pane's opening sentence leaves out the
-hours over burst. The pane notes "This control plane predates burst capacity;
-red hours appear after it updates." A footer reads
+entry and no "over burst" or "Bursts fit"; the legend keeps its shading and
+no-data keys, and the pair-hours and coverage tooltips are the same. The pane
+notes "This control plane predates burst capacity; red hours appear after it
+updates." A footer reads
 "Measured *start*–*end* UTC · generated *time*".
 
 ### Dry run

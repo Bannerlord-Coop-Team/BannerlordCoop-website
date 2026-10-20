@@ -1,13 +1,14 @@
 "use client";
 
 import { LoaderCircle, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { Empty, SectionHeading } from "@/app/components/admin/ControlPlanePresentation";
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import {
+    OVERLAP_COVERAGE_HINT,
+    OVERLAP_PAIR_HOURS_HINT,
     overlapBand,
-    overlapBurstCapacityLabel,
     overlapBurstLabel,
     overlapBurstRow,
     overlapCellLabel,
@@ -29,7 +30,7 @@ import { HEATMAP_CLASSES } from "./placement-heatmap-classes";
 
 const buttonClass = "inline-flex min-h-9 items-center gap-1.5 border border-white/15 px-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40";
 // Name and servers, the week (168 quarter-rem hours with a hairline between UTC days), and the totals.
-const ROW_GRID = "grid grid-cols-[13rem_43rem_13rem] items-start gap-x-5";
+const ROW_GRID = "grid grid-cols-[13rem_43rem_11rem] items-start gap-x-5";
 /** An hour without data is hatched, so it never reads as an hour in which nobody was online. */
 const NO_DATA: CSSProperties = { backgroundImage: "repeating-linear-gradient(135deg, rgb(255 255 255 / 0.22) 0 1px, transparent 1px 3px)" };
 
@@ -92,7 +93,7 @@ export function PlacementMeasuredOverlap() {
 
     const overlap = state.kind === "ready" ? state.overlap : state.previous;
     const groups = overlap === null ? [] : overlapGroups(overlap.hosts);
-    // An older control plane's read has no red hours, so neither the intro, its legend nor its rows mention them.
+    // An older control plane's read has no red hours, so neither its legend nor its rows mention them.
     const predatesBurst = overlap !== null && overlapPredatesBurst(overlap);
     return (
         <section aria-label="Host overlap" className="border border-white/10 bg-surface p-5">
@@ -106,8 +107,7 @@ export function PlacementMeasuredOverlap() {
                 </button>
             </div>
             <p className="mt-2 max-w-3xl text-xs leading-5 text-foreground-muted">
-                How the servers on each VPS with more than one slot were online together in each of the last 168 hours, from their own status samples
-                {!predatesBurst && ", and the hours in which more of them were online than could each burst to 2 vCPU and 3 GiB at once"}. Nothing here is modelled.
+                How the servers on each VPS with more than one slot were online together in each of the last 168 hours.
             </p>
             {state.kind === "loading" && <p role="status" className="mt-4 text-xs text-foreground-muted">Loading measured overlap…</p>}
             {state.kind === "error" && (
@@ -172,9 +172,8 @@ function DayAxis({ windowStartedAt }: { windowStartedAt: string }) {
 }
 
 function OverlapRow({ host, windowStartedAt }: { host: HostingPlacementOverlapHost; windowStartedAt: string }) {
-    // Both are null for a control plane that predates burst capacity.
+    // Null for a control plane that predates burst capacity.
     const burst = overlapBurstLabel(host);
-    const capacity = overlapBurstCapacityLabel(host);
     return (
         <li className={`${ROW_GRID} py-3`}>
             <div className="min-w-0 text-xs">
@@ -185,12 +184,66 @@ function OverlapRow({ host, windowStartedAt }: { host: HostingPlacementOverlapHo
             <OverlapStrip host={host} windowStartedAt={windowStartedAt} />
             <div className="space-y-1 text-right font-mono text-xs">
                 {burst !== null && <p className="text-foreground">{burst}</p>}
-                <p className="text-foreground-muted">{overlapPairHoursLabel(host)}</p>
-                <p className="text-foreground-muted">{overlapCoverageLabel(host)}</p>
-                {capacity !== null && <p className="text-foreground-muted">{capacity}</p>}
+                <p className="text-foreground-muted"><MetricHint label={overlapPairHoursLabel(host)} hint={OVERLAP_PAIR_HOURS_HINT} /></p>
+                <p className="text-foreground-muted"><MetricHint label={overlapCoverageLabel(host)} hint={OVERLAP_COVERAGE_HINT} /></p>
             </div>
         </li>
     );
+}
+
+/** Room a hint needs below its figure before it opens above it instead. */
+const HINT_ROOM = 280;
+const HINT_WIDTH = 320;
+const HINT_MARGIN = 8;
+
+/**
+ * A figure that explains itself: a button described by its hint, which shows on hover, on focus and on a tap, and
+ * hides on Escape or when the pointer or focus leaves. The hint is fixed to the window, so the strips' scroll box
+ * never clips it.
+ */
+function MetricHint({ label, hint }: { label: string; hint: string }) {
+    const id = useId();
+    const trigger = useRef<HTMLButtonElement>(null);
+    const [position, setPosition] = useState<CSSProperties | null>(null);
+    const open = position !== null;
+
+    useEffect(() => {
+        if (!open) return;
+        // A scroll would leave the hint behind its figure, so it closes instead.
+        const close = () => setPosition(null);
+        window.addEventListener("scroll", close, true);
+        return () => window.removeEventListener("scroll", close, true);
+    }, [open]);
+
+    const show = () => {
+        const rect = trigger.current?.getBoundingClientRect();
+        if (rect === undefined) return;
+        // Right-aligned with the figure and kept inside the window: below it, or above it near the window's foot.
+        const right = Math.min(Math.max(HINT_MARGIN, window.innerWidth - rect.right), Math.max(HINT_MARGIN, window.innerWidth - HINT_WIDTH - HINT_MARGIN));
+        setPosition(rect.bottom + HINT_ROOM > window.innerHeight && rect.top > HINT_ROOM
+            ? { right, bottom: window.innerHeight - rect.top + 6 }
+            : { right, top: rect.bottom + 6 });
+    };
+    const hide = () => setPosition(null);
+    return <>
+        <button
+            ref={trigger}
+            type="button"
+            aria-describedby={id}
+            onMouseEnter={show}
+            onMouseLeave={hide}
+            onFocus={show}
+            onBlur={hide}
+            onClick={show}
+            onKeyDown={(event) => { if (event.key === "Escape") hide(); }}
+            className="cursor-help underline decoration-white/30 decoration-dotted underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold"
+        >
+            {label}
+        </button>
+        <span id={id} role="tooltip" hidden={!open} style={position ?? undefined} className="pointer-events-none fixed z-50 w-80 max-w-[calc(100vw-1rem)] border border-white/15 bg-background px-3 py-2 text-left font-sans text-xs leading-5 text-foreground shadow-xl">
+            {hint}
+        </span>
+    </>;
 }
 
 /**

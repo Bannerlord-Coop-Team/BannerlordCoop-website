@@ -269,11 +269,18 @@ export function overlapBurstLabel(host: HostingPlacementOverlapHost) {
     return overlapCanExceedBurst(host) ? `${host.overBurstHours} h over burst` : "Bursts fit";
 }
 
-/** "3 × 2 vCPU · 3 GiB at once", noting a VPS whose RAM could not be read; null without burst capacity. */
-export function overlapBurstCapacityLabel(host: HostingPlacementOverlapHost) {
-    if (!overlapHasBurst(host)) return null;
-    return `${host.burstServers} × 2 vCPU · 3 GiB at once${host.memoryBytes === null ? " (RAM unknown)" : ""}`;
-}
+/** What the coverage figure measures, in the control plane's terms: its reconcile checks and the states they count. */
+export const OVERLAP_COVERAGE_HINT = "Share of the last 168 hours in which every server now on this VPS had at least one counted check, "
+    + "wherever it ran then. The control plane checks each server about every 5 minutes: running counts as online; stopped, "
+    + "awaiting save or failed as offline; drifted or degraded is not counted. A server's online share in an hour is its running "
+    + "checks over its counted ones. A server with no counted check in an hour (it didn't exist yet, or its checks were skipped "
+    + "while another job ran on it) is unknown there, not offline; an hour with no data from any of them is hatched.";
+
+/** What pair-hours add up: per hour and pair of servers that both have data, the product of their online shares. */
+export const OVERLAP_PAIR_HOURS_HINT = "Pair-hours add up, over every pair of servers on this VPS, how much they were online together: "
+    + "each hour counts the product of the two servers' online shares, so both online all hour counts 1 and both online for half "
+    + "of it counts 0.25. Only hours in which both have data count. Two servers online together for 10 hours make 10 pair-hours; "
+    + "three servers all online for 1 hour make 3. Lower means their online times overlap less, so they compete less for the VPS.";
 
 export function overlapPairHoursLabel(host: Pick<HostingPlacementOverlapHost, "measuredPairHours">) {
     return `${oneDecimal(host.measuredPairHours)} pair-h measured`;
