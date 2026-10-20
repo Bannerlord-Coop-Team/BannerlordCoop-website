@@ -46,6 +46,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
     const loadedRef = useRef<ServerModsState | null>(null);
     const draftRef = useRef<ServerMod[]>([]);
     const savingRef = useRef(false);
+    const draggingRef = useRef(false);
     const keyboardSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [loaded, setLoaded] = useState<ServerModsState | null>(null);
     const [draft, setDraft] = useState<ServerMod[]>([]);
@@ -78,11 +79,18 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         setLoaded(state);
     }
 
-    /** Replaces the list and any edits not yet saved with a confirmed state, clearing an earlier load failure. */
+    /** Replaces the list and any edits not yet saved with a confirmed state, clearing an earlier load failure and any drag. */
     function apply(state: ServerModsState) {
         recordConfirmed(state);
         updateDraft(state.mods);
         setLoadFailed(null);
+        draggingRef.current = false;
+        setDraggingId(null);
+    }
+
+    /** Whether the owner is mid-way through a drag or an arrow-key run, whose end saves the final order. */
+    function editingOrder() {
+        return draggingRef.current || keyboardSaveTimer.current !== null;
     }
 
     /** Reads the list; a failure shows the last confirmed list (if any) again and offers a retry. */
@@ -137,12 +145,13 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
 
     /** Saves the shown order and enabled flags, then again for edits made mid-save; only one save runs at a time. */
     async function persist() {
-        if (savingRef.current || !loadedRef.current || sameServerModOrder(draftRef.current, loadedRef.current.mods)) return;
+        if (savingRef.current || editingOrder() || !loadedRef.current || sameServerModOrder(draftRef.current, loadedRef.current.mods)) return;
         savingRef.current = true;
         setSaving(true);
         setNotice(null);
         try {
-            for (let base = loadedRef.current; base && !sameServerModOrder(draftRef.current, base.mods); base = loadedRef.current) {
+            // An unfinished drag or arrow-key run is left to the save its end starts.
+            for (let base = loadedRef.current; base && !editingOrder() && !sameServerModOrder(draftRef.current, base.mods); base = loadedRef.current) {
                 const sent = draftRef.current;
                 const state = await catalog.saveServerModOrder(serverId, base.revision, serverModLoadOrder(sent));
                 recordConfirmed(state);
@@ -183,6 +192,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         event.dataTransfer.setData("text/plain", mod.id);
         const row = event.currentTarget.closest("li");
         if (row) event.dataTransfer.setDragImage(row, 24, 24);
+        draggingRef.current = true;
         setDraggingId(mod.id);
     }
 
@@ -208,6 +218,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
 
     /** Ends a drag and saves wherever the mod was left. */
     function endDrag() {
+        draggingRef.current = false;
         setDraggingId(null);
         void persist();
     }

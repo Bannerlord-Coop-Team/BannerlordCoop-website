@@ -163,6 +163,29 @@ it("saves edits made during a save afterwards against the newer revision", async
     expect(container.textContent).toContain("Load order saved.");
 });
 
+it("waits for a drag that started during a save to end before saving its order", async () => {
+    const catalog = createMockServerModCatalog(mods());
+    const original = catalog.saveServerModOrder.bind(catalog);
+    let release = () => {};
+    const save = vi.spyOn(catalog, "saveServerModOrder").mockImplementationOnce(async (...args) => {
+        await new Promise<void>(resolve => { release = resolve; });
+        return original(...args);
+    });
+    await render(catalog);
+    await click(checkbox("Beta"));
+    const handle = container.querySelector<HTMLButtonElement>('[aria-label="Reorder Gamma"]')!;
+    const dataTransfer = { setData() {}, setDragImage() {}, effectAllowed: "", dropEffect: "" };
+    const dragOver = (row: number) => container.querySelectorAll("ol li")[row].dispatchEvent(Object.assign(new Event("dragover", { bubbles: true, cancelable: true }), { dataTransfer }));
+    await act(async () => { handle.dispatchEvent(Object.assign(new Event("dragstart", { bubbles: true }), { dataTransfer })); });
+    await act(async () => { dragOver(4); });
+    await act(async () => { release(); });
+    expect(save).toHaveBeenCalledOnce();
+    await act(async () => { dragOver(3); });
+    await act(async () => { handle.dispatchEvent(Object.assign(new Event("dragend", { bubbles: true }), { dataTransfer })); });
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save.mock.calls[1][2].map(entry => entry.id).slice(3, 7)).toEqual(["Gamma", "Coop", "Alpha", "Beta"]);
+});
+
 it("toggles owner mods only and enforces the enabled limit", async () => {
     const catalog = createMockServerModCatalog(mods());
     const save = vi.spyOn(catalog, "saveServerModOrder");

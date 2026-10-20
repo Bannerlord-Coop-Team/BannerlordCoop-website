@@ -19,7 +19,8 @@ the website's side of it.
   switch. Each change saves itself: a toggle saves at once, a drag when it ends,
   and arrow-key moves 600 ms after the last key. Every save sends the complete
   list (`load-order`) against the last confirmed revision; one save runs at a
-  time, and edits made meanwhile are saved next against the revision it returned.
+  time, and edits made meanwhile are saved next against the revision it returned
+  (a drag or arrow-key run still in progress is saved when it ends).
   A refused save shows the saved list again with the reason; a stale revision or
   an unknown outcome reloads it. If that reload fails too, the tab shows the last
   confirmed list with the error and keeps Refresh available. At most 32 owner
