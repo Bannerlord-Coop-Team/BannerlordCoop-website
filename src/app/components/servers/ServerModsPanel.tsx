@@ -176,14 +176,15 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         }, KEYBOARD_SAVE_DELAY_MS);
     }
 
-    /** Moves a mod in the draft and announces its new position for screen readers. */
-    function move(fromIndex: number, toIndex: number) {
+    /** Moves a mod in the draft and announces its new position for screen readers; returns whether it moved. */
+    function move(fromIndex: number, toIndex: number): boolean {
         const next = moveServerMod(draft, fromIndex, toIndex);
         const moved = draft[fromIndex];
         const position = next.indexOf(moved);
-        if (position === fromIndex) return;
+        if (position === fromIndex) return false;
         updateDraft(next);
         setAnnouncement(t("mods.moved", { name: moved.name, position: position + 1, total: next.length }));
+        return true;
     }
 
     /** Starts dragging from the handle, using the whole row as the drag preview. */
@@ -211,8 +212,9 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         const step = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
         if (step === 0) return;
         event.preventDefault();
-        pendingFocusId.current = draft[index].id;
-        move(index, index + step);
+        const id = draft[index].id;
+        if (!move(index, index + step)) return;
+        pendingFocusId.current = id;
         persistSoon();
     }
 

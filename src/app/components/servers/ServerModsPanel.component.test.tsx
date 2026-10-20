@@ -138,6 +138,17 @@ it("moves with arrow keys, keeps focus, announces the position and saves once th
     expect(container.textContent).toContain("Load order saved.");
 });
 
+it("leaves focus alone after an arrow key that cannot move the mod", async () => {
+    await render(createMockServerModCatalog(mods()));
+    const handle = container.querySelector<HTMLButtonElement>('[aria-label="Reorder Coop"]')!;
+    handle.focus();
+    await act(async () => { handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })); });
+    expect(order()[3]).toBe("Coop");
+    handle.blur();
+    await click(checkbox("Beta"));
+    expect(document.activeElement).not.toBe(handle);
+});
+
 it("saves edits made during a save afterwards against the newer revision", async () => {
     const catalog = createMockServerModCatalog(mods());
     const original = catalog.saveServerModOrder.bind(catalog);
