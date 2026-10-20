@@ -236,6 +236,21 @@ exact HTTPS proxy allowlist. Merging the backend PR alone does not deploy the
 website's Edge Function or expose the loopback route through the proxy.
 
 
+## Custom mods
+
+The managed page's **Mods** tab uses the same `my-servers` Edge Function with two
+explicitly allowlisted resources: `POST ?resource=mods&route=<route>` relays one of
+the six JSON routes to its fixed `/api/v1/mods/...` path (64 KiB bodies, 90 s
+upstream wait), and `PUT ?resource=mod-chunk&uploadId=<UUID>&index=<n>` reads one
+whole chunk of at most 8 MiB before forwarding it to
+`/api/v1/mods/uploads/chunk` with its `x-chunk-sha256` (120 s upstream wait). The
+browser never calls the Edge Function directly; same-origin website route handlers
+revalidate the session and relay through it. Start refusals `mod_load_failed` and
+`crash_loop_cooldown`, and a Start status's `modLoadFailure`, are shown to owners.
+[Server mods](server-mods.md) has the complete contract, retry rules and rollout
+order (control-plane release and `--enable-mods` runners, the separately authorized
+Oracle `@mods`/`@modChunk` proxy matchers, then this function).
+
 ## Fresh release reads and Operations inventory
 
 Every authenticated release-list request reaches the control plane. There is no

@@ -147,6 +147,8 @@ See [website server onboarding](docs/server-onboarding.md) for the strict contra
 
 Owners and managers use the managed console, its command input, lifecycle controls and log downloads. Support and administrator assignments remain read-only and do not connect to console streaming. Owners rename a server from Settings through the control plane. Managed backup, save/configuration transfer, visibility, maintenance and release settings retain their existing authorization boundaries.
 
+The **Mods** tab lets owners and managers reorder, enable, upload and delete custom modules. The browser calls only the same-origin `/api/servers/<UUID>/mods` route handlers, which revalidate the session and relay an allowlisted route (including 8 MiB binary upload chunks) through the `my-servers` Edge Function to the control plane's `/api/v1/mods/*` routes. See [server mods](docs/server-mods.md) for the transport, retry and archive rules and the rollout order.
+
 The legacy external WebSocket console, catalog, owner/operator assignment actions, live rename actions, gateway, Docker node agent and deployment recipes have been removed; old `/servers/live/<id>` links redirect to `/servers`. This source change does not stop an existing deployment or erase historical account metadata.
 
 Configure `CONTROL_PLANE_CONSOLE_ORIGIN` with the fixed HTTPS control-plane origin used by the `/v1/user/console-stream` proxy.

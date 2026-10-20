@@ -1,0 +1,155 @@
+# Server mods
+
+The managed server page's **Mods** tab lists, orders, enables, uploads and deletes
+custom Bannerlord modules through the control plane's custom-mods API. The
+control-plane repository's `docs/managed-hosting/custom-mods.md` (section 7 and its
+**Website transport contract**) is the source of truth; this page describes only
+the website's side of it.
+
+## What owners see
+
+- Owners and managers (the control plane's `manage-mods` capability) load the list
+  when the tab is first opened. Support and administrator roles see that only owners
+  and managers can view and change mods; the website sends no request for them.
+- Native, SandBoxCore and SandBox are pinned at the top and DedicatedServer.Linux at
+  the bottom. Bannerlord Coop can be moved but stays enabled. Owner mods can be
+  dragged by their handle or moved with the arrow keys, and toggled with the gold
+  switch. These edits form a draft: **Save load order** sends the complete list
+  (`load-order`) against the revision it was loaded with, and **Discard changes**
+  restores it. At most 32 owner mods can be enabled.
+- **Upload mod folder** opens a folder picker. The browser zips the folder (see
+  below), confirms before replacing an installed Id, and shows the upload phases
+  with a percentage while chunks are sent. The control plane installs a new mod
+  enabled, immediately before DedicatedServer.Linux, unless a dependency or the
+  enabled limit leaves it disabled; the panel says which happened.
+- Deleting asks for confirmation. Pinned modules and Coop have no delete button.
+- Each mod shows its notes (stripped assemblies, missing or misordered
+  dependencies, removed dedicated-server tags). The **Mods players need** list shows
+  the enabled owner mods players must install with the same Id and version.
+- When the running game uses an older list (`restartRequired`), the tab says that a
+  restart applies the changes. Nothing restarts the server automatically.
+- Upload and delete are disabled while the order has unsaved changes, so every
+  mutation is based on the list the owner sees.
+
+## Transport
+
+```
+browser ─► /api/servers/<id>/mods?route=<route>       (POST, JSON)  ┐ website route handlers
+browser ─► /api/servers/<id>/mods/chunk?uploadId&index (PUT, bytes) ┘ (same origin, session revalidated)
+        ─► my-servers Edge Function ?resource=mods&route=<route> | ?resource=mod-chunk&uploadId&index
+        ─► Oracle adapter /api/v1/mods/{list,load-order,uploads,uploads/complete,uploads/status,delete}
+                          /api/v1/mods/uploads/chunk?uploadId=&index=
+```
+
+The browser talks only to the website's own route handlers
+(`src/app/api/servers/[serverId]/mods`). They are route handlers rather than server
+actions so a chunk relay of up to two minutes never blocks the page's sequential
+server-action queue (Start, Save, status polling). Each request:
+
+- is refused unless it is same-origin (`sec-fetch-site`/`Origin`);
+- names one of six allowlisted route keys, or a chunk's upload UUID and index (0–12);
+  no caller value ever becomes an upstream path;
+- carries a body validated by `supabase/functions/_shared/server-mods-contract.ts`,
+  the closed contract shared with the Edge Function, and a `serverId` equal to the
+  page's server;
+- revalidates the Supabase user and session, refreshing the session when it is
+  within five minutes of expiry. After a `401` the browser retries once with
+  `x-mods-refresh-session: 1`, which forces one refresh; a second `401` ends the
+  call.
+
+The `my-servers` Edge Function (`_shared/my-servers-mods.ts`) forwards only those
+routes:
+
+| Edge request | Upstream | Body bound | Upstream wait |
+| --- | --- | --- | --- |
+| `POST ?resource=mods&route=list\|load-order\|uploads\|complete\|status\|delete` | `POST /api/v1/mods/...` | 64 KiB JSON | 90 s |
+| `PUT ?resource=mod-chunk&uploadId=<UUID>&index=<n>` | `PUT /api/v1/mods/uploads/chunk?uploadId=&index=` | 8 MiB `application/octet-stream` | 120 s |
+
+- Mutations must send an `x-request-id` equal to the body `requestId`, so the website
+  and control plane share one replay key.
+- A chunk needs exactly one `x-chunk-sha256`. The function reads the whole chunk
+  (refusing a larger declared or streamed body with `413`) before forwarding it with
+  an exact `content-length`, so the adapter's 30-second request deadline only covers
+  a fast Oracle-side transfer.
+- Both waits stay below Supabase's 150-second response deadline. The website waits
+  100 s (JSON) and 130 s (chunk) for the function; the browser waits 150 s and 180 s.
+- Results are validated per route (a list of at most 133 entries, upload sessions
+  whose chunk count matches the archive, a status bound to the requested upload)
+  and returned in the website's versioned envelope with `Cache-Control: no-store`.
+  Responses carrying a list may be up to 8 MiB; the others 64 KiB.
+- Typed refusals pass through with their status. Unreadable `408`, `502`, `503` and
+  `504` replies become retryable `503 control_plane_unavailable`; an unreadable
+  `413` stays a non-retryable `request_too_large`; anything else that breaks the
+  contract is a retryable `502 invalid_response` (an identical resend replays safely).
+- CORS preflight lists `PUT` and `x-chunk-sha256`.
+
+## Retries, polling and reconciliation
+
+`src/app/lib/hosting/server-mods-client.ts` implements the contract's retry rules:
+
+- Mutations resend the same `requestId`; chunks resend the same index and digest.
+  Retryable failures (`429 rate_limited`/`busy`, retryable `mods_unavailable`,
+  unreadable gateway replies, network loss) back off 1, 2, 4, 8 and then 15 seconds
+  for at least 150 seconds. A plain list gives up after about 20 seconds and offers
+  **Try again**.
+- One chunk is sent at a time, in order.
+- After `complete`, `status` is polled after 2 s, growing to every 10 s, for up to
+  12 minutes. `installed` returns the new list; `rejected`, `failed` and `expired`
+  are reported. `unconfirmed`, any status the website does not know, a forgotten
+  upload (`upload_not_found`), a completion whose answer was lost, and an install
+  that outlives the poll window are all reconciled through `list`: the upload counts
+  as installed only when its Id is listed with the uploaded archive's sha256.
+- A stale revision, or any outcome the website could not confirm, reloads the list.
+
+## Archive shape
+
+`src/app/lib/hosting/server-mod-archive.ts` zips the picked folder with `fflate` into
+the single shape the runner accepts and checks the runner's limits first, for
+clearer feedback; the runner remains authoritative.
+
+- The folder must contain `SubModule.xml` (exact name) at its top level. Its single
+  `Id`, `Name` and `Version` must match the runner's patterns, the Id must not be
+  reserved (Native, SandBoxCore, SandBox, StoryMode, CustomBattle, Multiplayer,
+  BirthAndDeath, NavalDLC, Coop, CoopNightly, `DedicatedServer.*`), and `ModuleType`
+  and `Official` must be absent, `Community` and `false`. DTDs, entities, CDATA and
+  numeric character references are refused.
+- The archive's single top-level directory is named exactly the `Id`, whatever the
+  picked folder was called.
+- At most 5,000 files, 512 MiB uncompressed and 100 MiB compressed; paths of at most
+  240 bytes and 16 levels, without backslashes or control characters, unique after
+  NFC and case folding.
+- Entries above 1 MiB that would compress beyond 100:1 are stored uncompressed
+  instead; an archive above 16 MiB that still exceeds 100:1 overall is refused.
+- A fixed timestamp makes the same folder produce the same archive and sha256.
+
+Mods that use Harmony cannot run yet, and mods that need client-only assemblies fail
+the boot (custom-mods.md "Known limitations"); the tab's help text says so.
+
+## Start failures caused by mods
+
+- A Start whose status reports `modLoadFailure` shows "Mod <Id> failed to load
+  (missing assembly <Name>). Disable it in Mods and start again." (or the missing-DLL
+  and generic variants) in the Start progress card.
+- An immediate `mod_load_failed` refusal reads the Start's recorded diagnosis once
+  and falls back to the control plane's own message.
+- `crash_loop_cooldown` shows the control plane's message, which carries the
+  remaining wait ("Start is paused for about N minutes. Changing its enabled mods
+  ends the pause now."). Neither refusal starts a status check or a retry.
+
+## Rollout
+
+The tab depends on, in order:
+
+1. the control-plane custom-mods release and runners updated with
+   `install-managed-runner.sh --enable-mods` (older runners answer
+   `runner_unsupported`);
+2. the separately authorized Oracle Caddy change adding the `@mods` and `@modChunk`
+   matchers on both hostnames;
+3. this website's `my-servers` Edge Function (deployed from main by
+   **Deploy Supabase hosting APIs**), after probing that the deployed function accepts
+   an 8 MiB `PUT` body and recording one full chunk's end-to-end time.
+
+Until all three are in place the tab is visible but its requests fail (a missing
+proxy route reads as "The hosting service could not be reached"). Local tests use
+synthetic fixtures; they do not prove the Supabase body limit, chunk latency through
+Oracle, or that real mods load on the Linux server.
