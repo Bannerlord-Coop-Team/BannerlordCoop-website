@@ -2,7 +2,9 @@ import { requestMyServersApi } from "./my-servers";
 import {
     MAXIMUM_MODS_SMALL_RESPONSE_BYTES,
     MAXIMUM_MODS_STATE_RESPONSE_BYTES,
+    MOD_CHUNK_RESOURCE,
     MOD_UPLOAD_CHUNK_BYTES,
+    MODS_RESOURCE,
     isModMutationRoute,
     parseModChunkReceipt,
     parseModsResult,
@@ -36,7 +38,7 @@ export async function requestServerMods(accessToken: string, request: ModsReques
         timeoutMilliseconds: MODS_JSON_TIMEOUT_MILLISECONDS,
         maximumResponseBytes: request.route === "uploads" || request.route === "complete" ? MAXIMUM_MODS_SMALL_RESPONSE_BYTES : MAXIMUM_MODS_STATE_RESPONSE_BYTES,
         configureEndpoint(endpoint) {
-            endpoint.searchParams.set("resource", "mods");
+            endpoint.searchParams.set("resource", MODS_RESOURCE);
             endpoint.searchParams.set("route", request.route);
         },
     });
@@ -53,7 +55,7 @@ export async function putServerModChunk(accessToken: string, chunk: ServerModChu
         timeoutMilliseconds: MOD_CHUNK_TIMEOUT_MILLISECONDS,
         maximumResponseBytes: MAXIMUM_MODS_SMALL_RESPONSE_BYTES,
         configureEndpoint(endpoint) {
-            endpoint.searchParams.set("resource", "mod-chunk");
+            endpoint.searchParams.set("resource", MOD_CHUNK_RESOURCE);
             endpoint.searchParams.set("uploadId", chunk.uploadId);
             endpoint.searchParams.set("index", String(chunk.index));
         },

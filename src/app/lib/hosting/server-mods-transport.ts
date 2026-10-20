@@ -1,4 +1,6 @@
 import {
+    isModErrorCode,
+    isModId,
     parseModChunkReceipt,
     parseModsResult,
     type ModsRequest,
@@ -12,8 +14,6 @@ import { createServerModCatalog, type ServerModsCallFailure, type ServerModsCall
 const JSON_TIMEOUT_MILLISECONDS = 150_000;
 /** A chunk relay answers within about 130 s on the server side. */
 const CHUNK_TIMEOUT_MILLISECONDS = 180_000;
-const ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/u;
-const MODULE_ID = /^[A-Za-z0-9_.-]{1,64}$/u;
 
 /** Builds the transport over `fetch`, validating each result again before the catalog sees it. */
 export function createServerModsHttpTransport(fetchImplementation: typeof fetch = (input, init) => fetch(input, init)): ServerModsTransport {
@@ -68,9 +68,9 @@ async function readResult<T>(response: Response, parse: (value: unknown) => T): 
             return { ok: false, error: { code: "invalid_response", retryable: true, modId: null } };
         }
     }
-    if (isRecord(body) && body.ok === false && isRecord(body.error) && typeof body.error.code === "string" && ERROR_CODE.test(body.error.code)
-        && typeof body.error.retryable === "boolean" && (body.error.modId === null || (typeof body.error.modId === "string" && MODULE_ID.test(body.error.modId)))) {
-        return { ok: false, error: { code: body.error.code, retryable: body.error.retryable, modId: body.error.modId as string | null } };
+    if (isRecord(body) && body.ok === false && isRecord(body.error) && isModErrorCode(body.error.code)
+        && typeof body.error.retryable === "boolean" && (body.error.modId === null || isModId(body.error.modId))) {
+        return { ok: false, error: { code: body.error.code, retryable: body.error.retryable, modId: body.error.modId } };
     }
     return { ok: false, error: unenvelopedFailure(response) };
 }

@@ -5,8 +5,10 @@ import {
     MAXIMUM_MODS_SMALL_RESPONSE_BYTES,
     MAXIMUM_MODS_STATE_RESPONSE_BYTES,
     MOD_CHUNK_PATH,
+    MOD_CHUNK_RESOURCE,
     MOD_JSON_ROUTES,
     MOD_UPLOAD_CHUNK_BYTES,
+    MODS_RESOURCE,
     isModJsonRoute,
     isModMutationRoute,
     parseModChunkDigest,
@@ -21,10 +23,6 @@ import {
 // Custom-mods forwarding for the owner my-servers Edge Function (custom-mods.md "Website transport contract").
 // The browser names only a route key or a chunk's upload and index; every upstream path is fixed here.
 
-/** `POST ?resource=mods&route=<route>` carries one JSON route. */
-export const MODS_RESOURCE = "mods";
-/** `PUT ?resource=mod-chunk&uploadId=<UUID>&index=<n>` carries one raw chunk. */
-export const MOD_CHUNK_RESOURCE = "mod-chunk";
 /** The adapter waits up to 60 s for the control plane on JSON routes, after authentication and body transfer. */
 export const DEFAULT_MODS_JSON_TIMEOUT_MILLISECONDS = 90_000;
 /** A full chunk relays as 128 runner stage requests; the contract asks the website to wait about 120 s. */

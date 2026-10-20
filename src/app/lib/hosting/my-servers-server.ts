@@ -8,6 +8,7 @@ import { HOSTING_MAINTENANCE_SLOTS, type MaintenanceSlot } from "../../../../sup
 import { controlPlaneEndpoint } from "@/app/lib/control-plane/origin";
 import { listAllMyServers as collectServers, MyServersApiError, readMyServersResponse, type MyServerDeletionStatus } from "./my-servers";
 import { onboardingSummaryRequest, parseOnboardingSummary, type OnboardingSummaryRequest } from "../../../../supabase/functions/_shared/server-onboarding-contract";
+import { isModId } from "../../../../supabase/functions/_shared/server-mods-contract";
 import { SERVER_MOVE_STATES, SERVER_MOVE_STEPS } from "./server-move";
 import { isJoinAddress } from "./connection-address";
 
@@ -92,12 +93,11 @@ export type ManagedStartStatus = {
 };
 
 const START_STATUS_KEYS = ["serverId", "jobId", "state", "phase", "progress"];
-const MOD_ID = /^[A-Za-z0-9_.-]{1,64}$/u;
 const ASSEMBLY_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/u;
 
 /** Whether a value is the closed mod-load diagnosis: an assembly name exactly when the reason is a missing assembly. */
 function isModLoadFailure(value: unknown): value is ModLoadFailure {
-    if (!isRecord(value) || typeof value.modId !== "string" || !MOD_ID.test(value.modId)) return false;
+    if (!isRecord(value) || !isModId(value.modId)) return false;
     if (value.reason === "missing-assembly") return hasExactKeys(value, ["modId", "reason", "assembly"]) && typeof value.assembly === "string" && ASSEMBLY_NAME.test(value.assembly);
     return (value.reason === "load-error" || value.reason === "missing-dll") && hasExactKeys(value, ["modId", "reason"]);
 }

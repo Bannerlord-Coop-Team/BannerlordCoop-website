@@ -35,6 +35,11 @@ export const MAXIMUM_MODS_STATE_RESPONSE_BYTES = 8 * MIB;
 /** Every other mods response is a small fixed-shape result or error. */
 export const MAXIMUM_MODS_SMALL_RESPONSE_BYTES = 64 * 1_024;
 
+/** The my-servers Edge `resource` for `POST ?resource=mods&route=<route>`, one JSON route. */
+export const MODS_RESOURCE = "mods";
+/** The my-servers Edge `resource` for `PUT ?resource=mod-chunk&uploadId=<UUID>&index=<n>`, one raw chunk. */
+export const MOD_CHUNK_RESOURCE = "mod-chunk";
+
 /** The six JSON routes and their fixed control-plane paths; the browser only ever names the key. */
 export const MOD_JSON_ROUTES = Object.freeze({
     list: "/api/v1/mods/list",
@@ -51,7 +56,7 @@ export const MOD_CHUNK_PATH = "/api/v1/mods/uploads/chunk";
 /** Routes that carry a caller-generated `requestId` and replay on resend. */
 const MUTATION_ROUTES: ReadonlySet<ModJsonRoute> = new Set(["load-order", "uploads", "complete", "delete"]);
 
-export const MOD_ID_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/u;
+const MOD_ID_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/u;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const CALLER_SHA256 = /^[A-Fa-f0-9]{64}$/u;
@@ -85,7 +90,6 @@ export type ModUploadSession = { uploadId: string; chunkBytes: number; chunkCoun
 export type ModChunkReceipt = { receivedChunks: number; receivedBytes: number };
 /** Statuses the website knows; the API may add more, which clients reconcile through `list`. */
 export const MOD_UPLOAD_ACTIVE_STATUSES = ["receiving", "validating", "transferring", "installing"] as const;
-export const MOD_UPLOAD_TERMINAL_STATUSES = ["installed", "rejected", "failed", "expired", "unconfirmed"] as const;
 export type ModUploadStatus =
     | { uploadId: string; status: "installed"; state: ModsState }
     | { uploadId: string; status: "rejected"; error: string }
@@ -113,6 +117,11 @@ export function isModMutationRoute(route: ModJsonRoute): boolean {
 /** Whether a value has the module id shape (owner, image or dependency id). */
 export function isModId(value: unknown): value is string {
     return typeof value === "string" && MOD_ID_PATTERN.test(value);
+}
+
+/** Whether a value has the closed error-code shape the API and the website's routes use. */
+export function isModErrorCode(value: unknown): value is string {
+    return typeof value === "string" && ERROR_CODE.test(value);
 }
 
 /** Whether an id is reserved for core or image modules, compared case-insensitively, or is dot-only. */

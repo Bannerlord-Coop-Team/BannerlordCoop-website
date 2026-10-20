@@ -1,4 +1,5 @@
 import {
+    MOD_UPLOAD_ACTIVE_STATUSES,
     MOD_UPLOAD_CHUNK_BYTES,
     modChunkCount,
     modChunkLength,
@@ -41,7 +42,7 @@ export const MOD_INSTALL_SETTLE_MILLISECONDS = 12 * 60_000;
 const RETRY_DELAYS_MILLISECONDS = [1_000, 2_000, 4_000, 8_000, 15_000];
 const FIRST_STATUS_POLL_MILLISECONDS = 2_000;
 const MAXIMUM_STATUS_POLL_MILLISECONDS = 10_000;
-const ACTIVE_STATUSES = new Set(["receiving", "validating", "transferring", "installing"]);
+const ACTIVE_STATUSES: ReadonlySet<string> = new Set(MOD_UPLOAD_ACTIVE_STATUSES);
 
 /** Builds the catalog over an injected transport, hashing, ids and time. */
 export function createServerModCatalog(dependencies: ServerModCatalogDependencies): ServerModCatalog {
