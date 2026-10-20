@@ -1,7 +1,7 @@
 import type { ModEntry, ModOrderEntry, ModsState, ModUploadManifest } from "../../../../supabase/functions/_shared/server-mods-contract";
 
 // The Mods tab's domain: installed mods as the control plane lists them, the catalog the panel depends
-// on (an API-backed implementation and an in-memory mock implement it), and pure load-order edits.
+// on (the API-backed catalog implements it; panel tests use an in-memory one), and pure load-order edits.
 
 /** One installed module. `pinned`: a core module with a fixed position; `required`: Coop, always enabled. */
 export type ServerMod = ModEntry;

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 import { ServerModsPanel } from "./ServerModsPanel";
 import { moveServerMod, ServerModsError, toggleServerMod, type ServerModCatalog } from "@/app/lib/hosting/server-mods";
-import { createMockServerModCatalog, sampleOwnerMod, sampleServerMods } from "@/app/lib/hosting/server-mods-mock";
+import { createMockServerModCatalog, sampleOwnerMod, sampleServerMods } from "./ServerModsPanel.test-utils";
 
 const SERVER_ID = "22222222-2222-4222-8222-222222222222";
 let container: HTMLDivElement;

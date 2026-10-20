@@ -1,7 +1,7 @@
-import { ServerModsError, findServerMod, isOwnerMod, type ServerMod, type ServerModCatalog, type ServerModsState } from "./server-mods";
+import { ServerModsError, findServerMod, isOwnerMod, type ServerMod, type ServerModCatalog, type ServerModsState } from "@/app/lib/hosting/server-mods";
 
-// An in-memory ServerModCatalog with the control plane's observable rules (revision checks, pinned and
-// required modules, dependency refusals, in-place replacement), for component tests and UI work.
+// An in-memory ServerModCatalog for the Mods panel's component tests, imitating the control plane's observable
+// rules (revision checks, pinned and required modules, dependency refusals, in-place replacement).
 
 /** Builds an image module entry. */
 function imageModule(id: string, kind: "pinned" | "required"): ServerMod {
