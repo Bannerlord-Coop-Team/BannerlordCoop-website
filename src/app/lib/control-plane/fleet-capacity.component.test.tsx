@@ -10,6 +10,8 @@ import {
     fleetCapacityErrorMessage,
     fleetCapacityHostGroups,
     FLEET_CAPACITY_LIMITS,
+    FLEET_CAPACITY_PROVIDERS,
+    fleetCapacityProviderLabel,
     fleetCapacityHints,
     fleetCapacityHostNote,
     formatPercent,
@@ -21,7 +23,6 @@ import {
     staticSlots,
     stealBand,
 } from "./fleet-capacity";
-import { vpsProviderLabel } from "./vps-providers";
 
 /** A copy of a record without one key. */
 function without<T extends object>(value: T, key: keyof T) {
@@ -245,7 +246,6 @@ it.each([
     ["VPSs", (count: number) => ({ ...capacity, hosts: many(count, spare, "serviceName", (index) => `vps-${index}`) }), FLEET_CAPACITY_LIMITS.hosts],
     ["servers on one VPS", (count: number) => withHost({ occupants: many(count, host.occupants[0]!, "serverId", (index) => `server-${index}`) }), FLEET_CAPACITY_LIMITS.occupantsPerHost],
     ["instance types", (count: number) => ({ ...capacity, instanceTypes: many(count, instanceType, "key", (index) => `type-${index}`) }), FLEET_CAPACITY_LIMITS.instanceTypes],
-    ["providers", (count: number) => ({ ...capacity, providers: many(count, provider, "provider", (index) => `provider-${index}`) }), FLEET_CAPACITY_LIMITS.providers],
     ["regions on one VPS", (count: number) => withHost({ regionKeys: Array.from({ length: count }, (_, index) => `region-${index}`) }), FLEET_CAPACITY_LIMITS.regionsPerHost],
 ] as const)("accepts as many %s as the cap and rejects one more", (_case, build, limit) => {
     expect(parseFleetCapacity(build(limit))).not.toBeNull();
@@ -253,7 +253,30 @@ it.each([
 });
 
 it("caps each list well above the control plane's own bounds", () => {
-    expect(FLEET_CAPACITY_LIMITS).toEqual({ hosts: 256, occupantsPerHost: 64, instanceTypes: 256, providers: 16, regionsPerHost: 32 });
+    expect(FLEET_CAPACITY_LIMITS).toEqual({ hosts: 256, occupantsPerHost: 64, instanceTypes: 256, regionsPerHost: 32 });
+});
+
+it("knows exactly the control plane's VPS providers, each with a readable name", () => {
+    expect(FLEET_CAPACITY_PROVIDERS).toEqual(["ovhcloud-vps", "contabo-vps", "hosthatch-vps"]);
+    expect(FLEET_CAPACITY_PROVIDERS.map(fleetCapacityProviderLabel)).toEqual(["OVHcloud", "Contabo", "HostHatch"]);
+});
+
+it.each(FLEET_CAPACITY_PROVIDERS)("accepts %s as a provider, an instance type's and a VPS's", (id) => {
+    expect(parseFleetCapacity({ ...capacity, providers: [{ ...provider, provider: id }] })).not.toBeNull();
+    expect(parseFleetCapacity({ ...capacity, instanceTypes: [{ ...instanceType, provider: id }] })).not.toBeNull();
+    expect(parseFleetCapacity(withHost({ provider: id }))).not.toBeNull();
+    // All three providers in one read.
+    expect(parseFleetCapacity({ ...capacity, providers: FLEET_CAPACITY_PROVIDERS.map((each) => ({ ...provider, provider: each })) })).not.toBeNull();
+});
+
+it.each([
+    ["the provider list", { ...capacity, providers: [{ ...provider, provider: "unknown-provider" }] }],
+    ["an instance type", { ...capacity, instanceTypes: [{ ...instanceType, provider: "unknown-provider" }] }],
+    ["a VPS", withHost({ provider: "unknown-provider" })],
+    ["a VPS, by a provider id's case", withHost({ provider: "OVHcloud-VPS" })],
+    ["a VPS, by a provider's display name", withHost({ provider: "OVHcloud" })],
+])("rejects an unknown provider on %s", (_case, value) => {
+    expect(parseFleetCapacity(value)).toBeNull();
 });
 
 it("notes VPSs whose servers report but whose host metrics are not measured yet", () => {
@@ -302,7 +325,7 @@ it("groups VPSs by provider then region, without a region last, and VPSs without
     const contabo = { ...host, serviceName: "vmi123456.contaboserver.net", provider: "contabo-vps" };
     const uk = { ...host, serviceName: "vps-uk", regionKeys: ["united-kingdom"] };
     const parsed = parseFleetCapacity({ ...capacity, hosts: [spare, quiet, uk, host, contabo] })!;
-    expect(fleetCapacityHostGroups(parsed.hosts, vpsProviderLabel).map((group) => [group.label, group.hosts.map((entry) => entry.serviceName)])).toEqual([
+    expect(fleetCapacityHostGroups(parsed.hosts).map((group) => [group.label, group.hosts.map((entry) => entry.serviceName)])).toEqual([
         ["Contabo · Germany", ["vmi123456.contaboserver.net"]],
         ["OVHcloud · Germany", ["vps-1a2b3c4d.vps.ovh.net", "vps-de-quiet"]],
         ["OVHcloud · United Kingdom", ["vps-uk"]],

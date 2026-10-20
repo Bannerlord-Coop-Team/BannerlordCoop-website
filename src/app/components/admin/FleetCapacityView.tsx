@@ -20,6 +20,7 @@ import {
     fleetCapacityHints,
     fleetCapacityHostGroups,
     fleetCapacityHostNote,
+    fleetCapacityProviderLabel,
     formatCores,
     formatGiB,
     formatMhz,
@@ -42,7 +43,6 @@ import {
 } from "@/app/lib/control-plane/fleet-capacity";
 import { overlapDayAxisLabel, overlapDays } from "@/app/lib/control-plane/placement-measured-overlap";
 import { shortServiceName } from "@/app/lib/control-plane/placement-live-moves";
-import { vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
 import type {
     HostingAdminFleetCapacity,
     HostingFleetCapacityHost,
@@ -241,7 +241,7 @@ function ProvidersPane({ capacity, hints }: { capacity: HostingAdminFleetCapacit
                         <tbody className="divide-y divide-white/10 text-foreground">
                             {capacity.providers.map((entry) => (
                                 <tr key={entry.provider}>
-                                    <th scope="row" className="p-3 font-medium">{vpsProviderLabel(entry.provider)}</th>
+                                    <th scope="row" className="p-3 font-medium">{fleetCapacityProviderLabel(entry.provider)}</th>
                                     <td className="p-3 text-right font-mono">{entry.hosts}</td>
                                     <td className="p-3 text-right font-mono">{entry.servers}</td>
                                     <StealCells steal={entry.steal} />
@@ -305,7 +305,7 @@ function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCap
                             {capacity.instanceTypes.map((entry) => (
                                 <tr key={entry.key}>
                                     {/* The key, provider|vCpu|GiB|CPU model|MHz, repeats the row's columns, so it is only the title. */}
-                                    <th scope="row" title={entry.key} className="p-3 align-top font-medium">{vpsProviderLabel(entry.provider)}</th>
+                                    <th scope="row" title={entry.key} className="p-3 align-top font-medium">{fleetCapacityProviderLabel(entry.provider)}</th>
                                     <td className="p-3 text-right align-top font-mono">{entry.vCpu}</td>
                                     <td className="p-3 text-right align-top font-mono">{figure(entry.memoryBytes, formatGiB)}</td>
                                     <td className="max-w-56 p-3 align-top break-words">{entry.cpuModel ?? <NoData />}</td>
@@ -329,7 +329,7 @@ function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCap
 }
 
 function HostsPane({ capacity, hints }: { capacity: HostingAdminFleetCapacity; hints: FleetCapacityHints }) {
-    const groups = useMemo(() => fleetCapacityHostGroups(capacity.hosts, vpsProviderLabel), [capacity.hosts]);
+    const groups = useMemo(() => fleetCapacityHostGroups(capacity.hosts), [capacity.hosts]);
     const days = useMemo(() => overlapDays(capacity.windowStartedAt), [capacity.windowStartedAt]);
     const hourLabels = useMemo(() => capacityHourLabels(capacity.windowStartedAt), [capacity.windowStartedAt]);
     return (

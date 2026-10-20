@@ -310,6 +310,28 @@ it("says which VPSs lack host metrics, with a header note, even when the fleet h
     expect(pane("VPSs").textContent).not.toContain("Host metrics not measured yet");
 });
 
+it("names every provider the control plane knows, HostHatch included", async () => {
+    const hosthatch: HostingFleetCapacityHost = { ...matching, serviceName: "hh-ams-1", provider: "hosthatch-vps", regionKeys: ["netherlands"], instanceTypeKey: null,
+        occupants: [{ serverId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", displayName: "Dutch Courage", demand: demandOf(0.8, GIB) }] };
+    mocks.request.mockResolvedValueOnce({
+        ...capacity,
+        providers: [...capacity.providers, { ...capacity.providers[0]!, provider: "hosthatch-vps", hosts: 1, servers: 1 }],
+        instanceTypes: [...capacity.instanceTypes, { ...ovhFour, key: `hosthatch-vps|4|8|${HASWELL}|2400`, provider: "hosthatch-vps" }],
+        hosts: [...capacity.hosts, hosthatch],
+    });
+    await open();
+    expect([...pane("Providers").querySelectorAll('tbody th[scope="row"]')].map((name) => name.textContent)).toEqual(["OVHcloud", "Contabo", "HostHatch"]);
+    expect(typeRow(`hosthatch-vps|4|8|${HASWELL}|2400`).querySelector("th")!.textContent).toBe("HostHatch");
+    expect([...pane("VPSs").querySelectorAll('th[scope="rowgroup"]')].map((heading) => heading.textContent)).toContain("HostHatch · Netherlands");
+    expect(pane("VPSs").textContent).not.toContain("hosthatch-vps");
+});
+
+it("rejects a read with a provider the website does not know yet", async () => {
+    mocks.request.mockResolvedValueOnce({ ...capacity, hosts: [{ ...roomy, provider: "unknown-provider" }] });
+    await open();
+    expect(container.querySelector('[role="alert"]')!.textContent).toBe("The control plane returned an unexpected fleet capacity. Retry");
+});
+
 it("rejects a read with more VPSs than the tab will draw", async () => {
     const hosts = Array.from({ length: 257 }, (_, index) => ({ ...spare, serviceName: `vps-${index}` }));
     mocks.request.mockResolvedValueOnce({ ...capacity, hosts });

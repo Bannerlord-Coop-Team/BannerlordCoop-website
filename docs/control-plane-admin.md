@@ -843,7 +843,8 @@ figure; the tab presents them as follows.
    ("A running server uses 1.20 cores at p95 (60% of 2 vCPU) and 1.80 GiB at p95
    (60% of 3 GiB).").
 3. **Providers**: VPSs, servers, steal mean, p95 and max, and per-server CPU p50
-   and p95 and memory p95, one row per provider.
+   and p95 and memory p95, one row per provider. Providers are named OVHcloud,
+   Contabo and HostHatch here and in the other tables and VPS groups.
 4. **Instance types**: provider, vCPU, RAM, CPU model, MHz, VPSs, servers,
    per-server CPU p50 and p95, memory p95, steal p95, servers at once against the
    type's static slots, and the demand source. The type's key repeats those
@@ -920,16 +921,19 @@ max), and its shares are null or 0–1. A steal stat is 0–100 and a busy-cores
 stat non-negative, each with its mean and p95 at most its max. Figures are
 rounded to three decimals, so each ordering allows 0.001. Usable cores and
 memory are null or non-negative, as the control plane clamps them.
+Every `provider`, in the provider list, on an instance type and on a VPS, is one
+of the control plane's closed `VPS_PROVIDER_IDS`: `ovhcloud-vps`,
+`contabo-vps` or `hosthatch-vps` (the parser's `FLEET_CAPACITY_PROVIDERS`).
 `demandSource` is `type`, `fleet` or `none` and `limitedBy` null, `cpu` or
 `memory`. `stealHourly` and `busyHourly` are 336 characters, 168 hours of two
 lowercase hex digits or `--`; steal is permille capped at 255 (`ff` is 25.5% or
 more) and busy is a percent no more than 100 (`64`). Each provider,
 instance-type key and VPS service name appears once. So that a malformed
 response cannot make the tab draw thousands of rows of 336 cells, a read holds
-at most 256 VPSs, 64 servers and 32 regions on any one VPS, 256 instance types
-and 16 providers (`FLEET_CAPACITY_LIMITS`). These are well above the control
-plane's own bounds, 64 VPSs and 512 placed servers today, so they leave room for
-them to rise. Nothing else between fields is checked: an unknown
+at most 256 VPSs, 64 servers and 32 regions on any one VPS, and 256 instance
+types (`FLEET_CAPACITY_LIMITS`). These are well above the control plane's own
+bounds, 64 VPSs and 512 placed servers today, so they leave room for them to
+rise. Providers need no cap: each appears once and is one of the three ids. Nothing else between fields is checked: an unknown
 `instanceTypeKey`, occupants beyond slots or fleet totals that do not add up
 still render.
 
@@ -938,6 +942,12 @@ still render.
 Deploy the control plane's `fleet-capacity` operation first, then this website
 change. Deployed the other way round, the tab only says the control plane does
 not report fleet capacity yet until the control plane catches up.
+
+A VPS provider the control plane adds to `VPS_PROVIDER_IDS` needs a website
+update first: add it to `FLEET_CAPACITY_PROVIDERS` (and
+`HostingFleetCapacityProviderId`) with a readable name in
+`fleetCapacityProviderLabel`, and deploy that before the control plane reports
+the provider. Until then the read is an unexpected response.
 
 ## Server notices
 

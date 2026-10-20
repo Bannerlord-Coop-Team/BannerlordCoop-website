@@ -2,6 +2,7 @@ import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/d
 import { hostingRegionLabel, MAXIMUM_REGIONS } from "../../../../supabase/functions/_shared/hosting-regions";
 import { ControlPlaneAdminError } from "./client";
 import { shortServiceName } from "./placement-live-moves";
+import { vpsProviderLabel } from "./vps-providers";
 import type {
     HostingAdminFleetCapacity,
     HostingFleetCapacityCpuCores,
@@ -9,6 +10,7 @@ import type {
     HostingFleetCapacityDemandSource,
     HostingFleetCapacityHost,
     HostingFleetCapacityMemoryBytes,
+    HostingFleetCapacityProviderId,
 } from "./types";
 
 /** The measured window: one week of hours. */
@@ -16,9 +18,15 @@ export const FLEET_CAPACITY_HOURS = 168;
 /**
  * The most of each list a read may hold, so a malformed response cannot make the tab draw thousands of rows of
  * 336 cells. Each is well above the control plane's own bounds (64 VPSs and 512 placed servers today), which may
- * rise.
+ * rise. Providers need no cap: each appears once and is one of `FLEET_CAPACITY_PROVIDERS`.
  */
-export const FLEET_CAPACITY_LIMITS = { hosts: 256, occupantsPerHost: 64, instanceTypes: 256, providers: 16, regionsPerHost: MAXIMUM_REGIONS } as const;
+export const FLEET_CAPACITY_LIMITS = { hosts: 256, occupantsPerHost: 64, instanceTypes: 256, regionsPerHost: MAXIMUM_REGIONS } as const;
+
+/**
+ * Exactly the control plane's closed `VPS_PROVIDER_IDS` (`src/hosting/providers/vps-provider-ids.ts`). A provider
+ * it adds makes the read unexpected until this list, and its label, are updated, so the website updates first.
+ */
+export const FLEET_CAPACITY_PROVIDERS = ["ovhcloud-vps", "contabo-vps", "hosthatch-vps"] as const satisfies readonly HostingFleetCapacityProviderId[];
 
 const HOUR_MILLISECONDS = 3_600_000;
 const GIB = 1024 ** 3;
@@ -110,6 +118,10 @@ function stat(maximum: number) {
 const percentStat = stat(100);
 const coresStat = stat(Number.MAX_SAFE_INTEGER);
 
+function providerId(value: unknown) {
+    return (FLEET_CAPACITY_PROVIDERS as readonly unknown[]).includes(value);
+}
+
 function demandSource(value: unknown) {
     return DEMAND_SOURCES.includes(value as HostingFleetCapacityDemandSource);
 }
@@ -137,13 +149,13 @@ function model(value: unknown) {
 
 function provider(value: unknown) {
     return isRecord(value) && hasExactKeys(value, PROVIDER_KEYS)
-        && text(value.provider) && count(value.hosts) && count(value.servers) && demand(value.demand)
+        && providerId(value.provider) && count(value.hosts) && count(value.servers) && demand(value.demand)
         && nullable(value.steal, percentStat) && nullable(value.busyCores, coresStat);
 }
 
 function instanceType(value: unknown) {
     return isRecord(value) && hasExactKeys(value, INSTANCE_TYPE_KEYS)
-        && typeKey(value.key) && text(value.provider) && count(value.vCpu, 1)
+        && typeKey(value.key) && providerId(value.provider) && count(value.vCpu, 1)
         && nullable(value.memoryBytes, positiveBytes) && nullable(value.cpuModel, text) && nullable(value.cpuMhz, mhz)
         && count(value.hosts) && count(value.servers) && demand(value.demand)
         && nullable(value.steal, percentStat)
@@ -162,7 +174,7 @@ function hourly(value: unknown, maximum: number) {
 
 function host(value: unknown) {
     return isRecord(value) && hasExactKeys(value, HOST_KEYS)
-        && text(value.serviceName) && text(value.provider)
+        && text(value.serviceName) && providerId(value.provider)
         && within(value.regionKeys, FLEET_CAPACITY_LIMITS.regionsPerHost) && value.regionKeys.every((key) => text(key))
         && count(value.vCpu, 1) && nullable(value.memoryBytes, positiveBytes)
         && nullable(value.cpuModel, text) && nullable(value.cpuMhz, mhz) && nullable(value.instanceTypeKey, typeKey)
@@ -192,8 +204,8 @@ function unique(values: readonly string[]) {
 
 /**
  * The `fleet-capacity` result, checked key by key; null when anything is not as the contract says. Beyond each
- * field's range and its percentiles' order it checks only what the view keys on, that each provider, instance type
- * and VPS appears once, and that no list is longer than `FLEET_CAPACITY_LIMITS`.
+ * field's range, its enums (providers included) and its percentiles' order it checks only what the view keys on,
+ * that each provider, instance type and VPS appears once, and that no list is longer than `FLEET_CAPACITY_LIMITS`.
  */
 export function parseFleetCapacity(value: unknown): HostingAdminFleetCapacity | null {
     if (!isRecord(value) || !hasExactKeys(value, TOP_KEYS)) return null;
@@ -203,7 +215,7 @@ export function parseFleetCapacity(value: unknown): HostingAdminFleetCapacity | 
     if (!model(value.model)) return null;
     const fleet = value.fleet;
     if (!isRecord(fleet) || !hasExactKeys(fleet, ["hosts", "servers", "demand"]) || !count(fleet.hosts) || !count(fleet.servers) || !demand(fleet.demand)) return null;
-    if (!within(value.providers, FLEET_CAPACITY_LIMITS.providers) || !value.providers.every(provider)) return null;
+    if (!Array.isArray(value.providers) || !value.providers.every(provider)) return null;
     if (!within(value.instanceTypes, FLEET_CAPACITY_LIMITS.instanceTypes) || !value.instanceTypes.every(instanceType)) return null;
     if (!within(value.hosts, FLEET_CAPACITY_LIMITS.hosts) || !value.hosts.every(host)) return null;
     const capacity = value as HostingAdminFleetCapacity;
@@ -473,16 +485,21 @@ export function busyStripSummary(serviceName: string, values: readonly (number |
     return `${name}: highest ${values[peak]}% at ${hourLabels[peak]}; mean ${Math.round(mean)}% over ${measured} of ${FLEET_CAPACITY_HOURS} hours measured`;
 }
 
+/** HostHatch is not in the website's own provider list yet, so its label lives here. */
+export function fleetCapacityProviderLabel(provider: HostingFleetCapacityProviderId) {
+    return provider === "hosthatch-vps" ? "HostHatch" : vpsProviderLabel(provider);
+}
+
 export type FleetCapacityHostGroup = { label: string; hosts: HostingFleetCapacityHost[] };
 
 /**
  * The VPSs grouped by provider, then region: alphabetical, hosts without a region last in their provider. Within
  * a group VPSs with samples keep the read's order, and those without any come last.
  */
-export function fleetCapacityHostGroups(hosts: readonly HostingFleetCapacityHost[], providerLabel: (provider: string) => string): FleetCapacityHostGroup[] {
+export function fleetCapacityHostGroups(hosts: readonly HostingFleetCapacityHost[]): FleetCapacityHostGroup[] {
     const groups = new Map<string, { provider: string; region: string; hosts: HostingFleetCapacityHost[] }>();
     for (const entry of hosts) {
-        const provider = providerLabel(entry.provider);
+        const provider = fleetCapacityProviderLabel(entry.provider);
         const region = entry.regionKeys.length === 0 ? "" : entry.regionKeys.map(hostingRegionLabel).join(", ");
         const key = `${provider}\u0000${region}`;
         const group = groups.get(key) ?? { provider, region, hosts: [] };
