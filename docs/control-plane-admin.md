@@ -360,10 +360,10 @@ not establish or repair the cause of the slow provider call.
 Each expanded VPS row ends with a **Slot capacity** field and a **Raise slots**
 button. It sends `raise-vps-slot-capacity` with the row's own `provider` and
 service name, the entered `slotCapacity` and a fixed audit reason, after a
-confirmation. A slot reserves no cores: the placement planner prefers VPSs whose
-servers are rarely online together, so a VPS may hold more servers than its vCPUs
-suggest, but servers online at once beyond its cores share them and slow each
-other. The field takes a whole number above the current capacity and at
+confirmation. A slot reserves no cores: the placement planner plans about 1.6
+vCPU for each server online together and prefers VPSs whose servers rarely are, so
+a VPS may hold more servers than its vCPUs suggest. More online at once than that
+fits (about three on a 6-vCPU VPS) share its cores and slow each other. The field takes a whole number above the current capacity and at
 most 32, since a capacity is never lowered; the control plane checks the same
 bounds against the stored host. The button is disabled until the row's runner
 onboarding has succeeded and once the VPS holds 32 slots.
