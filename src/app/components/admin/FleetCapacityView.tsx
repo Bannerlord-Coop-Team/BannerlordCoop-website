@@ -190,7 +190,7 @@ function ServerNeeds({ capacity, hints }: { capacity: HostingAdminFleetCapacity;
     const tiles: Array<{ label: string; hint: string; value: ReactNode }> = [
         { label: "CPU p50", hint: `${hints.cpu} ${hints.cpuP50}`, value: figure(cpu?.p50, formatCores) },
         { label: "CPU p95", hint: `${hints.cpu} ${hints.cpuP95}`, value: figure(cpu?.p95, formatCores) },
-        { label: "CPU max", hint: `${hints.cpu} ${hints.max}`, value: figure(cpu?.max, formatCores) },
+        { label: "CPU max", hint: `${hints.cpu} ${hints.cpuMax}`, value: figure(cpu?.max, formatCores) },
         { label: "Running server-hours", hint: hints.runningHours, value: formatServerHours(demand.runningServerHours) },
         { label: "Memory p50", hint: `${hints.memory} ${hints.p50}`, value: figure(memory?.p50, formatGiB) },
         { label: "Memory p95", hint: `${hints.memory} ${hints.p95}`, value: figure(memory?.p95, formatGiB) },
@@ -462,7 +462,7 @@ const HostRow = memo(function HostRow({ host, model, days, hourLabels }: {
             <td className="p-3 text-right font-mono whitespace-nowrap"><TwoLine cores={host.overheadCores} bytes={host.overheadMemoryBytes} /></td>
             <td className="p-3 text-right font-mono whitespace-nowrap"><TwoLine cores={host.usableCores} bytes={host.usableMemoryBytes} /></td>
             <td className="p-3 text-right font-mono whitespace-nowrap">
-                <TwoLine cores={host.demandCpuCores} bytes={host.demandMemoryBytes} exact={model.cpuBurstPercent !== null} />
+                <TwoLine cores={host.demandCpuCores} bytes={host.demandMemoryBytes} exact={model.cpuBurstVcpu !== null} />
                 <span className="mt-0.5 block font-sans text-foreground-dim">{perServerSourceLabel(host, model)}</span>
             </td>
             <td className="p-3">
