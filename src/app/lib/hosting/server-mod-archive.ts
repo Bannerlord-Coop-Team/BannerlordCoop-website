@@ -184,10 +184,11 @@ function childElements(root: Element, name: string): Element[] {
     return Array.from(root.children).filter(child => child.nodeName === name);
 }
 
-/** Reads a picked file as strict UTF-8 text; invalid encoding is a SubModule.xml problem. */
+/** Reads a picked file as strict UTF-8 text; invalid encoding is a SubModule.xml problem, a failed read is not. */
 async function readText(file: ModFolderFile): Promise<string> {
+    const bytes = await file.arrayBuffer();
     try {
-        return new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
+        return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     } catch {
         throw new ModArchiveError("submodule-invalid");
     }

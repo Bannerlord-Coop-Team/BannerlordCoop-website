@@ -77,6 +77,8 @@ test("reads Id, Name and Version with the runner's rules", async () => {
     for (const [xml, problem] of cases) await rejects(folder({ "ButterLib/SubModule.xml": xml }), problem);
     const invalidUtf8 = folder({ "ButterLib/SubModule.xml": new Uint8Array([0x3c, 0xff, 0xfe]) });
     await rejects(invalidUtf8, "submodule-invalid");
+    const unreadable = { ...folder({ "ButterLib/SubModule.xml": submodule() })[0], arrayBuffer: () => Promise.reject(new DOMException("Changed", "NotReadableError")) };
+    await expect(buildModArchive([unreadable])).rejects.toMatchObject({ name: "NotReadableError" });
     const community = await buildModArchive(folder({ "ButterLib/SubModule.xml": submodule({ extra: '<ModuleType value="Community"/><Official value="false"/>' }) }));
     expect(community.manifest.id).toBe("Bannerlord.ButterLib");
 });
