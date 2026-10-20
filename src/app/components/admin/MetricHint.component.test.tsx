@@ -1,6 +1,6 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MetricHint } from "./MetricHint";
 
 let mounted: Array<{ container: HTMLDivElement; root: Root }> = [];
@@ -52,8 +52,14 @@ function activate(target: HTMLElement) {
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0 }));
 }
 
+/** Presses Escape on `target`; false when something prevented its default action. */
 function escape(target: EventTarget) {
-    target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    return target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+}
+
+/** A click with no pointer press of its own, as a screen reader's activation can send. */
+function clickWithoutPress(target: HTMLElement) {
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
 }
 
 it("names its button by the figure and describes it by the hint", async () => {
@@ -150,7 +156,7 @@ const pressesWithoutClick = [
 const activations = [
     ["Enter", activate],
     // A screen reader's activation can click with a count of one but no pointer press of its own.
-    ["a click no press began", (trigger: HTMLElement) => { trigger.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 })); }],
+    ["a click no press began", clickWithoutPress],
 ] as const;
 
 it.each(pressesWithoutClick.flatMap(([pressName, pressWithoutClick]) => activations.map(([activationName, activation]) => [activationName, pressName, pressWithoutClick, activation] as const)))(
@@ -175,6 +181,72 @@ it("toggles on Enter by the hint alone, even while a pointer is still down on th
     expect(tooltip.hidden).toBe(false);
     await act(async () => activate(trigger));
     expect(tooltip.hidden).toBe(true);
+});
+
+it("closes only the hint on Escape, leaving the dialog under it for the next Escape", async () => {
+    const { trigger, tooltip } = await render("71% measured", "Share of the hours with data.");
+    // An ancestor's own Escape handler, as a dialog or menu has, hearing the key as it bubbles.
+    const dialogEscapes: KeyboardEvent[] = [];
+    trigger.closest("div")!.addEventListener("keydown", (event) => { if (event.key === "Escape") dialogEscapes.push(event); });
+    await act(async () => trigger.focus());
+    expect(tooltip.hidden).toBe(false);
+
+    let notPrevented = false;
+    await act(async () => { notPrevented = escape(trigger); });
+    expect(tooltip.hidden).toBe(true);
+    expect(dialogEscapes).toHaveLength(0);
+    // Stopping the key there needs no preventDefault.
+    expect(notPrevented).toBe(true);
+
+    // With no hint open, the next Escape is the dialog's, untouched.
+    await act(async () => { notPrevented = escape(trigger); });
+    expect(dialogEscapes).toHaveLength(1);
+    expect(dialogEscapes[0]!.defaultPrevented).toBe(false);
+    expect(notPrevented).toBe(true);
+});
+
+it.each([
+    ["a scroll cancels", () => { window.dispatchEvent(new Event("scroll")); }],
+    ["a press elsewhere cancels", () => { pointer(document.body, "pointerdown", "touch"); }],
+    ["has not come within a second", () => { vi.advanceTimersByTime(1000); }],
+] as const)("forgets a released tap whose click %s", async (_case, cancelClick) => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+        const { trigger, tooltip } = await render("71% measured", "Share of the hours with data.");
+        // A finger presses and lifts with the hint closed, without focusing it (iOS Safari), and its click never comes.
+        await act(async () => {
+            pointer(trigger, "pointerdown", "touch");
+            pointer(trigger, "pointerup", "touch");
+            pointer(trigger, "pointerout", "touch", { relatedTarget: document.body });
+        });
+        await act(async () => cancelClick());
+        expect(tooltip.hidden).toBe(true);
+        // Focus opens the hint, and a later click with no press of its own toggles it by the hint alone.
+        await act(async () => trigger.focus());
+        expect(tooltip.hidden).toBe(false);
+        await act(async () => clickWithoutPress(trigger));
+        expect(tooltip.hidden).toBe(true);
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it("keeps a released tap's toggle for its click when the click comes", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+        const { trigger, tooltip } = await render("71% measured", "Share of the hours with data.");
+        await act(async () => {
+            pointer(trigger, "pointerdown", "touch");
+            pointer(trigger, "pointerup", "touch");
+            pointer(trigger, "pointerout", "touch", { relatedTarget: document.body });
+        });
+        // Well within the second, the tap's own click opens the hint.
+        await act(async () => { vi.advanceTimersByTime(300); });
+        await act(async () => clickWithoutPress(trigger));
+        expect(tooltip.hidden).toBe(false);
+    } finally {
+        vi.useRealTimers();
+    }
 });
 
 it("keeps one hint open across the page, even in separate React roots", async () => {

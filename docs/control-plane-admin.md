@@ -562,13 +562,18 @@ count), when the figure takes keyboard focus, and on a tap. It closes when the
 mouse or pen leaves, focus leaves, Escape is pressed (wherever focus is, through
 one capture-phase `keydown` listener held only while a tooltip is open), the
 figure is tapped again, anything outside the figure is pressed, or the window or
-the strips scroll or the window resizes. Enter or Space toggles it by its own
-state and never by an earlier pointer press; a press that never becomes a click
-(a right-click, a cancelled touch, a press dragged off before release, or one
-whose figure lost focus) is forgotten, so it cannot sway a later activation. A
-finger leaving the figure between its release and its click still counts as a
-tap. Only one tooltip is open on the page at a time: opening one, by hover, focus
-or tap, closes any other. It is fixed to the window,
+the strips scroll or the window resizes. The tooltip is the topmost layer: an
+Escape that closes it stops there (`stopPropagation`, without `preventDefault`),
+so a dialog or menu under it closes only on the next Escape, which the tooltip
+leaves untouched. Enter or Space toggles it by its own state and never by an
+earlier pointer press; a press that never becomes a click (a right-click, a
+cancelled touch, a press dragged off before release, or one whose figure lost
+focus) is forgotten, so it cannot sway a later activation. A finger leaving the
+figure between its release and its click still counts as a tap, but a released
+press waits for its click only until a scroll, a press anywhere else or one
+second passes, any of which forgets it. Only one tooltip is open on the page at a
+time: opening one, by hover, focus or tap, closes any other. It is fixed to the
+window,
 right-aligned with its figure, below it or above it near the window's foot, so
 the strips' scroll box never clips it. The coverage tooltip says what is
 measured: the share of the 168 hours in which every current server had at least
