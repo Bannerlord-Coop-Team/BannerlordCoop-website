@@ -1,5 +1,6 @@
 import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 import type { VpsProviderId, VpsProviderRead } from "./vps-providers";
+import type { ManualEntryProvider } from "./manual-vps";
 
 export type ManagedServer = {
     serverId: string;
@@ -280,6 +281,8 @@ export type HostingAdminVpsInventory = {
     availableHosts: HostingAdminVpsAvailableHost[];
     /** One entry per enabled provider whose account was read; a failed read withholds only that provider's data. */
     providerReads?: VpsProviderRead[];
+    /** Providers without an account API whose hosts are onboarded by manual entry; absent from older backends. Read it through `manualEntryProviders`. */
+    manualEntryProviders?: ManualEntryProvider[];
     runnerTargetSourceCommit?: string | null;
 };
 
