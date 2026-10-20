@@ -1,0 +1,244 @@
+import { expect, it } from "vitest";
+import { ControlPlaneAdminError } from "./client";
+import {
+    busyBand,
+    capacityHourLabel,
+    capacityWindowLabel,
+    decodeHourly,
+    fleetCapacityDataNote,
+    fleetCapacityDataState,
+    fleetCapacityErrorMessage,
+    fleetCapacityHostGroups,
+    formatPercent,
+    modelledVerdict,
+    parseFleetCapacity,
+    staticRuleComparison,
+    staticSlots,
+    stealBand,
+} from "./fleet-capacity";
+import { vpsProviderLabel } from "./vps-providers";
+
+/** A copy of a record without one key. */
+function without<T extends object>(value: T, key: keyof T) {
+    const copy = { ...value };
+    delete copy[key];
+    return copy;
+}
+
+const GIB = 1024 ** 3;
+const week = <T,>(value: (hour: number) => T) => Array.from({ length: 168 }, (_, hour) => value(hour));
+/** Hourly values as the control plane encodes them: two hex digits, `--` without data. */
+const hex = (values: Array<number | null>) => values.map((value) => value === null ? "--" : value.toString(16).padStart(2, "0")).join("");
+
+const demand = {
+    runningServerHours: 412.5, samples: 4950,
+    cpuCores: { p50: 0.85, p90: 1.1, p95: 1.2, p99: 1.6, max: 1.95 },
+    memoryBytes: { p50: 1_503_238_553, p95: 1_932_735_283, max: 2 * GIB },
+    throttledShare: 0.012, cpuPressureShare: 0.034,
+};
+const noDemand = { runningServerHours: 0, samples: 0, cpuCores: null, memoryBytes: null, throttledShare: null, cpuPressureShare: null };
+const steal = { samples: 2016, mean: 0.4, p95: 1.2, max: 6.5 };
+const busy = { samples: 2016, mean: 1.1, p95: 2.4, max: 4.8 };
+const host = {
+    serviceName: "vps-1a2b3c4d.vps.ovh.net", provider: "ovhcloud-vps", regionKeys: ["germany"], vCpu: 6, memoryBytes: 12 * GIB,
+    cpuModel: "Intel Core Processor (Haswell, no TSX)", cpuMhz: 2399.996, instanceTypeKey: "ovh-6-12-haswell", slots: 3,
+    occupants: [{ serverId: "22222222-2222-4222-8222-222222222222", displayName: "Calradia Company", demand }],
+    steal, busyCores: busy, cpuPressureShare: 0.02, overheadCores: 0.35, overheadMemoryBytes: 1_181_116_006,
+    usableCores: 5.58, usableMemoryBytes: 11_703_786_240, demandCpuCores: 1.2, demandMemoryBytes: 1_932_735_283,
+    demandSource: "type", modelledServers: 4, limitedBy: "cpu", samples: 2016,
+    stealHourly: hex(week((hour) => hour < 2 ? null : hour === 68 ? 255 : 4)),
+    busyHourly: hex(week((hour) => hour < 2 ? null : 30)),
+};
+const spare = {
+    ...host, serviceName: "vps-spare", regionKeys: [], memoryBytes: null, cpuModel: null, cpuMhz: null, instanceTypeKey: null, occupants: [],
+    steal: null, busyCores: null, cpuPressureShare: null, overheadCores: null, overheadMemoryBytes: null, usableCores: null, usableMemoryBytes: null,
+    demandCpuCores: null, demandMemoryBytes: null, demandSource: "none", modelledServers: null, limitedBy: null, samples: 0,
+    stealHourly: "--".repeat(168), busyHourly: "--".repeat(168),
+};
+const instanceType = {
+    key: "ovh-6-12-haswell", provider: "ovhcloud-vps", vCpu: 6, memoryBytes: 12 * GIB, cpuModel: "Intel Core Processor (Haswell, no TSX)", cpuMhz: 2399.996,
+    hosts: 1, servers: 1, demand, steal, modelledServers: 4, demandSource: "type",
+};
+const provider = { provider: "ovhcloud-vps", hosts: 2, servers: 1, demand, steal, busyCores: busy };
+const model = { cpuPercentile: 95, memoryPercentile: 95, minimumRunningHours: 24, staticBurstVcpuPerServer: 2, staticBurstMemoryBytesPerServer: 3 * GIB };
+const capacity = {
+    generatedAt: "2026-10-19T00:07:31.552Z", windowStartedAt: "2026-10-12T00:00:00.000Z", windowEndedAt: "2026-10-19T00:00:00.000Z", hours: 168,
+    model, fleet: { hosts: 2, servers: 1, demand }, providers: [provider], instanceTypes: [instanceType], hosts: [host, spare],
+};
+// The first read after the backend deploys: nothing measured yet, every figure null.
+const blank = {
+    ...capacity, fleet: { hosts: 1, servers: 0, demand: noDemand },
+    providers: [{ ...provider, hosts: 1, servers: 0, demand: noDemand, steal: null, busyCores: null }],
+    instanceTypes: [{ ...instanceType, demand: noDemand, steal: null, modelledServers: null, demandSource: "none" }],
+    hosts: [spare],
+};
+
+const withHost = (changes: Record<string, unknown>) => ({ ...capacity, hosts: [{ ...host, ...changes }] });
+const withDemand = (changes: Record<string, unknown>) => ({ ...capacity, fleet: { ...capacity.fleet, demand: { ...demand, ...changes } } });
+
+it("accepts the fleet-capacity read exactly as the contract describes it", () => {
+    expect(parseFleetCapacity(capacity)).toBe(capacity);
+    expect(parseFleetCapacity({ ...capacity, providers: [], instanceTypes: [], hosts: [] })).not.toBeNull();
+});
+
+it("accepts the sparse first read, with every figure null", () => {
+    expect(parseFleetCapacity(blank)).toBe(blank);
+    expect(parseFleetCapacity({ ...capacity, hosts: [{ ...spare, occupants: [{ serverId: "33333333-3333-4333-8333-333333333333", displayName: "New", demand: noDemand }] }] })).not.toBeNull();
+});
+
+it("accepts what the contract does not rule out", () => {
+    // A starved VPS: usable cores and memory below zero once steal and overhead are taken off.
+    expect(parseFleetCapacity(withHost({ usableCores: -0.25, usableMemoryBytes: -1024, modelledServers: 0 }))).not.toBeNull();
+    // A window that does not start on the hour still covers 168 hours.
+    expect(parseFleetCapacity({ ...capacity, windowStartedAt: "2026-10-12T19:30:00.000Z", windowEndedAt: "2026-10-19T19:30:00.000Z" })).not.toBeNull();
+    // Percentiles rounded to three decimals may cross by 0.001.
+    expect(parseFleetCapacity(withDemand({ cpuCores: { p50: 1.201, p90: 1.2, p95: 1.2, p99: 1.2, max: 1.2 } }))).not.toBeNull();
+    expect(parseFleetCapacity(withHost({ steal: { samples: 3, mean: 6.501, p95: 6.501, max: 6.5 } }))).not.toBeNull();
+    // Equal figures, steal at its bounds, the hex extremes, a VPS with no slots and figures that do not add up.
+    expect(parseFleetCapacity(withHost({ steal: { samples: 1, mean: 100, p95: 100, max: 100 }, stealHourly: hex(week(() => 255)), busyHourly: hex(week(() => 100)) }))).not.toBeNull();
+    expect(parseFleetCapacity(withHost({ vCpu: 1, slots: 0, occupants: [host.occupants[0], { ...host.occupants[0], serverId: "44444444-4444-4444-8444-444444444444" }] }))).not.toBeNull();
+    expect(parseFleetCapacity({ ...capacity, fleet: { hosts: 0, servers: 99, demand } })).not.toBeNull();
+    expect(parseFleetCapacity(withHost({ instanceTypeKey: "not-in-the-read", demandSource: "none", demandCpuCores: 1.2 }))).not.toBeNull();
+    expect(parseFleetCapacity({ ...capacity, model: { ...model, cpuPercentile: 90, minimumRunningHours: 12.5, staticBurstVcpuPerServer: 1.5 } })).not.toBeNull();
+});
+
+it.each([
+    ["an extra top-level key", { ...capacity, plan: {} }],
+    ["a missing top-level key", without(capacity, "generatedAt")],
+    ["hours other than 168", { ...capacity, hours: 167 }],
+    ["a window that is not 168 hours", { ...capacity, windowStartedAt: "2026-10-12T01:00:00.000Z" }],
+    ["a timestamp without milliseconds", { ...capacity, generatedAt: "2026-10-19T00:07:31Z" }],
+    ["a timestamp that is not a real date", { ...capacity, generatedAt: "2026-02-30T00:07:31.552Z" }],
+    ["a model with an extra key", { ...capacity, model: { ...model, cpuShare: 1 } }],
+    ["a model without a key", { ...capacity, model: without(model, "minimumRunningHours") }],
+    ["a CPU percentile of 0", { ...capacity, model: { ...model, cpuPercentile: 0 } }],
+    ["a memory percentile above 100", { ...capacity, model: { ...model, memoryPercentile: 101 } }],
+    ["negative minimum running hours", { ...capacity, model: { ...model, minimumRunningHours: -1 } }],
+    ["a static vCPU of 0", { ...capacity, model: { ...model, staticBurstVcpuPerServer: 0 } }],
+    ["fractional static memory", { ...capacity, model: { ...model, staticBurstMemoryBytesPerServer: 3 * GIB + 0.5 } }],
+    ["a fleet without demand", { ...capacity, fleet: without(capacity.fleet, "demand") }],
+    ["a fractional fleet host count", { ...capacity, fleet: { ...capacity.fleet, hosts: 1.5 } }],
+    ["a demand with an extra key", withDemand({ medianCores: 1 })],
+    ["a demand without a key", { ...capacity, fleet: { ...capacity.fleet, demand: without(demand, "throttledShare") } }],
+    ["negative running server-hours", withDemand({ runningServerHours: -0.1 })],
+    ["fractional samples", withDemand({ samples: 10.5 })],
+    ["CPU percentiles out of order", withDemand({ cpuCores: { ...demand.cpuCores, p95: 1.7 } })],
+    ["CPU percentiles out of order by more than the rounding", withDemand({ cpuCores: { p50: 1.202, p90: 1.2, p95: 1.2, p99: 1.2, max: 1.2 } })],
+    ["CPU percentiles without p90", withDemand({ cpuCores: without(demand.cpuCores, "p90") })],
+    ["a negative CPU figure", withDemand({ cpuCores: { p50: -0.1, p90: 1.1, p95: 1.2, p99: 1.6, max: 1.95 } })],
+    ["CPU given as text", withDemand({ cpuCores: { ...demand.cpuCores, max: "1.95" } })],
+    ["fractional memory bytes", withDemand({ memoryBytes: { ...demand.memoryBytes, p50: 1.5 } })],
+    ["memory percentiles out of order", withDemand({ memoryBytes: { ...demand.memoryBytes, max: GIB } })],
+    ["memory with a p99", withDemand({ memoryBytes: { ...demand.memoryBytes, p99: 2 * GIB } })],
+    ["a throttled share above 1", withDemand({ throttledShare: 1.2 })],
+    ["a negative pressure share", withDemand({ cpuPressureShare: -0.1 })],
+    ["a provider with an extra key", { ...capacity, providers: [{ ...provider, region: "eu" }] }],
+    ["a provider without a name", { ...capacity, providers: [{ ...provider, provider: "" }] }],
+    ["one provider twice", { ...capacity, providers: [provider, provider] }],
+    ["steal above 100%", { ...capacity, providers: [{ ...provider, steal: { ...steal, max: 100.5 } }] }],
+    ["a steal p95 above its max", { ...capacity, providers: [{ ...provider, steal: { ...steal, p95: 7 } }] }],
+    ["a steal mean above its max", { ...capacity, providers: [{ ...provider, steal: { ...steal, mean: 7 } }] }],
+    ["a stat with an extra key", { ...capacity, providers: [{ ...provider, steal: { ...steal, p99: 3 } }] }],
+    ["negative busy cores", { ...capacity, providers: [{ ...provider, busyCores: { ...busy, mean: -1 } }] }],
+    ["an instance type with an extra key", { ...capacity, instanceTypes: [{ ...instanceType, region: "eu" }] }],
+    ["one instance type twice", { ...capacity, instanceTypes: [instanceType, instanceType] }],
+    ["an instance type of 0 vCPU", { ...capacity, instanceTypes: [{ ...instanceType, vCpu: 0 }] }],
+    ["an instance type of 0 bytes", { ...capacity, instanceTypes: [{ ...instanceType, memoryBytes: 0 }] }],
+    ["a CPU of 0 MHz", { ...capacity, instanceTypes: [{ ...instanceType, cpuMhz: 0 }] }],
+    ["an empty CPU model", { ...capacity, instanceTypes: [{ ...instanceType, cpuModel: "" }] }],
+    ["an unknown demand source", { ...capacity, instanceTypes: [{ ...instanceType, demandSource: "host" }] }],
+    ["fractional modelled servers", { ...capacity, instanceTypes: [{ ...instanceType, modelledServers: 1.5 }] }],
+    ["negative modelled servers", { ...capacity, instanceTypes: [{ ...instanceType, modelledServers: -1 }] }],
+    ["hosts that are not a list", { ...capacity, hosts: {} }],
+    ["a host with an extra key", withHost({ cost: 1 })],
+    ["a host without a key", { ...capacity, hosts: [without(host, "busyHourly")] }],
+    ["one VPS twice", { ...capacity, hosts: [host, host] }],
+    ["a region key that is not text", withHost({ regionKeys: [7] })],
+    ["negative slots", withHost({ slots: -1 })],
+    ["an occupant with an extra key", withHost({ occupants: [{ ...host.occupants[0], ownerId: "x" }] })],
+    ["an occupant without demand", withHost({ occupants: [without(host.occupants[0]!, "demand")] })],
+    ["negative overhead cores", withHost({ overheadCores: -0.1 })],
+    ["fractional overhead memory", withHost({ overheadMemoryBytes: 1.5 })],
+    ["infinite usable cores", withHost({ usableCores: Number.POSITIVE_INFINITY })],
+    ["fractional usable memory", withHost({ usableMemoryBytes: 0.5 })],
+    ["negative per-server demand", withHost({ demandCpuCores: -1 })],
+    ["limited by something else", withHost({ limitedBy: "disk" })],
+    ["a pressure share above 1", withHost({ cpuPressureShare: 2 })],
+    ["fractional samples on a host", withHost({ samples: 0.5 })],
+    ["a steal string of 167 hours", withHost({ stealHourly: host.stealHourly.slice(2) })],
+    ["a steal string with an odd character", withHost({ stealHourly: `x${host.stealHourly.slice(1)}` })],
+    ["a single dash in an hour", withHost({ stealHourly: `0-${host.stealHourly.slice(2)}` })],
+    ["upper-case hex", withHost({ stealHourly: `FF${host.stealHourly.slice(2)}` })],
+    ["a busy hour above 100%", withHost({ busyHourly: `65${host.busyHourly.slice(2)}` })],
+    ["an hourly series that is not text", withHost({ busyHourly: week(() => 30) })],
+])("rejects %s", (_case, value) => {
+    expect(parseFleetCapacity(value)).toBeNull();
+});
+
+it("decodes hourly hex oldest first, with hours without data as null", () => {
+    const values = decodeHourly(host.stealHourly);
+    expect(values).toHaveLength(168);
+    expect(values.slice(0, 3)).toEqual([null, null, 4]);
+    expect(values[68]).toBe(255);
+    expect(decodeHourly("--".repeat(168)).every((value) => value === null)).toBe(true);
+});
+
+it("shades steal on its permille bands and busy by tenths", () => {
+    expect([0, 4, 5, 9, 10, 20, 30, 50, 75, 100, 150, 199, 200, 255].map(stealBand)).toEqual([0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9]);
+    expect([0, 9, 10, 45, 89, 90, 100].map(busyBand)).toEqual([0, 0, 1, 4, 8, 9, 9]);
+});
+
+it("labels hours and the window in UTC, minutes included for a window off the hour", () => {
+    expect(capacityHourLabel("2026-10-12T00:00:00.000Z", 68)).toBe("Wed 14 Oct 20:00 UTC");
+    expect(capacityHourLabel("2026-10-12T19:30:00.000Z", 5)).toBe("Tue 13 Oct 00:30 UTC");
+    expect(capacityWindowLabel(capacity)).toBe("12 Oct 00:00 – 19 Oct 00:00 UTC");
+    expect(capacityWindowLabel({ windowStartedAt: "2026-10-12T19:30:00.000Z", windowEndedAt: "2026-10-19T19:30:00.000Z" })).toBe("12 Oct 19:30 – 19 Oct 19:30 UTC");
+});
+
+it("groups VPSs by provider then region, without a region last, and VPSs without data last in their group", () => {
+    const quiet = { ...spare, serviceName: "vps-de-quiet", regionKeys: ["germany"] };
+    const contabo = { ...host, serviceName: "vmi123456.contaboserver.net", provider: "contabo-vps" };
+    const uk = { ...host, serviceName: "vps-uk", regionKeys: ["united-kingdom"] };
+    const parsed = parseFleetCapacity({ ...capacity, hosts: [spare, quiet, uk, host, contabo] })!;
+    expect(fleetCapacityHostGroups(parsed.hosts, vpsProviderLabel).map((group) => [group.label, group.hosts.map((entry) => entry.serviceName)])).toEqual([
+        ["Contabo · Germany", ["vmi123456.contaboserver.net"]],
+        ["OVHcloud · Germany", ["vps-1a2b3c4d.vps.ovh.net", "vps-de-quiet"]],
+        ["OVHcloud · United Kingdom", ["vps-uk"]],
+        ["OVHcloud · No region", ["vps-spare"]],
+    ]);
+});
+
+it("compares modelled servers with today's slots", () => {
+    expect(modelledVerdict(1, 2)).toEqual({ kind: "risk", label: "At risk −1", description: "1 fewer than its 2 slots: at risk when every slot's server runs at once." });
+    expect(modelledVerdict(5, 3)).toEqual({ kind: "headroom", label: "Headroom +2", description: "2 more than its 3 slots: room for more servers." });
+    expect(modelledVerdict(3, 3).kind).toBe("match");
+    expect(modelledVerdict(null, 3).kind).toBe("unknown");
+    expect(staticSlots(6, model)).toBe(3);
+    expect(staticSlots(7, model)).toBe(3);
+    expect(staticSlots(1, model)).toBe(0);
+});
+
+it("compares the fleet's needs with the static rule, or says there is not enough data", () => {
+    expect(staticRuleComparison(parseFleetCapacity(capacity)!)).toBe("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 1.20 cores at p95 (60% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB).");
+    expect(staticRuleComparison(parseFleetCapacity({ ...capacity, model: { ...model, cpuPercentile: 99 } })!)).toContain("1.60 cores at p99 (80% of 2 vCPU)");
+    expect(staticRuleComparison(parseFleetCapacity(blank)!)).toBe("Today's static rule reserves 2 vCPU · 3 GiB per server. There is not enough data yet to compare it with what servers use.");
+});
+
+it("says when there is no data or not enough yet", () => {
+    expect(fleetCapacityDataState(parseFleetCapacity(blank)!)).toBe("empty");
+    expect(fleetCapacityDataNote(parseFleetCapacity(blank)!)).toMatch(/^Not enough data yet: no samples have arrived\./u);
+    const sparse = parseFleetCapacity(withDemand({ runningServerHours: 3.25 }))!;
+    expect(fleetCapacityDataState(sparse)).toBe("sparse");
+    expect(fleetCapacityDataNote(sparse)).toBe("Not enough data yet: the fleet has 3.3 server-h of running data, and an instance type needs 24.0 server-h before its own figures are used. Until then VPSs are modelled with the fleet's figures, or not at all, and figures without data show —.");
+    expect(fleetCapacityDataState(parseFleetCapacity(capacity)!)).toBe("ready");
+    expect(fleetCapacityDataNote(parseFleetCapacity(capacity)!)).toBeNull();
+});
+
+it("formats a sliver of a percent and explains failed reads", () => {
+    expect([0, 0.04, 0.05, 1.25, 25.5].map(formatPercent)).toEqual(["0.0%", "<0.1%", "0.1%", "1.3%", "25.5%"]);
+    expect(fleetCapacityErrorMessage(new ControlPlaneAdminError("rate_limited", "Too many.", true))).toBe("You can read fleet capacity six times every five minutes. Wait a few minutes, then refresh.");
+    expect(fleetCapacityErrorMessage(new ControlPlaneAdminError("invalid_request", "Invalid.", false))).toBe("This control plane does not report fleet capacity yet.");
+    expect(fleetCapacityErrorMessage(new ControlPlaneAdminError("unsupported_operation", "Unsupported.", false))).toBe("This control plane does not report fleet capacity yet.");
+    expect(fleetCapacityErrorMessage(new ControlPlaneAdminError("capacity_unavailable", "Capacity history is unavailable.", true))).toBe("Capacity history is unavailable.");
+    expect(fleetCapacityErrorMessage("boom")).toBe("Fleet capacity could not be loaded.");
+});

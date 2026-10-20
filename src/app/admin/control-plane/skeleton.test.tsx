@@ -18,6 +18,7 @@ const VIEWS: ControlPlaneView[] = [
     "operations",
     "relocate",
     "placement",
+    "capacity",
     "notices",
 ];
 
