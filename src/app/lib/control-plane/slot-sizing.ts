@@ -26,6 +26,14 @@ const MAXIMUM_BURST_VCPU = 256;
 const MAXIMUM_BURST_MEMORY_BYTES = 64 * GIB;
 /** A figure within this of a whole number of its last decimal is that number: floating-point noise, not a digit. */
 const DECIMAL_NOISE = 1e-6;
+/**
+ * Half the last decimal the control plane rounds the shortage (three) and the overflow share (four) to: each rounded
+ * figure is within this of the exact one its budget flag describes.
+ */
+const SHORTAGE_ROUNDING = 0.0005;
+const OVERFLOW_ROUNDING = 0.00005;
+/** Room for the control plane's own 1e-9 core-hour tolerance on the CPU budget, and for floating-point sums. */
+const FIGURE_NOISE = 1e-9;
 const REASONS: readonly HostingSlotSizingReason[] = ["cpu", "memory", "floor", "maximum", "drain", "unmeasured"];
 const CAPACITY_SOURCES: readonly HostingSlotSizingCapacitySource[] = ["measured", "type", "provider-vcpu", "none"];
 const TOP_KEYS = ["generatedAt", "model", "hosts", "regions"];
@@ -34,9 +42,9 @@ const MODEL_KEYS = [
     "minimumObservedDays", "maximumSlots", "typicalWeeklyOnlineHours", "capacityErrorCode",
 ];
 const HOST_KEYS = [
-    "serviceName", "provider", "regionKeys", "vCpu", "slots", "occupants", "acceptsRelocations", "usableCores", "usableMemoryBytes",
-    "capacitySource", "memoryBytesPerServer", "recommendedSlots", "reason", "expectedShortageCoreHoursPerWeek", "memoryOverflowShare",
-    "serversToMove", "freeRecommendedSlots",
+    "serviceName", "provider", "regionKeys", "vCpu", "slots", "occupants", "acceptsRelocations", "usableCores", "coresSource",
+    "usableMemoryBytes", "memorySource", "memoryBytesPerServer", "recommendedSlots", "reason", "expectedShortageCoreHoursPerWeek",
+    "withinCpuBudget", "memoryOverflowShare", "withinMemoryBudget", "serversToMove", "freeRecommendedSlots",
 ];
 const REGION_KEYS = ["regionKey", "serversToMove", "freeRecommendedSlots", "shortfallServers"];
 
@@ -95,17 +103,34 @@ function model(value: unknown): value is Model {
         && (value.capacityErrorCode === null || text(value.capacityErrorCode));
 }
 
+function source(value: unknown): value is HostingSlotSizingCapacitySource {
+    return CAPACITY_SOURCES.includes(value as HostingSlotSizingCapacitySource);
+}
+
 /**
- * One VPS, field by field and against its reason, as `sizeVpsSlots` and `readSlotSizing` in the control plane make it:
+ * Whether a rounded figure can stand for the exact one its budget flag describes: at most the budget when it keeps it,
+ * at least the budget when it breaks it, each within the figure's rounding.
+ */
+function fitsFlag(within: boolean, figure: number, budget: number, rounding: number) {
+    return within ? figure <= budget + rounding + FIGURE_NOISE : figure >= budget - rounding - FIGURE_NOISE;
+}
+
+/**
+ * One VPS, field by field and against its reason, as `sizeVpsSlots`, `slotSizingHostEntry` and `readSlotSizing` in the
+ * control plane make it:
  *
- * - it is `unmeasured` exactly when its usable cores or memory are unknown, and then its source is `none`, it has no
- *   recommendation or figures, and nothing moves to or from it;
+ * - each usable figure's source is `none` exactly when that figure is null;
+ * - it is `unmeasured` exactly when either source is `none`, and then it has no recommendation, figures or budget flags,
+ *   and nothing moves to or from it;
  * - otherwise its recommendation is from floor(vCPU ÷ 2) to `maximumSlots`, its figures are rounded to three and four
- *   decimals, and its source names where its usable cores come from;
- * - `drain` moves at least one server and keeps the rest, which is the recommendation, and has no free slots;
- * - `floor` recommends floor(vCPU ÷ 2), at least its servers, with free slots no more than the floor leaves;
+ *   decimals, and both budget flags are set. The flags are of the exact figures, so a flag that keeps its budget has
+ *   its rounded figure at most half a last decimal above the budget, and one that breaks it at most half below;
  * - `cpu`, `memory` and `maximum` keep both budgets, `maximum` at `maximumSlots` and the other two below it, and their
  *   free slots are the recommendation less the servers;
+ * - `floor` recommends floor(vCPU ÷ 2), at least its servers, with free slots no more than the floor leaves, and breaks
+ *   at least one budget there: fewer slots keep both, and adding servers never lowers a figure;
+ * - `drain` moves at least one server and keeps the rest, which is the recommendation, has no free slots, and keeps
+ *   both budgets unless it stopped at the floor;
  * - only `drain` moves servers.
  */
 function host(value: unknown, sizingModel: Model): value is HostingSlotSizingHost {
@@ -117,18 +142,21 @@ function host(value: unknown, sizingModel: Model): value is HostingSlotSizingHos
     if (typeof value.acceptsRelocations !== "boolean") return false;
     if (value.usableCores !== null && !rounded(value.usableCores, 3)) return false;
     if (value.usableMemoryBytes !== null && !count(value.usableMemoryBytes)) return false;
-    if (!CAPACITY_SOURCES.includes(value.capacitySource as HostingSlotSizingCapacitySource)) return false;
+    if (!source(value.coresSource) || !source(value.memorySource)) return false;
+    // Each source names its own figure: none exactly when that figure is unknown.
+    if ((value.usableCores === null) !== (value.coresSource === "none")) return false;
+    if ((value.usableMemoryBytes === null) !== (value.memorySource === "none")) return false;
     // The burst target, or the VPS's servers' peak working set where that is higher.
     if (!count(value.memoryBytesPerServer, sizingModel.memoryBurstBytes)) return false;
     if (!REASONS.includes(value.reason as HostingSlotSizingReason)) return false;
     if (!count(value.serversToMove) || !count(value.freeRecommendedSlots)) return false;
 
-    const unknownCapacity = value.usableCores === null || value.usableMemoryBytes === null;
     const unmeasured = value.reason === "unmeasured";
-    if (unmeasured !== unknownCapacity || unmeasured !== (value.capacitySource === "none")) return false;
+    if (unmeasured !== (value.coresSource === "none" || value.memorySource === "none")) return false;
     if (unmeasured) {
-        return value.recommendedSlots === null && value.expectedShortageCoreHoursPerWeek === null && value.memoryOverflowShare === null
-            && value.serversToMove === 0 && value.freeRecommendedSlots === 0;
+        return value.recommendedSlots === null && value.expectedShortageCoreHoursPerWeek === null && value.withinCpuBudget === null
+            && value.memoryOverflowShare === null && value.withinMemoryBudget === null && value.serversToMove === 0
+            && value.freeRecommendedSlots === 0;
     }
     const floor = slotSizingFloor(value.vCpu);
     const recommended = value.recommendedSlots;
@@ -136,15 +164,18 @@ function host(value: unknown, sizingModel: Model): value is HostingSlotSizingHos
     const shortage = value.expectedShortageCoreHoursPerWeek;
     const overflow = value.memoryOverflowShare;
     if (!rounded(shortage, 3) || !rounded(overflow, 4, 1)) return false;
+    const { withinCpuBudget: cpu, withinMemoryBudget: memory } = value;
+    if (typeof cpu !== "boolean" || typeof memory !== "boolean") return false;
+    if (!fitsFlag(cpu, shortage, sizingModel.cpuShortageBudgetCoreHoursPerWeek, SHORTAGE_ROUNDING)) return false;
+    if (!fitsFlag(memory, overflow, sizingModel.memoryOverflowShare, OVERFLOW_ROUNDING)) return false;
     const { occupants, serversToMove: moving, freeRecommendedSlots: free } = value;
-    if (value.reason === "drain") return moving >= 1 && recommended === occupants - moving && free === 0;
+    if (value.reason === "drain") {
+        return moving >= 1 && recommended === occupants - moving && free === 0 && (recommended === floor || (cpu && memory));
+    }
     if (moving !== 0) return false;
-    if (value.reason === "floor") return recommended === floor && free <= recommended - occupants;
-    // Both budgets hold at the recommendation, as rounded: the shortage to three decimals, the overflow to four.
-    const withinBudgets = shortage <= sizingModel.cpuShortageBudgetCoreHoursPerWeek + 0.0005
-        && overflow <= sizingModel.memoryOverflowShare + 0.00005;
+    if (value.reason === "floor") return recommended === floor && free <= recommended - occupants && !(cpu && memory);
     const atMaximum = recommended === sizingModel.maximumSlots;
-    return withinBudgets && free === recommended - occupants && (value.reason === "maximum" ? atMaximum : !atMaximum);
+    return cpu && memory && free === recommended - occupants && (value.reason === "maximum" ? atMaximum : !atMaximum);
 }
 
 /**
@@ -242,24 +273,93 @@ export function slotSizingReasonLabel(reason: HostingSlotSizingReason) {
     return REASON_LABELS[reason];
 }
 
-/** The sentence under a VPS's reason, with its own floor, servers and model maximum. */
-export function slotSizingReasonDescription(entry: Pick<HostingSlotSizingHost, "reason" | "vCpu" | "occupants" | "serversToMove">, sizingModel: Pick<Model, "maximumSlots">) {
+type ReasonFacts = Pick<HostingSlotSizingHost, "reason" | "vCpu" | "occupants" | "recommendedSlots" | "serversToMove" | "freeRecommendedSlots"
+    | "withinCpuBudget" | "withinMemoryBudget" | "coresSource" | "memorySource">;
+
+/** "1 server" or "3 servers". */
+function servers(count: number) {
+    return `${count} ${count === 1 ? "server" : "servers"}`;
+}
+
+/** The budgets its flags say the exact figures break: "the CPU budget", "the memory budget" or both. */
+function brokenBudgets(entry: Pick<HostingSlotSizingHost, "withinCpuBudget" | "withinMemoryBudget">) {
+    const cpu = entry.withinCpuBudget === false;
+    const memory = entry.withinMemoryBudget === false;
+    return cpu && memory ? "the CPU and memory budgets" : cpu ? "the CPU budget" : "the memory budget";
+}
+
+/** "its floor of 3 slots (floor(vCPU ÷ 2))". */
+function floorOf(vCpu: number) {
+    const floor = slotSizingFloor(vCpu);
+    return `its floor of ${floor} ${floor === 1 ? "slot" : "slots"} (floor(vCPU ÷ 2))`;
+}
+
+/**
+ * Why `floor`: fewer slots keep both budgets, so at the floor at least one breaks. With as many servers as the floor,
+ * they break it themselves and nothing moves; with fewer, they take `freeRecommendedSlots` typical servers within the
+ * budgets, and the floor filled with typical servers breaks the budgets its flags name.
+ */
+function floorDescription(entry: ReasonFacts) {
+    const budgets = brokenBudgets(entry);
+    if (entry.occupants === entry.recommendedSlots) {
+        return `Its ${servers(entry.occupants)} already ${entry.occupants === 1 ? "breaks" : "break"} ${budgets}. A VPS keeps ${floorOf(entry.vCpu)}, and this one has no more servers than that, so nothing moves.`;
+    }
+    const free = entry.freeRecommendedSlots;
+    const room = entry.occupants === 0
+        ? free === 0 ? "Not even one typical server fits within the budgets." : `${free} typical ${free === 1 ? "server fits" : "servers fit"} within the budgets.`
+        : free === 0 ? `Beside its ${servers(entry.occupants)}, no more typical server fits within the budgets.`
+            : `Beside its ${servers(entry.occupants)}, ${free} more typical ${free === 1 ? "server fits" : "servers fit"} within the budgets.`;
+    return `${room} A VPS keeps ${floorOf(entry.vCpu)} anyway; filled with typical servers, they would break ${budgets}.`;
+}
+
+/** Why `drain`: some would move, and those that stay keep both budgets, or still break one at the floor. */
+function drainDescription(entry: ReasonFacts) {
+    const kept = entry.recommendedSlots ?? 0;
+    // A drain keeps at least floor(vCPU ÷ 2), at least 1, and moves at least 1, so it starts from at least 2 servers.
+    const start = `Its ${entry.occupants} servers alone break a budget, so ${entry.serversToMove} would move`;
+    const stay = kept === 1 ? "the 1 that stays" : `the ${kept} that stay`;
+    if (kept !== slotSizingFloor(entry.vCpu)) return `${start}, and ${stay} ${kept === 1 ? "keeps" : "keep"} both budgets.`;
+    const end = entry.withinCpuBudget === false || entry.withinMemoryBudget === false
+        ? `still ${kept === 1 ? "breaks" : "break"} ${brokenBudgets(entry)}` : `${kept === 1 ? "keeps" : "keep"} both budgets`;
+    return `${start}, down to ${floorOf(entry.vCpu)}, where ${stay} ${end}.`;
+}
+
+/** Why `unmeasured`: the usable figure, or figures, neither measured nor borrowable. */
+function unmeasuredDescription(entry: ReasonFacts) {
+    const missing = entry.coresSource === "none" && entry.memorySource === "none" ? "Its usable cores and memory are"
+        : entry.coresSource === "none" ? "Its usable cores are" : "Its usable memory is";
+    return `${missing} neither measured nor borrowable, so there is no recommendation.`;
+}
+
+/** The sentence under a VPS's reason, with its own floor, servers, free slots, budget flags and model maximum. */
+export function slotSizingReasonDescription(entry: ReasonFacts, sizingModel: Pick<Model, "maximumSlots">) {
     switch (entry.reason) {
     case "cpu": return "One more slot would break the CPU budget.";
     case "memory": return "One more slot would break the memory budget.";
-    case "floor": return `The budgets allow fewer slots, but a VPS always keeps floor(vCPU ÷ 2): ${slotSizingFloor(entry.vCpu)} here.`;
+    case "floor": return floorDescription(entry);
     case "maximum": return `${sizingModel.maximumSlots} slots, the most a VPS holds, keep both budgets.`;
-    case "drain": return `${entry.occupants === 1 ? "Its 1 server alone breaks" : `Its ${entry.occupants} servers alone break`} a budget, so ${entry.serversToMove} would move.`;
-    case "unmeasured": return "No usable cores or memory are measured or borrowable, so there is no recommendation.";
+    case "drain": return drainDescription(entry);
+    case "unmeasured": return unmeasuredDescription(entry);
     }
 }
 
-const CAPACITY_SOURCE_LABELS: Record<HostingSlotSizingCapacitySource, string> = {
-    measured: "Measured", type: "Borrowed by type", "provider-vcpu": "Borrowed by provider and vCPU", none: "None",
+const SOURCE_WORDS: Record<HostingSlotSizingCapacitySource, string> = {
+    measured: "measured", type: "borrowed (type)", "provider-vcpu": "borrowed (provider and vCPU)", none: "unknown",
 };
 
-export function slotSizingCapacitySourceLabel(source: HostingSlotSizingCapacitySource) {
-    return CAPACITY_SOURCE_LABELS[source];
+/** Where each usable figure comes from: "Cores and memory measured", or "Cores measured · memory borrowed (type)" when they differ. */
+export function slotSizingCapacitySources(entry: Pick<HostingSlotSizingHost, "coresSource" | "memorySource">) {
+    return entry.coresSource === entry.memorySource ? `Cores and memory ${SOURCE_WORDS[entry.coresSource]}`
+        : `Cores ${SOURCE_WORDS[entry.coresSource]} · memory ${SOURCE_WORDS[entry.memorySource]}`;
+}
+
+/** The usable figures it knows: "5.580 cores, 10.90 GiB usable", only the known one while the other is unknown, or null. */
+export function slotSizingCapacityFigures(entry: Pick<HostingSlotSizingHost, "usableCores" | "usableMemoryBytes">) {
+    const known = [
+        entry.usableCores === null ? null : `${entry.usableCores.toFixed(3)} cores`,
+        entry.usableMemoryBytes === null ? null : formatGiB(entry.usableMemoryBytes),
+    ].filter((part) => part !== null);
+    return known.length === 0 ? null : `${known.join(", ")} usable`;
 }
 
 /** "0.072 core-h": the control plane's own three decimals. */
@@ -287,12 +387,12 @@ function ruleGiB(bytes: number) {
     return `${Number((bytes / GIB).toFixed(2))} GiB`;
 }
 
-/** Whether a figure at the recommendation is above its budget, which only `drain` (at its floor) and `floor` can be. */
-export function slotSizingOverBudget(entry: Pick<HostingSlotSizingHost, "expectedShortageCoreHoursPerWeek" | "memoryOverflowShare">, sizingModel: Pick<Model, "cpuShortageBudgetCoreHoursPerWeek" | "memoryOverflowShare">) {
-    return {
-        cpu: entry.expectedShortageCoreHoursPerWeek !== null && entry.expectedShortageCoreHoursPerWeek > sizingModel.cpuShortageBudgetCoreHoursPerWeek,
-        memory: entry.memoryOverflowShare !== null && entry.memoryOverflowShare > sizingModel.memoryOverflowShare,
-    };
+/**
+ * Which budgets the figures at the recommendation break, from the control plane's flags on the exact figures: the
+ * rounded figures cannot tell one at the edge ("1.000 core-h" can be over). Only `floor`, and `drain` at its floor, can be.
+ */
+export function slotSizingOverBudget(entry: Pick<HostingSlotSizingHost, "withinCpuBudget" | "withinMemoryBudget">) {
+    return { cpu: entry.withinCpuBudget === false, memory: entry.withinMemoryBudget === false };
 }
 
 /** The two budgets in one sentence, from the read's model. */
@@ -319,12 +419,12 @@ export function slotSizingHints(sizingModel: Model) {
         slots: "Slots now: the VPS's stored slot capacity, floor(vCPU ÷ 2) when it is registered and more once an administrator raises it. A slot reserves no cores.",
         servers: "Servers in its slots now.",
         recommended: `Recommended slots: the most, from floor(vCPU ÷ 2) to ${sizingModel.maximumSlots}, at which the servers on it now plus typical new servers in the other slots keep both budgets (at most ${budget} a week of expected CPU shortage, and more online at once than its memory holds in under ${share} of the week). Each server counts with its own week of online hours and the CPU it is planned to need on this VPS; one observed for under ${sizingModel.minimumObservedDays} days counts with the typical week, and one without a measured need at ${sizingModel.cpuBurstVcpu} vCPU. Servers rarely online together can share a VPS, so this can be above the servers it fits at once. The difference is against its slots now. Nothing applies it.`,
-        reason: `Why the recommendation is what it is. CPU budget or Memory budget: one more slot would break that budget. Floor: the budgets allow fewer than floor(vCPU ÷ 2) slots, which a VPS always keeps. Maximum: ${sizingModel.maximumSlots} slots, the most a VPS holds, keep both budgets. Drain: its servers alone break a budget, so the recommendation is below them and some would move. Unmeasured: no usable cores or memory are measured or borrowable, so there is no recommendation.`,
-        shortage: `Expected CPU shortage at the recommendation, in core-hours a week: the cores that the servers online together are expected to want beyond its usable cores, summed over the week's half-hours, for the servers that stay plus typical servers up to the recommendation. The budget is ${budget}; only Drain and Floor can be above it.`,
-        overflow: `Memory over: the expected share of the week in which more of those servers are online at once than floor(usable memory ÷ memory per server). The budget is under ${share}; only Drain and Floor can be above it.`,
+        reason: `Why the recommendation is what it is. CPU budget or Memory budget: one more slot would break that budget. Floor: fewer than floor(vCPU ÷ 2) slots keep both budgets, but a VPS always keeps that many, so at least one budget breaks there; either its servers, as many as the floor, break it themselves and nothing moves, or fewer servers leave room for the free recommended slots within the budgets and the floor filled with typical servers breaks it. Maximum: ${sizingModel.maximumSlots} slots, the most a VPS holds, keep both budgets. Drain: its servers alone break a budget and are more than the floor, so the recommendation is below them and some would move, until those that stay keep both budgets or down to the floor, where they may still break one. Unmeasured: its usable cores or memory are neither measured nor borrowable, so there is no recommendation.`,
+        shortage: `Expected CPU shortage at the recommendation, in core-hours a week: the cores that the servers online together are expected to want beyond its usable cores, summed over the week's half-hours, for the servers that stay plus typical servers up to the recommendation. The budget is ${budget}. Over budget marks where the control plane says the exact figure breaks it, which the rounded figure cannot show at the edge; only Drain and Floor can be.`,
+        overflow: `Memory over: the expected share of the week in which more of those servers are online at once than floor(usable memory ÷ memory per server). The budget is under ${share}. Over budget marks where the control plane says the exact share reaches it, which the rounded figure cannot show at the edge; only Drain and Floor can be.`,
         toMove: "Servers that would move off it: with Drain, its servers beyond the recommendation, dropped one at a time by whichever leaves the broken budget lowest; 0 otherwise. Nothing moves them.",
         free: "Free recommended slots: slots beyond the servers that stay that a moved server could take, counted as a typical server, with both budgets kept. The recommendation less its servers for CPU budget, Memory budget and Maximum; the room the budgets allow under the floor for Floor; 0 for Drain and Unmeasured. Only a VPS that accepts relocations offers them to its region.",
-        capacity: `Where its usable cores and memory come from: Measured, its own from the capacity read; Borrowed by type, the median of the measured VPSs of its instance type; Borrowed by provider and vCPU, the median of the measured VPSs of its provider and vCPU count; None, nothing to measure or borrow. Each online server is planned to need ${ruleGiB(sizingModel.memoryBurstBytes)} of memory on it, or its servers' measured peak where higher.`,
+        capacity: `Its usable cores and memory, each with where it comes from: measured, its own from the capacity read; borrowed (type), the median of the measured VPSs of its instance type; borrowed (provider and vCPU), the median of the measured VPSs of its provider and vCPU count; unknown, nothing to measure or borrow, which leaves the VPS Unmeasured. Each is borrowed on its own. Each online server is planned to need ${ruleGiB(sizingModel.memoryBurstBytes)} of memory on it, or its servers' measured peak where higher.`,
         regionToMove: "Servers to move off drained VPSs whose region this is: a server's own published region, else its VPS's.",
         regionFree: "Free recommended slots on the region's VPSs that accept relocations. Regions overlap, so a VPS in several regions offers the same slots to each.",
         shortfall: "Shortfall: servers to move with no free recommended slot of their own provider in the region, since a move keeps a server on its provider. They need more VPSs; the read does not say how many.",
@@ -332,10 +432,3 @@ export function slotSizingHints(sizingModel: Model) {
 }
 
 export type SlotSizingHints = ReturnType<typeof slotSizingHints>;
-
-/** "Measured · 5.800 cores, 12.00 GiB usable", or the source alone while either is unknown. */
-export function slotSizingCapacityLabel(entry: Pick<HostingSlotSizingHost, "capacitySource" | "usableCores" | "usableMemoryBytes">) {
-    const source = slotSizingCapacitySourceLabel(entry.capacitySource);
-    if (entry.usableCores === null || entry.usableMemoryBytes === null) return source;
-    return `${source} · ${entry.usableCores.toFixed(3)} cores, ${formatGiB(entry.usableMemoryBytes)} usable`;
-}

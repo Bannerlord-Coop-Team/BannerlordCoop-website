@@ -154,11 +154,13 @@ const sizing: HostingAdminSlotSizing = {
         minimumObservedDays: 7, maximumSlots: 32, typicalWeeklyOnlineHours: 41.37, capacityErrorCode: null },
     hosts: [
         { serviceName: "vps-1a2b3c4d.vps.ovh.net", provider: "ovhcloud-vps", regionKeys: ["germany"], vCpu: 6, slots: 3, occupants: 3, acceptsRelocations: true,
-            usableCores: 5.58, usableMemoryBytes: 11_703_786_240, capacitySource: "measured", memoryBytesPerServer: 2.5 * GIB, recommendedSlots: 5, reason: "cpu",
-            expectedShortageCoreHoursPerWeek: 0.842, memoryOverflowShare: 0.0021, serversToMove: 0, freeRecommendedSlots: 2 },
+            usableCores: 5.58, coresSource: "measured", usableMemoryBytes: 11_703_786_240, memorySource: "measured", memoryBytesPerServer: 2.5 * GIB,
+            recommendedSlots: 5, reason: "cpu", expectedShortageCoreHoursPerWeek: 0.842, withinCpuBudget: true, memoryOverflowShare: 0.0021,
+            withinMemoryBudget: true, serversToMove: 0, freeRecommendedSlots: 2 },
         { serviceName: "vps-spare", provider: "ovhcloud-vps", regionKeys: [], vCpu: 4, slots: 2, occupants: 0, acceptsRelocations: true, usableCores: null,
-            usableMemoryBytes: null, capacitySource: "none", memoryBytesPerServer: 2.5 * GIB, recommendedSlots: null, reason: "unmeasured",
-            expectedShortageCoreHoursPerWeek: null, memoryOverflowShare: null, serversToMove: 0, freeRecommendedSlots: 0 },
+            coresSource: "none", usableMemoryBytes: null, memorySource: "none", memoryBytesPerServer: 2.5 * GIB, recommendedSlots: null, reason: "unmeasured",
+            expectedShortageCoreHoursPerWeek: null, withinCpuBudget: null, memoryOverflowShare: null, withinMemoryBudget: null, serversToMove: 0,
+            freeRecommendedSlots: 0 },
     ],
     regions: [{ regionKey: "germany", serversToMove: 0, freeRecommendedSlots: 2, shortfallServers: 0 }],
 };

@@ -654,13 +654,17 @@ export type HostingAdminFleetCapacity = {
 
 /**
  * Why a VPS's recommended slot count is what it is: `cpu` and `memory`, one more slot would break that budget;
- * `floor`, the budgets allow fewer than floor(vCPU / 2) slots, which a VPS always keeps; `maximum`, the most slots any
- * VPS holds keep both budgets; `drain`, its servers alone break a budget, so the recommendation is below them;
- * `unmeasured`, no usable cores or memory are measured or borrowable, so there is none.
+ * `floor`, fewer than floor(vCPU / 2) slots keep both budgets, but a VPS always keeps that many, so a budget breaks at
+ * the floor; `maximum`, the most slots any VPS holds keep both budgets; `drain`, its servers alone break a budget and
+ * are more than the floor, so the recommendation is below them; `unmeasured`, its usable cores or memory are neither
+ * measured nor borrowable, so there is none.
  */
 export type HostingSlotSizingReason = "cpu" | "memory" | "floor" | "maximum" | "drain" | "unmeasured";
 
-/** Where a VPS's usable cores for sizing come from: its own, borrowed from its instance type or its provider and vCPU count, or none. */
+/**
+ * Where one of a VPS's usable figures for sizing (its cores, or its memory) comes from: its own, borrowed from its
+ * instance type or its provider and vCPU count, or none.
+ */
 export type HostingSlotSizingCapacitySource = "measured" | "type" | "provider-vcpu" | "none";
 
 /** One VPS's recommended slot count. */
@@ -676,19 +680,27 @@ export type HostingSlotSizingHost = {
     occupants: number;
     /** Whether relocation may move a server onto it: onboarded, with its provider's reviewed image. */
     acceptsRelocations: boolean;
-    /** Its usable cores and memory, its own or borrowed; null when neither is known. */
+    /** Its usable cores, its own or borrowed; null when neither measured nor borrowable. */
     usableCores: number | null;
+    /** Where `usableCores` comes from; `none` exactly when it is null. */
+    coresSource: HostingSlotSizingCapacitySource;
+    /** Its usable memory, borrowed apart from its cores; null when neither measured nor borrowable. */
     usableMemoryBytes: number | null;
-    capacitySource: HostingSlotSizingCapacitySource;
+    /** Where `usableMemoryBytes` comes from; `none` exactly when it is null. */
+    memorySource: HostingSlotSizingCapacitySource;
     /** The memory each online server is planned to need on it: the memory burst target, or its servers' peak where higher. */
     memoryBytesPerServer: number;
     /** Null only when `unmeasured`; otherwise from floor(vCPU / 2) to the model's `maximumSlots`. */
     recommendedSlots: number | null;
     reason: HostingSlotSizingReason;
-    /** Expected CPU shortage, in core-hours a week, of the servers it would hold at the recommendation. */
+    /** Expected CPU shortage, in core-hours a week, of the servers it would hold at the recommendation; three decimals. */
     expectedShortageCoreHoursPerWeek: number | null;
-    /** Share of the week's hours in which more of them would be online at once than its memory holds. */
+    /** Whether the exact shortage keeps the CPU budget, which the rounded figure cannot tell at the edge; null when `unmeasured`. */
+    withinCpuBudget: boolean | null;
+    /** Share of the week's hours in which more of them would be online at once than its memory holds; four decimals. */
     memoryOverflowShare: number | null;
+    /** Whether the exact share keeps the memory budget (is under it); null when `unmeasured`. */
+    withinMemoryBudget: boolean | null;
     /** Servers that would move off it: its servers less the recommendation, for `drain` only. */
     serversToMove: number;
     /** Slots beyond the servers that stay that a moved server could take with both budgets kept. */

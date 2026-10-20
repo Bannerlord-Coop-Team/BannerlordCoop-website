@@ -14,8 +14,9 @@ import {
     parseSlotSizing,
     SLOT_SIZING_UNAVAILABLE,
     slotSizingBudgets,
-    slotSizingCapacityLabel,
+    slotSizingCapacityFigures,
     slotSizingCapacityNote,
+    slotSizingCapacitySources,
     slotSizingDifference,
     slotSizingErrorMessage,
     slotSizingHints,
@@ -193,7 +194,7 @@ function Recommendation({ host }: { host: HostingSlotSizingHost }) {
     );
 }
 
-/** A figure at the recommendation, marked when it is above its budget. */
+/** A figure at the recommendation, marked when the control plane says its exact value breaks the budget. */
 function BudgetFigure({ value, over }: { value: ReactNode; over: boolean }) {
     return <>
         <span className="block">{value}</span>
@@ -202,7 +203,8 @@ function BudgetFigure({ value, over }: { value: ReactNode; over: boolean }) {
 }
 
 function HostRow({ host, sizing }: { host: HostingSlotSizingHost; sizing: HostingAdminSlotSizing }) {
-    const over = slotSizingOverBudget(host, sizing.model);
+    const over = slotSizingOverBudget(host);
+    const capacityFigures = slotSizingCapacityFigures(host);
     const name = shortServiceName(host.serviceName);
     return (
         <tr className="align-top text-foreground">
@@ -228,7 +230,10 @@ function HostRow({ host, sizing }: { host: HostingSlotSizingHost; sizing: Hostin
             </td>
             <td className={`p-3 text-right font-mono ${host.serversToMove > 0 ? "text-amber-300" : ""}`}>{host.serversToMove}</td>
             <td className="p-3 text-right font-mono">{host.freeRecommendedSlots}</td>
-            <td className="p-3">{slotSizingCapacityLabel(host)}</td>
+            <td className="p-3">
+                <span className="block">{slotSizingCapacitySources(host)}</span>
+                {capacityFigures !== null && <span className="mt-0.5 block text-foreground-muted">{capacityFigures}</span>}
+            </td>
         </tr>
     );
 }

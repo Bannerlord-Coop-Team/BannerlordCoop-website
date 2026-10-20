@@ -1156,23 +1156,49 @@ control plane returned an unexpected slot sizing."
   - **Recommended**, with a badge against its slots now: **+N**, **−N** or
     **same**, each with an icon and a title sentence, so it does not rely on
     colour alone;
-  - **Reason** in words with a sentence for the VPS: **CPU budget** or
-    **Memory budget** (one more slot would break that budget), **Floor** (the
-    budgets allow fewer slots, but a VPS always keeps floor(vCPU ÷ 2)),
-    **Maximum** (32 slots keep both budgets), **Drain** ("Its 5 servers alone
-    break a budget, so 2 would move.") and **Unmeasured** (no usable cores or
-    memory are measured or borrowable);
+  - **Reason** in words with a sentence for the VPS, using only what the read
+    says:
+    - **CPU budget** or **Memory budget**: one more slot would break that
+      budget.
+    - **Floor**: fewer than floor(vCPU ÷ 2) slots keep both budgets, but a VPS
+      keeps that many, so a budget breaks at the floor. The budgets named are
+      those whose flag is false. When its servers fill the floor, they break it
+      themselves: "Its 2 servers already break the CPU and memory budgets. A VPS
+      keeps its floor of 2 slots (floor(vCPU ÷ 2)), and this one has no more
+      servers than that, so nothing moves." With fewer, the free recommended
+      slots are the room left within the budgets: "Beside its 1 server, 1 more
+      typical server fits within the budgets. A VPS keeps its floor of 3 slots
+      (floor(vCPU ÷ 2)) anyway; filled with typical servers, they would break
+      the CPU budget." An empty VPS reads "2 typical servers fit within the
+      budgets." or "Not even one typical server fits within the budgets.", and
+      one with no room "no more typical server fits".
+    - **Maximum**: 32 slots keep both budgets.
+    - **Drain**: its servers alone break a budget, so some would move. Above the
+      floor: "Its 7 servers alone break a budget, so 2 would move, and the 5
+      that stay keep both budgets." At the floor, by the flags: "…, down to its
+      floor of 3 slots (floor(vCPU ÷ 2)), where the 3 that stay keep both
+      budgets." or "… still break the CPU budget."
+    - **Unmeasured**: names the missing figure, "Its usable memory is neither
+      measured nor borrowable, so there is no recommendation." (or cores, or
+      both).
   - **CPU shortage / week** in core-hours with the control plane's three
     decimals ("0.842 core-h") and **Memory over** as a percent with its four
-    decimals of share ("0.21%"), each marked **Over budget** above its budget,
-    which only Drain and Floor can be;
+    decimals of share ("0.21%"). Each is marked **Over budget** when its flag,
+    `withinCpuBudget` or `withinMemoryBudget`, is false. The marks come from the
+    flags, not the rounded figures, which cannot tell a figure at the edge:
+    "1.000 core-h" can be over the 1 core-hour budget and "1.00%" under the 1%
+    one. Only Drain and Floor can be over;
   - **To move** and **Free recommended** slots;
-  - **Capacity**: Measured, Borrowed by type, Borrowed by provider and vCPU or
-    None, with the usable cores and memory ("Measured · 5.580 cores, 10.90 GiB
-    usable").
+  - **Capacity**: each usable figure's own source, then the figures it knows.
+    Sources read "Cores and memory measured", "Cores and memory borrowed
+    (type)" or "… borrowed (provider and vCPU)", or, when they differ, "Cores
+    measured · memory borrowed (type)". The figures read "5.580 cores, 10.90 GiB
+    usable".
 
   An unmeasured VPS shows "—" (read out as "Unmeasured") for its
-  recommendation, shortage and memory over.
+  recommendation, shortage and memory over. Its capacity still shows the figure
+  it knows and names the missing one ("Cores measured · memory unknown", "1.500
+  cores usable"), or "Cores and memory unknown".
 - **By region**: each region the read lists, in its order, with **To move**,
   **Free recommended** and **Shortfall**. A shortfall above zero reads "*N*
   servers without a slot" with a warning icon. The read reports servers, not how
@@ -1184,19 +1210,21 @@ now, the recommendation and how occupants and typical servers count, each
 reason, the shortage (the cores that servers online together are expected to
 want beyond the usable cores, summed over the week's half-hours), memory over
 (the expected share of the week with more online than floor(usable memory ÷
-memory per server)), servers to move, free recommended slots (and that only a
-VPS accepting relocations offers them to its region), where the capacity comes
-from with the planned memory per server, and each region figure (regions
-overlap, so a VPS in several offers the same slots to each).
+memory per server)), each with how **Over budget** follows the control plane's
+flags on the exact figures, servers to move, free recommended slots (and that
+only a VPS accepting relocations offers them to its region), where each usable
+figure comes from (each is borrowed on its own) with the planned memory per
+server, and each region figure (regions overlap, so a VPS in several offers the
+same slots to each).
 
 #### Slot sizing response shape
 
 `parseSlotSizing` in `src/app/lib/control-plane/slot-sizing.ts` parses the read
 strictly against the control plane's `HostingAdminSlotSizing`
 (`src/hosting/fleet/slot-sizing-contract.ts`), checking only what the control
-plane's `sizeVpsSlots` and `readSlotSizing` guarantee; anything else is an
-unexpected response. Every object has exactly its keys, and `generatedAt` is a
-millisecond UTC time.
+plane's `sizeVpsSlots`, `slotSizingHostEntry` and `readSlotSizing` guarantee;
+anything else is an unexpected response. Every object has exactly its keys, and
+`generatedAt` is a millisecond UTC time.
 
 - **Model**: the CPU budget is finite and non-negative, the memory budget above
   0 and at most 1, `cpuBurstVcpu` above 0 and at most 256, `memoryBurstBytes` a
@@ -1209,22 +1237,35 @@ millisecond UTC time.
   at least 2 vCPUs, its counts are non-negative integers with no more servers
   than `maximumSlots`, usable cores have at most three decimals, usable memory
   is whole bytes, and memory per server is whole bytes no less than
-  `memoryBurstBytes`. Its `reason` and `capacitySource` are in their enums.
+  `memoryBurstBytes`. Its `reason`, `coresSource` and `memorySource` are in
+  their enums.
+- **Sources**: `coresSource` is `none` exactly when `usableCores` is null, and
+  `memorySource` exactly when `usableMemoryBytes` is.
 - **Reason against figures**:
-  - `unmeasured` exactly when its usable cores or memory are null, and then the
-    source is `none`, `recommendedSlots`, the shortage and memory over are null,
-    and servers to move and free slots are 0. Otherwise the source is not
-    `none`;
+  - `unmeasured` exactly when either source is `none`, and then
+    `recommendedSlots`, the shortage, memory over and both budget flags are
+    null, and servers to move and free slots are 0;
   - otherwise `recommendedSlots` is an integer from floor(vCPU ÷ 2) to
-    `maximumSlots`, the shortage is non-negative with at most three decimals and
-    memory over is 0 to 1 with at most four;
+    `maximumSlots`, the shortage is non-negative with at most three decimals,
+    memory over is 0 to 1 with at most four, and `withinCpuBudget` and
+    `withinMemoryBudget` are booleans;
+  - the flags are of the exact figures, so a true flag's rounded figure is at
+    most its budget plus half its last decimal, and a false flag's at least its
+    budget less half its last decimal. With the budgets of 1 core-hour and 1%,
+    a broken CPU budget reads at least 1.000 and a broken memory budget at
+    least 0.0100;
   - only `drain` has servers to move: at least one, with the recommendation
-    equal to its servers less them, and no free slots;
+    equal to its servers less them, and no free slots. It keeps both budgets
+    unless the recommendation is floor(vCPU ÷ 2), where either may break;
   - `floor` recommends exactly floor(vCPU ÷ 2), with free slots no more than the
-    recommendation less its servers;
-  - `cpu`, `memory` and `maximum` keep both budgets as rounded, have free slots
-    equal to the recommendation less its servers, and `maximum` recommends
-    `maximumSlots`, the other two fewer.
+    recommendation less its servers, and at least one flag false;
+  - `cpu`, `memory` and `maximum` have both flags true, free slots equal to the
+    recommendation less its servers, and `maximum` recommends `maximumSlots`,
+    the other two fewer.
+
+  Each rule has its own rejection test in
+  `src/app/lib/control-plane/slot-sizing.component.test.tsx`, and removing any
+  one of them fails that test.
 - When `capacityErrorCode` is set, every VPS is `unmeasured`.
 - **Each region**: its key is text and its counts are non-negative integers. Its
   shortfall is at most its servers to move and at least its servers to move less
@@ -1249,7 +1290,9 @@ The pane always sends `{}`, which #530 accepts, so `invalid_request` here only
 means the operation is unknown. Once #530 deploys, **Refresh** or reopening the
 tab shows the recommendations. Rolling #530 back returns the pane to the note.
 A later change to the slot sizing contract, such as a new reason, key or rule,
-needs the website updated first, or the read is unexpected.
+needs the website updated first, or the read is unexpected. The pane reads #530
+with each usable figure's own source and both budget flags; a build of #530
+from before them (with `capacitySource`) reads as unexpected.
 
 ## Server notices
 
