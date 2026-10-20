@@ -222,7 +222,7 @@ export function ServerControlPanel({
                         >
                             <span
                                 aria-hidden="true"
-                                className={`absolute top-0.5 left-0 size-4 rounded-full bg-foreground shadow-sm transition-transform ${
+                                className={`absolute top-0.75 left-0 size-4 rounded-full bg-foreground shadow-sm transition-transform ${
                                     cronRestartEnabled ? "translate-x-6" : "translate-x-0.5"
                                 }`}
                             />
