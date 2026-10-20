@@ -461,10 +461,62 @@ verification remain separate from native Windows website tests/builds and live e
 
 ## Placement planner
 
-The **Placement** tab shows the control plane's co-tenancy planner, which learns
-from reconcile history when each OVH slot server is usually online and proposes
-which servers should share a VPS so fewer of them are online at once. See the
-control-plane repository's `docs/managed-hosting/placement-planner.md` for the model.
+The **Placement** tab shows, in this order, the **measured host overlap** (what
+actually happened on each shared VPS over the last week), the **automatic
+placement** panel (its switch, status, waiting-to-retry list and live moves) and
+the control plane's co-tenancy planner, which learns from reconcile history when
+each OVH slot server is usually online and proposes which servers should share a
+VPS so fewer of them are online at once. See the control-plane repository's
+`docs/managed-hosting/placement-planner.md` for the model and the measured overlap.
+
+### Measured host overlap
+
+The tab's first pane, **Host overlap** ("Measured over the last 7 days"), sends
+`placement-overlap` with `{}` from the browser when the tab opens, through the
+same `control-plane-admin` Edge Function as `placement-executor`. That function
+forwards any administrator's operation to the control plane without an
+allowlist, so no Edge Function change is needed. It needs control plane #517 or
+later, which must be deployed first; an older control plane rejects the unknown
+operation as `invalid_request`, and the pane then says the control plane does not
+report measured overlap yet. The read is kept while the tab stays open and is not
+polled: **Refresh** reads it again (one read at a time), and the control plane
+allows each administrator six reads per five minutes (`rate_limited`, with retry
+text). While it loads the pane says so; a failed read shows its message with
+**Retry**, keeps any overlap it already showed and never affects the rest of the
+tab. The response is parsed strictly: exact keys, `hours` 168, a window of exactly
+168 hours whose bounds fall on whole UTC hours, millisecond UTC times, 168
+`online` entries that are null or finite and non-negative, `allBusy` matching
+`^[01-]{168}$` with `allBusyHours` its count of `1`, `hoursWithData` 0–168, and
+finite measured pair-hours and coverage (0–1). It also checks what the control
+plane's definitions allow between fields: no more occupants than slots, each
+server on one VPS only, no hour with more online than occupants, a `0` or `1` only
+for a full VPS (at least one occupant and as many as slots) in an hour with data,
+and a `1` only when `online` is at least half the number of occupants (every one
+of them was online at least half the hour). Online counts
+are rounded to two decimals, so those bounds allow 0.01. It does not check slots
+against vCPUs: the control plane owns slot capacity. Anything else is shown as an
+unexpected response.
+
+Every VPS with more than one slot is listed, empty ones too, grouped by region
+(alphabetical, hosts without a region last). Each row shows the service name
+without `.vps.ovh.net` (the full name in its title), its slots and current servers
+(or **Empty**), a 168-cell strip and, on the right, "N h all busy" (or **Not full**
+while a slot is free), the measured pair-hours and the coverage ("71% measured").
+The strip is the window's real hours, oldest first, under a day axis of UTC dates.
+A window that starts mid-day begins and ends with part of a day, and every date
+segment gets a label that fits it: "Mon 12 Oct" from 14 hours, "12 Oct" from 8, the
+day of the month ("12") from 3, and no visible text for a one- or two-hour sliver.
+Each segment's title gives its full date.
+Each cell is shaded by `online` over slots on the heatmap's ten bands, and an hour
+with no data (`online` null) is hatched, never the shade of an hour with nobody
+online. Under a full VPS a thin row marks the `1` hours of `allBusy` in crimson,
+shows `0` hours as a faint measured cell and hatches `-` hours (a server without
+data). Each cell's title gives its date and hour, the online count and the
+all-busy state, and each strip has a text summary (slots filled, all-busy hours or
+"not full", the busiest hour and the coverage, or "empty"). A footer reads
+"Measured *start*–*end* UTC · generated *time*".
+
+### Dry run
 
 The dry run is never requested on page load. The administrator sets the options
 (`historyDays` 14–90, `halfLifeDays` 1–90, `maximumMoves` 0–64,
@@ -489,34 +541,6 @@ history start, samples and unsequenced servers, then these sections:
   pinned, an always-on badge, weekly online hours, observed days and a 7×24 heatmap
   of its hourly online probability (Monday first, UTC). Each square has a title and
   the grid has a text summary for assistive technology.
-- **Host overlap**, when a VPS's slots are busy at the same time, for every VPS with
-  more than one slot (a one-slot VPS cannot overlap), grouped by region (alphabetical,
-  hosts without a region last) with rows in the hosts table's order. **Now** and **After plan** (`aria-pressed`) switch between each
-  host's `current` and `proposed` servers and pair-hours. Each row shows the VPS,
-  its slot count and servers, a 168-cell strip of the week (Monday first, UTC, a
-  hairline between days) and its pair-hours per week with "~N h/wk all K busy", or
-  "M slots free" while a slot is free. The math uses only the plan: a server's
-  hourly online probability is the midpoint of its heatmap band, (d + 0.5) / 10;
-  a cell is shaded by expected servers online over slots, on the heatmap's ten
-  bands; for a full VPS the chance every slot is busy is the product of its
-  servers' probabilities (independent, as the planner assumes), hours of at least
-  50% are marked on a thin red row under the strip, and N is its sum over the week.
-  Each cell's title gives the hour and expected online, plus the all-busy chance on
-  a full VPS. Each strip's text summary gives the slots filled and then, on a full
-  VPS, the all-busy hours and busiest hour; with a free slot, the free slots and
-  busiest hour; with no servers, the free slots and "no servers". A VPS holding a
-  server with fewer observed days than the plan's `model.minimumObservedDays` is an
-  estimate, because the control plane shrinks such a server's heatmap toward the
-  fleet's overall online fraction (with no history, entirely, so its heatmap is flat):
-  its row says so in words, such
-  as "Estimated: Game Night has under 7 days of history" or "… has no history yet"
-  (naming up to three servers, counting more), the summary ends with that note and
-  each cell's title with "· estimated". This is worked out separately for **Now**
-  and **After plan**. A VPS holding a server without a usable heatmap, or one the
-  plan does not list, shows "Unavailable" instead of a strip, without an estimate
-  note or all-busy hours: a full VPS shows "—" there, one with a free slot still
-  shows its free slots. The computations live
-  in `lib/control-plane/placement-overlap.ts`.
 - **VPS hosts**, most contended first, with capacity, whether relocation may target
   them, current and proposed contention and their servers.
 
@@ -539,7 +563,8 @@ This switch-only panel requires control plane #516 or later, which fixes the
 rules below, and must be deployed after it; an older control plane still applies
 the stored minimum gain, notice lead and always-on policy.
 
-The top of the Placement tab shows the automatic placement executor, read in the
+Below the measured host overlap and above the dry run, the Placement tab shows the
+automatic placement executor, read in the
 browser with `placement-executor` when the tab opens. It has nothing to configure:
 a heading, one sentence on what it does, a single **Automatic placement** switch
 (`role="switch"`, with **On · relocating servers automatically** or **Off ·

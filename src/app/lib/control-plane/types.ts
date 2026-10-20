@@ -417,6 +417,42 @@ export type HostingPlacementMove = {
     window: HostingPlacementWindow;
 };
 
+/** One current occupant of a shared VPS in the measured overlap. */
+export type HostingPlacementOverlapOccupant = {
+    serverId: string;
+    displayName: string;
+    /** Hours of the window with at least one counted sample from this server, wherever it ran then. */
+    hoursWithData: number;
+};
+
+/** One VPS with more than one slot, measured over the window from its current occupants' samples. */
+export type HostingPlacementOverlapHost = {
+    serviceName: string;
+    regionKeys: string[];
+    vCpu: number;
+    slots: number;
+    /** The servers on it now, in slot order; empty for an empty VPS. */
+    occupants: HostingPlacementOverlapOccupant[];
+    /** 168 hours, oldest first: the sum of the occupants' online fractions, or null when none has data. */
+    online: (number | null)[];
+    /** 168 characters, oldest first: `1` full and all busy, `0` full and measured but not all busy, `-` unknown or not full. */
+    allBusy: string;
+    allBusyHours: number;
+    measuredPairHours: number;
+    /** Share of the hours in which every occupant has data, 0 to 1. */
+    coverage: number;
+};
+
+/** The `placement-overlap` read: how the current placement was online together, hour by hour, over the last week. */
+export type HostingAdminPlacementOverlap = {
+    generatedAt: string;
+    /** The window is [windowStartedAt, windowEndedAt): 168 whole UTC hours ending at the current hour boundary. */
+    windowStartedAt: string;
+    windowEndedAt: string;
+    hours: number;
+    hosts: HostingPlacementOverlapHost[];
+};
+
 /** The control plane's read-only `placement-plan` proposal. Nothing is relocated. */
 export type HostingAdminPlacementPlan = {
     dryRun: true;

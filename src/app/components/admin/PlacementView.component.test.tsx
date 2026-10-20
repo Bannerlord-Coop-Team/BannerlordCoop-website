@@ -125,6 +125,16 @@ const data: PlacementViewData = {
     activeJobs: [],
 };
 
+// One measured shared VPS, so the tab's first pane has something to draw.
+const measuredOverlap = {
+    generatedAt: "2026-10-19T00:07:31.552Z", windowStartedAt: "2026-10-12T00:00:00.000Z", windowEndedAt: "2026-10-19T00:00:00.000Z", hours: 168,
+    hosts: [{
+        serviceName: "vps-uk-a", regionKeys: ["united-kingdom"], vCpu: 4, slots: 2,
+        occupants: [{ serverId: "gang", displayName: "The Gang", hoursWithData: 168 }, { serverId: "knights", displayName: "Calradian Knights", hoursWithData: 168 }],
+        online: Array.from({ length: 168 }, () => 0.5), allBusy: "0".repeat(168), allBusyHours: 0, measuredPairHours: 0, coverage: 1,
+    }],
+};
+
 const executor = {
     settings: { enabled: false, minimumGainHours: 20, alwaysOnPolicy: "single-slot", noticeLeadHours: 1, updatedBy: null, reason: null, updatedAt: null },
     relocations: [],
@@ -149,6 +159,7 @@ beforeEach(() => {
     mocks.session.mockResolvedValue({ data: { session: { access_token: "test-only" } } });
     mocks.request.mockImplementation(async ({ operation, input }: { operation: string; input: { serverId?: string } }) => {
         if (operation === "placement-executor") return executor;
+        if (operation === "placement-overlap") return measuredOverlap;
         if (operation === "placement-plan") return plan;
         if (operation === "server-dashboard") return { dashboard: { server: managedServer(input.serverId!, "The Gang"), activeJob: null } };
         return { outcome: "enqueued", job: job("gang", "migrate-region") };
@@ -306,16 +317,28 @@ it("runs the dry run only when asked, with progress, and renders the plan", asyn
     expect(hostRow.textContent).toContain("→ Dem Boys");
 });
 
-it("shows each shared VPS's overlap between the servers and the hosts tables", async () => {
+it("shows the measured overlap first, then automatic placement, then the dry run", async () => {
+    await act(async () => root.render(<PlacementView data={data} />));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    const overlap = container.querySelector('section[aria-label="Host overlap"]')!;
+    const executorPanel = container.querySelector('section[aria-labelledby="placement-executor-heading"]')!;
+    const dryRun = container.querySelector('form[aria-labelledby="placement-plan-heading"]')!;
+    expect(overlap.compareDocumentPosition(executorPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(executorPanel.compareDocumentPosition(dryRun) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The measured read needs no dry run.
+    expect(calls("placement-overlap")).toHaveLength(1);
+    expect(calls("placement-plan")).toHaveLength(0);
+    expect(overlap.querySelector('[role="img"][aria-label^="vps-uk-a:"]')).not.toBeNull();
+});
+
+it("no longer shows a modelled host overlap in the dry run's results", async () => {
     await act(async () => root.render(<PlacementView data={data} />));
     await runPlan();
     const sections = [...container.querySelectorAll("section[aria-label]")].map((section) => section.getAttribute("aria-label"));
-    expect(sections.slice(sections.indexOf("Servers"))).toEqual(["Servers", "Host overlap", "VPS hosts"]);
-    const overlap = container.querySelector('section[aria-label="Host overlap"]')!;
-    expect([...overlap.querySelectorAll("li")].map((item) => item.querySelector("p")!.textContent)).toEqual(["vps-uk-a", "vps-uk-b", "vps-uk-c"]);
-    // Dem Boys has no usable heatmap yet, so vps-uk-a cannot be drawn.
-    expect(overlap.textContent).toContain("Unavailable: a server on this VPS has no learned weekly activity yet.");
-    expect(overlap.querySelector('[role="img"][aria-label^="vps-uk-b:"]')!.getAttribute("aria-label")).toBe("vps-uk-b: 0 of 3 slots; 3 slots free; no servers");
+    expect(sections.filter((label) => label === "Host overlap")).toHaveLength(1);
+    expect(sections.slice(sections.indexOf("Servers"))).toEqual(["Servers", "VPS hosts"]);
+    expect(container.textContent).not.toContain("After plan");
+    expect(container.querySelector('[aria-label="Placement shown"]')).toBeNull();
 });
 
 it("explains a rate-limited dry run and keeps the form usable", async () => {
@@ -327,7 +350,7 @@ it("explains a rate-limited dry run and keeps the form usable", async () => {
     await act(async () => root.render(<PlacementView data={data} />));
     await runPlan();
 
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe("You can run six dry runs every five minutes. Wait a few minutes, then run it again.");
+    expect(container.querySelector('form[aria-labelledby="placement-plan-heading"] [role="alert"]')?.textContent).toBe("You can run six dry runs every five minutes. Wait a few minutes, then run it again.");
     expect(button(container, "Run dry run").disabled).toBe(false);
 });
 
