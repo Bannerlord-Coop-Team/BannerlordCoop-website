@@ -16,8 +16,6 @@ const REGIONS: HostingRegionPayload[] = [
     { region: "us-west", placement: { countryCodes: ["US"], locationIds: ["us-west-or"] } },
 ];
 const PROVIDERS = [{ provider: "hosthatch-vps", displayName: "HostHatch VPS" }];
-// A syntactically complete OpenSSH Ed25519 line: the fixed algorithm prefix plus 43 more base64 characters.
-const HOST_KEY = `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI${"B".repeat(43)} root@ams-1`;
 
 let container: HTMLDivElement;
 let root: Root;
@@ -52,7 +50,6 @@ async function enter(name: string, value: string) {
 async function fillValidForm() {
     await enter("serviceName", "hosthatch-ams-1");
     await enter("sshLogin", "root@45.91.20.7");
-    await enter("hostPublicKey", HOST_KEY);
     await enter("vCpu", "8");
     await enter("region", "benelux");
     await enter("countryCode", "NL");
@@ -66,6 +63,14 @@ function optionValues(name: string) {
 async function submit() {
     await act(async () => container.querySelector("form")!.requestSubmit());
 }
+
+it("asks for no host key, since the control plane pins it on first contact", async () => {
+    await render();
+    expect(control("hostPublicKey")).toBeNull();
+    expect(container.querySelector("textarea")).toBeNull();
+    expect(container.textContent).not.toMatch(/ssh-ed25519|ssh_host_ed25519_key/u);
+    expect(container.textContent).toContain("scans and pins the host key on first contact");
+});
 
 it("is unavailable with an explanation when no provider accepts manual entry", async () => {
     await render([]);
@@ -111,12 +116,12 @@ it("shows field errors without asking for confirmation or sending anything", asy
     await render();
     await fillValidForm();
     await enter("sshLogin", "debian@45.91.20.7");
-    await enter("hostPublicKey", "ssh-rsa AAAA");
+    await enter("vCpu", "1");
     await submit();
     expect(confirm).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
     expect(control("sshLogin").getAttribute("aria-invalid")).toBe("true");
-    expect(control("hostPublicKey").getAttribute("aria-invalid")).toBe("true");
+    expect(control("vCpu").getAttribute("aria-invalid")).toBe("true");
     expect(control("serviceName").getAttribute("aria-invalid")).toBe("false");
     expect(container.textContent).toContain("Enter root@ followed by the VPS's public IPv4 address.");
 });
@@ -130,7 +135,7 @@ it("sends nothing when the administrator does not confirm the IPv4 address", asy
     expect(request).not.toHaveBeenCalled();
 });
 
-it("submits the exact strict input with blank optional fields as null, then opens the VPS view", async () => {
+it("submits the exact strict input without a host key, blank optional fields as null, then opens the VPS view", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     request.mockResolvedValueOnce({ onboarding: { state: "queued", progressStage: "queued" } });
     await render();
@@ -139,7 +144,7 @@ it("submits the exact strict input with blank optional fields as null, then open
     expect(request).toHaveBeenCalledOnce();
     expect(request.mock.calls[0]?.[0]).toMatchObject({ accessToken: "test-only", operation: "onboard-manual-vps-host" });
     expect(request.mock.calls[0]?.[0].input).toStrictEqual({
-        provider: "hosthatch-vps", serviceName: "hosthatch-ams-1", sshLogin: "root@45.91.20.7", hostPublicKey: HOST_KEY,
+        provider: "hosthatch-vps", serviceName: "hosthatch-ams-1", sshLogin: "root@45.91.20.7",
         vCpu: 8, region: "benelux", countryCode: "NL", locationId: "ams", publicHostname: null, datacenter: null,
     });
     expect(push).toHaveBeenCalledWith("/admin/control-plane?view=vps");
@@ -148,13 +153,13 @@ it("submits the exact strict input with blank optional fields as null, then open
 
 it("keeps the entered facts and shows the control plane's rejection", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    request.mockRejectedValueOnce(new Error("The host key does not match."));
+    request.mockRejectedValueOnce(new Error("The host is unreachable."));
     await render();
     await fillValidForm();
     await enter("publicHostname", "play.example.com");
     await submit();
     expect(request.mock.calls[0]?.[0].input).toMatchObject({ publicHostname: "play.example.com", datacenter: null });
-    expect(container.querySelector('[role="alert"]')!.textContent).toContain("The host key does not match.");
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain("The host is unreachable.");
     expect(control("serviceName").value).toBe("hosthatch-ams-1");
     expect(push).not.toHaveBeenCalled();
 });

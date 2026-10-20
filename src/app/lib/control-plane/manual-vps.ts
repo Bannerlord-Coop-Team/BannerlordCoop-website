@@ -16,7 +16,6 @@ export type ManualVpsFormValues = {
     provider: string;
     serviceName: string;
     sshLogin: string;
-    hostPublicKey: string;
     vCpu: string;
     region: string;
     countryCode: string;
@@ -32,7 +31,6 @@ export type ManualVpsInput = {
     provider: string;
     serviceName: string;
     sshLogin: string;
-    hostPublicKey: string;
     vCpu: number;
     region: string;
     countryCode: string;
@@ -56,10 +54,6 @@ const MAXIMUM_PROVIDERS = 16;
 const MAXIMUM_PROVIDER_NAME_LENGTH = 64;
 const MAXIMUM_HOSTNAME_LENGTH = 253;
 const HOSTNAME_LABEL_PATTERN = /^[A-Za-z\d](?:[A-Za-z\d-]{0,61}[A-Za-z\d])?$/u;
-// An OpenSSH Ed25519 public key blob is always 51 bytes: 68 base64 characters with this fixed algorithm prefix.
-const ED25519_KEY_PATTERN = /^ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI[A-Za-z\d+/]{43}(?: [^\u0000-\u001f\u007f]*)?$/u;
-const HOST_KEY_MINIMUM_LENGTH = 80;
-const HOST_KEY_MAXIMUM_LENGTH = 512;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/u;
 // The control plane's provider datacenter-name grammar; the label is audit evidence only.
 const DATACENTER_PATTERN = /^[A-Za-z\d][A-Za-z\d ._:()-]{0,63}$/u;
@@ -67,7 +61,7 @@ const DATACENTER_PATTERN = /^[A-Za-z\d][A-Za-z\d ._:()-]{0,63}$/u;
 /** An empty form, with the provider preselected when there is exactly one. */
 export function emptyManualVpsForm(providers: readonly ManualEntryProvider[]): ManualVpsFormValues {
     return {
-        provider: providers.length === 1 ? providers[0]!.provider : "", serviceName: "", sshLogin: "", hostPublicKey: "",
+        provider: providers.length === 1 ? providers[0]!.provider : "", serviceName: "", sshLogin: "",
         vCpu: "", region: "", countryCode: "", locationId: "", publicHostname: "", datacenter: "",
     };
 }
@@ -129,7 +123,6 @@ export function validateManualVpsForm(values: ManualVpsFormValues, choices: Manu
         provider: providerError(values.provider, choices.providers),
         serviceName: serviceNameError(values.serviceName.trim()),
         sshLogin: sshLoginError(values.sshLogin.trim()),
-        hostPublicKey: hostPublicKeyError(values.hostPublicKey.trim()),
         vCpu: parseVCpu(values.vCpu) === null ? `Enter a whole number of vCPUs from ${MANUAL_VPS_MINIMUM_VCPU} to ${MANUAL_VPS_MAXIMUM_VCPU}.` : undefined,
         region: region === undefined ? "Choose a region from the catalog." : undefined,
         countryCode: countryCodeError(values.countryCode, region),
@@ -148,7 +141,6 @@ export function buildManualVpsInput(values: ManualVpsFormValues): ManualVpsInput
         provider: values.provider,
         serviceName: values.serviceName.trim(),
         sshLogin: values.sshLogin.trim(),
-        hostPublicKey: values.hostPublicKey.trim(),
         vCpu: Number(values.vCpu.trim()),
         region: values.region,
         countryCode: values.countryCode,
@@ -182,14 +174,6 @@ function sshLoginError(sshLogin: string) {
     const octets = parseIpv4(address);
     if (octets === null) return "Enter a valid IPv4 address after root@.";
     return isPublicIpv4(octets) ? undefined : "The address is private, reserved or otherwise not a public IPv4 address.";
-}
-
-/** Requires one OpenSSH Ed25519 public key line within the backend's length bounds. */
-function hostPublicKeyError(key: string) {
-    if (key.length < HOST_KEY_MINIMUM_LENGTH || key.length > HOST_KEY_MAXIMUM_LENGTH || !ED25519_KEY_PATTERN.test(key)) {
-        return "Paste the single ssh-ed25519 line from /etc/ssh/ssh_host_ed25519_key.pub.";
-    }
-    return undefined;
 }
 
 /** Requires a country the chosen region's placement accepts. */

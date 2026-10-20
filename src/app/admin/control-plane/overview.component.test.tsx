@@ -182,7 +182,9 @@ it("offers every stored region and the listed manual-entry providers on Add manu
     expect(manualCard).toContain('value="us-east"');
     expect(manualCard).toContain('value="us-west"');
     expect(manualCard).not.toContain("No provider currently accepts manual entry.");
-    expect(manualCard).toContain("cat /etc/ssh/ssh_host_ed25519_key.pub");
+    expect(manualCard).toContain('name="sshLogin"');
+    // The control plane scans and pins the host key on first contact, so the form never asks for one.
+    expect(manualCard).not.toContain("hostPublicKey");
 });
 
 /** The server-rendered markup of one operation card, located by its anchor id. */

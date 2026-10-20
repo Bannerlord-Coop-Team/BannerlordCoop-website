@@ -109,25 +109,32 @@ omits the field is treated as offering none, and the card then explains that it
 is unavailable instead of showing the form. The administrator types the host's
 facts from the provider panel: a permanent server name
 (`^[A-Za-z\d][A-Za-z\d.-]{0,63}$`), the SSH login as exactly `root@<public IPv4>`,
-the host key (the single `ssh-ed25519` line printed by
-`cat /etc/ssh/ssh_host_ed25519_key.pub` in the provider console), the vCPU count
-(2–64; the card shows the resulting `floor(vCPU / 2)` game slots), a region from
+the vCPU count (2–64; the card shows the resulting `floor(vCPU / 2)` game
+slots), a region from
 the stored catalog (every region, not only those with free capacity), a country
 limited to that region's placement countries, a location chosen from the
 region's location IDs when it names them and otherwise typed as a short code
 such as `ams`, and the optional player hostname and datacenter label. The card
 validates these grammars in the browser, asks the administrator to confirm the
 IPv4 address once more, and sends `onboard-manual-vps-host` with exactly those
-ten fields; blank optional fields are sent as `null`. The control plane remains
-authoritative for every check. It refuses a host that presents any other host
-key, so a mistyped address cannot silently enroll a different machine. Success
+nine fields; blank optional fields are sent as `null`. The card asks for no
+host key: as for an account VPS, the control plane scans the host key at the
+entered address on first contact and pins it for every later connection, so the
+administrator need not copy anything from the provider console. Because that
+first contact trusts whatever machine answers at the address, the IPv4 address
+is the fact to double-check. The control plane remains authoritative for every
+check. Success
 opens the VPS view, and a failed attempt is retried there with the existing
 **Retry onboarding** button, which sends `onboard-vps-host` with the host row's
 own provider, its service name and `mode: "retry"`. The `control-plane-admin`
 Edge Function forwards the envelope unchanged, so it needs no redeploy; deploy
 the control-plane release that adds `onboard-manual-vps-host` and
 `manualEntryProviders` before this website change. Against an older backend the
-card stays unavailable.
+card stays unavailable. The control plane's strict schema rejects the
+`hostPublicKey` field earlier releases required, so deploy the control-plane
+release that drops it (and scans the key itself) no later than this website
+change; a control plane that still requires the field rejects the card's
+request.
 
 Deploy the Edge Function from the repository root:
 
