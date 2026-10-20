@@ -564,12 +564,14 @@ have put it over). Each cell's title gives its date and hour, the online count a
 how many can burst together ("Wed 14 Oct 20:00 UTC · 4 online; 3 can burst
 together"), adding "over burst capacity" on a red hour. Each strip has a text
 summary (slots filled, how many can burst together, the hours over burst or
-"bursts fit", the busiest hour and the coverage, or "empty"). The legend reads
-"Red: more servers online than can each burst to 2 vCPU and 3 GiB".
+"bursts fit", the busiest hour and the coverage, or "empty"). After its shading
+and no-data keys the legend adds "Red: more servers online than can each burst
+to 2 vCPU and 3 GiB".
 
-A legacy response is shaded the same way but has no red row, no "over burst" or
-"Bursts fit" and no burst capacity, and the pane notes "This control plane
-predates burst capacity; red hours appear after it updates." A footer reads
+A legacy response is shaded the same way but has no red row, no red legend
+entry, no "over burst" or "Bursts fit" and no burst capacity; the legend keeps
+its shading and no-data keys, and the pane notes "This control plane predates
+burst capacity; red hours appear after it updates." A footer reads
 "Measured *start*–*end* UTC · generated *time*".
 
 ### Dry run

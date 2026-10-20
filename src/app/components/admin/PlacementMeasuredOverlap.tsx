@@ -92,6 +92,8 @@ export function PlacementMeasuredOverlap() {
 
     const overlap = state.kind === "ready" ? state.overlap : state.previous;
     const groups = overlap === null ? [] : overlapGroups(overlap.hosts);
+    // An older control plane's read has no red hours, so neither its legend nor its rows mention them.
+    const predatesBurst = overlap !== null && overlapPredatesBurst(overlap);
     return (
         <section aria-label="Host overlap" className="border border-white/10 bg-surface p-5">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -113,8 +115,8 @@ export function PlacementMeasuredOverlap() {
                 </p>
             )}
             {overlap !== null && <>
-                <OverlapLegend />
-                {overlapPredatesBurst(overlap) && <p className="mt-2 text-[0.65rem] text-foreground-muted">This control plane predates burst capacity; red hours appear after it updates.</p>}
+                <OverlapLegend burst={!predatesBurst} />
+                {predatesBurst && <p className="mt-2 text-[0.65rem] text-foreground-muted">This control plane predates burst capacity; red hours appear after it updates.</p>}
                 <div className="mt-4 overflow-x-auto border border-white/10">
                     {groups.length === 0
                         ? <Empty>No VPS has more than one slot, so no two servers share one.</Empty>
@@ -134,7 +136,7 @@ export function PlacementMeasuredOverlap() {
     );
 }
 
-function OverlapLegend() {
+function OverlapLegend({ burst }: { burst: boolean }) {
     return (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[0.65rem] text-foreground-muted">
             <span>One cell per UTC hour, oldest first. Online:</span>
@@ -143,8 +145,10 @@ function OverlapLegend() {
             <span>all slots</span>
             <span aria-hidden="true" className="ml-2 size-2.5 border border-white/10" style={NO_DATA} />
             <span>No data</span>
-            <span aria-hidden="true" className="ml-2 h-1 w-4 bg-crimson" />
-            <span>Red: more servers online than can each burst to 2 vCPU and 3 GiB</span>
+            {burst && <>
+                <span aria-hidden="true" className="ml-2 h-1 w-4 bg-crimson" />
+                <span>Red: more servers online than can each burst to 2 vCPU and 3 GiB</span>
+            </>}
         </div>
     );
 }

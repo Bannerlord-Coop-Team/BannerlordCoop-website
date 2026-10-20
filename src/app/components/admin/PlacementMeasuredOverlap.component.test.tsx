@@ -114,6 +114,11 @@ function rightColumn(name: string) {
     return [...row(name).children[2]!.querySelectorAll("p")].map((line) => line.textContent);
 }
 
+/** The key above the strips. */
+function legend() {
+    return [...container.querySelectorAll("div")].find((item) => item.firstElementChild?.textContent === "One cell per UTC hour, oldest first. Online:")!;
+}
+
 const NOTE = "This control plane predates burst capacity; red hours appear after it updates.";
 
 it("reads the measured overlap once when it opens, with no dry run", async () => {
@@ -172,7 +177,8 @@ it("marks in red the hours more servers were online than can each burst, and dra
     expect(burst[50]!.style.backgroundImage).toBe("");
     expect(rightColumn("vps-1a2b3c4d")).toEqual(["10 h over burst", "7.5 pair-h measured", "71% measured", "3 × 2 vCPU · 3 GiB at once"]);
     expect(strip("vps-1a2b3c4d").getAttribute("aria-label")).toBe("vps-1a2b3c4d: 4 of 4 slots; 3 can burst together; over burst 10 hours in the week; busiest Wed 14 Oct 20:00 UTC, 4 online; 71% measured");
-    expect(container.textContent).toContain("Red: more servers online than can each burst to 2 vCPU and 3 GiB");
+    expect(legend().textContent).toContain("Red: more servers online than can each burst to 2 vCPU and 3 GiB");
+    expect(legend().querySelector('span[aria-hidden="true"].bg-crimson')).not.toBeNull();
     expect(container.textContent).toContain("more of them were online than could each burst to 2 vCPU and 3 GiB at once");
     expect(container.textContent).not.toContain("All slots busy");
     expect(container.textContent).not.toContain(NOTE);
@@ -206,7 +212,10 @@ it("shades an older control plane's read without red hours, and says why", async
     expect(container.textContent).toContain(NOTE);
     // A full VPS with all-busy hours still gets no red row: the website no longer draws that verdict.
     expect(cells("vps-1a2b3c4d").burst).toBeUndefined();
-    expect(container.querySelector(".bg-crimson:not([aria-hidden])")).toBeNull();
+    // Nor does the legend explain red it never draws, while it keeps the shading and no-data keys.
+    expect(legend().textContent).toBe("One cell per UTC hour, oldest first. Online:0all slotsNo data");
+    expect(legend().querySelectorAll('span[aria-hidden="true"]')).toHaveLength(2);
+    expect(container.querySelector(".bg-crimson")).toBeNull();
     expect(cells("vps-1a2b3c4d").shading[2 * 24 + 20]!.classList.contains("bg-gold")).toBe(true);
     expect(cells("vps-1a2b3c4d").shading[2 * 24 + 20]!.getAttribute("title")).toBe("Wed 14 Oct 20:00 UTC · 2 online");
     expect(rightColumn("vps-1a2b3c4d")).toEqual(["7.5 pair-h measured", "71% measured"]);
