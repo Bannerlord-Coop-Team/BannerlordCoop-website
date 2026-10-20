@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
 import { serverModsApi, type ServerModsApi } from "./server-mods-api";
-import { createServerModChunkHandler, createServerModsJsonHandler, MODS_REFRESH_SESSION_HEADER } from "./server-mods-route";
+import { MODS_REFRESH_SESSION_HEADER } from "./server-mods";
+import { createServerModChunkHandler, createServerModsJsonHandler } from "./server-mods-route";
 
 const SITE = "https://bannerlordcoop.com";
 const SERVER_ID = "22222222-2222-4222-8222-222222222222";

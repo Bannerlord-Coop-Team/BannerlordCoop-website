@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { sameOriginRequest } from "@/app/lib/auth/same-origin";
 import { MyServersApiError } from "./my-servers";
 import type { ServerModsApi } from "./server-mods-api";
+import { MODS_REFRESH_SESSION_HEADER } from "./server-mods";
 import { readBoundedBytes, readBoundedText, RequestTooLargeError } from "../../../../supabase/functions/_shared/edge-http";
 import {
     MAXIMUM_MODS_REQUEST_BYTES,
@@ -20,8 +21,6 @@ import {
 // `PUT /api/servers/<id>/mods/chunk?uploadId=&index=`. Route handlers keep long chunk relays out of
 // the page's sequential server-action queue, and refresh the Supabase session themselves.
 
-/** The browser asks for a forced refresh after a 401, once, as the transport contract requires. */
-export const MODS_REFRESH_SESSION_HEADER = "x-mods-refresh-session";
 /** Sessions this close to expiry are refreshed before relaying, matching the page middleware. */
 const REFRESH_BEFORE_EXPIRY_MILLISECONDS = 5 * 60_000;
 const ERROR_STATUS: Readonly<Record<string, number>> = {
