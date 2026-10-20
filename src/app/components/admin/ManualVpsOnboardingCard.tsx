@@ -63,7 +63,7 @@ export function ManualVpsOnboardingCard({ providers, regions, regionsError, help
         }
         setErrors({});
         const address = manualVpsLoginAddress(validation.input.sshLogin);
-        if (!window.confirm(`Onboard ${validation.input.serviceName} at ${address}? Onboarding trusts the pasted host key only at this exact IPv4 address, so confirm it against the provider console.`)) return;
+        if (!window.confirm(`Onboard ${validation.input.serviceName} at ${address}? The control plane pins the host key it finds at this exact IPv4 address on first contact, so confirm the address against the provider console.`)) return;
         setPending(true);
         setResult(null);
         try {
@@ -88,13 +88,13 @@ export function ManualVpsOnboardingCard({ providers, regions, regionsError, help
                 <h3 className="font-display text-xl font-semibold text-foreground">Add manual VPS</h3>
                 {help && <HelpIcon label={`Add manual VPS: ${help}`} help={help} />}
             </div>
-            <p className="mt-1 text-xs leading-5 text-foreground-muted">For an already-purchased VPS from a provider without an account API. Type the facts from the provider panel; the control plane revalidates them, pins the pasted host key, installs every managed runner slot, and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.</p>
+            <p className="mt-1 text-xs leading-5 text-foreground-muted">For an already-purchased VPS from a provider without an account API. Type the facts from the provider panel; the control plane revalidates them, scans and pins the host key on first contact, installs every managed runner slot, and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.</p>
             <form noValidate onSubmit={(event) => { event.preventDefault(); void submit(); }} className="mt-4 flex flex-1 flex-col">
                 <fieldset disabled={blockedReason !== null || pending} className="grid gap-3">
                     <ManualVpsFields values={values} errors={errors} providers={providers} regions={regions ?? []} onChange={update} />
                     <p role="note" className="flex gap-2 border-l-2 border-gold bg-gold/10 px-3 py-2 text-xs leading-5 text-foreground">
                         <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-gold" />
-                        <span>Check the IPv4 address twice. Onboarding trusts the pasted host key at that address, so a wrong address could enroll a machine you do not control.</span>
+                        <span>Check the IPv4 address twice. The control plane pins whatever host key that address presents on first contact, so a wrong address could enroll a machine you do not control.</span>
                     </p>
                 </fieldset>
                 {blockedReason !== null && <p className="mt-3 text-xs leading-5 text-amber-300">{blockedReason}</p>}
@@ -143,10 +143,6 @@ function ManualVpsFields({ values, errors, providers, regions, onChange }: {
         </FormField>
         <FormField label="SSH login" required error={errors.sshLogin} help="root@ and the VPS's public IPv4 address. Only root is accepted.">
             {(control) => <input {...control} {...bind("sshLogin")} autoComplete="off" spellCheck={false} placeholder="root@203.0.113.10" className={INPUT_CLASS} />}
-        </FormField>
-        <FormField label="Host key" required error={errors.hostPublicKey} help="Onboarding refuses a host presenting any other key."
-            hint={<>Copy the output of <code className="font-mono text-foreground">cat /etc/ssh/ssh_host_ed25519_key.pub</code> from the provider console.</>}>
-            {(control) => <textarea {...control} {...bind("hostPublicKey")} rows={3} spellCheck={false} placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI… root@host" className={`${INPUT_CLASS} py-2 font-mono`} />}
         </FormField>
         <FormField label="vCPU" required error={errors.vCpu} help="Capacity is one game slot per two vCPUs."
             hint={<span aria-live="polite">{slots === null ? `${MANUAL_VPS_MINIMUM_VCPU}–${MANUAL_VPS_MAXIMUM_VCPU} vCPUs.` : `${slots} game ${slots === 1 ? "slot" : "slots"}.`}</span>}>

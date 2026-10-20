@@ -280,8 +280,7 @@ test("does not cache lifecycle operations or requests with unknown release field
 test("forwards manual VPS onboarding byte-for-byte and relays the control plane's validation verdict", async () => {
     // The Edge keeps no operation allowlist: the control plane alone validates the strict manual-entry input.
     const raw = JSON.stringify({ version: 1, requestId: REQUEST_ID, operation: "onboard-manual-vps-host", input: {
-        provider: "hosthatch-vps", serviceName: "hosthatch-ams-1", sshLogin: "root@45.91.20.7",
-        hostPublicKey: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI${"A".repeat(43)} root@ams-1`, vCpu: 8, region: "benelux",
+        provider: "hosthatch-vps", serviceName: "hosthatch-ams-1", sshLogin: "root@45.91.20.7", vCpu: 8, region: "benelux",
         countryCode: "NL", locationId: "ams", publicHostname: null, datacenter: null,
     } });
     const bodies: string[] = [];
@@ -297,7 +296,7 @@ test("forwards manual VPS onboarding byte-for-byte and relays the control plane'
     assert.deepEqual(await accepted.json(), reply);
     assert.deepEqual(bodies, [raw]);
 
-    reply = { version: 1, requestId: REQUEST_ID, ok: false, error: { code: "invalid_input", message: "The host key is invalid.", retryable: false } };
+    reply = { version: 1, requestId: REQUEST_ID, ok: false, error: { code: "invalid_input", message: "The SSH login is invalid.", retryable: false } };
     status = 400;
     const rejected = await handler(adminRequest(raw));
     assert.equal(rejected.status, 400);

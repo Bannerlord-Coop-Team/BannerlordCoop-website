@@ -24,17 +24,10 @@ const REGIONS: HostingRegionPayload[] = [
 const PROVIDERS = [{ provider: "hosthatch-vps", displayName: "HostHatch VPS" }];
 const CHOICES = { providers: PROVIDERS, regions: REGIONS };
 
-/** Builds a real OpenSSH Ed25519 public key line: the wire-format blob of a fixed 32-byte key. */
-function ed25519Key(comment = "") {
-    const field = (bytes: Buffer) => Buffer.concat([Buffer.from([0, 0, 0, bytes.length]), bytes]);
-    const blob = Buffer.concat([field(Buffer.from("ssh-ed25519")), field(Buffer.alloc(32, 7))]);
-    return `ssh-ed25519 ${blob.toString("base64")}${comment ? ` ${comment}` : ""}`;
-}
-
 /** A complete, valid form whose fields individual tests override. */
 function form(overrides: Partial<ManualVpsFormValues> = {}): ManualVpsFormValues {
     return {
-        provider: "hosthatch-vps", serviceName: "hosthatch-ams-1", sshLogin: "root@45.91.20.7", hostPublicKey: ed25519Key("root@ams-1"),
+        provider: "hosthatch-vps", serviceName: "hosthatch-ams-1", sshLogin: "root@45.91.20.7",
         vCpu: "8", region: "benelux", countryCode: "NL", locationId: "ams", publicHostname: "", datacenter: "", ...overrides,
     };
 }
@@ -94,20 +87,20 @@ test("the slot count is one per two vCPUs within 2–64 whole vCPUs", () => {
     for (const invalid of ["", "1", "65", "2.5", "-4", "1e1", "abc"]) assert.equal(manualVpsSlotCount(invalid), null, invalid);
 });
 
-test("a valid form becomes the exact strict input, with blank optional fields sent as null", () => {
-    const result = validateManualVpsForm(form({ serviceName: " hosthatch-ams-1 ", hostPublicKey: `${ed25519Key("root@ams-1")}\n`, vCpu: " 8 " }), CHOICES);
+test("a valid form becomes the exact strict input, with blank optional fields sent as null and no host key", () => {
+    const result = validateManualVpsForm(form({ serviceName: " hosthatch-ams-1 ", vCpu: " 8 " }), CHOICES);
     assert.deepEqual(result, { ok: true, input: {
-        provider: "hosthatch-vps", serviceName: "hosthatch-ams-1", sshLogin: "root@45.91.20.7", hostPublicKey: ed25519Key("root@ams-1"),
+        provider: "hosthatch-vps", serviceName: "hosthatch-ams-1", sshLogin: "root@45.91.20.7",
         vCpu: 8, region: "benelux", countryCode: "NL", locationId: "ams", publicHostname: null, datacenter: null,
     } });
     assert.deepEqual(Object.keys(buildManualVpsInput(form())), [
-        "provider", "serviceName", "sshLogin", "hostPublicKey", "vCpu", "region", "countryCode", "locationId", "publicHostname", "datacenter",
+        "provider", "serviceName", "sshLogin", "vCpu", "region", "countryCode", "locationId", "publicHostname", "datacenter",
     ]);
 });
 
 test("filled optional fields and a region location dropdown are sent as entered", () => {
     const result = validateManualVpsForm(form({ region: "us-east", countryCode: "US", locationId: "os-us-east-va-2",
-        publicHostname: "play.example.com", datacenter: "Ashburn (VA)", hostPublicKey: ed25519Key() }), CHOICES);
+        publicHostname: "play.example.com", datacenter: "Ashburn (VA)" }), CHOICES);
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.equal(result.input.publicHostname, "play.example.com");
@@ -138,17 +131,6 @@ test("the SSH login is exactly root at a public IPv4 address", () => {
     }
     assert.equal(manualVpsLoginAddress(" root@45.91.20.7 "), "45.91.20.7");
     assert.equal(manualVpsLoginAddress("admin@45.91.20.7"), null);
-});
-
-test("the host key must be one complete ssh-ed25519 line within 80–512 characters", () => {
-    assert.equal(fieldError(form({ hostPublicKey: ed25519Key() }), "hostPublicKey"), undefined);
-    assert.equal(ed25519Key().length, 80);
-    const blob = ed25519Key().split(" ")[1]!;
-    for (const invalid of ["", `ssh-rsa ${blob}`, `ssh-ed25519 ${blob.slice(0, -1)}`, `ssh-ed25519 ${blob}A`, `ssh-ed25519  ${blob}`,
-        `ssh-ed25519 ${blob.replace("AAAAC3", "BBBBC3")}`, `${ed25519Key("a")}\n${ed25519Key("b")}`, ed25519Key("x".repeat(500)),
-        `ecdsa-sha2-nistp256 ${blob}`]) {
-        assert.notEqual(fieldError(form({ hostPublicKey: invalid }), "hostPublicKey"), undefined, invalid);
-    }
 });
 
 test("vCPU must be a whole number from 2 to 64", () => {
