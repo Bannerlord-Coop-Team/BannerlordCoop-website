@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { ControlPlaneAdminError } from "./client";
 import {
+    burstBytes,
     burstCores,
     busyBand,
     capacityHourLabel,
@@ -75,11 +76,23 @@ const instanceType = {
     hosts: 1, servers: 1, demand, steal, modelledServers: 2, demandSource: "type",
 };
 const provider = { provider: "ovhcloud-vps", hosts: 2, servers: 1, demand, steal, busyCores: busy };
+// The current control plane's model: a CPU burst target, and memory planned at its percentile.
 const model = { cpuPercentile: 50, cpuBurstVcpu: 1.6, memoryPercentile: 95, minimumRunningHours: 6, staticBurstVcpuPerServer: 2, staticBurstMemoryBytesPerServer: 3 * GIB };
 const capacity = {
     generatedAt: "2026-10-19T00:07:31.552Z", windowStartedAt: "2026-10-12T00:00:00.000Z", windowEndedAt: "2026-10-19T00:00:00.000Z", hours: 168,
     model, fleet: { hosts: 2, servers: 1, demand }, providers: [provider], instanceTypes: [instanceType], hosts: [host, spare],
 };
+/** A read in the current control plane's shape as parsed: without a memory burst target, so it and every peak memory are null. */
+const asParsed = <T extends { model: object; hosts: object[] }>(read: T) =>
+    ({ ...read, model: { ...read.model, memoryBurstBytes: null }, hosts: read.hosts.map((entry) => ({ ...entry, peakMemoryBytes: null })) });
+
+// The next control plane's: every online server is planned to burst to 2.5 GiB too, or its peak where higher. The
+// VPS's servers peaked at 2 GiB, under the target, which it plans.
+const memoryModel = { ...model, memoryBurstBytes: 2.5 * GIB };
+const memoryHost = { ...host, peakMemoryBytes: 2 * GIB, demandMemoryBytes: 2.5 * GIB };
+const memorySpare = { ...spare, peakMemoryBytes: null };
+const memoryCapacity = { ...capacity, model: memoryModel, hosts: [memoryHost, memorySpare] };
+const withMemoryHost = (changes: Record<string, unknown>) => ({ ...memoryCapacity, hosts: [{ ...memoryHost, ...changes }] });
 // The first read after the backend deploys: nothing measured yet, every figure null.
 const blank = {
     ...capacity, fleet: { hosts: 1, servers: 0, demand: noDemand },
@@ -91,13 +104,28 @@ const blank = {
 const withHost = (changes: Record<string, unknown>) => ({ ...capacity, hosts: [{ ...host, ...changes }] });
 const withDemand = (changes: Record<string, unknown>) => ({ ...capacity, fleet: { ...capacity.fleet, demand: { ...demand, ...changes } } });
 
-it("accepts the fleet-capacity read exactly as the contract describes it", () => {
-    expect(parseFleetCapacity(capacity)).toBe(capacity);
+it("accepts the current control plane's fleet-capacity read, with its memory burst target and peak memory null", () => {
+    expect(parseFleetCapacity(capacity)).toEqual(asParsed(capacity));
     expect(parseFleetCapacity({ ...capacity, providers: [], instanceTypes: [], hosts: [] })).not.toBeNull();
+    // Without a memory burst target nothing ties the planned memory to a peak: it is the source's p95.
+    expect(parseFleetCapacity(capacity)!.hosts[0]!.demandMemoryBytes).toBe(demand.memoryBytes.p95);
+});
+
+it("accepts the next control plane's read, with a memory burst target, exactly as it is", () => {
+    expect(parseFleetCapacity(memoryCapacity)).toBe(memoryCapacity);
+    // A peak above the target is what is planned, and one at the target plans the target.
+    expect(parseFleetCapacity(withMemoryHost({ peakMemoryBytes: 2.75 * GIB, demandMemoryBytes: 2.75 * GIB }))).not.toBeNull();
+    expect(parseFleetCapacity(withMemoryHost({ peakMemoryBytes: 2.5 * GIB, demandMemoryBytes: 2.5 * GIB }))).not.toBeNull();
+    expect(parseFleetCapacity(withMemoryHost({ peakMemoryBytes: 0, demandMemoryBytes: 2.5 * GIB }))).not.toBeNull();
+    // The largest target the read accepts.
+    expect(parseFleetCapacity({ ...memoryCapacity, model: { ...memoryModel, memoryBurstBytes: 64 * GIB }, hosts: [{ ...memoryHost, demandMemoryBytes: 64 * GIB }] })).not.toBeNull();
+    expect(burstBytes(2 * GIB, 2.5 * GIB)).toBe(2.5 * GIB);
+    expect(burstBytes(2.75 * GIB, 2.5 * GIB)).toBe(2.75 * GIB);
 });
 
 it("accepts the sparse first read, with every figure null", () => {
-    expect(parseFleetCapacity(blank)).toBe(blank);
+    expect(parseFleetCapacity(blank)).toEqual(asParsed(blank));
+    expect(parseFleetCapacity({ ...blank, model: memoryModel, hosts: [memorySpare] })).not.toBeNull();
     expect(parseFleetCapacity({ ...capacity, hosts: [{ ...spare, occupants: [{ serverId: "33333333-3333-4333-8333-333333333333", displayName: "New", demand: noDemand }] }] })).not.toBeNull();
 });
 
@@ -112,7 +140,8 @@ const exampleSteal = { samples: 2015, mean: 5, p95: 5, max: 5 };
 const exampleKey = "ovhcloud-vps|6|12|Intel Core Processor (Haswell, no TSX)|2400";
 const example = {
     generatedAt: "2026-10-17T00:20:00.000Z", windowStartedAt: "2026-10-10T00:00:00.000Z", windowEndedAt: "2026-10-17T00:00:00.000Z", hours: 168,
-    model: { cpuPercentile: 50, cpuBurstVcpu: 1.6, memoryPercentile: 95, minimumRunningHours: 6, staticBurstVcpuPerServer: 2, staticBurstMemoryBytesPerServer: 3221225472 },
+    model: { cpuPercentile: 50, cpuBurstVcpu: 1.6, memoryBurstBytes: 2684354560, memoryPercentile: 95, minimumRunningHours: 6, staticBurstVcpuPerServer: 2,
+        staticBurstMemoryBytesPerServer: 3221225472 },
     fleet: { hosts: 1, servers: 2, demand: exampleDemand },
     providers: [{ provider: "ovhcloud-vps", hosts: 1, servers: 2, demand: exampleDemand, steal: exampleSteal, busyCores: { samples: 2015, mean: 2.1, p95: 2.1, max: 2.1 } }],
     instanceTypes: [{
@@ -134,7 +163,7 @@ const example = {
         steal: exampleSteal, busyCores: { samples: 2015, mean: 2.1, p95: 2.1, max: 2.1 },
         cpuPressureShare: null, overheadCores: 0.3, overheadMemoryBytes: 1610612736,
         usableCores: 5.4, usableMemoryBytes: 11274289152,
-        stableCpuCores: 0.6, peakCpuCores: 1.2, demandCpuCores: 1.6, demandMemoryBytes: 1610612736, demandSource: "vps",
+        stableCpuCores: 0.6, peakCpuCores: 1.2, peakMemoryBytes: 1610612736, demandCpuCores: 1.6, demandMemoryBytes: 2684354560, demandSource: "vps",
         modelledServers: 3, limitedBy: "cpu", samples: 4032,
         stealHourly: "32".repeat(168), busyHourly: "23".repeat(168),
     }],
@@ -144,27 +173,33 @@ it("accepts the control plane's documented example", () => {
     expect(parseFleetCapacity(example)).toBe(example);
 });
 
-/** An older control plane's read: no burst target, so no `cpuBurstVcpu`, `stableCpuCores` or `peakCpuCores` and no `vps` source. */
-const legacyModel = without({ ...model, cpuPercentile: 95 }, "cpuBurstVcpu");
-const legacyHost = <T extends { stableCpuCores: unknown; peakCpuCores: unknown; demandSource: string }>(entry: T) =>
+/** A read from before the CPU burst target: no `cpuBurstVcpu`, `stableCpuCores` or `peakCpuCores` and no `vps` source. */
+const earlierHost = <T extends { stableCpuCores: unknown; peakCpuCores: unknown; demandSource: string }>(entry: T) =>
     ({ ...without(without(entry, "stableCpuCores"), "peakCpuCores"), demandSource: entry.demandSource === "vps" ? "type" : entry.demandSource });
-const legacy = { ...capacity, model: legacyModel, hosts: [legacyHost(host), legacyHost(spare)] };
-
-it("accepts an older control plane's read, with its burst target, stable and peak figures null", () => {
-    const parsed = parseFleetCapacity(legacy)!;
-    expect(parsed).toEqual({ ...legacy, model: { ...legacyModel, cpuBurstVcpu: null },
-        hosts: legacy.hosts.map((entry) => ({ ...entry, stableCpuCores: null, peakCpuCores: null })) });
-    // It reads as it did before the burst target: the p95 planned for, and the hints without it.
-    expect(staticRuleComparison(parsed)).toBe("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 1.20 cores at p95 (60% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB).");
-    expect(fleetCapacityHints(parsed.model).modelled).toContain("at their p95 CPU and p95 memory");
-    expect(occupantDemandLabel(demand, parsed.model)).toBe("1.20 cores · 1.80 GiB at p95");
-    expect(perServerSourceLabel(parsed.hosts[0]!, parsed.model)).toBe("Type p95");
-});
+const earlier = { ...capacity, model: without({ ...model, cpuPercentile: 95 }, "cpuBurstVcpu"), hosts: [earlierHost(host), earlierHost(spare)] };
 
 it.each([
-    ["a new model with an older VPS", { ...capacity, hosts: [legacyHost(host)] }],
-    ["an older model with a new VPS", { ...legacy, hosts: [host] }],
-    ["an older VPS planned from its own servers", { ...legacy, hosts: [{ ...legacyHost(host), demandSource: "vps" }] }],
+    // No control plane sends a read from before the CPU burst target now.
+    ["a read from before the CPU burst target", earlier],
+    ["a model with a CPU burst target and a VPS from before it", { ...capacity, hosts: [earlierHost(host)] }],
+    // A read is in the current shape or the next one, never a mix.
+    ["a memory burst target with a VPS without its peak memory", { ...memoryCapacity, hosts: [host] }],
+    ["a VPS's peak memory without a memory burst target", { ...capacity, hosts: [memoryHost] }],
+    ["a memory burst target with one VPS of each shape", { ...memoryCapacity, hosts: [memoryHost, spare] }],
+    ["a zero memory burst target", { ...memoryCapacity, model: { ...memoryModel, memoryBurstBytes: 0 } }],
+    ["a negative memory burst target", { ...memoryCapacity, model: { ...memoryModel, memoryBurstBytes: -2.5 * GIB } }],
+    ["a fractional memory burst target", { ...memoryCapacity, model: { ...memoryModel, memoryBurstBytes: 2.5 * GIB + 0.5 } }],
+    ["a memory burst target above 64 GiB", { ...memoryCapacity, model: { ...memoryModel, memoryBurstBytes: 64 * GIB + 1 }, hosts: [{ ...memoryHost, demandMemoryBytes: 64 * GIB + 1 }] }],
+    ["a memory burst target given as text", { ...memoryCapacity, model: { ...memoryModel, memoryBurstBytes: "2684354560" } }],
+    ["a null memory burst target", { ...memoryCapacity, model: { ...memoryModel, memoryBurstBytes: null } }],
+    ["a negative peak memory", withMemoryHost({ peakMemoryBytes: -1 })],
+    ["a fractional peak memory", withMemoryHost({ peakMemoryBytes: 2 * GIB + 0.5 })],
+    ["no source but a peak memory alone", withMemoryHost({ demandSource: "none", stableCpuCores: null, peakCpuCores: null, demandCpuCores: null, demandMemoryBytes: null })],
+    ["a source without a peak memory", withMemoryHost({ peakMemoryBytes: null })],
+    ["a planned memory under the burst target", withMemoryHost({ demandMemoryBytes: 2 * GIB })],
+    ["a planned memory a byte over the burst target", withMemoryHost({ demandMemoryBytes: 2.5 * GIB + 1 })],
+    ["a planned memory under its peak", withMemoryHost({ peakMemoryBytes: 2.75 * GIB, demandMemoryBytes: 2.5 * GIB })],
+    ["the p95 planned with a memory burst target", withMemoryHost({ demandMemoryBytes: demand.memoryBytes.p95 })],
     ["an instance type planned from one VPS", { ...capacity, instanceTypes: [{ ...instanceType, demandSource: "vps" }] }],
     ["a zero burst target", { ...capacity, model: { ...model, cpuBurstVcpu: 0 } }],
     ["a negative burst target", { ...capacity, model: { ...model, cpuBurstVcpu: -1.6 } }],
@@ -185,8 +220,7 @@ it.each([
     ["a planned CPU under its peak", withHost({ demandCpuCores: 1.6 })],
     ["a planned CPU under the burst target", withHost({ peakCpuCores: 1.2, demandCpuCores: 1.2 })],
     ["a planned CPU over the burst target and its peak", withHost({ peakCpuCores: 1.2, demandCpuCores: 1.99 })],
-    ["an older VPS without a source but with figures", { ...legacy, hosts: [{ ...legacyHost(host), demandSource: "none" }] }],
-    ["an older VPS with a source but no planned CPU", { ...legacy, hosts: [{ ...legacyHost(host), demandCpuCores: null }] }],
+    ["a planned CPU under its peak with a memory burst target", withMemoryHost({ demandCpuCores: 1.6 })],
 ])("rejects %s, mixing the two shapes or out of range", (_case, value) => {
     expect(parseFleetCapacity(value)).toBeNull();
 });
@@ -201,13 +235,33 @@ it("labels each VPS's per-server source with the burst target and its peak", () 
     expect(perServerSourceLabel({ ...measured!, peakCpuCores: 1.6 }, parsed.model)).toBe("This VPS · 1.6 vCPU burst · peak 1.600");
     expect(formatCoresExact(0.996)).toBe("0.996 cores");
     expect(perServerSourceLabel(unmeasured!, parsed.model)).toBe("None yet");
-    // Each figure names its own percentile: the median CPU, its peak and the p95 memory.
+    // Each figure names its own percentile: the median CPU, its peak and the p95 memory, planned without a memory target.
     expect(occupantDemandLabel(demand, parsed.model)).toBe("0.85 cores stable (p50), peak 1.95 · 1.80 GiB at p95");
     expect(occupantDemandLabel({ ...demand, memoryBytes: null }, parsed.model)).toBe("0.85 cores stable (p50), peak 1.95 · memory —");
     expect(occupantDemandLabel({ ...demand, cpuCores: null }, parsed.model)).toBe("CPU — · 1.80 GiB at p95");
     expect(occupantDemandLabel(noDemand, parsed.model)).toBe("no data yet");
     expect(burstCores(1.445, 1.6)).toBe(1.6);
     expect(burstCores(1.95, 1.6)).toBe(1.95);
+});
+
+it("labels each VPS's per-server source with the burst targets it plans and both peaks", () => {
+    const parsed = parseFleetCapacity(memoryCapacity)!;
+    const [measured, unmeasured] = parsed.hosts;
+    // Its CPU peak is above the target and planned; its 2 GiB memory peak is under the target, which is planned.
+    expect(perServerSourceLabel(measured!, parsed.model)).toBe("This VPS · 2.5 GiB burst · peaks 1.950 cores, 2.00 GiB");
+    // Both peaks within their targets, as on today's fleet; a target is planned at its peak exactly.
+    expect(perServerSourceLabel({ ...measured!, peakCpuCores: 1.372, peakMemoryBytes: 2_430_492_672 }, parsed.model)).toBe("This VPS · 1.6 vCPU, 2.5 GiB burst · peaks 1.372 cores, 2.26 GiB");
+    expect(perServerSourceLabel({ ...measured!, demandSource: "fleet", peakCpuCores: 1.6, peakMemoryBytes: 2.5 * GIB }, parsed.model)).toBe("Fleet · 1.6 vCPU, 2.5 GiB burst · peaks 1.600 cores, 2.50 GiB");
+    // Memory above its target, CPU within; and both above.
+    expect(perServerSourceLabel({ ...measured!, peakCpuCores: 1.372, peakMemoryBytes: 2.6 * GIB }, parsed.model)).toBe("This VPS · 1.6 vCPU burst · peaks 1.372 cores, 2.60 GiB");
+    expect(perServerSourceLabel({ ...measured!, peakMemoryBytes: 2.6 * GIB }, parsed.model)).toBe("This VPS · peaks 1.950 cores, 2.60 GiB");
+    // A memory peak a few MiB above the target prints as 2.50 GiB, so the label keeps the target it reads as.
+    expect(perServerSourceLabel({ ...measured!, peakCpuCores: 1.372, peakMemoryBytes: 2.5 * GIB + 5 * 2 ** 20 }, parsed.model)).toBe("This VPS · 1.6 vCPU, 2.5 GiB burst · peaks 1.372 cores, 2.50 GiB");
+    expect(perServerSourceLabel(unmeasured!, parsed.model)).toBe("None yet");
+    // An occupant's memory peak is shown beside its p95, as it is what the plan follows.
+    expect(occupantDemandLabel(demand, parsed.model)).toBe("0.85 cores stable (p50), peak 1.95 · 1.80 GiB at p95, peak 2.00");
+    expect(occupantDemandLabel({ ...demand, memoryBytes: null }, parsed.model)).toBe("0.85 cores stable (p50), peak 1.95 · memory —");
+    expect(occupantDemandLabel({ ...demand, cpuCores: null }, parsed.model)).toBe("CPU — · 1.80 GiB at p95, peak 2.00");
 });
 
 it("accepts what the contract does not rule out", () => {
@@ -435,11 +489,33 @@ it("compares modelled servers with today's slots", () => {
 it("compares the fleet's needs with the static rule, or says there is not enough data", () => {
     expect(staticRuleComparison(parseFleetCapacity(capacity)!)).toBe("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB). Every online server is planned to burst to 1.6 vCPU at once, or to its VPS's measured peak where higher. The fleet's highest peak is 1.950 cores, so VPSs plan from 1.600 cores to 1.950 cores per server (98% of 2 vCPU at most); each VPS's own is in its per-server column.");
     expect(staticRuleComparison(parseFleetCapacity({ ...capacity, model: { ...model, cpuPercentile: 99 } })!)).toContain("1.60 cores at p99 (80% of 2 vCPU)");
-    // The control plane's own example: no peak is above the target, so every VPS plans the 1.6 vCPU target.
-    expect(staticRuleComparison(parseFleetCapacity(example)!)).toContain("No peak is above the target (the fleet's highest is 1.200 cores), so every VPS plans 1.600 cores per server (80% of 2 vCPU).");
-    // A fleet peak exactly at the target still plans the target everywhere.
-    const atTarget = { ...example, fleet: { ...example.fleet, demand: { ...exampleDemand, cpuCores: { ...exampleDemand.cpuCores, max: 1.6 } } } };
-    expect(staticRuleComparison(parseFleetCapacity(atTarget)!)).toContain("so every VPS plans 1.600 cores per server");
+    // Without a memory burst target: no CPU peak above the target, and one exactly at it, plan the target everywhere.
+    const currentAt = (max: number) => asParsed({ ...capacity, fleet: { ...capacity.fleet, demand: { ...demand, cpuCores: { ...demand.cpuCores, max } } } });
+    expect(staticRuleComparison(currentAt(1.2))).toContain("No peak is above the target (the fleet's highest is 1.200 cores), so every VPS plans 1.600 cores per server (80% of 2 vCPU).");
+    expect(staticRuleComparison(currentAt(1.6))).toContain("so every VPS plans 1.600 cores per server");
+});
+
+it("bounds each VPS's planned CPU and memory by the fleet's peaks with a memory burst target", () => {
+    const uses = "Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.60 cores at p50 (30% of 2 vCPU) and 1.50 GiB at p95 (50% of 3 GiB).";
+    const burst = "Every online server is planned to burst to 1.6 vCPU and 2.5 GiB at once, or to its VPS's measured peaks where higher;";
+    // The control plane's own example: neither peak is above its target, so every VPS plans both targets.
+    expect(staticRuleComparison(parseFleetCapacity(example)!)).toBe(`${uses} ${burst} no CPU peak is above its target (the fleet's highest is 1.200 cores), so every VPS plans 1.600 cores per server (80% of 2 vCPU), and no memory peak is above its target (the fleet's highest is 1.50 GiB), so every VPS plans 2.50 GiB per server (83% of 3 GiB).`);
+    const withPeaks = (cpuMax: number, memoryMax: number) => staticRuleComparison(parseFleetCapacity({ ...example, fleet: { ...example.fleet, demand: {
+        ...exampleDemand, cpuCores: { ...exampleDemand.cpuCores, max: cpuMax }, memoryBytes: { ...exampleDemand.memoryBytes, max: memoryMax } } } })!);
+    // A memory peak above its target ranges the plans from the target to that peak; one exactly at it plans the target.
+    expect(withPeaks(1.2, 2.75 * GIB)).toContain("no CPU peak is above its target (the fleet's highest is 1.200 cores), so every VPS plans 1.600 cores per server (80% of 2 vCPU), and the fleet's highest memory peak is 2.75 GiB, so VPSs plan from 2.50 GiB to 2.75 GiB per server (92% of 3 GiB at most); each VPS's own is in its per-server column.");
+    // A peak a few MiB above the target shows as the same two decimals, so it reads as at the target, never as a range
+    // from 2.50 to 2.50; one that shows differently is above it.
+    expect(withPeaks(1.2, 2.5 * GIB + 1)).toContain("and no memory peak is above its target (the fleet's highest is 2.50 GiB), so every VPS plans 2.50 GiB per server (83% of 3 GiB).");
+    expect(withPeaks(1.2, 2.5 * GIB + 5 * 2 ** 20)).not.toContain("from 2.50 GiB to 2.50 GiB");
+    expect(withPeaks(1.2, 2.5 * GIB + 16 * 2 ** 20)).toContain("the fleet's highest memory peak is 2.52 GiB, so VPSs plan from 2.50 GiB to 2.52 GiB per server");
+    expect(withPeaks(1.2, 2.5 * GIB)).toContain("and no memory peak is above its target (the fleet's highest is 2.50 GiB), so every VPS plans 2.50 GiB per server (83% of 3 GiB).");
+    // A CPU peak above its target alone, and both.
+    expect(withPeaks(1.95, 2 * GIB)).toContain("the fleet's highest CPU peak is 1.950 cores, so VPSs plan from 1.600 cores to 1.950 cores per server (98% of 2 vCPU at most), and no memory peak is above its target (the fleet's highest is 2.00 GiB), so every VPS plans 2.50 GiB per server (83% of 3 GiB); each VPS's own is in its per-server column.");
+    expect(withPeaks(1.95, 2.75 * GIB)).toContain("(98% of 2 vCPU at most), and the fleet's highest memory peak is 2.75 GiB, so VPSs plan from 2.50 GiB to 2.75 GiB per server (92% of 3 GiB at most); each VPS's own is in its per-server column.");
+    // Nothing is planned until the fleet has run long enough.
+    const sparse = { ...example, fleet: { ...example.fleet, demand: { ...exampleDemand, runningServerHours: 3.25 } } };
+    expect(staticRuleComparison(parseFleetCapacity(sparse)!)).not.toContain("burst");
     expect(staticRuleComparison(parseFleetCapacity(blank)!)).toBe("Today's static rule reserves 2 vCPU · 3 GiB per server. There is not enough data yet to compare it with what servers use.");
 });
 
@@ -461,7 +537,7 @@ it("reads a clock of 0 MHz as unknown", () => {
 });
 
 it("explains busy cores and modelled servers as the control plane computes them", () => {
-    const hints = fleetCapacityHints(model);
+    const hints = fleetCapacityHints(parseFleetCapacity(capacity)!.model);
     // Busy is user + nice + system + irq + softirq time.
     expect(hints.busyCores).toContain("(user, nice, system and interrupt time)");
     // Nothing is modelled while the VPS's servers, the type and the fleet are under minimumRunningHours.
@@ -476,6 +552,23 @@ it("explains busy cores and modelled servers as the control plane computes them"
     expect(hints.cpuMax).toContain("no source peaks above this");
     expect(hints.max).toBe("The highest interval in the week.");
     expect(hints.p50).not.toContain("stable");
+    // Without a memory burst target memory is planned at its p95.
+    expect(hints.p95).toContain("The model sizes servers at this level");
+    expect(hints.memory).not.toContain("burst");
+    expect(hints.perServer).toContain("and its p95 memory.");
+});
+
+it("explains memory as the burst target or the peak, with the p95 for comparison, once there is a memory burst target", () => {
+    const hints = fleetCapacityHints(memoryModel);
+    expect(hints.memory).toBe("Memory one server used (its working set) at the end of each running interval of about 5 minutes, in GiB. The model plans memory at the 2.5 GiB burst target, or the peak where higher.");
+    expect(hints.p95).toBe("p95: 95% of the intervals were at or below this, shown for comparison; the model does not plan memory from it.");
+    expect(hints.max).toBe("The highest interval in the week. Each VPS plans the peak of its own demand source (its own servers, its instance type or the fleet) where that is above the 2.5 GiB target, as its per-server column shows; no source peaks above this.");
+    expect(hints.p50).toBe("p50: the median. Half of the intervals were at or below this.");
+    expect(hints.perServer).toBe("Per server: what one server is modelled to need on this VPS when every server on it bursts at once: 1.6 vCPU and 2.5 GiB, or the peak CPU and memory of the source shown where higher.");
+    expect(hints.modelled).toContain("if each bursts to 1.6 vCPU and 2.5 GiB (or its peaks where higher) at once: floor(min(usable cores ÷ per-server cores, usable memory ÷ per-server memory))");
+    // The CPU hints are those without a memory burst target.
+    const current = fleetCapacityHints({ ...memoryModel, memoryBurstBytes: null });
+    expect([hints.cpuP50, hints.cpuP95, hints.cpuMax]).toEqual([current.cpuP50, current.cpuP95, current.cpuMax]);
 });
 
 it("formats a sliver of a percent and explains failed reads", () => {

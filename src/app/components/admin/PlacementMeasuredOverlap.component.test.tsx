@@ -12,7 +12,7 @@ vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({
 /** 168 hours from a function of the hour index. */
 const week = <T,>(value: (hour: number) => T) => Array.from({ length: 168 }, (_, hour) => value(hour));
 
-// Four servers on a 6 vCPU, 11.41 GiB VPS, where three can each burst to 1.6 vCPU and 3 GiB at once: all four were
+// Four servers on a 6 vCPU, 11.41 GiB VPS, where three can each burst to 1.6 vCPU and 2.5 GiB at once: all four were
 // online 20:00–22:00 on the last five days.
 const busyHours = new Set([0, 1, 2, 3, 4].flatMap((day) => [(day + 2) * 24 + 20, (day + 2) * 24 + 21]));
 const over: HostingPlacementOverlapBurstHost = {
@@ -228,7 +228,7 @@ it("marks in red the hours more servers were online than can each burst, and dra
     expect(burst[50]!.style.backgroundImage).toBe("");
     expect(rightColumn("vps-1a2b3c4d")).toEqual(["10 h over burst", "7.5 pair-h measured", "71% measured"]);
     expect(strip("vps-1a2b3c4d").getAttribute("aria-label")).toBe("vps-1a2b3c4d: 4 of 4 slots; 3 can burst together; over burst 10 hours in the week; busiest Wed 14 Oct 20:00 UTC, 4 online; 71% measured");
-    expect(legend().textContent).toContain("Red: more servers online than can each burst to 1.6 vCPU and 3 GiB");
+    expect(legend().textContent).toContain("Red: more servers online than can each burst to 1.6 vCPU and 2.5 GiB");
     expect(legend().querySelector('span[aria-hidden="true"].bg-crimson')).not.toBeNull();
     expect(intro().textContent).toBe(INTRO);
     expect(container.textContent).not.toContain("All slots busy");

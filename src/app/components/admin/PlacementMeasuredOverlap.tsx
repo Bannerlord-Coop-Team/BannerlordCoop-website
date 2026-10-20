@@ -147,7 +147,7 @@ function OverlapLegend({ burst }: { burst: boolean }) {
             <span>No data</span>
             {burst && <>
                 <span aria-hidden="true" className="ml-2 h-1 w-4 bg-crimson" />
-                <span>Red: more servers online than can each burst to 1.6 vCPU and 3 GiB</span>
+                <span>Red: more servers online than can each burst to 1.6 vCPU and 2.5 GiB</span>
             </>}
         </div>
     );
