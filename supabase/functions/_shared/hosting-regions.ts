@@ -49,6 +49,7 @@ export const HOSTING_REGIONS = [
     { key: "germany", label: "Germany", continent: "europe", placement: { countryCodes: ["DE"] } },
     { key: "united-kingdom", label: "United Kingdom", continent: "europe", placement: { countryCodes: ["GB"] } },
     { key: "poland", label: "Poland", continent: "europe", placement: { countryCodes: ["PL"] } },
+    { key: "hong-kong", label: "Hong Kong", continent: "asia", placement: { countryCodes: ["HK"] } },
     { key: "singapore", label: "Singapore", continent: "asia", placement: { countryCodes: ["SG"] } },
     { key: "japan", label: "Japan", continent: "asia", placement: { countryCodes: ["JP"] } },
     { key: "south-korea", label: "South Korea", continent: "asia", placement: { countryCodes: ["KR"] } },
