@@ -36,7 +36,9 @@ const fleetDemand: HostingFleetCapacityDemand = {
     memoryBytes: { p50: 1_503_238_553, p95: 1_932_735_283, max: 2 * GIB },
     throttledShare: 0.012, cpuPressureShare: 0.034,
 };
-const model: HostingAdminFleetCapacity["model"] = { cpuPercentile: 95, memoryPercentile: 95, minimumRunningHours: 6, staticBurstVcpuPerServer: 2, staticBurstMemoryBytesPerServer: 3 * GIB };
+const model: HostingAdminFleetCapacity["model"] = {
+    cpuPercentile: 50, cpuBurstVcpu: 1.6, memoryPercentile: 95, minimumRunningHours: 6, staticBurstVcpuPerServer: 2, staticBurstMemoryBytesPerServer: 3 * GIB,
+};
 const HASWELL = "Intel Core Processor (Haswell, no TSX)";
 const EPYC = "AMD EPYC 7282 16-Core Processor";
 // Instance type keys: provider, vCPUs, whole GiB, CPU model and MHz rounded to 100.
@@ -51,8 +53,8 @@ const CONTABO_TYPE = `Contabo · 8 vCPU · 16.00 GiB · ${EPYC} · 2,795 MHz`;
 
 const empty: Omit<HostingFleetCapacityHost, "serviceName" | "provider" | "regionKeys" | "vCpu" | "slots"> = {
     memoryBytes: null, cpuModel: null, cpuMhz: null, instanceTypeKey: null, occupants: [], steal: null, busyCores: null, cpuPressureShare: null,
-    overheadCores: null, overheadMemoryBytes: null, usableCores: null, usableMemoryBytes: null, demandCpuCores: null, demandMemoryBytes: null,
-    demandSource: "none", modelledServers: null, limitedBy: null, samples: 0, stealHourly: "--".repeat(168), busyHourly: "--".repeat(168),
+    overheadCores: null, overheadMemoryBytes: null, usableCores: null, usableMemoryBytes: null, stableCpuCores: null, peakCpuCores: null, demandCpuCores: null,
+    demandMemoryBytes: null, demandSource: "none", modelledServers: null, limitedBy: null, samples: 0, stealHourly: "--".repeat(168), busyHourly: "--".repeat(168),
 };
 // Listed first in the read but without any samples, so it comes last in its group.
 const quiet: HostingFleetCapacityHost = { ...empty, serviceName: "vps-de-quiet.vps.ovh.net", provider: "ovhcloud-vps", regionKeys: ["germany"], vCpu: 4, slots: 2 };
@@ -67,7 +69,8 @@ const roomy: HostingFleetCapacityHost = {
     ],
     steal: { samples: 2016, mean: 0.4, p95: 1.2, max: 6.5 }, busyCores: { samples: 2016, mean: 1.1, p95: 2.4, max: 4.8 }, cpuPressureShare: 0.02,
     overheadCores: 0.35, overheadMemoryBytes: 1_181_116_006, usableCores: 5.58, usableMemoryBytes: 11_703_786_240,
-    demandCpuCores: 1.2, demandMemoryBytes: 1_932_735_283, demandSource: "type", modelledServers: 4, limitedBy: "cpu", samples: 2016,
+    stableCpuCores: 0.723, peakCpuCores: 1.45, demandCpuCores: 1.6, demandMemoryBytes: 1_932_735_283, demandSource: "type", modelledServers: 4, limitedBy: "cpu",
+    samples: 2016,
     // The first two hours have no data.
     stealHourly: hex(week((hour) => hour < 2 ? null : hour === PEAK ? 255 : 4)),
     busyHourly: hex(week((hour) => hour < 2 ? null : hour === PEAK ? 85 : 30)),
@@ -82,7 +85,8 @@ const risky: HostingFleetCapacityHost = {
     ],
     steal: { samples: 2016, mean: 1.8, p95: 3.4, max: 12.5 }, busyCores: { samples: 2016, mean: 2.1, p95: 3.1, max: 3.9 }, cpuPressureShare: 0.1,
     overheadCores: 0.4, overheadMemoryBytes: 858_993_459, usableCores: 3.46, usableMemoryBytes: 3_435_973_837,
-    demandCpuCores: 1.2, demandMemoryBytes: 1_932_735_283, demandSource: "fleet", modelledServers: 1, limitedBy: "memory", samples: 2016,
+    stableCpuCores: 0.723, peakCpuCores: 1.45, demandCpuCores: 1.6, demandMemoryBytes: 1_932_735_283, demandSource: "fleet", modelledServers: 1,
+    limitedBy: "memory", samples: 2016,
     stealHourly: hex(week(() => 60)), busyHourly: hex(week(() => 70)),
 };
 const matching: HostingFleetCapacityHost = {
@@ -236,7 +240,7 @@ it("shows what a server needs and compares it with the static rule", async () =>
         ["CPU p50", "0.85 cores"], ["CPU p95", "1.20 cores"], ["CPU max", "1.95 cores"], ["Running server-hours", "412.5 server-h"],
         ["Memory p50", "1.40 GiB"], ["Memory p95", "1.80 GiB"], ["Memory max", "2.00 GiB"], ["Throttled", "1.2%"],
     ]);
-    expect(needs.textContent).toContain("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 1.20 cores at p95 (60% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB).");
+    expect(needs.textContent).toContain("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB). Every online server is planned to burst to 1.6 vCPU at once, or to its VPS's measured peak where higher. The fleet's highest peak is 1.950 cores, so VPSs plan from 1.600 cores to 1.950 cores per server (98% of 2 vCPU at most); each VPS's own is in its per-server column.");
 });
 
 it("compares providers' steal and per-server needs", async () => {
@@ -283,9 +287,10 @@ it("shows each VPS's figures and its servers' own needs", async () => {
     expect(name.textContent).toContain(`${HASWELL}2,400 MHz`);
     expect(name.textContent).toContain("3 servers · 3 slots");
     expect([...name.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
-        "Calradia Company1.10 cores · 1.65 GiB at p95", "Sturgia Nightsno data yet", "Vlandia Rising0.90 cores · memory — at p95",
+        "Calradia Company0.55 cores stable (p50), peak 1.10 · 1.65 GiB at p95", "Sturgia Nightsno data yet",
+        "Vlandia Rising0.45 cores stable (p50), peak 0.90 · memory —",
     ]);
-    expect(cellTexts(row).slice(0, 7)).toEqual(["4 / 3 slotsHeadroom +1", "CPU", "0.4% · 1.2% · 6.5%", "2.40 coresof 6 vCPU", "0.35 cores1.10 GiB", "5.58 cores10.90 GiB", "1.20 cores1.80 GiBType p95"]);
+    expect(cellTexts(row).slice(0, 7)).toEqual(["4 / 3 slotsHeadroom +1", "CPU", "0.4% · 1.2% · 6.5%", "2.40 coresof 6 vCPU", "0.35 cores1.10 GiB", "5.58 cores10.90 GiB", "1.600 cores1.80 GiBType · 1.6 vCPU burst · peak 1.450"]);
     expect(cellTexts(hostRow("vps-de-risk")).slice(0, 3)).toEqual(["1 / 2 slotsAt risk −1", "Memory", "1.8% · 3.4% · 12.5%"]);
     expect(cellTexts(hostRow("vps-spare")).slice(0, 7)).toEqual([`${NO_DATA} / 2 slots`, NO_DATA, NO_DATA, `${NO_DATA}of 4 vCPU`, `${NO_DATA}${NO_DATA}`, `${NO_DATA}${NO_DATA}`, `${NO_DATA}${NO_DATA}None yet`]);
 });
@@ -451,8 +456,49 @@ it("explains each figure in a tooltip that keyboard and pointer users can reach"
     ] as const) {
         expect(tooltipOf(button(label, vpss)).textContent).toBe(hint);
     }
-    expect(tooltipOf(button("Demand source", pane("Instance types"))).textContent).toContain("Type uses the instance type's own figures once its servers have run 6.0 server-h in the week; Fleet uses the whole fleet's once it has");
-    expect(tooltipOf(button("CPU p95", pane("What a server needs"))).textContent).toBe(`${hints.cpu} ${hints.p95}`);
+    // An instance type is never planned from one VPS, so its tooltip names only its own sources.
+    expect(tooltipOf(button("Demand source", pane("Instance types"))).textContent).toBe(hints.typeDemandSource);
+    expect(hints.typeDemandSource).toContain("Type uses its own servers once they have run 6.0 server-h in the week; Fleet uses the whole fleet's once it has");
+    expect(hints.typeDemandSource).not.toContain("This VPS");
+    expect(hints.demandSource).toContain("This VPS uses the servers that ran on this VPS once they have run 6.0 server-h there in the week");
+    expect(tooltipOf(button("CPU p95", pane("What a server needs"))).textContent).toBe(`${hints.cpu} ${hints.cpuP95}`);
+    // Memory is planned at its p95, so its tooltips never describe the CPU rule.
+    expect(tooltipOf(button("Memory p50", pane("What a server needs"))).textContent).toBe(`${hints.memory} ${hints.p50}`);
+    expect(tooltipOf(button("Memory p95", pane("What a server needs"))).textContent).toBe(`${hints.memory} ${hints.p95}`);
+    expect(`${hints.p50} ${hints.p95}`).not.toContain("stable");
+    expect(hints.p95).toContain("The model sizes servers at this level");
+    expect(tooltipOf(button("CPU p50", pane("What a server needs"))).textContent).toContain("a server's stable CPU use, shown for comparison");
+    // The CPU peak is what the model plans above the target, and says it is a 5-minute mean; memory's is plain.
+    expect(tooltipOf(button("CPU max", pane("What a server needs"))).textContent).toBe(`${hints.cpu} ${hints.cpuMax}`);
+    expect(hints.cpuMax).toContain("so shorter spikes are averaged in");
+    expect(tooltipOf(button("Memory max", pane("What a server needs"))).textContent).toBe(`${hints.memory} ${hints.max}`);
+});
+
+it("plans each VPS from its own servers when they have run long enough, at their peak above the target", async () => {
+    const own: HostingFleetCapacityHost = { ...roomy, demandSource: "vps", stableCpuCores: 0.9, peakCpuCores: 1.9, demandCpuCores: 1.9 };
+    mocks.request.mockResolvedValue({ ...capacity, hosts: [own] });
+    await open();
+    expect(cellTexts(hostRow("vps-1a2b3c4d"))[6]).toBe("1.900 cores1.80 GiBThis VPS · peak 1.900");
+});
+
+it("still shows an older control plane's read, planned at a percentile without a burst target", async () => {
+    // Its model and VPSs have no cpuBurstVcpu, stableCpuCores or peakCpuCores, and it plans for the p95.
+    const legacyModel: Partial<HostingAdminFleetCapacity["model"]> = { ...model, cpuPercentile: 95 };
+    delete legacyModel.cpuBurstVcpu;
+    const legacyHosts = capacity.hosts.map((entry) => {
+        const copy: Partial<HostingFleetCapacityHost> = { ...entry };
+        delete copy.stableCpuCores;
+        delete copy.peakCpuCores;
+        return copy;
+    });
+    mocks.request.mockResolvedValue({ ...capacity, model: legacyModel, hosts: legacyHosts });
+    await open();
+    const needs = pane("What a server needs");
+    expect(needs.textContent).toContain("A running server uses 1.20 cores at p95 (60% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB).");
+    expect(needs.textContent).not.toContain("burst to");
+    const row = hostRow("vps-1a2b3c4d");
+    expect([...row.querySelector("th")!.querySelectorAll("li")].map((item) => item.textContent)[0]).toBe("Calradia Company1.10 cores · 1.65 GiB at p95");
+    expect(cellTexts(row)[6]).toBe("1.60 cores1.80 GiBType p95");
 });
 
 it("says there is not enough data yet instead of looking broken before the first samples", async () => {
@@ -472,7 +518,7 @@ it("says there is not enough data yet instead of looking broken before the first
 it("says while the fleet has less running data than an instance type needs", async () => {
     mocks.request.mockResolvedValueOnce({ ...capacity, fleet: { ...capacity.fleet, demand: { ...fleetDemand, runningServerHours: 3.25 } } });
     await open();
-    expect(pane("Fleet capacity").textContent).toContain("Not enough data yet: the fleet has 3.3 server-h of running data, and the model plans with an instance type's or the whole fleet's figures only once it has 6.0 server-h. Until then no VPS is modelled");
+    expect(pane("Fleet capacity").textContent).toContain("Not enough data yet: the fleet has 3.3 server-h of running data, and the model plans with a VPS's own servers', an instance type's or the whole fleet's figures only once it has 6.0 server-h. Until then no VPS is modelled");
     expect(pane("What a server needs").textContent).toContain("1.20 cores");
 });
 
