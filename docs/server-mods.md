@@ -153,3 +153,47 @@ Until all three are in place the tab is visible but its requests fail (a missing
 proxy route reads as "The hosting service could not be reached"). Local tests use
 synthetic fixtures; they do not prove the Supabase body limit, chunk latency through
 Oracle, or that real mods load on the Linux server.
+
+## Run locally against the hosting sandbox
+
+The control-plane repository's hosting sandbox
+(`docs/managed-hosting/local-sandbox.md` there) runs the real control plane and web
+adapter on `127.0.0.1:8796` with its own local Supabase stack (API on port 55421).
+No Supabase Edge Function runs locally; under `next dev` the website runs the
+`my-servers` Edge handler in its own server process instead:
+
+```
+browser ─► /api/servers/<id>/mods[/chunk]                 Next route handlers (as in production)
+        ─► requestMyServersApi ─► fetchMyServersEdge      src/app/lib/control-plane/transport.ts
+        ─► my-servers Edge handler, in process            src/app/lib/control-plane/local-gateway.ts
+        ─► CONTROL_PLANE_URL /api/v1/mods/*               the sandbox adapter (path and query kept)
+server-rendered reads (inventory, summary, Start status) ─► CONTROL_PLANE_ORIGIN /v1/user/control-plane
+```
+
+1. Start the sandbox as its document describes (`npm run hosting:sandbox:supabase`,
+   then `npm run hosting:sandbox -- --dev-email <email>` in WSL). It prints the
+   values for step 2.
+2. Put these in `.env.local` (Git-ignored; never commit it), then restart `next dev`
+   if it is running, because `NEXT_PUBLIC_*` values are compiled in:
+   - `NEXT_PUBLIC_SUPABASE_URL`: the sandbox Supabase API origin (`http://127.0.0.1`,
+     port 55421).
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY`: that stack's
+     keys (`npx supabase status --workdir scripts/hosting-sandbox` in the
+     control-plane repository).
+   - `DEV_AUTH_EMAIL`: the sandbox's `--dev-email` account.
+   - `CONTROL_PLANE_URL`: the sandbox adapter origin (`http://127.0.0.1`, port 8796).
+     Turns on the in-process gateway.
+   - `CONTROL_PLANE_ORIGIN`: the same adapter origin. Server-rendered owner reads go
+     to it directly; without it they go to production and the page has no servers.
+3. `npm run dev`, open `http://localhost:3000/auth/dev-login?next=/servers`, then the
+   seeded **Sandbox Server** and its **Mods** tab.
+
+Loopback `http://` is accepted for `NEXT_PUBLIC_SUPABASE_URL`, `CONTROL_PLANE_ORIGIN`
+and `CONTROL_PLANE_URL` only when `NODE_ENV` is `development`; production builds keep
+HTTPS only, compile the gateway out and ignore `CONTROL_PLANE_URL`. A non-loopback
+`CONTROL_PLANE_URL` fails closed. `NEXT_PUBLIC_LOCAL_CONTROL_PLANE`, which the sandbox
+also prints, is not read by the website and can be left out.
+
+Requests the browser sends straight to an Edge Function (latest-log download), other
+Edge Functions (account, Patreon and region alerts, `control-plane-admin`) and the
+console stream are not served locally.
