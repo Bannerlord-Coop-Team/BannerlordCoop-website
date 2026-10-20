@@ -1234,8 +1234,10 @@ anything else is an unexpected response. Every object has exactly its keys, and
   `capacityErrorCode` null or text.
 - **Each VPS**: its service name and provider are text (any provider id: one the
   control plane does not know is unmeasured), it has at most 32 region keys and
-  at least 2 vCPUs, its counts are non-negative integers with no more servers
-  than `maximumSlots`, usable cores have at most three decimals, usable memory
+  at least 2 vCPUs, its counts are non-negative integers, its slots run from
+  floor(vCPU ÷ 2) (at least 1) to `maximumSlots` with no more servers than slots
+  (the control plane's hosts CHECK and slot triggers keep both), usable cores
+  have at most three decimals, usable memory
   is whole bytes, and memory per server is whole bytes no less than
   `memoryBurstBytes`. Its `reason`, `coresSource` and `memorySource` are in
   their enums.

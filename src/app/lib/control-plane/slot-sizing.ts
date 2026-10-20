@@ -119,6 +119,7 @@ function fitsFlag(within: boolean, figure: number, budget: number, rounding: num
  * One VPS, field by field and against its reason, as `sizeVpsSlots`, `slotSizingHostEntry` and `readSlotSizing` in the
  * control plane make it:
  *
+ * - its slots are from floor(vCPU ÷ 2), and at least 1, to `maximumSlots`, and its servers are no more than its slots;
  * - each usable figure's source is `none` exactly when that figure is null;
  * - it is `unmeasured` exactly when either source is `none`, and then it has no recommendation, figures or budget flags,
  *   and nothing moves to or from it;
@@ -137,8 +138,11 @@ function host(value: unknown, sizingModel: Model): value is HostingSlotSizingHos
     if (!isRecord(value) || !hasExactKeys(value, HOST_KEYS)) return false;
     if (!text(value.serviceName) || !text(value.provider)) return false;
     if (!within(value.regionKeys, MAXIMUM_REGIONS) || !value.regionKeys.every(text)) return false;
-    // Sizing throws for fewer than 2 vCPUs, and for more servers than any VPS holds.
-    if (!count(value.vCpu, 2) || !count(value.slots) || !count(value.occupants) || value.occupants > sizingModel.maximumSlots) return false;
+    // Sizing throws for fewer than 2 vCPUs. A VPS's stored capacity is from floor(vCPU ÷ 2), and at least 1, to the most a
+    // VPS holds, and each of its servers holds one of its slots: the hosts CHECK and the slot triggers keep both.
+    if (!count(value.vCpu, 2)) return false;
+    if (!count(value.slots, Math.max(1, slotSizingFloor(value.vCpu))) || value.slots > sizingModel.maximumSlots) return false;
+    if (!count(value.occupants) || value.occupants > value.slots) return false;
     if (typeof value.acceptsRelocations !== "boolean") return false;
     if (value.usableCores !== null && !rounded(value.usableCores, 3)) return false;
     if (value.usableMemoryBytes !== null && !count(value.usableMemoryBytes)) return false;
