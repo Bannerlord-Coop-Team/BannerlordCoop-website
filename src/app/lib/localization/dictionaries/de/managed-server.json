@@ -798,6 +798,7 @@
   "managerAccess.removeManager": "Remove manager access for {name}",
   "managerAccess.accessRemoved": "Manager access removed. The account can no longer manage this server.",
   "managerAccess.accessAlreadyRemoved": "That account no longer has manager access.",
+  "managerAccess.confirmRemove": "Remove manager access for {name}? They will no longer be able to manage this server.",
 
   "autosaves.recentAutosaves": "Letzte automatische Spielstände",
   "autosaves.recentAutosavesCampaign": "Letzte automatische Spielstände · {campaign}",

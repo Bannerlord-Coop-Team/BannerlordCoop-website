@@ -11,26 +11,42 @@ export type ServerManagerSources = {
     findAccount: (accountId: string) => Promise<WebsiteAccountSummary | null>;
 };
 
-const WEBSITE_ACCOUNT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+// Matches the account IDs the owner API's set-server-manager accepts, so every Remove button can succeed.
+const REMOVABLE_ACCOUNT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const defaultSources: ServerManagerSources = {
     listGrants: (accessToken, serverId, signal) => getMyServerManagers(accessToken, serverId, signal),
     findAccount: (accountId) => getWebsiteAccount(accountId),
 };
 
-/** Lists one server's managers with their account labels; the owner already knows each email, having entered it. */
+/**
+ * Lists one server's managers with each account's current label, for the owner who granted them.
+ * The signal bounds the account lookups as well as the grant read.
+ */
 export async function listServerManagers(accessToken: string, serverId: string, signal?: AbortSignal, sources = defaultSources): Promise<ServerManager[]> {
     const grants = await sources.listGrants(accessToken, serverId, signal);
-    return await Promise.all(grants.map(async ({ accountId }) => ({
+    const managers = Promise.all(grants.map(async ({ accountId }) => ({
         accountId,
         label: await accountLabel(accountId, sources),
         // Only website accounts can be revoked here; the owner API addresses managers by account UUID.
-        removable: WEBSITE_ACCOUNT_ID.test(accountId),
+        removable: REMOVABLE_ACCOUNT_ID.test(accountId),
     })));
+    return await untilAborted(managers, signal);
 }
 
 // One failed or missing lookup leaves that row unlabeled instead of hiding the whole list.
 async function accountLabel(accountId: string, sources: ServerManagerSources) {
-    if (!WEBSITE_ACCOUNT_ID.test(accountId)) return null;
+    if (!REMOVABLE_ACCOUNT_ID.test(accountId)) return null;
     try { return (await sources.findAccount(accountId))?.label ?? null; }
     catch { return null; }
+}
+
+// Settles with the work, or rejects as soon as the signal aborts; the lookups themselves take no signal.
+function untilAborted<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) return work;
+    signal.throwIfAborted();
+    return new Promise<T>((resolve, reject) => {
+        const abort = () => reject(signal.reason);
+        signal.addEventListener("abort", abort, { once: true });
+        work.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+    });
 }

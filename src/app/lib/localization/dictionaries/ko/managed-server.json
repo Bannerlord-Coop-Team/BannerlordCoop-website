@@ -797,6 +797,7 @@
   "managerAccess.removeManager": "Remove manager access for {name}",
   "managerAccess.accessRemoved": "Manager access removed. The account can no longer manage this server.",
   "managerAccess.accessAlreadyRemoved": "That account no longer has manager access.",
+  "managerAccess.confirmRemove": "Remove manager access for {name}? They will no longer be able to manage this server.",
 
   "autosaves.recentAutosaves": "최근 자동 저장",
   "autosaves.recentAutosavesCampaign": "최근 자동 저장 · {campaign}",

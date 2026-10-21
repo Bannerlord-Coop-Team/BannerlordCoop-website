@@ -7,8 +7,8 @@ import { findWebsiteAccountByEmail } from "@/app/lib/supabase/users";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
+// Server and account IDs both match the owner API's resource ID check.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-const ACCOUNT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
 type ManagerActionResult = { ok: boolean; message: string };
@@ -39,7 +39,7 @@ export async function removeServerManager(formData: FormData): Promise<ManagerAc
     const { t } = await getTranslations("managed-server");
     const serverId = String(formData.get("serverId") ?? "");
     const managerAccountId = String(formData.get("managerAccountId") ?? "").toLowerCase();
-    if (!UUID.test(serverId) || !ACCOUNT_ID.test(managerAccountId)) {
+    if (!UUID.test(serverId) || !UUID.test(managerAccountId)) {
         return { ok: false, message: t("managerAccess.requestCouldNotBeConfirmed") };
     }
     return await asOwner(t, serverId, async (owner) => {

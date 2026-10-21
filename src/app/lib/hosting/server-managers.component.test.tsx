@@ -33,3 +33,15 @@ it("propagates a failed grant read so the page can show the list as unavailable"
     await expect(listServerManagers("token", SERVER_ID, undefined, sources)).rejects.toThrow("Unknown operation");
     expect(sources.findAccount).not.toHaveBeenCalled();
 });
+
+it("gives up on account lookups that outlast the page's read signal", async () => {
+    const controller = new AbortController();
+    const sources: ServerManagerSources = {
+        listGrants: async () => [{ accountId: FRIEND, grantedAt }],
+        findAccount: vi.fn(() => new Promise<never>(() => {})),
+    };
+    const listing = listServerManagers("token", SERVER_ID, controller.signal, sources);
+    await vi.waitFor(() => expect(sources.findAccount).toHaveBeenCalledOnce());
+    controller.abort(new Error("Timed out"));
+    await expect(listing).rejects.toThrow("Timed out");
+});

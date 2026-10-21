@@ -38,6 +38,8 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
 async function render(next = props) { await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel {...next} />} </TestLocalization>)); }
+// Finds the manager-access live region among the panel's other status messages.
+function managerStatus() { return container.querySelector('section[aria-labelledby="managed-server-manager-heading"] [role="status"]'); }
 async function change(selector: string, value: string) {
     await act(async () => {
         const element = container.querySelector<HTMLInputElement | HTMLSelectElement>(selector)!;
@@ -98,13 +100,32 @@ it("lists current managers and lets the owner remove a website account", async (
     ] } });
     const rows = Array.from(container.querySelectorAll("li"));
     expect(rows.map(row => row.textContent)).toEqual(["friend@example.comRemove", "Unknown account"]);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Remove manager access for friend@example.com"]')!;
+    await act(async () => remove.click());
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("friend@example.com"));
+    expect(mocks.removeManager).not.toHaveBeenCalled();
     await act(async () => remove.click());
     expect(mocks.removeManager).toHaveBeenCalledExactlyOnceWith(expect.any(FormData));
     const submitted = mocks.removeManager.mock.calls[0]![0] as FormData;
     expect(submitted.get("serverId")).toBe(serverId);
     expect(submitted.get("managerAccountId")).toBe(managerAccountId);
-    expect(container.textContent).toContain("Manager access removed.");
+    expect(managerStatus()?.textContent).toBe("Manager access removed.");
+    expect(document.activeElement?.id).toBe("managed-server-manager-list-heading");
+});
+
+it("keeps focus on the row when a removal is refused", async () => {
+    mocks.removeManager.mockResolvedValueOnce({ ok: false, message: "Only the server owner can change manager access." });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await render({ ...props, managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true, managers: [
+        { accountId: "22222222-2222-4222-8222-222222222222", label: "friend@example.com", removable: true },
+    ] } });
+    const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Remove manager access for friend@example.com"]')!;
+    remove.focus();
+    await act(async () => remove.click());
+    expect(managerStatus()?.textContent).toBe("Only the server owner can change manager access.");
+    expect(document.activeElement).toBe(remove);
+    expect(remove.textContent).toBe("Remove");
 });
 
 it("tells the owner when there are no managers or the list could not be read", async () => {
