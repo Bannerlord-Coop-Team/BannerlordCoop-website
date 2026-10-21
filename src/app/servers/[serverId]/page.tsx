@@ -82,7 +82,10 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
         managedServer = await getMyServerSummary(accessToken, serverId);
     } catch (error) {
         const unknownServer = error instanceof MyServersApiError && ["invalid_request", "server_not_found", "forbidden"].includes(error.code);
-        if (!unknownServer) console.error("Managed server detail failed to load", error);
+        if (!unknownServer) {
+            console.error("Managed server detail failed to load", error);
+            throw error;
+        }
     }
 
     if (managedServer !== null) {
@@ -214,12 +217,15 @@ async function ManagedServerLifecycleSection({ server }: { server: MyServerSumma
     return (
         <section id="server-lifecycle" aria-label={t("page.serverControls")}>
                 <ManagedServerControls
+                    key={server.serverId}
                     serverId={server.serverId}
                     displayName={server.displayName}
                     accessRole={server.accessRole}
                     operationState={server.operationState}
                     observedGameState={server.observedGameState}
                     expectedUpdatedAt={server.updatedAt}
+                    runtimeInsight={server.runtimeInsight}
+                    releaseChannel={server.releaseChannel}
                 />
         </section>
     );

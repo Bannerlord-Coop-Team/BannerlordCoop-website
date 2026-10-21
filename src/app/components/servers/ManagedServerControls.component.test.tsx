@@ -8,10 +8,17 @@ import { ManagedServerControls, ManagedServerPassword } from "./ManagedServerCon
 import { ManagedServerMoveProvider, ManagedServerMoveStatus } from "./ManagedServerMoveStatus";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import type { MyServerMove } from "@/app/lib/control-plane/types";
+import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
 
-const { request, requestUpdate, requestPassword, beginPolling, startStatus, router, statusSlot } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn(), startStatus: vi.fn(), router: { refresh: vi.fn() }, statusSlot: { current: undefined as HTMLElement | null | undefined } }));
+const { revealAddress } = vi.hoisted(() => ({ revealAddress: vi.fn() }));
+const { backupStatus, deletionStatus } = vi.hoisted(() => ({ backupStatus: vi.fn(), deletionStatus: vi.fn() }));
+vi.mock("./ServerManagementWorkspace", async original => ({
+    ...await original<typeof import("./ServerManagementWorkspace")>(), useRevealServerAddress: () => revealAddress,
+}));
+
+const { request, requestUpdate, requestPassword, beginPolling, startStatus, summary, router, statusSlot } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn(), startStatus: vi.fn(), summary: vi.fn(), router: { refresh: vi.fn() }, statusSlot: { current: undefined as HTMLElement | null | undefined } }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerStartStatus: startStatus }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerStartStatus: startStatus, getMyServerSummary: summary, getMyServerDeletionStatus: deletionStatus }));
 afterEach(() => vi.useRealTimers());
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({
@@ -25,6 +32,7 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
     requestMyServerOperation: request,
     requestMyServerUpdate: requestUpdate,
     requestMyServerPassword: requestPassword,
+    getMyServerBackupStatus: backupStatus,
 }));
 vi.mock("@/app/servers/managed-server-move-actions", () => ({ readManagedServerMoveStatus: async () => ({ ok: false }) }));
 vi.mock("./ManagedServerPollingProvider", () => ({
@@ -33,6 +41,20 @@ vi.mock("./ManagedServerPollingProvider", () => ({
     useManagedServerSaves: () => null,
     useManagedServerStatusSlot: () => statusSlot.current,
 }));
+
+it("refreshes the polling fingerprint when lifecycle hints unlock without another server revision", async () => {
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    const status = { updatedAt: "2026-10-02T16:00:03.000Z", operationState: "stopped", observedGameState: "stopped", job: null };
+    backupStatus.mockResolvedValue(status);
+    deletionStatus.mockResolvedValue(null);
+    summary.mockResolvedValue({ ...status, runtimeInsight: { desiredState: "stopped", allowedActions: [] } });
+    const blocked = await serverActions.readManagedServerStatusFingerprint(serverId);
+    expect(blocked.ok).toBe(true);
+    summary.mockResolvedValue({ ...status, runtimeInsight: { desiredState: "stopped", allowedActions: ["start"] } });
+    const ready = await serverActions.readManagedServerStatusFingerprint(serverId);
+    expect(ready.ok).toBe(true);
+    expect(ready).not.toEqual(blocked);
+});
 
 it.each([
     [null, "Server started and game readiness confirmed"],
@@ -122,7 +144,7 @@ it("explains in plain language that Stop/Restart disconnect players and respects
     const container = document.createElement("div");
     const root = createRoot(container);
     try {
-        await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="stopped" serverId="22222222-2222-4222-8222-222222222222"
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="running" serverId="22222222-2222-4222-8222-222222222222"
             displayName="Campaign" accessRole="owner" operationState="running" expectedUpdatedAt="2026-09-20T12:00:00.000Z" />} </TestLocalization>));
         for (const index of [1, 2]) {
             await act(async () => container.querySelectorAll("button")[index].click());
@@ -160,6 +182,39 @@ it("confirms and queues an immediate update with the displayed server revision",
         await act(async () => root.unmount());
         confirm.mockRestore();
     }
+});
+
+it.each(["stable", "nightly"] as const)("refreshes the update revision only while the displayed channel is unchanged: %s", async channel => {
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    const expectedUpdatedAt = "2026-09-20T12:00:00.000Z";
+    const fresh = "2026-09-20T12:01:00.000Z";
+    summary.mockReset().mockResolvedValue({ serverId, releaseChannel: channel, updatedAt: fresh });
+    requestUpdate.mockReset().mockResolvedValue({ outcome: "enqueued" });
+    expect(await serverActions.operateManagedServer({ serverId, action: "update-now", expectedUpdatedAt, expectedReleaseChannel: channel })).toMatchObject({ ok: true });
+    expect(requestUpdate).toHaveBeenCalledExactlyOnceWith("token", { serverId, expectedUpdatedAt: fresh }, expect.any(String));
+    summary.mockResolvedValue({ serverId, releaseChannel: channel === "stable" ? "nightly" : "stable", updatedAt: fresh });
+    requestUpdate.mockClear();
+    expect(await serverActions.operateManagedServer({ serverId, action: "update-now", expectedUpdatedAt, expectedReleaseChannel: channel })).toMatchObject({ ok: false, refresh: true });
+    expect(requestUpdate).not.toHaveBeenCalled();
+});
+
+it("shows a terminal load crash and refreshes without submitting another Start", async () => {
+    request.mockReset().mockRejectedValue(new MyServersApiError("game_crashed_during_load", "The game crashed while loading your campaign."));
+    expect(await serverActions.operateManagedServer({ serverId: "22222222-2222-4222-8222-222222222222", action: "start" }))
+        .toEqual({ ok: false, refresh: true, message: "The game crashed while loading your campaign." });
+    expect(request).toHaveBeenCalledOnce();
+});
+
+it("does not claim Update now was sent when its freshness read failed", async () => {
+    summary.mockReset().mockRejectedValue(new MyServersApiError("server_api_unavailable", "Unavailable"));
+    requestUpdate.mockClear();
+    const result = await serverActions.operateManagedServer({ serverId: "22222222-2222-4222-8222-222222222222",
+        action: "update-now", expectedUpdatedAt: "2026-09-20T12:00:00.000Z", expectedReleaseChannel: "stable" });
+    expect(result).toMatchObject({ ok: false, refresh: true });
+    expect(result.checkStatus).not.toBe(true);
+    expect(result.message).not.toContain("went through");
+    expect(result.message).toContain("No update was sent");
+    expect(requestUpdate).not.toHaveBeenCalled();
 });
 
 it("sets a private website password once and clears the input", async () => {
@@ -236,6 +291,165 @@ function progress(phase: string, state = "running", label = phase) {
     return { serverId: progressServerId, jobId: progressJobId, phase, state, progress: label };
 }
 
+it.each(["failed", "retry-wait"] as const)("restores truthful %s progress after page reload without dispatching Start", async state => {
+    vi.useFakeTimers();
+    request.mockClear();
+    const receipt = { action: "start" as const, jobId: progressJobId, state, phase: state, progress: `Attempt 2 of 5. ${state === "failed" ? "Automatic Start retries have stopped." : "Next retry: 2026-09-20T12:05:00.000Z."}`,
+        attemptCount: 2, maximumAttempts: 5, nextRetryAt: state === "retry-wait" ? "2026-09-20T12:05:00.000Z" : null,
+        stoppedRetrying: state === "failed", failureCode: state === "failed" ? "game_crashed_during_load" as const : null,
+        recommendedAction: state === "failed" ? "review-backups" as const : null };
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: "2026-09-20T12:00:00.000Z", allowedActions: state === "failed" ? ["stop"] : [],
+        crashLoopDetected: false, failureCode: receipt.failureCode, recommendedAction: receipt.recommendedAction,
+        failureMessage: state === "failed" ? "The game crashed while loading your campaign." : null,
+        recommendation: state === "failed" ? "Review available backups before choosing recovery." : null, start: receipt };
+    startStatus.mockReset().mockResolvedValue({ serverId: progressServerId, ...receipt });
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="failed" operationState="failed" runtimeInsight={insight} /></TestLocalization>));
+        expect(container.textContent).toContain("Attempt 2 of 5");
+        if (state === "failed") {
+            expect(container.textContent).toContain("Automatic Start retries have stopped");
+            expect(container.textContent).toContain("Review available backups");
+            expect(container.textContent).not.toContain("Waiting to retry");
+        } else expect(container.textContent).toContain("Next retry:");
+        const buttons = [...container.querySelectorAll("button")];
+        expect(buttons.find(button => button.textContent?.startsWith("Start"))?.disabled).toBe(true);
+        expect(buttons.find(button => button.textContent === "Stop")?.disabled).toBe(state !== "failed");
+        expect(buttons.find(button => button.textContent === "Restart")?.disabled).toBe(true);
+        expect(request).not.toHaveBeenCalled();
+        expect(startStatus).toHaveBeenCalledTimes(state === "failed" ? 0 : 1);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it.each(["admin", "support"] as const)("keeps %s controls read-only while showing the safe failure insight", async accessRole => {
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop"],
+        crashLoopDetected: false, failureCode: "game_crashed_during_load", recommendedAction: "review-backups",
+        failureMessage: "The game crashed while loading your campaign.", recommendation: "Review available backups.", start: null };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} accessRole={accessRole} observedGameState="failed" runtimeInsight={insight} /></TestLocalization>));
+        expect(container.textContent).toContain(insight.failureMessage);
+        expect(container.textContent).toContain("Read-only access");
+        expect([...container.querySelectorAll("button")].some(button => ["Start", "Stop", "Restart", "Update now"].includes(button.textContent ?? ""))).toBe(false);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("does not render a historical succeeded receipt or hide controls after a reload", async () => {
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop", "restart-game"],
+        crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null,
+        start: { action: "start", jobId: progressJobId, state: "succeeded", phase: "ready", progress: "Server started and ready to join.",
+            attemptCount: 1, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: false, failureCode: null, recommendedAction: null } };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} operationState="running" observedGameState="running" runtimeInsight={insight} /></TestLocalization>));
+        expect(container.textContent).not.toContain("Your server is ready to join");
+        expect(container.querySelector("ol")).toBeNull();
+        expect([...container.querySelectorAll("button")].find(button => button.textContent === "Stop")?.disabled).toBe(false);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it.each(["running", "failed", "cancelled"] as const)("names an adopted %s restart receipt as Restart", async state => {
+    const container = document.createElement("div"); const root = createRoot(container);
+    const receipt = { action: "restart-game" as const, jobId: progressJobId, state,
+        phase: state === "running" ? "preparing" as const : state, progress: "Restart receipt.",
+        attemptCount: 1, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: state !== "running",
+        failureCode: state === "failed" ? "operation_failed" as const : null, recommendedAction: null };
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: [],
+        crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: receipt };
+    startStatus.mockReset().mockResolvedValue({ serverId: progressServerId, ...receipt });
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="starting" runtimeInsight={insight} /></TestLocalization>));
+        expect(container.textContent).toContain(state === "running" ? "Restarting your server" : state === "failed" ? "Server could not restart" : "Restart cancelled");
+        expect(container.textContent).not.toContain("Starting your server");
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("restores a mounted terminal receipt after an unrelated Update request", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    requestUpdate.mockReset().mockResolvedValue({ outcome: "queued" });
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop"],
+        crashLoopDetected: false, failureCode: "operation_failed", recommendedAction: "contact-support",
+        failureMessage: "Server status needs attention.", recommendation: null, start: {
+            action: "start", jobId: progressJobId, state: "failed", phase: "failed", progress: "Attempt 5 of 5.",
+            attemptCount: 5, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: true,
+            failureCode: "operation_failed", recommendedAction: "contact-support",
+        } };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="failed" operationState="failed" runtimeInsight={insight} /></TestLocalization>));
+        const update = [...container.querySelectorAll("button")].find(button => button.textContent === "Update now")!;
+        await act(async () => update.click());
+        expect(container.textContent).toContain("Attempt 5 of 5");
+    } finally { await act(async () => root.unmount()); vi.restoreAllMocks(); }
+});
+
+it("keeps a locally followed failed receipt after its matching summary and a refused Update", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockResolvedValue({ ...progress("failed", "failed", "Attempt 5 of 5."), failureCode: "operation_failed" });
+    requestUpdate.mockReset().mockRejectedValue(new MyServersApiError("no_update_available", "No update is available."));
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop"],
+        crashLoopDetected: false, failureCode: "operation_failed", recommendedAction: "contact-support", failureMessage: "Server status needs attention.", recommendation: null,
+        start: { action: "start", jobId: progressJobId, state: "failed", phase: "failed", progress: "Attempt 5 of 5.",
+            attemptCount: 5, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: true, failureCode: "operation_failed", recommendedAction: "contact-support" } };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" /></TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="failed" operationState="failed" runtimeInsight={insight} /></TestLocalization>));
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+        const update = [...container.querySelectorAll("button")].find(button => button.textContent === "Update now")!;
+        await act(async () => update.click());
+        expect(container.textContent).toContain("Attempt 5 of 5");
+    } finally { await act(async () => root.unmount()); vi.restoreAllMocks(); }
+});
+
+it.each(["succeeded", "running"] as const)("reveals once when a fast Start's %s receipt arrives and clears stale ready state", async state => {
+    vi.useFakeTimers();
+    revealAddress.mockClear();
+    request.mockReset().mockResolvedValue({ exitCode: 0 });
+    startStatus.mockReset().mockResolvedValue(progress("ready", "succeeded", "Ready."));
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" /></TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        expect(container.textContent).toContain("Your server is ready to join");
+        expect(revealAddress).toHaveBeenCalledTimes(1);
+        const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop", "restart-game"],
+            crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: {
+                action: "start", jobId: progressJobId, state, phase: state === "succeeded" ? "ready" : "verifying", progress: "Ready.",
+                attemptCount: 1, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: false, failureCode: null, recommendedAction: null,
+            } };
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} operationState="running" observedGameState="running" runtimeInsight={insight} /></TestLocalization>));
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+        expect(container.textContent).toContain("Your server is ready to join");
+        // A later receipt must respect the owner hiding the address after the first reveal.
+        expect(revealAddress).toHaveBeenCalledTimes(1);
+        const failed: OwnerRuntimeInsight = { ...insight, start: null, failureCode: "game_crashed_during_load", recommendedAction: "review-backups",
+            failureMessage: "The campaign failed.", recommendation: "Review recovery.", allowedActions: ["stop"] };
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} expectedUpdatedAt="2026-09-20T12:01:00.000Z"
+            operationState="failed" observedGameState="failed" runtimeInsight={failed} /></TestLocalization>));
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+        expect(container.textContent).not.toContain("Your server is ready to join");
+        expect(container.textContent).toContain("The campaign failed.");
+    } finally { await act(async () => root.unmount()); }
+});
+
+it.each(["admin", "support"] as const)("does not poll an active receipt for read-only %s", async accessRole => {
+    startStatus.mockClear();
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: [],
+        crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: {
+            action: "start", jobId: progressJobId, state: "running", phase: "starting", progress: "Loading.",
+            attemptCount: 1, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: false, failureCode: null, recommendedAction: null,
+        } };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} accessRole={accessRole} observedGameState="starting" runtimeInsight={insight} /></TestLocalization>));
+        expect(startStatus).not.toHaveBeenCalled();
+    } finally { await act(async () => root.unmount()); }
+});
+
 it("follows the accepted Start through real phases and readiness without sending Start again", async () => {
     vi.useFakeTimers();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -281,13 +495,33 @@ it.each(["failed", "cancelled"])("stops following a %s Start without claiming re
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain(state === "failed" ? "Server could not start" : "Start cancelled");
         expect(container.textContent).not.toContain("Your server is ready to join");
-        expect(container.textContent).toContain("The campaign did not finish loading. You can press Start to try again.");
+        expect(container.textContent).toContain("The campaign did not finish loading.");
+        expect(container.textContent).not.toContain("You can press Start to try again.");
         expect(container.textContent).not.toContain("contact support");
         expect(container.querySelector("button")!.disabled).toBe(false);
         expect(container.querySelector(".animate-spin")).toBeNull();
         await act(async () => vi.advanceTimersByTimeAsync(10_000));
         expect(startStatus).toHaveBeenCalledTimes(1);
         expect(request).toHaveBeenCalledTimes(1);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("clears local failed progress when a newer summary confirms recovery and clears the receipt", async () => {
+    vi.useFakeTimers();
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockResolvedValue({ ...progress("failed", "failed", "Automatic retries stopped."), failureCode: "game_crashed_during_load" });
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "stopped", observedAt: null, allowedActions: ["start"],
+        crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: null };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" runtimeInsight={insight} /></TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        expect(container.textContent).toContain("Server could not start");
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} expectedUpdatedAt="2026-10-02T16:01:00.000Z" operationState="running" observedGameState="running"
+            runtimeInsight={{ ...insight, desiredState: "running", allowedActions: ["stop", "restart-game"] }} /></TestLocalization>));
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+        expect(container.textContent).not.toContain("Server could not start");
+        expect(container.querySelector("ol")).toBeNull();
     } finally { await act(async () => root.unmount()); }
 });
 

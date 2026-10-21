@@ -1,4 +1,7 @@
 {
+  "controls.stoppedAwaitingServerCheck": "Son kontrolde oyun durmuş durumdaydı. Sunucu kontrolleri hazır olduğunu doğruladığında başlatma ve kurtarma araçları kullanılabilir hale gelir.",
+  "controls.restartCancelled": "Yeniden başlatma iptal edildi",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "Sunucu durumu doğrulanamadı. Güncelleme isteği gönderilmedi. Sayfayı yenileyip tekrar deneyin.",
   "name.required": "Bir sunucu adı girin.",
   "action.actions.theServerOperationIsInvalid": "Sunucu işlemi geçersiz.",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "Bu sunucuyu denetlemeden önce lütfen yeniden oturum açın.",
@@ -937,5 +940,7 @@
   "mods.archive.compressionRatio": "Klasör 100:1'den fazla sıkışıyor; sunucu bunu reddeder.",
   "controls.modLoadFailedMissingAssembly": "{modId} modu yüklenemedi ({assembly} derlemesi eksik). Modlar bölümünden devre dışı bırakıp yeniden başlatın.",
   "controls.modLoadFailedMissingDll": "{modId} modu yüklenemedi (SubModule.xml dosyasında listelenen bir DLL eksik). Modlar bölümünden devre dışı bırakıp yeniden başlatın.",
-  "controls.modLoadFailed": "{modId} modu yüklenemedi. Modlar bölümünden devre dışı bırakıp yeniden başlatın."
+  "controls.modLoadFailed": "{modId} modu yüklenemedi. Modlar bölümünden devre dışı bırakıp yeniden başlatın.",
+  "insight.lastObserved": "Son gözlem: {state}.",
+  "insight.lastHealthCheck": "Son durum kontrolü:"
 }

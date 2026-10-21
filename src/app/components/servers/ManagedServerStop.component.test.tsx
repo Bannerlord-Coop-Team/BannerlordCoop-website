@@ -1,7 +1,8 @@
-import { act, useEffect } from "react";
+import { act, useEffect, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerControls } from "./ManagedServerControls";
+import { ManagedServerBackups } from "./ManagedServerBackups";
 import { ManagedServerPollingProvider, managedServerPollDelay, useManagedServerPolling, useManagedServerSaves, type ManagedServerStatusReader } from "./ManagedServerPollingProvider";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 
@@ -10,6 +11,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("@/app/servers/managed-server-actions", () => ({
     operateManagedServer: operate, readManagedServerStartStatus: vi.fn(), setManagedServerPassword: vi.fn(),
 }));
+vi.mock("@/app/servers/managed-server-backup-actions", () => ({ manageServerBackup: vi.fn() }));
 
 const server = { serverId: "22222222-2222-4222-8222-222222222222", displayName: "Campaign",
     accessRole: "owner" as const, operationState: "running", observedGameState: "running",
@@ -17,7 +19,7 @@ const server = { serverId: "22222222-2222-4222-8222-222222222222", displayName: 
 let container: HTMLDivElement;
 let root: Root;
 const buttons = () => [...container.querySelectorAll("button")];
-const render = (overrides: Partial<typeof server> = {}) => act(async () => root.render(
+const render = (overrides: Partial<ComponentProps<typeof ManagedServerControls>> = {}) => act(async () => root.render(
     <TestLocalization><ManagedServerPollingProvider><ManagedServerControls {...server} {...overrides} /></ManagedServerPollingProvider></TestLocalization>,
 ));
 
@@ -52,6 +54,78 @@ it.each(["accepted", "unknown", "lost-response"])("automatically confirms Stop a
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(router.refresh).toHaveBeenCalledTimes(refreshes);
     expect(operate).toHaveBeenCalledExactlyOnceWith({ serverId: server.serverId, action: "stop" });
+});
+
+it("keeps checking a stopped drifted game until CP verifies readiness and unlocks Start", async () => {
+    operate.mockResolvedValue({ ok: true, checkStatus: true, message: "Checking whether your server has stopped…" });
+    const runtimeInsight = { desiredState: "running" as const, observedAt: null, allowedActions: ["stop" as const], crashLoopDetected: false,
+        failureCode: "game_crashed_during_load" as const, failureMessage: "Campaign load failed.", recommendedAction: "review-backups" as const,
+        recommendation: "Review recovery.", start: null };
+    await render({ operationState: "drifted", observedGameState: "failed", runtimeInsight });
+    await act(async () => buttons().find(button => button.textContent === "Stop")!.click());
+    await render({ operationState: "drifted", observedGameState: "stopped", expectedUpdatedAt: "2026-10-02T16:00:01.000Z", runtimeInsight });
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(container.textContent).not.toContain("Server stopped.");
+    await render({ operationState: "drifted", observedGameState: "stopped", expectedUpdatedAt: "2026-10-02T16:00:02.000Z",
+        runtimeInsight: { ...runtimeInsight, desiredState: "stopped", allowedActions: [] } });
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(container.textContent).not.toContain("Server stopped.");
+    expect(container.textContent).toContain("Start and recovery tools unlock after server checks confirm readiness.");
+    expect(buttons().find(button => button.textContent === "Start")?.disabled).toBe(true);
+    const refreshes = router.refresh.mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    expect(router.refresh.mock.calls.length).toBeGreaterThan(refreshes);
+    await render({ operationState: "stopped", observedGameState: "stopped", expectedUpdatedAt: "2026-10-02T16:00:03.000Z",
+        runtimeInsight: { ...runtimeInsight, desiredState: "stopped", allowedActions: [], failureCode: null, failureMessage: null, recommendedAction: null, recommendation: null } });
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(container.textContent).not.toContain("Server stopped.");
+    const blockedRefreshes = router.refresh.mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(router.refresh.mock.calls.length).toBeGreaterThan(blockedRefreshes);
+    await render({ operationState: "stopped", observedGameState: "stopped", expectedUpdatedAt: "2026-10-02T16:00:03.000Z",
+        runtimeInsight: { ...runtimeInsight, desiredState: "stopped", allowedActions: ["start"], failureCode: null, failureMessage: null, recommendedAction: null, recommendation: null } });
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(container.textContent).toContain("Server stopped.");
+    expect(buttons().find(button => button.textContent === "Start")?.disabled).toBe(false);
+    const settledRefreshes = router.refresh.mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(router.refresh).toHaveBeenCalledTimes(settledRefreshes);
+});
+
+it.each(["stopped", "drifted"])("settles a crash-loop Stop in %s without waiting for Start cooldown", async operationState => {
+    operate.mockResolvedValue({ ok: true, checkStatus: true, message: "Checking whether your server has stopped…" });
+    const runtimeInsight = { desiredState: "running" as const, observedAt: null, allowedActions: ["stop" as const], crashLoopDetected: true,
+        failureCode: "crash_loop_cooldown" as const, failureMessage: "Crash-loop protection is active.", recommendedAction: "wait" as const,
+        recommendation: "Wait for the crash-loop cooldown before starting again.", start: null };
+    const renderCase = async (settled: boolean) => act(async () => root.render(
+        <TestLocalization><ManagedServerPollingProvider><PollingProbe />
+            <ManagedServerControls {...server} operationState={settled ? operationState : "failed"}
+                observedGameState={settled ? "stopped" : "failed"}
+                expectedUpdatedAt={settled ? "2026-10-02T16:00:01.000Z" : server.expectedUpdatedAt}
+                runtimeInsight={settled ? { ...runtimeInsight, desiredState: "stopped", allowedActions: [] } : runtimeInsight} />
+            <ManagedServerBackups userId="owner" server={{ serverId: server.serverId, displayName: server.displayName,
+                accessRole: "owner", friendlyRegion: "Europe", releaseChannel: "stable", updatedAt: server.expectedUpdatedAt,
+                operationState: settled ? operationState : "failed", observedGameState: settled ? "stopped" : "failed" }} backups={[]} status={null} />
+        </ManagedServerPollingProvider></TestLocalization>,
+    ));
+    await renderCase(false);
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    await act(async () => buttons().find(button => button.textContent === "Stop")!.click());
+    expect(buttons().find(button => button.textContent === "Create backup")?.disabled).toBe(true);
+    await renderCase(true);
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(container.textContent).toContain(operationState === "drifted" ? "The game was last observed stopped." : "Server stopped.");
+    if (operationState === "drifted") expect(container.textContent).not.toContain("Server stopped.");
+    expect(container.textContent).toContain(runtimeInsight.failureMessage);
+    expect(container.textContent).toContain(runtimeInsight.recommendation);
+    expect(container.textContent).not.toContain("press Start when ready");
+    expect(buttons().find(button => button.textContent === "Start")?.disabled).toBe(true);
+    expect(buttons().find(button => button.textContent === "Create backup")?.disabled).toBe(false);
+    expect(polling.session).toBeNull();
+    const refreshes = router.refresh.mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(16 * 60_000));
+    expect(router.refresh).toHaveBeenCalledTimes(refreshes);
+    expect(container.textContent).not.toContain("Stopping is taking longer than usual");
 });
 
 it("does not enter the long Stop poll when another operation already owns the server", async () => {

@@ -1,4 +1,5 @@
-import { act, useEffect } from "react";
+import { act, useEffect, type ComponentProps } from "react";
+import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerControls, acceptRestartProgress, advanceRestartProgress, beginRestartProgress } from "./ManagedServerControls";
@@ -36,11 +37,28 @@ function FakeConsole() {
 }
 
 /** Mounts the controls inside the shared provider, optionally with a live console. */
-function render(overrides: Partial<typeof server> = {}, withConsole = true) {
+function render(overrides: Partial<ComponentProps<typeof ManagedServerControls>> = {}, withConsole = true) {
     return act(async () => root.render(
         <TestLocalization><ManagedServerPollingProvider>{withConsole && <FakeConsole />}<ManagedServerControls {...server} {...overrides} /></ManagedServerPollingProvider></TestLocalization>,
     ));
 }
+
+it("finishes Stop tracking when refresh removes the old Start receipt", async () => {
+    const runtimeInsight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop", "restart-game"],
+        crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null,
+        start: { action: "start", jobId: "55555555-5555-4555-8555-555555555555", state: "succeeded", phase: "ready", progress: "Ready.",
+            attemptCount: 1, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: false, failureCode: null, recommendedAction: null } };
+    operate.mockResolvedValueOnce({ ok: true, checkStatus: true, message: "Checking whether your server has stopped." });
+    await render({ runtimeInsight });
+    await act(async () => { buttons().find(button => button.textContent === "Stop")!.click(); });
+    expect(polling.session).not.toBeNull();
+    await render({ operationState: "stopped", observedGameState: "stopped", expectedUpdatedAt: "2026-10-02T16:01:00.000Z",
+        runtimeInsight: { ...runtimeInsight, desiredState: "stopped", allowedActions: ["start"], start: null } });
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(polling.session).toBeNull();
+    expect(container.textContent).toContain("Server stopped");
+    expect(buttons().find(button => button.textContent === "Start")?.disabled).toBe(false);
+});
 
 /** Publishes one console signal and flushes the resulting renders. */
 async function emit(signal: ManagedConsoleSignal) {
@@ -273,7 +291,7 @@ it("clears restart progress when the control plane reports the restarted run fai
     await render({ operationState: "failed", observedGameState: "failed", expectedUpdatedAt: "2026-10-02T16:00:05.000Z" });
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(container.textContent).toContain("Restarting your server…");
-    expect(buttons().slice(0, 4).map(button => button.disabled)).toEqual([false, false, true, true]);
+    expect(buttons().slice(0, 4).map(button => button.disabled)).toEqual([false, true, true, true]);
     await act(async () => vi.advanceTimersByTimeAsync(20_000));
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(container.textContent).toContain("Status checked. Current state: Failed");

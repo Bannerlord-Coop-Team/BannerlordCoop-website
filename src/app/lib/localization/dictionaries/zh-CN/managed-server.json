@@ -1,4 +1,7 @@
 {
+  "controls.stoppedAwaitingServerCheck": "上次检查时游戏已停止。服务器检查确认就绪后，启动和恢复工具将可用。",
+  "controls.restartCancelled": "重启已取消",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "无法确认服务器状态。未发送更新请求。请刷新页面后重试。",
   "name.required": "请输入服务器名称。",
   "action.actions.theServerOperationIsInvalid": "服务器操作无效。",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "请重新登录后再控制此服务器。",
@@ -936,5 +939,7 @@
   "mods.archive.compressionRatio": "该文件夹的压缩比超过 100:1，服务器会拒绝。",
   "controls.modLoadFailedMissingAssembly": "模组 {modId} 加载失败（缺少程序集 {assembly}）。请在“模组”中禁用它，然后重新启动。",
   "controls.modLoadFailedMissingDll": "模组 {modId} 加载失败（缺少其 SubModule.xml 中列出的 DLL）。请在“模组”中禁用它，然后重新启动。",
-  "controls.modLoadFailed": "模组 {modId} 加载失败。请在“模组”中禁用它，然后重新启动。"
+  "controls.modLoadFailed": "模组 {modId} 加载失败。请在“模组”中禁用它，然后重新启动。",
+  "insight.lastObserved": "上次观察：{state}。",
+  "insight.lastHealthCheck": "上次健康检查："
 }

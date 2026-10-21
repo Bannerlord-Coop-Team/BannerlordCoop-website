@@ -1,4 +1,7 @@
 {
+  "controls.stoppedAwaitingServerCheck": "The game was last observed stopped. Start and recovery tools unlock after server checks confirm readiness.",
+  "controls.restartCancelled": "Restart cancelled",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "We couldn't confirm server status. No update was sent. Refresh the page and try again.",
   "name.required": "Enter a server name.",
   "action.actions.theServerOperationIsInvalid": "The server operation is invalid.",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "Please sign in again before controlling this server.",
@@ -937,5 +940,7 @@
   "mods.archive.compressionRatio": "The folder compresses more than 100:1, which the server refuses.",
   "controls.modLoadFailedMissingAssembly": "Mod {modId} failed to load (missing assembly {assembly}). Disable it in Mods and start again.",
   "controls.modLoadFailedMissingDll": "Mod {modId} failed to load (a DLL its SubModule.xml lists is missing). Disable it in Mods and start again.",
-  "controls.modLoadFailed": "Mod {modId} failed to load. Disable it in Mods and start again."
+  "controls.modLoadFailed": "Mod {modId} failed to load. Disable it in Mods and start again.",
+  "insight.lastObserved": "Last observed: {state}.",
+  "insight.lastHealthCheck": "Last health check:"
 }

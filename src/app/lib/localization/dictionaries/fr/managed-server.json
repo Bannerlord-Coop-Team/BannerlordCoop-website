@@ -1,4 +1,7 @@
 {
+  "controls.stoppedAwaitingServerCheck": "Le jeu a été observé à l’arrêt lors de la dernière vérification. Le démarrage et les outils de récupération seront disponibles lorsque les vérifications du serveur confirmeront qu’il est prêt.",
+  "controls.restartCancelled": "Redémarrage annulé",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "Impossible de confirmer l’état du serveur. Aucune mise à jour n’a été envoyée. Actualisez la page et réessayez.",
   "name.required": "Saisissez un nom de serveur.",
   "action.actions.theServerOperationIsInvalid": "L’opération sur le serveur n’est pas valide.",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "Veuillez vous reconnecter avant de contrôler ce serveur.",
@@ -937,5 +940,7 @@
   "mods.archive.compressionRatio": "Le dossier se compresse à plus de 100:1, ce que le serveur refuse.",
   "controls.modLoadFailedMissingAssembly": "Le mod {modId} n'a pas pu être chargé (assembly {assembly} manquant). Désactivez-le dans Mods, puis redémarrez.",
   "controls.modLoadFailedMissingDll": "Le mod {modId} n'a pas pu être chargé (une DLL indiquée dans son SubModule.xml est manquante). Désactivez-le dans Mods, puis redémarrez.",
-  "controls.modLoadFailed": "Le mod {modId} n'a pas pu être chargé. Désactivez-le dans Mods, puis redémarrez."
+  "controls.modLoadFailed": "Le mod {modId} n'a pas pu être chargé. Désactivez-le dans Mods, puis redémarrez.",
+  "insight.lastObserved": "Dernier état observé : {state}.",
+  "insight.lastHealthCheck": "Dernière vérification de l’état :"
 }

@@ -12,7 +12,7 @@ import {
     requestMyServerPassword,
     type MyServerOperation,
 } from "@/app/lib/hosting/my-servers";
-import { getMyServerDeletionStatus, getMyServerResources, getMyServerStartStatus } from "@/app/lib/hosting/my-servers-server";
+import { getMyServerDeletionStatus, getMyServerResources, getMyServerStartStatus, getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
 import { serverResourceUsage, type ServerResourceUsage } from "@/app/lib/hosting/server-resource-usage";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -49,9 +49,21 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
 
     try {
         if (parsed.action === "update-now") {
+            let expectedUpdatedAt = parsed.expectedUpdatedAt;
+            if (parsed.expectedReleaseChannel !== undefined) {
+                let current;
+                try { current = await getMyServerSummary(accessToken, parsed.serverId); }
+                catch {
+                    return { ok: false, refresh: true, message: t("action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent") };
+                }
+                if (current.releaseChannel !== parsed.expectedReleaseChannel) {
+                    return { ok: false, refresh: true, message: t("action.actions.yourServerSStatusChangedSoWeRefreshedItPress", { action: t("controls.updateNow") }) };
+                }
+                expectedUpdatedAt = current.updatedAt;
+            }
             const update = await requestMyServerUpdate(accessToken, {
                 serverId: parsed.serverId,
-                expectedUpdatedAt: parsed.expectedUpdatedAt,
+                expectedUpdatedAt,
             }, crypto.randomUUID());
             revalidatePath("/servers");
             return { ok: true, message: update.outcome === "existing"
@@ -78,7 +90,10 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             return { ok: false, message: await startModLoadFailureMessage(accessToken, parsed.serverId, error, t) };
         }
         if (parsed.action === "start" && code === "crash_loop_cooldown" && error instanceof MyServersApiError) {
-            return { ok: false, message: error.message };
+            return { ok: false, refresh: true, message: error.message };
+        }
+        if (parsed.action === "start" && code === "game_crashed_during_load" && error instanceof MyServersApiError) {
+            return { ok: false, refresh: true, message: error.message };
         }
         if (parsed.action === "start" && code === "operation_timeout"
             && error instanceof MyServersApiError && error.operationId !== undefined) {
@@ -127,13 +142,17 @@ function parseOperation(value: unknown): {
     serverId: string;
     action: "update-now";
     expectedUpdatedAt: string;
+    expectedReleaseChannel?: "stable" | "nightly";
 } | null {
     if (!isRecord(value) || typeof value.action !== "string") return null;
     if (typeof value.serverId !== "string" || !SERVER_ID.test(value.serverId)) return null;
     if (value.action === "update-now") {
-        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) return null;
+        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])
+            && !hasExactKeys(value, ["action", "expectedReleaseChannel", "expectedUpdatedAt", "serverId"])) return null;
+        if ("expectedReleaseChannel" in value && value.expectedReleaseChannel !== "stable" && value.expectedReleaseChannel !== "nightly") return null;
         if (typeof value.expectedUpdatedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value.expectedUpdatedAt)) return null;
-        return { serverId: value.serverId, action: value.action, expectedUpdatedAt: value.expectedUpdatedAt };
+        return { serverId: value.serverId, action: value.action, expectedUpdatedAt: value.expectedUpdatedAt,
+            ...("expectedReleaseChannel" in value ? { expectedReleaseChannel: value.expectedReleaseChannel as "stable" | "nightly" } : {}) };
     }
     if (!hasExactKeys(value, ["action", "serverId"])) return null;
     if (typeof value.action !== "string" || !OPERATIONS.has(value.action as MyServerOperation)) return null;
@@ -226,9 +245,10 @@ export async function readManagedServerStatusFingerprint(serverId: string): Prom
         const supabase = await getSupabaseServerClient();
         const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
         if (!user || !session) return { ok: false };
-        const [status, deletion] = await Promise.all([
+        const [status, deletion, summary] = await Promise.all([
             getMyServerBackupStatus(session.access_token, serverId),
             getMyServerDeletionStatus(session.access_token, serverId).catch(() => null),
+            getMyServerSummary(session.access_token, serverId),
         ]);
         const job = status.job;
         const deletionJob = deletion?.job;
@@ -237,6 +257,7 @@ export async function readManagedServerStatusFingerprint(serverId: string): Prom
             job?.jobId ?? null, job?.state ?? null, job?.progress ?? null,
             deletion?.updatedAt ?? null, deletion?.operationState ?? null,
             deletionJob?.jobId ?? null, deletionJob?.state ?? null, deletionJob?.progress ?? null,
+            summary.runtimeInsight?.desiredState ?? null, summary.runtimeInsight?.allowedActions ?? null,
         ]) };
     } catch {
         return { ok: false };

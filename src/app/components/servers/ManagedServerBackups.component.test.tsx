@@ -689,6 +689,23 @@ describe("ManagedServerBackups recent autosaves", () => {
         expect(container.querySelector("section")!.textContent).toContain("Stop the game server before loading an earlier autosave.");
     });
 
+    it.each(["running", "stopped"] as const)("explains the required recovery step for a drifted stopped game desired %s", async desiredState => {
+        await renderAutosaves({ currentServer: { ...stopped, operationState: "drifted", runtimeInsight: {
+            desiredState, observedAt: null, allowedActions: desiredState === "running" ? ["stop"] : [],
+            crashLoopDetected: false, failureCode: "game_crashed_during_load", failureMessage: "Load failed.",
+            recommendedAction: "review-backups", recommendation: "Review recovery.", start: null,
+        } } });
+        const waiting = "The game was last observed stopped. Start and recovery tools unlock after server checks confirm readiness.";
+        const advice = desiredState === "stopped" ? waiting : "Stop the game server before loading an earlier autosave.";
+        expect(container.querySelector("section")!.textContent).toContain(advice);
+        for (const candidate of loadButtons()) {
+            expect(candidate.disabled).toBe(true);
+            expect(candidate.title).toBe(advice);
+        }
+        await renderAutosaves();
+        expect(loadButtons().every(candidate => !candidate.disabled)).toBe(true);
+    });
+
     it("confirms with the autosave time and submits the exact campaign, generation and generation check", async () => {
         const confirm = vi.mocked(window.confirm);
         confirm.mockReturnValueOnce(false);

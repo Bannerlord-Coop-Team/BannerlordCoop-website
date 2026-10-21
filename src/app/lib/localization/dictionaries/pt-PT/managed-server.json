@@ -1,4 +1,7 @@
 {
+  "controls.stoppedAwaitingServerCheck": "Na última verificação, o jogo estava parado. O arranque e as ferramentas de recuperação ficam disponíveis quando as verificações do servidor confirmarem que está pronto.",
+  "controls.restartCancelled": "Reinício cancelado",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "Não foi possível confirmar o estado do servidor. Não foi enviada nenhuma atualização. Atualize a página e tente novamente.",
   "name.required": "Introduza um nome para o servidor.",
   "action.actions.theServerOperationIsInvalid": "A operação do servidor é inválida.",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "Inicie sessão novamente antes de controlar este servidor.",
@@ -937,5 +940,7 @@
   "mods.archive.compressionRatio": "A pasta comprime mais de 100:1, o que o servidor recusa.",
   "controls.modLoadFailedMissingAssembly": "O mod {modId} não carregou (falta o assembly {assembly}). Desative-o em Mods e inicie novamente.",
   "controls.modLoadFailedMissingDll": "O mod {modId} não carregou (falta uma DLL indicada no SubModule.xml). Desative-o em Mods e inicie novamente.",
-  "controls.modLoadFailed": "O mod {modId} não carregou. Desative-o em Mods e inicie novamente."
+  "controls.modLoadFailed": "O mod {modId} não carregou. Desative-o em Mods e inicie novamente.",
+  "insight.lastObserved": "Último estado observado: {state}.",
+  "insight.lastHealthCheck": "Última verificação de integridade:"
 }
