@@ -114,7 +114,8 @@ it.each(["stopped", "drifted"])("settles a crash-loop Stop in %s without waiting
     expect(buttons().find(button => button.textContent === "Create backup")?.disabled).toBe(true);
     await renderCase(true);
     await act(async () => vi.advanceTimersByTimeAsync(0));
-    expect(container.textContent).toContain("Server stopped.");
+    expect(container.textContent).toContain(operationState === "drifted" ? "The game was last observed stopped." : "Server stopped.");
+    if (operationState === "drifted") expect(container.textContent).not.toContain("Server stopped.");
     expect(container.textContent).toContain(runtimeInsight.failureMessage);
     expect(container.textContent).toContain(runtimeInsight.recommendation);
     expect(container.textContent).not.toContain("press Start when ready");

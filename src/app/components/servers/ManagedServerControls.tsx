@@ -217,7 +217,7 @@ export function ManagedServerControls({
                 setMessage(t("controls.stoppedAwaitingServerCheck"));
                 return;
             }
-            setMessage(t("controls.serverStopped"));
+            setMessage(t(driftedStopped ? "controls.stoppedAwaitingServerCheck" : "controls.serverStopped"));
             setStopRevision(null);
             endPolling(serverId);
         }, 0);
