@@ -234,6 +234,10 @@ it("accepts what the control plane can send that looks unusual", () => {
     // A VPS with one side unknown is unmeasured, keeping the other and its source.
     expect(parseSlotSizing(withHost(unmeasured, { usableCores: 1.5, coresSource: "measured" }))).not.toBeNull();
     expect(parseSlotSizing(withHost(unmeasured, { usableMemoryBytes: GIB, memorySource: "provider-vcpu" }))).not.toBeNull();
+    // Memory per server at the static rule's 3 GiB, as a control plane that caps it plans a higher peak, and above it, as
+    // one from before the cap does.
+    expect(parseSlotSizing(withHost(grows, { memoryBytesPerServer: 3 * GIB }))).not.toBeNull();
+    expect(parseSlotSizing(withHost(grows, { memoryBytesPerServer: 3.25 * GIB }))).not.toBeNull();
 });
 
 it("keeps a flag whose figure, as rounded, crosses an uneven budget by less than half its last decimal", () => {
@@ -562,7 +566,7 @@ it("explains each column as the control plane computes it", () => {
     expect(hints.free).toContain("0 for Drain and Unmeasured");
     expect(hints.capacity).toContain("borrowed (provider and vCPU), the median of the measured VPSs of its provider and vCPU count");
     expect(hints.capacity).toContain("unknown, nothing to measure or borrow, which leaves the VPS Unmeasured. Each is borrowed on its own.");
-    expect(hints.capacity).toContain("2.5 GiB of memory on it, or its servers' measured peak where higher");
+    expect(hints.capacity).toContain("2.5 GiB of memory on it, or its servers' measured peak where higher, up to the static rule's 3 GiB.");
     expect(hints.shortfall).toContain("the read does not say how many");
     // No hint names a raw provider id.
     for (const hint of Object.values(hints)) expect(hint).not.toMatch(/ovhcloud-vps|contabo-vps|hosthatch-vps/u);

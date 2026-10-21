@@ -916,18 +916,29 @@ figure; the tab presents them as follows.
 - **Per server** is the demand a VPS is modelled with: every online server
   bursting at once to `model.cpuBurstVcpu` (1.6 vCPU) and
   `model.memoryBurstBytes` (2.5 GiB), or to the peak CPU and peak working set of
-  its demand source where those are higher. The source is the servers that ran on
+  its demand source where those are higher, but never above the static rule's
+  `model.staticBurstVcpuPerServer` and `model.staticBurstMemoryBytesPerServer`
+  (2 vCPU and 3 GiB) from control plane #550 on. The source is the servers that ran on
   the VPS itself once they have run `minimumRunningHours` (six today) in the
   window (**This VPS**), else its instance type's once they have (**Type**), else
   the whole fleet's (**Fleet**), else none yet (**None yet**). Under the figures
   the source says how they are made, leaving out a target whose peak is above it:
-  "This VPS · 1.6 vCPU, 2.5 GiB burst · peaks 1.372 cores, 2.26 GiB". A control
+  "This VPS · 1.6 vCPU, 2.5 GiB burst · peaks 1.372 cores, 2.26 GiB". A peak
+  above the static rule is planned at it, and the label names that cap beside
+  the peak it caps: "Type · 2.5 GiB burst · 2 vCPU cap · peaks 2.720 cores,
+  2.11 GiB" over a planned 2.000 cores. A cap is named only where the planned
+  figure is at it, so a control plane from before #550, which plans the peak,
+  reads as before. A control
   plane without a memory burst target plans memory at the source's p95 instead,
   and the label describes the CPU only ("This VPS · 1.6 vCPU burst · peak
   1.372").
 - **Servers at once (modelled)** is floor(min(usable cores ÷ per-server cores,
   usable memory ÷ per-server memory)), and **Limited by** says whether CPU or
-  memory runs out first. It is compared with today's slots, floor(vCPU ÷ 2) from
+  memory runs out first. From control plane #550 on it is never fewer than the
+  static rule gives the VPS, min(floor(vCPU ÷ 2), floor(RAM ÷ 3 GiB)), whatever
+  its steal and overhead, and where that floor sets it **Limited by** names the
+  static rule's limit (CPU when floor(vCPU ÷ 2) is no more than
+  floor(RAM ÷ 3 GiB)). It is compared with today's slots, floor(vCPU ÷ 2) from
   the static rule of 2 vCPU and 3 GiB per server (an instance type's slots are
   worked out the same way from `model.staticBurstVcpuPerServer`). Fewer than its
   slots is **At risk** (the VPS cannot run all its slots' servers at their needs
@@ -951,12 +962,16 @@ figure; the tab presents them as follows.
    share, and a sentence comparing them with the static rule and saying what is
    planned ("A running server uses 1.18 cores at p50 (59% of 2 vCPU) and 1.73 GiB
    at p95 (58% of 3 GiB). Every online server is planned to burst to 1.6 vCPU and
-   2.5 GiB at once, or to its VPS's measured peaks where higher; no CPU peak is
+   2.5 GiB at once, or to its VPS's measured peaks where higher, up to the static
+   rule's 2 vCPU and 3 GiB; no CPU peak is
    above its target (the fleet's highest is 1.492 cores), so every VPS plans 1.600
    cores per server (80% of 2 vCPU), and no memory peak is above its target (the
    fleet's highest is 2.26 GiB), so every VPS plans 2.50 GiB per server (83% of
    3 GiB)."). No VPS's source peaks above the fleet, so above a target the plans
-   range from the target to the fleet's peak, and the sentence says each VPS's own
+   range from the target to the fleet's peak, or to the static rule's 2 vCPU or
+   3 GiB where the peak is above that ("the fleet's highest CPU peak is 2.720
+   cores, so VPSs plan from 1.600 cores to 2.000 cores per server (100% of 2 vCPU
+   at most)"), and the sentence says each VPS's own
    is in its per-server column. Until the fleet has `minimumRunningHours` nothing
    is planned and the sentence stops after what a server uses.
 3. **Providers**: VPSs, servers, steal mean, p95 and max, and per-server CPU p50
@@ -992,8 +1007,10 @@ Every figure's label is a button with a tooltip explaining it (steal, busy
 cores, overhead, usable, p50/p95/max, per server and its source, servers at
 once, limited by, throttled share, running server-hours and the hourly strips).
 The memory tooltips say that the model plans memory at the burst target, or the
-peak where higher, and that the p95 is shown for comparison; without a memory
-burst target they say that the p95 is planned.
+peak where higher, up to the static rule's 3 GiB, and that the p95 is shown for
+comparison; without a memory burst target they say that the p95 is planned. The
+CPU, per-server and servers-at-once tooltips name the 2 vCPU cap, and servers at
+once and limited by the static floor.
 A tooltip opens on hover, focus or a tap and closes on Escape, when the pointer
 or focus leaves, or when the window scrolls or resizes; only one is open at a
 time. These are the shared `MetricHint` buttons described under the measured
@@ -1075,7 +1092,12 @@ A VPS without a source (`none`) has every per-server figure null, and one with a
 source has every one, with a stable CPU above 0 and a CPU peak no lower. Its
 `demandCpuCores` is `max(cpuBurstVcpu, peakCpuCores)` within 0.001, and in the
 memory-burst shape its `demandMemoryBytes` is exactly
-`max(memoryBurstBytes, peakMemoryBytes)`. A read from before the CPU burst target,
+`max(memoryBurstBytes, peakMemoryBytes)`; or, from control plane #550 on, each is
+also capped at the static rule: `min(staticBurstVcpuPerServer, max(cpuBurstVcpu,
+peakCpuCores))` within 0.001 and exactly `min(staticBurstMemoryBytesPerServer,
+max(memoryBurstBytes, peakMemoryBytes))`. Every VPS follows the same form, capped
+or not. `modelledServers` and `limitedBy` are checked only for their range, so the
+static floor #550 puts under servers at once needs no change. A read from before the CPU burst target,
 without `cpuBurstVcpu`, is no longer sent by any control plane and is unexpected.
 Nothing else between fields is checked: an unknown `instanceTypeKey`, occupants
 beyond slots or fleet totals that do not add up still render.
@@ -1093,6 +1115,13 @@ the other way round, an older website shows the new capacity read as unexpected,
 and would reject the overlap of any VPS whose memory lets more servers burst at
 2.5 GiB than at 3 GiB (none of today's). Roll back in the other order: the control
 plane first.
+
+The static cap on per-server demand (control plane #550) goes the same way:
+deploy this website change first, then the control plane. A website before it
+requires `demandCpuCores == max(cpuBurstVcpu, peakCpuCores)`, so it rejects the
+whole read once any VPS's source peaked above 2 vCPU (on 2026-10-21 the 6-vCPU
+OVHcloud type's servers had peaked at 2.72 cores) and the tab shows an unexpected
+response. This website reads both forms, so roll back the control plane first.
 
 A VPS provider the control plane adds to `VPS_PROVIDER_IDS` needs a website
 update first: add it to `FLEET_CAPACITY_PROVIDERS` (and

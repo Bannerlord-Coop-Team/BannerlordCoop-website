@@ -25,6 +25,11 @@ const WEEK_HOURS = 168;
 /** The most a read's model may claim: vCPUs, and bytes of memory, as the fleet capacity read bounds its targets. */
 const MAXIMUM_BURST_VCPU = 256;
 const MAXIMUM_BURST_MEMORY_BYTES = 64 * GIB;
+/**
+ * The most memory a server is planned to need while online: the static rule's 3 GiB per server, the control plane's
+ * `FLEET_CAPACITY_STATIC_BURST_MEMORY_BYTES_PER_SERVER`. The slot-sizing read does not carry it, unlike the capacity read.
+ */
+const STATIC_MEMORY_BYTES_PER_SERVER = 3 * GIB;
 /** A figure within this of a whole number of its last decimal is that number: floating-point noise, not a digit. */
 const DECIMAL_NOISE = 1e-6;
 /**
@@ -201,7 +206,9 @@ function host(value: unknown, sizingModel: Model): value is HostingSlotSizingHos
     // Each source names its own figure: none exactly when that figure is unknown.
     if ((value.usableCores === null) !== (value.coresSource === "none")) return false;
     if ((value.usableMemoryBytes === null) !== (value.memorySource === "none")) return false;
-    // The burst target, or the VPS's servers' peak working set where that is higher.
+    // The burst target, or the VPS's servers' peak working set where that is higher, at most the static rule's 3 GiB
+    // from a control plane that caps per-server demand. Only the lower bound is checked, so one from before the cap,
+    // which plans a peak above 3 GiB as it is, still reads.
     if (!count(value.memoryBytesPerServer, sizingModel.memoryBurstBytes)) return false;
     if (!REASONS.includes(value.reason as HostingSlotSizingReason)) return false;
     if (!count(value.serversToMove) || !count(value.freeRecommendedSlots)) return false;
@@ -480,7 +487,7 @@ export function slotSizingHints(sizingModel: Model) {
         overflow: `Memory over: the expected share of the week in which more of those servers are online at once than floor(usable memory ÷ memory per server). The budget is under ${share}. Over budget marks where the control plane says the exact share reaches it, which the rounded figure cannot show at the edge; only Drain and Floor can be.`,
         toMove: "Servers that would move off it: with Drain, its servers beyond the recommendation, dropped one at a time by whichever leaves the broken budget lowest; 0 otherwise. Nothing moves them.",
         free: "Free recommended slots: slots beyond the servers that stay that a moved server could take, counted as a typical server, with both budgets kept. The recommendation less its servers for CPU budget, Memory budget and Maximum; the room the budgets allow under the floor for Floor; 0 for Drain and Unmeasured. Only a VPS that accepts relocations offers them to its region.",
-        capacity: `Its usable cores and memory, each with where it comes from: measured, its own from the capacity read; borrowed (type), the median of the measured VPSs of its instance type; borrowed (provider and vCPU), the median of the measured VPSs of its provider and vCPU count; unknown, nothing to measure or borrow, which leaves the VPS Unmeasured. Each is borrowed on its own. Each online server is planned to need ${ruleGiB(sizingModel.memoryBurstBytes)} of memory on it, or its servers' measured peak where higher.`,
+        capacity: `Its usable cores and memory, each with where it comes from: measured, its own from the capacity read; borrowed (type), the median of the measured VPSs of its instance type; borrowed (provider and vCPU), the median of the measured VPSs of its provider and vCPU count; unknown, nothing to measure or borrow, which leaves the VPS Unmeasured. Each is borrowed on its own. Each online server is planned to need ${ruleGiB(sizingModel.memoryBurstBytes)} of memory on it, or its servers' measured peak where higher, up to the static rule's ${ruleGiB(STATIC_MEMORY_BYTES_PER_SERVER)}.`,
         regionToMove: "Servers to move off drained VPSs whose region this is: a server's own published region, else its VPS's.",
         regionFree: "Free recommended slots on the region's VPSs that accept relocations. Regions overlap, so a VPS in several regions offers the same slots to each.",
         shortfall: "Shortfall: servers to move with no free recommended slot of their own provider in the region, since a move keeps a server on its provider. They need more VPSs; the read does not say how many.",
