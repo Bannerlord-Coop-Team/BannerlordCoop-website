@@ -208,11 +208,12 @@ export function ManagedServerControls({
 
     useEffect(() => {
         if (stopRevision === null || isPending) return;
-        // Drift may still block recovery tools; keep the bounded poll until server checks clear it.
+        // A crash cooldown outlives Stop; other readiness gates keep the bounded refresh session.
         const driftedStopped = operationState === "drifted" && runtimeInsight?.desiredState === "stopped";
         if ((operationState !== "stopped" && !driftedStopped) || observedGameState !== "stopped" || expectedUpdatedAt <= stopRevision) return;
         const timeout = setTimeout(() => {
-            if (driftedStopped || (runtimeInsight && !runtimeInsight.allowedActions.includes("start"))) {
+            if (runtimeInsight?.crashLoopDetected !== true
+                && (driftedStopped || (runtimeInsight && !runtimeInsight.allowedActions.includes("start")))) {
                 setMessage(t("controls.stoppedAwaitingServerCheck"));
                 return;
             }
@@ -529,7 +530,7 @@ export function ManagedServerControls({
                     />
                 </div>
             </DisabledControlHint>
-            {!busy && operationState === "stopped" && observedGameState === "stopped" && <p className="max-w-sm text-xs text-foreground-muted">{t("controls.alreadyStopped")}</p>}
+            {!busy && canStart && operationState === "stopped" && observedGameState === "stopped" && <p className="max-w-sm text-xs text-foreground-muted">{t("controls.alreadyStopped")}</p>}
             {statusArea !== null && (statusSlot === undefined ? statusArea : statusSlot ? createPortal(statusArea, statusSlot) : null)}
         </div>
     );
