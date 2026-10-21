@@ -274,8 +274,9 @@ it.each([
     ["a recommendation below the floor", withHost(memoryBound, { recommendedSlots: 2, freeRecommendedSlots: 1 })],
     // A CPU-bound VPS within its slots, recommended one more than any VPS holds: only the recommendation's range rejects it.
     ["a recommendation above the maximum", withHost(grows, { recommendedSlots: 33, freeRecommendedSlots: 30 })],
-    // Its floor, floor(66 ÷ 2), is above the maximum, so no stored slot count can reach it: the slots' floor rejects it.
-    ["a floor above the maximum", withHost(floored, { vCpu: 66, recommendedSlots: 33 })],
+    // Its floor, floor(66 ÷ 2) = 33, is above the maximum, so no VPS can have it: its slots are below that floor and any
+    // recommendation is above the maximum, and both rules reject it. Each has its own isolated case above.
+    ["a VPS whose floor is above the maximum", withHost(floored, { vCpu: 66, recommendedSlots: 33 })],
     ["a fractional recommendation", withHost(grows, { recommendedSlots: 4.5, freeRecommendedSlots: 1.5 })],
     // Rounded as the control plane rounds them.
     ["a shortage with four decimals", withHost(grows, { expectedShortageCoreHoursPerWeek: 0.8421 })],
