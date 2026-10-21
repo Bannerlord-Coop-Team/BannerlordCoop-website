@@ -61,6 +61,7 @@ describe("home localization", () => {
         const heroDownload = root.querySelector("section[aria-labelledby='hero-heading'] button[aria-haspopup='dialog']");
         expect(heroDownload?.textContent).toBe(`${common["download.trigger"]}${home["download.platforms"]}`);
         expect(root.querySelector("section[aria-labelledby='hero-heading'] a[href='/servers']")?.textContent).toContain(home["hero.rentServer"]);
+        expect(root.querySelector("section[aria-labelledby='hero-heading'] a[href='https://discord.gg/bannerlordcoop']")?.getAttribute("aria-label")).toBe(home["hero.discord"]);
         expect(await generateMetadata()).toMatchObject({ description: home["metadata.description"], alternates: { canonical: "/" }, openGraph: { locale: "en_US", title: "Bannerlord Coop", description: home["metadata.description"] }, twitter: { description: home["metadata.description"] } });
     });
 

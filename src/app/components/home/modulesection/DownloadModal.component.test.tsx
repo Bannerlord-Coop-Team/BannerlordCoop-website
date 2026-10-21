@@ -16,6 +16,8 @@ it("uses only common messages outside home and preserves download links and dial
         expect(trigger.textContent).toContain("Download");
         await act(async () => trigger.click());
         const dialog = document.querySelector('[role="dialog"]')!;
+        // Portaled to body so ancestor stacking contexts (e.g. the hero's `isolate`) cannot cover it.
+        expect(container.contains(dialog)).toBe(false);
         expect(dialog.textContent).toContain(common["download.description"]);
         expect(dialog.textContent).toContain(common["download.installer.description"]);
         expect([...dialog.querySelectorAll("a")].map((link) => link.href)).toEqual([
