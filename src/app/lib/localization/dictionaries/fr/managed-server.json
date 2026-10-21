@@ -1,4 +1,5 @@
 {
+  "controls.stoppedAwaitingServerCheck": "Le jeu a été observé à l’arrêt lors de la dernière vérification. Le démarrage et les outils de récupération seront disponibles lorsque les vérifications du serveur confirmeront qu’il est prêt.",
   "controls.restartCancelled": "Redémarrage annulé",
   "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "Impossible de confirmer l’état du serveur. Aucune mise à jour n’a été envoyée. Actualisez la page et réessayez.",
   "name.required": "Saisissez un nom de serveur.",

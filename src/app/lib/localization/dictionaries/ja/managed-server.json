@@ -1,4 +1,5 @@
 {
+  "controls.stoppedAwaitingServerCheck": "最後の確認時、ゲームは停止していました。サーバーの確認で準備完了が確認されると、起動と復旧ツールが利用できるようになります。",
   "controls.restartCancelled": "再起動がキャンセルされました",
   "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "サーバーの状態を確認できませんでした。更新リクエストは送信されていません。ページを再読み込みして、もう一度お試しください。",
   "name.required": "サーバー名を入力してください。",

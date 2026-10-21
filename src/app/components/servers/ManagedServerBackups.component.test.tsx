@@ -689,6 +689,19 @@ describe("ManagedServerBackups recent autosaves", () => {
         expect(container.querySelector("section")!.textContent).toContain("Stop the game server before loading an earlier autosave.");
     });
 
+    it("waits for server checks instead of requesting another Stop while the stopped game is drifted", async () => {
+        await renderAutosaves({ currentServer: { ...stopped, operationState: "drifted" } });
+        const waiting = "The game was last observed stopped. Start and recovery tools unlock after server checks confirm readiness.";
+        expect(container.querySelector("section")!.textContent).toContain(waiting);
+        expect(container.querySelector("section")!.textContent).not.toContain("Stop the game server before loading");
+        for (const candidate of loadButtons()) {
+            expect(candidate.disabled).toBe(true);
+            expect(candidate.title).toBe(waiting);
+        }
+        await renderAutosaves();
+        expect(loadButtons().every(candidate => !candidate.disabled)).toBe(true);
+    });
+
     it("confirms with the autosave time and submits the exact campaign, generation and generation check", async () => {
         const confirm = vi.mocked(window.confirm);
         confirm.mockReturnValueOnce(false);

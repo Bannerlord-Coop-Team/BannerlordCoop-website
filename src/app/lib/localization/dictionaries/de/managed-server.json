@@ -1,4 +1,5 @@
 {
+  "controls.stoppedAwaitingServerCheck": "Das Spiel wurde zuletzt als gestoppt gemeldet. Start und Wiederherstellungsfunktionen werden freigegeben, sobald die Serverprüfungen die Bereitschaft bestätigen.",
   "controls.restartCancelled": "Neustart abgebrochen",
   "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "Der Serverstatus konnte nicht bestätigt werden. Es wurde kein Update angefordert. Lade die Seite neu und versuche es erneut.",
   "name.required": "Gib einen Servernamen ein.",

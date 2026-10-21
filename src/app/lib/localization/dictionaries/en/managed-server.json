@@ -1,4 +1,5 @@
 {
+  "controls.stoppedAwaitingServerCheck": "The game was last observed stopped. Start and recovery tools unlock after server checks confirm readiness.",
   "controls.restartCancelled": "Restart cancelled",
   "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "We couldn't confirm server status. No update was sent. Refresh the page and try again.",
   "name.required": "Enter a server name.",

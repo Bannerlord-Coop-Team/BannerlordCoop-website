@@ -186,6 +186,8 @@ function ManagedServerBackupsSession({
     // Earlier autosaves are swapped in only while the server is both meant to be and seen to be stopped.
     const serverIsStopped = currentServer.operationState === "stopped"
         && currentServer.observedGameState === "stopped";
+    const autosaveStopHint = currentServer.operationState === "drifted" && currentServer.observedGameState === "stopped"
+        ? t("controls.stoppedAwaitingServerCheck") : t("autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave");
     const canManage = canManageServerBackups(server.accessRole);
     const statusIsStale = timedOutSession?.serverId === server.serverId
         && timedOutSession.statusSource === "backup"
@@ -483,7 +485,7 @@ function ManagedServerBackupsSession({
                         onClick={() => submitAutosaveRestore(item)}
                         title={retainedIntent !== null
                             ? t("backups.reconcileThePendingBackupRequestFirst")
-                            : serverIsStopped ? undefined : t("autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave")}
+                            : serverIsStopped ? undefined : autosaveStopHint}
                         className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 border border-red-400/40 bg-red-500/[0.06] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-red-200 transition-colors hover:border-red-300/60 hover:bg-red-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
                     >
                         <RotateCcw aria-hidden="true" className={`size-3.5 ${isRestoring ? "animate-pulse" : ""}`} />
@@ -621,7 +623,7 @@ function ManagedServerBackupsSession({
                         </div>
                     )}
                     {canManage && earlierAutosaves.length > 0 && !serverIsStopped && (
-                        <p className="mt-2 text-xs text-foreground-dim">{t("autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave")}</p>
+                        <p className="mt-2 text-xs text-foreground-dim">{autosaveStopHint}</p>
                     )}
                 </section>
             )}

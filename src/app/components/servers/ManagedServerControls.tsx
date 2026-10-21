@@ -208,10 +208,14 @@ export function ManagedServerControls({
 
     useEffect(() => {
         if (stopRevision === null || isPending) return;
-        // A completed command is not enough: require a newer, confirmed server observation.
+        // Drift may still block recovery tools; keep the bounded poll until server checks clear it.
         const driftedStopped = operationState === "drifted" && runtimeInsight?.desiredState === "stopped";
         if ((operationState !== "stopped" && !driftedStopped) || observedGameState !== "stopped" || expectedUpdatedAt <= stopRevision) return;
         const timeout = setTimeout(() => {
+            if (driftedStopped) {
+                setMessage(t("controls.stoppedAwaitingServerCheck"));
+                return;
+            }
             setMessage(t("controls.serverStopped"));
             setStopRevision(null);
             endPolling(serverId);

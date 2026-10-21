@@ -1,4 +1,5 @@
 {
+  "controls.stoppedAwaitingServerCheck": "Son kontrolde oyun durmuş durumdaydı. Sunucu kontrolleri hazır olduğunu doğruladığında başlatma ve kurtarma araçları kullanılabilir hale gelir.",
   "controls.restartCancelled": "Yeniden başlatma iptal edildi",
   "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "Sunucu durumu doğrulanamadı. Güncelleme isteği gönderilmedi. Sayfayı yenileyip tekrar deneyin.",
   "name.required": "Bir sunucu adı girin.",

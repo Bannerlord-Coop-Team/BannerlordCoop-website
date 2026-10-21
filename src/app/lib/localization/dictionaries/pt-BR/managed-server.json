@@ -1,4 +1,5 @@
 {
+  "controls.stoppedAwaitingServerCheck": "Na última verificação, o jogo estava parado. A inicialização e as ferramentas de recuperação serão liberadas quando as verificações do servidor confirmarem que ele está pronto.",
   "controls.restartCancelled": "Reinício cancelado",
   "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "Não foi possível confirmar o status do servidor. Nenhuma atualização foi enviada. Atualize a página e tente novamente.",
   "name.required": "Digite um nome para o servidor.",
