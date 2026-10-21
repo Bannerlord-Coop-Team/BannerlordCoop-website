@@ -722,7 +722,8 @@ An at-once response marks its red row from `overAtOnce` instead, under a VPS
 with more occupants than `atOnceServers`, and its legend reads "Red: more servers
 online than the VPS can run at once at what they usually need". Each row's right
 column says "Fits at once", "*N* h over at once" or "At once not modelled yet",
-then, as information, "Burst headroom: 3 could burst at once". A cell's title adds
+then, as information, "3 can burst together (1.6 vCPU, 2.5 GiB each)", the
+overlap's own burst capacity, not the capacity tab's burst headroom. A cell's title adds
 "can run *N* at once" and, on a red hour, "over at-once capacity", before the
 burst capacity it keeps as information ("Wed 14 Oct 20:00 UTC · 4 online; can run
 4 at once; 3 can burst together, over burst capacity").

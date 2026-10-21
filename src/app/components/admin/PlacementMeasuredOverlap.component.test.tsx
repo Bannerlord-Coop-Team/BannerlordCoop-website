@@ -447,9 +447,9 @@ it("marks in red the hours over at-once capacity once the control plane reports 
     expect(legend().textContent).toContain("Red: more servers online than the VPS can run at once at what they usually need");
     expect(legend().textContent).not.toContain("can each burst");
     expect(cells("vps-1a2b3c4d").burst).toBeUndefined();
-    expect(rightColumn("vps-1a2b3c4d")).toEqual(["Fits at once", "Burst headroom: 3 could burst at once", "7.5 pair-h measured", "71% measured"]);
+    expect(rightColumn("vps-1a2b3c4d")).toEqual(["Fits at once", "3 can burst together (1.6 vCPU, 2.5 GiB each)", "7.5 pair-h measured", "71% measured"]);
     expect(cells("vps-1a2b3c4d").shading[2 * 24 + 20]!.getAttribute("title")).toBe("Wed 14 Oct 20:00 UTC · 4 online; can run 4 at once; 3 can burst together, over burst capacity");
-    expect(rightColumn("vps-spare")).toEqual(["At once not modelled yet", "Burst headroom: 2 could burst at once", "0.0 pair-h measured", "0% measured"]);
+    expect(rightColumn("vps-spare")).toEqual(["At once not modelled yet", "2 can burst together (1.6 vCPU, 2.5 GiB each)", "0.0 pair-h measured", "0% measured"]);
 
     // At three at once, the hours all four were online are over: the red row follows overAtOnce.
     mocks.request.mockResolvedValue({ ...overlap, hosts: [{ ...over, atOnceServers: 3, overAtOnce: over.overBurst, overAtOnceHours: 10 }] });
@@ -457,5 +457,5 @@ it("marks in red the hours over at-once capacity once the control plane reports 
     await settle();
     const red = cells("vps-1a2b3c4d").burst!;
     expect(red.filter((cell) => cell.classList.contains("bg-crimson"))).toHaveLength(10);
-    expect(rightColumn("vps-1a2b3c4d")).toEqual(["10 h over at once", "Burst headroom: 3 could burst at once", "7.5 pair-h measured", "71% measured"]);
+    expect(rightColumn("vps-1a2b3c4d")).toEqual(["10 h over at once", "3 can burst together (1.6 vCPU, 2.5 GiB each)", "7.5 pair-h measured", "71% measured"]);
 });

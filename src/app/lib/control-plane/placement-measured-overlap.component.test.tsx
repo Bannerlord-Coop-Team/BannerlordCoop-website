@@ -221,7 +221,7 @@ it("accepts the at-once shape exactly as the contract describes it, with its red
     expect(overlapOverRow(atOnceHost)).toBeNull();
     expect(overlapBurstRow(atOnceHost)).toBe(burstHost.overBurst);
     expect(overlapAtOnceLabel(atOnceHost)).toBe("Fits at once");
-    expect(overlapBurstLabel(atOnceHost)).toBe("Burst headroom: 3 could burst at once");
+    expect(overlapBurstLabel(atOnceHost)).toBe("3 can burst together (1.6 vCPU, 2.5 GiB each)");
     expect(overlapBurstLabel(burstHost)).toBe("5 h over burst");
     expect(overlapCellLabel(atOnceHost, overlap.windowStartedAt, OVER_HOUR)).toBe("Wed 14 Oct 20:00 UTC · 4 online; can run 4 at once; 3 can burst together, over burst capacity");
     // Three at once: the over-burst hours are now over at-once capacity.

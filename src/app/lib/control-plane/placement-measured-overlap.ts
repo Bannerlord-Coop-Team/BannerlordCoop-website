@@ -183,6 +183,10 @@ export function overlapBurstRow(host: HostingPlacementOverlapHost) {
     return overlapHasBurst(host) && host.occupants.length > host.burstServers ? host.overBurst : null;
 }
 
+/** The legend's red key: over at-once capacity once the control plane reports it, over burst capacity before. */
+export const OVERLAP_RED_AT_ONCE = "Red: more servers online than the VPS can run at once at what they usually need";
+export const OVERLAP_RED_BURST = "Red: more servers online than can each burst to 1.6 vCPU and 2.5 GiB";
+
 /** Whether a VPS reports its at-once capacity, as every host does once the control plane fits on typical demand. */
 export function overlapHasAtOnce(host: HostingPlacementOverlapHost): host is HostingPlacementOverlapBurstHost & { atOnceServers: number | null; overAtOnce: string; overAtOnceHours: number } {
     return "atOnceServers" in host;
@@ -332,12 +336,13 @@ export function overlapSummary(host: HostingPlacementOverlapHost, windowStartedA
 
 /**
  * "10 h over burst" for a VPS that can exceed its burst capacity, "Bursts fit" for one that cannot; null without burst
- * capacity. Once the control plane reports at-once capacity, burst capacity is information, read as the capacity tab
- * reads it: "Burst headroom: 3 could burst at once".
+ * capacity. Once the control plane reports at-once capacity, burst capacity is information: "3 can burst together (1.6
+ * vCPU, 2.5 GiB each)", in the overlap's own terms, the VPS's vCPUs and RAM at the burst targets. That is not the capacity
+ * tab's burst headroom, which counts usable cores at each source's burst CPU, so it is not worded as it is.
  */
 export function overlapBurstLabel(host: HostingPlacementOverlapHost) {
     if (!overlapHasBurst(host)) return null;
-    if (overlapHasAtOnce(host)) return `Burst headroom: ${host.burstServers} could burst at once`;
+    if (overlapHasAtOnce(host)) return `${host.burstServers} can burst together (${BURST_VCPU} vCPU, ${BURST_MEMORY_BYTES / 1024 ** 3} GiB each)`;
     return overlapCanExceedBurst(host) ? `${host.overBurstHours} h over burst` : "Bursts fit";
 }
 

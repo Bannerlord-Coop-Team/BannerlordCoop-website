@@ -549,8 +549,8 @@ export type HostingFleetCapacityVerdict = { kind: "at-risk" | "headroom" | "matc
 
 /**
  * Where a VPS's co-online servers come from: `measured` from every current server's online hours; `worst-case-occupants`
- * when some server has too few hours with samples and counts as online in every hour; `slots` when it has no servers,
- * so every slot counts.
+ * when some server has too few hours with samples and counts as online in every hour; `slots` when every slot counts:
+ * it has no servers, or the control plane could not read the servers' online history (its read then still loads).
  */
 export type HostingFleetCapacityConcurrentSource = "measured" | "worst-case-occupants" | "slots";
 

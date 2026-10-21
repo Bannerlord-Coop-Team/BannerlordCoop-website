@@ -9,6 +9,8 @@ import {
     OVERLAP_COVERAGE_HINT,
     OVERLAP_PAIR_HOURS_HINT,
     overlapBand,
+    OVERLAP_RED_AT_ONCE,
+    OVERLAP_RED_BURST,
     overlapAtOnceLabel,
     overlapBurstLabel,
     overlapOverRow,
@@ -151,9 +153,7 @@ function OverlapLegend({ red }: { red: "at-once" | "burst" | null }) {
             <span>No data</span>
             {red !== null && <>
                 <span aria-hidden="true" className="ml-2 h-1 w-4 bg-crimson" />
-                <span>{red === "at-once"
-                    ? "Red: more servers online than the VPS can run at once at what they usually need"
-                    : "Red: more servers online than can each burst to 1.6 vCPU and 2.5 GiB"}</span>
+                <span>{red === "at-once" ? OVERLAP_RED_AT_ONCE : OVERLAP_RED_BURST}</span>
             </>}
         </div>
     );

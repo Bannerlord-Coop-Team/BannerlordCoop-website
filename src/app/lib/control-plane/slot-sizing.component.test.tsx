@@ -574,6 +574,8 @@ const typicalFleet: HostingAdminSlotSizing = { ...fleet, model: { ...fleet.model
 it("accepts the typical new server's CPU from a control plane that fits on typical demand, and describes the server with it", () => {
     expect(parseSlotSizing(typicalFleet)).toBe(typicalFleet);
     expect(parseSlotSizing(withModel({ typicalServerCpuCores: 1.8 }))).not.toBeNull();
+    // A capacity read that fails with the control plane's new history error names it, as every capacity error does.
+    expect(slotSizingCapacityNote({ capacityErrorCode: "fleet_capacity_history_invalid" })).toBe("Capacity samples could not be read (fleet_capacity_history_invalid), so no VPS's usable cores or memory are known: every VPS is unmeasured and has no recommendation.");
     const typicalModel = parseSlotSizing(typicalFleet)!.model;
     expect(slotSizingTypicalServer(typicalModel)).toBe("A typical new server needs 1.600 cores and 2.5 GiB while online: what servers usually need, the 1.6 vCPU target or the fleet's p95 CPU where higher, at most 2 vCPU (the target before the fleet has data). It is online 41.37 hours a week, the mean of servers' weeks over the last 28 days (14-day half-life). A server observed for under 7 days counts with that typical week.");
     const hints = slotSizingHints(typicalModel);
