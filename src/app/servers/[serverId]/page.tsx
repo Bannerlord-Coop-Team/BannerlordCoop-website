@@ -214,12 +214,15 @@ async function ManagedServerLifecycleSection({ server }: { server: MyServerSumma
     return (
         <section id="server-lifecycle" aria-label={t("page.serverControls")}>
                 <ManagedServerControls
+                    key={`${server.serverId}:${server.runtimeInsight?.start?.jobId ?? "none"}`}
                     serverId={server.serverId}
                     displayName={server.displayName}
                     accessRole={server.accessRole}
                     operationState={server.operationState}
                     observedGameState={server.observedGameState}
                     expectedUpdatedAt={server.updatedAt}
+                    runtimeInsight={server.runtimeInsight}
+                    releaseChannel={server.releaseChannel}
                 />
         </section>
     );

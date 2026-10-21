@@ -936,5 +936,7 @@
   "mods.archive.compressionRatio": "폴더 압축률이 100:1을 넘어 서버가 거부합니다.",
   "controls.modLoadFailedMissingAssembly": "모드 {modId}을(를) 로드하지 못했습니다(어셈블리 {assembly} 없음). 모드 탭에서 비활성화한 뒤 다시 시작하세요.",
   "controls.modLoadFailedMissingDll": "모드 {modId}을(를) 로드하지 못했습니다(SubModule.xml에 나열된 DLL 없음). 모드 탭에서 비활성화한 뒤 다시 시작하세요.",
-  "controls.modLoadFailed": "모드 {modId}을(를) 로드하지 못했습니다. 모드 탭에서 비활성화한 뒤 다시 시작하세요."
+  "controls.modLoadFailed": "모드 {modId}을(를) 로드하지 못했습니다. 모드 탭에서 비활성화한 뒤 다시 시작하세요.",
+  "insight.lastObserved": "마지막 확인: {state}.",
+  "insight.lastHealthCheck": "마지막 상태 점검:"
 }

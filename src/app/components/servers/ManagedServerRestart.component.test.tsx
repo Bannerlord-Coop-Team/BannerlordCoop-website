@@ -273,7 +273,7 @@ it("clears restart progress when the control plane reports the restarted run fai
     await render({ operationState: "failed", observedGameState: "failed", expectedUpdatedAt: "2026-10-02T16:00:05.000Z" });
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(container.textContent).toContain("Restarting your server…");
-    expect(buttons().slice(0, 4).map(button => button.disabled)).toEqual([false, false, true, true]);
+    expect(buttons().slice(0, 4).map(button => button.disabled)).toEqual([false, true, true, true]);
     await act(async () => vi.advanceTimersByTimeAsync(20_000));
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(container.textContent).toContain("Status checked. Current state: Failed");

@@ -937,5 +937,7 @@
   "mods.archive.compressionRatio": "Klasör 100:1'den fazla sıkışıyor; sunucu bunu reddeder.",
   "controls.modLoadFailedMissingAssembly": "{modId} modu yüklenemedi ({assembly} derlemesi eksik). Modlar bölümünden devre dışı bırakıp yeniden başlatın.",
   "controls.modLoadFailedMissingDll": "{modId} modu yüklenemedi (SubModule.xml dosyasında listelenen bir DLL eksik). Modlar bölümünden devre dışı bırakıp yeniden başlatın.",
-  "controls.modLoadFailed": "{modId} modu yüklenemedi. Modlar bölümünden devre dışı bırakıp yeniden başlatın."
+  "controls.modLoadFailed": "{modId} modu yüklenemedi. Modlar bölümünden devre dışı bırakıp yeniden başlatın.",
+  "insight.lastObserved": "Son gözlem: {state}.",
+  "insight.lastHealthCheck": "Son durum kontrolü:"
 }

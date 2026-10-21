@@ -150,7 +150,8 @@ it("shows authoritative settings without enabling unsupported save controls", as
     await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel name="Real campaign" visibility="public" />} </TestLocalization>));
     expect(container.querySelector<HTMLInputElement>("#settings-server-name")?.value).toBe("Real campaign");
     expect(container.querySelector<HTMLInputElement>('input[value="public"]')?.checked).toBe(true);
-    for (const control of container.querySelectorAll("input, button")) expect((control as HTMLInputElement).disabled).toBe(true);
+    expect(container.querySelector<HTMLInputElement>('#settings-search')?.disabled).toBe(false);
+    for (const control of container.querySelectorAll('input:not([type="search"]), button[type="submit"]')) expect((control as HTMLInputElement).disabled).toBe(true);
     await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel name="Renamed campaign" />} </TestLocalization>));
     expect(container.querySelector<HTMLInputElement>("#settings-server-name")?.value).toBe("Renamed campaign");
     expect(container.querySelector('input[type="radio"]:checked')).toBeNull();

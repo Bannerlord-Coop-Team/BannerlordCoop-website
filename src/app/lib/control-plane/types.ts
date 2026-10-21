@@ -42,6 +42,7 @@ export type MyServerSummary = Pick<
     | "releaseChannel"
     | "updatedAt"
 > & {
+    runtimeInsight?: import("../hosting/owner-runtime-insight").OwnerRuntimeInsight;
     accessRole: "owner" | "manager" | "support" | "admin";
     // Missing visibility is treated as private during the control-plane rollout.
     visibility?: "private" | "public";

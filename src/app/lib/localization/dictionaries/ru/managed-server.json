@@ -939,5 +939,7 @@
   "mods.archive.compressionRatio": "Папка сжимается сильнее чем 100:1, а сервер такое отклоняет.",
   "controls.modLoadFailedMissingAssembly": "Мод {modId} не загрузился (отсутствует сборка {assembly}). Отключите его в разделе «Моды» и запустите сервер снова.",
   "controls.modLoadFailedMissingDll": "Мод {modId} не загрузился (отсутствует DLL, указанная в его SubModule.xml). Отключите его в разделе «Моды» и запустите сервер снова.",
-  "controls.modLoadFailed": "Мод {modId} не загрузился. Отключите его в разделе «Моды» и запустите сервер снова."
+  "controls.modLoadFailed": "Мод {modId} не загрузился. Отключите его в разделе «Моды» и запустите сервер снова.",
+  "insight.lastObserved": "Последнее наблюдение: {state}.",
+  "insight.lastHealthCheck": "Последняя проверка состояния:"
 }

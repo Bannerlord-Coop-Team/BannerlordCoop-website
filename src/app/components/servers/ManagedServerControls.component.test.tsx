@@ -8,10 +8,11 @@ import { ManagedServerControls, ManagedServerPassword } from "./ManagedServerCon
 import { ManagedServerMoveProvider, ManagedServerMoveStatus } from "./ManagedServerMoveStatus";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import type { MyServerMove } from "@/app/lib/control-plane/types";
+import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
 
-const { request, requestUpdate, requestPassword, beginPolling, startStatus, router, statusSlot } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn(), startStatus: vi.fn(), router: { refresh: vi.fn() }, statusSlot: { current: undefined as HTMLElement | null | undefined } }));
+const { request, requestUpdate, requestPassword, beginPolling, startStatus, summary, router, statusSlot } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn(), startStatus: vi.fn(), summary: vi.fn(), router: { refresh: vi.fn() }, statusSlot: { current: undefined as HTMLElement | null | undefined } }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerStartStatus: startStatus }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerStartStatus: startStatus, getMyServerSummary: summary }));
 afterEach(() => vi.useRealTimers());
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({
@@ -122,7 +123,7 @@ it("explains in plain language that Stop/Restart disconnect players and respects
     const container = document.createElement("div");
     const root = createRoot(container);
     try {
-        await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="stopped" serverId="22222222-2222-4222-8222-222222222222"
+        await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="running" serverId="22222222-2222-4222-8222-222222222222"
             displayName="Campaign" accessRole="owner" operationState="running" expectedUpdatedAt="2026-09-20T12:00:00.000Z" />} </TestLocalization>));
         for (const index of [1, 2]) {
             await act(async () => container.querySelectorAll("button")[index].click());
@@ -160,6 +161,27 @@ it("confirms and queues an immediate update with the displayed server revision",
         await act(async () => root.unmount());
         confirm.mockRestore();
     }
+});
+
+it.each(["stable", "nightly"] as const)("refreshes the update revision only while the displayed channel is unchanged: %s", async channel => {
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    const expectedUpdatedAt = "2026-09-20T12:00:00.000Z";
+    const fresh = "2026-09-20T12:01:00.000Z";
+    summary.mockReset().mockResolvedValue({ serverId, releaseChannel: channel, updatedAt: fresh });
+    requestUpdate.mockReset().mockResolvedValue({ outcome: "enqueued" });
+    expect(await serverActions.operateManagedServer({ serverId, action: "update-now", expectedUpdatedAt, expectedReleaseChannel: channel })).toMatchObject({ ok: true });
+    expect(requestUpdate).toHaveBeenCalledExactlyOnceWith("token", { serverId, expectedUpdatedAt: fresh }, expect.any(String));
+    summary.mockResolvedValue({ serverId, releaseChannel: channel === "stable" ? "nightly" : "stable", updatedAt: fresh });
+    requestUpdate.mockClear();
+    expect(await serverActions.operateManagedServer({ serverId, action: "update-now", expectedUpdatedAt, expectedReleaseChannel: channel })).toMatchObject({ ok: false, refresh: true });
+    expect(requestUpdate).not.toHaveBeenCalled();
+});
+
+it("shows a terminal load crash and refreshes without submitting another Start", async () => {
+    request.mockReset().mockRejectedValue(new MyServersApiError("game_crashed_during_load", "The game crashed while loading your campaign."));
+    expect(await serverActions.operateManagedServer({ serverId: "22222222-2222-4222-8222-222222222222", action: "start" }))
+        .toEqual({ ok: false, refresh: true, message: "The game crashed while loading your campaign." });
+    expect(request).toHaveBeenCalledOnce();
 });
 
 it("sets a private website password once and clears the input", async () => {
@@ -236,6 +258,36 @@ function progress(phase: string, state = "running", label = phase) {
     return { serverId: progressServerId, jobId: progressJobId, phase, state, progress: label };
 }
 
+it.each(["failed", "retry-wait"] as const)("restores truthful %s progress after page reload without dispatching Start", async state => {
+    vi.useFakeTimers();
+    request.mockClear();
+    const receipt = { action: "start" as const, jobId: progressJobId, state, phase: state, progress: `Attempt 2 of 5. ${state === "failed" ? "Automatic Start retries have stopped." : "Next retry: 2026-09-20T12:05:00.000Z."}`,
+        attemptCount: 2, maximumAttempts: 5, nextRetryAt: state === "retry-wait" ? "2026-09-20T12:05:00.000Z" : null,
+        stoppedRetrying: state === "failed", failureCode: state === "failed" ? "game_crashed_during_load" as const : null,
+        recommendedAction: state === "failed" ? "review-backups" as const : null };
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: "2026-09-20T12:00:00.000Z", allowedActions: state === "failed" ? ["start"] : [],
+        crashLoopDetected: false, failureCode: receipt.failureCode, recommendedAction: receipt.recommendedAction,
+        failureMessage: state === "failed" ? "The game crashed while loading your campaign." : null,
+        recommendation: state === "failed" ? "Review available backups before choosing recovery." : null, start: receipt };
+    startStatus.mockReset().mockResolvedValue({ serverId: progressServerId, ...receipt });
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="failed" operationState="failed" runtimeInsight={insight} /></TestLocalization>));
+        expect(container.textContent).toContain("Attempt 2 of 5");
+        if (state === "failed") {
+            expect(container.textContent).toContain("Automatic Start retries have stopped");
+            expect(container.textContent).toContain("Review available backups");
+            expect(container.textContent).not.toContain("Waiting to retry");
+        } else expect(container.textContent).toContain("Next retry:");
+        const buttons = [...container.querySelectorAll("button")];
+        expect(buttons.find(button => button.textContent?.startsWith("Start"))?.disabled).toBe(state !== "failed");
+        expect(buttons.find(button => button.textContent === "Stop")?.disabled).toBe(true);
+        expect(buttons.find(button => button.textContent === "Restart")?.disabled).toBe(true);
+        expect(request).not.toHaveBeenCalled();
+        expect(startStatus).toHaveBeenCalledTimes(state === "failed" ? 0 : 1);
+    } finally { await act(async () => root.unmount()); }
+});
+
 it("follows the accepted Start through real phases and readiness without sending Start again", async () => {
     vi.useFakeTimers();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -281,7 +333,8 @@ it.each(["failed", "cancelled"])("stops following a %s Start without claiming re
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain(state === "failed" ? "Server could not start" : "Start cancelled");
         expect(container.textContent).not.toContain("Your server is ready to join");
-        expect(container.textContent).toContain("The campaign did not finish loading. You can press Start to try again.");
+        expect(container.textContent).toContain("The campaign did not finish loading.");
+        expect(container.textContent).not.toContain("You can press Start to try again.");
         expect(container.textContent).not.toContain("contact support");
         expect(container.querySelector("button")!.disabled).toBe(false);
         expect(container.querySelector(".animate-spin")).toBeNull();

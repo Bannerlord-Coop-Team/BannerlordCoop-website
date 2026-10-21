@@ -373,6 +373,16 @@ export function ManagedServerConsole({ serverId, operationState = "running", obs
         idle: t("console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching"),
         unavailable: t("console.liveOutputIsnTAvailableRightNow"),
     };
+    const loading = observedGameState === "starting" || (operationState === "starting" && observedGameState !== "running");
+    if (loading) {
+        const explanation = `${t("console.serverStatusLoadingCampaign")} ${t("console.liveOutputIsnTAvailableRightNow")}`;
+        consoleStateMessages.connecting = explanation;
+        consoleStateMessages.reconnecting = explanation;
+        consoleStateMessages.unavailable = explanation;
+        consoleStateMessages.stopped = explanation;
+    } else if (operationState === "failed" || observedGameState === "failed" || observedGameState === "unknown") {
+        consoleStateMessages.stopped = t("console.liveOutputIsnTAvailableRightNow");
+    }
 
     useLayoutEffect(() => {
         const output = outputRef.current;

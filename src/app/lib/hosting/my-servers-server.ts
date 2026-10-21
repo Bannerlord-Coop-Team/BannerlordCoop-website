@@ -1,4 +1,5 @@
 import "server-only";
+import { isOwnerRuntimeInsight, isOwnerStartInsight, START_INSIGHT_KEYS, type OwnerStartInsight } from "./owner-runtime-insight";
 import { isIP } from "node:net";
 import type { MyServerMove, MyServerNotice, MyServerSummary } from "@/app/lib/control-plane/types";
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
@@ -22,9 +23,17 @@ export async function listAllMyServers(accessToken: string, callerSignal?: Abort
 /** Reads one freshly authorized summary without collecting inventory or hydrating a dashboard. */
 export async function getMyServerSummary(accessToken: string, serverId: string, callerSignal?: AbortSignal): Promise<MyServerSummary> {
     if (!REQUEST_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid managed server ID.");
-    const value = await readOwner(accessToken, { operation: "server-summary", input: { serverId } }, ownerReadSignal(accessToken, callerSignal));
+    const signal = ownerReadSignal(accessToken, callerSignal);
+    let value: unknown;
+    try { value = await readOwner(accessToken, { operation: "server-summary", input: { serverId, includeRuntimeInsight: true } }, signal); }
+    catch (error) {
+        if (!(error instanceof MyServersApiError) || error.code !== "invalid_request") throw error;
+        value = await readOwner(accessToken, { operation: "server-summary", input: { serverId } }, signal);
+    }
     if (!isRecord(value) || !hasExactKeys(value, ["serverId", "displayName", "accessRole", "friendlyRegion", "operationState",
-        "observedGameState", "releaseChannel", "maintenanceSlot", "timezone", "visibility", "connectionIp", "gamePorts", "updatedAt"])
+        "observedGameState", "releaseChannel", "maintenanceSlot", "timezone", "visibility", "connectionIp", "gamePorts", "updatedAt",
+        ...(Object.hasOwn(value, "runtimeInsight") ? ["runtimeInsight"] : [])])
+        || (Object.hasOwn(value, "runtimeInsight") && !isOwnerRuntimeInsight(value.runtimeInsight))
         || value.serverId !== serverId || !timestamp(value.updatedAt)
         || typeof value.displayName !== "string" || value.displayName.length < 1 || value.displayName.length > 48 || /[\p{Cc}]/u.test(value.displayName)
         || !["owner", "manager", "support", "admin"].includes(value.accessRole as string)
@@ -82,11 +91,11 @@ export async function getMyServerDeletionStatus(accessToken: string, serverId: s
 /** The control plane's diagnosis of a Start that failed because an enabled mod did not load. */
 export type ModLoadFailure = { modId: string; reason: "missing-assembly" | "load-error" | "missing-dll"; assembly?: string };
 
-export type ManagedStartStatus = {
+export type ManagedStartStatus = Partial<Omit<OwnerStartInsight, "jobId" | "state" | "phase" | "progress">> & {
     serverId: string;
     jobId: string;
     state: "queued" | "running" | "retry-wait" | "succeeded" | "failed" | "cancelled";
-    phase: "queued" | "preparing" | "starting" | "verifying" | "ready";
+    phase: OwnerStartInsight["phase"];
     progress: string;
     /** Only on a failed Start whose enabled mod did not load; `progress` then holds the control plane's English copy. */
     modLoadFailure?: ModLoadFailure;
@@ -106,16 +115,24 @@ function isModLoadFailure(value: unknown): value is ModLoadFailure {
 export async function getMyServerStartStatus(accessToken: string, serverId: string, jobId: string): Promise<ManagedStartStatus> {
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
     if (!uuid.test(serverId) || !uuid.test(jobId)) throw new MyServersApiError("invalid_request", "Invalid Start reference.");
-    const result = await readOwner(accessToken, { operation: "server-start-status", input: { serverId, jobId } },
-        ownerReadSignal(accessToken, AbortSignal.timeout(10_000)));
+    const signal = ownerReadSignal(accessToken, AbortSignal.timeout(10_000));
+    let result: unknown;
+    try { result = await readOwner(accessToken, { operation: "server-start-status", input: { serverId, jobId, includeRuntimeInsight: true } }, signal); }
+    catch (error) {
+        if (!(error instanceof MyServersApiError) || error.code !== "invalid_request") throw error;
+        result = await readOwner(accessToken, { operation: "server-start-status", input: { serverId, jobId } }, signal);
+    }
     if (!result || typeof result !== "object" || Array.isArray(result)) throw new MyServersApiError("invalid_response", "Invalid Start status.");
     const value = result as Record<string, unknown>;
     const diagnosed = Object.hasOwn(value, "modLoadFailure");
-    if (!hasExactKeys(value, diagnosed ? [...START_STATUS_KEYS, "modLoadFailure"] : START_STATUS_KEYS)
+    const insight = Object.hasOwn(value, "attemptCount");
+    const keys = insight ? ["serverId", ...START_INSIGHT_KEYS] : START_STATUS_KEYS;
+    if (!hasExactKeys(value, diagnosed ? [...keys, "modLoadFailure"] : keys)
+        || (insight && !isOwnerStartInsight(Object.fromEntries(START_INSIGHT_KEYS.map(key => [key, value[key]]))))
         || (diagnosed && (value.state !== "failed" || !isModLoadFailure(value.modLoadFailure)))
         || value.serverId !== serverId || value.jobId !== jobId
         || !["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"].includes(value.state as string)
-        || !["queued", "preparing", "starting", "verifying", "ready"].includes(value.phase as string)
+        || (!insight && !["queued", "preparing", "starting", "verifying", "ready"].includes(value.phase as string))
         || (value.phase === "ready") !== (value.state === "succeeded")
         || typeof value.progress !== "string" || value.progress.length < 1 || value.progress.length > 256
         || /[\p{Cc}\p{Cf}]/u.test(value.progress)) throw new MyServersApiError("invalid_response", "Invalid Start status.");
@@ -248,10 +265,10 @@ function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
 // Posts one owner read to the control plane and returns its result after checking the redirect, content type and length.
 async function readOwner(accessToken: string, request:
     | { operation: "my-servers"; input: { cursor: string | null; limit: 100 } }
-    | { operation: "server-summary"; input: { serverId: string } }
+    | { operation: "server-summary"; input: { serverId: string; includeRuntimeInsight?: boolean } }
     | OnboardingSummaryRequest
     | { operation: "server-deletion-status"; input: { serverId: string } }
-    | { operation: "server-start-status"; input: { serverId: string; jobId: string } }
+    | { operation: "server-start-status"; input: { serverId: string; jobId: string; includeRuntimeInsight?: boolean } }
     | { operation: "server-resources"; input: { serverId: string } }
     | { operation: "server-notices"; input: { serverId: string } }
     | { operation: "server-move-status"; input: { serverId: string } }, signal: AbortSignal) {
