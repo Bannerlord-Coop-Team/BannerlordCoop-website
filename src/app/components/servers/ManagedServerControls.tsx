@@ -209,14 +209,15 @@ export function ManagedServerControls({
     useEffect(() => {
         if (stopRevision === null || isPending) return;
         // A completed command is not enough: require a newer, confirmed server observation.
-        if (operationState !== "stopped" || observedGameState !== "stopped" || expectedUpdatedAt <= stopRevision) return;
+        const driftedStopped = operationState === "drifted" && runtimeInsight?.desiredState === "stopped";
+        if ((operationState !== "stopped" && !driftedStopped) || observedGameState !== "stopped" || expectedUpdatedAt <= stopRevision) return;
         const timeout = setTimeout(() => {
             setMessage(t("controls.serverStopped"));
             setStopRevision(null);
             endPolling(serverId);
         }, 0);
         return () => clearTimeout(timeout);
-    }, [serverId, stopRevision, operationState, observedGameState, expectedUpdatedAt, isPending, endPolling, t]);
+    }, [serverId, stopRevision, operationState, observedGameState, expectedUpdatedAt, runtimeInsight?.desiredState, isPending, endPolling, t]);
 
     useEffect(() => {
         const current = restartRef.current;

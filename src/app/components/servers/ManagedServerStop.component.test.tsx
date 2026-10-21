@@ -1,4 +1,4 @@
-import { act, useEffect } from "react";
+import { act, useEffect, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerControls } from "./ManagedServerControls";
@@ -17,7 +17,7 @@ const server = { serverId: "22222222-2222-4222-8222-222222222222", displayName: 
 let container: HTMLDivElement;
 let root: Root;
 const buttons = () => [...container.querySelectorAll("button")];
-const render = (overrides: Partial<typeof server> = {}) => act(async () => root.render(
+const render = (overrides: Partial<ComponentProps<typeof ManagedServerControls>> = {}) => act(async () => root.render(
     <TestLocalization><ManagedServerPollingProvider><ManagedServerControls {...server} {...overrides} /></ManagedServerPollingProvider></TestLocalization>,
 ));
 
@@ -52,6 +52,23 @@ it.each(["accepted", "unknown", "lost-response"])("automatically confirms Stop a
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(router.refresh).toHaveBeenCalledTimes(refreshes);
     expect(operate).toHaveBeenCalledExactlyOnceWith({ serverId: server.serverId, action: "stop" });
+});
+
+it("confirms a stopped drifted game without unlocking Start before CP verifies the drift", async () => {
+    operate.mockResolvedValue({ ok: true, checkStatus: true, message: "Checking whether your server has stopped…" });
+    const runtimeInsight = { desiredState: "running" as const, observedAt: null, allowedActions: ["stop" as const], crashLoopDetected: false,
+        failureCode: "game_crashed_during_load" as const, failureMessage: "Campaign load failed.", recommendedAction: "review-backups" as const,
+        recommendation: "Review recovery.", start: null };
+    await render({ operationState: "drifted", observedGameState: "failed", runtimeInsight });
+    await act(async () => buttons().find(button => button.textContent === "Stop")!.click());
+    await render({ operationState: "drifted", observedGameState: "stopped", expectedUpdatedAt: "2026-10-02T16:00:01.000Z", runtimeInsight });
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(container.textContent).not.toContain("Server stopped.");
+    await render({ operationState: "drifted", observedGameState: "stopped", expectedUpdatedAt: "2026-10-02T16:00:02.000Z",
+        runtimeInsight: { ...runtimeInsight, desiredState: "stopped", allowedActions: [] } });
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(container.textContent).toContain("Server stopped.");
+    expect(buttons().find(button => button.textContent === "Start")?.disabled).toBe(true);
 });
 
 it("does not enter the long Stop poll when another operation already owns the server", async () => {
