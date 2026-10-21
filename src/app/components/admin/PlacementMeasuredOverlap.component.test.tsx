@@ -436,3 +436,42 @@ it.each([
     expect([...axis.children].map((day) => day.getAttribute("title"))).toEqual(["Mon 12 Oct", "Tue 13 Oct", "Wed 14 Oct", "Thu 15 Oct", "Fri 16 Oct", "Sat 17 Oct", "Sun 18 Oct", "Mon 19 Oct"]);
     expect(cells("vps-1a2b3c4d").shading[0]!.getAttribute("title")).toBe(`Mon 12 Oct ${start} UTC · no data`);
 });
+
+it("marks in red the hours over at-once capacity once the control plane reports it, keeping burst capacity as information", async () => {
+    // At what they usually need all four servers run at once, though only three can burst together: no red row.
+    const fitsAtOnce: HostingPlacementOverlapBurstHost = { ...over, atOnceServers: 4, overAtOnce: "0".repeat(168), overAtOnceHours: 0 };
+    const quiet: HostingPlacementOverlapBurstHost = { ...fits, atOnceServers: 2, overAtOnce: "0".repeat(168), overAtOnceHours: 0 };
+    const unknown: HostingPlacementOverlapBurstHost = { ...empty, atOnceServers: null, overAtOnce: "-".repeat(168), overAtOnceHours: 0 };
+    mocks.request.mockResolvedValue({ ...overlap, hosts: [fitsAtOnce, quiet, unknown] });
+    await open();
+    expect(legend().textContent).toContain("Red: more servers online than the VPS can run at once at what they usually need");
+    expect(legend().textContent).not.toContain("can each burst");
+    expect(cells("vps-1a2b3c4d").burst).toBeUndefined();
+    expect(rightColumn("vps-1a2b3c4d")).toEqual(["Fits at once", "3 can burst together (1.6 vCPU, 2.5 GiB each)", "7.5 pair-h measured", "71% measured"]);
+    expect(cells("vps-1a2b3c4d").shading[2 * 24 + 20]!.getAttribute("title")).toBe("Wed 14 Oct 20:00 UTC · 4 online; can run 4 at once; 3 can burst together, over burst capacity");
+    expect(rightColumn("vps-spare")).toEqual(["At once not modelled yet", "2 can burst together (1.6 vCPU, 2.5 GiB each)", "0.0 pair-h measured", "0% measured"]);
+
+    // At three at once, the hours all four were online are over: the red row follows overAtOnce.
+    mocks.request.mockResolvedValue({ ...overlap, hosts: [{ ...over, atOnceServers: 3, overAtOnce: over.overBurst, overAtOnceHours: 10 }] });
+    await act(async () => button("Refresh").click());
+    await settle();
+    const red = cells("vps-1a2b3c4d").burst!;
+    expect(red.filter((cell) => cell.classList.contains("bg-crimson"))).toHaveLength(10);
+    expect(rightColumn("vps-1a2b3c4d")).toEqual(["10 h over at once", "3 can burst together (1.6 vCPU, 2.5 GiB each)", "7.5 pair-h measured", "71% measured"]);
+});
+
+it("draws the red row from at-once capacity where it differs from burst capacity", async () => {
+    // Four servers that run at most 2 at once but 3 burst together: 3 online at 20:00 is over at once, not over burst;
+    // 4 online at 21:00 is over both.
+    const split: HostingPlacementOverlapBurstHost = {
+        ...over, serviceName: "vps-de-split.vps.ovh.net", atOnceServers: 2,
+        online: week((hour) => hour < 2 ? null : hour % 24 === 20 ? 3 : hour % 24 === 21 ? 4 : 0),
+        overBurst: week((hour) => hour < 2 ? "-" : hour % 24 === 21 ? "1" : "0").join(""), overBurstHours: 7,
+        overAtOnce: week((hour) => hour < 2 ? "-" : hour % 24 === 20 || hour % 24 === 21 ? "1" : "0").join(""), overAtOnceHours: 14,
+    };
+    mocks.request.mockResolvedValue({ ...overlap, hosts: [split] });
+    await open();
+    const red = cells("vps-de-split").burst!.flatMap((cell, hour) => cell.classList.contains("bg-crimson") ? [hour] : []);
+    expect(red).toEqual([20, 21, 44, 45, 68, 69, 92, 93, 116, 117, 140, 141, 164, 165]);
+    expect(rightColumn("vps-de-split")).toEqual(["14 h over at once", "3 can burst together (1.6 vCPU, 2.5 GiB each)", "7.5 pair-h measured", "71% measured"]);
+});

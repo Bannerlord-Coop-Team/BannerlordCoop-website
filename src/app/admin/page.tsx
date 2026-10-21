@@ -1,5 +1,8 @@
+import { MemberPagination } from "@/app/components/admin/MemberPagination";
 import { RoleEditor } from "@/app/components/admin/RoleEditor";
 import { startImpersonation } from "./impersonation-actions";
+import { DEFAULT_MEMBER_PAGE_SIZE, parseMemberListState, type MemberListState } from "./member-list";
+import { paginateItems } from "@/app/lib/pagination";
 import { getMemberRole, hasAdminAccess, isBootstrapAdmin } from "@/app/lib/auth/access";
 import { createSupabaseServerClient, getSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
@@ -23,7 +26,9 @@ export const dynamic = "force-dynamic";
 type AdminPageProps = {
     searchParams: Promise<{
         error?: string | string[];
+        page?: string | string[];
         q?: string | string[];
+        size?: string | string[];
         updated?: string | string[];
     }>;
 };
@@ -74,7 +79,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     const effectiveUser = (await (await createSupabaseServerClient()).auth.getUser()).data.user;
 
     const params = await searchParams;
-    const query = (firstValue(params.q) ?? "").trim().slice(0, 100);
+    const requestedList = parseMemberListState({
+        query: firstValue(params.q),
+        page: firstValue(params.page),
+        size: firstValue(params.size),
+    });
+    const query = requestedList.query;
     const errorMessage = firstValue(params.error);
     const successMessage = firstValue(params.updated);
 
@@ -111,6 +121,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             return searchable.includes(normalizedQuery);
         })
         .sort((left, right) => memberName(left).localeCompare(memberName(right)));
+    const pagination = paginateItems(filteredMembers, requestedList.page, requestedList.size);
+    // Out-of-range page requests clamp, so links and role forms use the page actually shown.
+    const listState: MemberListState = { ...requestedList, page: pagination.page };
 
     return (
         <main className="min-h-svh bg-background">
@@ -182,6 +195,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         placeholder="Search by name, email, ID, provider, or role"
                         className="min-h-12 w-full rounded-sm border border-white/15 bg-surface py-3 pr-28 pl-11 text-sm text-foreground outline-none hover:border-white/25 focus:border-gold focus:ring-1 focus:ring-gold/30"
                     />
+                    {listState.size !== DEFAULT_MEMBER_PAGE_SIZE && <input type="hidden" name="size" value={listState.size} />}
                     <button
                         type="submit"
                         className="absolute top-1.5 right-1.5 min-h-9 rounded-sm border border-crimson bg-crimson px-4 font-label text-xs font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson"
@@ -227,7 +241,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/[0.07]">
-                                {filteredMembers.map((member) => {
+                                {pagination.items.map((member) => {
                                     const name = memberName(member);
                                     const role = getMemberRole(member);
                                     const roleLocked =
@@ -261,7 +275,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                                 <RoleEditor
                                                     currentRole={role}
                                                     disabled={roleLocked}
-                                                    query={query}
+                                                    listState={listState}
                                                     userId={member.id}
                                                 />
                                             </td>
@@ -290,6 +304,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         </div>
                     )}
                 </div>
+
+                {!loadError && filteredMembers.length > 0 && (
+                    <MemberPagination listState={listState} pagination={pagination} total={filteredMembers.length} />
+                )}
             </section>
         </main>
     );
