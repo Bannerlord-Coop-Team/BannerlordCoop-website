@@ -939,7 +939,5 @@
   "mods.archive.compressionRatio": "该文件夹的压缩比超过 100:1，服务器会拒绝。",
   "controls.modLoadFailedMissingAssembly": "模组 {modId} 加载失败（缺少程序集 {assembly}）。请在“模组”中禁用它，然后重新启动。",
   "controls.modLoadFailedMissingDll": "模组 {modId} 加载失败（缺少其 SubModule.xml 中列出的 DLL）。请在“模组”中禁用它，然后重新启动。",
-  "controls.modLoadFailed": "模组 {modId} 加载失败。请在“模组”中禁用它，然后重新启动。",
-  "insight.lastObserved": "上次观察：{state}。",
-  "insight.lastHealthCheck": "上次健康检查："
+  "controls.modLoadFailed": "模组 {modId} 加载失败。请在“模组”中禁用它，然后重新启动。"
 }

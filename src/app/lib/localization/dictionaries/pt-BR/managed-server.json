@@ -940,7 +940,5 @@
   "mods.archive.compressionRatio": "A pasta compacta mais de 100:1, o que o servidor recusa.",
   "controls.modLoadFailedMissingAssembly": "O mod {modId} não carregou (falta o assembly {assembly}). Desative-o em Mods e inicie novamente.",
   "controls.modLoadFailedMissingDll": "O mod {modId} não carregou (falta uma DLL listada no SubModule.xml). Desative-o em Mods e inicie novamente.",
-  "controls.modLoadFailed": "O mod {modId} não carregou. Desative-o em Mods e inicie novamente.",
-  "insight.lastObserved": "Último estado observado: {state}.",
-  "insight.lastHealthCheck": "Última verificação de integridade:"
+  "controls.modLoadFailed": "O mod {modId} não carregou. Desative-o em Mods e inicie novamente."
 }

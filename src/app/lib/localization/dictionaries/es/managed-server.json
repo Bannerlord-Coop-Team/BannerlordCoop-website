@@ -940,7 +940,5 @@
   "mods.archive.compressionRatio": "La carpeta se comprime más de 100:1, y el servidor lo rechaza.",
   "controls.modLoadFailedMissingAssembly": "El mod {modId} no se pudo cargar (falta el ensamblado {assembly}). Desactívalo en Mods e inicia de nuevo.",
   "controls.modLoadFailedMissingDll": "El mod {modId} no se pudo cargar (falta una DLL que indica su SubModule.xml). Desactívalo en Mods e inicia de nuevo.",
-  "controls.modLoadFailed": "El mod {modId} no se pudo cargar. Desactívalo en Mods e inicia de nuevo.",
-  "insight.lastObserved": "Último estado observado: {state}.",
-  "insight.lastHealthCheck": "Última comprobación de estado:"
+  "controls.modLoadFailed": "El mod {modId} no se pudo cargar. Desactívalo en Mods e inicia de nuevo."
 }
