@@ -1,4 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { locales } from "@/app/lib/localization/types";
 import { renderToStaticMarkup } from "react-dom/server";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -11,10 +14,11 @@ import { DisconnectAccount } from "./DisconnectAccount";
 const mocks = vi.hoisted(() => ({ status: vi.fn(), user: vi.fn(), pending: false }));
 // Synthetic messages prove dictionary consumption without enabling an unfinished locale.
 const translated = Object.fromEntries(Object.entries(account).map(([key, value]) => [key, `訳:${key} ${value}`]));
+let dictionary: Record<string, string> = translated;
 vi.mock("@/app/lib/localization/server", () => ({
     getLocale: async () => "ja",
-    getTranslations: async () => createTranslator("ja", translated),
-    getMessages: async () => ({ account: translated }),
+    getTranslations: async () => createTranslator("ja", dictionary),
+    getMessages: async () => ({ account: dictionary }),
 }));
 vi.mock("@/app/account/AccountStatusSync", () => ({ AccountStatusSync: () => null }));
 vi.mock("@/app/components/layout/Navbar", () => ({ Navbar: () => null }));
@@ -29,7 +33,7 @@ vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: async () 
 import AccountPage, { generateMetadata } from "./page";
 import AccountLoading from "./loading";
 
-afterEach(() => { vi.resetAllMocks(); mocks.pending = false; });
+afterEach(() => { vi.resetAllMocks(); mocks.pending = false; dictionary = translated; });
 
 /** Builds a complete authoritative account status for the presentation under test. */
 function accountStatus(hasDiscord: boolean, membership: AccountStatus["membership"] = EMPTY_MEMBERSHIP): AccountStatus {
@@ -90,15 +94,52 @@ it.each([
 it.each([
     ["qualifying", "2099-01-01T00:00:00Z", "pending", "membership.verified", "membership.syncPending"],
     ["qualifying", "2000-01-01T00:00:00Z", "unavailable", "membership.verifyRequired", "membership.syncUnavailable"],
-    ["nonqualifying", null, "pending", "membership.nonqualifying", "membership.syncPending"],
+    ["qualifying", null, "pending", "membership.verifyRequired", "membership.syncPending"],
+    ["unverified", null, "pending", "membership.verifyRequired", "membership.syncPending"],
+    ["unknown", null, "unavailable", "membership.verifyRequired", "membership.syncUnavailable"],
     ["review_required", null, "unavailable", "membership.reviewRequired", "membership.syncUnavailable"],
 ] as const)("localizes linked membership %s notices without translating actual Discord names", async (verification, validUntil, sync, verificationKey, syncKey) => {
     const view = await renderAccount(accountStatus(true, { ...EMPTY_MEMBERSHIP, linked: true, verification, validUntil, sync }));
     for (const key of [verificationKey, syncKey, "membership.expiry", "badge.connected", "patreon.linked", "patreon.verify"]) {
         expect(view.textContent).toContain(translated[key]);
     }
+    expect(view.querySelector('a[href^="https://discord.com/channels/"]')).toBeNull();
     expect(view.textContent).toContain("actual_discord");
     expect(view.textContent).not.toContain(translated["discord.connected"]);
+});
+
+const installerGuide = "https://discord.com/channels/709516043332354119/1058155634702434355/1539466223916421201";
+
+it.each(["not_needed", "applied", "pending", "unavailable"] as const)("links the exact supporter guidance and preserves sync=%s", async sync => {
+    dictionary = account;
+    const view = await renderAccount(accountStatus(true, { ...EMPTY_MEMBERSHIP, linked: true, verification: "nonqualifying", sync }));
+    const notice = view.querySelector('[role="status"]')!;
+    const link = notice.querySelector("a")!;
+    expect(notice.textContent).toBe("Patreon supporters have access to the nightly installer (here's how to use it) and other benefits.");
+    expect(link.textContent).toBe("Patreon supporters have access to the nightly installer (here's how to use it)");
+    expect(link.getAttribute("href")).toBe(installerGuide);
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(notice.querySelectorAll("a")).toHaveLength(1);
+    expect(link.nextSibling?.nodeType).toBe(Node.TEXT_NODE);
+    expect(link.nextSibling?.textContent).toBe(" and other benefits.");
+    expect([...view.querySelectorAll('[role="status"]')].map(node => node.textContent)).toEqual([
+        notice.textContent,
+        ...(sync === "pending" ? [account["membership.syncPending"]] : sync === "unavailable" ? [account["membership.syncUnavailable"]] : []),
+    ]);
+    expect(view.textContent).not.toContain("No eligible membership benefits were found.");
+});
+
+it.each(locales)("renders translated rich guidance from %s", async locale => {
+    const messages: Record<string, string> = JSON.parse(readFileSync(resolve("src/app/lib/localization/dictionaries", locale, "account.json"), "utf8"));
+    dictionary = messages;
+    const view = await renderAccount(accountStatus(true, { ...EMPTY_MEMBERSHIP, linked: true, verification: "nonqualifying" }));
+    const notice = view.querySelector('[role="status"]')!;
+    const link = notice.querySelector("a")!;
+    expect(link.textContent).toBe(messages["membership.nightlyInstaller"]);
+    expect(link.getAttribute("href")).toBe(installerGuide);
+    expect(notice.textContent).toBe(messages["membership.nonqualifying"].replace("{installer}", messages["membership.nightlyInstaller"]));
+    expect(notice.textContent).not.toContain("{installer}");
 });
 
 it.each(["Discord", "Patreon"] as const)("localizes %s disconnect confirmation and pending accessibility", async provider => {
