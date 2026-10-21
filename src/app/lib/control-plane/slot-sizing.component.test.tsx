@@ -190,6 +190,19 @@ it("accepts slot targets the sizer sets, holds and clears", () => {
     expect(parseSlotSizing(withTarget(grows, { changedAt: TARGET_CHANGED, reason: `a${"-".repeat(30)}9` }))).not.toBeNull();
 });
 
+it.each(["2026-02-30T08:16:04.000Z", "2026-13-21T08:16:04.000Z", "x".repeat(24)])(
+    "accepts the target time %s, which the control plane stores and presents by its length alone", (time) => {
+        // Only the sizer parses target times, so a stored non-date still reaches the read: one VPS's must not hide the fleet.
+        expect(parseSlotSizing(withTarget(grows, { targetSlots: 5, changedAt: time, reason: "cpu" }))).not.toBeNull();
+        expect(parseSlotSizing(withTarget(drained, { pendingLowerSlots: 4, pendingLowerSince: time }))).not.toBeNull();
+    },
+);
+
+it("reads a generated time that has the form but does not parse as malformed, rather than throwing from toISOString", () => {
+    expect(() => parseSlotSizing({ ...fleet, generatedAt: "9999-99-99T99:99:99.999Z" })).not.toThrow();
+    expect(parseSlotSizing({ ...fleet, generatedAt: "9999-99-99T99:99:99.999Z" })).toBeNull();
+});
+
 it("accepts what the control plane can send that looks unusual", () => {
     // A failed capacity read: every VPS unmeasured, and nothing to move or offer anywhere.
     const failed = { ...fleet, model: { ...fleet.model, capacityErrorCode: "fleet_capacity_history_unavailable" },
@@ -356,15 +369,18 @@ it.each([
     ["a target without its change time and reason", withTarget(grows, { targetSlots: 5 })],
     ["a reason without a change time", withTarget(grows, { reason: "cpu" })],
     ["a change time without a reason", withTarget(grows, { changedAt: TARGET_CHANGED })],
+    // A target time is only checked for its stored form's length, as the control plane presents it.
     ["a change time without milliseconds", withTarget(grows, { targetSlots: 5, changedAt: "2026-10-21T08:16:04Z", reason: "cpu" })],
     ["a change time with an offset", withTarget(grows, { targetSlots: 5, changedAt: "2026-10-21T08:16:04.000+00:00", reason: "cpu" })],
-    ["a change time that is not a real date", withTarget(grows, { targetSlots: 5, changedAt: "2026-02-30T08:16:04.000Z", reason: "cpu" })],
+    ["a change time that is not text", withTarget(grows, { targetSlots: 5, changedAt: Date.parse(TARGET_CHANGED), reason: "cpu" })],
     ["a reason in capitals", withTarget(grows, { targetSlots: 5, changedAt: TARGET_CHANGED, reason: "CPU" })],
     ["a reason of 33 characters", withTarget(grows, { changedAt: TARGET_CHANGED, reason: "a".repeat(33) })],
     ["a reason that is not text", withTarget(grows, { changedAt: TARGET_CHANGED, reason: 1 })],
     ["a held recommendation without its time", withTarget(drained, { pendingLowerSlots: 4 })],
     ["a hold time without a held recommendation", withTarget(drained, { pendingLowerSince: TARGET_HELD })],
-    ["a hold time that is not ISO", withTarget(drained, { pendingLowerSlots: 4, pendingLowerSince: "2026-10-22 08:16:04" })],
+    ["a hold time shorter than its stored form", withTarget(drained, { pendingLowerSlots: 4, pendingLowerSince: "2026-10-22 08:16:04" })],
+    ["a hold time longer than its stored form", withTarget(drained, { pendingLowerSlots: 4, pendingLowerSince: `${TARGET_HELD} ` })],
+    ["a hold time that is not text", withTarget(drained, { pendingLowerSlots: 4, pendingLowerSince: Date.parse(TARGET_HELD) })],
     ["a held recommendation at its target", withTarget(grows, { targetSlots: 5, pendingLowerSlots: 5, pendingLowerSince: TARGET_HELD,
         changedAt: TARGET_CHANGED, reason: "cpu" })],
     ["a held recommendation above its target", withTarget(grows, { targetSlots: 5, pendingLowerSlots: 6, pendingLowerSince: TARGET_HELD,

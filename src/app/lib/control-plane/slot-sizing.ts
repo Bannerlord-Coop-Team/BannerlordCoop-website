@@ -52,12 +52,23 @@ const TARGETED_HOST_KEYS = [...HOST_KEYS, "target"];
 const TARGET_KEYS = ["targetSlots", "pendingLowerSlots", "pendingLowerSince", "changedAt", "reason"];
 /** A target's reason as the control plane stores it: a recommendation's reason, or one of its own such as `admin-raise`. */
 const TARGET_REASON = /^[a-z][a-z0-9-]{0,31}$/u;
+/** The length of a stored target time: `2026-10-21T08:16:04.000Z`. */
+const TARGET_TIME_LENGTH = 24;
 const REGION_KEYS = ["regionKey", "serversToMove", "freeRecommendedSlots", "shortfallServers"];
 
 type Model = HostingAdminSlotSizing["model"];
 
+/** An exact ISO time that is a real date. One that matches the form but does not parse is not, rather than a throw. */
 function timestamp(value: unknown): value is string {
-    return typeof value === "string" && TIMESTAMP.test(value) && new Date(value).toISOString() === value;
+    return typeof value === "string" && TIMESTAMP.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+}
+
+/**
+ * A slot target's time as the control plane presents it: its stored form, checked for its length only, as the hosts
+ * CHECK and `presentSlotTarget` do. Only the sizer parses it, so a stored non-date still reaches the read.
+ */
+function targetTime(value: unknown): value is string {
+    return typeof value === "string" && value.length === TARGET_TIME_LENGTH;
 }
 
 function count(value: unknown, minimum = 0): value is number {
@@ -132,18 +143,19 @@ function fitsFlag(within: boolean, figure: number, budget: number, rounding: num
  *
  * - the target and a held lower recommendation are slot counts as `slots` is, from floor(vCPU ÷ 2) to `maximumSlots`;
  * - `changedAt` and `reason` are both set or both null, and a target has them;
- * - a held lower recommendation has its time, and is below the target, or below `slots` without one.
+ * - a held lower recommendation has its time, and is below the target, or below `slots` without one;
+ * - each time is in its stored form (`targetTime`), not necessarily a real date.
  */
 function target(value: unknown, vCpu: number, slots: number, sizingModel: Model): value is HostingSlotSizingTarget {
     if (!isRecord(value) || !hasExactKeys(value, TARGET_KEYS)) return false;
     const { targetSlots, pendingLowerSlots, pendingLowerSince, changedAt, reason } = value;
     if (targetSlots !== null && !slotCount(targetSlots, vCpu, sizingModel.maximumSlots)) return false;
-    if (changedAt !== null && !timestamp(changedAt)) return false;
+    if (changedAt !== null && !targetTime(changedAt)) return false;
     if (reason !== null && (typeof reason !== "string" || !TARGET_REASON.test(reason))) return false;
     if ((changedAt === null) !== (reason === null) || (targetSlots !== null && changedAt === null)) return false;
     if ((pendingLowerSlots === null) !== (pendingLowerSince === null)) return false;
     if (pendingLowerSlots === null) return true;
-    return slotCount(pendingLowerSlots, vCpu, sizingModel.maximumSlots) && timestamp(pendingLowerSince)
+    return slotCount(pendingLowerSlots, vCpu, sizingModel.maximumSlots) && targetTime(pendingLowerSince)
         && pendingLowerSlots < (typeof targetSlots === "number" ? targetSlots : slots);
 }
 
