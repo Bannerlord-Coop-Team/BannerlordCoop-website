@@ -238,13 +238,20 @@ it("accepts the at-once shape exactly as the contract describes it, with its red
     expect(overlapAtOnceLabel(burstHost)).toBeNull();
 });
 
+it("does not work out again which hours are over at-once capacity, which is the control plane's to say", () => {
+    expect(parsePlacementOverlap({ ...overlap, hosts: [{ ...atOnceHost, overAtOnce: burstHost.overBurst, overAtOnceHours: 5 }] })).not.toBeNull();
+    expect(parsePlacementOverlap({ ...overlap, hosts: [{ ...unknownHost, overAtOnce: "0".repeat(168) }] })).not.toBeNull();
+    // The burst hours are still checked against burst capacity, as before.
+    expect(parsePlacementOverlap({ ...overlap, hosts: [{ ...atOnceHost, overBurst: "0".repeat(168), overBurstHours: 0 }] })).toBeNull();
+});
+
 it.each([
     ["one VPS of each shape", { ...overlap, hosts: [atOnceHost, burstSpare] }],
     ["an at-once VPS with an extra key", { ...overlap, hosts: [{ ...atOnceHost, atOnceVerdict: "fits" }] }],
     ["an at-once VPS without its hours", { ...overlap, hosts: [without(atOnceHost, "overAtOnceHours")] }],
-    ["at-once hours over when all can run at once", { ...overlap, hosts: [{ ...atOnceHost, overAtOnce: burstHost.overBurst, overAtOnceHours: 5 }] }],
     ["an over-at-once count that is not of its hours", { ...overlap, hosts: [{ ...tightHost, overAtOnceHours: 4 }] }],
-    ["known hours while at-once capacity is unknown", { ...overlap, hosts: [{ ...unknownHost, overAtOnce: "0".repeat(168) }] }],
+    ["at-once hours of 167 characters", { ...overlap, hosts: [{ ...atOnceHost, overAtOnce: "0".repeat(167) }] }],
+    ["at-once hours with another character", { ...overlap, hosts: [{ ...atOnceHost, overAtOnce: `x${"0".repeat(167)}` }] }],
     ["a fractional at-once capacity", { ...overlap, hosts: [{ ...atOnceHost, atOnceServers: 3.5 }] }],
     ["a negative at-once capacity", { ...overlap, hosts: [{ ...atOnceHost, atOnceServers: -1 }] }],
 ])("rejects %s, in the at-once shape", (_case, value) => {

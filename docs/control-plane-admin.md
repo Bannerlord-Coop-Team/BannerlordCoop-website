@@ -633,9 +633,10 @@ From control plane #550 the response has a third shape, **at once**: every host
 of the burst-capacity shape adds exactly `atOnceServers` (N, the servers the VPS
 can run at once at what they usually need, from the capacity model of the same
 inventory; null or a non-negative integer), `overAtOnce` (encoded as
-`overBurst`, but against N) and `overAtOnceHours` (its count of `1`). While N is
-null every hour is `-`; otherwise the hours follow N as `overBurst` follows
-`burstServers`. The burst fields are then information only. A read is in one
+`overBurst`, but against N) and `overAtOnceHours` (its count of `1`). Which hours are over N is the
+control plane's to work out, so the website checks only their format and count,
+not each hour against N. The burst fields are then information only and still
+checked as before. A read is in one
 shape throughout: at once, burst capacity or legacy.
 
 The control plane sends the burst-capacity response. Until control plane #529
@@ -1158,24 +1159,21 @@ source has every one, with a stable CPU above 0 and a CPU peak no lower. Its
 memory-burst shape its `demandMemoryBytes` is exactly
 `max(memoryBurstBytes, peakMemoryBytes)`.
 
-In the typical-demand shape the planned figures follow #550's rules instead:
+In the typical-demand shape the website does not work the planned figures out
+again from #550's formulas, so a control plane that adjusts a formula or its
+rounding does not break the tab. The figures are `demandCpuCores` (`min(2,
+max(1.6, p95))`), `burstCpuCores`, `typicalCpuCores`, `effectiveVcpu` and
+`burstServers`. It checks only their ranges and the obvious caps:
 
-- `typicalCpuCores` lies between the stable CPU and the peak (the same demand's
-  p50, p95 and max);
-- `demandCpuCores` is `min(staticBurstVcpuPerServer, max(cpuBurstVcpu,
-  typicalCpuCores))` within 0.001, at least the 1.6 vCPU target and at most
-  2 vCPU;
-- `demandMemoryBytes` is exactly `min(staticBurstMemoryBytesPerServer,
-  max(memoryBurstBytes, peakMemoryBytes))`;
-- `burstCpuCores` is `min(staticBurstVcpuPerServer, max(cpuBurstVcpu,
-  peakCpuCores))` within 0.001.
+- `demandCpuCores` and `burstCpuCores` are at most `staticBurstVcpuPerServer`
+  (2 vCPU, allowing 0.001);
+- `demandMemoryBytes` is at most `staticBurstMemoryBytesPerServer` (3 GiB);
+- `effectiveVcpu` is null or at most the vCPUs;
+- `typicalCpuCores` is null or non-negative;
+- `burstServers` and `modelledServers` are null or whole numbers from 0.
 
-Each VPS and instance type also has:
-
-- `effectiveVcpu`: null exactly without steal, and at most its vCPUs;
-- `burstServers`: null while `modelledServers` is, and never above it.
-
-Each VPS's `concurrentServers` (M) is at most its slots, and equals them when
+The current shape keeps its own check, `demandCpuCores = max(cpuBurstVcpu,
+peakCpuCores)`, as before. Each VPS's `concurrentServers` (M) is at most its slots, and equals them when
 `concurrentSource` is `slots`. Its `verdict` must be what N, M and S give:
 `unknown` while N is null, `at-risk` by M − N when N < M, `headroom` by N − S
 when N > S, else `matches`, whose `servers` is 0. An instance type's verdict uses

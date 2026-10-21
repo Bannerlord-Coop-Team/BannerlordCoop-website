@@ -222,14 +222,22 @@ function verdictOf(value: unknown, modelled: number | null, concurrent: number, 
     return value.kind === expected.kind && value.servers === expected.servers;
 }
 
-/** Effective vCPUs, null exactly without steal, and no more than the vCPUs allowing for the control plane's rounding. */
-function effectiveVcpu(value: unknown, vCpu: number, steal: unknown) {
-    return (value === null) === (steal === null) && nullable(value, (cores) => amount(cores, vCpu + ROUNDING));
+/**
+ * Effective vCPUs, null or no more than the vCPUs allowing for the control plane's rounding. The website does not work
+ * them out from the steal: a control plane that changes how it rounds or takes off steal must not break the tab.
+ */
+function effectiveVcpu(value: unknown, vCpu: number) {
+    return nullable(value, (cores) => amount(cores, vCpu + ROUNDING));
 }
 
-/** Servers that could burst at once: information only, null while N is, and no more than N, as bursts need more. */
-function burstServers(value: unknown, modelled: unknown) {
-    return value === null ? true : count(value) && typeof modelled === "number" && (value as number) <= modelled;
+/** Servers that could burst at once: information only, null or a whole number, not worked out again here. */
+function burstServers(value: unknown) {
+    return nullable(value, (servers) => count(servers));
+}
+
+/** CPU in cores no more than `cap` (the static rule's vCPU per server), allowing for the control plane's rounding. */
+function capped(value: unknown, cap: number) {
+    return nullable(value, (cores) => amount(cores, cap + ROUNDING));
 }
 
 function instanceType(value: unknown, typical: boolean, rule: HostingAdminFleetCapacity["model"]) {
@@ -242,9 +250,9 @@ function instanceType(value: unknown, typical: boolean, rule: HostingAdminFleetC
     if (!valid || !typical) return valid;
     // An instance type answers whether a typical VPS of it runs its static slots at once: they are its S and its M.
     const slots = staticSlots(value.vCpu as number, rule);
-    return effectiveVcpu(value.effectiveVcpu, value.vCpu as number, value.steal)
-        && (value.typicalCpuCores === null) === (value.demandSource === "none") && nullable(value.typicalCpuCores, (cores) => amount(cores))
-        && burstServers(value.burstServers, value.modelledServers)
+    return effectiveVcpu(value.effectiveVcpu, value.vCpu as number)
+        && nullable(value.typicalCpuCores, (cores) => amount(cores))
+        && burstServers(value.burstServers)
         && verdictOf(value.verdict, value.modelledServers as number | null, slots, slots);
 }
 
@@ -258,8 +266,13 @@ function hourly(value: unknown, maximum: number) {
     return typeof value === "string" && HOURLY.test(value) && decodeHourly(value).every((hour) => hour === null || hour <= maximum);
 }
 
-/** A VPS in the read's shape: with typical demand, with its peak memory (`burst`), or an earlier control plane's without. */
-function host(value: unknown, shape: Shape) {
+/**
+ * A VPS in the read's shape: with typical demand, with its peak memory (`burst`), or an earlier control plane's without.
+ * In the typical shape its added figures are checked for their ranges and the static rule's caps, never worked out again
+ * from the control plane's formulas (`rule`'s caps: planned CPU and burst CPU at most its vCPU per server, planned
+ * memory at most its memory per server), and its verdict against N, M and S.
+ */
+function host(value: unknown, shape: Shape, rule: HostingAdminFleetCapacity["model"]) {
     const memoryBurst = shape !== "percentile";
     const typical = shape === "typical";
     if (!isRecord(value) || !hasExactKeys(value, typical ? TYPICAL_HOST_KEYS : memoryBurst ? HOST_KEYS : PERCENTILE_MEMORY_HOST_KEYS)) return false;
@@ -286,8 +299,11 @@ function host(value: unknown, shape: Shape) {
     if (!valid || !typical) return valid;
     const slots = value.slots as number;
     const concurrent = value.concurrentServers;
-    return effectiveVcpu(value.effectiveVcpu, value.vCpu as number, value.steal)
-        && burstServers(value.burstServers, value.modelledServers)
+    return effectiveVcpu(value.effectiveVcpu, value.vCpu as number)
+        && nullable(value.typicalCpuCores, (cores) => amount(cores))
+        && capped(value.demandCpuCores, rule.staticBurstVcpuPerServer) && capped(value.burstCpuCores, rule.staticBurstVcpuPerServer)
+        && nullable(value.demandMemoryBytes, (bytes) => count(bytes) && (bytes as number) <= rule.staticBurstMemoryBytesPerServer)
+        && burstServers(value.burstServers)
         // M is never more than S; without servers it is S, every slot counted.
         && count(concurrent) && (concurrent as number) <= slots
         && CONCURRENT_SOURCES.includes(value.concurrentSource as HostingFleetCapacityConcurrentSource)
@@ -299,48 +315,28 @@ function host(value: unknown, shape: Shape) {
 /**
  * A VPS's per-server figures agree with their source, as the control plane chooses them: none has no figures, and
  * any other source has a positive stable CPU, a peak no lower, and CPU and memory to plan with, and with a memory burst
- * target its peak memory too. In the `typical` shape it also has its typical CPU, from its stable CPU to its peak (the
- * same demand's p50, p95 and max), and its burst CPU. The read's model checks the planned figures against the peaks and
- * typical CPU once the whole read is parsed (`planConsistent`).
+ * target its peak memory too. Before typical demand the read's model checks the planned figures against the peaks once
+ * the whole read is parsed (`burstConsistent`).
  */
 function plannedDemand(value: Record<string, unknown>, shape: Shape) {
     const figures = [value.stableCpuCores, value.peakCpuCores, value.demandCpuCores, value.demandMemoryBytes,
-        ...(shape !== "percentile" ? [value.peakMemoryBytes] : []),
-        ...(shape === "typical" ? [value.typicalCpuCores, value.burstCpuCores] : [])];
+        ...(shape !== "percentile" ? [value.peakMemoryBytes] : [])];
     if (value.demandSource === "none") return figures.every((figure) => figure === null);
-    if (!figures.every((figure) => figure !== null)) return false;
-    const stable = value.stableCpuCores as number;
-    const peak = value.peakCpuCores as number;
-    return stable > 0 && peak >= stable
-        && (shape !== "typical" || (amount(value.typicalCpuCores) && amount(value.burstCpuCores)
-            && ordered([stable, value.typicalCpuCores as number, peak])));
+    return figures.every((figure) => figure !== null)
+        && (value.stableCpuCores as number) > 0 && (value.peakCpuCores as number) >= (value.stableCpuCores as number);
 }
 
 /**
- * Each planned figure follows from its rule, to the control plane's three decimals for CPU and to the byte for memory.
- * Before typical demand: each planned CPU is the model's burst target, or the peak where higher, and with a memory burst
- * target each planned memory is that target, or the peak where higher. With it (`typical`): each planned CPU is the
- * burst target, or the typical CPU where higher, at most the static rule's vCPU per server; each planned memory is the memory target, or the peak where
- * higher, at most the static rule's memory per server; and each burst CPU is the burst target, or the peak where higher,
- * at most the static rule's vCPU per server.
+ * Each planned CPU is the model's burst target, or the peak where higher, to the control plane's three decimals, and
+ * with a memory burst target each planned memory is that target, or the peak where higher, to the byte. This is the
+ * current control plane's check, kept as it was; a read that fits on typical demand is not worked out again here.
  */
-function planConsistent(capacity: Pick<HostingAdminFleetCapacity, "model" | "hosts">, typical: boolean) {
-    const { cpuBurstVcpu, memoryBurstBytes, staticBurstVcpuPerServer: cpuCap, staticBurstMemoryBytesPerServer: memoryCap } = capacity.model;
-    const near = (figure: number, expected: number) => Math.abs(figure - expected) <= ROUNDING;
-    return capacity.hosts.every((entry) => {
-        if (!typical) {
-            return (entry.peakCpuCores === null || entry.demandCpuCores === null || near(entry.demandCpuCores, burstCores(entry.peakCpuCores, cpuBurstVcpu)))
-                && (memoryBurstBytes === null || entry.peakMemoryBytes === null
-                    || entry.demandMemoryBytes === burstBytes(entry.peakMemoryBytes, memoryBurstBytes));
-        }
-        // A source has every figure or none (`plannedDemand`), so one check covers all three.
-        if (entry.typicalCpuCores === null || entry.typicalCpuCores === undefined || entry.peakCpuCores === null || entry.peakMemoryBytes === null
-            || entry.demandCpuCores === null || entry.demandMemoryBytes === null || entry.burstCpuCores === null || entry.burstCpuCores === undefined
-            || memoryBurstBytes === null) return true;
-        return near(entry.demandCpuCores, fitCores(entry.typicalCpuCores, cpuBurstVcpu, cpuCap))
-            && entry.demandMemoryBytes === Math.min(memoryCap, burstBytes(entry.peakMemoryBytes, memoryBurstBytes))
-            && near(entry.burstCpuCores, Math.min(cpuCap, burstCores(entry.peakCpuCores, cpuBurstVcpu)));
-    });
+function burstConsistent(capacity: Pick<HostingAdminFleetCapacity, "model" | "hosts">) {
+    const { cpuBurstVcpu, memoryBurstBytes } = capacity.model;
+    return capacity.hosts.every((entry) => (entry.peakCpuCores === null || entry.demandCpuCores === null
+        || Math.abs(entry.demandCpuCores - burstCores(entry.peakCpuCores, cpuBurstVcpu)) <= ROUNDING)
+        && (memoryBurstBytes === null || entry.peakMemoryBytes === null
+            || entry.demandMemoryBytes === burstBytes(entry.peakMemoryBytes, memoryBurstBytes)));
 }
 
 /** A list of at most `maximum` entries. */
@@ -355,8 +351,10 @@ function unique(values: readonly string[]) {
 /**
  * The `fleet-capacity` result, checked key by key; null when anything is not as the contract says. Beyond each
  * field's range, its enums (providers included) and its percentiles' order it checks only what the view keys on,
- * that each provider, instance type and VPS appears once, that each planned figure follows from its rule, that each
- * verdict follows from its figures, and that no list is longer than `FLEET_CAPACITY_LIMITS`.
+ * that each provider, instance type and VPS appears once, that each verdict follows from N, M and S, and that no list is
+ * longer than `FLEET_CAPACITY_LIMITS`. Before typical demand it also checks that each planned figure follows from its
+ * burst target and peak, as it always has; with it, the planned, effective and burst figures are checked only for their
+ * ranges and the static rule's caps, so a control plane that adjusts a formula or its rounding does not break the tab.
  *
  * A read is in one of three shapes, keyed by its model and every part of it in the same one: `typical`, from a control
  * plane that fits on typical demand (#550), with its added keys exactly; `burst`, the current control plane's; or
@@ -377,7 +375,7 @@ export function parseFleetCapacity(value: unknown): HostingAdminFleetCapacity | 
     if (!isRecord(fleet) || !hasExactKeys(fleet, ["hosts", "servers", "demand"]) || !count(fleet.hosts) || !count(fleet.servers) || !demand(fleet.demand)) return null;
     if (!Array.isArray(value.providers) || !value.providers.every((entry) => provider(entry, typical))) return null;
     if (!within(value.instanceTypes, FLEET_CAPACITY_LIMITS.instanceTypes) || !value.instanceTypes.every((entry) => instanceType(entry, typical, rule))) return null;
-    if (!within(value.hosts, FLEET_CAPACITY_LIMITS.hosts) || !value.hosts.every((entry) => host(entry, shape))) return null;
+    if (!within(value.hosts, FLEET_CAPACITY_LIMITS.hosts) || !value.hosts.every((entry) => host(entry, shape, rule))) return null;
     const read = value as HostingAdminFleetCapacity;
     if (!unique(read.providers.map((entry) => entry.provider)) || !unique(read.instanceTypes.map((entry) => entry.key))
         || !unique(read.hosts.map((entry) => entry.serviceName))) return null;
@@ -386,7 +384,7 @@ export function parseFleetCapacity(value: unknown): HostingAdminFleetCapacity | 
         model: { ...read.model, memoryBurstBytes: null },
         hosts: read.hosts.map((entry) => ({ ...entry, peakMemoryBytes: null })),
     };
-    return planConsistent(capacity, typical) ? capacity : null;
+    return typical || burstConsistent(capacity) ? capacity : null;
 }
 
 /** Whether a parsed read comes from a control plane that fits on typical demand (#550): its model says so. */

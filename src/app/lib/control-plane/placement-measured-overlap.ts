@@ -80,17 +80,14 @@ function isBurstHost(value: unknown): value is HostingPlacementOverlapBurstHost 
 }
 
 /**
- * A VPS from a control plane that fits on typical demand (#550): the burst fields as before, and its at-once capacity N
- * with the hours more of its servers were online than that. While N is unknown every hour is unknown (`-`); otherwise the
- * hours follow N as the burst hours follow `burstServers` (`consistentOverHours`).
+ * A VPS from a control plane that fits on typical demand (#550): the burst fields as before, and its at-once capacity N,
+ * null or a whole number, with 168 hourly verdicts and their count of `1` hours. Which hours are over is the control
+ * plane's to work out from its own model, so they are not worked out again here.
  */
 function isAtOnceHost(value: unknown): value is HostingPlacementOverlapBurstHost {
     if (!isRecord(value) || !hasExactKeys(value, AT_ONCE_HOST_KEYS) || !burstFields(value)) return false;
-    const atOnce = value.atOnceServers;
-    if (!verdicts(value.overAtOnce, value.overAtOnceHours)) return false;
-    if (atOnce === null) return value.overAtOnce === "-".repeat(PLACEMENT_OVERLAP_HOURS);
-    return count(atOnce, Number.MAX_SAFE_INTEGER)
-        && consistentOverHours(value as HostingPlacementOverlapBurstHost, atOnce as number, value.overAtOnce as string);
+    return (value.atOnceServers === null || count(value.atOnceServers, Number.MAX_SAFE_INTEGER))
+        && verdicts(value.overAtOnce, value.overAtOnceHours);
 }
 
 /** The burst-capacity fields, as both the burst and the at-once shapes report them. */
@@ -108,7 +105,7 @@ function burstFields(value: Record<string, unknown>) {
 }
 
 /**
- * What the definitions allow hour by hour for a capacity of `limit` servers, burst or at once. A VPS with no more
+ * What the definitions allow hour by hour for a capacity of `limit` burst servers. A VPS with no more
  * servers than that is never over, so it is all `0`. On any other VPS an hour without data is unknown (`-`), and a
  * `1` needs more than `limit` servers each online at least half the hour: at least half of one more than `limit` in
  * all, less the 0.01 rounding allowance.

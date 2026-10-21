@@ -652,7 +652,7 @@ export type HostingFleetCapacityHost = {
     limitedBy: "cpu" | "memory" | null;
     /**
      * From a control plane that fits on typical demand (#550), all of these or none. It then plans `demandCpuCores` at
-     * min(2, `typicalCpuCores`) and `demandMemoryBytes` at min(3 GiB, max(2.5 GiB, peak)); its `usableCores` take off
+     * min(2, max(1.6, `typicalCpuCores`)) and `demandMemoryBytes` at min(3 GiB, max(2.5 GiB, peak)); its `usableCores` take off
      * the steal p50, and `modelledServers` is never below the static rule's servers.
      *
      * - `effectiveVcpu`: vCpu × (1 − steal p50 ÷ 100), three decimals; null without steal.
@@ -831,7 +831,7 @@ export type HostingAdminSlotSizing = {
         /** A typical new server's expected online hours a week. */
         typicalWeeklyOnlineHours: number;
         /**
-         * What a typical new server is planned to need while online, in cores: the fleet's p95, at most 2, or 1.6 without
+         * What a typical new server is planned to need while online, in cores: at least 1.6, the fleet's p95 where higher, at most 2; 1.6 without
          * fleet data. From a control plane that fits on typical demand (#550) only; `cpuBurstVcpu` is then information.
          */
         typicalServerCpuCores?: number;

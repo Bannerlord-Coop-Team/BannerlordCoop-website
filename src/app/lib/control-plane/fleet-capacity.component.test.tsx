@@ -649,23 +649,16 @@ it.each([
     ["a model without the co-online hour share", { ...typicalCapacity, model: without(typicalModel, "concurrentHourShare") }],
     ["a model with an extra key", { ...typicalCapacity, model: { ...typicalModel, cpuFitPercentile: 95 } }],
     ["a verdict with an extra key", withTypicalHost({ verdict: { kind: "matches", servers: 0, label: "Matches" } })],
-    // Planned figures follow their rules.
-    ["a planned CPU at the earlier burst rule", withTypicalHost({ demandCpuCores: 1.95 })],
-    ["a planned CPU at the p95 under the 1.6 target", withTypicalHost({ demandCpuCores: 1.2 })],
+    // Planned figures are within the static rule's caps, and effective vCPU within the vCPUs.
     ["a planned CPU above the cap", withTypicalHost({ typicalCpuCores: 2.15, peakCpuCores: 2.72, demandCpuCores: 2.15, burstCpuCores: 2 })],
     ["a planned memory above the cap", withTypicalHost({ peakMemoryBytes: 3.25 * GIB, demandMemoryBytes: 3.25 * GIB })],
     ["a burst CPU at a peak above the cap", withTypicalHost({ peakCpuCores: 2.72, burstCpuCores: 2.72 })],
-    ["a typical CPU above its peak", withTypicalHost({ typicalCpuCores: 2, demandCpuCores: 2 })],
-    ["a typical CPU below its stable CPU", withTypicalHost({ typicalCpuCores: 0.8 })],
-    ["a source without a typical CPU", withTypicalHost({ typicalCpuCores: null })],
-    ["no source but a burst CPU", { ...typicalCapacity, hosts: [{ ...typicalSpare, burstCpuCores: 1.6 }] }],
     ["a steal p50 above its p95", withTypicalHost({ steal: { ...typicalSteal, p50: 1.5 } })],
     ["effective vCPU above the vCPU", withTypicalHost({ effectiveVcpu: 6.5 })],
-    ["effective vCPU without steal", withTypicalHost({ steal: null })],
-    ["steal without effective vCPU", withTypicalHost({ effectiveVcpu: null })],
-    // Burst headroom is information, never more than N.
-    ["burst headroom above N", withTypicalHost({ burstServers: 4 })],
-    ["burst headroom without N", withTypicalHost({ modelledServers: null, limitedBy: null, verdict: { kind: "unknown", servers: 0 } })],
+    ["a negative typical CPU", withTypicalHost({ typicalCpuCores: -0.1 })],
+    ["fractional burst headroom", withTypicalHost({ burstServers: 1.5 })],
+    ["negative burst headroom", withTypicalHost({ burstServers: -1 })],
+    ["fractional co-online servers", withTypicalHost({ concurrentServers: 1.5 })],
     // Co-online is at most the slots, which it is without servers.
     ["co-online above the slots", withTypicalHost({ concurrentServers: 4, verdict: { kind: "at-risk", servers: 1 } })],
     ["co-online from the slots below them", withTypicalHost({ concurrentSource: "slots" })],
@@ -678,11 +671,28 @@ it.each([
     ["unknown with N", withTypicalHost({ verdict: { kind: "unknown", servers: 0 } })],
     ["the day/night VPS's verdict against its slots", withTypicalHost({ ...dayNight, verdict: { kind: "at-risk", servers: 3 } })],
     ["an instance type's verdict that is not against its static slots", { ...typicalCapacity, instanceTypes: [{ ...typicalType, verdict: { kind: "headroom", servers: 1 } }] }],
-    ["an instance type's typical CPU without a source", { ...typicalCapacity, instanceTypes: [{ ...typicalType, demandSource: "none" }] }],
+    ["an instance type's effective vCPU above its vCPU", { ...typicalCapacity, instanceTypes: [{ ...typicalType, effectiveVcpu: 6.5 }] }],
     ["a negative steal floor threshold", { ...typicalCapacity, model: { ...typicalModel, stealFloorThresholdPercent: -1 } }],
     ["a busy fraction above 1", { ...typicalCapacity, model: { ...typicalModel, concurrentBusyFraction: 1.5 } }],
 ])("rejects %s, in the typical shape", (_case, value) => {
     expect(parseFleetCapacity(value)).toBeNull();
+});
+
+it("accepts typical-shape figures without working them out again from the control plane's formulas", () => {
+    // Planned CPU, typical CPU, burst headroom and effective vCPU are the control plane's to compute: a change in a
+    // formula or its rounding must not reject the read. Only their ranges, the static rule's caps and the verdict are checked.
+    for (const changes of [
+        { demandCpuCores: 1.95 }, { demandCpuCores: 1.2 }, { typicalCpuCores: 2, demandCpuCores: 2 }, { typicalCpuCores: 0.8 },
+        { typicalCpuCores: null }, { burstServers: 4 }, { steal: null }, { effectiveVcpu: null }, { demandMemoryBytes: 2 * GIB },
+        { burstCpuCores: 1.5 }, { modelledServers: null, limitedBy: null, verdict: { kind: "unknown", servers: 0 } },
+    ]) expect(parseFleetCapacity(withTypicalHost(changes))).not.toBeNull();
+    expect(parseFleetCapacity({ ...typicalCapacity, hosts: [{ ...typicalSpare, burstCpuCores: 1.6 }] })).not.toBeNull();
+    expect(parseFleetCapacity({ ...typicalCapacity, instanceTypes: [{ ...typicalType, demandSource: "none" }] })).not.toBeNull();
+    // At the caps, within the control plane's rounding.
+    expect(parseFleetCapacity(withTypicalHost({ typicalCpuCores: 2.15, peakCpuCores: 2.72, demandCpuCores: 2.0005, burstCpuCores: 2 }))).not.toBeNull();
+    expect(parseFleetCapacity(withTypicalHost({ peakMemoryBytes: 3.25 * GIB, demandMemoryBytes: 3 * GIB }))).not.toBeNull();
+    // The current control plane's planned figures are still checked against its burst targets, as before.
+    expect(parseFleetCapacity({ ...memoryCapacity, hosts: [{ ...memoryHost, demandCpuCores: 1.6 }] })).toBeNull();
 });
 
 it("shows the read's verdict of what a VPS can run at once against its co-online servers and slots", () => {
@@ -792,6 +802,11 @@ it("reads model-v2 §4's example VPS and instance type, the full 3/3 6-vCPU host
     expect(stealFigures(vps.steal!)).toBe("0.6% · 3.8% · 7.8%");
     const type = parsed.instanceTypes[0]!;
     expect(capacityVerdict(type, staticSlots(type.vCpu, parsed.model)).label).toBe("Matches");
-    // The rule §4 states: min(staticBurstVcpuPerServer, max(cpuBurstVcpu, typicalCpuCores)), so a plan at the pure p95 is not.
-    expect(parseFleetCapacity({ ...typicalCapacity, hosts: [{ ...exampleHost, demandCpuCores: 1.418, modelledServers: 4, verdict: { kind: "headroom", servers: 1 } }] })).toBeNull();
+    // Its verdict is checked against N, M and S: a matches read with N above its slots is rejected.
+    expect(parseFleetCapacity({ ...typicalCapacity, hosts: [{ ...exampleHost, modelledServers: 4 }] })).toBeNull();
+    // What the copy says of the fit: the 1.6 vCPU target over a lower p95, the p95 above it, and the cap above 2.
+    const fitLabel = (typicalCpuCores: number) => perServerSourceLabel({ ...vps, typicalCpuCores }, parsed.model).split(" · ")[1];
+    expect([fitLabel(1.418), fitLabel(1.8), fitLabel(2.15)]).toEqual(["1.6 vCPU target (p95 1.418)", "p95 1.800", "p95 2.150 capped at 2 vCPU"]);
+    expect(staticRuleComparison(parsed)).toContain("CPU at the 1.6 vCPU target, or the p95 of its demand source where higher, at most 2 vCPU");
+    expect(fleetCapacityHints(parsed.model).perServer).toContain("the 1.6 vCPU target, or the p95 CPU of the source shown where higher, at most 2 vCPU");
 });
