@@ -10,6 +10,11 @@ import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import type { MyServerMove } from "@/app/lib/control-plane/types";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
 
+const { revealAddress } = vi.hoisted(() => ({ revealAddress: vi.fn() }));
+vi.mock("./ServerManagementWorkspace", async original => ({
+    ...await original<typeof import("./ServerManagementWorkspace")>(), useRevealServerAddress: () => revealAddress,
+}));
+
 const { request, requestUpdate, requestPassword, beginPolling, startStatus, summary, router, statusSlot } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn(), startStatus: vi.fn(), summary: vi.fn(), router: { refresh: vi.fn() }, statusSlot: { current: undefined as HTMLElement | null | undefined } }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerStartStatus: startStatus, getMyServerSummary: summary }));
@@ -364,12 +369,14 @@ it("restores a mounted terminal receipt after an unrelated Update request", asyn
 
 it("keeps a locally verified fast Start when its succeeded receipt arrives", async () => {
     vi.useFakeTimers();
+    revealAddress.mockClear();
     request.mockReset().mockResolvedValue({ exitCode: 0 });
     const container = document.createElement("div"); const root = createRoot(container);
     try {
         await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" /></TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain("Your server is ready to join");
+        expect(revealAddress).toHaveBeenCalledTimes(1);
         const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop", "restart-game"],
             crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: {
                 action: "start", jobId: progressJobId, state: "succeeded", phase: "ready", progress: "Ready.",
@@ -378,6 +385,8 @@ it("keeps a locally verified fast Start when its succeeded receipt arrives", asy
         await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} operationState="running" observedGameState="running" runtimeInsight={insight} /></TestLocalization>));
         await act(async () => vi.advanceTimersByTimeAsync(1));
         expect(container.textContent).toContain("Your server is ready to join");
+        // A later receipt must respect the owner hiding the address after the first reveal.
+        expect(revealAddress).toHaveBeenCalledTimes(1);
     } finally { await act(async () => root.unmount()); }
 });
 

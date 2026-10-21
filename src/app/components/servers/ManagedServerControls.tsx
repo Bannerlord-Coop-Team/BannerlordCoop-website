@@ -451,7 +451,7 @@ export function ManagedServerControls({
     const showStart = pendingOperation === "start" || startJobId !== null || displayedStartStatus !== null;
     const statusArea = showStart || restart !== null || progressPaused || stopCheckPaused || message ? (
         <div className="flex w-full flex-col items-start gap-2">
-            {showStart && <StartProgress key={`${serverId}:${startJobId ?? receiptId ?? startRevision}`} status={displayedStartStatus} paused={progressPaused} />}
+            {showStart && <StartProgress key={`${serverId}:${startJobId ?? (locallyRequested ? startRevision : receiptId ?? startRevision)}`} status={displayedStartStatus} paused={progressPaused} />}
             {restart !== null && <RestartProgressCard progress={restart} />}
             {progressPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted">
                 <p>{t("controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed")}</p>
