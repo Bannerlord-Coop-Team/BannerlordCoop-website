@@ -5,12 +5,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ServerSettingsPanel } from "./ServerSettingsPanel";
 
-const mocks = vi.hoisted(() => ({ router: { refresh: vi.fn() }, settings: vi.fn(), visibility: vi.fn(), release: vi.fn(), status: vi.fn(), manager: vi.fn() }));
+const mocks = vi.hoisted(() => ({ router: { refresh: vi.fn() }, settings: vi.fn(), visibility: vi.fn(), release: vi.fn(), status: vi.fn(), manager: vi.fn(), removeManager: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => mocks.router }));
 vi.mock("@/app/servers/server-settings-actions", () => ({ saveServerSettings: mocks.settings }));
 vi.mock("@/app/servers/server-visibility-actions", () => ({ setServerVisibility: mocks.visibility }));
 vi.mock("@/app/servers/server-release-actions", () => ({ changeServerRelease: mocks.release, readServerReleaseStatus: mocks.status }));
-vi.mock("@/app/servers/server-manager-actions", () => ({ setServerManager: mocks.manager }));
+vi.mock("@/app/servers/server-manager-actions", () => ({ setServerManager: mocks.manager, removeServerManager: mocks.removeManager }));
 
 const serverId = "11111111-1111-4111-8111-111111111111";
 const updatedAt = "2026-10-01T00:00:00.000Z";
@@ -33,10 +33,13 @@ beforeEach(() => {
     mocks.release.mockResolvedValue({ ok: true, jobId: serverId, message: "Release queued." });
     mocks.status.mockResolvedValue(null);
     mocks.manager.mockResolvedValue({ ok: true, message: "Manager access granted." });
+    mocks.removeManager.mockResolvedValue({ ok: true, message: "Manager access removed." });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
 async function render(next = props) { await act(async () => root.render(<TestLocalization>{<ServerSettingsPanel {...next} />} </TestLocalization>)); }
+// Finds the manager-access live region among the panel's other status messages.
+function managerStatus() { return container.querySelector('section[aria-labelledby="managed-server-manager-heading"] [role="status"]'); }
 async function change(selector: string, value: string) {
     await act(async () => {
         const element = container.querySelector<HTMLInputElement | HTMLSelectElement>(selector)!;
@@ -87,6 +90,71 @@ it("offers owner manager access through exact email entry without rendering an a
     expect(submitted.get("serverId")).toBe(serverId);
     expect(submitted.get("expectedUpdatedAt")).toBe(updatedAt);
     expect(submitted.get("managerEmail")).toBe("friend@example.com");
+    expect(document.activeElement?.id).toBe("manager-account-email");
+});
+
+it("shows the retry message instead of crashing when a manager action call fails", async () => {
+    mocks.manager.mockRejectedValueOnce(new Error("Failed to find Server Action"));
+    mocks.removeManager.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await render({ ...props, managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true, managers: [
+        { accountId: "22222222-2222-4222-8222-222222222222", label: "friend@example.com", removable: true },
+    ] } });
+    await change("#manager-account-email", "friend@example.com");
+    await act(async () => container.querySelector<HTMLFormElement>('form:has(#manager-account-email)')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(managerStatus()?.textContent).toBe("The manager access change could not be confirmed. Refresh and try again.");
+    expect(container.querySelector<HTMLInputElement>("#manager-account-email")?.value).toBe("friend@example.com");
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Remove manager access for friend@example.com"]')!.click());
+    expect(managerStatus()?.textContent).toBe("The manager access change could not be confirmed. Refresh and try again.");
+    expect(document.activeElement?.id).toBe("managed-server-manager-list-heading");
+});
+
+it("lists current managers and lets the owner remove a website account", async () => {
+    const managerAccountId = "22222222-2222-4222-8222-222222222222";
+    await render({ ...props, managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true, managers: [
+        { accountId: managerAccountId, label: "friend@example.com", removable: true },
+        { accountId: "123456789012345678", label: null, removable: false },
+    ] } });
+    const rows = Array.from(container.querySelectorAll("li"));
+    expect(rows.map(row => row.textContent)).toEqual(["friend@example.comRemove", "Unknown account (12345678)"]);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Remove manager access for friend@example.com"]')!;
+    await act(async () => remove.click());
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("friend@example.com"));
+    expect(mocks.removeManager).not.toHaveBeenCalled();
+    await act(async () => remove.click());
+    expect(mocks.removeManager).toHaveBeenCalledExactlyOnceWith(expect.any(FormData));
+    const submitted = mocks.removeManager.mock.calls[0]![0] as FormData;
+    expect(submitted.get("serverId")).toBe(serverId);
+    expect(submitted.get("managerAccountId")).toBe(managerAccountId);
+    expect(managerStatus()?.textContent).toBe("Manager access removed.");
+    expect(document.activeElement?.id).toBe("managed-server-manager-list-heading");
+});
+
+it("labels only the removing row while pending and returns focus to the list heading when a removal is refused", async () => {
+    let refuse!: (result: { ok: boolean; message: string }) => void;
+    mocks.removeManager.mockReturnValueOnce(new Promise(resolve => { refuse = resolve; }));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await render({ ...props, managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true, managers: [
+        { accountId: "22222222-2222-4222-8222-222222222222", label: "friend@example.com", removable: true },
+    ] } });
+    const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Remove manager access for friend@example.com"]')!;
+    remove.focus();
+    await act(async () => remove.click());
+    expect(remove.textContent).toBe("Removing...");
+    expect(container.querySelector<HTMLButtonElement>('#manager-account-email ~ button')?.textContent).toBe("Grant manager access");
+    await act(async () => refuse({ ok: false, message: "Only the server owner can change manager access." }));
+    expect(managerStatus()?.textContent).toBe("Only the server owner can change manager access.");
+    expect(document.activeElement?.id).toBe("managed-server-manager-list-heading");
+    expect(remove.textContent).toBe("Remove");
+});
+
+it("tells the owner when there are no managers or the list could not be read", async () => {
+    await render({ ...props, managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true, managers: [] } });
+    expect(container.textContent).toContain("No one has manager access yet.");
+    await render({ ...props, managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true, managers: null } });
+    expect(container.textContent).toContain("The manager list could not be loaded.");
+    expect(container.querySelector("#manager-account-email")).not.toBeNull();
 });
 it("saves name and maintenance once, then carries each returned generation into visibility and release", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);

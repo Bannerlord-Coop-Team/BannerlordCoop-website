@@ -19,6 +19,18 @@ server generation before granting the manager ACL. Managers can view, operate an
 manage saves; they cannot change settings, manage access, export data or delete
 the server.
 
+The panel lists the current managers by their account email, read through the
+owner-only `server-managers` control-plane operation. Each website account has a
+**Remove** button that asks for confirmation, then sends `set-server-manager`
+with `enabled: false` against the current server generation. A legacy Discord
+manager is listed without a button, because the owner API addresses managers by
+account UUID. If the list cannot be read (for example, an older control plane),
+or its account lookups outlast the page's five-second read, the panel says so
+and still offers the grant form. Labels show each account's current email, so an
+owner who granted an account UUID directly through the owner API (bypassing the
+exact-email form) would see that account's email; account UUIDs are not shown
+anywhere else on the website.
+
 Campaign transfers distinguish accepted queued jobs, processing, automatic retry
 waits and terminal results. Confirmed jobs are checked for up to ten minutes;
 checks pause after one minute without confirmation. A paused check does not cancel

@@ -4,7 +4,7 @@ import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getMyServerMoveStatus, getMyServerNotices, getMyServerSummary, getMyServerStartStatus, getServerOnboarding, listAllMyServers } from "./my-servers-server";
+import { getMyServerManagers, getMyServerMoveStatus, getMyServerNotices, getMyServerSummary, getMyServerStartStatus, getServerOnboarding, listAllMyServers } from "./my-servers-server";
 import { onboardingRegion, onboardingSummary } from "../../../../tests/onboarding-fixtures";
 
 const TOKEN = "access-token-with-enough-characters";
@@ -542,4 +542,31 @@ it("validates the server ID and token before reading move status", async () => {
     await expect(getMyServerMoveStatus(TOKEN, "invalid")).rejects.toMatchObject({ code: "invalid_request" });
     await expect(getMyServerMoveStatus("short", server.serverId)).rejects.toMatchObject({ code: "invalid_request" });
     expect(fetch).not.toHaveBeenCalled();
+});
+
+it("reads the owner's manager grants through the closed owner read", async () => {
+    const managers = [
+        { accountId: "22222222-2222-4222-8222-222222222222", grantedAt: "2026-10-01T00:00:00.000Z" },
+        { accountId: "123456789012345678", grantedAt: "2026-10-02T00:00:00.000Z" },
+    ];
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = input(init);
+        expect(request).toEqual({ version: 1, requestId: expect.any(String), operation: "server-managers", input: { serverId: server.serverId } });
+        expect(init).toMatchObject({ cache: "no-store", redirect: "manual", credentials: "omit" });
+        return accepted(request, { serverId: server.serverId, managers });
+    });
+    vi.stubGlobal("fetch", fetch);
+    expect(await getMyServerManagers(TOKEN, server.serverId)).toEqual(managers);
+});
+
+it.each([
+    { serverId: "11111111-1111-4111-8111-999999999999", managers: [] },
+    { serverId: "11111111-1111-4111-8111-111111111111", managers: [{ accountId: "not-an-account", grantedAt: "2026-10-01T00:00:00.000Z" }] },
+    { serverId: "11111111-1111-4111-8111-111111111111", managers: [{ accountId: "22222222-2222-4222-8222-222222222222", grantedAt: "yesterday" }] },
+    { serverId: "11111111-1111-4111-8111-111111111111", managers: [{ accountId: "22222222-2222-4222-8222-222222222222", grantedAt: "2026-10-01T00:00:00.000Z", email: "x@example.com" }] },
+    { serverId: "11111111-1111-4111-8111-111111111111", managers: Array.from({ length: 2 }, () => ({ accountId: "22222222-2222-4222-8222-222222222222", grantedAt: "2026-10-01T00:00:00.000Z" })) },
+    { serverId: "11111111-1111-4111-8111-111111111111" },
+])("rejects a malformed manager list %#", async (result) => {
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
+    await expect(getMyServerManagers(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
 });
