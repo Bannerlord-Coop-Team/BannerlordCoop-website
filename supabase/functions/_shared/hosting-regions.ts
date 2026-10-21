@@ -39,7 +39,8 @@ export const LOCATION_ID_PATTERN = /^[A-Za-z\d][A-Za-z\d._:-]{0,127}$/u;
 // Region keys the control plane accepts: bounded lowercase slugs.
 const REGION_KEY_PATTERN = /^[a-z][a-z0-9-]{1,47}$/u;
 
-// Coast regions name their exact zones: a US country code alone never implies a coast.
+// Coast and city-named regions name their exact zones: a country code alone never implies
+// a coast or city.
 export const HOSTING_REGIONS = [
     { key: "us-west", label: "US-West", continent: "north-america",
         placement: { countryCodes: ["US"], locationIds: ["os-us-west-or-2", "us-west-or"] } },
@@ -53,7 +54,8 @@ export const HOSTING_REGIONS = [
     { key: "singapore", label: "Singapore", continent: "asia", placement: { countryCodes: ["SG"] } },
     { key: "japan", label: "Japan", continent: "asia", placement: { countryCodes: ["JP"] } },
     { key: "south-korea", label: "South Korea", continent: "asia", placement: { countryCodes: ["KR"] } },
-    { key: "australia", label: "Australia", continent: "oceania", placement: { countryCodes: ["AU"] } },
+    { key: "australia-sydney", label: "Australia (Sydney)", continent: "oceania",
+        placement: { countryCodes: ["AU"], locationIds: ["syd"] } },
 ] as const satisfies readonly HostingRegionDefinition[];
 
 type HostingRegionKey = typeof HOSTING_REGIONS[number]["key"];
