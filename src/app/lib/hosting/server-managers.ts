@@ -33,10 +33,10 @@ export async function listServerManagers(accessToken: string, serverId: string, 
     return await untilAborted(managers, signal);
 }
 
-// One failed or missing lookup leaves that row unlabeled instead of hiding the whole list.
+// Labels by email only, never a phone number; one failed or missing lookup leaves just that row unlabeled.
 async function accountLabel(accountId: string, sources: ServerManagerSources) {
     if (!REMOVABLE_ACCOUNT_ID.test(accountId)) return null;
-    try { return (await sources.findAccount(accountId))?.label ?? null; }
+    try { return (await sources.findAccount(accountId))?.email ?? null; }
     catch { return null; }
 }
 

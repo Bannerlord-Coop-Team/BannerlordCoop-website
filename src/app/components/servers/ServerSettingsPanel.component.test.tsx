@@ -99,7 +99,7 @@ it("lists current managers and lets the owner remove a website account", async (
         { accountId: "123456789012345678", label: null, removable: false },
     ] } });
     const rows = Array.from(container.querySelectorAll("li"));
-    expect(rows.map(row => row.textContent)).toEqual(["friend@example.comRemove", "Unknown account"]);
+    expect(rows.map(row => row.textContent)).toEqual(["friend@example.comRemove", "Unknown account (12345678)"]);
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Remove manager access for friend@example.com"]')!;
     await act(async () => remove.click());
@@ -114,8 +114,9 @@ it("lists current managers and lets the owner remove a website account", async (
     expect(document.activeElement?.id).toBe("managed-server-manager-list-heading");
 });
 
-it("keeps focus on the row when a removal is refused", async () => {
-    mocks.removeManager.mockResolvedValueOnce({ ok: false, message: "Only the server owner can change manager access." });
+it("labels only the removing row while pending and returns focus to the list heading when a removal is refused", async () => {
+    let refuse!: (result: { ok: boolean; message: string }) => void;
+    mocks.removeManager.mockReturnValueOnce(new Promise(resolve => { refuse = resolve; }));
     vi.spyOn(window, "confirm").mockReturnValue(true);
     await render({ ...props, managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true, managers: [
         { accountId: "22222222-2222-4222-8222-222222222222", label: "friend@example.com", removable: true },
@@ -123,8 +124,11 @@ it("keeps focus on the row when a removal is refused", async () => {
     const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Remove manager access for friend@example.com"]')!;
     remove.focus();
     await act(async () => remove.click());
+    expect(remove.textContent).toBe("Removing...");
+    expect(container.querySelector<HTMLButtonElement>('#manager-account-email ~ button')?.textContent).toBe("Grant manager access");
+    await act(async () => refuse({ ok: false, message: "Only the server owner can change manager access." }));
     expect(managerStatus()?.textContent).toBe("Only the server owner can change manager access.");
-    expect(document.activeElement).toBe(remove);
+    expect(document.activeElement?.id).toBe("managed-server-manager-list-heading");
     expect(remove.textContent).toBe("Remove");
 });
 

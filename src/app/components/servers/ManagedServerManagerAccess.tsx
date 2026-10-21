@@ -16,7 +16,8 @@ export function ManagedServerManagerAccess({ serverId, expectedUpdatedAt, canEdi
     const { t } = useTranslations("managed-server");
     const [email, setEmail] = useState("");
     const [message, setMessage] = useState("");
-    const [removingId, setRemovingId] = useState<string | null>(null);
+    // The last started action ("grant" or a manager account ID); it only labels a button while the transition is pending.
+    const [pendingAction, setPendingAction] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
     const listHeading = useRef<HTMLHeadingElement>(null);
 
@@ -29,6 +30,7 @@ export function ManagedServerManagerAccess({ serverId, expectedUpdatedAt, canEdi
         form.set("expectedUpdatedAt", expectedUpdatedAt);
         form.set("managerEmail", email);
         setMessage("");
+        setPendingAction("grant");
         startTransition(async () => {
             const result = await setServerManager(form);
             setMessage(result.message);
@@ -36,19 +38,18 @@ export function ManagedServerManagerAccess({ serverId, expectedUpdatedAt, canEdi
         });
     }
 
-    // Revokes one confirmed manager; the refreshed page drops the row, so focus returns to the list heading.
+    // Revokes one confirmed manager; focus returns to the list heading, since the row is dropped or its button was disabled.
     function remove(manager: ServerManager, label: string) {
         if (!window.confirm(t("managerAccess.confirmRemove", { name: label }))) return;
         const form = new FormData();
         form.set("serverId", serverId);
         form.set("managerAccountId", manager.accountId);
         setMessage("");
-        setRemovingId(manager.accountId);
+        setPendingAction(manager.accountId);
         startTransition(async () => {
             const result = await removeServerManager(form);
             setMessage(result.message);
-            setRemovingId(null);
-            if (result.ok) listHeading.current?.focus();
+            listHeading.current?.focus();
         });
     }
 
@@ -57,7 +58,7 @@ export function ManagedServerManagerAccess({ serverId, expectedUpdatedAt, canEdi
         <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">{t("managerAccess.description")}</p>
         <div className="mt-5 max-w-xl">
             <h3 ref={listHeading} id={LIST_HEADING_ID} tabIndex={-1} className="text-sm font-medium outline-none">{t("managerAccess.currentManagers")}</h3>
-            <ManagerList managers={managers} disabled={isPending} removingId={removingId} onRemove={remove} />
+            <ManagerList managers={managers} disabled={isPending} removingId={isPending ? pendingAction : null} onRemove={remove} />
         </div>
         <form className="mt-5 max-w-xl space-y-3" onSubmit={(event) => { event.preventDefault(); submit(); }}>
             <label htmlFor="manager-account-email" className="block text-sm font-medium">{t("managerAccess.emailLabel")}</label>
@@ -76,7 +77,7 @@ export function ManagedServerManagerAccess({ serverId, expectedUpdatedAt, canEdi
                 className="w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-gold focus:ring-1 focus:ring-gold"
             />
             <p id="manager-account-email-help" className="text-xs leading-5 text-foreground-muted">{t("managerAccess.emailHelp")}</p>
-            <button type="submit" disabled={isPending || email.trim().length === 0} className={button}>{isPending && removingId === null ? t("managerAccess.granting") : t("managerAccess.grant")}</button>
+            <button type="submit" disabled={isPending || email.trim().length === 0} className={button}>{isPending && pendingAction === "grant" ? t("managerAccess.granting") : t("managerAccess.grant")}</button>
         </form>
         <p role="status" className={message ? "mt-3 max-w-xl text-sm leading-6 text-foreground-muted" : "sr-only"}>{message}</p>
     </section>;
@@ -92,7 +93,8 @@ function ManagerList({ managers, disabled, removingId, onRemove }: {
     if (managers.length === 0) return <p className="mt-2 text-sm leading-6 text-foreground-muted">{t("managerAccess.noManagers")}</p>;
     return <ul aria-labelledby={LIST_HEADING_ID} className="mt-2 divide-y divide-white/10 rounded-md border border-white/10">
         {managers.map(manager => {
-            const label = manager.label ?? t("managerAccess.unknownAccount");
+            // Unresolved accounts keep a short ID so two of them can still be told apart.
+            const label = manager.label ?? t("managerAccess.unknownAccount", { id: manager.accountId.slice(0, 8) });
             return <li key={manager.accountId} className="flex items-center justify-between gap-3 px-3 py-2">
                 <span className="min-w-0 break-all text-sm">{label}</span>
                 {manager.removable && <button
