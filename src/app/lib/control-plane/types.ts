@@ -480,6 +480,14 @@ export type HostingPlacementOverlapBurstHost = HostingPlacementOverlapHostMeasur
      */
     overBurst: string;
     overBurstHours: number;
+    /**
+     * From a control plane that fits on typical demand (#550), all three or none: the servers the VPS can run at once
+     * (N, the capacity read's `modelledServers`), null while unknown; and `overAtOnce`, encoded as `overBurst` but
+     * against N, all `-` while N is null, with its count of `1` hours. The burst fields are then information only.
+     */
+    atOnceServers?: number | null;
+    overAtOnce?: string;
+    overAtOnceHours?: number;
 };
 
 /** One VPS as a control plane that predates burst capacity (98d1f12a) reports it, with its all-busy verdict. */
@@ -523,7 +531,28 @@ export type HostingFleetCapacityDemand = {
 };
 
 /** One measure over the window: steal in percent (0–100) or busy cores. */
-export type HostingFleetCapacityStat = { samples: number; mean: number; p95: number; max: number };
+export type HostingFleetCapacityStat = {
+    samples: number;
+    mean: number;
+    /** The median, no more than `p95`; from a control plane that fits on typical demand (#550) only. */
+    p50?: number;
+    p95: number;
+    max: number;
+};
+
+/**
+ * A VPS's or an instance type's verdict as a control plane that fits on typical demand (#550) computes it, from the
+ * servers it can run at once (N, `modelledServers`), its co-online servers (M) and its slots (S): `unknown` while N is
+ * null, `at-risk` by M − N when N < M, `headroom` by N − S when N > S, else `matches`, whose `servers` is 0.
+ */
+export type HostingFleetCapacityVerdict = { kind: "at-risk" | "headroom" | "matches" | "unknown"; servers: number };
+
+/**
+ * Where a VPS's co-online servers come from: `measured` from every current server's online hours; `worst-case-occupants`
+ * when some server has too few hours with samples and counts as online in every hour; `slots` when every slot counts:
+ * it has no servers, or the control plane could not read the servers' online history (its read then still loads).
+ */
+export type HostingFleetCapacityConcurrentSource = "measured" | "worst-case-occupants" | "slots";
 
 /**
  * A VPS provider as the fleet capacity read reports it: exactly the control plane's closed `VPS_PROVIDER_IDS`,
@@ -562,6 +591,15 @@ export type HostingFleetCapacityInstanceType = {
     /** How many servers a typical VPS of this type can run at once at their modelled needs. */
     modelledServers: number | null;
     demandSource: HostingFleetCapacityDemandSource;
+    /**
+     * From a control plane that fits on typical demand (#550), all four or none: vCpu less its pooled steal p50, null
+     * without steal; its demand source's p95 cores, null without one; how many could burst at once, information only and
+     * null while `modelledServers` is; and its verdict against its static slots, floor(vCpu ÷ 2), as its co-online count.
+     */
+    effectiveVcpu?: number | null;
+    typicalCpuCores?: number | null;
+    burstServers?: number | null;
+    verdict?: HostingFleetCapacityVerdict;
 };
 
 export type HostingFleetCapacityOccupant = {
@@ -612,6 +650,27 @@ export type HostingFleetCapacityHost = {
     /** floor(min(usableCores / demandCpuCores, usableMemoryBytes / demandMemoryBytes)); null while an input is unknown. */
     modelledServers: number | null;
     limitedBy: "cpu" | "memory" | null;
+    /**
+     * From a control plane that fits on typical demand (#550), all of these or none. It then plans `demandCpuCores` at
+     * min(2, max(1.6, `typicalCpuCores`)) and `demandMemoryBytes` at min(3 GiB, max(2.5 GiB, peak)); its `usableCores` take off
+     * the steal p50, and `modelledServers` is never below the static rule's servers.
+     *
+     * - `effectiveVcpu`: vCpu × (1 − steal p50 ÷ 100), three decimals; null without steal.
+     * - `typicalCpuCores`: the demand source's p95 cores, what a server there usually needs; null without a source.
+     * - `burstCpuCores`: min(2, max(1.6, peak)), what one server bursts to; null without a source. Information only.
+     * - `burstServers`: how many could burst to it at once; null while `modelledServers` is. Information only.
+     * - `concurrentServers`: M, its co-online servers, at most its slots; `concurrentSource` says where M comes from,
+     *   and `concurrentCoverage` is the share of the window's hours in which every current server has samples.
+     * - `verdict`: N against M and its slots.
+     */
+    effectiveVcpu?: number | null;
+    typicalCpuCores?: number | null;
+    burstCpuCores?: number | null;
+    burstServers?: number | null;
+    concurrentServers?: number;
+    concurrentSource?: HostingFleetCapacityConcurrentSource;
+    concurrentCoverage?: number;
+    verdict?: HostingFleetCapacityVerdict;
     /** Observations taken on this VPS in the window that carried server or host counters. */
     samples: number;
     /** 168 hours oldest first, two lowercase hex digits each or `--` without data: mean steal in permille, capped at 255. */
@@ -646,6 +705,17 @@ export type HostingAdminFleetCapacity = {
         minimumRunningHours: number;
         staticBurstVcpuPerServer: number;
         staticBurstMemoryBytesPerServer: number;
+        /**
+         * From a control plane that fits on typical demand (#550), all five or none: the CPU percentile servers are fitted
+         * at (95); the steal percentile taken off the vCPUs (50); the steal below which the static floor ignores it (5%);
+         * the online share of an hour that counts a server as online in it (0.5); and the share of the window's hours the
+         * co-online count may be exceeded in (0.01).
+         */
+        cpuTypicalPercentile?: number;
+        stealPercentile?: number;
+        stealFloorThresholdPercent?: number;
+        concurrentBusyFraction?: number;
+        concurrentHourShare?: number;
     };
     fleet: { hosts: number; servers: number; demand: HostingFleetCapacityDemand };
     providers: HostingFleetCapacityProvider[];
@@ -760,6 +830,11 @@ export type HostingAdminSlotSizing = {
         maximumSlots: number;
         /** A typical new server's expected online hours a week. */
         typicalWeeklyOnlineHours: number;
+        /**
+         * What a typical new server is planned to need while online, in cores: at least 1.6, the fleet's p95 where higher, at most 2; 1.6 without
+         * fleet data. From a control plane that fits on typical demand (#550) only; `cpuBurstVcpu` is then information.
+         */
+        typicalServerCpuCores?: number;
         /** Why the capacity samples could not be read, when they could not: every VPS is then `unmeasured`. */
         capacityErrorCode: string | null;
     };
