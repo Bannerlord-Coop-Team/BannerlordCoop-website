@@ -629,6 +629,16 @@ control plane owns slot capacity.
   an hour with data, and a `1` needs `online` of at least half the number of
   occupants, less 0.01. The pane does not draw this verdict.
 
+From control plane #550 the response has a third shape, **at once**: every host
+of the burst-capacity shape adds exactly `atOnceServers` (N, the servers the VPS
+can run at once at what they usually need, from the capacity model of the same
+inventory; null or a non-negative integer), `overAtOnce` (encoded as
+`overBurst`, but against N) and `overAtOnceHours` (its count of `1`). Which hours are over N is the
+control plane's to work out, so the website checks only their format and count,
+not each hour against N. The burst fields are then information only and still
+checked as before. A read is in one
+shape throughout: at once, burst capacity or legacy.
+
 The control plane sends the burst-capacity response. Until control plane #529
 its `burstServers` counts 3 GiB per server; from #529 it counts 2.5 GiB, which
 counts more servers on a VPS whose memory, not CPU, is the limit (none today).
@@ -707,6 +717,16 @@ summary (slots filled, how many can burst together, the hours over burst or
 "bursts fit", the busiest hour and the coverage, or "empty"). After its shading
 and no-data keys the legend adds "Red: more servers online than can each burst
 to 1.6 vCPU and 2.5 GiB".
+
+An at-once response marks its red row from `overAtOnce` instead, under a VPS
+with more occupants than `atOnceServers`, and its legend reads "Red: more servers
+online than the VPS can run at once at what they usually need". Each row's right
+column says "Fits at once", "*N* h over at once" or "At once not modelled yet",
+then, as information, "3 can burst together (1.6 vCPU, 2.5 GiB each)", the
+overlap's own burst capacity, not the capacity tab's burst headroom. A cell's title adds
+"can run *N* at once" and, on a red hour, "over at-once capacity", before the
+burst capacity it keeps as information ("Wed 14 Oct 20:00 UTC · 4 online; can run
+4 at once; 3 can burst together, over burst capacity").
 
 A legacy response is shaded the same way but has no red row, no red legend
 entry and no "over burst" or "Bursts fit"; the legend keeps its shading and
@@ -988,6 +1008,56 @@ figure; the tab presents them as follows.
    row has a red edge and an **At risk −N** badge with a warning icon, a row with
    headroom a green edge and **Headroom +N**; neither relies on colour alone.
 
+#### Typical demand (control plane #550)
+
+A read in the typical-demand shape (see [response shape](#response-shape)) fits
+each online server at what it usually needs, not at its peak. CPU is planned at
+least at the 1.6 vCPU target, at its demand source's p95 where that is higher,
+and never above 2 vCPU. Memory is planned at 2.5 GiB, or its peak where higher, up
+to 3 GiB. The tab then shows:
+
+- **Servers at once** as the control plane's verdict of N (`modelledServers`)
+  against its co-online servers M and slots S: "Can run 3 at once", then "co-online
+  3 · slots 6", the badge (**Matches**, **At risk −1**, **Headroom +1**) and, as
+  information, "Burst headroom: 3 could burst at once (1.600 cores each)".
+  - Where some server has too few samples, M reads "co-online 3 (some servers
+    counted as always online)".
+  - A VPS with no servers, which counts every slot, reads "co-online unmeasured,
+    using slots".
+  - Unknown N reads "Not modelled yet".
+  - An instance type reads "Can run 3 at once" and "static slots 3", its verdict
+    against its static slots.
+  - A day/night VPS raised to 6 slots that runs its 3 co-online servers at once
+    **matches**. Burst headroom never changes a badge.
+- **Steal p50 · p95 · max** in place of mean · p95 · max (providers: **Steal p50**;
+  instance types: **Steal p50 · p95**), since steal lowers the effective vCPU at
+  its p50. Under **Usable** each VPS adds its effective vCPU ("5.982 effective
+  vCPU"), as does each instance type under its vCPU.
+- **Per server** at the fit, labelled by what sets it:
+  - "This VPS · 1.6 vCPU target (p95 1.200) · 2.5 GiB memory target · peaks
+    1.950 cores, 2.00 GiB" when the p95 is under the target;
+  - "· p95 1.800 ·" when the p95 is above it;
+  - "· p95 2.150 capped at 2 vCPU · 3 GiB memory cap ·" at the caps.
+
+  Each server's own needs add its p95 ("0.55 cores stable (p50), p95 1.10, peak
+  1.10 · 1.65 GiB at p95, peak 1.65").
+- **The summary sentence**: "Each VPS is fitted at what its servers usually need,
+  not at their peaks: CPU at the 1.6 vCPU target, or the p95 of its demand source
+  where higher, at most 2 vCPU (the fleet's p95 is 1.200 cores, which fits at
+  1.600 cores per server, 80% of 2 vCPU), and memory at 2.5 GiB or the peak where
+  higher, at most 3 GiB; *memory plan*. Bursting to 1.6 vCPU, or the peak where
+  higher, at most 2 vCPU, is shown as burst headroom and never decides a verdict.
+  Each VPS's own figures are in its per-server column."
+- **The tooltips** say the same:
+  - the fit at p95 between the target and the cap;
+  - the static floor, min(floor(vCPU ÷ 2), floor(RAM ÷ 3 GiB)), where steal lowers
+    the vCPU only once its p50 reaches 5%;
+  - co-online and its worst cases;
+  - the verdict rule;
+  - burst headroom as information only.
+
+A read from before #550 renders exactly as above.
+
 Every figure's label is a button with a tooltip explaining it (steal, busy
 cores, overhead, usable, p50/p95/max, per server and its source, servers at
 once, limited by, throttled share, running server-hours and the hourly strips).
@@ -1060,9 +1130,22 @@ types (`FLEET_CAPACITY_LIMITS`). These are well above the control plane's own
 bounds, 64 VPSs and 512 placed servers today, so they leave room for them to
 rise. Providers need no cap: each appears once and is one of the three ids.
 
-The read comes in one of two shapes, every part of it in the same one; a mix is
-unexpected. Both have `model.cpuBurstVcpu`, above 0 and at most 256, and each
-VPS's `stableCpuCores` and `peakCpuCores`.
+The read comes in one of three shapes, keyed by its model and every part of it in
+the same one; a mix, or a key outside a shape's set, is unexpected. All have
+`model.cpuBurstVcpu`, above 0 and at most 256, and each VPS's `stableCpuCores` and
+`peakCpuCores`.
+
+- **Typical demand**, from control plane #550 on, is the memory-burst shape plus
+  exactly these keys:
+  - `model`: `cpuTypicalPercentile` and `stealPercentile` (percentiles),
+    `stealFloorThresholdPercent` (0 to 100), `concurrentBusyFraction` and
+    `concurrentHourShare` (0 to 1);
+  - every steal and busy-cores measure: `p50`, with `p50 ≤ p95 ≤ max`;
+  - each instance type: `effectiveVcpu`, `typicalCpuCores`, `burstServers` and
+    `verdict`;
+  - each VPS: `effectiveVcpu`, `typicalCpuCores`, `burstCpuCores`,
+    `burstServers`, `concurrentServers`, `concurrentSource`,
+    `concurrentCoverage` and `verdict`.
 
 - **Memory burst**, from control plane `ao/memory-burst` on, adds
   `model.memoryBurstBytes`, a positive safe integer of at most 64 GiB, and each
@@ -1075,7 +1158,29 @@ A VPS without a source (`none`) has every per-server figure null, and one with a
 source has every one, with a stable CPU above 0 and a CPU peak no lower. Its
 `demandCpuCores` is `max(cpuBurstVcpu, peakCpuCores)` within 0.001, and in the
 memory-burst shape its `demandMemoryBytes` is exactly
-`max(memoryBurstBytes, peakMemoryBytes)`. A read from before the CPU burst target,
+`max(memoryBurstBytes, peakMemoryBytes)`.
+
+In the typical-demand shape the website does not work the planned figures out
+again from #550's formulas, so a control plane that adjusts a formula or its
+rounding does not break the tab. The figures are `demandCpuCores` (`min(2,
+max(1.6, p95))`), `burstCpuCores`, `typicalCpuCores`, `effectiveVcpu` and
+`burstServers`. It checks only their ranges and the obvious caps:
+
+- `demandCpuCores` and `burstCpuCores` are at most `staticBurstVcpuPerServer`
+  (2 vCPU, allowing 0.001);
+- `demandMemoryBytes` is at most `staticBurstMemoryBytesPerServer` (3 GiB);
+- `effectiveVcpu` is null or at most the vCPUs;
+- `typicalCpuCores` is null or non-negative;
+- `burstServers` and `modelledServers` are null or whole numbers from 0.
+
+The current shape keeps its own check, `demandCpuCores = max(cpuBurstVcpu,
+peakCpuCores)`, as before. Each VPS's `concurrentServers` (M) is at most its slots, and equals them when
+`concurrentSource` is `slots`. Its `verdict` must be what N, M and S give:
+`unknown` while N is null, `at-risk` by M − N when N < M, `headroom` by N − S
+when N > S, else `matches`, whose `servers` is 0. An instance type's verdict uses
+its static slots, floor(vCPU ÷ 2), as both M and S. The typical-demand shape comes
+back exactly as it is, and the website shows the control plane's verdict rather
+than working out its own. A read from before the CPU burst target,
 without `cpuBurstVcpu`, is no longer sent by any control plane and is unexpected.
 Nothing else between fields is checked: an unknown `instanceTypeKey`, occupants
 beyond slots or fleet totals that do not add up still render.
@@ -1093,6 +1198,12 @@ the other way round, an older website shows the new capacity read as unexpected,
 and would reject the overlap of any VPS whose memory lets more servers burst at
 2.5 GiB than at 3 GiB (none of today's). Roll back in the other order: the control
 plane first.
+
+Typical demand (control plane #550) also goes website first. Its new keys make a
+website before this change reject the capacity, slot-sizing and overlap reads as
+unexpected, so deploy this website change, then #550. This website reads both
+the current control plane's reads and #550's, so roll back the control plane
+first.
 
 A VPS provider the control plane adds to `VPS_PROVIDER_IDS` needs a website
 update first: add it to `FLEET_CAPACITY_PROVIDERS` (and
@@ -1142,7 +1253,13 @@ control plane returned an unexpected slot sizing."
   in under 1% of the week." and "A typical new server needs 1.6 vCPU and 2.5 GiB
   while online and is online 41.37 hours a week, the mean of servers' weeks over
   the last 28 days (14-day half-life). A server observed for under 7 days counts
-  with that typical week."
+  with that typical week." From control plane #550 the model adds exactly
+  `typicalServerCpuCores` (above 0, at most 256), and the typical server reads "A
+  typical new server needs 1.600 cores and 2.5 GiB while online: what servers
+  usually need, the 1.6 vCPU target or the fleet's p95 CPU where higher, at most
+  2 vCPU (the target before the fleet has data). …". The recommended-slots
+  tooltip then counts a server without a measured need "at the typical 1.600
+  cores", and the capacity tooltip plans memory "at most 3 GiB".
 - When `model.capacityErrorCode` is set, a note: "Capacity samples could not be
   read (*code*), so no VPS's usable cores or memory are known: every VPS is
   unmeasured and has no recommendation."
