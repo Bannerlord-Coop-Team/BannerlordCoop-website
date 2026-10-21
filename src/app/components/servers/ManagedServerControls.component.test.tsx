@@ -367,6 +367,28 @@ it("restores a mounted terminal receipt after an unrelated Update request", asyn
     } finally { await act(async () => root.unmount()); vi.restoreAllMocks(); }
 });
 
+it("keeps a locally followed failed receipt after its matching summary and a refused Update", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockResolvedValue({ ...progress("failed", "failed", "Attempt 5 of 5."), failureCode: "operation_failed" });
+    requestUpdate.mockReset().mockRejectedValue(new MyServersApiError("no_update_available", "No update is available."));
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop"],
+        crashLoopDetected: false, failureCode: "operation_failed", recommendedAction: "contact-support", failureMessage: "Server status needs attention.", recommendation: null,
+        start: { action: "start", jobId: progressJobId, state: "failed", phase: "failed", progress: "Attempt 5 of 5.",
+            attemptCount: 5, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: true, failureCode: "operation_failed", recommendedAction: "contact-support" } };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" /></TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="failed" operationState="failed" runtimeInsight={insight} /></TestLocalization>));
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+        const update = [...container.querySelectorAll("button")].find(button => button.textContent === "Update now")!;
+        await act(async () => update.click());
+        expect(container.textContent).toContain("Attempt 5 of 5");
+    } finally { await act(async () => root.unmount()); vi.restoreAllMocks(); }
+});
+
 it("keeps a locally verified fast Start when its succeeded receipt arrives", async () => {
     vi.useFakeTimers();
     revealAddress.mockClear();

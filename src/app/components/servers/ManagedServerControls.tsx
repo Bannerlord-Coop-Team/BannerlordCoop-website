@@ -396,7 +396,7 @@ export function ManagedServerControls({
             : operation === "stop" ? t("controls.sendingYourStopRequest")
                 : operation === "update-now" ? t("controls.sendingYourUpdateRequest") : "");
         setStartRevision(expectedUpdatedAt);
-        if (operation === "start") setLocallyRequested(true);
+        setLocallyRequested(operation === "start");
         setStartJobId(null);
         setStartStatus(null);
         setProgressPaused(false);
