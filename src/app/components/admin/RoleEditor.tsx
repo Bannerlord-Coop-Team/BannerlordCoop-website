@@ -1,6 +1,7 @@
 "use client";
 
 import { updateMemberRole } from "@/app/admin/actions";
+import type { MemberListState } from "@/app/admin/member-list";
 import { MEMBER_ROLES, type MemberRole } from "@/app/lib/auth/roles";
 import { LoaderCircle } from "lucide-react";
 import { useFormStatus } from "react-dom";
@@ -28,18 +29,20 @@ function SaveButton({ disabled }: { disabled: boolean }) {
 export function RoleEditor({
     currentRole,
     disabled,
-    query,
+    listState,
     userId,
 }: {
     currentRole: MemberRole;
     disabled: boolean;
-    query: string;
+    listState: MemberListState;
     userId: string;
 }) {
     return (
         <form action={updateMemberRole} className="flex items-center justify-end gap-2">
             <input type="hidden" name="userId" value={userId} />
-            <input type="hidden" name="query" value={query} />
+            <input type="hidden" name="query" value={listState.query} />
+            <input type="hidden" name="page" value={listState.page} />
+            <input type="hidden" name="size" value={listState.size} />
             <label htmlFor={`role-${userId}`} className="sr-only">
                 Member role
             </label>
