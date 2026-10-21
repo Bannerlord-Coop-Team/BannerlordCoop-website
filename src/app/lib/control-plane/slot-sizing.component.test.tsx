@@ -21,7 +21,7 @@ import {
     slotSizingTypicalServer,
     slotSizingUnavailable,
 } from "./slot-sizing";
-import type { HostingAdminSlotSizing, HostingSlotSizingHost } from "./types";
+import type { HostingAdminSlotSizing, HostingSlotSizingHost, HostingSlotSizingTarget } from "./types";
 
 /** A copy of a record without one key. */
 function without<T extends object>(value: T, key: keyof T) {
@@ -36,12 +36,16 @@ const model: HostingAdminSlotSizing["model"] = {
     cpuShortageBudgetCoreHoursPerWeek: 1, memoryOverflowShare: 0.01, cpuBurstVcpu: 1.6, memoryBurstBytes: BURST, historyDays: 28,
     halfLifeDays: 14, minimumObservedDays: 7, maximumSlots: 32, typicalWeeklyOnlineHours: 90.96, capacityErrorCode: null,
 };
+/** No slot target: every VPS's until automatic slot sizing sets one, and every production VPS's today. */
+const NO_TARGET: HostingSlotSizingTarget = { targetSlots: null, pendingLowerSlots: null, pendingLowerSince: null, changedAt: null, reason: null };
+const TARGET_CHANGED = "2026-10-21T08:16:04.000Z";
+const TARGET_HELD = "2026-10-22T08:16:04.000Z";
 
 /**
  * The control plane's documented example (`docs/managed-hosting/web-admin.md`, "Slot sizing"), from its PGlite test
  * fixture. The page elides `vps-new` and `vps-small`; they are filled in from its descriptions and the control plane's
  * test of the same fleet: `vps-new` borrows `vps-b`'s 4 cores and 12 GiB (both provider-vcpu) and is recommended 2
- * slots (cpu, 2 free), and `vps-small` has nothing to borrow.
+ * slots (cpu, 2 free), and `vps-small` has nothing to borrow. Since #542 each VPS has its slot target, all null.
  */
 const example: HostingAdminSlotSizing = {
     generatedAt: "2026-10-17T00:20:00.000Z",
@@ -51,22 +55,22 @@ const example: HostingAdminSlotSizing = {
             occupants: 4, acceptsRelocations: true, usableCores: 5.8, coresSource: "measured",
             usableMemoryBytes: 12884901888, memorySource: "measured", memoryBytesPerServer: 2684354560,
             recommendedSlots: 5, reason: "cpu", expectedShortageCoreHoursPerWeek: 0.072, withinCpuBudget: true,
-            memoryOverflowShare: 0, withinMemoryBudget: true, serversToMove: 0, freeRecommendedSlots: 1 },
+            memoryOverflowShare: 0, withinMemoryBudget: true, serversToMove: 0, freeRecommendedSlots: 1, target: NO_TARGET },
         { serviceName: "vps-b", provider: "ovhcloud-vps", regionKeys: ["poland"], vCpu: 4, slots: 4,
             occupants: 4, acceptsRelocations: true, usableCores: 4, coresSource: "measured",
             usableMemoryBytes: 12884901888, memorySource: "measured", memoryBytesPerServer: 2684354560,
             recommendedSlots: 2, reason: "drain", expectedShortageCoreHoursPerWeek: 0, withinCpuBudget: true,
-            memoryOverflowShare: 0, withinMemoryBudget: true, serversToMove: 2, freeRecommendedSlots: 0 },
+            memoryOverflowShare: 0, withinMemoryBudget: true, serversToMove: 2, freeRecommendedSlots: 0, target: NO_TARGET },
         { serviceName: "vps-new", provider: "ovhcloud-vps", regionKeys: ["poland"], vCpu: 4, slots: 2,
             occupants: 0, acceptsRelocations: true, usableCores: 4, coresSource: "provider-vcpu",
             usableMemoryBytes: 12884901888, memorySource: "provider-vcpu", memoryBytesPerServer: 2684354560,
             recommendedSlots: 2, reason: "cpu", expectedShortageCoreHoursPerWeek: 0, withinCpuBudget: true,
-            memoryOverflowShare: 0, withinMemoryBudget: true, serversToMove: 0, freeRecommendedSlots: 2 },
+            memoryOverflowShare: 0, withinMemoryBudget: true, serversToMove: 0, freeRecommendedSlots: 2, target: NO_TARGET },
         { serviceName: "vps-small", provider: "ovhcloud-vps", regionKeys: ["poland"], vCpu: 2, slots: 1,
             occupants: 0, acceptsRelocations: true, usableCores: null, coresSource: "none",
             usableMemoryBytes: null, memorySource: "none", memoryBytesPerServer: 2684354560,
             recommendedSlots: null, reason: "unmeasured", expectedShortageCoreHoursPerWeek: null, withinCpuBudget: null,
-            memoryOverflowShare: null, withinMemoryBudget: null, serversToMove: 0, freeRecommendedSlots: 0 },
+            memoryOverflowShare: null, withinMemoryBudget: null, serversToMove: 0, freeRecommendedSlots: 0, target: NO_TARGET },
     ],
     regions: [{ regionKey: "poland", serversToMove: 2, freeRecommendedSlots: 3, shortfallServers: 0 }],
 };
@@ -146,6 +150,11 @@ function withRegion(index: number, change: Record<string, unknown>) {
     return { ...fleet, regions: fleet.regions.map((candidate, at) => at === index ? { ...candidate, ...change } : candidate) };
 }
 
+/** The fleet with one VPS given a slot target: none, with some fields changed. */
+function withTarget(entry: HostingSlotSizingHost, change: Record<string, unknown>) {
+    return withHost(entry, { target: { ...NO_TARGET, ...change } });
+}
+
 it("accepts the control plane's documented example exactly as it is", () => {
     expect(parseSlotSizing(example)).toBe(example);
 });
@@ -153,6 +162,32 @@ it("accepts the control plane's documented example exactly as it is", () => {
 it("accepts a realistic fleet with every reason", () => {
     expect(parseSlotSizing(fleet)).toBe(fleet);
     expect(new Set(fleet.hosts.map((entry) => entry.reason))).toEqual(new Set(["cpu", "memory", "floor", "maximum", "drain", "unmeasured"]));
+});
+
+it("accepts every VPS's slot target all null, as production sends it today, and a read without one from before it", () => {
+    const untargeted = { ...fleet, hosts: fleet.hosts.map((entry) => ({ ...entry, target: NO_TARGET })) };
+    expect(parseSlotSizing(untargeted)).toBe(untargeted);
+    // A control plane before automatic slot sizing (#542) sends no target, so a rollback still reads.
+    expect(fleet.hosts.some((entry) => "target" in entry)).toBe(false);
+    expect(parseSlotSizing(fleet)).toBe(fleet);
+});
+
+it("accepts slot targets the sizer sets, holds and clears", () => {
+    const set = withTarget(grows, { targetSlots: 5, changedAt: TARGET_CHANGED, reason: "cpu" });
+    expect(parseSlotSizing(set)).toBe(set);
+    // A target bounds its servers, not its slots: below them, with servers to drain, or at the floor or the maximum.
+    expect(parseSlotSizing(withTarget(drained, { targetSlots: 3, changedAt: TARGET_CHANGED, reason: "drain" }))).not.toBeNull();
+    expect(parseSlotSizing(withTarget(biggest, { targetSlots: 12, changedAt: TARGET_CHANGED, reason: "floor" }))).not.toBeNull();
+    expect(parseSlotSizing(withTarget(biggest, { targetSlots: 32, changedAt: TARGET_CHANGED, reason: "maximum" }))).not.toBeNull();
+    expect(parseSlotSizing(withTarget(unmeasured, { targetSlots: 1, changedAt: TARGET_CHANGED, reason: "memory" }))).not.toBeNull();
+    // A lower recommendation held below the target, or below its slots before any target.
+    expect(parseSlotSizing(withTarget(grows, { targetSlots: 5, pendingLowerSlots: 4, pendingLowerSince: TARGET_HELD, changedAt: TARGET_CHANGED,
+        reason: "cpu" }))).not.toBeNull();
+    expect(parseSlotSizing(withTarget(drained, { pendingLowerSlots: 4, pendingLowerSince: TARGET_HELD }))).not.toBeNull();
+    // A cleared target keeps its time and reason; the control plane's own reasons, up to 32 characters.
+    expect(parseSlotSizing(withTarget(grows, { changedAt: TARGET_CHANGED, reason: "switched-off" }))).not.toBeNull();
+    expect(parseSlotSizing(withTarget(grows, { targetSlots: 6, changedAt: TARGET_CHANGED, reason: "admin-raise" }))).not.toBeNull();
+    expect(parseSlotSizing(withTarget(grows, { changedAt: TARGET_CHANGED, reason: `a${"-".repeat(30)}9` }))).not.toBeNull();
 });
 
 it("accepts what the control plane can send that looks unusual", () => {
@@ -311,6 +346,31 @@ it.each([
     ["a CPU reason with more free slots than it has", withHost(grows, { freeRecommendedSlots: 3 })],
     ["a CPU reason at the maximum", withHost(biggest, { reason: "cpu" })],
     ["a maximum below the maximum", withHost(grows, { reason: "maximum" })],
+    // A slot target, when the control plane sends one, as it stores it.
+    ["a slot target with an extra key", withTarget(grows, { applied: true })],
+    ["a slot target without a key", withHost(grows, { target: without(NO_TARGET, "reason") })],
+    ["a slot target that is null", withHost(grows, { target: null })],
+    ["a fractional target", withTarget(drained, { targetSlots: 3.5, changedAt: TARGET_CHANGED, reason: "drain" })],
+    ["a target below floor(vCPU ÷ 2)", withTarget(grows, { targetSlots: 2, changedAt: TARGET_CHANGED, reason: "drain" })],
+    ["a target above the most a VPS holds", withTarget(biggest, { targetSlots: 33, changedAt: TARGET_CHANGED, reason: "maximum" })],
+    ["a target without its change time and reason", withTarget(grows, { targetSlots: 5 })],
+    ["a reason without a change time", withTarget(grows, { reason: "cpu" })],
+    ["a change time without a reason", withTarget(grows, { changedAt: TARGET_CHANGED })],
+    ["a change time without milliseconds", withTarget(grows, { targetSlots: 5, changedAt: "2026-10-21T08:16:04Z", reason: "cpu" })],
+    ["a change time with an offset", withTarget(grows, { targetSlots: 5, changedAt: "2026-10-21T08:16:04.000+00:00", reason: "cpu" })],
+    ["a change time that is not a real date", withTarget(grows, { targetSlots: 5, changedAt: "2026-02-30T08:16:04.000Z", reason: "cpu" })],
+    ["a reason in capitals", withTarget(grows, { targetSlots: 5, changedAt: TARGET_CHANGED, reason: "CPU" })],
+    ["a reason of 33 characters", withTarget(grows, { changedAt: TARGET_CHANGED, reason: "a".repeat(33) })],
+    ["a reason that is not text", withTarget(grows, { changedAt: TARGET_CHANGED, reason: 1 })],
+    ["a held recommendation without its time", withTarget(drained, { pendingLowerSlots: 4 })],
+    ["a hold time without a held recommendation", withTarget(drained, { pendingLowerSince: TARGET_HELD })],
+    ["a hold time that is not ISO", withTarget(drained, { pendingLowerSlots: 4, pendingLowerSince: "2026-10-22 08:16:04" })],
+    ["a held recommendation at its target", withTarget(grows, { targetSlots: 5, pendingLowerSlots: 5, pendingLowerSince: TARGET_HELD,
+        changedAt: TARGET_CHANGED, reason: "cpu" })],
+    ["a held recommendation above its target", withTarget(grows, { targetSlots: 5, pendingLowerSlots: 6, pendingLowerSince: TARGET_HELD,
+        changedAt: TARGET_CHANGED, reason: "cpu" })],
+    ["a held recommendation at its slots without a target", withTarget(drained, { pendingLowerSlots: 5, pendingLowerSince: TARGET_HELD })],
+    ["a held recommendation below floor(vCPU ÷ 2)", withTarget(drained, { pendingLowerSlots: 2, pendingLowerSince: TARGET_HELD })],
     // Regions.
     ["regions that are not a list", { ...fleet, regions: {} }],
     ["a region with an extra key", withRegion(0, { vpssNeeded: 1 })],

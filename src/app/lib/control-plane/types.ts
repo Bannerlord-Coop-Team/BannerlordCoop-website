@@ -667,6 +667,22 @@ export type HostingSlotSizingReason = "cpu" | "memory" | "floor" | "maximum" | "
  */
 export type HostingSlotSizingCapacitySource = "measured" | "type" | "provider-vcpu" | "none";
 
+/**
+ * A VPS's slot target as automatic slot sizing stores it: every field null until the sizer first sets one, and
+ * `changedAt` and `reason` kept once a target is cleared.
+ */
+export type HostingSlotSizingTarget = {
+    /** The servers sizing wants it to hold, from floor(vCPU / 2) to 32; null means its slots. */
+    targetSlots: number | null;
+    /** A lower recommendation held for the seven-day shrink: below the target, or its slots without one. */
+    pendingLowerSlots: number | null;
+    /** When that hold began; set exactly when `pendingLowerSlots` is. */
+    pendingLowerSince: string | null;
+    /** When the target last changed, and the recommendation's reason then: both or neither, and both with a target. */
+    changedAt: string | null;
+    reason: string | null;
+};
+
 /** One VPS's recommended slot count. */
 export type HostingSlotSizingHost = {
     serviceName: string;
@@ -705,6 +721,8 @@ export type HostingSlotSizingHost = {
     serversToMove: number;
     /** Slots beyond the servers that stay that a moved server could take with both budgets kept. */
     freeRecommendedSlots: number;
+    /** Its slot target; a control plane from before automatic slot sizing sends none. */
+    target?: HostingSlotSizingTarget;
 };
 
 /** One region's moves, room and shortfall under the recommendations. */

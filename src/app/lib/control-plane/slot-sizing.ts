@@ -8,6 +8,7 @@ import type {
     HostingSlotSizingCapacitySource,
     HostingSlotSizingHost,
     HostingSlotSizingReason,
+    HostingSlotSizingTarget,
 } from "./types";
 
 /**
@@ -46,6 +47,11 @@ const HOST_KEYS = [
     "usableMemoryBytes", "memorySource", "memoryBytesPerServer", "recommendedSlots", "reason", "expectedShortageCoreHoursPerWeek",
     "withinCpuBudget", "memoryOverflowShare", "withinMemoryBudget", "serversToMove", "freeRecommendedSlots",
 ];
+/** A VPS from a control plane with automatic slot sizing: the same keys and its slot target. */
+const TARGETED_HOST_KEYS = [...HOST_KEYS, "target"];
+const TARGET_KEYS = ["targetSlots", "pendingLowerSlots", "pendingLowerSince", "changedAt", "reason"];
+/** A target's reason as the control plane stores it: a recommendation's reason, or one of its own such as `admin-raise`. */
+const TARGET_REASON = /^[a-z][a-z0-9-]{0,31}$/u;
 const REGION_KEYS = ["regionKey", "serversToMove", "freeRecommendedSlots", "shortfallServers"];
 
 type Model = HostingAdminSlotSizing["model"];
@@ -91,6 +97,11 @@ export function slotSizingFloor(vCpu: number) {
     return Math.floor(vCpu / 2);
 }
 
+/** A slot count a VPS of `vCpu` vCPUs may store: from floor(vCPU ÷ 2), and at least 1, to `maximum`. */
+function slotCount(value: unknown, vCpu: number, maximum: number): value is number {
+    return count(value, Math.max(1, slotSizingFloor(vCpu))) && value <= maximum;
+}
+
 function model(value: unknown): value is Model {
     return isRecord(value) && hasExactKeys(value, MODEL_KEYS)
         && amount(value.cpuShortageBudgetCoreHoursPerWeek)
@@ -116,10 +127,32 @@ function fitsFlag(within: boolean, figure: number, budget: number, rounding: num
 }
 
 /**
+ * A VPS's slot target, as `presentSlotTarget` in the control plane presents it, which refuses the whole read rather than
+ * present stored columns that break a rule:
+ *
+ * - the target and a held lower recommendation are slot counts as `slots` is, from floor(vCPU ÷ 2) to `maximumSlots`;
+ * - `changedAt` and `reason` are both set or both null, and a target has them;
+ * - a held lower recommendation has its time, and is below the target, or below `slots` without one.
+ */
+function target(value: unknown, vCpu: number, slots: number, sizingModel: Model): value is HostingSlotSizingTarget {
+    if (!isRecord(value) || !hasExactKeys(value, TARGET_KEYS)) return false;
+    const { targetSlots, pendingLowerSlots, pendingLowerSince, changedAt, reason } = value;
+    if (targetSlots !== null && !slotCount(targetSlots, vCpu, sizingModel.maximumSlots)) return false;
+    if (changedAt !== null && !timestamp(changedAt)) return false;
+    if (reason !== null && (typeof reason !== "string" || !TARGET_REASON.test(reason))) return false;
+    if ((changedAt === null) !== (reason === null) || (targetSlots !== null && changedAt === null)) return false;
+    if ((pendingLowerSlots === null) !== (pendingLowerSince === null)) return false;
+    if (pendingLowerSlots === null) return true;
+    return slotCount(pendingLowerSlots, vCpu, sizingModel.maximumSlots) && timestamp(pendingLowerSince)
+        && pendingLowerSlots < (typeof targetSlots === "number" ? targetSlots : slots);
+}
+
+/**
  * One VPS, field by field and against its reason, as `sizeVpsSlots`, `slotSizingHostEntry` and `readSlotSizing` in the
  * control plane make it:
  *
  * - its slots are from floor(vCPU ÷ 2), and at least 1, to `maximumSlots`, and its servers are no more than its slots;
+ * - its slot target is absent, from a control plane before automatic slot sizing, or as `target` checks it;
  * - each usable figure's source is `none` exactly when that figure is null;
  * - it is `unmeasured` exactly when either source is `none`, and then it has no recommendation, figures or budget flags,
  *   and nothing moves to or from it;
@@ -136,14 +169,19 @@ function fitsFlag(within: boolean, figure: number, budget: number, rounding: num
  * - only `drain` moves servers.
  */
 function host(value: unknown, sizingModel: Model): value is HostingSlotSizingHost {
-    if (!isRecord(value) || !hasExactKeys(value, HOST_KEYS)) return false;
+    if (!isRecord(value)) return false;
+    // A control plane before automatic slot sizing (#542) sends no `target`, so a rollback still reads; one with it
+    // sends it with every VPS.
+    const targeted = Object.hasOwn(value, "target");
+    if (!hasExactKeys(value, targeted ? TARGETED_HOST_KEYS : HOST_KEYS)) return false;
     if (!text(value.serviceName) || !text(value.provider)) return false;
     if (!within(value.regionKeys, MAXIMUM_REGIONS) || !value.regionKeys.every(text)) return false;
     // Sizing throws for fewer than 2 vCPUs. A VPS's stored capacity is from floor(vCPU ÷ 2), and at least 1, to the most a
     // VPS holds, and each of its servers holds one of its slots: the hosts CHECK and the slot triggers keep both.
     if (!count(value.vCpu, 2)) return false;
-    if (!count(value.slots, Math.max(1, slotSizingFloor(value.vCpu))) || value.slots > sizingModel.maximumSlots) return false;
+    if (!slotCount(value.slots, value.vCpu, sizingModel.maximumSlots)) return false;
     if (!count(value.occupants) || value.occupants > value.slots) return false;
+    if (targeted && !target(value.target, value.vCpu, value.slots, sizingModel)) return false;
     if (typeof value.acceptsRelocations !== "boolean") return false;
     if (value.usableCores !== null && !rounded(value.usableCores, 3)) return false;
     if (value.usableMemoryBytes !== null && !count(value.usableMemoryBytes)) return false;

@@ -293,6 +293,18 @@ it.each([
     expect(hostRow("vps-de-part")).toBeDefined();
 });
 
+it("draws a read whose VPSs carry their slot targets, as the control plane sends them since #542", async () => {
+    const none = { targetSlots: null, pendingLowerSlots: null, pendingLowerSince: null, changedAt: null, reason: null };
+    mocks.request.mockResolvedValueOnce({ ...sizing, hosts: sizing.hosts.map((entry) => entry === grows
+        ? { ...entry, target: { ...none, targetSlots: 5, changedAt: "2026-10-21T08:16:04.000Z", reason: "cpu" } } : { ...entry, target: none }) });
+    await open();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    // The pane does not show targets yet: a VPS with one reads as it did without.
+    expect(cellTexts(hostRow("vps-de-part"))).toEqual(["3", "3", "5+2", "CPU budgetOne more slot would break the CPU budget.", "0.842 core-h", "0.21%", "0", "2",
+        "Cores and memory measured5.580 cores, 10.90 GiB usable"]);
+    expect(cellTexts(hostRow("vps-sg-spare"))).toEqual(["1", "0", UNMEASURED, NO_CAPACITY, UNMEASURED, UNMEASURED, "0", "0", "Cores and memory unknown"]);
+});
+
 it("rejects a malformed read, and keeps what it showed when a refresh fails", async () => {
     await open();
     mocks.request.mockResolvedValueOnce({ ...sizing, hosts: [{ ...grows, serversToMove: 1 }] });
