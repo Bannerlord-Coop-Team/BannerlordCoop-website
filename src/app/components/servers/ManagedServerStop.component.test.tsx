@@ -74,6 +74,13 @@ it("keeps checking a stopped drifted game until CP verifies readiness and unlock
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(router.refresh.mock.calls.length).toBeGreaterThan(refreshes);
     await render({ operationState: "stopped", observedGameState: "stopped", expectedUpdatedAt: "2026-10-02T16:00:03.000Z",
+        runtimeInsight: { ...runtimeInsight, desiredState: "stopped", allowedActions: [], failureCode: null, failureMessage: null, recommendedAction: null, recommendation: null } });
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(container.textContent).not.toContain("Server stopped.");
+    const blockedRefreshes = router.refresh.mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(router.refresh.mock.calls.length).toBeGreaterThan(blockedRefreshes);
+    await render({ operationState: "stopped", observedGameState: "stopped", expectedUpdatedAt: "2026-10-02T16:00:03.000Z",
         runtimeInsight: { ...runtimeInsight, desiredState: "stopped", allowedActions: ["start"], failureCode: null, failureMessage: null, recommendedAction: null, recommendation: null } });
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(container.textContent).toContain("Server stopped.");

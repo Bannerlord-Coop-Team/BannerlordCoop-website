@@ -245,9 +245,10 @@ export async function readManagedServerStatusFingerprint(serverId: string): Prom
         const supabase = await getSupabaseServerClient();
         const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
         if (!user || !session) return { ok: false };
-        const [status, deletion] = await Promise.all([
+        const [status, deletion, summary] = await Promise.all([
             getMyServerBackupStatus(session.access_token, serverId),
             getMyServerDeletionStatus(session.access_token, serverId).catch(() => null),
+            getMyServerSummary(session.access_token, serverId),
         ]);
         const job = status.job;
         const deletionJob = deletion?.job;
@@ -256,6 +257,7 @@ export async function readManagedServerStatusFingerprint(serverId: string): Prom
             job?.jobId ?? null, job?.state ?? null, job?.progress ?? null,
             deletion?.updatedAt ?? null, deletion?.operationState ?? null,
             deletionJob?.jobId ?? null, deletionJob?.state ?? null, deletionJob?.progress ?? null,
+            summary.runtimeInsight?.desiredState ?? null, summary.runtimeInsight?.allowedActions ?? null,
         ]) };
     } catch {
         return { ok: false };

@@ -212,7 +212,7 @@ export function ManagedServerControls({
         const driftedStopped = operationState === "drifted" && runtimeInsight?.desiredState === "stopped";
         if ((operationState !== "stopped" && !driftedStopped) || observedGameState !== "stopped" || expectedUpdatedAt <= stopRevision) return;
         const timeout = setTimeout(() => {
-            if (driftedStopped) {
+            if (driftedStopped || (runtimeInsight && !runtimeInsight.allowedActions.includes("start"))) {
                 setMessage(t("controls.stoppedAwaitingServerCheck"));
                 return;
             }
@@ -221,7 +221,7 @@ export function ManagedServerControls({
             endPolling(serverId);
         }, 0);
         return () => clearTimeout(timeout);
-    }, [serverId, stopRevision, operationState, observedGameState, expectedUpdatedAt, runtimeInsight?.desiredState, isPending, endPolling, t]);
+    }, [serverId, stopRevision, operationState, observedGameState, expectedUpdatedAt, runtimeInsight, isPending, endPolling, t]);
 
     useEffect(() => {
         const current = restartRef.current;

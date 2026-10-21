@@ -187,6 +187,7 @@ function ManagedServerBackupsSession({
     const serverIsStopped = currentServer.operationState === "stopped"
         && currentServer.observedGameState === "stopped";
     const autosaveStopHint = currentServer.operationState === "drifted" && currentServer.observedGameState === "stopped"
+        && currentServer.runtimeInsight?.desiredState === "stopped"
         ? t("controls.stoppedAwaitingServerCheck") : t("autosaves.stopTheGameServerBeforeLoadingAnEarlierAutosave");
     const canManage = canManageServerBackups(server.accessRole);
     const statusIsStale = timedOutSession?.serverId === server.serverId

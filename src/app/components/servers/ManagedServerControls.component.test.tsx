@@ -11,13 +11,14 @@ import type { MyServerMove } from "@/app/lib/control-plane/types";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
 
 const { revealAddress } = vi.hoisted(() => ({ revealAddress: vi.fn() }));
+const { backupStatus, deletionStatus } = vi.hoisted(() => ({ backupStatus: vi.fn(), deletionStatus: vi.fn() }));
 vi.mock("./ServerManagementWorkspace", async original => ({
     ...await original<typeof import("./ServerManagementWorkspace")>(), useRevealServerAddress: () => revealAddress,
 }));
 
 const { request, requestUpdate, requestPassword, beginPolling, startStatus, summary, router, statusSlot } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn(), startStatus: vi.fn(), summary: vi.fn(), router: { refresh: vi.fn() }, statusSlot: { current: undefined as HTMLElement | null | undefined } }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerStartStatus: startStatus, getMyServerSummary: summary }));
+vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerStartStatus: startStatus, getMyServerSummary: summary, getMyServerDeletionStatus: deletionStatus }));
 afterEach(() => vi.useRealTimers());
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({
@@ -31,6 +32,7 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
     requestMyServerOperation: request,
     requestMyServerUpdate: requestUpdate,
     requestMyServerPassword: requestPassword,
+    getMyServerBackupStatus: backupStatus,
 }));
 vi.mock("@/app/servers/managed-server-move-actions", () => ({ readManagedServerMoveStatus: async () => ({ ok: false }) }));
 vi.mock("./ManagedServerPollingProvider", () => ({
@@ -39,6 +41,20 @@ vi.mock("./ManagedServerPollingProvider", () => ({
     useManagedServerSaves: () => null,
     useManagedServerStatusSlot: () => statusSlot.current,
 }));
+
+it("refreshes the polling fingerprint when lifecycle hints unlock without another server revision", async () => {
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    const status = { updatedAt: "2026-10-02T16:00:03.000Z", operationState: "stopped", observedGameState: "stopped", job: null };
+    backupStatus.mockResolvedValue(status);
+    deletionStatus.mockResolvedValue(null);
+    summary.mockResolvedValue({ ...status, runtimeInsight: { desiredState: "stopped", allowedActions: [] } });
+    const blocked = await serverActions.readManagedServerStatusFingerprint(serverId);
+    expect(blocked.ok).toBe(true);
+    summary.mockResolvedValue({ ...status, runtimeInsight: { desiredState: "stopped", allowedActions: ["start"] } });
+    const ready = await serverActions.readManagedServerStatusFingerprint(serverId);
+    expect(ready.ok).toBe(true);
+    expect(ready).not.toEqual(blocked);
+});
 
 it.each([
     [null, "Server started and game readiness confirmed"],
