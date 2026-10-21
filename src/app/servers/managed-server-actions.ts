@@ -51,9 +51,13 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         if (parsed.action === "update-now") {
             let expectedUpdatedAt = parsed.expectedUpdatedAt;
             if (parsed.expectedReleaseChannel !== undefined) {
-                const current = await getMyServerSummary(accessToken, parsed.serverId);
-                if (current === null || current.releaseChannel !== parsed.expectedReleaseChannel) {
-                    return { ok: false, refresh: true, message: t("server-release.theServerChangedRefreshBeforeSavingTheReleaseChannelAgain") };
+                let current;
+                try { current = await getMyServerSummary(accessToken, parsed.serverId); }
+                catch {
+                    return { ok: false, refresh: true, message: t("action.actions.yourServerSStatusChangedSoWeRefreshedItPress", { action: t("controls.updateNow") }) };
+                }
+                if (current.releaseChannel !== parsed.expectedReleaseChannel) {
+                    return { ok: false, refresh: true, message: t("action.actions.yourServerSStatusChangedSoWeRefreshedItPress", { action: t("controls.updateNow") }) };
                 }
                 expectedUpdatedAt = current.updatedAt;
             }
@@ -86,7 +90,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             return { ok: false, message: await startModLoadFailureMessage(accessToken, parsed.serverId, error, t) };
         }
         if (parsed.action === "start" && code === "crash_loop_cooldown" && error instanceof MyServersApiError) {
-            return { ok: false, message: error.message };
+            return { ok: false, refresh: true, message: error.message };
         }
         if (parsed.action === "start" && code === "game_crashed_during_load" && error instanceof MyServersApiError) {
             return { ok: false, refresh: true, message: error.message };

@@ -184,6 +184,17 @@ it("shows a terminal load crash and refreshes without submitting another Start",
     expect(request).toHaveBeenCalledOnce();
 });
 
+it("does not claim Update now was sent when its freshness read failed", async () => {
+    summary.mockReset().mockRejectedValue(new MyServersApiError("server_api_unavailable", "Unavailable"));
+    requestUpdate.mockClear();
+    const result = await serverActions.operateManagedServer({ serverId: "22222222-2222-4222-8222-222222222222",
+        action: "update-now", expectedUpdatedAt: "2026-09-20T12:00:00.000Z", expectedReleaseChannel: "stable" });
+    expect(result).toMatchObject({ ok: false, refresh: true });
+    expect(result.checkStatus).not.toBe(true);
+    expect(result.message).not.toContain("went through");
+    expect(requestUpdate).not.toHaveBeenCalled();
+});
+
 it("sets a private website password once and clears the input", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     requestPassword.mockReset().mockResolvedValue({ changed: true, restartQueued: false });
@@ -265,7 +276,7 @@ it.each(["failed", "retry-wait"] as const)("restores truthful %s progress after 
         attemptCount: 2, maximumAttempts: 5, nextRetryAt: state === "retry-wait" ? "2026-09-20T12:05:00.000Z" : null,
         stoppedRetrying: state === "failed", failureCode: state === "failed" ? "game_crashed_during_load" as const : null,
         recommendedAction: state === "failed" ? "review-backups" as const : null };
-    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: "2026-09-20T12:00:00.000Z", allowedActions: state === "failed" ? ["start"] : [],
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: "2026-09-20T12:00:00.000Z", allowedActions: state === "failed" ? ["stop"] : [],
         crashLoopDetected: false, failureCode: receipt.failureCode, recommendedAction: receipt.recommendedAction,
         failureMessage: state === "failed" ? "The game crashed while loading your campaign." : null,
         recommendation: state === "failed" ? "Review available backups before choosing recovery." : null, start: receipt };
@@ -280,11 +291,38 @@ it.each(["failed", "retry-wait"] as const)("restores truthful %s progress after 
             expect(container.textContent).not.toContain("Waiting to retry");
         } else expect(container.textContent).toContain("Next retry:");
         const buttons = [...container.querySelectorAll("button")];
-        expect(buttons.find(button => button.textContent?.startsWith("Start"))?.disabled).toBe(state !== "failed");
-        expect(buttons.find(button => button.textContent === "Stop")?.disabled).toBe(true);
+        expect(buttons.find(button => button.textContent?.startsWith("Start"))?.disabled).toBe(true);
+        expect(buttons.find(button => button.textContent === "Stop")?.disabled).toBe(state !== "failed");
         expect(buttons.find(button => button.textContent === "Restart")?.disabled).toBe(true);
         expect(request).not.toHaveBeenCalled();
         expect(startStatus).toHaveBeenCalledTimes(state === "failed" ? 0 : 1);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it.each(["admin", "support"] as const)("keeps %s controls read-only while showing the safe failure insight", async accessRole => {
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop"],
+        crashLoopDetected: false, failureCode: "game_crashed_during_load", recommendedAction: "review-backups",
+        failureMessage: "The game crashed while loading your campaign.", recommendation: "Review available backups.", start: null };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} accessRole={accessRole} observedGameState="failed" runtimeInsight={insight} /></TestLocalization>));
+        expect(container.textContent).toContain(insight.failureMessage);
+        expect(container.textContent).toContain("Read-only access");
+        expect([...container.querySelectorAll("button")].some(button => ["Start", "Stop", "Restart", "Update now"].includes(button.textContent ?? ""))).toBe(false);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("does not render a historical succeeded receipt or hide controls after a reload", async () => {
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop", "restart-game"],
+        crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null,
+        start: { action: "start", jobId: progressJobId, state: "succeeded", phase: "ready", progress: "Server started and ready to join.",
+            attemptCount: 1, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: false, failureCode: null, recommendedAction: null } };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} operationState="running" observedGameState="running" runtimeInsight={insight} /></TestLocalization>));
+        expect(container.textContent).not.toContain("Your server is ready to join");
+        expect(container.querySelector("ol")).toBeNull();
+        expect([...container.querySelectorAll("button")].find(button => button.textContent === "Stop")?.disabled).toBe(false);
     } finally { await act(async () => root.unmount()); }
 });
 
@@ -341,6 +379,25 @@ it.each(["failed", "cancelled"])("stops following a %s Start without claiming re
         await act(async () => vi.advanceTimersByTimeAsync(10_000));
         expect(startStatus).toHaveBeenCalledTimes(1);
         expect(request).toHaveBeenCalledTimes(1);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("clears local failed progress when a newer summary confirms recovery and clears the receipt", async () => {
+    vi.useFakeTimers();
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockResolvedValue({ ...progress("failed", "failed", "Automatic retries stopped."), failureCode: "game_crashed_during_load" });
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "stopped", observedAt: null, allowedActions: ["start"],
+        crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: null };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" runtimeInsight={insight} /></TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        expect(container.textContent).toContain("Server could not start");
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} expectedUpdatedAt="2026-10-02T16:01:00.000Z" operationState="running" observedGameState="running"
+            runtimeInsight={{ ...insight, desiredState: "running", allowedActions: ["stop", "restart-game"] }} /></TestLocalization>));
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+        expect(container.textContent).not.toContain("Server could not start");
+        expect(container.querySelector("ol")).toBeNull();
     } finally { await act(async () => root.unmount()); }
 });
 

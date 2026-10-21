@@ -117,6 +117,15 @@ it("renders managed pages from the requested registered server identity", async 
     expect(result.props.server.serverId).toBe(managedId);
 });
 
+it("keeps the controls identity stable as Start receipts appear and disappear", async () => {
+    for (const start of [null, { jobId: "55555555-5555-4555-8555-555555555555" }]) {
+        mocks.managedServers.mockResolvedValue({ ...managedSummary, runtimeInsight: { start } });
+        const commands = await findServerElement(await page(), "ManagedServerCommands");
+        const controls = await findServerElement(commands?.props.controls, "ManagedServerControls");
+        expect(controls?.key).toBe(`.$${managedId}`);
+    }
+});
+
 // Restores a remembered tab on the server so a reload does not flash the Console first.
 it.each<[string | string[], string | undefined]>([
     ["settings", "Settings"],
@@ -176,7 +185,7 @@ async function findServerElement(node: ReactNode, name: string): Promise<ReactEl
         if (!isValidElement<{ children?: ReactNode }>(child)) continue;
         if (typeof child.type === "function") {
             if (child.type.name === name) return child;
-            if (["ManagedServerManagementPage", "ManagedServerSections", "ManagedServerBackupsSection", "UnavailableFileWorkspaces"].includes(child.type.name)) {
+            if (["ManagedServerManagementPage", "ManagedServerSections", "ManagedServerBackupsSection", "UnavailableFileWorkspaces", "ManagedServerLifecycleSection"].includes(child.type.name)) {
                 const component = child.type as (props: unknown) => ReactNode | Promise<ReactNode>;
                 const found = await findServerElement(await component(child.props), name);
                 if (found) return found;
@@ -397,12 +406,12 @@ it("places managed password configuration in Settings rather than the Console wo
     expect(await findServerElement(consolePanel, "ManagedServerPassword")).toBeNull();
 });
 
-it("logs an unexpected single-server read failure and returns to discovery without managed controls", async () => {
+it("surfaces an unexpected single-server read failure instead of treating the server as missing", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
         const failure = new Error("Unavailable");
         mocks.managedServers.mockRejectedValueOnce(failure);
-        await expect(page()).rejects.toThrow("redirect:/servers");
+        await expect(page()).rejects.toThrow("Unavailable");
         expect(error).toHaveBeenCalledExactlyOnceWith("Managed server detail failed to load", failure);
     } finally { error.mockRestore(); }
     expect(mocks.backups).not.toHaveBeenCalled();

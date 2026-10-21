@@ -17,7 +17,7 @@ export type OwnerStartInsight = {
     recommendedAction: Recommendation | null;
 };
 export type OwnerRuntimeInsight = {
-    desiredState: string;
+    desiredState: "running" | "stopped" | "deleted";
     observedAt: string | null;
     allowedActions: ("start" | "stop" | "restart-game")[];
     crashLoopDetected: boolean | null;

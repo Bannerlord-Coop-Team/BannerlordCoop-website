@@ -375,7 +375,7 @@ export function ManagedServerConsole({ serverId, operationState = "running", obs
     };
     const loading = observedGameState === "starting" || (operationState === "starting" && observedGameState !== "running");
     if (loading) {
-        const explanation = `${t("console.serverStatusLoadingCampaign")} ${t("console.liveOutputIsnTAvailableRightNow")}`;
+        const explanation = `${t("console.serverStatusLoadingCampaign")} — ${t("console.liveOutputIsnTAvailableRightNow")}`;
         consoleStateMessages.connecting = explanation;
         consoleStateMessages.reconnecting = explanation;
         consoleStateMessages.unavailable = explanation;
