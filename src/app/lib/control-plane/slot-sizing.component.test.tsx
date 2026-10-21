@@ -231,6 +231,11 @@ it.each([
     ["a region key that is not text", withHost(grows, { regionKeys: [7] })],
     ["a VPS of 1 vCPU, which sizing refuses", withHost(unmeasured, { vCpu: 1 })],
     ["fractional slots", withHost(grows, { slots: 3.5 })],
+    // Each whole-number check on its own. Fractional servers to move need none: every reason pins them to a whole number.
+    ["fractional vCPUs", withHost(unmeasured, { vCpu: 2.5 })],
+    ["fractional servers", withHost(unmeasured, { occupants: 0.5 })],
+    ["fractional free slots under a floor", withHost(floored, { ...roomyFloor, freeRecommendedSlots: 0.5 })],
+    ["fractional memory per server", withHost(grows, { memoryBytesPerServer: BURST + 0.5 })],
     ["fewer slots than its floor", withHost(borrowed, { slots: 3 })],
     ["more slots than any VPS holds", withHost(biggest, { slots: 33 })],
     ["more servers than slots", withHost(grows, { occupants: 4, freeRecommendedSlots: 1 })],
@@ -471,7 +476,7 @@ it("explains each column as the control plane computes it", () => {
     expect(hints.recommended).toContain("the most, from floor(vCPU ÷ 2) to 32, at which the servers on it now plus typical new servers in the other slots keep both budgets (at most 1 core-hour a week of expected CPU shortage, and more online at once than its memory holds in under 1% of the week)");
     expect(hints.recommended).toContain("one observed for under 7 days counts with the typical week, and one without a measured need at 1.6 vCPU");
     expect(hints.recommended).toContain("Nothing applies it.");
-    expect(hints.reason).toContain("Floor: fewer than floor(vCPU ÷ 2) slots keep both budgets, but a VPS always keeps that many, so at least one budget breaks there");
+    expect(hints.reason).toContain("Floor: the most slots that keep both budgets, if any, is below floor(vCPU ÷ 2), but a VPS always keeps that many, so at least one budget breaks there");
     expect(hints.reason).toContain("Drain: its servers alone break a budget and are more than the floor");
     expect(hints.reason).toContain("down to the floor, where they may still break one");
     expect(hints.reason).toContain("Unmeasured: its usable cores or memory are neither measured nor borrowable");

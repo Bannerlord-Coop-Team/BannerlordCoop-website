@@ -654,8 +654,8 @@ export type HostingAdminFleetCapacity = {
 
 /**
  * Why a VPS's recommended slot count is what it is: `cpu` and `memory`, one more slot would break that budget;
- * `floor`, fewer than floor(vCPU / 2) slots keep both budgets, but a VPS always keeps that many, so a budget breaks at
- * the floor; `maximum`, the most slots any VPS holds keep both budgets; `drain`, its servers alone break a budget and
+ * `floor`, the most slots that keep both budgets, if any, is below floor(vCPU / 2), but a VPS always keeps that many,
+ * so a budget breaks at the floor; `maximum`, the most slots any VPS holds keep both budgets; `drain`, its servers alone break a budget and
  * are more than the floor, so the recommendation is below them; `unmeasured`, its usable cores or memory are neither
  * measured nor borrowable, so there is none.
  */

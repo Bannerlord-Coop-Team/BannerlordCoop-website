@@ -1160,8 +1160,8 @@ control plane returned an unexpected slot sizing."
     says:
     - **CPU budget** or **Memory budget**: one more slot would break that
       budget.
-    - **Floor**: fewer than floor(vCPU ÷ 2) slots keep both budgets, but a VPS
-      keeps that many, so a budget breaks at the floor. The budgets named are
+    - **Floor**: the most slots that keep both budgets, if any, is below
+      floor(vCPU ÷ 2), but a VPS keeps that many, so a budget breaks at the floor. The budgets named are
       those whose flag is false. When its servers fill the floor, they break it
       themselves: "Its 2 servers already break the CPU and memory budgets. A VPS
       keeps its floor of 2 slots (floor(vCPU ÷ 2)), and this one has no more

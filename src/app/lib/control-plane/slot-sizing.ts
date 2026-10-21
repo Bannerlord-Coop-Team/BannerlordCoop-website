@@ -129,7 +129,8 @@ function fitsFlag(within: boolean, figure: number, budget: number, rounding: num
  * - `cpu`, `memory` and `maximum` keep both budgets, `maximum` at `maximumSlots` and the other two below it, and their
  *   free slots are the recommendation less the servers;
  * - `floor` recommends floor(vCPU ÷ 2), at least its servers, with free slots no more than the floor leaves, and breaks
- *   at least one budget there: fewer slots keep both, and adding servers never lowers a figure;
+ *   at least one budget there: a count no larger than the floor (its servers, or one more than the most that keep both)
+ *   already breaks one, and adding servers never lowers a figure;
  * - `drain` moves at least one server and keeps the rest, which is the recommendation, has no free slots, and keeps
  *   both budgets unless it stopped at the floor;
  * - only `drain` moves servers.
@@ -299,7 +300,8 @@ function floorOf(vCpu: number) {
 }
 
 /**
- * Why `floor`: fewer slots keep both budgets, so at the floor at least one breaks. With as many servers as the floor,
+ * Why `floor`: the most slots that keep both budgets, if any, is below the floor, so at the floor at least one breaks.
+ * With as many servers as the floor,
  * they break it themselves and nothing moves; with fewer, they take `freeRecommendedSlots` typical servers within the
  * budgets, and the floor filled with typical servers breaks the budgets its flags name.
  */
@@ -423,7 +425,7 @@ export function slotSizingHints(sizingModel: Model) {
         slots: "Slots now: the VPS's stored slot capacity, floor(vCPU ÷ 2) when it is registered and more once an administrator raises it. A slot reserves no cores.",
         servers: "Servers in its slots now.",
         recommended: `Recommended slots: the most, from floor(vCPU ÷ 2) to ${sizingModel.maximumSlots}, at which the servers on it now plus typical new servers in the other slots keep both budgets (at most ${budget} a week of expected CPU shortage, and more online at once than its memory holds in under ${share} of the week). Each server counts with its own week of online hours and the CPU it is planned to need on this VPS; one observed for under ${sizingModel.minimumObservedDays} days counts with the typical week, and one without a measured need at ${sizingModel.cpuBurstVcpu} vCPU. Servers rarely online together can share a VPS, so this can be above the servers it fits at once. The difference is against its slots now. Nothing applies it.`,
-        reason: `Why the recommendation is what it is. CPU budget or Memory budget: one more slot would break that budget. Floor: fewer than floor(vCPU ÷ 2) slots keep both budgets, but a VPS always keeps that many, so at least one budget breaks there; either its servers, as many as the floor, break it themselves and nothing moves, or fewer servers leave room for the free recommended slots within the budgets and the floor filled with typical servers breaks it. Maximum: ${sizingModel.maximumSlots} slots, the most a VPS holds, keep both budgets. Drain: its servers alone break a budget and are more than the floor, so the recommendation is below them and some would move, until those that stay keep both budgets or down to the floor, where they may still break one. Unmeasured: its usable cores or memory are neither measured nor borrowable, so there is no recommendation.`,
+        reason: `Why the recommendation is what it is. CPU budget or Memory budget: one more slot would break that budget. Floor: the most slots that keep both budgets, if any, is below floor(vCPU ÷ 2), but a VPS always keeps that many, so at least one budget breaks there; either its servers, as many as the floor, break it themselves and nothing moves, or fewer servers leave room for the free recommended slots within the budgets and the floor filled with typical servers breaks it. Maximum: ${sizingModel.maximumSlots} slots, the most a VPS holds, keep both budgets. Drain: its servers alone break a budget and are more than the floor, so the recommendation is below them and some would move, until those that stay keep both budgets or down to the floor, where they may still break one. Unmeasured: its usable cores or memory are neither measured nor borrowable, so there is no recommendation.`,
         shortage: `Expected CPU shortage at the recommendation, in core-hours a week: the cores that the servers online together are expected to want beyond its usable cores, summed over the week's half-hours, for the servers that stay plus typical servers up to the recommendation. The budget is ${budget}. Over budget marks where the control plane says the exact figure breaks it, which the rounded figure cannot show at the edge; only Drain and Floor can be.`,
         overflow: `Memory over: the expected share of the week in which more of those servers are online at once than floor(usable memory ÷ memory per server). The budget is under ${share}. Over budget marks where the control plane says the exact share reaches it, which the rounded figure cannot show at the edge; only Drain and Floor can be.`,
         toMove: "Servers that would move off it: with Drain, its servers beyond the recommendation, dropped one at a time by whichever leaves the broken budget lowest; 0 otherwise. Nothing moves them.",
