@@ -49,7 +49,9 @@ export function isOwnerStartInsight(value: unknown): value is OwnerStartInsight 
         && (value.nextRetryAt === null || timestamp(value.nextRetryAt))
         && (value.state === "retry-wait") === (value.nextRetryAt !== null)
         && value.stoppedRetrying === ["failed", "cancelled"].includes(value.state as string)
-        && (value.phase === "ready") === (value.state === "succeeded")
+        && (value.state === "running" ? ["preparing", "starting", "verifying"].includes(value.phase as string)
+            : value.phase === (value.state === "succeeded" ? "ready" : value.state))
+        && (value.failureCode !== null) === (value.state === "failed")
         && failure(value.failureCode) && recommendation(value.recommendedAction);
 }
 
@@ -62,6 +64,8 @@ export function isOwnerRuntimeInsight(value: unknown): value is OwnerRuntimeInsi
         && new Set(value.allowedActions).size === value.allowedActions.length
         && value.allowedActions.every(action => ["start", "stop", "restart-game"].includes(action))
         && !(value.allowedActions.includes("start") && (value.allowedActions.includes("stop") || value.allowedActions.includes("restart-game")))
+        && !(value.crashLoopDetected === true && value.allowedActions.includes("start"))
+        && !(value.desiredState === "deleted" && value.allowedActions.length > 0)
         && (value.crashLoopDetected === null || typeof value.crashLoopDetected === "boolean")
         && failure(value.failureCode) && recommendation(value.recommendedAction)
         && (value.failureMessage === null || text(value.failureMessage))

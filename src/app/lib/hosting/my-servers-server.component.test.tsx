@@ -312,7 +312,9 @@ it.each(["server-summary", "server-start-status"])("falls back only after an old
 
 it.each([{ ...runtimeInsight, allowedActions: ["start", "stop"] }, { ...runtimeInsight, privatePath: "extra" },
     { ...runtimeInsight, desiredState: "suspended" }, { ...runtimeInsight, start: { ...failedStartInsight, nextRetryAt: server.updatedAt } },
-    { ...runtimeInsight, start: { ...failedStartInsight, attemptCount: 6 } }])("rejects malformed runtime insight without legacy fallback: %j", async runtimeInsight => {
+    { ...runtimeInsight, start: { ...failedStartInsight, attemptCount: 6 } },
+    { ...runtimeInsight, start: { ...failedStartInsight, phase: "preparing" } },
+    { ...runtimeInsight, crashLoopDetected: true }, { ...runtimeInsight, desiredState: "deleted" }])("rejects malformed runtime insight without legacy fallback: %j", async runtimeInsight => {
     const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, runtimeInsight }));
     vi.stubGlobal("fetch", fetch);
     await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
