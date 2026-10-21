@@ -389,10 +389,11 @@ it("keeps a locally followed failed receipt after its matching summary and a ref
     } finally { await act(async () => root.unmount()); vi.restoreAllMocks(); }
 });
 
-it("keeps a locally verified fast Start when its succeeded receipt arrives", async () => {
+it.each(["succeeded", "running"] as const)("reveals once when a fast Start's %s receipt arrives and clears stale ready state", async state => {
     vi.useFakeTimers();
     revealAddress.mockClear();
     request.mockReset().mockResolvedValue({ exitCode: 0 });
+    startStatus.mockReset().mockResolvedValue(progress("ready", "succeeded", "Ready."));
     const container = document.createElement("div"); const root = createRoot(container);
     try {
         await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" /></TestLocalization>));
@@ -401,7 +402,7 @@ it("keeps a locally verified fast Start when its succeeded receipt arrives", asy
         expect(revealAddress).toHaveBeenCalledTimes(1);
         const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop", "restart-game"],
             crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: {
-                action: "start", jobId: progressJobId, state: "succeeded", phase: "ready", progress: "Ready.",
+                action: "start", jobId: progressJobId, state, phase: state === "succeeded" ? "ready" : "verifying", progress: "Ready.",
                 attemptCount: 1, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: false, failureCode: null, recommendedAction: null,
             } };
         await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} operationState="running" observedGameState="running" runtimeInsight={insight} /></TestLocalization>));
@@ -409,6 +410,13 @@ it("keeps a locally verified fast Start when its succeeded receipt arrives", asy
         expect(container.textContent).toContain("Your server is ready to join");
         // A later receipt must respect the owner hiding the address after the first reveal.
         expect(revealAddress).toHaveBeenCalledTimes(1);
+        const failed: OwnerRuntimeInsight = { ...insight, start: null, failureCode: "game_crashed_during_load", recommendedAction: "review-backups",
+            failureMessage: "The campaign failed.", recommendation: "Review recovery.", allowedActions: ["stop"] };
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} expectedUpdatedAt="2026-09-20T12:01:00.000Z"
+            operationState="failed" observedGameState="failed" runtimeInsight={failed} /></TestLocalization>));
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+        expect(container.textContent).not.toContain("Your server is ready to join");
+        expect(container.textContent).toContain("The campaign failed.");
     } finally { await act(async () => root.unmount()); }
 });
 

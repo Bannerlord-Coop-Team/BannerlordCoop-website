@@ -138,6 +138,8 @@ export function ManagedServerControls({
     const [startStatus, setStartStatus] = useState<StartProgressStatus | null>(null);
     const [locallyRequested, setLocallyRequested] = useState(false);
     const receiptId = runtimeInsight?.start?.jobId ?? null;
+    const [startProgressIdentity, setStartProgressIdentity] = useState(receiptId ?? "initial");
+    const localStartSequence = useRef(0);
     const seenReceipt = useRef(receiptId);
     const [progressPaused, setProgressPaused] = useState(false);
     const [pollRun, setPollRun] = useState(0);
@@ -175,6 +177,7 @@ export function ManagedServerControls({
         }
         const timeout = setTimeout(() => {
             seenReceipt.current = receiptId;
+            if (!locallyRequested) setStartProgressIdentity(receiptId);
             setStartStatus(null);
             setProgressPaused(false);
             setLocallyRequested(false);
@@ -184,12 +187,15 @@ export function ManagedServerControls({
     }, [receiptId, isPending, trackingStop, trackingRestart, verifyRevision, startJobId, runtimeInsight?.start, canOperate, locallyRequested, startStatus?.state]);
 
     useEffect(() => {
-        if (!runtimeInsight || runtimeInsight.start !== null || runtimeInsight.failureCode !== null
-            || expectedUpdatedAt <= startRevision || !["failed", "cancelled"].includes(startStatus?.state ?? "")
+        if (!runtimeInsight || runtimeInsight.start !== null
+            || expectedUpdatedAt <= startRevision
             || isPending || trackingStop || trackingRestart || verifyRevision !== null) return;
+        const clearedFailure = ["failed", "cancelled"].includes(startStatus?.state ?? "") && runtimeInsight.failureCode === null;
+        const supersededSuccess = startStatus?.state === "succeeded" && (observedGameState !== "running" || runtimeInsight.failureCode !== null);
+        if (!clearedFailure && !supersededSuccess) return;
         const timeout = setTimeout(() => { setStartStatus(null); setStartJobId(null); setLocallyRequested(false); }, 0);
         return () => clearTimeout(timeout);
-    }, [runtimeInsight, expectedUpdatedAt, startRevision, startStatus?.state, isPending, trackingStop, trackingRestart, verifyRevision]);
+    }, [runtimeInsight, observedGameState, expectedUpdatedAt, startRevision, startStatus?.state, isPending, trackingStop, trackingRestart, verifyRevision]);
 
     useEffect(() => {
         const scheduled = timers.current;
@@ -397,6 +403,7 @@ export function ManagedServerControls({
                 : operation === "update-now" ? t("controls.sendingYourUpdateRequest") : "");
         setStartRevision(expectedUpdatedAt);
         setLocallyRequested(operation === "start");
+        if (operation === "start") setStartProgressIdentity(`local-${++localStartSequence.current}`);
         setStartJobId(null);
         setStartStatus(null);
         setProgressPaused(false);
@@ -451,7 +458,7 @@ export function ManagedServerControls({
     const showStart = pendingOperation === "start" || startJobId !== null || displayedStartStatus !== null;
     const statusArea = showStart || restart !== null || progressPaused || stopCheckPaused || message ? (
         <div className="flex w-full flex-col items-start gap-2">
-            {showStart && <StartProgress key={`${serverId}:${startJobId ?? (locallyRequested ? startRevision : receiptId ?? startRevision)}`} status={displayedStartStatus} paused={progressPaused} />}
+            {showStart && <StartProgress key={`${serverId}:${startProgressIdentity}`} status={displayedStartStatus} paused={progressPaused} />}
             {restart !== null && <RestartProgressCard progress={restart} />}
             {progressPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted">
                 <p>{t("controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed")}</p>
