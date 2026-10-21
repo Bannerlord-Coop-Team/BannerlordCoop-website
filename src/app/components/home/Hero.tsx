@@ -1,7 +1,9 @@
 import { getTranslations } from "@/app/lib/localization/server";
 import Image from "next/image";
-import { ChessKnight } from "lucide-react";
+import Link from "next/link";
+import { Server } from "lucide-react";
 import { HeroTrailer } from "@/app/components/home/HeroTrailer";
+import { DownloadModal } from "@/app/components/home/modulesection/DownloadModal";
 
 // Renders localized Hero presentation while preserving source values.
 export async function Hero() {
@@ -41,23 +43,26 @@ export async function Hero() {
                             ))}
                         </h1>
 
-                        <p className="mt-6 max-w-2xl font-sans text-sm leading-6 text-foreground-muted sm:mt-8 sm:text-lg sm:leading-8">
-                            {t("hero.description")}
-                        </p>
-
-                        <div className="mt-8 flex flex-col items-start gap-3 sm:mt-10 sm:flex-row sm:flex-wrap sm:justify-start sm:gap-4">
-                            <a
-                                href="#download"
-                                className="inline-flex gap-2 min-h-12 items-center justify-center rounded-sm border border-crimson/40 bg-crimson/40 px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors duration-300 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
+                        <div className="mt-8 flex flex-wrap items-stretch gap-3 sm:mt-10 sm:gap-4">
+                            <DownloadModal trigger="hero" detail={t("download.platforms")} />
+                            <Link
+                                href="/servers"
+                                prefetch={false}
+                                className="inline-flex gap-3 min-h-14 items-center rounded-sm border border-gold/55 bg-gold/10 px-6 py-2 text-left font-label text-sm font-semibold uppercase tracking-[0.14em] text-gold transition-colors duration-300 hover:border-gold hover:bg-gold/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-7 sm:tracking-[0.16em]"
                             >
-                                <ChessKnight aria-hidden="true" className="size-4.5 text-foreground" strokeWidth={3}/>
-                                {t("hero.download")}
-                            </a>
+                                <Server aria-hidden="true" className="size-4.5 shrink-0" strokeWidth={1.75}/>
+                                <span className="flex flex-col leading-tight">
+                                    {t("hero.rentServer")}
+                                    <span className="mt-0.5 font-sans text-xs font-normal normal-case tracking-normal text-foreground-muted">{t("hero.rentServerDetail")}</span>
+                                </span>
+                            </Link>
                             <a
                                 href="https://discord.gg/bannerlordcoop"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex group gap-2 min-h-12 items-center justify-center rounded-sm border border-white/20 bg-background/70 px-6 py-3 font-label text-sm font-semibold uppercase tracking-[0.14em] text-foreground transition-colors duration-300 hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-7 sm:py-3.5 sm:tracking-[0.16em]"
+                                aria-label={t("hero.discord")}
+                                title={t("hero.discord")}
+                                className="inline-flex group min-h-14 w-14 shrink-0 items-center justify-center rounded-sm border border-white/20 bg-background/70 transition-colors duration-300 hover:border-gold/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                             >
                                     <span
                                         aria-hidden="true"
@@ -73,8 +78,6 @@ export async function Hero() {
                                             maskSize: "contain",
                                         }}
                                     />
-
-                                <span>{t("hero.discord")}</span>
                             </a>
                         </div>
                     </div>

@@ -5,7 +5,7 @@ test.describe("homepage display", () => {
         await page.goto("/");
 
         await expect(page).toHaveTitle(/Bannerlord Coop/);
-        await expect(page.getByRole("heading", {level: 1, name: /Rally The Warband Raise The Banner Conquer Calradia/i,}),).toBeVisible();
+        await expect(page.getByRole("heading", {level: 1, name: /Forge Alliances Wage War Shared Calradia/i,}),).toBeVisible();
 
         await expect(page.getByRole("banner")).toBeVisible();
         await expect(page.getByRole("main")).toBeVisible();
@@ -29,11 +29,14 @@ test.describe("homepage display", () => {
     test("provides working homepage calls to action", async ({ page }) => {
         await page.goto("/");
 
-        const downloadLink = page.getByRole("link", {name: "Ride To Conquest",});
+        const hero = page.getByRole("region", {name: /Forge Alliances/,});
 
-        await expect(downloadLink).toHaveAttribute("href", "#download");
-        await downloadLink.click();
-        await expect(page.locator("#download")).toBeInViewport();
+        await hero.getByRole("button", {name: /Download/,}).click();
+        await expect(page.getByRole("dialog", {name: "Choose A Platform",})).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(page.getByRole("dialog")).toHaveCount(0);
+
+        await expect(page.getByRole("link", {name: "Rent a Server",})).toHaveAttribute("href", "/servers");
 
         const discordLink = page.getByRole("link", {name: "Join the Discord",});
 

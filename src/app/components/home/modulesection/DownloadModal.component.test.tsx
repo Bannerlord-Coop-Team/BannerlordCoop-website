@@ -15,7 +15,7 @@ it("uses only common messages outside home and preserves download links and dial
         const trigger = container.querySelector("button")!;
         expect(trigger.textContent).toContain("Download");
         await act(async () => trigger.click());
-        const dialog = container.querySelector('[role="dialog"]')!;
+        const dialog = document.querySelector('[role="dialog"]')!;
         expect(dialog.textContent).toContain(common["download.description"]);
         expect(dialog.textContent).toContain(common["download.installer.description"]);
         expect([...dialog.querySelectorAll("a")].map((link) => link.href)).toEqual([
@@ -28,7 +28,7 @@ it("uses only common messages outside home and preserves download links and dial
         expect(close.getAttribute("aria-label")).toBe(common["download.close"]);
         expect(document.activeElement).toBe(close);
         await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
-        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(document.activeElement).toBe(trigger);
     } finally { await act(async () => root.unmount()); container.remove(); }
 });

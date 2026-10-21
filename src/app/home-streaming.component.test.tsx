@@ -42,9 +42,9 @@ describe("homepage statistics streaming", () => {
             expect(html).toContain("<header");
             expect(html).toContain('aria-label="Primary navigation"');
             expect(html).toContain('id="hero-heading"');
-            expect(html).toContain("Rally The Warband");
-            expect(html).toContain('href="#download"');
-            expect(html).toContain("Ride To Conquest");
+            expect(html).toContain("Forge Alliances");
+            expect(html).toContain('aria-haspopup="dialog"');
+            expect(html).toContain("Rent a Server");
             expect(html).toContain('aria-busy="true"');
             expect(html).not.toContain("12,345");
             expect(output.readableEnded).toBe(false);
