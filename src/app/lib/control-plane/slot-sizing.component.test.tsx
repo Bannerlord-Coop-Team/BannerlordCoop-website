@@ -234,10 +234,6 @@ it("accepts what the control plane can send that looks unusual", () => {
     // A VPS with one side unknown is unmeasured, keeping the other and its source.
     expect(parseSlotSizing(withHost(unmeasured, { usableCores: 1.5, coresSource: "measured" }))).not.toBeNull();
     expect(parseSlotSizing(withHost(unmeasured, { usableMemoryBytes: GIB, memorySource: "provider-vcpu" }))).not.toBeNull();
-    // Memory per server at the static rule's 3 GiB, as a control plane that caps it plans a higher peak, and above it, as
-    // one from before the cap does.
-    expect(parseSlotSizing(withHost(grows, { memoryBytesPerServer: 3 * GIB }))).not.toBeNull();
-    expect(parseSlotSizing(withHost(grows, { memoryBytesPerServer: 3.25 * GIB }))).not.toBeNull();
 });
 
 it("keeps a flag whose figure, as rounded, crosses an uneven budget by less than half its last decimal", () => {
@@ -566,8 +562,37 @@ it("explains each column as the control plane computes it", () => {
     expect(hints.free).toContain("0 for Drain and Unmeasured");
     expect(hints.capacity).toContain("borrowed (provider and vCPU), the median of the measured VPSs of its provider and vCPU count");
     expect(hints.capacity).toContain("unknown, nothing to measure or borrow, which leaves the VPS Unmeasured. Each is borrowed on its own.");
-    expect(hints.capacity).toContain("2.5 GiB of memory on it, or its servers' measured peak where higher, capped at 3 GiB once the control plane applies the static rule.");
+    expect(hints.capacity).toContain("2.5 GiB of memory on it, or its servers' measured peak where higher");
     expect(hints.shortfall).toContain("the read does not say how many");
     // No hint names a raw provider id.
     for (const hint of Object.values(hints)) expect(hint).not.toMatch(/ovhcloud-vps|contabo-vps|hosthatch-vps/u);
+});
+
+// A control plane that fits on typical demand (#550) adds the typical new server's CPU to the model, and nothing else.
+const typicalFleet: HostingAdminSlotSizing = { ...fleet, model: { ...fleet.model, typicalServerCpuCores: 1.6 } };
+
+it("accepts the typical new server's CPU from a control plane that fits on typical demand, and describes the server with it", () => {
+    expect(parseSlotSizing(typicalFleet)).toBe(typicalFleet);
+    expect(parseSlotSizing(withModel({ typicalServerCpuCores: 1.8 }))).not.toBeNull();
+    const typicalModel = parseSlotSizing(typicalFleet)!.model;
+    expect(slotSizingTypicalServer(typicalModel)).toBe("A typical new server needs 1.600 cores and 2.5 GiB while online: what servers usually need, the 1.6 vCPU target or the fleet's p95 CPU where higher, at most 2 vCPU (the target before the fleet has data). It is online 41.37 hours a week, the mean of servers' weeks over the last 28 days (14-day half-life). A server observed for under 7 days counts with that typical week.");
+    const hints = slotSizingHints(typicalModel);
+    expect(hints.recommended).toContain("one observed for under 7 days counts with the typical week, and one without a measured need at the typical 1.600 cores.");
+    expect(hints.capacity).toContain("Each online server is planned to need 2.5 GiB of memory on it, or its servers' measured peak where higher, at most 3 GiB.");
+    // The current control plane's copy is as it was.
+    const current = slotSizingHints(parseSlotSizing(fleet)!.model);
+    expect(current.recommended).toContain("and one without a measured need at 1.6 vCPU.");
+    expect(current.capacity).toContain("or its servers' measured peak where higher.");
+    expect(slotSizingTypicalServer(parseSlotSizing(fleet)!.model)).toMatch(/^A typical new server needs 1\.6 vCPU and 2\.5 GiB while online/u);
+});
+
+it.each([
+    ["zero", { typicalServerCpuCores: 0 }],
+    ["negative", { typicalServerCpuCores: -1.6 }],
+    ["given as text", { typicalServerCpuCores: "1.6" }],
+    ["null", { typicalServerCpuCores: null }],
+    ["above 256 vCPU", { typicalServerCpuCores: 257 }],
+    ["beside another new key", { typicalServerCpuCores: 1.6, typicalServerMemoryBytes: BURST }],
+])("rejects a typical new server's CPU %s", (_case, change) => {
+    expect(parseSlotSizing(withModel(change))).toBeNull();
 });

@@ -9,8 +9,9 @@ import {
     OVERLAP_COVERAGE_HINT,
     OVERLAP_PAIR_HOURS_HINT,
     overlapBand,
+    overlapAtOnceLabel,
     overlapBurstLabel,
-    overlapBurstRow,
+    overlapOverRow,
     overlapCellLabel,
     overlapCoverageLabel,
     overlapDayAxisLabel,
@@ -18,6 +19,7 @@ import {
     overlapGroups,
     overlapPairHoursLabel,
     overlapPredatesBurst,
+    overlapReportsAtOnce,
     overlapSummary,
     overlapWindowLabel,
     parsePlacementOverlap,
@@ -94,6 +96,8 @@ export function PlacementMeasuredOverlap() {
     const groups = overlap === null ? [] : overlapGroups(overlap.hosts);
     // An older control plane's read has no red hours, so neither its legend nor its rows mention them.
     const predatesBurst = overlap !== null && overlapPredatesBurst(overlap);
+    // Once the control plane reports at-once capacity, red hours are over it and burst capacity is information.
+    const atOnce = overlap !== null && overlapReportsAtOnce(overlap);
     return (
         <section aria-label="Host overlap" className="border border-white/10 bg-surface p-5">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -115,7 +119,7 @@ export function PlacementMeasuredOverlap() {
                 </p>
             )}
             {overlap !== null && <>
-                <OverlapLegend burst={!predatesBurst} />
+                <OverlapLegend red={predatesBurst ? null : atOnce ? "at-once" : "burst"} />
                 {predatesBurst && <p className="mt-2 text-[0.65rem] text-foreground-muted">This control plane predates burst capacity; red hours appear after it updates.</p>}
                 <div className="mt-4 overflow-x-auto border border-white/10">
                     {groups.length === 0
@@ -136,7 +140,7 @@ export function PlacementMeasuredOverlap() {
     );
 }
 
-function OverlapLegend({ burst }: { burst: boolean }) {
+function OverlapLegend({ red }: { red: "at-once" | "burst" | null }) {
     return (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[0.65rem] text-foreground-muted">
             <span>One cell per UTC hour, oldest first. Online:</span>
@@ -145,9 +149,11 @@ function OverlapLegend({ burst }: { burst: boolean }) {
             <span>all slots</span>
             <span aria-hidden="true" className="ml-2 size-2.5 border border-white/10" style={NO_DATA} />
             <span>No data</span>
-            {burst && <>
+            {red !== null && <>
                 <span aria-hidden="true" className="ml-2 h-1 w-4 bg-crimson" />
-                <span>Red: more servers online than can each burst to 1.6 vCPU and 2.5 GiB</span>
+                <span>{red === "at-once"
+                    ? "Red: more servers online than the VPS can run at once at what they usually need"
+                    : "Red: more servers online than can each burst to 1.6 vCPU and 2.5 GiB"}</span>
             </>}
         </div>
     );
@@ -171,7 +177,8 @@ function DayAxis({ windowStartedAt }: { windowStartedAt: string }) {
 }
 
 function OverlapRow({ host, windowStartedAt }: { host: HostingPlacementOverlapHost; windowStartedAt: string }) {
-    // Null for a control plane that predates burst capacity.
+    // Null for a control plane that predates at-once or burst capacity; with at once, burst capacity is information.
+    const atOnce = overlapAtOnceLabel(host);
     const burst = overlapBurstLabel(host);
     return (
         <li className={`${ROW_GRID} py-3`}>
@@ -182,7 +189,8 @@ function OverlapRow({ host, windowStartedAt }: { host: HostingPlacementOverlapHo
             </div>
             <OverlapStrip host={host} windowStartedAt={windowStartedAt} />
             <div className="space-y-1 text-right font-mono text-xs">
-                {burst !== null && <p className="text-foreground">{burst}</p>}
+                {atOnce !== null && <p className="text-foreground">{atOnce}</p>}
+                {burst !== null && <p className={atOnce === null ? "text-foreground" : "text-foreground-muted"}>{burst}</p>}
                 <p className="text-foreground-muted"><MetricHint label={overlapPairHoursLabel(host)} hint={OVERLAP_PAIR_HOURS_HINT} /></p>
                 <p className="text-foreground-muted"><MetricHint label={overlapCoverageLabel(host)} hint={OVERLAP_COVERAGE_HINT} /></p>
             </div>
@@ -191,12 +199,13 @@ function OverlapRow({ host, windowStartedAt }: { host: HostingPlacementOverlapHo
 }
 
 /**
- * The week's hours shaded by online servers over slots. A VPS with more servers than can each burst at once adds
- * a row marking the hours more of them were online than that; no other VPS can have one.
+ * The week's hours shaded by online servers over slots. A VPS with more servers than it can run at once (or, before the
+ * control plane reports that, than can each burst at once) adds a row marking the hours more of them were online than
+ * that; no other VPS can have one.
  */
 function OverlapStrip({ host, windowStartedAt }: { host: HostingPlacementOverlapHost; windowStartedAt: string }) {
     const days = overlapDays(windowStartedAt);
-    const overBurst = overlapBurstRow(host);
+    const overBurst = overlapOverRow(host);
     return (
         <div role="img" aria-label={overlapSummary(host, windowStartedAt)} className="flex flex-col gap-0.5">
             <div className="flex gap-0.5">{days.map((day) => (

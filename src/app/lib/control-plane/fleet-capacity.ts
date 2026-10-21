@@ -5,6 +5,7 @@ import { shortServiceName } from "./placement-live-moves";
 import { vpsProviderLabel } from "./vps-providers";
 import type {
     HostingAdminFleetCapacity,
+    HostingFleetCapacityConcurrentSource,
     HostingFleetCapacityCpuCores,
     HostingFleetCapacityDemand,
     HostingFleetCapacityDemandSource,
@@ -12,6 +13,8 @@ import type {
     HostingFleetCapacityInstanceType,
     HostingFleetCapacityMemoryBytes,
     HostingFleetCapacityProviderId,
+    HostingFleetCapacityStat,
+    HostingFleetCapacityVerdict,
 } from "./types";
 
 /** The measured window: one week of hours. */
@@ -65,6 +68,21 @@ const HOST_KEYS = [
     "limitedBy", "samples", "stealHourly", "busyHourly",
 ];
 const PERCENTILE_MEMORY_HOST_KEYS = HOST_KEYS.filter((key) => key !== "peakMemoryBytes");
+/**
+ * A control plane that fits on typical demand (#550) adds these keys, and only these, to the model, every measure,
+ * each instance type and each VPS. The read accepts its shape or an earlier one, the whole read in one, so the website
+ * can deploy first and the control plane roll back.
+ */
+const TYPICAL_MODEL_KEYS = [...MODEL_KEYS, "cpuTypicalPercentile", "stealPercentile", "stealFloorThresholdPercent", "concurrentBusyFraction", "concurrentHourShare"];
+const STAT_KEYS = ["samples", "mean", "p95", "max"];
+const TYPICAL_STAT_KEYS = ["samples", "mean", "p50", "p95", "max"];
+const TYPICAL_INSTANCE_TYPE_KEYS = [...INSTANCE_TYPE_KEYS, "effectiveVcpu", "typicalCpuCores", "burstServers", "verdict"];
+const TYPICAL_HOST_KEYS = [
+    ...HOST_KEYS, "effectiveVcpu", "typicalCpuCores", "burstCpuCores", "burstServers", "concurrentServers", "concurrentSource",
+    "concurrentCoverage", "verdict",
+];
+const VERDICT_KEYS = ["kind", "servers"];
+const CONCURRENT_SOURCES: readonly HostingFleetCapacityConcurrentSource[] = ["measured", "worst-case-occupants", "slots"];
 // "Mon 12 Oct", as the strips' day labels and hour titles read the window's real dates.
 const DAY_FORMAT = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 const DATE_FORMAT = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
@@ -125,15 +143,19 @@ function demand(value: unknown) {
         && nullable(value.throttledShare, share) && nullable(value.cpuPressureShare, share);
 }
 
-/** A week's measure: its mean and p95 no more than its max, each from 0 to `maximum`. */
-function stat(maximum: number) {
-    return (value: unknown) => isRecord(value) && hasExactKeys(value, ["samples", "mean", "p95", "max"])
+/**
+ * A week's measure: its mean and p95 no more than its max, each from 0 to `maximum`; in the `typical` shape its p50
+ * too, no more than its p95.
+ */
+function stat(maximum: number, typical: boolean) {
+    return (value: unknown) => isRecord(value) && hasExactKeys(value, typical ? TYPICAL_STAT_KEYS : STAT_KEYS)
         && count(value.samples) && amount(value.mean, maximum) && amount(value.p95, maximum) && amount(value.max, maximum)
-        && ordered([value.mean as number, value.max as number]) && ordered([value.p95 as number, value.max as number]);
+        && ordered([value.mean as number, value.max as number]) && ordered([value.p95 as number, value.max as number])
+        && (!typical || (amount(value.p50, maximum) && ordered([value.p50 as number, value.p95 as number])));
 }
 
-const percentStat = stat(100);
-const coresStat = stat(Number.MAX_SAFE_INTEGER);
+const percentStat = (typical: boolean) => stat(100, typical);
+const coresStat = (typical: boolean) => stat(Number.MAX_SAFE_INTEGER, typical);
 
 function providerId(value: unknown) {
     return (FLEET_CAPACITY_PROVIDERS as readonly unknown[]).includes(value);
@@ -156,30 +178,74 @@ function percentile(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 100;
 }
 
-/** The model, in either shape: with a memory burst target (`memoryBurst`), or an earlier control plane's without. */
-function model(value: unknown, memoryBurst: boolean) {
-    return isRecord(value) && hasExactKeys(value, memoryBurst ? MODEL_KEYS : PERCENTILE_MEMORY_MODEL_KEYS)
+/**
+ * The read's shape, from its model's keys: `typical` once the control plane fits on typical demand (#550), `burst`
+ * with a memory burst target, `percentile` from before it. Every part of a read is in its model's shape.
+ */
+type Shape = "percentile" | "burst" | "typical";
+
+function shapeOf(model: unknown): Shape {
+    if (!isRecord(model)) return "percentile";
+    return "cpuTypicalPercentile" in model ? "typical" : "memoryBurstBytes" in model ? "burst" : "percentile";
+}
+
+/** The model, in its shape: with typical demand and a memory burst target, with a memory burst target only, or neither. */
+function model(value: unknown, shape: Shape) {
+    const memoryBurst = shape !== "percentile";
+    return isRecord(value) && hasExactKeys(value, shape === "typical" ? TYPICAL_MODEL_KEYS : memoryBurst ? MODEL_KEYS : PERCENTILE_MEMORY_MODEL_KEYS)
         && amount(value.cpuBurstVcpu, MAXIMUM_BURST_VCPU) && (value.cpuBurstVcpu as number) > 0
         && (!memoryBurst || (count(value.memoryBurstBytes, 1) && (value.memoryBurstBytes as number) <= MAXIMUM_BURST_MEMORY_BYTES))
         && percentile(value.cpuPercentile) && percentile(value.memoryPercentile)
         && amount(value.minimumRunningHours)
         && typeof value.staticBurstVcpuPerServer === "number" && Number.isFinite(value.staticBurstVcpuPerServer) && value.staticBurstVcpuPerServer > 0
-        && positiveBytes(value.staticBurstMemoryBytesPerServer);
+        && positiveBytes(value.staticBurstMemoryBytesPerServer)
+        && (shape !== "typical" || (percentile(value.cpuTypicalPercentile) && percentile(value.stealPercentile)
+            && amount(value.stealFloorThresholdPercent, 100) && share(value.concurrentBusyFraction) && share(value.concurrentHourShare)));
 }
 
-function provider(value: unknown) {
+function provider(value: unknown, typical: boolean) {
     return isRecord(value) && hasExactKeys(value, PROVIDER_KEYS)
         && providerId(value.provider) && count(value.hosts) && count(value.servers) && demand(value.demand)
-        && nullable(value.steal, percentStat) && nullable(value.busyCores, coresStat);
+        && nullable(value.steal, percentStat(typical)) && nullable(value.busyCores, coresStat(typical));
 }
 
-function instanceType(value: unknown) {
-    return isRecord(value) && hasExactKeys(value, INSTANCE_TYPE_KEYS)
-        && typeKey(value.key) && providerId(value.provider) && count(value.vCpu, 1)
+/**
+ * A verdict as the control plane computes it from N (`modelled`), M (`concurrent`) and S (`slots`): `unknown` while N is
+ * null, `at-risk` by M − N when N < M, `headroom` by N − S when N > S, else `matches`; `servers` is 0 for the last two.
+ */
+function verdictOf(value: unknown, modelled: number | null, concurrent: number, slots: number) {
+    if (!isRecord(value) || !hasExactKeys(value, VERDICT_KEYS)) return false;
+    const expected = modelled === null ? { kind: "unknown", servers: 0 }
+        : modelled < concurrent ? { kind: "at-risk", servers: concurrent - modelled }
+            : modelled > slots ? { kind: "headroom", servers: modelled - slots }
+                : { kind: "matches", servers: 0 };
+    return value.kind === expected.kind && value.servers === expected.servers;
+}
+
+/** Effective vCPUs, null exactly without steal, and no more than the vCPUs allowing for the control plane's rounding. */
+function effectiveVcpu(value: unknown, vCpu: number, steal: unknown) {
+    return (value === null) === (steal === null) && nullable(value, (cores) => amount(cores, vCpu + ROUNDING));
+}
+
+/** Servers that could burst at once: information only, null while N is, and no more than N, as bursts need more. */
+function burstServers(value: unknown, modelled: unknown) {
+    return value === null ? true : count(value) && typeof modelled === "number" && (value as number) <= modelled;
+}
+
+function instanceType(value: unknown, typical: boolean, rule: HostingAdminFleetCapacity["model"]) {
+    if (!isRecord(value) || !hasExactKeys(value, typical ? TYPICAL_INSTANCE_TYPE_KEYS : INSTANCE_TYPE_KEYS)) return false;
+    const valid = typeKey(value.key) && providerId(value.provider) && count(value.vCpu, 1)
         && nullable(value.memoryBytes, positiveBytes) && nullable(value.cpuModel, text) && nullable(value.cpuMhz, mhz)
         && count(value.hosts) && count(value.servers) && demand(value.demand)
-        && nullable(value.steal, percentStat)
+        && nullable(value.steal, percentStat(typical))
         && nullable(value.modelledServers, (servers) => count(servers)) && demandSource(TYPE_DEMAND_SOURCES)(value.demandSource);
+    if (!valid || !typical) return valid;
+    // An instance type answers whether a typical VPS of it runs its static slots at once: they are its S and its M.
+    const slots = staticSlots(value.vCpu as number, rule);
+    return effectiveVcpu(value.effectiveVcpu, value.vCpu as number, value.steal)
+        && (value.typicalCpuCores === null) === (value.demandSource === "none") && nullable(value.typicalCpuCores, (cores) => amount(cores))
+        && burstServers(value.burstServers, value.modelledServers)
+        && verdictOf(value.verdict, value.modelledServers as number | null, slots, slots);
 }
 
 function occupant(value: unknown) {
@@ -192,17 +258,19 @@ function hourly(value: unknown, maximum: number) {
     return typeof value === "string" && HOURLY.test(value) && decodeHourly(value).every((hour) => hour === null || hour <= maximum);
 }
 
-/** A VPS in the read's shape: with its peak memory (`memoryBurst`), or an earlier control plane's without. */
-function host(value: unknown, memoryBurst: boolean) {
-    return isRecord(value) && hasExactKeys(value, memoryBurst ? HOST_KEYS : PERCENTILE_MEMORY_HOST_KEYS)
-        && (!memoryBurst || nullable(value.peakMemoryBytes, (bytes) => count(bytes)))
+/** A VPS in the read's shape: with typical demand, with its peak memory (`burst`), or an earlier control plane's without. */
+function host(value: unknown, shape: Shape) {
+    const memoryBurst = shape !== "percentile";
+    const typical = shape === "typical";
+    if (!isRecord(value) || !hasExactKeys(value, typical ? TYPICAL_HOST_KEYS : memoryBurst ? HOST_KEYS : PERCENTILE_MEMORY_HOST_KEYS)) return false;
+    const valid = (!memoryBurst || nullable(value.peakMemoryBytes, (bytes) => count(bytes)))
         && text(value.serviceName) && providerId(value.provider)
         && within(value.regionKeys, FLEET_CAPACITY_LIMITS.regionsPerHost) && value.regionKeys.every((key) => text(key))
         && count(value.vCpu, 1) && nullable(value.memoryBytes, positiveBytes)
         && nullable(value.cpuModel, text) && nullable(value.cpuMhz, mhz) && nullable(value.instanceTypeKey, typeKey)
         && count(value.slots)
         && within(value.occupants, FLEET_CAPACITY_LIMITS.occupantsPerHost) && value.occupants.every(occupant)
-        && nullable(value.steal, percentStat) && nullable(value.busyCores, coresStat)
+        && nullable(value.steal, percentStat(typical)) && nullable(value.busyCores, coresStat(typical))
         && nullable(value.cpuPressureShare, share)
         && nullable(value.overheadCores, (cores) => amount(cores)) && nullable(value.overheadMemoryBytes, (bytes) => count(bytes))
         // The control plane clamps what is left after steal and overhead at zero.
@@ -210,72 +278,69 @@ function host(value: unknown, memoryBurst: boolean) {
         && nullable(value.stableCpuCores, (cores) => amount(cores)) && nullable(value.peakCpuCores, (cores) => amount(cores))
         && nullable(value.demandCpuCores, (cores) => amount(cores)) && nullable(value.demandMemoryBytes, (bytes) => count(bytes))
         && demandSource(HOST_DEMAND_SOURCES)(value.demandSource)
-        && plannedDemand(value, memoryBurst)
+        && plannedDemand(value, shape)
         && nullable(value.modelledServers, (servers) => count(servers))
         && (value.limitedBy === null || value.limitedBy === "cpu" || value.limitedBy === "memory")
         && count(value.samples)
         && hourly(value.stealHourly, STEAL_CAP_PERMILLE) && hourly(value.busyHourly, 100);
+    if (!valid || !typical) return valid;
+    const slots = value.slots as number;
+    const concurrent = value.concurrentServers;
+    return effectiveVcpu(value.effectiveVcpu, value.vCpu as number, value.steal)
+        && burstServers(value.burstServers, value.modelledServers)
+        // M is never more than S; without servers it is S, every slot counted.
+        && count(concurrent) && (concurrent as number) <= slots
+        && CONCURRENT_SOURCES.includes(value.concurrentSource as HostingFleetCapacityConcurrentSource)
+        && (value.concurrentSource !== "slots" || concurrent === slots)
+        && share(value.concurrentCoverage)
+        && verdictOf(value.verdict, value.modelledServers as number | null, concurrent as number, slots);
 }
 
 /**
  * A VPS's per-server figures agree with their source, as the control plane chooses them: none has no figures, and
  * any other source has a positive stable CPU, a peak no lower, and CPU and memory to plan with, and with a memory burst
- * target its peak memory too. The read's model checks the planned figures against the peaks once the whole read is
- * parsed (`burstConsistent`).
+ * target its peak memory too. In the `typical` shape it also has its typical CPU, from its stable CPU to its peak (the
+ * same demand's p50, p95 and max), and its burst CPU. The read's model checks the planned figures against the peaks and
+ * typical CPU once the whole read is parsed (`planConsistent`).
  */
-function plannedDemand(value: Record<string, unknown>, memoryBurst: boolean) {
+function plannedDemand(value: Record<string, unknown>, shape: Shape) {
     const figures = [value.stableCpuCores, value.peakCpuCores, value.demandCpuCores, value.demandMemoryBytes,
-        ...(memoryBurst ? [value.peakMemoryBytes] : [])];
+        ...(shape !== "percentile" ? [value.peakMemoryBytes] : []),
+        ...(shape === "typical" ? [value.typicalCpuCores, value.burstCpuCores] : [])];
     if (value.demandSource === "none") return figures.every((figure) => figure === null);
-    return figures.every((figure) => figure !== null)
-        && (value.stableCpuCores as number) > 0 && (value.peakCpuCores as number) >= (value.stableCpuCores as number);
+    if (!figures.every((figure) => figure !== null)) return false;
+    const stable = value.stableCpuCores as number;
+    const peak = value.peakCpuCores as number;
+    return stable > 0 && peak >= stable
+        && (shape !== "typical" || (amount(value.typicalCpuCores) && amount(value.burstCpuCores)
+            && ordered([stable, value.typicalCpuCores as number, peak])));
 }
 
 /**
- * Each planned CPU is the model's burst target, or the peak where higher, to the control plane's three decimals, and
- * with a memory burst target each planned memory is that target, or the peak where higher, to the byte. With `capped`
- * each is also at most the static rule's vCPU and memory per server, as a control plane that caps per-server demand
- * plans them; the peaks stay as measured.
+ * Each planned figure follows from its rule, to the control plane's three decimals for CPU and to the byte for memory.
+ * Before typical demand: each planned CPU is the model's burst target, or the peak where higher, and with a memory burst
+ * target each planned memory is that target, or the peak where higher. With it (`typical`): each planned CPU is the
+ * burst target, or the typical CPU where higher, at most the static rule's vCPU per server; each planned memory is the memory target, or the peak where
+ * higher, at most the static rule's memory per server; and each burst CPU is the burst target, or the peak where higher,
+ * at most the static rule's vCPU per server.
  */
-function burstConsistent(capacity: Pick<HostingAdminFleetCapacity, "model" | "hosts">, capped: boolean) {
-    const { cpuBurstVcpu, memoryBurstBytes, staticBurstVcpuPerServer, staticBurstMemoryBytesPerServer } = capacity.model;
-    const cpuCap = capped ? staticBurstVcpuPerServer : Number.POSITIVE_INFINITY;
-    const memoryCap = capped ? staticBurstMemoryBytesPerServer : Number.POSITIVE_INFINITY;
-    return capacity.hosts.every((entry) => (entry.peakCpuCores === null || entry.demandCpuCores === null
-        || Math.abs(entry.demandCpuCores - burstCores(entry.peakCpuCores, cpuBurstVcpu, cpuCap)) <= ROUNDING)
-        && (memoryBurstBytes === null || entry.peakMemoryBytes === null
-            || entry.demandMemoryBytes === burstBytes(entry.peakMemoryBytes, memoryBurstBytes, memoryCap)));
-}
-
-/**
- * The static rule's servers for a VPS, min(floor(vCPU ÷ its vCPU per server), floor(RAM ÷ its memory per server)), as the
- * control plane's `staticHostCapacity` counts them; null while its RAM is unknown.
- */
-function staticFloor(host: Pick<HostingFleetCapacityHost, "vCpu" | "memoryBytes">, rule: HostingAdminFleetCapacity["model"]) {
-    if (host.memoryBytes === null) return null;
-    return Math.min(Math.floor(host.vCpu / rule.staticBurstVcpuPerServer), Math.floor(Math.round(host.memoryBytes) / rule.staticBurstMemoryBytesPerServer));
-}
-
-/**
- * Whether the static floor lifted a VPS: it is modelled at the static rule's servers, above what its usable cores and
- * memory hold at its planned figures, worked out as the control plane does (cores in whole thousandths, memory in bytes).
- */
-function floorLifted(host: HostingFleetCapacityHost, rule: HostingAdminFleetCapacity["model"]) {
-    const { modelledServers, usableCores, usableMemoryBytes, demandCpuCores, demandMemoryBytes } = host;
-    if (modelledServers === null || usableCores === null || usableMemoryBytes === null || demandCpuCores === null || demandMemoryBytes === null) return false;
-    const byCpu = Math.round(usableCores * 1000) / Math.max(1, Math.round(demandCpuCores * 1000));
-    const byMemory = Math.round(usableMemoryBytes) / Math.max(1, Math.round(demandMemoryBytes));
-    return modelledServers > Math.floor(Math.min(byCpu, byMemory)) && modelledServers === staticFloor(host, rule);
-}
-
-/**
- * Whether a parsed read comes from a control plane that applies the static rule to the model (#550), as far as the read
- * shows: a VPS planned below its burst target or peak, which only the cap does, or one the static floor lifted. A read
- * that shows neither plans and models every VPS alike under both, no peak being above the cap and no floor lifting a
- * VPS, so it reads as one from before, which the summary and tooltips then describe.
- */
-export function fleetCapacityCapped(capacity: Pick<HostingAdminFleetCapacity, "model" | "hosts">) {
-    return !burstConsistent(capacity, false) || capacity.hosts.some((entry) => floorLifted(entry, capacity.model));
+function planConsistent(capacity: Pick<HostingAdminFleetCapacity, "model" | "hosts">, typical: boolean) {
+    const { cpuBurstVcpu, memoryBurstBytes, staticBurstVcpuPerServer: cpuCap, staticBurstMemoryBytesPerServer: memoryCap } = capacity.model;
+    const near = (figure: number, expected: number) => Math.abs(figure - expected) <= ROUNDING;
+    return capacity.hosts.every((entry) => {
+        if (!typical) {
+            return (entry.peakCpuCores === null || entry.demandCpuCores === null || near(entry.demandCpuCores, burstCores(entry.peakCpuCores, cpuBurstVcpu)))
+                && (memoryBurstBytes === null || entry.peakMemoryBytes === null
+                    || entry.demandMemoryBytes === burstBytes(entry.peakMemoryBytes, memoryBurstBytes));
+        }
+        // A source has every figure or none (`plannedDemand`), so one check covers all three.
+        if (entry.typicalCpuCores === null || entry.typicalCpuCores === undefined || entry.peakCpuCores === null || entry.peakMemoryBytes === null
+            || entry.demandCpuCores === null || entry.demandMemoryBytes === null || entry.burstCpuCores === null || entry.burstCpuCores === undefined
+            || memoryBurstBytes === null) return true;
+        return near(entry.demandCpuCores, fitCores(entry.typicalCpuCores, cpuBurstVcpu, cpuCap))
+            && entry.demandMemoryBytes === Math.min(memoryCap, burstBytes(entry.peakMemoryBytes, memoryBurstBytes))
+            && near(entry.burstCpuCores, Math.min(cpuCap, burstCores(entry.peakCpuCores, cpuBurstVcpu)));
+    });
 }
 
 /** A list of at most `maximum` entries. */
@@ -290,36 +355,43 @@ function unique(values: readonly string[]) {
 /**
  * The `fleet-capacity` result, checked key by key; null when anything is not as the contract says. Beyond each
  * field's range, its enums (providers included) and its percentiles' order it checks only what the view keys on,
- * that each provider, instance type and VPS appears once, that each planned figure follows from its burst target and
- * peak, and that no list is longer than `FLEET_CAPACITY_LIMITS`. Planned figures may be capped at the static rule's
- * vCPU and memory per server, as a control plane that caps per-server demand plans them, or uncapped, as one from
- * before plans them: the whole read in one form, so the website can deploy first and the control plane roll back. A
- * read from a control plane without a memory burst target comes back with `memoryBurstBytes` and every
- * `peakMemoryBytes` null. One from before the CPU burst target, without `cpuBurstVcpu`, no longer occurs and is
- * unexpected. Servers at once and what limits them are checked only for their range: the static floor a capping
- * control plane puts under servers at once changes neither.
+ * that each provider, instance type and VPS appears once, that each planned figure follows from its rule, that each
+ * verdict follows from its figures, and that no list is longer than `FLEET_CAPACITY_LIMITS`.
+ *
+ * A read is in one of three shapes, keyed by its model and every part of it in the same one: `typical`, from a control
+ * plane that fits on typical demand (#550), with its added keys exactly; `burst`, the current control plane's; or
+ * `percentile`, from before the memory burst target, which comes back with `memoryBurstBytes` and every
+ * `peakMemoryBytes` null. The first two come back exactly as they are. One from before the CPU burst target, without
+ * `cpuBurstVcpu`, no longer occurs and is unexpected.
  */
 export function parseFleetCapacity(value: unknown): HostingAdminFleetCapacity | null {
     if (!isRecord(value) || !hasExactKeys(value, TOP_KEYS)) return null;
-    const memoryBurst = isRecord(value.model) && "memoryBurstBytes" in value.model;
+    const shape = shapeOf(value.model);
+    const typical = shape === "typical";
     if (!timestamp(value.generatedAt) || !timestamp(value.windowStartedAt) || !timestamp(value.windowEndedAt)) return null;
     if (value.hours !== FLEET_CAPACITY_HOURS) return null;
     if (Date.parse(value.windowEndedAt) - Date.parse(value.windowStartedAt) !== FLEET_CAPACITY_HOURS * HOUR_MILLISECONDS) return null;
-    if (!model(value.model, memoryBurst)) return null;
+    if (!model(value.model, shape)) return null;
+    const rule = value.model as HostingAdminFleetCapacity["model"];
     const fleet = value.fleet;
     if (!isRecord(fleet) || !hasExactKeys(fleet, ["hosts", "servers", "demand"]) || !count(fleet.hosts) || !count(fleet.servers) || !demand(fleet.demand)) return null;
-    if (!Array.isArray(value.providers) || !value.providers.every(provider)) return null;
-    if (!within(value.instanceTypes, FLEET_CAPACITY_LIMITS.instanceTypes) || !value.instanceTypes.every(instanceType)) return null;
-    if (!within(value.hosts, FLEET_CAPACITY_LIMITS.hosts) || !value.hosts.every((entry) => host(entry, memoryBurst))) return null;
+    if (!Array.isArray(value.providers) || !value.providers.every((entry) => provider(entry, typical))) return null;
+    if (!within(value.instanceTypes, FLEET_CAPACITY_LIMITS.instanceTypes) || !value.instanceTypes.every((entry) => instanceType(entry, typical, rule))) return null;
+    if (!within(value.hosts, FLEET_CAPACITY_LIMITS.hosts) || !value.hosts.every((entry) => host(entry, shape))) return null;
     const read = value as HostingAdminFleetCapacity;
     if (!unique(read.providers.map((entry) => entry.provider)) || !unique(read.instanceTypes.map((entry) => entry.key))
         || !unique(read.hosts.map((entry) => entry.serviceName))) return null;
-    const capacity = memoryBurst ? read : {
+    const capacity = shape !== "percentile" ? read : {
         ...read,
         model: { ...read.model, memoryBurstBytes: null },
         hosts: read.hosts.map((entry) => ({ ...entry, peakMemoryBytes: null })),
     };
-    return burstConsistent(capacity, false) || burstConsistent(capacity, true) ? capacity : null;
+    return planConsistent(capacity, typical) ? capacity : null;
+}
+
+/** Whether a parsed read comes from a control plane that fits on typical demand (#550): its model says so. */
+export function fleetCapacityTypical(capacity: { model: Pick<HostingAdminFleetCapacity["model"], "cpuTypicalPercentile"> }) {
+    return capacity.model.cpuTypicalPercentile !== undefined;
 }
 
 /** Turns a failed capacity read into text, including the rate limit and a control plane that predates the read. */
@@ -461,34 +533,34 @@ export function modelMemory(bytes: HostingFleetCapacityMemoryBytes, percentileVa
     return { key, value: bytes[key] };
 }
 
-/**
- * What one server is planned to need when every one bursts at once: the model's burst target, or its peak where higher,
- * at most `capVcpu`. The control plane caps it at the static rule's vCPU per server; uncapped by default.
- */
-export function burstCores(peakCores: number, burstVcpu: number, capVcpu = Number.POSITIVE_INFINITY) {
-    return Math.min(capVcpu, Math.max(burstVcpu, peakCores));
+/** What one server is planned to need when every one bursts at once: the model's burst target, or its peak where higher. */
+export function burstCores(peakCores: number, burstVcpu: number) {
+    return Math.max(burstVcpu, peakCores);
+}
+
+/** The memory one server is planned to need when every one bursts at once: the target, or its peak where higher. */
+export function burstBytes(peakBytes: number, burstMemoryBytes: number) {
+    return Math.max(burstMemoryBytes, peakBytes);
 }
 
 /**
- * The memory one server is planned to need when every one bursts at once: the target, or its peak where higher, at
- * most `capBytes`. The control plane caps it at the static rule's memory per server; uncapped by default.
+ * The CPU one server is fitted at once the control plane fits on typical demand: what it usually needs, at least the
+ * `floorVcpu` target, its typical CPU where that is higher, and at most `capVcpu`.
  */
-export function burstBytes(peakBytes: number, burstMemoryBytes: number, capBytes = Number.POSITIVE_INFINITY) {
-    return Math.min(capBytes, Math.max(burstMemoryBytes, peakBytes));
+export function fitCores(typicalCores: number, floorVcpu: number, capVcpu: number) {
+    return Math.min(capVcpu, Math.max(floorVcpu, typicalCores));
 }
 
 /**
  * One sentence comparing what a running server uses at the model's percentiles with today's static rule, and what the
  * model plans for each server instead. Each VPS plans each burst target or the peak of its own demand source, and no
  * source peaks above the fleet, so the fleet's peak bounds every plan: at or under a target every VPS plans the target,
- * and above it the plans range from the target to that peak. A read that caps per-server demand at the static rule's
- * vCPU and memory per server (`fleetCapacityCapped`) caps that bound too, and says so; one from before the cap ranges to
- * the peak, as its VPSs plan. CPU is bounded so, and memory too with a memory burst target. No source has run long
- * enough while the fleet itself has not, so until then nothing is planned and the sentence stops at what servers use.
+ * and above it the plans range from the target to that peak. CPU is bounded so, and memory too with a memory burst
+ * target. No source has run long enough while the fleet itself has not, so until then nothing is planned and the
+ * sentence stops at what servers use. A read that fits on typical demand (#550) says so instead (`typicalPlan`).
  */
-export function staticRuleComparison(capacity: Pick<HostingAdminFleetCapacity, "model" | "fleet" | "hosts">) {
+export function staticRuleComparison(capacity: Pick<HostingAdminFleetCapacity, "model" | "fleet">) {
     const { model: rule, fleet } = capacity;
-    const capped = fleetCapacityCapped(capacity);
     const reserves = `Today's static rule reserves ${staticRuleLabel(rule)}.`;
     const { cpuCores: cores, memoryBytes: bytes } = fleet.demand;
     if (cores === null || bytes === null) return `${reserves} There is not enough data yet to compare it with what servers use.`;
@@ -498,18 +570,21 @@ export function staticRuleComparison(capacity: Pick<HostingAdminFleetCapacity, "
     const memoryShare = Math.round((memory.value / rule.staticBurstMemoryBytesPerServer) * 100);
     const uses = `${reserves} A running server uses ${formatCores(cpu.value)} at ${cpu.key} (${cpuShare}% of ${rule.staticBurstVcpuPerServer} vCPU) and ${formatGiB(memory.value)} at ${memory.key} (${memoryShare}% of ${ruleGiB(rule.staticBurstMemoryBytesPerServer)}).`;
     if (fleet.demand.runningServerHours < rule.minimumRunningHours) return uses;
+    if (rule.cpuTypicalPercentile !== undefined && rule.memoryBurstBytes !== null) {
+        return `${uses} ${typicalPlan({ ...rule, cpuTypicalPercentile: rule.cpuTypicalPercentile, memoryBurstBytes: rule.memoryBurstBytes }, cores, bytes)}`;
+    }
     // Rounded to three decimals as the control plane rounds each VPS's planned CPU, and shown with them.
-    const highest = Math.round(burstCores(cores.max, rule.cpuBurstVcpu, capped ? rule.staticBurstVcpuPerServer : Number.POSITIVE_INFINITY) * 1_000) / 1_000;
+    const highest = Math.round(burstCores(cores.max, rule.cpuBurstVcpu) * 1_000) / 1_000;
     const share = (value: number) => `${Math.round((value / rule.staticBurstVcpuPerServer) * 100)}% of ${rule.staticBurstVcpuPerServer} vCPU`;
     if (rule.memoryBurstBytes === null) {
-        const burst = `${uses} Every online server is planned to burst to ${rule.cpuBurstVcpu} vCPU at once, or to its VPS's measured peak where higher${capped ? `, up to the static rule's ${rule.staticBurstVcpuPerServer} vCPU` : ""}.`;
+        const burst = `${uses} Every online server is planned to burst to ${rule.cpuBurstVcpu} vCPU at once, or to its VPS's measured peak where higher.`;
         if (highest === rule.cpuBurstVcpu) {
             return `${burst} No peak is above the target (the fleet's highest is ${formatCoresExact(cores.max)}), so every VPS plans ${formatCoresExact(highest)} per server (${share(highest)}).`;
         }
         return `${burst} The fleet's highest peak is ${formatCoresExact(cores.max)}, so VPSs plan from ${formatCoresExact(rule.cpuBurstVcpu)} to ${formatCoresExact(highest)} per server (${share(highest)} at most); each VPS's own is in its per-server column.`;
     }
     // Memory is planned to the byte, so its bound needs no rounding.
-    const highestBytes = burstBytes(bytes.max, rule.memoryBurstBytes, capped ? rule.staticBurstMemoryBytesPerServer : Number.POSITIVE_INFINITY);
+    const highestBytes = burstBytes(bytes.max, rule.memoryBurstBytes);
     const memoryShareOf = (value: number) => `${Math.round((value / rule.staticBurstMemoryBytesPerServer) * 100)}% of ${ruleGiB(rule.staticBurstMemoryBytesPerServer)}`;
     const cpuPlan = highest === rule.cpuBurstVcpu
         ? `no CPU peak is above its target (the fleet's highest is ${formatCoresExact(cores.max)}), so every VPS plans ${formatCoresExact(highest)} per server (${share(highest)})`
@@ -519,7 +594,29 @@ export function staticRuleComparison(capacity: Pick<HostingAdminFleetCapacity, "
         ? `no memory peak is above its target (the fleet's highest is ${formatGiB(bytes.max)}), so every VPS plans ${formatGiB(highestBytes)} per server (${memoryShareOf(highestBytes)})`
         : `the fleet's highest memory peak is ${formatGiB(bytes.max)}, so VPSs plan from ${formatGiB(rule.memoryBurstBytes)} to ${formatGiB(highestBytes)} per server (${memoryShareOf(highestBytes)} at most)`;
     const own = highest === rule.cpuBurstVcpu && !memoryAbove ? "" : "; each VPS's own is in its per-server column";
-    return `${uses} Every online server is planned to burst to ${rule.cpuBurstVcpu} vCPU and ${ruleGiB(rule.memoryBurstBytes)} at once, or to its VPS's measured peaks where higher${capped ? `, up to the static rule's ${rule.staticBurstVcpuPerServer} vCPU and ${ruleGiB(rule.staticBurstMemoryBytesPerServer)}` : ""}; ${cpuPlan}, and ${memoryPlan}${own}.`;
+    return `${uses} Every online server is planned to burst to ${rule.cpuBurstVcpu} vCPU and ${ruleGiB(rule.memoryBurstBytes)} at once, or to its VPS's measured peaks where higher; ${cpuPlan}, and ${memoryPlan}${own}.`;
+}
+
+/**
+ * What a model that fits on typical demand plans, for the summary. Each VPS fits CPU at the burst target, or its demand
+ * source's typical percentile where higher, at most the static rule's vCPU per server: the read checks every VPS's plan
+ * so, and the fleet's own figure shows the level. Memory is the target, or the peak where higher, at most the static rule's memory per server, and no
+ * source peaks above the fleet, so the fleet's peak bounds every memory plan. Bursting is described only as headroom.
+ */
+function typicalPlan(rule: HostingAdminFleetCapacity["model"] & { cpuTypicalPercentile: number; memoryBurstBytes: number },
+    cores: HostingFleetCapacityCpuCores, bytes: HostingFleetCapacityMemoryBytes) {
+    const cap = rule.staticBurstVcpuPerServer;
+    const typical = modelCpu(cores, rule.cpuTypicalPercentile);
+    // Rounded to three decimals as the control plane rounds each VPS's planned CPU, and shown with them.
+    const fit = Math.round(fitCores(typical.value, rule.cpuBurstVcpu, cap) * 1_000) / 1_000;
+    const fleetFit = `the fleet's ${typical.key} is ${formatCoresExact(typical.value)}, which fits at ${formatCoresExact(fit)} per server, ${Math.round((fit / cap) * 100)}% of ${cap} vCPU`;
+    // Memory is planned to the byte, so its bound needs no rounding.
+    const highestBytes = Math.min(rule.staticBurstMemoryBytesPerServer, burstBytes(bytes.max, rule.memoryBurstBytes));
+    const memoryShareOf = (value: number) => `${Math.round((value / rule.staticBurstMemoryBytesPerServer) * 100)}% of ${ruleGiB(rule.staticBurstMemoryBytesPerServer)}`;
+    const memoryPlan = !memoryPeakAbove(highestBytes, rule.memoryBurstBytes)
+        ? `no memory peak is above its target (the fleet's highest is ${formatGiB(bytes.max)}), so every VPS plans ${formatGiB(highestBytes)} per server (${memoryShareOf(highestBytes)})`
+        : `the fleet's highest memory peak is ${formatGiB(bytes.max)}, so VPSs plan from ${formatGiB(rule.memoryBurstBytes)} to ${formatGiB(highestBytes)} per server (${memoryShareOf(highestBytes)} at most)`;
+    return `Each VPS is fitted at what its servers usually need, not at their peaks: CPU at the ${rule.cpuBurstVcpu} vCPU target, or the ${typical.key} of its demand source where higher, at most ${cap} vCPU (${fleetFit}), and memory at ${ruleGiB(rule.memoryBurstBytes)} or the peak where higher, at most ${ruleGiB(rule.staticBurstMemoryBytesPerServer)}; ${memoryPlan}. Bursting to ${rule.cpuBurstVcpu} vCPU, or the peak where higher, at most ${cap} vCPU, is shown as burst headroom and never decides a verdict. Each VPS's own figures are in its per-server column.`;
 }
 
 export type FleetCapacityDataState = "empty" | "sparse" | "ready";
@@ -587,6 +684,80 @@ export function modelledVerdict(modelled: number | null, slots: number): Modelle
     return { kind: "match", label: "Matches", description: `As many as its ${of}.` };
 }
 
+function serverCount(count: number) {
+    return `${count} ${count === 1 ? "server" : "servers"}`;
+}
+
+/**
+ * The verdict a VPS or an instance type shows. From a control plane that fits on typical demand (#550) it is the read's
+ * own `verdict`, of N (`modelledServers`) against M (`concurrentServers`, or for an instance type its static slots) and
+ * S (`slots`); from an earlier one, N against S (`modelledVerdict`). Burst headroom never enters it.
+ */
+export function capacityVerdict(entry: { modelledServers: number | null; verdict?: HostingFleetCapacityVerdict; concurrentServers?: number }, slots: number): ModelledVerdict {
+    const verdict = entry.verdict;
+    if (verdict === undefined) return modelledVerdict(entry.modelledServers, slots);
+    const of = `${slots} ${slots === 1 ? "slot" : "slots"}`;
+    const concurrent = entry.concurrentServers ?? slots;
+    switch (verdict.kind) {
+    case "unknown": return { kind: "unknown", label: "Not modelled yet", description: "Not enough data yet to model this." };
+    case "at-risk":
+        return { kind: "risk", label: `At risk −${verdict.servers}`, description: `${serverCount(verdict.servers)} more online together than it can run at once: up to ${concurrent} co-online, ${entry.modelledServers} at once.` };
+    case "headroom":
+        return { kind: "headroom", label: `Headroom +${verdict.servers}`, description: `${verdict.servers} more than its ${of}: room for more servers even with every slot's server online at once.` };
+    case "matches":
+        return { kind: "match", label: "Matches", description: `It can run ${entry.modelledServers} at once: enough for its ${concurrent} co-online, and no more than its ${of}.` };
+    }
+}
+
+/** "Can run 4 at once", or "Not modelled yet" while N is unknown. */
+export function atOnceLabel(modelled: number | null) {
+    return modelled === null ? "Not modelled yet" : `Can run ${modelled} at once`;
+}
+
+/**
+ * A VPS's co-online servers as its source allows: "co-online 3" measured, with the worst case named where a server
+ * without enough samples counts as always online, and "co-online unmeasured, using slots" for a VPS without servers.
+ */
+export function concurrentLabel(host: { concurrentServers: number; concurrentSource: HostingFleetCapacityConcurrentSource }) {
+    if (host.concurrentSource === "slots") return "co-online unmeasured, using slots";
+    if (host.concurrentSource === "worst-case-occupants") return `co-online ${host.concurrentServers} (some servers counted as always online)`;
+    return `co-online ${host.concurrentServers}`;
+}
+
+/**
+ * A VPS's at-once figures in one line: "Can run 4 at once · co-online 3 · slots 3" from a control plane that fits on
+ * typical demand, and today's "4 / 3 slots" from an earlier one.
+ */
+export function capacityAtOnceSummary(host: Pick<HostingFleetCapacityHost, "modelledServers" | "slots" | "concurrentServers" | "concurrentSource">) {
+    if (host.concurrentServers === undefined || host.concurrentSource === undefined) {
+        return `${host.modelledServers ?? "—"} / ${host.slots} ${host.slots === 1 ? "slot" : "slots"}`;
+    }
+    return `${atOnceLabel(host.modelledServers)} · ${concurrentLabel({ concurrentServers: host.concurrentServers, concurrentSource: host.concurrentSource })} · slots ${host.slots}`;
+}
+
+/**
+ * How many could burst at once, information only: "Burst headroom: 2 could burst at once (2.000 cores each)", without
+ * the burst CPU for an instance type, which reports none; null without the figure.
+ */
+export function burstHeadroomLabel(entry: { burstServers?: number | null; burstCpuCores?: number | null }) {
+    if (entry.burstServers === undefined || entry.burstServers === null) return null;
+    const each = entry.burstCpuCores === undefined || entry.burstCpuCores === null ? "" : ` (${formatCoresExact(entry.burstCpuCores)} each)`;
+    return `Burst headroom: ${entry.burstServers} could burst at once${each}`;
+}
+
+/** "5.963 effective vCPU": vCPU less the steal the model takes off, to the control plane's three decimals. */
+export function effectiveVcpuLabel(value: number) {
+    return `${value.toFixed(3)} effective vCPU`;
+}
+
+/**
+ * Steal as a VPS's row reads it: "0.4% · 1.2% · 6.5%", its mean, p95 and max, or its p50, p95 and max once the
+ * control plane fits on typical demand and takes the p50 off the vCPUs.
+ */
+export function stealFigures(steal: HostingFleetCapacityStat) {
+    return `${formatPercent(steal.p50 ?? steal.mean)} · ${formatPercent(steal.p95)} · ${formatPercent(steal.max)}`;
+}
+
 export function demandSourceLabel(source: HostingFleetCapacityDemandSource) {
     return source === "vps" ? "This VPS" : source === "type" ? "Type" : source === "fleet" ? "Fleet" : "None yet";
 }
@@ -595,37 +766,42 @@ export function demandSourceLabel(source: HostingFleetCapacityDemandSource) {
  * Where a VPS's per-server figures come from and how they are made, under them: its source, the burst targets it plans
  * and its source's peaks. "This VPS · 1.6 vCPU, 2.5 GiB burst · peaks 1.372 cores, 2.26 GiB" while both peaks are
  * within their targets; a target is left out once its peak is above it, as in "This VPS · 2.5 GiB burst · peaks
- * 1.950 cores, 2.26 GiB" or "This VPS · peaks 1.950 cores, 2.60 GiB". A peak above the static rule's vCPU or memory
- * per server is planned at that cap, which the label names, as in "Type · 2.5 GiB burst · 2 vCPU cap · peaks 2.720
- * cores, 2.26 GiB"; a cap is named only where the planned figure is at it, so a control plane from before the cap,
- * which plans the peak, reads as before. Without a memory burst target, memory is planned at its percentile and only
- * the CPU is described: "This VPS · 1.6 vCPU burst · peak 1.445", "This VPS · peak 1.900" above the target, or "This
- * VPS · 2 vCPU cap · peak 2.720" above the cap. "None yet" without a source. The CPU peak has three decimals, as the
- * planned figure above it does (`formatCoresExact`).
+ * 1.950 cores, 2.26 GiB" or "This VPS · peaks 1.950 cores, 2.60 GiB". Without a memory burst target, memory is planned
+ * at its percentile and only the CPU is described: "This VPS · 1.6 vCPU burst · peak 1.445", or "This VPS · peak
+ * 1.900" above the target. "None yet" without a source. The CPU peak has three decimals, as the planned figure above
+ * it does (`formatCoresExact`).
+ *
+ * Once the control plane fits on typical demand (#550), CPU is fitted at the burst target, or its source's typical
+ * percentile where higher, at most the static rule's vCPU per server, and memory at its target, or the peak where
+ * higher, at most the static rule's memory: "This VPS · 1.6 vCPU target (p95 1.418) · 2.5 GiB memory target · peaks
+ * 2.720 cores, 1.43 GiB", "Type · p95 1.800 · peaks 2.720 cores, 2.60 GiB", or "This VPS · p95 2.150 capped at 2 vCPU ·
+ * 3 GiB memory cap · peaks 2.720 cores, 3.25 GiB".
  */
-export function perServerSourceLabel(
-    host: Pick<HostingFleetCapacityHost, "demandSource" | "peakCpuCores" | "peakMemoryBytes" | "demandCpuCores" | "demandMemoryBytes">,
-    capacityModel: Pick<HostingAdminFleetCapacity["model"], "cpuBurstVcpu" | "memoryBurstBytes" | "staticBurstVcpuPerServer" | "staticBurstMemoryBytesPerServer">,
-) {
+export function perServerSourceLabel(host: Pick<HostingFleetCapacityHost, "demandSource" | "peakCpuCores" | "peakMemoryBytes" | "typicalCpuCores">,
+    capacityModel: Pick<HostingAdminFleetCapacity["model"], "cpuBurstVcpu" | "memoryBurstBytes" | "cpuTypicalPercentile" | "staticBurstVcpuPerServer" | "staticBurstMemoryBytesPerServer">) {
     const source = demandSourceLabel(host.demandSource);
     if (host.demandSource === "none" || host.peakCpuCores === null) return source;
-    const { staticBurstVcpuPerServer: cpuCap, staticBurstMemoryBytesPerServer: memoryCap } = capacityModel;
+    if (capacityModel.cpuTypicalPercentile !== undefined && host.typicalCpuCores !== undefined && host.typicalCpuCores !== null
+        && capacityModel.memoryBurstBytes !== null && host.peakMemoryBytes !== null) {
+        const cap = capacityModel.staticBurstVcpuPerServer;
+        const memoryCap = capacityModel.staticBurstMemoryBytesPerServer;
+        const percentileKey = `p${capacityModel.cpuTypicalPercentile}`;
+        const typical = `${percentileKey} ${formatCoresExact(host.typicalCpuCores).replace(/ cores$/u, "")}`;
+        const cpu = host.typicalCpuCores > cap ? `${typical} capped at ${cap} vCPU`
+            : host.typicalCpuCores > capacityModel.cpuBurstVcpu ? typical : `${capacityModel.cpuBurstVcpu} vCPU target (${typical})`;
+        const memory = !memoryPeakAbove(host.peakMemoryBytes, capacityModel.memoryBurstBytes) ? `${ruleGiB(capacityModel.memoryBurstBytes)} memory target`
+            : memoryPeakAbove(host.peakMemoryBytes, memoryCap) ? `${ruleGiB(memoryCap)} memory cap` : null;
+        return [source, cpu, memory, `peaks ${formatCoresExact(host.peakCpuCores)}, ${formatGiB(host.peakMemoryBytes)}`].filter((part) => part !== null).join(" · ");
+    }
     const cpuTarget = host.peakCpuCores > capacityModel.cpuBurstVcpu ? null : `${capacityModel.cpuBurstVcpu} vCPU`;
-    const cpuCapped = host.peakCpuCores > cpuCap && host.demandCpuCores !== null && host.demandCpuCores <= cpuCap + ROUNDING
-        ? `${cpuCap} vCPU` : null;
-    const parts = (targets: Array<string | null>, caps: Array<string | null>, peaks: string) => {
-        const burst = targets.filter((target) => target !== null);
-        const capped = caps.filter((cap) => cap !== null);
-        return [source, burst.length === 0 ? null : `${burst.join(", ")} burst`, capped.length === 0 ? null : `${capped.join(", ")} cap`, peaks]
-            .filter((part) => part !== null).join(" · ");
-    };
     if (capacityModel.memoryBurstBytes === null || host.peakMemoryBytes === null) {
-        return parts([cpuTarget], [cpuCapped], `peak ${formatCoresExact(host.peakCpuCores).replace(/ cores$/u, "")}`);
+        const peak = `peak ${formatCoresExact(host.peakCpuCores).replace(/ cores$/u, "")}`;
+        return cpuTarget === null ? `${source} · ${peak}` : `${source} · ${cpuTarget} burst · ${peak}`;
     }
     const memoryTarget = memoryPeakAbove(host.peakMemoryBytes, capacityModel.memoryBurstBytes) ? null : ruleGiB(capacityModel.memoryBurstBytes);
-    const memoryCapped = memoryPeakAbove(host.peakMemoryBytes, memoryCap) && host.demandMemoryBytes !== null && host.demandMemoryBytes <= memoryCap
-        ? ruleGiB(memoryCap) : null;
-    return parts([cpuTarget, memoryTarget], [cpuCapped, memoryCapped], `peaks ${formatCoresExact(host.peakCpuCores)}, ${formatGiB(host.peakMemoryBytes)}`);
+    const targets = [cpuTarget, memoryTarget].filter((target) => target !== null);
+    const peaks = `peaks ${formatCoresExact(host.peakCpuCores)}, ${formatGiB(host.peakMemoryBytes)}`;
+    return targets.length === 0 ? `${source} · ${peaks}` : `${source} · ${targets.join(", ")} burst · ${peaks}`;
 }
 
 export function limitedByLabel(limitedBy: HostingFleetCapacityHost["limitedBy"]) {
@@ -635,14 +811,18 @@ export function limitedByLabel(limitedBy: HostingFleetCapacityHost["limitedBy"])
 /**
  * One occupant's needs, each figure with its own percentile: "1.10 cores stable (p50), peak 1.40 · 1.65 GiB at p95",
  * its CPU at the model's stable percentile and its highest interval, and its memory at p95; with a memory burst
- * target its memory's highest interval too, "· 1.65 GiB at p95, peak 1.90"; or that it has no data yet.
+ * target its memory's highest interval too, "· 1.65 GiB at p95, peak 1.90"; or that it has no data yet. Once the
+ * control plane fits on typical demand, its CPU at the typical percentile is shown too: "1.10 cores stable (p50),
+ * p95 1.32, peak 1.40".
  */
 export function occupantDemandLabel(occupantDemand: HostingFleetCapacityDemand,
-    capacityModel: Pick<HostingAdminFleetCapacity["model"], "cpuPercentile" | "memoryBurstBytes">) {
+    capacityModel: Pick<HostingAdminFleetCapacity["model"], "cpuPercentile" | "memoryBurstBytes" | "cpuTypicalPercentile">) {
     if (occupantDemand.cpuCores === null && occupantDemand.memoryBytes === null) return "no data yet";
     const stable = occupantDemand.cpuCores === null ? null : modelCpu(occupantDemand.cpuCores, capacityModel.cpuPercentile);
+    const typical = occupantDemand.cpuCores === null || capacityModel.cpuTypicalPercentile === undefined ? null
+        : modelCpu(occupantDemand.cpuCores, capacityModel.cpuTypicalPercentile);
     const cpu = stable === null || occupantDemand.cpuCores === null ? "CPU —"
-        : `${formatCores(stable.value)} stable (${stable.key}), peak ${formatCores(occupantDemand.cpuCores.max).replace(/ cores$/u, "")}`;
+        : `${formatCores(stable.value)} stable (${stable.key}), ${typical === null ? "" : `${typical.key} ${formatCores(typical.value).replace(/ cores$/u, "")}, `}peak ${formatCores(occupantDemand.cpuCores.max).replace(/ cores$/u, "")}`;
     const bytes = occupantDemand.memoryBytes;
     const memory = bytes === null ? "memory —" : capacityModel.memoryBurstBytes === null ? `${formatGiB(bytes.p95)} at p95`
         : `${formatGiB(bytes.p95)} at p95, peak ${formatGiB(bytes.max).replace(/ GiB$/u, "")}`;
@@ -736,36 +916,64 @@ export function fleetCapacityHostGroups(hosts: readonly HostingFleetCapacityHost
 }
 
 /**
- * The explanations behind each figure's tooltip, with the model's own thresholds and burst targets. `memory`, `p50`,
+ * The explanations behind each figure's tooltip, with the model's own thresholds and burst targets. A read that fits on
+ * typical demand (#550) explains its fit, steal p50, co-online count, verdict and burst headroom; an earlier one keeps
+ * the tooltips it had (`earlierHints`), with no text for the figures it lacks. `memory`, `p50`,
  * `p95` and `max` describe memory figures; with a memory burst target they say that the model plans the target or the
- * peak and shows the p95 for comparison, and without one that it plans the p95. For a `capped` read
- * (`fleetCapacityCapped`) they add the static rule: planned CPU and memory at most its vCPU and memory per server, and
- * servers at once never fewer than it gives the VPS. A read from before the cap is described as it plans.
+ * peak and shows the p95 for comparison, and without one that it plans the p95.
  */
-export function fleetCapacityHints(capacityModel: HostingAdminFleetCapacity["model"], capped: boolean) {
+export function fleetCapacityHints(capacityModel: HostingAdminFleetCapacity["model"]) {
+    const earlier = earlierHints(capacityModel);
+    const { cpuTypicalPercentile, stealPercentile, stealFloorThresholdPercent, concurrentBusyFraction, concurrentHourShare, memoryBurstBytes } = capacityModel;
+    if (cpuTypicalPercentile === undefined || stealPercentile === undefined || stealFloorThresholdPercent === undefined
+        || concurrentBusyFraction === undefined || concurrentHourShare === undefined || memoryBurstBytes === null) return earlier;
+    const cap = `${capacityModel.staticBurstVcpuPerServer} vCPU`;
+    const memoryCap = ruleGiB(capacityModel.staticBurstMemoryBytesPerServer);
+    const memoryBurst = ruleGiB(memoryBurstBytes);
+    const cpuBurst = `${capacityModel.cpuBurstVcpu} vCPU`;
+    const typical = `p${cpuTypicalPercentile}`;
+    const steal = `p${stealPercentile}`;
+    const busy = concurrentBusyFraction === 0.5 ? "half" : `${Number((concurrentBusyFraction * 100).toFixed(2))}%`;
+    const hourShare = `${Number((concurrentHourShare * 100).toFixed(2))}%`;
+    const workingSet = "Memory one server used (its working set) at the end of each running interval of about 5 minutes, in GiB.";
+    return {
+        ...earlier,
+        memory: `${workingSet} The model plans memory at ${memoryBurst}, or the peak where higher, at most ${memoryCap}.`,
+        max: `The highest interval in the week. Each VPS plans the peak of its own demand source (its own servers, its instance type or the fleet) where that is above the ${memoryBurst} target, at most ${memoryCap}, as its per-server column shows; no source peaks above this.`,
+        cpuP50: `p50: the median. Half of the intervals were at or below this: a server's stable CPU use, shown for comparison. The model fits CPU at the ${cpuBurst} target or the ${typical} where higher, not at this.`,
+        cpuP95: `p95: 95% of the intervals were at or below this: what a server usually needs. The model fits each VPS's servers at the ${cpuBurst} target, or the ${typical} CPU of its demand source where higher, at most ${cap}, so a rare burst above it is allowed.`,
+        cpuMax: `The highest interval in the week. Each interval averages about 5 minutes, so shorter spikes are averaged in. The model does not fit servers at their peak: burst headroom counts how many could burst at once to ${cpuBurst}, or their source's peak where higher, at most ${cap}, and never decides a verdict.`,
+        stealP50: `Steal p50: the median steal of the VPS's intervals of about 5 minutes. Steal lowers the VPS's effective vCPU, which the model fits servers on: vCPU × (1 − steal ${steal} ÷ 100).`,
+        stealP95: `Steal p95: 95% of the VPS's intervals of about 5 minutes had at most this much steal, shown for comparison; the model takes the ${steal} off the vCPUs, not this.`,
+        usable: `Usable: what is left for game servers, never below 0. Cores are effective vCPU − overhead cores, where effective vCPU is vCPU × (1 − steal ${steal} ÷ 100); memory is RAM − overhead memory.`,
+        perServer: `Per server: what one server is fitted at on this VPS, what servers there usually need: the ${cpuBurst} target, or the ${typical} CPU of the source shown where higher, at most ${cap}, and ${memoryBurst} of memory, or its peak where higher, at most ${memoryCap}.`,
+        modelled: `Servers at once (N): how many servers the VPS can run together at what they usually need: floor(min(usable cores ÷ per-server cores, usable memory ÷ per-server memory)), but never fewer than the static floor, min(floor(vCPU ÷ ${capacityModel.staticBurstVcpuPerServer}), floor(RAM ÷ ${memoryCap})), where steal lowers the vCPU only once its ${steal} reaches ${stealFloorThresholdPercent}%; unknown until its steal, overhead and memory are measured and its own servers, its instance type or the fleet have enough running data. It is compared with how many of its servers are online together (co-online, M) and with its slots (S): at risk −(M − N) when it can run fewer than are co-online, headroom +(N − S) when it can run more than its slots, matches otherwise. An instance type is compared with its static slots, ${staticRuleLabel(capacityModel)}, as if every one ran at once. Burst headroom, how many could burst at once, is information only and never changes the verdict.`,
+        concurrent: `Co-online (M): how many of its current servers are online together at most, leaving under ${hourShare} of the week's hours with more, a server counting as online in an hour it ran at least ${busy} of, or had no samples in. Some servers counted as always online: a server with too few hours of samples counts as online in every hour, the worst case for it. Unmeasured, using slots: a VPS with no servers counts every slot. Coverage is the share of the week's hours in which every current server has samples.`,
+        burst: `Burst headroom: how many of its servers could burst at once, each to ${cpuBurst}, or its source's peak where higher, at most ${cap}, with the same memory per server. Information only: it never changes the verdict.`,
+        limitedBy: "Whether CPU or memory runs out first at what servers usually need; where the static rule's floor sets servers at once, the one that limits the floor.",
+    };
+}
+
+/** The tooltips of a read from before typical demand, which fits servers at their burst targets or peaks. */
+function earlierHints(capacityModel: HostingAdminFleetCapacity["model"]) {
     const memoryPercentile = `p${capacityModel.memoryPercentile}`;
     const rule = staticRuleLabel(capacityModel);
     const hours = formatServerHours(capacityModel.minimumRunningHours);
     const cpuBurst = `${capacityModel.cpuBurstVcpu} vCPU`;
     const memoryBurst = capacityModel.memoryBurstBytes === null ? null : ruleGiB(capacityModel.memoryBurstBytes);
-    const cpuCap = `${capacityModel.staticBurstVcpuPerServer} vCPU`;
-    const memoryCap = ruleGiB(capacityModel.staticBurstMemoryBytesPerServer);
-    const staticFloor = `min(floor(vCPU ÷ ${capacityModel.staticBurstVcpuPerServer}), floor(RAM ÷ ${memoryCap}))`;
-    /** ", up to the static rule's 2 vCPU" for a capped read, nothing for one from before the cap. */
-    const upTo = (caps: string, prefix = "the static rule's ") => capped ? `, up to ${prefix}${caps}` : "";
     const workingSet = "Memory one server used (its working set) at the end of each running interval of about 5 minutes, in GiB.";
     return {
         cpu: "CPU cores one server used, averaged over each interval between its samples (about 5 minutes) while it was running.",
-        memory: memoryBurst === null ? workingSet : `${workingSet} The model plans memory at the ${memoryBurst} burst target, or the peak where higher${upTo(memoryCap)}.`,
+        memory: memoryBurst === null ? workingSet : `${workingSet} The model plans memory at the ${memoryBurst} burst target, or the peak where higher.`,
         p50: "p50: the median. Half of the intervals were at or below this.",
         p95: memoryBurst === null
             ? "p95: 95% of the intervals were at or below this. The model sizes servers at this level, so brief spikes above it are expected."
             : "p95: 95% of the intervals were at or below this, shown for comparison; the model does not plan memory from it.",
         max: memoryBurst === null ? "The highest interval in the week."
-            : `The highest interval in the week. Each VPS plans the peak of its own demand source (its own servers, its instance type or the fleet) where that is above the ${memoryBurst} target${upTo(memoryCap)}, as its per-server column shows; no source peaks above this.`,
+            : `The highest interval in the week. Each VPS plans the peak of its own demand source (its own servers, its instance type or the fleet) where that is above the ${memoryBurst} target, as its per-server column shows; no source peaks above this.`,
         cpuP50: `p50: the median. Half of the intervals were at or below this: a server's stable CPU use, shown for comparison. The model plans CPU from the ${cpuBurst} burst target and the peak, not from this.`,
         cpuP95: `p95: 95% of the intervals were at or below this. The model plans CPU from the ${cpuBurst} burst target and the peak, not from this.`,
-        cpuMax: `The highest interval in the week. Each interval averages about 5 minutes, so shorter spikes are averaged in. Each VPS plans every online server at the ${cpuBurst} burst target, or at the peak of its own demand source (its own servers, its instance type or the fleet) where that is higher${upTo(cpuCap)}, as its per-server column shows; no source peaks above this.`,
+        cpuMax: `The highest interval in the week. Each interval averages about 5 minutes, so shorter spikes are averaged in. Each VPS plans every online server at the ${cpuBurst} burst target, or at the peak of its own demand source (its own servers, its instance type or the fleet) where that is higher, as its per-server column shows; no source peaks above this.`,
         runningHours: "Hours that servers were running in the week, summed over servers. The more of them, the more the figures can be trusted.",
         throttled: "Share of a server's running time in which its CPU quota throttled it.",
         steal: "Steal: the share of the VPS's CPU time that the hypervisor gave to other tenants of the same physical machine, in percent. A VPS with high steal really has fewer cores than it is sold with.",
@@ -775,14 +983,18 @@ export function fleetCapacityHints(capacityModel: HostingAdminFleetCapacity["mod
         overhead: "Overhead: the median cores and memory in use beyond the game servers' own, from the operating system, the runner and anything else on the VPS.",
         usable: "Usable: what is left for game servers, never below 0. Cores are vCPU × (1 − steal p95 ÷ 100) − overhead cores; memory is RAM − overhead memory.",
         perServer: memoryBurst === null
-            ? `Per server: what one server is modelled to need on this VPS when every server on it bursts at once: ${cpuBurst}, or the peak CPU of the source shown where that is higher${upTo(cpuCap)}, and its ${memoryPercentile} memory.`
-            : `Per server: what one server is modelled to need on this VPS when every server on it bursts at once: ${cpuBurst} and ${memoryBurst}, or the peak CPU and memory of the source shown where higher${upTo(`${cpuCap} and ${memoryCap}`)}.`,
+            ? `Per server: what one server is modelled to need on this VPS when every server on it bursts at once: ${cpuBurst}, or the peak CPU of the source shown where that is higher, and its ${memoryPercentile} memory.`
+            : `Per server: what one server is modelled to need on this VPS when every server on it bursts at once: ${cpuBurst} and ${memoryBurst}, or the peak CPU and memory of the source shown where higher.`,
         demandSource: `Where the per-server needs come from: This VPS uses the servers that ran on this VPS once they have run ${hours} there in the week; Type uses the instance type's servers once they have; Fleet uses the whole fleet's once it has; None yet means none has enough data.`,
         typeDemandSource: `Where the type's per-server needs come from: Type uses its own servers once they have run ${hours} in the week; Fleet uses the whole fleet's once it has; None yet means neither has enough data.`,
-        modelled: `Servers at once: how many servers the VPS could run together if each bursts to ${memoryBurst === null ? `${cpuBurst} (or its peak where higher${upTo(cpuCap, "")}) at once, with ${memoryPercentile} memory` : `${cpuBurst} and ${memoryBurst} (or its peaks where higher${upTo(`${cpuCap} and ${memoryCap}`, "")}) at once`}: floor(min(usable cores ÷ per-server cores, usable memory ÷ per-server memory))${capped ? `, but never fewer than the static rule gives it, ${staticFloor}, whatever its steal and overhead;` : ","} unknown until its steal, overhead and memory are measured and its own servers, its instance type or the fleet have enough running data. It counts servers online together, not servers on the VPS: placement can put more on it when they are rarely online at once. Compared with its slots (for an instance type, the static rule's ${rule}): fewer is at risk when they all run at once, more is headroom.`,
+        modelled: `Servers at once: how many servers the VPS could run together if each bursts to ${memoryBurst === null ? `${cpuBurst} (or its peak where higher) at once, with ${memoryPercentile} memory` : `${cpuBurst} and ${memoryBurst} (or its peaks where higher) at once`}: floor(min(usable cores ÷ per-server cores, usable memory ÷ per-server memory)), unknown until its steal, overhead and memory are measured and its own servers, its instance type or the fleet have enough running data. It counts servers online together, not servers on the VPS: placement can put more on it when they are rarely online at once. Compared with its slots (for an instance type, the static rule's ${rule}): fewer is at risk when they all run at once, more is headroom.`,
         slots: "Slots: the VPS's slot capacity, floor(vCPU ÷ 2) when it is registered and more once an administrator raises it, since a slot reserves no cores.",
-        limitedBy: `Whether CPU or memory runs out first in the model.${capped ? ` Where the static rule sets servers at once, the one that limits its count: CPU when floor(vCPU ÷ ${capacityModel.staticBurstVcpuPerServer}) is no more than floor(RAM ÷ ${memoryCap}), else memory.` : ""}`,
+        limitedBy: "Whether CPU or memory runs out first in the model.",
         hourly: "Mean steal and busy share of each UTC hour, oldest first. The fuller the gold, the more; a hatched hour has no data.",
+        // Only a read that fits on typical demand reports these; an earlier one shows none of them.
+        stealP50: "",
+        concurrent: "",
+        burst: "",
     };
 }
 

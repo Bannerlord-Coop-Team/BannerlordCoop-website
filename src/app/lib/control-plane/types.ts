@@ -480,6 +480,14 @@ export type HostingPlacementOverlapBurstHost = HostingPlacementOverlapHostMeasur
      */
     overBurst: string;
     overBurstHours: number;
+    /**
+     * From a control plane that fits on typical demand (#550), all three or none: the servers the VPS can run at once
+     * (N, the capacity read's `modelledServers`), null while unknown; and `overAtOnce`, encoded as `overBurst` but
+     * against N, all `-` while N is null, with its count of `1` hours. The burst fields are then information only.
+     */
+    atOnceServers?: number | null;
+    overAtOnce?: string;
+    overAtOnceHours?: number;
 };
 
 /** One VPS as a control plane that predates burst capacity (98d1f12a) reports it, with its all-busy verdict. */
@@ -523,7 +531,28 @@ export type HostingFleetCapacityDemand = {
 };
 
 /** One measure over the window: steal in percent (0–100) or busy cores. */
-export type HostingFleetCapacityStat = { samples: number; mean: number; p95: number; max: number };
+export type HostingFleetCapacityStat = {
+    samples: number;
+    mean: number;
+    /** The median, no more than `p95`; from a control plane that fits on typical demand (#550) only. */
+    p50?: number;
+    p95: number;
+    max: number;
+};
+
+/**
+ * A VPS's or an instance type's verdict as a control plane that fits on typical demand (#550) computes it, from the
+ * servers it can run at once (N, `modelledServers`), its co-online servers (M) and its slots (S): `unknown` while N is
+ * null, `at-risk` by M − N when N < M, `headroom` by N − S when N > S, else `matches`, whose `servers` is 0.
+ */
+export type HostingFleetCapacityVerdict = { kind: "at-risk" | "headroom" | "matches" | "unknown"; servers: number };
+
+/**
+ * Where a VPS's co-online servers come from: `measured` from every current server's online hours; `worst-case-occupants`
+ * when some server has too few hours with samples and counts as online in every hour; `slots` when it has no servers,
+ * so every slot counts.
+ */
+export type HostingFleetCapacityConcurrentSource = "measured" | "worst-case-occupants" | "slots";
 
 /**
  * A VPS provider as the fleet capacity read reports it: exactly the control plane's closed `VPS_PROVIDER_IDS`,
@@ -559,12 +588,18 @@ export type HostingFleetCapacityInstanceType = {
     servers: number;
     demand: HostingFleetCapacityDemand;
     steal: HostingFleetCapacityStat | null;
-    /**
-     * How many servers a typical VPS of this type can run at once at their modelled needs, never fewer than the static
-     * rule gives its vCPUs and median memory.
-     */
+    /** How many servers a typical VPS of this type can run at once at their modelled needs. */
     modelledServers: number | null;
     demandSource: HostingFleetCapacityDemandSource;
+    /**
+     * From a control plane that fits on typical demand (#550), all four or none: vCpu less its pooled steal p50, null
+     * without steal; its demand source's p95 cores, null without one; how many could burst at once, information only and
+     * null while `modelledServers` is; and its verdict against its static slots, floor(vCpu ÷ 2), as its co-online count.
+     */
+    effectiveVcpu?: number | null;
+    typicalCpuCores?: number | null;
+    burstServers?: number | null;
+    verdict?: HostingFleetCapacityVerdict;
 };
 
 export type HostingFleetCapacityOccupant = {
@@ -598,33 +633,44 @@ export type HostingFleetCapacityHost = {
     usableMemoryBytes: number | null;
     /** A server's stable CPU on this VPS, the median of `demandSource`'s demand; null without a source. */
     stableCpuCores: number | null;
-    /**
-     * A server's peak CPU on this VPS, the highest interval of `demandSource`'s demand, as measured: above the static
-     * rule's vCPU per server where it was. Null without a source.
-     */
+    /** A server's peak CPU on this VPS, the highest interval of `demandSource`'s demand; null without a source. */
     peakCpuCores: number | null;
     /**
-     * A server's peak working set on this VPS, the highest interval of `demandSource`'s demand, as measured. Null without
-     * a source, and from a control plane without a memory burst target.
+     * A server's peak working set on this VPS, the highest interval of `demandSource`'s demand. Null without a source,
+     * and from a control plane without a memory burst target.
      */
     peakMemoryBytes: number | null;
     /**
      * The per-server demand this VPS is modelled with, from `demandSource`: each of the model's burst targets, or the
-     * peak where that is higher, at most the static rule's `staticBurstVcpuPerServer` and
-     * `staticBurstMemoryBytesPerServer` (2 vCPU and 3 GiB) from a control plane that caps it; one from before plans the
-     * peak uncapped. Without a memory burst target the memory is `demandSource`'s p95.
+     * peak where that is higher. Without a memory burst target the memory is `demandSource`'s p95.
      */
     demandCpuCores: number | null;
     demandMemoryBytes: number | null;
     demandSource: HostingFleetCapacityDemandSource;
-    /**
-     * floor(min(usableCores / demandCpuCores, usableMemoryBytes / demandMemoryBytes)), and from a control plane that caps
-     * per-server demand never fewer than the static rule's min(floor(vCpu / 2), floor(memoryBytes / 3 GiB)); null while an
-     * input is unknown.
-     */
+    /** floor(min(usableCores / demandCpuCores, usableMemoryBytes / demandMemoryBytes)); null while an input is unknown. */
     modelledServers: number | null;
-    /** The resource that runs out first; where the static rule's floor sets `modelledServers`, the one that limits it. */
     limitedBy: "cpu" | "memory" | null;
+    /**
+     * From a control plane that fits on typical demand (#550), all of these or none. It then plans `demandCpuCores` at
+     * min(2, `typicalCpuCores`) and `demandMemoryBytes` at min(3 GiB, max(2.5 GiB, peak)); its `usableCores` take off
+     * the steal p50, and `modelledServers` is never below the static rule's servers.
+     *
+     * - `effectiveVcpu`: vCpu × (1 − steal p50 ÷ 100), three decimals; null without steal.
+     * - `typicalCpuCores`: the demand source's p95 cores, what a server there usually needs; null without a source.
+     * - `burstCpuCores`: min(2, max(1.6, peak)), what one server bursts to; null without a source. Information only.
+     * - `burstServers`: how many could burst to it at once; null while `modelledServers` is. Information only.
+     * - `concurrentServers`: M, its co-online servers, at most its slots; `concurrentSource` says where M comes from,
+     *   and `concurrentCoverage` is the share of the window's hours in which every current server has samples.
+     * - `verdict`: N against M and its slots.
+     */
+    effectiveVcpu?: number | null;
+    typicalCpuCores?: number | null;
+    burstCpuCores?: number | null;
+    burstServers?: number | null;
+    concurrentServers?: number;
+    concurrentSource?: HostingFleetCapacityConcurrentSource;
+    concurrentCoverage?: number;
+    verdict?: HostingFleetCapacityVerdict;
     /** Observations taken on this VPS in the window that carried server or host counters. */
     samples: number;
     /** 168 hours oldest first, two lowercase hex digits each or `--` without data: mean steal in permille, capped at 255. */
@@ -646,26 +692,30 @@ export type HostingAdminFleetCapacity = {
     model: {
         /** The CPU percentile taken as a server's stable use (50). */
         cpuPercentile: number;
-        /**
-         * The vCPUs every online server is planned to burst to at once, or its measured peak where that is higher, up to
-         * `staticBurstVcpuPerServer`.
-         */
+        /** The vCPUs every online server is planned to burst to at once, or its measured peak where that is higher. */
         cpuBurstVcpu: number;
         /**
-         * The bytes every online server is planned to burst to at once, or its measured peak where that is higher, up to
-         * `staticBurstMemoryBytesPerServer`; null from a control plane without it, which plans memory at `memoryPercentile`.
+         * The bytes every online server is planned to burst to at once, or its measured peak where that is higher; null
+         * from a control plane without it, which plans memory at `memoryPercentile`.
          */
         memoryBurstBytes: number | null;
         /** The working-set percentile shown beside the plan, and the plan itself while `memoryBurstBytes` is null. */
         memoryPercentile: number;
         /** Running server-hours an instance type, or else the fleet, needs before the model plans with its demand. */
         minimumRunningHours: number;
-        /**
-         * The static rule, 2 vCPU and 3 GiB per server. A control plane that caps per-server demand plans no server above
-         * it and models no VPS below the servers it gives; one from before reports it for comparison only.
-         */
         staticBurstVcpuPerServer: number;
         staticBurstMemoryBytesPerServer: number;
+        /**
+         * From a control plane that fits on typical demand (#550), all five or none: the CPU percentile servers are fitted
+         * at (95); the steal percentile taken off the vCPUs (50); the steal below which the static floor ignores it (5%);
+         * the online share of an hour that counts a server as online in it (0.5); and the share of the window's hours the
+         * co-online count may be exceeded in (0.01).
+         */
+        cpuTypicalPercentile?: number;
+        stealPercentile?: number;
+        stealFloorThresholdPercent?: number;
+        concurrentBusyFraction?: number;
+        concurrentHourShare?: number;
     };
     fleet: { hosts: number; servers: number; demand: HostingFleetCapacityDemand };
     providers: HostingFleetCapacityProvider[];
@@ -725,10 +775,7 @@ export type HostingSlotSizingHost = {
     usableMemoryBytes: number | null;
     /** Where `usableMemoryBytes` comes from; `none` exactly when it is null. */
     memorySource: HostingSlotSizingCapacitySource;
-    /**
-     * The memory each online server is planned to need on it: the memory burst target, or its servers' peak where higher,
-     * at most the static rule's 3 GiB from a control plane that caps per-server demand.
-     */
+    /** The memory each online server is planned to need on it: the memory burst target, or its servers' peak where higher. */
     memoryBytesPerServer: number;
     /** Null only when `unmeasured`; otherwise from floor(vCPU / 2) to the model's `maximumSlots`. */
     recommendedSlots: number | null;
@@ -783,6 +830,11 @@ export type HostingAdminSlotSizing = {
         maximumSlots: number;
         /** A typical new server's expected online hours a week. */
         typicalWeeklyOnlineHours: number;
+        /**
+         * What a typical new server is planned to need while online, in cores: the fleet's p95, at most 2, or 1.6 without
+         * fleet data. From a control plane that fits on typical demand (#550) only; `cpuBurstVcpu` is then information.
+         */
+        typicalServerCpuCores?: number;
         /** Why the capacity samples could not be read, when they could not: every VPS is then `unmeasured`. */
         capacityErrorCode: string | null;
     };

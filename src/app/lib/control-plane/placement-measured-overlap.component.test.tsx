@@ -1,11 +1,18 @@
 import { expect, it } from "vitest";
 import { ControlPlaneAdminError } from "./client";
 import {
+    overlapAtOnceLabel,
     overlapBand,
+    overlapBurstLabel,
+    overlapBurstRow,
+    overlapCellLabel,
     overlapDayAxisLabel,
     overlapDays,
     overlapGroups,
     overlapHourLabel,
+    overlapOverRow,
+    overlapReportsAtOnce,
+    overlapSummary,
     overlapWindowLabel,
     parsePlacementOverlap,
     placementOverlapErrorMessage,
@@ -193,4 +200,53 @@ it("labels each date segment of the axis as fits its width, keeping the full dat
     expect(overlapDayAxisLabel({ label: "Mon 12 Oct", hours: [0, 1, 2, 3, 4] }).text).toBe("12");
     expect(overlapDayAxisLabel({ label: "Mon 12 Oct", hours: [0, 1, 2] }).text).toBe("12");
     expect(overlapDayAxisLabel({ label: "Mon 12 Oct", hours: [0, 1] })).toEqual({ text: "", title: "Mon 12 Oct" });
+});
+
+// A control plane that fits on typical demand (#550): the burst fields kept as information, and its at-once capacity.
+// The same four servers on the 6 vCPU VPS can all run at once at what they usually need, so no hour is over at once,
+// though three can burst together and four online at 20:00 are still over burst capacity.
+const atOnceHost = { ...burstHost, atOnceServers: 4, overAtOnce: "0".repeat(168), overAtOnceHours: 0 };
+// Run at most three at once, the hours all four were online at least half the hour are over, as over burst.
+const tightHost = { ...burstHost, atOnceServers: 3, overAtOnce: burstHost.overBurst, overAtOnceHours: 5 };
+// A VPS whose at-once capacity is unknown: every hour is unknown.
+const unknownHost = { ...burstSpare, atOnceServers: null, overAtOnce: "-".repeat(168), overAtOnceHours: 0 };
+const atOnceOverlap = { ...overlap, hosts: [atOnceHost, unknownHost] };
+
+it("accepts the at-once shape exactly as the contract describes it, with its red hours from at-once capacity", () => {
+    expect(parsePlacementOverlap(atOnceOverlap)).toBe(atOnceOverlap);
+    expect(parsePlacementOverlap({ ...overlap, hosts: [tightHost] })).not.toBeNull();
+    expect(overlapReportsAtOnce(atOnceOverlap)).toBe(true);
+    expect(overlapReportsAtOnce(burstOverlap)).toBe(false);
+    // Over burst capacity but able to run all four at once: no red row, and burst stays as information.
+    expect(overlapOverRow(atOnceHost)).toBeNull();
+    expect(overlapBurstRow(atOnceHost)).toBe(burstHost.overBurst);
+    expect(overlapAtOnceLabel(atOnceHost)).toBe("Fits at once");
+    expect(overlapBurstLabel(atOnceHost)).toBe("Burst headroom: 3 could burst at once");
+    expect(overlapBurstLabel(burstHost)).toBe("5 h over burst");
+    expect(overlapCellLabel(atOnceHost, overlap.windowStartedAt, OVER_HOUR)).toBe("Wed 14 Oct 20:00 UTC · 4 online; can run 4 at once; 3 can burst together, over burst capacity");
+    // Three at once: the over-burst hours are now over at-once capacity.
+    expect(overlapOverRow(tightHost)).toBe(burstHost.overBurst);
+    expect(overlapAtOnceLabel(tightHost)).toBe("5 h over at once");
+    expect(overlapCellLabel(tightHost, overlap.windowStartedAt, OVER_HOUR)).toBe("Wed 14 Oct 20:00 UTC · 4 online; can run 3 at once; over at-once capacity; 3 can burst together, over burst capacity");
+    expect(overlapCellLabel(tightHost, overlap.windowStartedAt, 10)).toBe("Mon 12 Oct 10:00 UTC · 0.25 online; can run 3 at once; over at once unknown (a server has no data); 3 can burst together");
+    expect(overlapSummary(tightHost, overlap.windowStartedAt)).toBe("vps-1a2b3c4d: 4 of 4 slots; can run 3 at once; over at once 5 hours in the week; 3 can burst together; over burst 5 hours in the week; busiest Mon 12 Oct 20:00 UTC, 4 online; 71% measured");
+    // Unknown at-once capacity: no red row.
+    expect(overlapOverRow(unknownHost)).toBeNull();
+    expect(overlapAtOnceLabel(unknownHost)).toBe("At once not modelled yet");
+    // The burst shape keeps its red row from burst capacity.
+    expect(overlapOverRow(burstHost)).toBe(burstHost.overBurst);
+    expect(overlapAtOnceLabel(burstHost)).toBeNull();
+});
+
+it.each([
+    ["one VPS of each shape", { ...overlap, hosts: [atOnceHost, burstSpare] }],
+    ["an at-once VPS with an extra key", { ...overlap, hosts: [{ ...atOnceHost, atOnceVerdict: "fits" }] }],
+    ["an at-once VPS without its hours", { ...overlap, hosts: [without(atOnceHost, "overAtOnceHours")] }],
+    ["at-once hours over when all can run at once", { ...overlap, hosts: [{ ...atOnceHost, overAtOnce: burstHost.overBurst, overAtOnceHours: 5 }] }],
+    ["an over-at-once count that is not of its hours", { ...overlap, hosts: [{ ...tightHost, overAtOnceHours: 4 }] }],
+    ["known hours while at-once capacity is unknown", { ...overlap, hosts: [{ ...unknownHost, overAtOnce: "0".repeat(168) }] }],
+    ["a fractional at-once capacity", { ...overlap, hosts: [{ ...atOnceHost, atOnceServers: 3.5 }] }],
+    ["a negative at-once capacity", { ...overlap, hosts: [{ ...atOnceHost, atOnceServers: -1 }] }],
+])("rejects %s, in the at-once shape", (_case, value) => {
+    expect(parsePlacementOverlap(value)).toBeNull();
 });

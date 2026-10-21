@@ -8,22 +8,27 @@ import { MetricHint } from "@/app/components/admin/MetricHint";
 import { SlotSizingView } from "@/app/components/admin/SlotSizingView";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import {
+    atOnceLabel,
+    burstHeadroomLabel,
     busyBand,
     busyCellLabel,
     busyStripSummary,
     capacityHourLabels,
+    capacityVerdict,
     capacitySizeLabel,
     capacityWindowLabel,
+    concurrentLabel,
     decodeHourly,
     demandSourceLabel,
+    effectiveVcpuLabel,
     fleetCapacityDataNote,
     fleetCapacityErrorMessage,
-    fleetCapacityCapped,
     fleetCapacityHints,
     fleetCapacityHostGroups,
     fleetCapacityHostNote,
     fleetCapacityProviderLabel,
     fleetCapacityTypeLabel,
+    fleetCapacityTypical,
     formatCores,
     formatCoresExact,
     formatGiB,
@@ -35,7 +40,6 @@ import {
     hostMetricsMissing,
     knownMhz,
     limitedByLabel,
-    modelledVerdict,
     occupantDemandLabel,
     perServerSourceLabel,
     parseFleetCapacity,
@@ -43,6 +47,7 @@ import {
     staticSlots,
     stealBand,
     stealCellLabel,
+    stealFigures,
     stealStripSummary,
     type FleetCapacityHints,
 } from "@/app/lib/control-plane/fleet-capacity";
@@ -51,6 +56,7 @@ import { shortServiceName } from "@/app/lib/control-plane/placement-live-moves";
 import type {
     HostingAdminFleetCapacity,
     HostingFleetCapacityHost,
+    HostingFleetCapacityInstanceType,
     HostingFleetCapacityStat,
 } from "@/app/lib/control-plane/types";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
@@ -126,8 +132,7 @@ export function FleetCapacityView() {
     }, [load]);
 
     const capacity = state.kind === "ready" ? state.capacity : state.previous;
-    // The tooltips describe the static rule's cap and floor only for a read that applies them.
-    const hints = useMemo(() => capacity === null ? null : fleetCapacityHints(capacity.model, fleetCapacityCapped(capacity)), [capacity]);
+    const hints = useMemo(() => capacity === null ? null : fleetCapacityHints(capacity.model), [capacity]);
     // Too little data overall, and VPSs without host metrics, each get their own note.
     const notes = capacity === null ? [] : [fleetCapacityDataNote(capacity), fleetCapacityHostNote(capacity)].filter((note) => note !== null);
     return (
@@ -218,15 +223,16 @@ function ServerNeeds({ capacity, hints }: { capacity: HostingAdminFleetCapacity;
     );
 }
 
-function StealCells({ steal }: { steal: HostingFleetCapacityStat | null }) {
+function StealCells({ steal, typical }: { steal: HostingFleetCapacityStat | null; typical: boolean }) {
     return <>
-        <td className="p-3 text-right font-mono">{figure(steal?.mean, formatPercent)}</td>
+        <td className="p-3 text-right font-mono">{figure(typical ? steal?.p50 : steal?.mean, formatPercent)}</td>
         <td className="p-3 text-right font-mono">{figure(steal?.p95, formatPercent)}</td>
         <td className="p-3 text-right font-mono">{figure(steal?.max, formatPercent)}</td>
     </>;
 }
 
 function ProvidersPane({ capacity, hints }: { capacity: HostingAdminFleetCapacity; hints: FleetCapacityHints }) {
+    const typical = fleetCapacityTypical(capacity);
     return (
         <section aria-label="Providers" className={paneClass}>
             <SectionHeading eyebrow="Steal and per-server needs by provider" title="Providers" count={capacity.providers.length} />
@@ -238,7 +244,7 @@ function ProvidersPane({ capacity, hints }: { capacity: HostingAdminFleetCapacit
                                 <th className="p-3">Provider</th>
                                 <th className="p-3 text-right">VPSs</th>
                                 <th className="p-3 text-right">Servers</th>
-                                <th className="p-3 text-right"><MetricHint label="Steal mean" hint={hints.steal} /></th>
+                                <th className="p-3 text-right">{typical ? <MetricHint label="Steal p50" hint={hints.stealP50} /> : <MetricHint label="Steal mean" hint={hints.steal} />}</th>
                                 <th className="p-3 text-right"><MetricHint label="Steal p95" hint={hints.stealP95} /></th>
                                 <th className="p-3 text-right"><MetricHint label="Steal max" hint={hints.stealMax} /></th>
                                 <th className="p-3 text-right"><MetricHint label="CPU p50" hint={`${hints.cpu} ${hints.cpuP50}`} /></th>
@@ -252,7 +258,7 @@ function ProvidersPane({ capacity, hints }: { capacity: HostingAdminFleetCapacit
                                     <th scope="row" className="p-3 font-medium">{fleetCapacityProviderLabel(entry.provider)}</th>
                                     <td className="p-3 text-right font-mono">{entry.hosts}</td>
                                     <td className="p-3 text-right font-mono">{entry.servers}</td>
-                                    <StealCells steal={entry.steal} />
+                                    <StealCells steal={entry.steal} typical={typical} />
                                     <td className="p-3 text-right font-mono">{figure(entry.demand.cpuCores?.p50, formatCores)}</td>
                                     <td className="p-3 text-right font-mono">{figure(entry.demand.cpuCores?.p95, formatCores)}</td>
                                     <td className="p-3 text-right font-mono">{figure(entry.demand.memoryBytes?.p95, formatGiB)}</td>
@@ -266,26 +272,47 @@ function ProvidersPane({ capacity, hints }: { capacity: HostingAdminFleetCapacit
     );
 }
 
-/** Modelled servers against today's slots, with a cue that does not rely on colour alone. */
-function ModelledCue({ modelled, slots }: { modelled: number | null; slots: number }) {
-    const verdict = modelledVerdict(modelled, slots);
+/**
+ * Servers at once with its verdict, a cue that does not rely on colour alone. From a control plane that fits on typical
+ * demand: "Can run 4 at once", its co-online servers and slots (an instance type's static slots), the read's verdict and,
+ * as information, its burst headroom. From an earlier one: modelled servers against today's slots.
+ */
+function ModelledCue({ entry, slots }: {
+    entry: Pick<HostingFleetCapacityHost, "modelledServers" | "verdict" | "concurrentServers" | "concurrentSource" | "burstServers" | "burstCpuCores">;
+    slots: number;
+}) {
+    const verdict = capacityVerdict(entry, slots);
+    const modelled = entry.modelledServers;
+    const burst = burstHeadroomLabel(entry);
+    const of = `${slots} ${slots === 1 ? "slot" : "slots"}`;
     return (
         <div className="flex flex-col items-end gap-1">
-            <span className="font-mono text-foreground">
-                {modelled === null ? <NoData /> : modelled}
-                <span className="text-foreground-muted"> / {slots} {slots === 1 ? "slot" : "slots"}</span>
-            </span>
+            {entry.verdict === undefined ? (
+                <span className="font-mono text-foreground">
+                    {modelled === null ? <NoData /> : modelled}
+                    <span className="text-foreground-muted"> / {of}</span>
+                </span>
+            ) : <>
+                <span className="text-right text-foreground">{atOnceLabel(modelled)}</span>
+                <span className="text-right text-foreground-muted">
+                    {entry.concurrentServers === undefined || entry.concurrentSource === undefined
+                        ? `static slots ${slots}`
+                        : `${concurrentLabel({ concurrentServers: entry.concurrentServers, concurrentSource: entry.concurrentSource })} · slots ${slots}`}
+                </span>
+            </>}
             {verdict.kind !== "unknown" && (
                 <span title={verdict.description} className={`${badgeClass} ${VERDICT_CLASSES[verdict.kind]}`}>
                     {verdict.kind === "risk" ? <TriangleAlert aria-hidden="true" className="size-3" /> : verdict.kind === "headroom" ? <ArrowUp aria-hidden="true" className="size-3" /> : <Equal aria-hidden="true" className="size-3" />}
                     {verdict.label}
                 </span>
             )}
+            {burst !== null && <span className="text-right text-[0.65rem] text-foreground-dim">{burst}</span>}
         </div>
     );
 }
 
 function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCapacity; hints: FleetCapacityHints }) {
+    const typical = fleetCapacityTypical(capacity);
     return (
         <section aria-label="Instance types" className={paneClass}>
             <SectionHeading eyebrow="Modelled per VPS of each type" title="Instance types" count={capacity.instanceTypes.length} />
@@ -304,8 +331,8 @@ function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCap
                                 <th className="p-3 text-right"><MetricHint label="CPU p50" hint={`${hints.cpu} ${hints.cpuP50}`} /></th>
                                 <th className="p-3 text-right"><MetricHint label="CPU p95" hint={`${hints.cpu} ${hints.cpuP95}`} /></th>
                                 <th className="p-3 text-right"><MetricHint label="Memory p95" hint={`${hints.memory} ${hints.p95}`} /></th>
-                                <th className="p-3 text-right"><MetricHint label="Steal p95" hint={hints.stealP95} /></th>
-                                <th className="p-3 text-right"><MetricHint label="Servers at once (modelled)" hint={`${hints.modelled} ${hints.slots}`} /></th>
+                                <th className="p-3 text-right">{typical ? <MetricHint label="Steal p50 · p95" hint={`${hints.stealP50} ${hints.stealP95}`} /> : <MetricHint label="Steal p95" hint={hints.stealP95} />}</th>
+                                <th className="p-3 text-right"><MetricHint label="Servers at once (modelled)" hint={typical ? `${hints.modelled} ${hints.slots} ${hints.burst}` : `${hints.modelled} ${hints.slots}`} /></th>
                                 <th className="p-3"><MetricHint label="Demand source" hint={hints.typeDemandSource} /></th>
                             </tr>
                         </thead>
@@ -314,7 +341,7 @@ function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCap
                                 <tr key={entry.key}>
                                     {/* The type in words, never its raw key with the provider id. */}
                                     <th scope="row" title={fleetCapacityTypeLabel(entry)} className="p-3 align-top font-medium">{fleetCapacityProviderLabel(entry.provider)}</th>
-                                    <td className="p-3 text-right align-top font-mono">{entry.vCpu}</td>
+                                    <td className="p-3 text-right align-top font-mono">{entry.vCpu}<TypeEffectiveVcpu entry={entry} /></td>
                                     <td className="p-3 text-right align-top font-mono">{figure(entry.memoryBytes, formatGiB)}</td>
                                     <td className="max-w-56 p-3 align-top break-words">{entry.cpuModel ?? <NoData />}</td>
                                     <td className="p-3 text-right align-top font-mono">{figure(knownMhz(entry.cpuMhz), formatMhz)}</td>
@@ -323,8 +350,9 @@ function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCap
                                     <td className="p-3 text-right align-top font-mono">{figure(entry.demand.cpuCores?.p50, formatCores)}</td>
                                     <td className="p-3 text-right align-top font-mono">{figure(entry.demand.cpuCores?.p95, formatCores)}</td>
                                     <td className="p-3 text-right align-top font-mono">{figure(entry.demand.memoryBytes?.p95, formatGiB)}</td>
-                                    <td className="p-3 text-right align-top font-mono">{figure(entry.steal?.p95, formatPercent)}</td>
-                                    <td className="p-3 align-top"><ModelledCue modelled={entry.modelledServers} slots={staticSlots(entry.vCpu, capacity.model)} /></td>
+                                    <td className="p-3 text-right align-top font-mono">{typical && entry.steal !== null && entry.steal.p50 !== undefined
+                                        ? `${formatPercent(entry.steal.p50)} · ${formatPercent(entry.steal.p95)}` : figure(entry.steal?.p95, formatPercent)}</td>
+                                    <td className="p-3 align-top"><ModelledCue entry={entry} slots={staticSlots(entry.vCpu, capacity.model)} /></td>
                                     <td className="p-3 align-top">{demandSourceLabel(entry.demandSource)}</td>
                                 </tr>
                             ))}
@@ -336,7 +364,14 @@ function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCap
     );
 }
 
+/** An instance type's effective vCPU under its vCPU, once the control plane reports it. */
+function TypeEffectiveVcpu({ entry }: { entry: HostingFleetCapacityInstanceType }) {
+    if (entry.effectiveVcpu === undefined || entry.effectiveVcpu === null) return null;
+    return <span className="block text-foreground-muted">{effectiveVcpuLabel(entry.effectiveVcpu)}</span>;
+}
+
 function HostsPane({ capacity, hints }: { capacity: HostingAdminFleetCapacity; hints: FleetCapacityHints }) {
+    const typical = fleetCapacityTypical(capacity);
     const groups = useMemo(() => fleetCapacityHostGroups(capacity.hosts), [capacity.hosts]);
     const days = useMemo(() => overlapDays(capacity.windowStartedAt), [capacity.windowStartedAt]);
     const hourLabels = useMemo(() => capacityHourLabels(capacity.windowStartedAt), [capacity.windowStartedAt]);
@@ -350,9 +385,11 @@ function HostsPane({ capacity, hints }: { capacity: HostingAdminFleetCapacity; h
                         <thead className={tableHeadClass}>
                             <tr>
                                 <th className="p-3">VPS</th>
-                                <th className="p-3 text-right"><MetricHint label="Servers at once" hint={`${hints.modelled} ${hints.slots}`} /></th>
+                                <th className="p-3 text-right"><MetricHint label="Servers at once" hint={typical ? `${hints.modelled} ${hints.slots} ${hints.concurrent} ${hints.burst}` : `${hints.modelled} ${hints.slots}`} /></th>
                                 <th className="p-3"><MetricHint label="Limited by" hint={hints.limitedBy} /></th>
-                                <th className="p-3 text-right"><MetricHint label="Steal mean · p95 · max" hint={`${hints.steal} ${hints.stealP95}`} /></th>
+                                <th className="p-3 text-right">{typical
+                                    ? <MetricHint label="Steal p50 · p95 · max" hint={`${hints.steal} ${hints.stealP50} ${hints.stealP95}`} />
+                                    : <MetricHint label="Steal mean · p95 · max" hint={`${hints.steal} ${hints.stealP95}`} />}</th>
                                 <th className="p-3 text-right"><MetricHint label="Busy p95" hint={hints.busyCores} /></th>
                                 <th className="p-3 text-right"><MetricHint label="Overhead" hint={hints.overhead} /></th>
                                 <th className="p-3 text-right"><MetricHint label="Usable" hint={hints.usable} /></th>
@@ -429,7 +466,7 @@ const HostRow = memo(function HostRow({ host, model, days, hourLabels }: {
 }) {
     const steal = useMemo(() => decodeHourly(host.stealHourly), [host.stealHourly]);
     const busy = useMemo(() => decodeHourly(host.busyHourly), [host.busyHourly]);
-    const verdict = modelledVerdict(host.modelledServers, host.slots);
+    const verdict = capacityVerdict(host, host.slots);
     const limitedBy = limitedByLabel(host.limitedBy);
     const servers = host.occupants.length;
     return (
@@ -458,14 +495,17 @@ const HostRow = memo(function HostRow({ host, model, days, hourLabels }: {
                     )}
                 </div>
             </th>
-            <td className="p-3"><ModelledCue modelled={host.modelledServers} slots={host.slots} /></td>
+            <td className="p-3"><ModelledCue entry={host} slots={host.slots} /></td>
             <td className="p-3">{limitedBy ?? <NoData />}</td>
             <td className="p-3 text-right font-mono whitespace-nowrap">
-                {host.steal === null ? <NoData /> : `${formatPercent(host.steal.mean)} · ${formatPercent(host.steal.p95)} · ${formatPercent(host.steal.max)}`}
+                {host.steal === null ? <NoData /> : stealFigures(host.steal)}
             </td>
             <td className="p-3 text-right font-mono whitespace-nowrap">{figure(host.busyCores?.p95, formatCores)}<span className="block text-foreground-muted">of {host.vCpu} vCPU</span></td>
             <td className="p-3 text-right font-mono whitespace-nowrap"><TwoLine cores={host.overheadCores} bytes={host.overheadMemoryBytes} /></td>
-            <td className="p-3 text-right font-mono whitespace-nowrap"><TwoLine cores={host.usableCores} bytes={host.usableMemoryBytes} /></td>
+            <td className="p-3 text-right font-mono whitespace-nowrap">
+                <TwoLine cores={host.usableCores} bytes={host.usableMemoryBytes} />
+                {host.effectiveVcpu !== undefined && host.effectiveVcpu !== null && <span className="block text-foreground-dim">{effectiveVcpuLabel(host.effectiveVcpu)}</span>}
+            </td>
             <td className="p-3 text-right font-mono whitespace-nowrap">
                 <TwoLine cores={host.demandCpuCores} bytes={host.demandMemoryBytes} exact />
                 <span className="mt-0.5 block font-sans text-foreground-dim">{perServerSourceLabel(host, model)}</span>

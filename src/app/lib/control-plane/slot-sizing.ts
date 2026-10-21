@@ -25,12 +25,6 @@ const WEEK_HOURS = 168;
 /** The most a read's model may claim: vCPUs, and bytes of memory, as the fleet capacity read bounds its targets. */
 const MAXIMUM_BURST_VCPU = 256;
 const MAXIMUM_BURST_MEMORY_BYTES = 64 * GIB;
-/**
- * The most memory a server is planned to need while online once the control plane applies the static rule (#550): its
- * 3 GiB per server, the control plane's `FLEET_CAPACITY_STATIC_BURST_MEMORY_BYTES_PER_SERVER`. The slot-sizing read
- * carries neither the rule nor whether it applies it, so the capacity hint names the cap in words true either way.
- */
-const STATIC_MEMORY_BYTES_PER_SERVER = 3 * GIB;
 /** A figure within this of a whole number of its last decimal is that number: floating-point noise, not a digit. */
 const DECIMAL_NOISE = 1e-6;
 /**
@@ -48,6 +42,8 @@ const MODEL_KEYS = [
     "cpuShortageBudgetCoreHoursPerWeek", "memoryOverflowShare", "cpuBurstVcpu", "memoryBurstBytes", "historyDays", "halfLifeDays",
     "minimumObservedDays", "maximumSlots", "typicalWeeklyOnlineHours", "capacityErrorCode",
 ];
+/** A control plane that fits on typical demand (#550) adds the typical new server's CPU, and nothing else, to the model. */
+const TYPICAL_MODEL_KEYS = [...MODEL_KEYS, "typicalServerCpuCores"];
 const HOST_KEYS = [
     "serviceName", "provider", "regionKeys", "vCpu", "slots", "occupants", "acceptsRelocations", "usableCores", "coresSource",
     "usableMemoryBytes", "memorySource", "memoryBytesPerServer", "recommendedSlots", "reason", "expectedShortageCoreHoursPerWeek",
@@ -120,7 +116,10 @@ function slotCount(value: unknown, vCpu: number, maximum: number): value is numb
 }
 
 function model(value: unknown): value is Model {
-    return isRecord(value) && hasExactKeys(value, MODEL_KEYS)
+    if (!isRecord(value)) return false;
+    const typical = Object.hasOwn(value, "typicalServerCpuCores");
+    return hasExactKeys(value, typical ? TYPICAL_MODEL_KEYS : MODEL_KEYS)
+        && (!typical || (amount(value.typicalServerCpuCores, MAXIMUM_BURST_VCPU) && value.typicalServerCpuCores > 0))
         && amount(value.cpuShortageBudgetCoreHoursPerWeek)
         && amount(value.memoryOverflowShare, 1) && value.memoryOverflowShare > 0
         && amount(value.cpuBurstVcpu, MAXIMUM_BURST_VCPU) && value.cpuBurstVcpu > 0
@@ -207,9 +206,7 @@ function host(value: unknown, sizingModel: Model): value is HostingSlotSizingHos
     // Each source names its own figure: none exactly when that figure is unknown.
     if ((value.usableCores === null) !== (value.coresSource === "none")) return false;
     if ((value.usableMemoryBytes === null) !== (value.memorySource === "none")) return false;
-    // The burst target, or the VPS's servers' peak working set where that is higher, at most the static rule's 3 GiB
-    // from a control plane that caps per-server demand. Only the lower bound is checked, so one from before the cap,
-    // which plans a peak above 3 GiB as it is, still reads.
+    // The burst target, or the VPS's servers' peak working set where that is higher.
     if (!count(value.memoryBytesPerServer, sizingModel.memoryBurstBytes)) return false;
     if (!REASONS.includes(value.reason as HostingSlotSizingReason)) return false;
     if (!count(value.serversToMove) || !count(value.freeRecommendedSlots)) return false;
@@ -466,6 +463,9 @@ export function slotSizingBudgets(sizingModel: Model) {
 
 /** What a typical new server is planned to be, and the history behind it. */
 export function slotSizingTypicalServer(sizingModel: Model) {
+    if (sizingModel.typicalServerCpuCores !== undefined) {
+        return `A typical new server needs ${sizingModel.typicalServerCpuCores.toFixed(3)} cores and ${ruleGiB(sizingModel.memoryBurstBytes)} while online: what servers usually need, the ${sizingModel.cpuBurstVcpu} vCPU target or the fleet's p95 CPU where higher, at most 2 vCPU (the target before the fleet has data). It is online ${sizingModel.typicalWeeklyOnlineHours.toFixed(2)} hours a week, the mean of servers' weeks over the last ${sizingModel.historyDays} days (${sizingModel.halfLifeDays}-day half-life). A server observed for under ${sizingModel.minimumObservedDays} days counts with that typical week.`;
+    }
     return `A typical new server needs ${sizingModel.cpuBurstVcpu} vCPU and ${ruleGiB(sizingModel.memoryBurstBytes)} while online and is online ${sizingModel.typicalWeeklyOnlineHours.toFixed(2)} hours a week, the mean of servers' weeks over the last ${sizingModel.historyDays} days (${sizingModel.halfLifeDays}-day half-life). A server observed for under ${sizingModel.minimumObservedDays} days counts with that typical week.`;
 }
 
@@ -479,16 +479,18 @@ export function slotSizingCapacityNote(sizingModel: Pick<Model, "capacityErrorCo
 export function slotSizingHints(sizingModel: Model) {
     const budget = coreHours(sizingModel.cpuShortageBudgetCoreHoursPerWeek);
     const share = budgetPercent(sizingModel.memoryOverflowShare);
+    // A server without a measured need counts as a typical new one: its typical CPU, or the burst target before that.
+    const typicalNeed = sizingModel.typicalServerCpuCores === undefined ? `${sizingModel.cpuBurstVcpu} vCPU` : `the typical ${sizingModel.typicalServerCpuCores.toFixed(3)} cores`;
     return {
         slots: "Slots now: the VPS's stored slot capacity, floor(vCPU ÷ 2) when it is registered and more once an administrator raises it. A slot reserves no cores.",
         servers: "Servers in its slots now.",
-        recommended: `Recommended slots: the most, from floor(vCPU ÷ 2) to ${sizingModel.maximumSlots}, at which the servers on it now plus typical new servers in the other slots keep both budgets (at most ${budget} a week of expected CPU shortage, and more online at once than its memory holds in under ${share} of the week). Each server counts with its own week of online hours and the CPU it is planned to need on this VPS; one observed for under ${sizingModel.minimumObservedDays} days counts with the typical week, and one without a measured need at ${sizingModel.cpuBurstVcpu} vCPU. Servers rarely online together can share a VPS, so this can be above the servers it fits at once. The difference is against its slots now. Nothing applies it.`,
+        recommended: `Recommended slots: the most, from floor(vCPU ÷ 2) to ${sizingModel.maximumSlots}, at which the servers on it now plus typical new servers in the other slots keep both budgets (at most ${budget} a week of expected CPU shortage, and more online at once than its memory holds in under ${share} of the week). Each server counts with its own week of online hours and the CPU it is planned to need on this VPS; one observed for under ${sizingModel.minimumObservedDays} days counts with the typical week, and one without a measured need at ${typicalNeed}. Servers rarely online together can share a VPS, so this can be above the servers it fits at once. The difference is against its slots now. Nothing applies it.`,
         reason: `Why the recommendation is what it is. CPU budget or Memory budget: one more slot would break that budget. Floor: the most slots that keep both budgets, if any, is below floor(vCPU ÷ 2), but a VPS always keeps that many, so at least one budget breaks there; either its servers, as many as the floor, break it themselves and nothing moves, or fewer servers leave room for the free recommended slots within the budgets and the floor filled with typical servers breaks it. Maximum: ${sizingModel.maximumSlots} slots, the most a VPS holds, keep both budgets. Drain: its servers alone break a budget and are more than the floor, so the recommendation is below them and some would move, until those that stay keep both budgets or down to the floor, where they may still break one. Unmeasured: its usable cores or memory are neither measured nor borrowable, so there is no recommendation.`,
         shortage: `Expected CPU shortage at the recommendation, in core-hours a week: the cores that the servers online together are expected to want beyond its usable cores, summed over the week's half-hours, for the servers that stay plus typical servers up to the recommendation. The budget is ${budget}. Over budget marks where the control plane says the exact figure breaks it, which the rounded figure cannot show at the edge; only Drain and Floor can be.`,
         overflow: `Memory over: the expected share of the week in which more of those servers are online at once than floor(usable memory ÷ memory per server). The budget is under ${share}. Over budget marks where the control plane says the exact share reaches it, which the rounded figure cannot show at the edge; only Drain and Floor can be.`,
         toMove: "Servers that would move off it: with Drain, its servers beyond the recommendation, dropped one at a time by whichever leaves the broken budget lowest; 0 otherwise. Nothing moves them.",
         free: "Free recommended slots: slots beyond the servers that stay that a moved server could take, counted as a typical server, with both budgets kept. The recommendation less its servers for CPU budget, Memory budget and Maximum; the room the budgets allow under the floor for Floor; 0 for Drain and Unmeasured. Only a VPS that accepts relocations offers them to its region.",
-        capacity: `Its usable cores and memory, each with where it comes from: measured, its own from the capacity read; borrowed (type), the median of the measured VPSs of its instance type; borrowed (provider and vCPU), the median of the measured VPSs of its provider and vCPU count; unknown, nothing to measure or borrow, which leaves the VPS Unmeasured. Each is borrowed on its own. Each online server is planned to need ${ruleGiB(sizingModel.memoryBurstBytes)} of memory on it, or its servers' measured peak where higher, capped at ${ruleGiB(STATIC_MEMORY_BYTES_PER_SERVER)} once the control plane applies the static rule.`,
+        capacity: `Its usable cores and memory, each with where it comes from: measured, its own from the capacity read; borrowed (type), the median of the measured VPSs of its instance type; borrowed (provider and vCPU), the median of the measured VPSs of its provider and vCPU count; unknown, nothing to measure or borrow, which leaves the VPS Unmeasured. Each is borrowed on its own. Each online server is planned to need ${ruleGiB(sizingModel.memoryBurstBytes)} of memory on it, or its servers' measured peak where higher${sizingModel.typicalServerCpuCores === undefined ? "" : ", at most 3 GiB"}.`,
         regionToMove: "Servers to move off drained VPSs whose region this is: a server's own published region, else its VPS's.",
         regionFree: "Free recommended slots on the region's VPSs that accept relocations. Regions overlap, so a VPS in several regions offers the same slots to each.",
         shortfall: "Shortfall: servers to move with no free recommended slot of their own provider in the region, since a move keeps a server on its provider. They need more VPSs; the read does not say how many.",
