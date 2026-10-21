@@ -28,7 +28,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect("/login?next=/account");
     const locale = await getLocale();
-    const { t } = await getTranslations("account", locale);
+    const { t, rich } = await getTranslations("account", locale);
     const messages = await getMessages(["account"], locale);
     const params = await searchParams;
     let status: AccountStatus | null = null;
@@ -89,7 +89,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                     <div className="flex flex-wrap items-center justify-between gap-3"><h3 id="patreon-heading" className="font-semibold">Patreon</h3><ConnectionBadge connected={status?.membership.linked} t={t} /></div>
                     <p className="mt-3 text-sm leading-6 text-foreground-muted">{status?.membership.linked ? t("patreon.linked") : t("patreon.benefits")}</p>
                     {status?.membership.linked && <div className="mt-3 space-y-2 text-sm leading-6 text-foreground-muted">
-                        <p role="status">{status.membership.verification === "qualifying" && status.membership.validUntil && Date.parse(status.membership.validUntil) > checkedAt ? t("membership.verified") : status.membership.verification === "nonqualifying" ? t("membership.nonqualifying") : status.membership.verification === "review_required" ? t("membership.reviewRequired") : t("membership.verifyRequired")}</p>
+                        <p role="status">{status.membership.verification === "qualifying" && status.membership.validUntil && Date.parse(status.membership.validUntil) > checkedAt ? t("membership.verified") : status.membership.verification === "nonqualifying" ? rich("membership.nonqualifying", {
+                            installer: <a href="https://discord.com/channels/709516043332354119/1058155634702434355/1539466223916421201" target="_blank" rel="noopener noreferrer" className="text-gold underline hover:text-gold/85">{t("membership.nightlyInstaller")}</a>,
+                        }) : status.membership.verification === "review_required" ? t("membership.reviewRequired") : t("membership.verifyRequired")}</p>
                         {status.membership.sync === "pending" && <p role="status">{t("membership.syncPending")}</p>}
                         {status.membership.sync === "unavailable" && <p role="status">{t("membership.syncUnavailable")}</p>}
                         <p>{t("membership.expiry")}</p>
