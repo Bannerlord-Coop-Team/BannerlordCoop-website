@@ -20,10 +20,17 @@ export function ManagedServerManagerAccess({ serverId, expectedUpdatedAt, canEdi
     const [pendingAction, setPendingAction] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
     const listHeading = useRef<HTMLHeadingElement>(null);
+    const emailInput = useRef<HTMLInputElement>(null);
 
     if (!canEdit) return null;
 
-    // Submits the entered email as a new manager grant.
+    // Calls one manager action, turning a failed call (network loss, a redeployed action) into the generic retry message.
+    async function attempt(action: typeof setServerManager, form: FormData) {
+        try { return await action(form); }
+        catch { return { ok: false, message: t("managerAccess.requestCouldNotBeConfirmed") }; }
+    }
+
+    // Submits the entered email as a new manager grant; focus returns to the email field, since the button was disabled.
     function submit() {
         const form = new FormData();
         form.set("serverId", serverId);
@@ -32,9 +39,10 @@ export function ManagedServerManagerAccess({ serverId, expectedUpdatedAt, canEdi
         setMessage("");
         setPendingAction("grant");
         startTransition(async () => {
-            const result = await setServerManager(form);
+            const result = await attempt(setServerManager, form);
             setMessage(result.message);
             if (result.ok) setEmail("");
+            emailInput.current?.focus();
         });
     }
 
@@ -47,7 +55,7 @@ export function ManagedServerManagerAccess({ serverId, expectedUpdatedAt, canEdi
         setMessage("");
         setPendingAction(manager.accountId);
         startTransition(async () => {
-            const result = await removeServerManager(form);
+            const result = await attempt(removeServerManager, form);
             setMessage(result.message);
             listHeading.current?.focus();
         });
@@ -63,6 +71,7 @@ export function ManagedServerManagerAccess({ serverId, expectedUpdatedAt, canEdi
         <form className="mt-5 max-w-xl space-y-3" onSubmit={(event) => { event.preventDefault(); submit(); }}>
             <label htmlFor="manager-account-email" className="block text-sm font-medium">{t("managerAccess.emailLabel")}</label>
             <input
+                ref={emailInput}
                 id="manager-account-email"
                 name="managerEmail"
                 type="email"

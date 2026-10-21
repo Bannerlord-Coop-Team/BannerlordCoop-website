@@ -90,6 +90,23 @@ it("offers owner manager access through exact email entry without rendering an a
     expect(submitted.get("serverId")).toBe(serverId);
     expect(submitted.get("expectedUpdatedAt")).toBe(updatedAt);
     expect(submitted.get("managerEmail")).toBe("friend@example.com");
+    expect(document.activeElement?.id).toBe("manager-account-email");
+});
+
+it("shows the retry message instead of crashing when a manager action call fails", async () => {
+    mocks.manager.mockRejectedValueOnce(new Error("Failed to find Server Action"));
+    mocks.removeManager.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await render({ ...props, managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true, managers: [
+        { accountId: "22222222-2222-4222-8222-222222222222", label: "friend@example.com", removable: true },
+    ] } });
+    await change("#manager-account-email", "friend@example.com");
+    await act(async () => container.querySelector<HTMLFormElement>('form:has(#manager-account-email)')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(managerStatus()?.textContent).toBe("The manager access change could not be confirmed. Refresh and try again.");
+    expect(container.querySelector<HTMLInputElement>("#manager-account-email")?.value).toBe("friend@example.com");
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Remove manager access for friend@example.com"]')!.click());
+    expect(managerStatus()?.textContent).toBe("The manager access change could not be confirmed. Refresh and try again.");
+    expect(document.activeElement?.id).toBe("managed-server-manager-list-heading");
 });
 
 it("lists current managers and lets the owner remove a website account", async () => {
