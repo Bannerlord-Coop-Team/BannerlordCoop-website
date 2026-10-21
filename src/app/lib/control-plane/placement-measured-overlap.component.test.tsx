@@ -257,3 +257,24 @@ it.each([
 ])("rejects %s, in the at-once shape", (_case, value) => {
     expect(parsePlacementOverlap(value)).toBeNull();
 });
+
+// Four servers that run at most 2 at once but 3 burst together: 3 online at 20:00 is over at once, not over burst;
+// 4 online at 21:00 is over both. Its two rows differ, so the red one shows which it follows.
+const splitHost = {
+    ...burstHost, atOnceServers: 2,
+    online: week((hour) => hour < 2 ? null : hour % 24 === 20 ? 3 : hour % 24 === 21 ? 4 : 0.25),
+    overBurst: week((hour) => hour < 2 ? "-" : hour % 24 === 21 ? "1" : "0").join(""), overBurstHours: 7,
+    overAtOnce: week((hour) => hour < 2 ? "-" : hour % 24 === 20 || hour % 24 === 21 ? "1" : "0").join(""), overAtOnceHours: 14,
+};
+/** The hours a row marks `1`. */
+const marked = (row: string | null) => row === null ? null : [...row].flatMap((verdict, hour) => verdict === "1" ? [hour] : []);
+
+it("marks the hours over at-once capacity, not over burst capacity, where the two differ", () => {
+    expect(parsePlacementOverlap({ ...overlap, hosts: [splitHost] })).not.toBeNull();
+    // 20:00 and 21:00 on every day: over at once; over burst only at 21:00.
+    expect(marked(overlapOverRow(splitHost))).toEqual([20, 21, 44, 45, 68, 69, 92, 93, 116, 117, 140, 141, 164, 165]);
+    expect(marked(overlapBurstRow(splitHost))).toEqual([21, 45, 69, 93, 117, 141, 165]);
+    expect(overlapAtOnceLabel(splitHost)).toBe("14 h over at once");
+    expect(overlapCellLabel(splitHost, overlap.windowStartedAt, 20)).toBe("Mon 12 Oct 20:00 UTC · 3 online; can run 2 at once; over at-once capacity; 3 can burst together");
+    expect(overlapCellLabel(splitHost, overlap.windowStartedAt, 21)).toBe("Mon 12 Oct 21:00 UTC · 4 online; can run 2 at once; over at-once capacity; 3 can burst together, over burst capacity");
+});
