@@ -940,7 +940,5 @@
   "mods.archive.compressionRatio": "The folder compresses more than 100:1, which the server refuses.",
   "controls.modLoadFailedMissingAssembly": "Mod {modId} failed to load (missing assembly {assembly}). Disable it in Mods and start again.",
   "controls.modLoadFailedMissingDll": "Mod {modId} failed to load (a DLL its SubModule.xml lists is missing). Disable it in Mods and start again.",
-  "controls.modLoadFailed": "Mod {modId} failed to load. Disable it in Mods and start again.",
-  "insight.lastObserved": "Last observed: {state}.",
-  "insight.lastHealthCheck": "Last health check:"
+  "controls.modLoadFailed": "Mod {modId} failed to load. Disable it in Mods and start again."
 }
