@@ -1,4 +1,6 @@
 {
+  "controls.restartCancelled": "Перезапуск отменён",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "Не удалось подтвердить состояние сервера. Запрос на обновление не отправлен. Обновите страницу и повторите попытку.",
   "name.required": "Введите название сервера.",
   "action.actions.theServerOperationIsInvalid": "Недопустимая операция с сервером.",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "Войдите снова, чтобы управлять этим сервером.",

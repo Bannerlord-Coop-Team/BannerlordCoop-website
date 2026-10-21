@@ -1,4 +1,6 @@
 {
+  "controls.restartCancelled": "再起動がキャンセルされました",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "サーバーの状態を確認できませんでした。更新リクエストは送信されていません。ページを再読み込みして、もう一度お試しください。",
   "name.required": "サーバー名を入力してください。",
   "action.actions.theServerOperationIsInvalid": "サーバー操作が無効です。",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "このサーバーを操作するには、再度ログインしてください。",

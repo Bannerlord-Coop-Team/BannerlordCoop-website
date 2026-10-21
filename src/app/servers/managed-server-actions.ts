@@ -54,7 +54,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
                 let current;
                 try { current = await getMyServerSummary(accessToken, parsed.serverId); }
                 catch {
-                    return { ok: false, refresh: true, message: t("action.actions.yourServerSStatusChangedSoWeRefreshedItPress", { action: t("controls.updateNow") }) };
+                    return { ok: false, refresh: true, message: t("action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent") };
                 }
                 if (current.releaseChannel !== parsed.expectedReleaseChannel) {
                     return { ok: false, refresh: true, message: t("action.actions.yourServerSStatusChangedSoWeRefreshedItPress", { action: t("controls.updateNow") }) };

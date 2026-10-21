@@ -248,6 +248,8 @@ it("waits while the server is stopped and reconnects as soon as it is running", 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await renderConsole("preview", { operationState: "starting", observedGameState: "stopped" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(output()).not.toContain("loading campaign");
+    await renderConsole("preview", { operationState: "starting", observedGameState: "starting" });
     expect(output()).toContain("loading campaign");
     expect(output()).toContain("Live output isn’t available right now");
     expect(output()).not.toContain("The server is stopped");

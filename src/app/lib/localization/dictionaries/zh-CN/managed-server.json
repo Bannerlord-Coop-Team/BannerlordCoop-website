@@ -1,4 +1,6 @@
 {
+  "controls.restartCancelled": "重启已取消",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "无法确认服务器状态。未发送更新请求。请刷新页面后重试。",
   "name.required": "请输入服务器名称。",
   "action.actions.theServerOperationIsInvalid": "服务器操作无效。",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "请重新登录后再控制此服务器。",

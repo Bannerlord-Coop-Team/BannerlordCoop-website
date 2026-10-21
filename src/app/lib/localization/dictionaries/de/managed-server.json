@@ -1,4 +1,6 @@
 {
+  "controls.restartCancelled": "Neustart abgebrochen",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "Der Serverstatus konnte nicht bestätigt werden. Es wurde kein Update angefordert. Lade die Seite neu und versuche es erneut.",
   "name.required": "Gib einen Servernamen ein.",
   "action.actions.theServerOperationIsInvalid": "Der Serverbetrieb ist ungültig.",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "Melde dich bitte erneut an, bevor du diesen Server steuerst.",

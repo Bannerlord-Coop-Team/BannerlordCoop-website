@@ -373,7 +373,7 @@ export function ManagedServerConsole({ serverId, operationState = "running", obs
         idle: t("console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching"),
         unavailable: t("console.liveOutputIsnTAvailableRightNow"),
     };
-    const loading = observedGameState === "starting" || (operationState === "starting" && observedGameState !== "running");
+    const loading = observedGameState === "starting";
     if (loading) {
         const explanation = `${t("console.serverStatusLoadingCampaign")} — ${t("console.liveOutputIsnTAvailableRightNow")}`;
         consoleStateMessages.connecting = explanation;

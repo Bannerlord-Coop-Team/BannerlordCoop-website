@@ -1,4 +1,6 @@
 {
+  "controls.restartCancelled": "재시작 취소됨",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "서버 상태를 확인할 수 없습니다. 업데이트 요청이 전송되지 않았습니다. 페이지를 새로 고친 후 다시 시도하세요.",
   "name.required": "서버 이름을 입력하세요.",
   "action.actions.theServerOperationIsInvalid": "서버 작업이 유효하지 않습니다.",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "이 서버를 제어하려면 다시 로그인하세요.",

@@ -192,6 +192,7 @@ it("does not claim Update now was sent when its freshness read failed", async ()
     expect(result).toMatchObject({ ok: false, refresh: true });
     expect(result.checkStatus).not.toBe(true);
     expect(result.message).not.toContain("went through");
+    expect(result.message).toContain("No update was sent");
     expect(requestUpdate).not.toHaveBeenCalled();
 });
 
@@ -323,6 +324,74 @@ it("does not render a historical succeeded receipt or hide controls after a relo
         expect(container.textContent).not.toContain("Your server is ready to join");
         expect(container.querySelector("ol")).toBeNull();
         expect([...container.querySelectorAll("button")].find(button => button.textContent === "Stop")?.disabled).toBe(false);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it.each(["running", "failed", "cancelled"] as const)("names an adopted %s restart receipt as Restart", async state => {
+    const container = document.createElement("div"); const root = createRoot(container);
+    const receipt = { action: "restart-game" as const, jobId: progressJobId, state,
+        phase: state === "running" ? "preparing" as const : state, progress: "Restart receipt.",
+        attemptCount: 1, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: state !== "running",
+        failureCode: state === "failed" ? "operation_failed" as const : null, recommendedAction: null };
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: [],
+        crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: receipt };
+    startStatus.mockReset().mockResolvedValue({ serverId: progressServerId, ...receipt });
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="starting" runtimeInsight={insight} /></TestLocalization>));
+        expect(container.textContent).toContain(state === "running" ? "Restarting your server" : state === "failed" ? "Server could not restart" : "Restart cancelled");
+        expect(container.textContent).not.toContain("Starting your server");
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("restores a mounted terminal receipt after an unrelated Update request", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    requestUpdate.mockReset().mockResolvedValue({ outcome: "queued" });
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop"],
+        crashLoopDetected: false, failureCode: "operation_failed", recommendedAction: "contact-support",
+        failureMessage: "Server status needs attention.", recommendation: null, start: {
+            action: "start", jobId: progressJobId, state: "failed", phase: "failed", progress: "Attempt 5 of 5.",
+            attemptCount: 5, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: true,
+            failureCode: "operation_failed", recommendedAction: "contact-support",
+        } };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="failed" operationState="failed" runtimeInsight={insight} /></TestLocalization>));
+        const update = [...container.querySelectorAll("button")].find(button => button.textContent === "Update now")!;
+        await act(async () => update.click());
+        expect(container.textContent).toContain("Attempt 5 of 5");
+    } finally { await act(async () => root.unmount()); vi.restoreAllMocks(); }
+});
+
+it("keeps a locally verified fast Start when its succeeded receipt arrives", async () => {
+    vi.useFakeTimers();
+    request.mockReset().mockResolvedValue({ exitCode: 0 });
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" /></TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        expect(container.textContent).toContain("Your server is ready to join");
+        const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop", "restart-game"],
+            crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: {
+                action: "start", jobId: progressJobId, state: "succeeded", phase: "ready", progress: "Ready.",
+                attemptCount: 1, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: false, failureCode: null, recommendedAction: null,
+            } };
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} operationState="running" observedGameState="running" runtimeInsight={insight} /></TestLocalization>));
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+        expect(container.textContent).toContain("Your server is ready to join");
+    } finally { await act(async () => root.unmount()); }
+});
+
+it.each(["admin", "support"] as const)("does not poll an active receipt for read-only %s", async accessRole => {
+    startStatus.mockClear();
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: [],
+        crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: {
+            action: "start", jobId: progressJobId, state: "running", phase: "starting", progress: "Loading.",
+            attemptCount: 1, maximumAttempts: 5, nextRetryAt: null, stoppedRetrying: false, failureCode: null, recommendedAction: null,
+        } };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} accessRole={accessRole} observedGameState="starting" runtimeInsight={insight} /></TestLocalization>));
+        expect(startStatus).not.toHaveBeenCalled();
     } finally { await act(async () => root.unmount()); }
 });
 

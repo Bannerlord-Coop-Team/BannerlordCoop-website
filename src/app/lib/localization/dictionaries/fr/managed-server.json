@@ -1,4 +1,6 @@
 {
+  "controls.restartCancelled": "Redémarrage annulé",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "Impossible de confirmer l’état du serveur. Aucune mise à jour n’a été envoyée. Actualisez la page et réessayez.",
   "name.required": "Saisissez un nom de serveur.",
   "action.actions.theServerOperationIsInvalid": "L’opération sur le serveur n’est pas valide.",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "Veuillez vous reconnecter avant de contrôler ce serveur.",

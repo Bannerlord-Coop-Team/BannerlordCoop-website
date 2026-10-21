@@ -1,4 +1,6 @@
 {
+  "controls.restartCancelled": "Reinício cancelado",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "Não foi possível confirmar o status do servidor. Nenhuma atualização foi enviada. Atualize a página e tente novamente.",
   "name.required": "Digite um nome para o servidor.",
   "action.actions.theServerOperationIsInvalid": "A operação do servidor é inválida.",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "Entre novamente antes de controlar este servidor.",

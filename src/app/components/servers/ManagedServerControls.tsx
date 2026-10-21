@@ -134,7 +134,7 @@ export function ManagedServerControls({
     const [pendingOperation, setPendingOperation] = useState<Operation | null>(null);
     const [message, setMessage] = useState("");
     const [startRevision, setStartRevision] = useState(expectedUpdatedAt);
-    const [startJobId, setStartJobId] = useState<string | null>(() => runtimeInsight?.start && ["queued", "running", "retry-wait"].includes(runtimeInsight.start.state) ? runtimeInsight.start.jobId : null);
+    const [startJobId, setStartJobId] = useState<string | null>(() => ["owner", "manager"].includes(accessRole) && runtimeInsight?.start && ["queued", "running", "retry-wait"].includes(runtimeInsight.start.state) ? runtimeInsight.start.jobId : null);
     const [startStatus, setStartStatus] = useState<StartProgressStatus | null>(null);
     const [locallyRequested, setLocallyRequested] = useState(false);
     const receiptId = runtimeInsight?.start?.jobId ?? null;
@@ -169,15 +169,19 @@ export function ManagedServerControls({
     useEffect(() => {
         if (receiptId === null || receiptId === seenReceipt.current || isPending || trackingStop || trackingRestart || verifyRevision !== null) return;
         if (receiptId === startJobId) { seenReceipt.current = receiptId; return; }
+        if (locallyRequested && startStatus?.state === "succeeded" && runtimeInsight?.start?.state === "succeeded") {
+            seenReceipt.current = receiptId;
+            return;
+        }
         const timeout = setTimeout(() => {
             seenReceipt.current = receiptId;
             setStartStatus(null);
             setProgressPaused(false);
             setLocallyRequested(false);
-            setStartJobId(runtimeInsight?.start && ["queued", "running", "retry-wait"].includes(runtimeInsight.start.state) ? receiptId : null);
+            setStartJobId(canOperate && runtimeInsight?.start && ["queued", "running", "retry-wait"].includes(runtimeInsight.start.state) ? receiptId : null);
         }, 0);
         return () => clearTimeout(timeout);
-    }, [receiptId, isPending, trackingStop, trackingRestart, verifyRevision, startJobId, runtimeInsight?.start]);
+    }, [receiptId, isPending, trackingStop, trackingRestart, verifyRevision, startJobId, runtimeInsight?.start, canOperate, locallyRequested, startStatus?.state]);
 
     useEffect(() => {
         if (!runtimeInsight || runtimeInsight.start !== null || runtimeInsight.failureCode !== null
@@ -238,7 +242,7 @@ export function ManagedServerControls({
     }, [serverId, verifyRevision, verifyWindowOpen, verifyTimedOut, operationState, expectedUpdatedAt, isPending, endPolling, t]);
 
     useEffect(() => {
-        if (startJobId === null) return;
+        if (!canOperate || startJobId === null) return;
         let cancelled = false;
         let timeout: ReturnType<typeof setTimeout>;
         const deadline = Date.now() + 15 * 60_000;
@@ -267,7 +271,7 @@ export function ManagedServerControls({
         }
         void poll();
         return () => { cancelled = true; clearTimeout(timeout); };
-    }, [serverId, startJobId, pollRun, router]);
+    }, [serverId, startJobId, pollRun, router, canOperate]);
 
     /** Keeps the restart ref and rendered progress in step. */
     function updateRestart(next: RestartProgress | null) {
@@ -392,7 +396,7 @@ export function ManagedServerControls({
             : operation === "stop" ? t("controls.sendingYourStopRequest")
                 : operation === "update-now" ? t("controls.sendingYourUpdateRequest") : "");
         setStartRevision(expectedUpdatedAt);
-        setLocallyRequested(true);
+        if (operation === "start") setLocallyRequested(true);
         setStartJobId(null);
         setStartStatus(null);
         setProgressPaused(false);
@@ -440,7 +444,8 @@ export function ManagedServerControls({
         });
     }
 
-    const serverReceipt = !locallyRequested && runtimeInsight?.start?.state !== "succeeded"
+    const serverReceipt = !locallyRequested && !isPending && !trackingStop && !trackingRestart && verifyRevision === null
+        && runtimeInsight?.start?.state !== "succeeded"
         && (startJobId === null || startJobId === receiptId) ? runtimeInsight?.start ?? null : null;
     const displayedStartStatus = startStatus ?? serverReceipt;
     const showStart = pendingOperation === "start" || startJobId !== null || displayedStartStatus !== null;
@@ -557,6 +562,7 @@ function StartProgress({ status, paused }: { status: StartProgressStatus | null;
     const phases = ["queued", "preparing", "starting", "verifying", "ready"] as const;
     const labels = [t(status?.action === "restart-game" ? "controls.restartRequested" : "controls.startRequested"), t("controls.prepareServer"), t("controls.launchGameAndLoadCampaign"), t("controls.confirmReadiness"), t("controls.readyToJoin")];
     const failed = status?.state === "failed" || status?.state === "cancelled";
+    const restarting = status?.action === "restart-game";
     const outcome = failed ? "failed" : status?.state === "succeeded" ? "succeeded" : paused ? "paused" : "active";
     useEffect(() => {
         if (status?.state === "succeeded" && !revealed.current) {
@@ -565,8 +571,8 @@ function StartProgress({ status, paused }: { status: StartProgressStatus | null;
         }
     }, [revealAddress, status?.state]);
     return <OperationProgress
-        title={failed ? status.state === "cancelled" ? t("controls.startCancelled") : t("controls.serverCouldNotStart")
-            : status?.state === "succeeded" ? t("controls.yourServerIsReadyToJoin") : t("controls.startingYourServer")}
+        title={failed ? status.state === "cancelled" ? t(restarting ? "controls.restartCancelled" : "controls.startCancelled") : t(restarting ? "controls.serverCouldNotRestart" : "controls.serverCouldNotStart")
+            : status?.state === "succeeded" ? t("controls.yourServerIsReadyToJoin") : t(restarting ? "controls.restartingYourServer" : "controls.startingYourServer")}
         labels={labels}
         current={status?.state === "retry-wait" || (failed && ["game_crashed_during_load", "mod_load_failed"].includes(status.failureCode ?? "")) ? 2
             : Math.max(0, phases.findIndex(phase => phase === status?.phase))}

@@ -1,4 +1,6 @@
 {
+  "controls.restartCancelled": "Restart cancelled",
+  "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "We couldn't confirm server status. No update was sent. Refresh the page and try again.",
   "name.required": "Enter a server name.",
   "action.actions.theServerOperationIsInvalid": "The server operation is invalid.",
   "action.actions.pleaseSignInAgainBeforeControllingThisServer": "Please sign in again before controlling this server.",
