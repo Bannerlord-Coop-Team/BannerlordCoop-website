@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { hostServedRegionKeys, slotOwnerAccountId } from "@/app/lib/control-plane/presentation";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
+import { paginateItems } from "@/app/lib/pagination";
 import { HOSTING_REGIONS, hostingRegionLabel, type HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 type RegionCatalog = readonly HostingRegionPayload[] | null;
@@ -211,17 +212,7 @@ export function sortVpsHosts(hosts: readonly HostingAdminVpsHost[]) {
 
 export function paginateVpsHosts<T>(items: readonly T[], page: number, pageSize: number) {
     const safeSize = Number.isSafeInteger(pageSize) && pageSize > 0 ? pageSize : DEFAULT_VPS_PAGE_SIZE;
-    const pageCount = Math.max(1, Math.ceil(items.length / safeSize));
-    const current = Number.isInteger(page) ? Math.min(Math.max(page, 1), pageCount) : 1;
-    const startIndex = (current - 1) * safeSize;
-    const slice = items.slice(startIndex, startIndex + safeSize);
-    return {
-        page: current,
-        pageCount,
-        start: items.length === 0 ? 0 : startIndex + 1,
-        end: startIndex + slice.length,
-        items: slice,
-    };
+    return paginateItems(items, page, safeSize);
 }
 
 function emailLookup(accounts: readonly WebsiteAccountSummary[]): EmailLookup {
