@@ -652,6 +652,102 @@ export type HostingAdminFleetCapacity = {
     hosts: HostingFleetCapacityHost[];
 };
 
+/**
+ * Why a VPS's recommended slot count is what it is: `cpu` and `memory`, one more slot would break that budget;
+ * `floor`, the most slots that keep both budgets, if any, is below floor(vCPU / 2), but a VPS always keeps that many,
+ * so a budget breaks at the floor; `maximum`, the most slots any VPS holds keep both budgets; `drain`, its servers alone break a budget and
+ * are more than the floor, so the recommendation is below them; `unmeasured`, its usable cores or memory are neither
+ * measured nor borrowable, so there is none.
+ */
+export type HostingSlotSizingReason = "cpu" | "memory" | "floor" | "maximum" | "drain" | "unmeasured";
+
+/**
+ * Where one of a VPS's usable figures for sizing (its cores, or its memory) comes from: its own, borrowed from its
+ * instance type or its provider and vCPU count, or none.
+ */
+export type HostingSlotSizingCapacitySource = "measured" | "type" | "provider-vcpu" | "none";
+
+/** One VPS's recommended slot count. */
+export type HostingSlotSizingHost = {
+    serviceName: string;
+    /** A provider id; one the control plane does not know is reported as it is, and is `unmeasured`. */
+    provider: string;
+    regionKeys: string[];
+    vCpu: number;
+    /** Its stored slot capacity now. */
+    slots: number;
+    /** Servers in its slots now. */
+    occupants: number;
+    /** Whether relocation may move a server onto it: onboarded, with its provider's reviewed image. */
+    acceptsRelocations: boolean;
+    /** Its usable cores, its own or borrowed; null when neither measured nor borrowable. */
+    usableCores: number | null;
+    /** Where `usableCores` comes from; `none` exactly when it is null. */
+    coresSource: HostingSlotSizingCapacitySource;
+    /** Its usable memory, borrowed apart from its cores; null when neither measured nor borrowable. */
+    usableMemoryBytes: number | null;
+    /** Where `usableMemoryBytes` comes from; `none` exactly when it is null. */
+    memorySource: HostingSlotSizingCapacitySource;
+    /** The memory each online server is planned to need on it: the memory burst target, or its servers' peak where higher. */
+    memoryBytesPerServer: number;
+    /** Null only when `unmeasured`; otherwise from floor(vCPU / 2) to the model's `maximumSlots`. */
+    recommendedSlots: number | null;
+    reason: HostingSlotSizingReason;
+    /** Expected CPU shortage, in core-hours a week, of the servers it would hold at the recommendation; three decimals. */
+    expectedShortageCoreHoursPerWeek: number | null;
+    /** Whether the exact shortage keeps the CPU budget, which the rounded figure cannot tell at the edge; null when `unmeasured`. */
+    withinCpuBudget: boolean | null;
+    /** Share of the week's hours in which more of them would be online at once than its memory holds; four decimals. */
+    memoryOverflowShare: number | null;
+    /** Whether the exact share keeps the memory budget (is under it); null when `unmeasured`. */
+    withinMemoryBudget: boolean | null;
+    /** Servers that would move off it: its servers less the recommendation, for `drain` only. */
+    serversToMove: number;
+    /** Slots beyond the servers that stay that a moved server could take with both budgets kept. */
+    freeRecommendedSlots: number;
+};
+
+/** One region's moves, room and shortfall under the recommendations. */
+export type HostingSlotSizingRegion = {
+    regionKey: string;
+    /** Servers whose region this is that would move off a drained VPS. */
+    serversToMove: number;
+    /** Free recommended slots on the region's VPSs that accept relocations. */
+    freeRecommendedSlots: number;
+    /** Servers to move with no free recommended slot of their own provider in the region: more VPSs are needed. */
+    shortfallServers: number;
+};
+
+/**
+ * The read-only `slot-sizing` recommendation: each VPS's slot count from its servers' weeks and its usable capacity,
+ * so servers rarely online together can share a VPS. It changes no capacity, slot, server or placement.
+ */
+export type HostingAdminSlotSizing = {
+    generatedAt: string;
+    model: {
+        /** The most expected CPU shortage, in core-hours a week, a VPS may have at its recommendation (1). */
+        cpuShortageBudgetCoreHoursPerWeek: number;
+        /** The share of the week a VPS may have more servers online than its memory holds, kept under (0.01). */
+        memoryOverflowShare: number;
+        /** What a typical new server is planned to need while online: vCPUs and bytes. */
+        cpuBurstVcpu: number;
+        memoryBurstBytes: number;
+        /** The online history window and its half-life, in days. */
+        historyDays: number;
+        halfLifeDays: number;
+        /** A server observed for less than this counts with the typical new server's week. */
+        minimumObservedDays: number;
+        /** The most slots any VPS holds (32). */
+        maximumSlots: number;
+        /** A typical new server's expected online hours a week. */
+        typicalWeeklyOnlineHours: number;
+        /** Why the capacity samples could not be read, when they could not: every VPS is then `unmeasured`. */
+        capacityErrorCode: string | null;
+    };
+    hosts: HostingSlotSizingHost[];
+    regions: HostingSlotSizingRegion[];
+};
+
 /** The control plane's read-only `placement-plan` proposal. Nothing is relocated. */
 export type HostingAdminPlacementPlan = {
     dryRun: true;
