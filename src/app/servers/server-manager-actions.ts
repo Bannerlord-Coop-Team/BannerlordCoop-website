@@ -8,15 +8,50 @@ import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const ACCOUNT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
-export async function setServerManager(formData: FormData): Promise<{ ok: boolean; message: string }> {
+type ManagerActionResult = { ok: boolean; message: string };
+type Translate = Awaited<ReturnType<typeof getTranslations>>["t"];
+type OwnerSession = { accessToken: string; updatedAt: string };
+
+/** Grants manager access to the website account with the submitted exact email. */
+export async function setServerManager(formData: FormData): Promise<ManagerActionResult> {
     const { t } = await getTranslations("managed-server");
     const serverId = String(formData.get("serverId") ?? "");
     const email = String(formData.get("managerEmail") ?? "").trim().toLowerCase();
     if (!UUID.test(serverId) || !EMAIL.test(email) || email.length > 320) {
         return { ok: false, message: t("managerAccess.enterValidAccountEmail") };
     }
+    return await asOwner(t, serverId, async (owner) => {
+        const target = await findWebsiteAccountByEmail(email);
+        // Keep unknown-account and backend authorization responses intentionally generic.
+        if (!target) return { ok: false, message: t("managerAccess.accountCouldNotBeFound") };
+        const result = await requestMyServerManager(owner.accessToken, {
+            serverId, managerAccountId: target.accountId, enabled: true, expectedUpdatedAt: owner.updatedAt,
+        }, crypto.randomUUID());
+        return { ok: true, message: result.changed ? t("managerAccess.accessGranted") : t("managerAccess.accessAlreadyGranted") };
+    });
+}
+
+/** Revokes one listed manager's access to the owner's server. */
+export async function removeServerManager(formData: FormData): Promise<ManagerActionResult> {
+    const { t } = await getTranslations("managed-server");
+    const serverId = String(formData.get("serverId") ?? "");
+    const managerAccountId = String(formData.get("managerAccountId") ?? "").toLowerCase();
+    if (!UUID.test(serverId) || !ACCOUNT_ID.test(managerAccountId)) {
+        return { ok: false, message: t("managerAccess.requestCouldNotBeConfirmed") };
+    }
+    return await asOwner(t, serverId, async (owner) => {
+        const result = await requestMyServerManager(owner.accessToken, {
+            serverId, managerAccountId, enabled: false, expectedUpdatedAt: owner.updatedAt,
+        }, crypto.randomUUID());
+        return { ok: true, message: result.changed ? t("managerAccess.accessRemoved") : t("managerAccess.accessAlreadyRemoved") };
+    });
+}
+
+// Runs one manager change for a freshly verified owner session, then refreshes the server pages.
+async function asOwner(t: Translate, serverId: string, change: (owner: OwnerSession) => Promise<ManagerActionResult>): Promise<ManagerActionResult> {
     try {
         const supabase = await getSupabaseServerClient();
         const [{ data: userData }, { data: sessionData }] = await Promise.all([
@@ -29,15 +64,11 @@ export async function setServerManager(formData: FormData): Promise<{ ok: boolea
         }
         const server = await getMyServerSummary(accessToken, serverId);
         if (!server || server.accessRole !== "owner") return { ok: false, message: t("managerAccess.ownerOnly") };
-        const target = await findWebsiteAccountByEmail(email);
-        // Keep unknown-account and backend authorization responses intentionally generic.
-        if (!target) return { ok: false, message: t("managerAccess.accountCouldNotBeFound") };
-        const result = await requestMyServerManager(accessToken, {
-            serverId, managerAccountId: target.accountId, enabled: true, expectedUpdatedAt: server.updatedAt,
-        }, crypto.randomUUID());
+        const result = await change({ accessToken, updatedAt: server.updatedAt });
+        if (!result.ok) return result;
         revalidatePath("/servers");
         revalidatePath(`/servers/${serverId}`);
-        return { ok: true, message: result.changed ? t("managerAccess.accessGranted") : t("managerAccess.accessAlreadyGranted") };
+        return result;
     } catch (error) {
         if (error instanceof MyServersApiError && error.code === "unauthenticated") return { ok: false, message: t("managerAccess.signInAgain") };
         return { ok: false, message: t("managerAccess.requestCouldNotBeConfirmed") };

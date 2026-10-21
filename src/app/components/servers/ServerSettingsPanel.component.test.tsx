@@ -5,12 +5,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ServerSettingsPanel } from "./ServerSettingsPanel";
 
-const mocks = vi.hoisted(() => ({ router: { refresh: vi.fn() }, settings: vi.fn(), visibility: vi.fn(), release: vi.fn(), status: vi.fn(), manager: vi.fn() }));
+const mocks = vi.hoisted(() => ({ router: { refresh: vi.fn() }, settings: vi.fn(), visibility: vi.fn(), release: vi.fn(), status: vi.fn(), manager: vi.fn(), removeManager: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => mocks.router }));
 vi.mock("@/app/servers/server-settings-actions", () => ({ saveServerSettings: mocks.settings }));
 vi.mock("@/app/servers/server-visibility-actions", () => ({ setServerVisibility: mocks.visibility }));
 vi.mock("@/app/servers/server-release-actions", () => ({ changeServerRelease: mocks.release, readServerReleaseStatus: mocks.status }));
-vi.mock("@/app/servers/server-manager-actions", () => ({ setServerManager: mocks.manager }));
+vi.mock("@/app/servers/server-manager-actions", () => ({ setServerManager: mocks.manager, removeServerManager: mocks.removeManager }));
 
 const serverId = "11111111-1111-4111-8111-111111111111";
 const updatedAt = "2026-10-01T00:00:00.000Z";
@@ -33,6 +33,7 @@ beforeEach(() => {
     mocks.release.mockResolvedValue({ ok: true, jobId: serverId, message: "Release queued." });
     mocks.status.mockResolvedValue(null);
     mocks.manager.mockResolvedValue({ ok: true, message: "Manager access granted." });
+    mocks.removeManager.mockResolvedValue({ ok: true, message: "Manager access removed." });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
@@ -87,6 +88,31 @@ it("offers owner manager access through exact email entry without rendering an a
     expect(submitted.get("serverId")).toBe(serverId);
     expect(submitted.get("expectedUpdatedAt")).toBe(updatedAt);
     expect(submitted.get("managerEmail")).toBe("friend@example.com");
+});
+
+it("lists current managers and lets the owner remove a website account", async () => {
+    const managerAccountId = "22222222-2222-4222-8222-222222222222";
+    await render({ ...props, managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true, managers: [
+        { accountId: managerAccountId, label: "friend@example.com", removable: true },
+        { accountId: "123456789012345678", label: null, removable: false },
+    ] } });
+    const rows = Array.from(container.querySelectorAll("li"));
+    expect(rows.map(row => row.textContent)).toEqual(["friend@example.comRemove", "Unknown account"]);
+    const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Remove manager access for friend@example.com"]')!;
+    await act(async () => remove.click());
+    expect(mocks.removeManager).toHaveBeenCalledExactlyOnceWith(expect.any(FormData));
+    const submitted = mocks.removeManager.mock.calls[0]![0] as FormData;
+    expect(submitted.get("serverId")).toBe(serverId);
+    expect(submitted.get("managerAccountId")).toBe(managerAccountId);
+    expect(container.textContent).toContain("Manager access removed.");
+});
+
+it("tells the owner when there are no managers or the list could not be read", async () => {
+    await render({ ...props, managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true, managers: [] } });
+    expect(container.textContent).toContain("No one has manager access yet.");
+    await render({ ...props, managerAccess: { serverId, expectedUpdatedAt: updatedAt, canEdit: true, managers: null } });
+    expect(container.textContent).toContain("The manager list could not be loaded.");
+    expect(container.querySelector("#manager-account-email")).not.toBeNull();
 });
 it("saves name and maintenance once, then carries each returned generation into visibility and release", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);

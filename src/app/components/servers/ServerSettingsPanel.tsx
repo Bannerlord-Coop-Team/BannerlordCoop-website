@@ -12,6 +12,7 @@ import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE, type MaintenanceSlot, typ
 import type { ReleaseChannel, ReleaseStatus } from "../../../../supabase/functions/_shared/server-release-contract";
 import { CircleAlert, Globe2, LockKeyhole, Search } from "lucide-react";
 import { ManagedServerManagerAccess } from "./ManagedServerManagerAccess";
+import type { ServerManager } from "@/app/lib/hosting/server-managers";
 
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-40";
 const ACTIVE_RELEASE_JOB_STATES = new Set(["queued", "running", "retry-wait"]);
@@ -28,7 +29,7 @@ type VisibilityAccess = { serverId: string; expectedUpdatedAt: string; canEdit: 
 export function ServerSettingsPanel({ name, visibility, visibilityAccess, releaseAccess, settingsAccess, managerAccess }: {
     settingsAccess?: VisibilityAccess & { maintenanceSlot?: string; timezone?: string };
     releaseAccess?: VisibilityAccess & { channel: ReleaseChannel };
-    managerAccess?: { serverId: string; expectedUpdatedAt: string; canEdit: boolean };
+    managerAccess?: { serverId: string; expectedUpdatedAt: string; canEdit: boolean; managers?: readonly ServerManager[] | null };
     name: string; visibility?: Visibility; visibilityAccess?: VisibilityAccess;
 }) {
     const { t } = useTranslations("managed-server");

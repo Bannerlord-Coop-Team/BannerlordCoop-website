@@ -28,6 +28,7 @@ import {
     type MyServerDeletionStatus,
 } from "@/app/lib/hosting/my-servers";
 import { getMyServerDeletionStatus, getMyServerMoveStatus, getMyServerNotices, getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
+import { listServerManagers } from "@/app/lib/hosting/server-managers";
 import { isMoveInProgress } from "@/app/lib/hosting/server-move";
 import { ManagedServerNoticeBanner } from "@/app/components/servers/ManagedServerNoticeBanner";
 import { ManagedServerMoveProvider, ManagedServerMoveStatus } from "@/app/components/servers/ManagedServerMoveStatus";
@@ -142,12 +143,13 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
     const { t } = await getTranslations("managed-server");
     // Region names live with onboarding in the servers namespace, so both pages share one translation.
     const { t: tServers } = await getTranslations("servers");
-    const [deletionStatus, notices, move] = await Promise.all([
+    const [deletionStatus, notices, move, managers] = await Promise.all([
         server.accessRole === "owner"
             ? getMyServerDeletionStatus(accessToken, server.serverId, AbortSignal.timeout(5_000)).catch(() => null)
             : null,
         readServerNotices(accessToken, server.serverId),
         readServerMoveStatus(accessToken, server.serverId),
+        server.accessRole === "owner" ? readServerManagers(accessToken, server.serverId) : null,
     ]);
     const initializing = INITIALIZING_SERVER_STATES.has(server.operationState);
     const managedAccessLabels: Record<MyServerSummary["accessRole"], string> = {
@@ -176,7 +178,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
             <ManagedServerMods key={`${userId}:${server.serverId}`} serverId={server.serverId} canManage={server.accessRole === "owner" || server.accessRole === "manager"} />
         </ServerWorkspacePanel>
         <ServerWorkspacePanel section="Settings">
-            <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} managerAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
+            <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} managerAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner", managers }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
         </ServerWorkspacePanel>
     </ServerManagementWorkspace></ManagedServerMoveProvider>;
 }
@@ -328,6 +330,11 @@ function rateLimited(error: unknown) {
 // Notices are optional page content: a failed read, a slow one or an older control plane never blocks the page.
 function readServerNotices(accessToken: string, serverId: string) {
     return getMyServerNotices(accessToken, serverId, AbortSignal.timeout(5_000)).catch(() => null);
+}
+
+// The manager list is optional too: a failed read, or a control plane without it, still leaves the grant form.
+function readServerManagers(accessToken: string, serverId: string) {
+    return listServerManagers(accessToken, serverId, AbortSignal.timeout(5_000)).catch(() => null);
 }
 
 // A move status is optional page content too: any failure, including a control plane without the read, shows no move.

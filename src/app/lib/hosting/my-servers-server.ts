@@ -251,6 +251,30 @@ function isMyServerMove(value: unknown): value is MyServerMove {
         : presence !== "null" && MOVE_FIELD_VALUES[field as MoveField](value[field]));
 }
 
+/** One unrevoked manager grant: a website account UUID, or a legacy Discord user ID. */
+export type MyServerManagerGrant = { accountId: string; grantedAt: string };
+
+const MAXIMUM_LISTED_MANAGERS = 200;
+const MANAGER_PRINCIPAL_ID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[1-9]\d{16,19})$/iu;
+
+/** Reads the owner's unrevoked manager grants for one server, oldest first; only the owner may read them. */
+export async function getMyServerManagers(accessToken: string, serverId: string, callerSignal?: AbortSignal): Promise<MyServerManagerGrant[]> {
+    if (!REQUEST_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid managed server ID.");
+    const value = await readOwner(accessToken, { operation: "server-managers", input: { serverId } }, ownerReadSignal(accessToken, callerSignal));
+    if (!isRecord(value) || !hasExactKeys(value, ["serverId", "managers"]) || value.serverId !== serverId
+        || !Array.isArray(value.managers) || value.managers.length > MAXIMUM_LISTED_MANAGERS || !value.managers.every(isManagerGrant)
+        || new Set(value.managers.map(manager => manager.accountId)).size !== value.managers.length) {
+        throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid manager list.", true);
+    }
+    return value.managers;
+}
+
+// A grant carries exactly its principal and the time it was made.
+function isManagerGrant(value: unknown): value is MyServerManagerGrant {
+    return isRecord(value) && hasExactKeys(value, ["accountId", "grantedAt"])
+        && typeof value.accountId === "string" && MANAGER_PRINCIPAL_ID.test(value.accountId) && timestamp(value.grantedAt);
+}
+
 
 // Validates the owner token and bounds a read by the caller's signal and a 30-second timeout.
 function ownerReadSignal(accessToken: string, callerSignal?: AbortSignal) {
@@ -271,7 +295,8 @@ async function readOwner(accessToken: string, request:
     | { operation: "server-start-status"; input: { serverId: string; jobId: string; includeRuntimeInsight?: boolean } }
     | { operation: "server-resources"; input: { serverId: string } }
     | { operation: "server-notices"; input: { serverId: string } }
-    | { operation: "server-move-status"; input: { serverId: string } }, signal: AbortSignal) {
+    | { operation: "server-move-status"; input: { serverId: string } }
+    | { operation: "server-managers"; input: { serverId: string } }, signal: AbortSignal) {
     const requestId = crypto.randomUUID();
     let response: Response;
     try {
