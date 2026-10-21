@@ -98,8 +98,10 @@ const risky: HostingFleetCapacityHost = {
     limitedBy: "memory", samples: 2016,
     stealHourly: hex(week(() => 60)), busyHourly: hex(week(() => 70)),
 };
+// Its usable memory is its own 8 GiB less overhead, so its two servers at once follow from its figures, as a control plane
+// from before the static floor models them.
 const matching: HostingFleetCapacityHost = {
-    ...risky, serviceName: "vps-uk-match.vps.ovh.net", regionKeys: ["united-kingdom"], memoryBytes: 8 * GIB, instanceTypeKey: MATCH_KEY,
+    ...risky, serviceName: "vps-uk-match.vps.ovh.net", regionKeys: ["united-kingdom"], memoryBytes: 8 * GIB, usableMemoryBytes: 7_730_941_133, instanceTypeKey: MATCH_KEY,
     occupants: [{ serverId: "44444444-4444-4444-8444-444444444444", displayName: "Lone Wolf", demand: demandOf(0.6, GIB) }],
     steal: { samples: 2016, mean: 0.1, p95: 0.2, max: 0.9 }, demandSource: "type", modelledServers: 2, limitedBy: "cpu",
     stealHourly: hex(week(() => 1)), busyHourly: hex(week(() => 20)),
@@ -146,7 +148,8 @@ const blank: HostingAdminFleetCapacity = {
     instanceTypes: [{ ...ovhSix, hosts: 2, servers: 0, demand: noDemand, steal: null, modelledServers: null, demandSource: "none" }],
     hosts: [quiet, spare],
 };
-const hints = fleetCapacityHints(model);
+// The fixture plans and models as a control plane from before the static cap, so its tooltips are those of an uncapped read.
+const hints = fleetCapacityHints(model, false);
 /** Slot sizing for two of the VPSs: one grows, one is unmeasured. */
 const sizing: HostingAdminSlotSizing = {
     generatedAt: "2026-10-19T00:07:40.123Z",
@@ -272,7 +275,7 @@ it("shows what a server needs and compares it with the static rule", async () =>
         ["CPU p50", "0.85 cores"], ["CPU p95", "1.20 cores"], ["CPU max", "1.95 cores"], ["Running server-hours", "412.5 server-h"],
         ["Memory p50", "1.40 GiB"], ["Memory p95", "1.80 GiB"], ["Memory max", "2.00 GiB"], ["Throttled", "1.2%"],
     ]);
-    expect(needs.textContent).toContain("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB). Every online server is planned to burst to 1.6 vCPU and 2.5 GiB at once, or to its VPS's measured peaks where higher, up to the static rule's 2 vCPU and 3 GiB; the fleet's highest CPU peak is 1.950 cores, so VPSs plan from 1.600 cores to 1.950 cores per server (98% of 2 vCPU at most), and no memory peak is above its target (the fleet's highest is 2.00 GiB), so every VPS plans 2.50 GiB per server (83% of 3 GiB); each VPS's own is in its per-server column.");
+    expect(needs.textContent).toContain("Today's static rule reserves 2 vCPU · 3 GiB per server. A running server uses 0.85 cores at p50 (43% of 2 vCPU) and 1.80 GiB at p95 (60% of 3 GiB). Every online server is planned to burst to 1.6 vCPU and 2.5 GiB at once, or to its VPS's measured peaks where higher; the fleet's highest CPU peak is 1.950 cores, so VPSs plan from 1.600 cores to 1.950 cores per server (98% of 2 vCPU at most), and no memory peak is above its target (the fleet's highest is 2.00 GiB), so every VPS plans 2.50 GiB per server (83% of 3 GiB); each VPS's own is in its per-server column.");
 });
 
 it("compares providers' steal and per-server needs", async () => {
@@ -500,10 +503,10 @@ it("explains each figure in a tooltip that keyboard and pointer users can reach"
     expect(tooltipOf(button("Memory p95", pane("What a server needs"))).textContent).toBe(`${hints.memory} ${hints.p95}`);
     expect(tooltipOf(button("Memory p95", pane("Providers"))).textContent).toBe(`${hints.memory} ${hints.p95}`);
     expect(`${hints.p50} ${hints.p95}`).not.toContain("stable");
-    expect(hints.memory).toContain("The model plans memory at the 2.5 GiB burst target, or the peak where higher, up to the static rule's 3 GiB.");
+    expect(hints.memory).toContain("The model plans memory at the 2.5 GiB burst target, or the peak where higher.");
     expect(hints.p95).toContain("shown for comparison; the model does not plan memory from it");
     expect(hints.max).toContain("Each VPS plans the peak of its own demand source (its own servers, its instance type or the fleet) where that is above the 2.5 GiB target");
-    expect(tooltipOf(button("Per server", pane("VPSs"))).textContent).toContain("1.6 vCPU and 2.5 GiB, or the peak CPU and memory of the source shown where higher, up to the static rule's 2 vCPU and 3 GiB.");
+    expect(tooltipOf(button("Per server", pane("VPSs"))).textContent).toContain("1.6 vCPU and 2.5 GiB, or the peak CPU and memory of the source shown where higher.");
     expect(tooltipOf(button("CPU p50", pane("What a server needs"))).textContent).toContain("a server's stable CPU use, shown for comparison");
     // The CPU peak is what the model plans above the target, and says it is a 5-minute mean; memory's is plain.
     expect(tooltipOf(button("CPU max", pane("What a server needs"))).textContent).toBe(`${hints.cpu} ${hints.cpuMax}`);
@@ -531,15 +534,39 @@ it("shows a plan capped at the static rule beside the higher peak, and servers a
     const capped: HostingFleetCapacityHost = { ...roomy, peakCpuCores: 2.72, demandCpuCores: 2, usableCores: 5.733, modelledServers: 3 };
     mocks.request.mockResolvedValue({ ...capacity, fleet: peaks, hosts: [capped] });
     await open();
-    expect(pane("What a server needs").textContent).toContain("up to the static rule's 2 vCPU and 3 GiB; the fleet's highest CPU peak is 2.720 cores, so VPSs plan from 1.600 cores to 2.000 cores per server (100% of 2 vCPU at most)");
+    expect(pane("What a server needs").textContent).toContain("or to its VPS's measured peaks where higher, up to the static rule's 2 vCPU and 3 GiB; the fleet's highest CPU peak is 2.720 cores, so VPSs plan from 1.600 cores to 2.000 cores per server (100% of 2 vCPU at most)");
     expect(cellTexts(hostRow("vps-1a2b3c4d")).slice(0, 2)).toEqual(["3 / 3 slotsMatches", "CPU"]);
     expect(cellTexts(hostRow("vps-1a2b3c4d"))[6]).toBe("2.000 cores2.50 GiBType · 2.5 GiB burst · 2 vCPU cap · peaks 2.720 cores, 2.00 GiB");
-    // A control plane from before the cap plans the peak and models two servers at it; the tab still reads it.
+    const cappedHints = fleetCapacityHints(model, true);
+    const tooltips = () => ({
+        modelled: tooltipOf(button("Servers at once", pane("VPSs"))).textContent,
+        perServer: tooltipOf(button("Per server", pane("VPSs"))).textContent,
+        limitedBy: tooltipOf(button("Limited by", pane("VPSs"))).textContent,
+        cpuMax: tooltipOf(button("CPU max", pane("What a server needs"))).textContent,
+        memoryMax: tooltipOf(button("Memory max", pane("What a server needs"))).textContent,
+    });
+    expect(tooltips()).toEqual({
+        modelled: `${cappedHints.modelled} ${cappedHints.slots}`, perServer: `${cappedHints.perServer} ${cappedHints.demandSource}`, limitedBy: cappedHints.limitedBy,
+        cpuMax: `${cappedHints.cpu} ${cappedHints.cpuMax}`, memoryMax: `${cappedHints.memory} ${cappedHints.max}`,
+    });
+    expect(tooltips().modelled).toContain("but never fewer than the static rule gives it, min(floor(vCPU ÷ 2), floor(RAM ÷ 3 GiB)), whatever its steal and overhead;");
+    expect(tooltips().perServer).toContain("or the peak CPU and memory of the source shown where higher, up to the static rule's 2 vCPU and 3 GiB.");
+
+    // A control plane from before the cap plans the peak and models two servers at it. The tab still reads it, and its
+    // summary and tooltips describe it as it plans: up to the 2.72-core peak, with no cap or static floor.
     mocks.request.mockResolvedValue({ ...capacity, fleet: peaks, hosts: [{ ...capped, demandCpuCores: 2.72, modelledServers: 2 }] });
     await act(async () => button("Refresh").click());
     await settle();
     expect(cellTexts(hostRow("vps-1a2b3c4d")).slice(0, 2)).toEqual(["2 / 3 slotsAt risk −1", "CPU"]);
     expect(cellTexts(hostRow("vps-1a2b3c4d"))[6]).toBe("2.720 cores2.50 GiBType · 2.5 GiB burst · peaks 2.720 cores, 2.00 GiB");
+    const summary = pane("What a server needs").textContent;
+    expect(summary).toContain("or to its VPS's measured peaks where higher; the fleet's highest CPU peak is 2.720 cores, so VPSs plan from 1.600 cores to 2.720 cores per server (136% of 2 vCPU at most)");
+    expect(summary).not.toContain("up to the static rule's");
+    expect(tooltips()).toEqual({
+        modelled: `${hints.modelled} ${hints.slots}`, perServer: `${hints.perServer} ${hints.demandSource}`, limitedBy: hints.limitedBy,
+        cpuMax: `${hints.cpu} ${hints.cpuMax}`, memoryMax: `${hints.memory} ${hints.max}`,
+    });
+    expect(Object.values(tooltips()).join(" ")).not.toMatch(/up to the static rule's|up to 2 vCPU|never fewer|Where the static rule sets/u);
 });
 
 it("still shows the current control plane's read, which plans memory at its p95 without a memory burst target", async () => {
@@ -554,7 +581,7 @@ it("still shows the current control plane's read, which plans memory at its p95 
     mocks.request.mockResolvedValue({ ...capacity, model: currentModel, hosts: currentHosts });
     await open();
     const needs = pane("What a server needs");
-    expect(needs.textContent).toContain("Every online server is planned to burst to 1.6 vCPU at once, or to its VPS's measured peak where higher, up to the static rule's 2 vCPU. The fleet's highest peak is 1.950 cores, so VPSs plan from 1.600 cores to 1.950 cores per server (98% of 2 vCPU at most); each VPS's own is in its per-server column.");
+    expect(needs.textContent).toContain("Every online server is planned to burst to 1.6 vCPU at once, or to its VPS's measured peak where higher. The fleet's highest peak is 1.950 cores, so VPSs plan from 1.600 cores to 1.950 cores per server (98% of 2 vCPU at most); each VPS's own is in its per-server column.");
     expect(needs.textContent).not.toContain("2.5 GiB");
     const row = hostRow("vps-1a2b3c4d");
     expect([...row.querySelector("th")!.querySelectorAll("li")].map((item) => item.textContent)[0]).toBe("Calradia Company0.55 cores stable (p50), peak 1.10 · 1.65 GiB at p95");

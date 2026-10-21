@@ -566,7 +566,7 @@ it("explains each column as the control plane computes it", () => {
     expect(hints.free).toContain("0 for Drain and Unmeasured");
     expect(hints.capacity).toContain("borrowed (provider and vCPU), the median of the measured VPSs of its provider and vCPU count");
     expect(hints.capacity).toContain("unknown, nothing to measure or borrow, which leaves the VPS Unmeasured. Each is borrowed on its own.");
-    expect(hints.capacity).toContain("2.5 GiB of memory on it, or its servers' measured peak where higher, up to the static rule's 3 GiB.");
+    expect(hints.capacity).toContain("2.5 GiB of memory on it, or its servers' measured peak where higher, capped at 3 GiB once the control plane applies the static rule.");
     expect(hints.shortfall).toContain("the read does not say how many");
     // No hint names a raw provider id.
     for (const hint of Object.values(hints)) expect(hint).not.toMatch(/ovhcloud-vps|contabo-vps|hosthatch-vps/u);

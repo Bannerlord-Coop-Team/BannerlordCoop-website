@@ -26,8 +26,9 @@ const WEEK_HOURS = 168;
 const MAXIMUM_BURST_VCPU = 256;
 const MAXIMUM_BURST_MEMORY_BYTES = 64 * GIB;
 /**
- * The most memory a server is planned to need while online: the static rule's 3 GiB per server, the control plane's
- * `FLEET_CAPACITY_STATIC_BURST_MEMORY_BYTES_PER_SERVER`. The slot-sizing read does not carry it, unlike the capacity read.
+ * The most memory a server is planned to need while online once the control plane applies the static rule (#550): its
+ * 3 GiB per server, the control plane's `FLEET_CAPACITY_STATIC_BURST_MEMORY_BYTES_PER_SERVER`. The slot-sizing read
+ * carries neither the rule nor whether it applies it, so the capacity hint names the cap in words true either way.
  */
 const STATIC_MEMORY_BYTES_PER_SERVER = 3 * GIB;
 /** A figure within this of a whole number of its last decimal is that number: floating-point noise, not a digit. */
@@ -487,7 +488,7 @@ export function slotSizingHints(sizingModel: Model) {
         overflow: `Memory over: the expected share of the week in which more of those servers are online at once than floor(usable memory ÷ memory per server). The budget is under ${share}. Over budget marks where the control plane says the exact share reaches it, which the rounded figure cannot show at the edge; only Drain and Floor can be.`,
         toMove: "Servers that would move off it: with Drain, its servers beyond the recommendation, dropped one at a time by whichever leaves the broken budget lowest; 0 otherwise. Nothing moves them.",
         free: "Free recommended slots: slots beyond the servers that stay that a moved server could take, counted as a typical server, with both budgets kept. The recommendation less its servers for CPU budget, Memory budget and Maximum; the room the budgets allow under the floor for Floor; 0 for Drain and Unmeasured. Only a VPS that accepts relocations offers them to its region.",
-        capacity: `Its usable cores and memory, each with where it comes from: measured, its own from the capacity read; borrowed (type), the median of the measured VPSs of its instance type; borrowed (provider and vCPU), the median of the measured VPSs of its provider and vCPU count; unknown, nothing to measure or borrow, which leaves the VPS Unmeasured. Each is borrowed on its own. Each online server is planned to need ${ruleGiB(sizingModel.memoryBurstBytes)} of memory on it, or its servers' measured peak where higher, up to the static rule's ${ruleGiB(STATIC_MEMORY_BYTES_PER_SERVER)}.`,
+        capacity: `Its usable cores and memory, each with where it comes from: measured, its own from the capacity read; borrowed (type), the median of the measured VPSs of its instance type; borrowed (provider and vCPU), the median of the measured VPSs of its provider and vCPU count; unknown, nothing to measure or borrow, which leaves the VPS Unmeasured. Each is borrowed on its own. Each online server is planned to need ${ruleGiB(sizingModel.memoryBurstBytes)} of memory on it, or its servers' measured peak where higher, capped at ${ruleGiB(STATIC_MEMORY_BYTES_PER_SERVER)} once the control plane applies the static rule.`,
         regionToMove: "Servers to move off drained VPSs whose region this is: a server's own published region, else its VPS's.",
         regionFree: "Free recommended slots on the region's VPSs that accept relocations. Regions overlap, so a VPS in several regions offers the same slots to each.",
         shortfall: "Shortfall: servers to move with no free recommended slot of their own provider in the region, since a move keeps a server on its provider. They need more VPSs; the read does not say how many.",

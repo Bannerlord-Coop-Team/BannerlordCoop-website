@@ -962,17 +962,18 @@ figure; the tab presents them as follows.
    share, and a sentence comparing them with the static rule and saying what is
    planned ("A running server uses 1.18 cores at p50 (59% of 2 vCPU) and 1.73 GiB
    at p95 (58% of 3 GiB). Every online server is planned to burst to 1.6 vCPU and
-   2.5 GiB at once, or to its VPS's measured peaks where higher, up to the static
-   rule's 2 vCPU and 3 GiB; no CPU peak is
+   2.5 GiB at once, or to its VPS's measured peaks where higher; no CPU peak is
    above its target (the fleet's highest is 1.492 cores), so every VPS plans 1.600
    cores per server (80% of 2 vCPU), and no memory peak is above its target (the
    fleet's highest is 2.26 GiB), so every VPS plans 2.50 GiB per server (83% of
    3 GiB)."). No VPS's source peaks above the fleet, so above a target the plans
-   range from the target to the fleet's peak, or to the static rule's 2 vCPU or
-   3 GiB where the peak is above that ("the fleet's highest CPU peak is 2.720
-   cores, so VPSs plan from 1.600 cores to 2.000 cores per server (100% of 2 vCPU
-   at most)"), and the sentence says each VPS's own
-   is in its per-server column. Until the fleet has `minimumRunningHours` nothing
+   range from the target to the fleet's peak ("the fleet's highest CPU peak is
+   2.720 cores, so VPSs plan from 1.600 cores to 2.720 cores per server (136% of
+   2 vCPU at most)"), and the sentence says each VPS's own
+   is in its per-server column. A capped read (see below) adds "up to the static
+   rule's 2 vCPU and 3 GiB" after "where higher" and caps that bound too: "so
+   VPSs plan from 1.600 cores to 2.000 cores per server (100% of 2 vCPU at
+   most)". Until the fleet has `minimumRunningHours` nothing
    is planned and the sentence stops after what a server uses.
 3. **Providers**: VPSs, servers, steal mean, p95 and max, and per-server CPU p50
    and p95 and memory p95, one row per provider. Providers are named OVHcloud,
@@ -1007,10 +1008,25 @@ Every figure's label is a button with a tooltip explaining it (steal, busy
 cores, overhead, usable, p50/p95/max, per server and its source, servers at
 once, limited by, throttled share, running server-hours and the hourly strips).
 The memory tooltips say that the model plans memory at the burst target, or the
-peak where higher, up to the static rule's 3 GiB, and that the p95 is shown for
-comparison; without a memory burst target they say that the p95 is planned. The
-CPU, per-server and servers-at-once tooltips name the 2 vCPU cap, and servers at
-once and limited by the static floor.
+peak where higher, and that the p95 is shown for comparison; without a memory
+burst target they say that the p95 is planned. For a capped read the memory,
+CPU max and per-server tooltips add the static rule's 3 GiB and 2 vCPU cap
+("up to the static rule's 2 vCPU and 3 GiB"), servers at once adds the static
+floor ("but never fewer than the static rule gives it, min(floor(vCPU ÷ 2),
+floor(RAM ÷ 3 GiB)), whatever its steal and overhead"), and limited by says
+which resource the floor stops at. A read from before the cap claims neither.
+
+**Capped reads.** `fleetCapacityCapped` tells the website whether a read comes
+from a control plane that applies the static rule (#550), from what the read
+shows. Either some VPS plans below `max(target, peak)`, which only the cap
+does, or the static floor lifted some VPS. A lifted VPS is modelled at
+min(floor(vCPU ÷ 2), floor(RAM ÷ 3 GiB)), above
+floor(min(usable cores ÷ per-server cores, usable memory ÷ per-server memory))
+worked out as the control plane does. A read that shows neither, where no peak
+is above the cap and the floor lifted no VPS, plans and models every VPS the same
+way under either control plane. It reads as uncapped, and the uncapped copy is
+true of every figure in it. The per-server label decides for each VPS on its
+own, naming a cap only where its planned figure is at one.
 A tooltip opens on hover, focus or a tap and closes on Escape, when the pointer
 or focus leaves, or when the window scrolls or resizes; only one is open at a
 time. These are the shared `MetricHint` buttons described under the measured

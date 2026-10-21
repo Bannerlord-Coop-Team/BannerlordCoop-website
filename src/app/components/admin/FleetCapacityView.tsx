@@ -18,6 +18,7 @@ import {
     demandSourceLabel,
     fleetCapacityDataNote,
     fleetCapacityErrorMessage,
+    fleetCapacityCapped,
     fleetCapacityHints,
     fleetCapacityHostGroups,
     fleetCapacityHostNote,
@@ -125,7 +126,8 @@ export function FleetCapacityView() {
     }, [load]);
 
     const capacity = state.kind === "ready" ? state.capacity : state.previous;
-    const hints = useMemo(() => capacity === null ? null : fleetCapacityHints(capacity.model), [capacity]);
+    // The tooltips describe the static rule's cap and floor only for a read that applies them.
+    const hints = useMemo(() => capacity === null ? null : fleetCapacityHints(capacity.model, fleetCapacityCapped(capacity)), [capacity]);
     // Too little data overall, and VPSs without host metrics, each get their own note.
     const notes = capacity === null ? [] : [fleetCapacityDataNote(capacity), fleetCapacityHostNote(capacity)].filter((note) => note !== null);
     return (
