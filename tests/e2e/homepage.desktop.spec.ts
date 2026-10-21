@@ -28,7 +28,7 @@ test("uses the complete top navigation on large screens", async ({ page }) => {
     }
     await expect(changelogLink).toBeVisible();
 
-    await page.getByRole("heading", { name: "Rally The Warband Raise The Banner Conquer Calradia" }).click();
+    await page.getByRole("heading", { name: "Forge Alliances Wage War Shared Calradia" }).click();
     await expect(communityButton).toHaveAttribute("aria-expanded", "false");
     await expect(primaryNavigation.getByRole("link", { name: "Discord", exact: true })).toHaveCount(0);
 

@@ -53,12 +53,15 @@ describe("home localization", () => {
         expect(page.props.locale).toBe("en");
         expect(Object.keys(page.props.messages)).toEqual(["home"]);
         const root = await markup(page);
-        expect(root.textContent).toContain("Rally The WarbandRaise The BannerConquer Calradia");
+        expect(root.textContent).toContain("Forge AlliancesWage WarShared Calradia");
         expect(root.textContent).toContain("12,345");
         expect(root.textContent).toContain("Not available");
         expect(root.querySelector("video")?.getAttribute("aria-label")).toBe(home["trailer.label"]);
         expect(root.querySelector("video a")?.getAttribute("href")).toContain("bannerlord-coop-trailer-v4.mp4");
-        expect(root.querySelector('a[href="#download"]')?.textContent).toContain(home["hero.download"]);
+        const heroDownload = root.querySelector("section[aria-labelledby='hero-heading'] button[aria-haspopup='dialog']");
+        expect(heroDownload?.textContent).toBe(`${common["download.trigger"]}${home["download.platforms"]}`);
+        expect(root.querySelector("section[aria-labelledby='hero-heading'] a[href='/servers']")?.textContent).toContain(home["hero.rentServer"]);
+        expect(root.querySelector("section[aria-labelledby='hero-heading'] a[href='https://discord.gg/bannerlordcoop']")?.getAttribute("aria-label")).toBe(home["hero.discord"]);
         expect(await generateMetadata()).toMatchObject({ description: home["metadata.description"], alternates: { canonical: "/" }, openGraph: { locale: "en_US", title: "Bannerlord Coop", description: home["metadata.description"] }, twitter: { description: home["metadata.description"] } });
     });
 
