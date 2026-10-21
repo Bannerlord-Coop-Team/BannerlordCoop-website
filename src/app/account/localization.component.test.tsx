@@ -90,15 +90,31 @@ it.each([
 it.each([
     ["qualifying", "2099-01-01T00:00:00Z", "pending", "membership.verified", "membership.syncPending"],
     ["qualifying", "2000-01-01T00:00:00Z", "unavailable", "membership.verifyRequired", "membership.syncUnavailable"],
-    ["nonqualifying", null, "pending", "membership.nonqualifying", "membership.syncPending"],
+    ["qualifying", null, "pending", "membership.verifyRequired", "membership.syncPending"],
+    ["unverified", null, "pending", "membership.verifyRequired", "membership.syncPending"],
+    ["unknown", null, "unavailable", "membership.verifyRequired", "membership.syncUnavailable"],
     ["review_required", null, "unavailable", "membership.reviewRequired", "membership.syncUnavailable"],
 ] as const)("localizes linked membership %s notices without translating actual Discord names", async (verification, validUntil, sync, verificationKey, syncKey) => {
     const view = await renderAccount(accountStatus(true, { ...EMPTY_MEMBERSHIP, linked: true, verification, validUntil, sync }));
     for (const key of [verificationKey, syncKey, "membership.expiry", "badge.connected", "patreon.linked", "patreon.verify"]) {
         expect(view.textContent).toContain(translated[key]);
     }
+    expect([...view.querySelectorAll('[role="status"]')].map(node => node.textContent)).toEqual([translated[verificationKey], translated[syncKey]]);
     expect(view.textContent).toContain("actual_discord");
     expect(view.textContent).not.toContain(translated["discord.connected"]);
+});
+
+it.each([
+    ["not_needed", null], ["applied", null],
+    ["pending", "membership.syncPending"], ["unavailable", "membership.syncUnavailable"],
+] as const)("omits nonqualifying verification status while preserving sync=%s", async (sync, syncKey) => {
+    const view = await renderAccount(accountStatus(true, { ...EMPTY_MEMBERSHIP, linked: true, verification: "nonqualifying", sync }));
+    expect(view.textContent).not.toContain("No eligible membership benefits were found.");
+    expect(view.textContent).not.toContain("membership.nonqualifying");
+    expect([...view.querySelectorAll('[role="status"]')].map(node => node.textContent)).toEqual(syncKey ? [translated[syncKey]] : []);
+    for (const key of ["membership.expiry", "patreon.linked", "patreon.verify"]) {
+        expect(view.textContent).toContain(translated[key]);
+    }
 });
 
 it.each(["Discord", "Patreon"] as const)("localizes %s disconnect confirmation and pending accessibility", async provider => {

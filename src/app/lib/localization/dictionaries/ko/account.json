@@ -23,7 +23,6 @@
   "patreon.linked": "Patreon 계정이 연결되어 있습니다.",
   "patreon.benefits": "Patreon을 연결하여 멤버십 혜택과 생성 가능한 서버 수를 확인하세요.",
   "membership.verified": "멤버십이 인증되었습니다.",
-  "membership.nonqualifying": "이용 가능한 멤버십 혜택을 찾지 못했습니다.",
   "membership.reviewRequired": "멤버십 검토가 필요합니다. 다시 시도하기 전에 지원팀에 문의하세요.",
   "membership.verifyRequired": "새 서버를 생성하기 전에 멤버십을 인증하세요.",
   "membership.syncPending": "생성 가능한 서버 수를 갱신하고 있습니다.",

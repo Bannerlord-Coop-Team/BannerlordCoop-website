@@ -89,7 +89,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                     <div className="flex flex-wrap items-center justify-between gap-3"><h3 id="patreon-heading" className="font-semibold">Patreon</h3><ConnectionBadge connected={status?.membership.linked} t={t} /></div>
                     <p className="mt-3 text-sm leading-6 text-foreground-muted">{status?.membership.linked ? t("patreon.linked") : t("patreon.benefits")}</p>
                     {status?.membership.linked && <div className="mt-3 space-y-2 text-sm leading-6 text-foreground-muted">
-                        <p role="status">{status.membership.verification === "qualifying" && status.membership.validUntil && Date.parse(status.membership.validUntil) > checkedAt ? t("membership.verified") : status.membership.verification === "nonqualifying" ? t("membership.nonqualifying") : status.membership.verification === "review_required" ? t("membership.reviewRequired") : t("membership.verifyRequired")}</p>
+                        {status.membership.verification !== "nonqualifying" && <p role="status">{status.membership.verification === "qualifying" && status.membership.validUntil && Date.parse(status.membership.validUntil) > checkedAt ? t("membership.verified") : status.membership.verification === "review_required" ? t("membership.reviewRequired") : t("membership.verifyRequired")}</p>}
                         {status.membership.sync === "pending" && <p role="status">{t("membership.syncPending")}</p>}
                         {status.membership.sync === "unavailable" && <p role="status">{t("membership.syncUnavailable")}</p>}
                         <p>{t("membership.expiry")}</p>
