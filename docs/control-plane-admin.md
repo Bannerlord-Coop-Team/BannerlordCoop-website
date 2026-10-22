@@ -410,10 +410,13 @@ Below **Raise slots**, each expanded VPS row has the slot decommission controls
 (`VpsSlotDecommission`; the control plane's `docs/managed-hosting/ovhcloud-vps.md`,
 "Decommissioning VPS slots", defines the operations). The control plane page is
 administrator-only, so a member never sees them, and the `control-plane-admin` Edge
-Function, which needs no change, refuses anyone but an administrator.
+Function, which needs no change, refuses anyone but an administrator. The control
+plane decommissions slots on OVHcloud VPSs only (`vps_slot_decommission_provider_unverified`
+otherwise), so any other VPS's row shows "Slot decommissioning is not supported on
+this VPS" instead of the controls.
 
 - **Decommission slots** takes **Keep slots**, a whole number from 1 to 31 below the
-  current capacity, and a **Reason** of 3 to 1,000 characters for the audit log.
+  current capacity with no leading zero, and a **Reason** of 3 to 1,000 characters for the audit log.
   After a confirmation that names the slots it retires (the slot table's numbering,
   so a 4-slot VPS kept at 2 retires Slots 3–4), it sends `decommission-vps-slots`
   with the row's `provider`, service name, `slotCapacity` and `reason`. It is
@@ -423,14 +426,21 @@ Function, which needs no change, refuses anyone but an administrator.
   after a confirmation. It stays available while the onboarding runs, since a queued
   decommission job meets a cancel; with no plan open the control plane answers that
   nothing changed.
-- **Resolve / accept** appears only when the row's onboarding `failed` with a
-  `slot_decommission_kept_*` code other than `slot_decommission_kept_unsettled`
-  (that check runs before anything is retired, so the plan is cancelled instead). It
-  sends `resolve-vps-slot-decommission-kept-slots` with the decommission's `token`,
-  `expectedEvidenceVersion`, a reason and `slots`, each kept slot index (zero-based,
-  as the decommission's evidence lists them) with `disposition` `accept` or
-  `repair`. No read gives the website the token or the evidence version yet, so the
-  administrator types them from the decommission's evidence.
+- **Resolve / accept** appears only when the row's onboarding `failed` with exactly
+  one of the codes the control plane resolves (its
+  `VPS_SLOT_DECOMMISSION_RESOLVABLE_CODES`): `slot_decommission_kept_units_restarted`,
+  `_controller_unavailable`, `_game_newly_failed`, `_game_changed`,
+  `_canary_changed`, `_assignment_changed` or `_tunnel_refused`. Other kept-slot
+  codes are not resolved: `slot_decommission_kept_unsettled` and
+  `slot_decommission_kept_unobservable` call for a cancel, and
+  `slot_decommission_kept_health_unavailable` for a retry. The form names the slot
+  the check failed on from the onboarding's `slot-decommission-kept-slot-<k>` stage
+  ("Slot 2 (index 1)") and what failed. It sends
+  `resolve-vps-slot-decommission-kept-slots` with the row's `provider` and service
+  name, `slots` (each kept slot's zero-based index with `disposition` `accept` or
+  `repair`) and a reason. It names no `token` or `expectedEvidenceVersion` (both
+  optional, and given together or not at all), so the control plane resolves the
+  VPS's open retired plan at its stored evidence version.
 
 Like the raise, every request carries a fresh `requestId`, which the control plane
 uses as the decommission's correlation id; the inputs carry no correlation id. A
@@ -446,20 +456,25 @@ Each result is accepted only with exactly its keys, for the requested host
 `runnerOnboarding` must be present. Anything else is reported as an unexpected
 result. Every outcome (`draining`, `queued`, `unchanged`, `completed`, `cancelled`,
 `superseded`; `cancelled` or `unchanged` for a cancel; `requeued` for a resolution)
-has its own sentence, and every refusal code has one naming what to do.
+has its own sentence; `unchanged` reads "Nothing changed: this VPS already has a
+decommission or runner job queued or under way. Follow the Runner column.", which
+holds for each path that answers it. Every refusal code, and each operation's
+`request_conflict` message, has a sentence naming what to do.
 
 **With the switch off**, the production setting, the control plane answers a
 decommission with `vps_slot_decommission_disabled` and changes nothing. The form shows
 it as a calm note, not an alert: "Slot decommissioning is switched off on this
-control plane (HOSTING_DYNAMIC_SLOT_CAPACITY is off), so nothing was changed." A
-control plane with the operations but no worker (`vps_slot_decommission_worker_unavailable`)
-and one without the operation (HTTP 400 `invalid_request`, or `unsupported_operation`)
+control plane (HOSTING_DYNAMIC_SLOT_CAPACITY is off), so nothing was changed." An
+older control plane with the operations but no worker (`vps_slot_decommission_worker_unavailable`,
+which the control plane with the worker no longer answers) and one without the operation (HTTP 400 `invalid_request`, or `unsupported_operation`)
 read as calm notes too; the decommission form checks every field the control
 plane checks before it answers `invalid_request` (the slot count and the reason), so
 there it means the operation is unknown. A cancel answers `unchanged`. The control
 plane that has the resolution is the release with the decommission worker; until it
 deploys, a resolution reads "This control plane cannot resolve kept slots yet, or
-refused the request as invalid", as a calm note. Every other refusal is an alert.
+refused the request as invalid", as a calm note (the form checks the slots and the
+reason first). A resolution is not gated by the switch. Every other refusal is an
+alert.
 
 ### Unused VPS renewal alert
 

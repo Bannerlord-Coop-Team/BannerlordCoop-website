@@ -18,7 +18,8 @@ import {
     resolveInput,
     resolveResultMessage,
     slotDecommissionAvailable,
-    slotDecommissionResolvable,
+    slotDecommissionKeptFailure,
+    slotDecommissionSupported,
     type SlotDecommissionNotice,
 } from "@/app/lib/control-plane/slot-decommission";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
@@ -38,7 +39,8 @@ const BUTTON = "inline-flex min-h-9 items-center justify-center gap-2 border bor
  * failed a kept-slot check, records the administrator's resolution. Each request carries a fresh request id, which the
  * control plane uses as its correlation id. The control plane refuses a decommission unless it runs with
  * HOSTING_DYNAMIC_SLOT_CAPACITY on, and checks every other fence itself; a control plane that cannot decommission is
- * reported as a calm note, not an alert.
+ * reported as a calm note, not an alert. A VPS outside OVHcloud, where the control plane does not decommission, shows a
+ * note instead of the controls.
  */
 export function VpsSlotDecommission({
     host,
@@ -52,11 +54,11 @@ export function VpsSlotDecommission({
     const id = useId();
     const [capacity, setCapacity] = useState(String(Math.max(1, Math.min(host.totalSlots - 1, MAXIMUM_DECOMMISSIONED_SLOT_CAPACITY))));
     const [reason, setReason] = useState("");
-    const [resolution, setResolution] = useState({ token: "", evidenceVersion: "", accept: "", repair: "", reason: "" });
+    const [resolution, setResolution] = useState({ accept: "", repair: "", reason: "" });
     const [busy, setBusy] = useState<Busy>(null);
     const [notice, setNotice] = useState<SlotDecommissionNotice | null>(null);
     const available = slotDecommissionAvailable(host);
-    const resolvable = slotDecommissionResolvable(host);
+    const keptFailure = slotDecommissionKeptFailure(host);
     const target = { provider: host.provider, serviceName: host.name };
 
     async function send(operation: string, input: Record<string, unknown>) {
@@ -135,6 +137,10 @@ export function VpsSlotDecommission({
                 ? "Available once this VPS's runner onboarding is no longer running."
                 : "Retires the highest slots once they hold no server; it never moves a server. Refused unless the control plane runs with HOSTING_DYNAMIC_SLOT_CAPACITY on.";
     const disabled = busy !== null;
+    if (!slotDecommissionSupported(host)) {
+        return <p className="border-t border-white/10 px-6 py-3 text-[0.65rem] text-foreground-muted">Slot decommissioning is not supported on this VPS: the control plane decommissions slots on OVHcloud VPSs only.</p>;
+    }
+    const failedSlot = keptFailure?.slotIndex ?? null;
     return (
         <div className="border-t border-white/10 px-6 py-3 text-xs">
             <form onSubmit={decommission} noValidate aria-label={`Decommission slots of ${host.name}`} className="flex flex-wrap items-end gap-x-4 gap-y-2">
@@ -182,20 +188,19 @@ export function VpsSlotDecommission({
                 </button>
                 <p className="basis-full max-w-xl text-[0.65rem] text-foreground-muted">{hint}</p>
             </form>
-            {resolvable && (
+            {keptFailure !== null && (
                 <form onSubmit={resolve} noValidate aria-label={`Resolve the kept slots of ${host.name}`} className="mt-3 border-t border-white/10 pt-3">
                     <p className="max-w-3xl text-[0.65rem] leading-5 text-foreground-muted">
-                        The decommission job failed a kept-slot check ({host.runnerOnboarding?.errorCode}) after retiring its slots. Accept a kept slot as it is now, or have the job repair it, then the job runs again. Take the token, the evidence version and the slot indexes (zero-based; Slot 1 is index 0) from the decommission&apos;s evidence. A slot that cannot be repaired stays an incident.
+                        {failedSlot === null
+                            ? <>The decommission job&apos;s kept-slot check failed after retiring its slots: {keptFailure.description} ({keptFailure.code}).</>
+                            : <>The decommission job&apos;s kept-slot check failed on <strong className="text-foreground">Slot {failedSlot + 1} (index {failedSlot})</strong> after retiring its slots: {keptFailure.description} ({keptFailure.code}).</>}
+                        {" "}Accept a kept slot as it is now, or have the job repair it, and the job runs again against this VPS&apos;s open decommission. List kept slots by their zero-based index (Slot 1 is index 0). A slot that cannot be repaired stays an incident.
                     </p>
                     <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2">
-                        <ResolveField id={`${id}-token`} label="Token" className="w-[34rem] max-w-full font-mono" value={resolution.token} disabled={disabled}
-                            onChange={(token) => setResolution({ ...resolution, token })} />
-                        <ResolveField id={`${id}-version`} label="Evidence version" className="w-24" value={resolution.evidenceVersion} disabled={disabled}
-                            onChange={(evidenceVersion) => setResolution({ ...resolution, evidenceVersion })} />
                         <ResolveField id={`${id}-accept`} label="Accept slot indexes" className="w-32" value={resolution.accept} disabled={disabled}
-                            onChange={(accept) => setResolution({ ...resolution, accept })} />
+                            placeholder={failedSlot === null ? "e.g. 0, 2" : `e.g. ${failedSlot}`} onChange={(accept) => setResolution({ ...resolution, accept })} />
                         <ResolveField id={`${id}-repair`} label="Repair slot indexes" className="w-32" value={resolution.repair} disabled={disabled}
-                            onChange={(repair) => setResolution({ ...resolution, repair })} />
+                            placeholder={failedSlot === null ? "e.g. 1" : `e.g. ${failedSlot}`} onChange={(repair) => setResolution({ ...resolution, repair })} />
                         <ResolveField id={`${id}-resolve-reason`} label="Resolution reason" className="w-72 max-w-full" value={resolution.reason} disabled={disabled}
                             onChange={(value) => setResolution({ ...resolution, reason: value })} />
                         <button type="submit" disabled={disabled} className={BUTTON}>
@@ -213,11 +218,11 @@ export function VpsSlotDecommission({
     );
 }
 
-function ResolveField({ id, label, className, value, disabled, onChange }: {
-    id: string; label: string; className: string; value: string; disabled: boolean; onChange: (value: string) => void;
+function ResolveField({ id, label, className, value, disabled, placeholder, onChange }: {
+    id: string; label: string; className: string; value: string; disabled: boolean; placeholder?: string; onChange: (value: string) => void;
 }) {
     return <div>
         <label htmlFor={id} className={LABEL}>{label}</label>
-        <input id={id} type="text" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className={`${FIELD} ${className}`} />
+        <input id={id} type="text" value={value} disabled={disabled} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} className={`${FIELD} ${className}`} />
     </div>;
 }

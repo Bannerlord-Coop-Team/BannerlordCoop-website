@@ -51,6 +51,18 @@ test("labels slot decommission operations and their audit actions", () => {
         auditActionExplanation("hosting.placement.ovhcloud_vps_slot_target_changed"));
     assert.equal(auditActionExplanation("hosting.runner.manual_vps_slot_capacity_lowered"),
         auditActionExplanation("hosting.runner.ovhcloud_vps_slot_capacity_lowered"));
+    const decommissionActions: Array<[string, RegExp]> = [
+        ["hosting.admin.ovhcloud_vps_slot_decommission_requested", /requested a VPS slot decommission/u],
+        ["hosting.admin.ovhcloud_vps_slot_decommission_queued", /decommission was queued/u],
+        ["hosting.admin.ovhcloud_vps_slot_decommission_replanned", /re-planned an interrupted slot decommission/u],
+        ["hosting.admin.ovhcloud_vps_slot_decommission_cancelled", /cancelled a VPS's open slot decommission plan/u],
+        ["hosting.admin.ovhcloud_vps_slot_decommission_kept_resolved", /accepted or repaired the kept slots/u],
+        ["hosting.runner.ovhcloud_vps_slots_retired", /point of no return/u],
+    ];
+    for (const [action, text] of decommissionActions) {
+        assert.match(auditActionExplanation(action), text);
+        assert.equal(auditActionExplanation(action.replace(".ovhcloud_vps_", ".manual_vps_")), auditActionExplanation(action));
+    }
 });
 
 test("gives destructive cards a concrete warning", () => {

@@ -19,9 +19,8 @@ const SUCCEEDED: NonNullable<HostingAdminVpsHost["runnerOnboarding"]> = {
     updatedAt: "2026-10-21T12:00:00.000Z",
 };
 const KEPT_FAILED: NonNullable<HostingAdminVpsHost["runnerOnboarding"]> = {
-    ...SUCCEEDED, state: "failed", progressStage: "slot-decommission-continuity", errorCode: "slot_decommission_kept_game_newly_failed",
+    ...SUCCEEDED, state: "failed", progressStage: "slot-decommission-kept-slot-1", errorCode: "slot_decommission_kept_game_newly_failed",
 };
-const TOKEN = "b".repeat(64);
 
 let container: HTMLDivElement;
 let root: Root;
@@ -41,7 +40,7 @@ afterEach(async () => {
     container.remove();
 });
 
-async function render(host: Partial<Pick<HostingAdminVpsHost, "totalSlots" | "runnerOnboarding">> = {}, onRefresh?: () => void) {
+async function render(host: Partial<Pick<HostingAdminVpsHost, "provider" | "totalSlots" | "runnerOnboarding">> = {}, onRefresh?: () => void) {
     await act(async () => root.render(<VpsSlotDecommission
         host={{ provider: "ovhcloud-vps", name: SERVICE_NAME, totalSlots: 4, runnerOnboarding: SUCCEEDED, ...host }}
         onRefresh={onRefresh}
@@ -221,11 +220,20 @@ it("is disabled for a VPS never onboarded, while its onboarding runs, and at one
 it("offers the kept-slot resolution only after a failed kept-slot check", async () => {
     await render();
     expect(form(`Resolve the kept slots of ${SERVICE_NAME}`)).toBeNull();
-    await render({ runnerOnboarding: { ...KEPT_FAILED, errorCode: "slot_decommission_kept_unsettled" } });
-    expect(form(`Resolve the kept slots of ${SERVICE_NAME}`)).toBeNull();
+    for (const errorCode of ["slot_decommission_kept_unsettled", "slot_decommission_kept_unobservable", "slot_decommission_kept_health_unavailable"]) {
+        await render({ runnerOnboarding: { ...KEPT_FAILED, errorCode } });
+        expect(form(`Resolve the kept slots of ${SERVICE_NAME}`)).toBeNull();
+    }
     await render({ runnerOnboarding: KEPT_FAILED });
-    expect(form(`Resolve the kept slots of ${SERVICE_NAME}`)?.textContent).toContain("slot_decommission_kept_game_newly_failed");
+    const resolution = form(`Resolve the kept slots of ${SERVICE_NAME}`)!;
+    // The failed stage names the slot, as the slot table numbers it and by its index.
+    expect(resolution.textContent).toContain("failed on Slot 2 (index 1) after retiring its slots: its game newly failed (slot_decommission_kept_game_newly_failed).");
+    // The control plane resolves the open plan at its stored version, so the form asks for neither.
+    expect([...resolution.querySelectorAll("label")].map((label) => label.textContent)).toEqual(["Accept slot indexes", "Repair slot indexes", "Resolution reason"]);
+    expect(field("Accept slot indexes").placeholder).toBe("e.g. 1");
     expect(button("Resolve / accept")).toBeDefined();
+    await render({ runnerOnboarding: { ...KEPT_FAILED, progressStage: "slot-decommission-continuity" } });
+    expect(form(`Resolve the kept slots of ${SERVICE_NAME}`)?.textContent).toContain("kept-slot check failed after retiring its slots: its game newly failed");
 });
 
 it("confirms, then sends the resolution and reports the requeued job", async () => {
@@ -236,8 +244,6 @@ it("confirms, then sends the resolution and reports the requeued job", async () 
         runnerOnboarding: { ...KEPT_FAILED, state: "queued", errorCode: null },
     });
     await render({ runnerOnboarding: KEPT_FAILED }, refresh);
-    await enter("Token", TOKEN);
-    await enter("Evidence version", "1");
     await enter("Accept slot indexes", "1");
     await enter("Repair slot indexes", "0");
     await enter("Resolution reason", "Owner restarted slot 2 during the job");
@@ -249,7 +255,7 @@ it("confirms, then sends the resolution and reports the requeued job", async () 
         requestId: expect.stringMatching(/^[0-9a-f-]{36}$/u),
         operation: "resolve-vps-slot-decommission-kept-slots",
         input: {
-            provider: "ovhcloud-vps", serviceName: SERVICE_NAME, token: TOKEN, expectedEvidenceVersion: 1,
+            provider: "ovhcloud-vps", serviceName: SERVICE_NAME,
             reason: "Owner restarted slot 2 during the job",
             slots: [{ slotIndex: 0, disposition: "repair" }, { slotIndex: 1, disposition: "accept" }],
         },
@@ -262,11 +268,16 @@ it("shows a control plane without the resolution operation as a calm note", asyn
     vi.spyOn(window, "confirm").mockReturnValue(true);
     mocks.request.mockRejectedValue(new ControlPlaneAdminError("invalid_request", "The control plane request is invalid.", false));
     await render({ runnerOnboarding: KEPT_FAILED });
-    await enter("Token", TOKEN);
-    await enter("Evidence version", "1");
     await enter("Accept slot indexes", "0");
     await enter("Resolution reason", "Accept the restarted game");
     await submit(`Resolve the kept slots of ${SERVICE_NAME}`);
     expect(alert()).toBeNull();
     expect(status()?.textContent).toMatch(/^This control plane cannot resolve kept slots yet/u);
+});
+
+it("shows a VPS outside OVHcloud as unsupported, with no controls", async () => {
+    await render({ provider: "contabo-vps", runnerOnboarding: KEPT_FAILED });
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("button")).toBeNull();
+    expect(container.textContent).toBe("Slot decommissioning is not supported on this VPS: the control plane decommissions slots on OVHcloud VPSs only.");
 });

@@ -14,7 +14,9 @@ import {
     resolveInput,
     resolveResultMessage,
     slotDecommissionAvailable,
+    slotDecommissionKeptFailure,
     slotDecommissionResolvable,
+    slotDecommissionSupported,
     slotList,
 } from "./slot-decommission";
 
@@ -81,7 +83,8 @@ describe("the slot decommission result", () => {
         expect(decommissionResultMessage(result, 5)).toMatch(/^Planned: Slots 6–8 retire once Slots 6 and 8 are empty\. A decommission never moves a server/u);
         expect(decommissionResultMessage({ ...result, occupiedSlotIndexes: [] }, 5)).toBe("Planned: Slots 6–8 are empty now. Submit the same decommission again to queue it.");
         expect(decommissionResultMessage({ ...result, outcome: "queued", occupiedSlotIndexes: [] }, 7)).toMatch(/^Queued: the control plane is decommissioning Slot 8, lowering this VPS to 7 slots\./u);
-        expect(decommissionResultMessage({ ...result, outcome: "unchanged" }, 5)).toMatch(/already queued or under way/u);
+        expect(decommissionResultMessage({ ...result, outcome: "unchanged" }, 5))
+            .toBe("Nothing changed: this VPS already has a decommission or runner job queued or under way. Follow the Runner column.");
         expect(decommissionResultMessage({ ...result, outcome: "completed", slotCapacity: 5 }, 5)).toMatch(/already completed/u);
         expect(decommissionResultMessage({ ...result, outcome: "cancelled" }, 5)).toMatch(/was cancelled; nothing changed/u);
         expect(decommissionResultMessage({ ...result, outcome: "superseded" }, 5)).toMatch(/superseded by a recovery plan/u);
@@ -148,7 +151,7 @@ describe("the slot decommission forms", () => {
         expect(decommissionCapacityInput(" 5 ", 8)).toEqual({ slotCapacity: 5 });
         expect(decommissionCapacityInput("31", 32)).toEqual({ slotCapacity: 31 });
         expect(decommissionCapacityInput("8", 8)).toEqual({ error: "Choose fewer than the 8 slots this VPS has now." });
-        for (const value of ["", "0", "4.5", "-4", "1e1", "six", "100"]) expect(decommissionCapacityInput(value, 8)).toHaveProperty("error");
+        for (const value of ["", "0", "00", "05", "007", "4.5", "-4", "1e1", "six", "100"]) expect(decommissionCapacityInput(value, 8)).toHaveProperty("error");
     });
 
     it("takes a reason the control plane accepts", () => {
@@ -168,26 +171,52 @@ describe("the slot decommission forms", () => {
         }
     });
 
-    it("asks for a resolution only after a failed kept-slot check", () => {
-        const failed = (errorCode: string | null) => ({ runnerOnboarding: { ...ONBOARDING, state: "failed", errorCode } as never });
-        expect(slotDecommissionResolvable(failed("slot_decommission_kept_game_newly_failed"))).toBe(true);
-        expect(slotDecommissionResolvable(failed("slot_decommission_kept_unobservable"))).toBe(true);
-        // Checked before anything is retired: the plan is cancelled instead.
-        expect(slotDecommissionResolvable(failed("slot_decommission_kept_unsettled"))).toBe(false);
-        expect(slotDecommissionResolvable(failed("slot_decommission_tail_not_empty"))).toBe(false);
-        expect(slotDecommissionResolvable(failed(null))).toBe(false);
-        expect(slotDecommissionResolvable({ runnerOnboarding: { ...ONBOARDING, errorCode: "slot_decommission_kept_unobservable" } as never })).toBe(false);
-        expect(slotDecommissionResolvable({ runnerOnboarding: null })).toBe(false);
+    it("offers the controls only on OVHcloud, where the control plane decommissions", () => {
+        expect(slotDecommissionSupported({ provider: "ovhcloud-vps" })).toBe(true);
+        expect(slotDecommissionSupported({ provider: "contabo-vps" })).toBe(false);
     });
 
-    it("reads a resolution's token, evidence version, slots and reason", () => {
-        const fields = { token: ` ${"A".repeat(64)} `, evidenceVersion: "2", accept: "3, 1", repair: "0", reason: "Owner restarted the game" };
+    const failed = (errorCode: string | null, progressStage = "slot-decommission-kept-slot-2") =>
+        ({ runnerOnboarding: { ...ONBOARDING, state: "failed", progressStage, errorCode } as never });
+
+    it.each([
+        "slot_decommission_kept_units_restarted",
+        "slot_decommission_kept_controller_unavailable",
+        "slot_decommission_kept_game_newly_failed",
+        "slot_decommission_kept_game_changed",
+        "slot_decommission_kept_canary_changed",
+        "slot_decommission_kept_assignment_changed",
+        "slot_decommission_kept_tunnel_refused",
+    ])("asks for a resolution after the kept-slot failure %s", (code) => {
+        expect(slotDecommissionResolvable(failed(code))).toBe(true);
+        expect(slotDecommissionKeptFailure(failed(code))).toEqual({ code, description: expect.any(String), slotIndex: 2 });
+    });
+
+    it.each([
+        // Before anything retires these call for a cancel (an incident after), and the last for a retry.
+        "slot_decommission_kept_unsettled", "slot_decommission_kept_unobservable", "slot_decommission_kept_health_unavailable",
+        "slot_decommission_kept_something_new", "slot_decommission_tail_not_empty", null,
+    ])("asks for no resolution after %s", (code) => {
+        expect(slotDecommissionResolvable(failed(code))).toBe(false);
+        expect(slotDecommissionKeptFailure(failed(code))).toBeNull();
+    });
+
+    it("asks for a resolution only while the onboarding is failed, and names the slot only from its kept-slot stage", () => {
+        const code = "slot_decommission_kept_game_newly_failed";
+        expect(slotDecommissionResolvable({ runnerOnboarding: { ...ONBOARDING, errorCode: code } as never })).toBe(false);
+        expect(slotDecommissionResolvable({ runnerOnboarding: null })).toBe(false);
+        expect(slotDecommissionKeptFailure(failed(code, "slot-decommission-kept-slot-0"))).toMatchObject({ slotIndex: 0, description: "its game newly failed" });
+        for (const stage of ["slot-decommission-continuity", "slot-decommission-kept-slot-", "slot-decommission-kept-slot-31", "slot-decommission-kept-slot-x"]) {
+            expect(slotDecommissionKeptFailure(failed(code, stage))).toMatchObject({ slotIndex: null });
+        }
+    });
+
+    it("reads a resolution's slots and reason, naming no plan or evidence version", () => {
+        const fields = { accept: "3, 1", repair: "0", reason: "Owner restarted the game" };
         expect(resolveInput(fields)).toEqual({
-            token: "a".repeat(64), expectedEvidenceVersion: 2, reason: "Owner restarted the game",
+            reason: "Owner restarted the game",
             slots: [{ slotIndex: 0, disposition: "repair" }, { slotIndex: 1, disposition: "accept" }, { slotIndex: 3, disposition: "accept" }],
         });
-        expect(resolveInput({ ...fields, token: "abc" })).toEqual({ error: expect.stringMatching(/64 hexadecimal/u) });
-        expect(resolveInput({ ...fields, evidenceVersion: "0" })).toEqual({ error: expect.stringMatching(/evidence version/u) });
         expect(resolveInput({ ...fields, accept: "", repair: "" })).toEqual({ error: "List at least one kept slot to accept or repair." });
         expect(resolveInput({ ...fields, repair: "1" })).toEqual({ error: "A slot can be accepted or repaired, not both." });
         for (const accept of ["31", "1,1", "a", "1.5"]) expect(resolveInput({ ...fields, accept })).toHaveProperty("error");
@@ -227,9 +256,27 @@ describe("decommission refusals", () => {
         ["vps_slot_decommission_state_inconsistent", /Open an incident/u],
         ["vps_slot_decommission_failed_use_retry", /Retry onboarding/u],
         ["vps_slot_decommission_committed", /can no longer be cancelled/u],
+        ["vps_slot_decommission_recovery_conflict", /no higher than its lowest retired slot/u],
+        ["vps_slot_decommission_not_resolvable", /cannot be resolved now/u],
+        ["vps_slot_decommission_evidence_changed", /review it again before resolving/u],
+        ["vps_slot_decommission_slot_not_kept", /not one this decommission keeps/u],
+        ["vps_slot_decommission_assignment_changed", /Do not accept it; open an incident/u],
+        ["vps_slot_decommission_resolutions_full", /as many resolutions as it can hold/u],
+        ["vps_slot_decommission_plan_open", /checks a fresh plan only/u],
+        ["vps_slot_decommission_preflight_failed", /preflight could not read the VPS/u],
         ["slot_catalog_decommission_in_progress", /only a raise revives them/u],
     ])("explains %s as an alert", (code, text) => {
         expect(notice(code)).toEqual({ tone: "error", text: expect.stringMatching(text) });
+    });
+
+    it.each([
+        ["VPS slot decommission request conflicted", /different decommission under this request/u],
+        ["VPS slot decommission cancel conflicted", /different cancel under this request/u],
+        ["VPS slot decommission resolution conflicted", /different resolution under this request. Refresh the VPS list and resolve again/u],
+        ["VPS host provider conflicted", /another provider/u],
+    ])("explains the conflict %s", (message, text) => {
+        expect(decommissionErrorNotice(new ControlPlaneAdminError("request_conflict", message))).toEqual({ tone: "error", text: expect.stringMatching(text) });
+        expect(resolveErrorNotice(new ControlPlaneAdminError("request_conflict", message))).toEqual({ tone: "error", text: expect.stringMatching(text) });
     });
 
     it("shows the control plane's own message for anything else", () => {
@@ -242,8 +289,10 @@ describe("decommission refusals", () => {
             .toEqual({ tone: "note", text: expect.stringMatching(/cannot resolve kept slots yet/u) });
         expect(resolveErrorNotice(new ControlPlaneAdminError("unsupported_operation", "raw"))).toMatchObject({ tone: "note" });
         expect(resolveErrorNotice(new ControlPlaneAdminError("vps_slot_decommission_disabled", "raw"))).toMatchObject({ tone: "note" });
-        expect(resolveErrorNotice(new ControlPlaneAdminError("vps_slot_decommission_assignment_changed", "A kept slot changed hands.")))
-            .toEqual({ tone: "error", text: "A kept slot changed hands." });
+        expect(resolveErrorNotice(new ControlPlaneAdminError("vps_slot_decommission_not_resolvable", "raw")))
+            .toEqual({ tone: "error", text: expect.stringMatching(/cannot be resolved now/u) });
+        expect(resolveErrorNotice(new ControlPlaneAdminError("vps_slot_decommission_some_new_code", "A new refusal.")))
+            .toEqual({ tone: "error", text: "A new refusal." });
     });
 
     it("explains a raise refused over an unsettled decommission", () => {
