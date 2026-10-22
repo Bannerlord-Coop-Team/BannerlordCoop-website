@@ -20,6 +20,7 @@ import {
     slotDecommissionAvailable,
     slotDecommissionKeptFailure,
     slotDecommissionSupported,
+    type SlotDecommissionKeptFailure,
     type SlotDecommissionNotice,
 } from "@/app/lib/control-plane/slot-decommission";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
@@ -116,12 +117,17 @@ export function VpsSlotDecommission({
         }, decommissionErrorNotice);
     }
 
-    async function resolve(event: FormEvent<HTMLFormElement>) {
+    /**
+     * Resolves the failure this render shows: `failure` is the row's kept-slot failure when the form rendered, and the
+     * request is bound to its onboarding time, so a page the control plane has moved past is refused, not resolved.
+     */
+    async function resolve(event: FormEvent<HTMLFormElement>, failure: SlotDecommissionKeptFailure) {
         event.preventDefault();
-        const input = resolveInput(resolution);
+        const input = resolveInput(resolution, failure.onboardingUpdatedAt);
         if ("error" in input) return setNotice({ tone: "error", text: input.error });
         const listed = input.slots.map((slot) => `index ${slot.slotIndex} (Slot ${slot.slotIndex + 1}): ${slot.disposition}`).join("; ");
-        if (!window.confirm(`Resolve the kept slots of ${host.name} and requeue its decommission job? ${listed}. Accept takes the slot as it is now as its new baseline; repair has the job repair it first.`)) return;
+        const failed = failure.slotIndex === null ? "its kept-slot failure" : `its kept-slot failure on Slot ${failure.slotIndex + 1} (index ${failure.slotIndex})`;
+        if (!window.confirm(`Resolve the kept slots of ${host.name} and requeue its decommission job? This answers ${failed}, ${failure.code}, as the runner reported it at ${failure.onboardingUpdatedAt} (UTC); if the runner state has changed since, the control plane refuses it. ${listed}. Accept takes the slot as it is now as its new baseline; repair has the job repair it first.`)) return;
         await run("resolve", async () => {
             const result = parseResolveVpsSlotDecommissionResult(await send("resolve-vps-slot-decommission-kept-slots", input), target);
             if (result === null) throw new Error("The control plane returned an unexpected kept-slot resolution result.");
@@ -189,12 +195,13 @@ export function VpsSlotDecommission({
                 <p className="basis-full max-w-xl text-[0.65rem] text-foreground-muted">{hint}</p>
             </form>
             {keptFailure !== null && (
-                <form onSubmit={resolve} noValidate aria-label={`Resolve the kept slots of ${host.name}`} className="mt-3 border-t border-white/10 pt-3">
+                <form onSubmit={(event) => resolve(event, keptFailure)} noValidate aria-label={`Resolve the kept slots of ${host.name}`} className="mt-3 border-t border-white/10 pt-3">
                     <p className="max-w-3xl text-[0.65rem] leading-5 text-foreground-muted">
                         {failedSlot === null
                             ? <>The decommission job&apos;s kept-slot check failed after retiring its slots: {keptFailure.description} ({keptFailure.code}).</>
                             : <>The decommission job&apos;s kept-slot check failed on <strong className="text-foreground">Slot {failedSlot + 1} (index {failedSlot})</strong> after retiring its slots: {keptFailure.description} ({keptFailure.code}).</>}
                         {" "}Accept a kept slot as it is now, or have the job repair it, and the job runs again against this VPS&apos;s open decommission. List kept slots by their zero-based index (Slot 1 is index 0). A slot that cannot be repaired stays an incident.
+                        {" "}The resolution answers the runner state reported at <span className="font-mono">{keptFailure.onboardingUpdatedAt}</span> (UTC); if it has changed since this page loaded, the control plane refuses it.
                     </p>
                     <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2">
                         <ResolveField id={`${id}-accept`} label="Accept slot indexes" className="w-32" value={resolution.accept} disabled={disabled}

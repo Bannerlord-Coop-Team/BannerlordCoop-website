@@ -16,6 +16,7 @@ import {
     slotDecommissionAvailable,
     slotDecommissionKeptFailure,
     slotDecommissionResolvable,
+    slotDecommissionPaused,
     slotDecommissionSupported,
     slotList,
 } from "./slot-decommission";
@@ -189,7 +190,9 @@ describe("the slot decommission forms", () => {
         "slot_decommission_kept_tunnel_refused",
     ])("asks for a resolution after the kept-slot failure %s", (code) => {
         expect(slotDecommissionResolvable(failed(code))).toBe(true);
-        expect(slotDecommissionKeptFailure(failed(code))).toEqual({ code, description: expect.any(String), slotIndex: 2 });
+        expect(slotDecommissionKeptFailure(failed(code))).toEqual({
+            code, description: expect.any(String), slotIndex: 2, onboardingUpdatedAt: ONBOARDING.updatedAt,
+        });
     });
 
     it.each([
@@ -211,16 +214,31 @@ describe("the slot decommission forms", () => {
         }
     });
 
-    it("reads a resolution's slots and reason, naming no plan or evidence version", () => {
+    it("reads a resolution's slots and reason, bound to the shown failure's onboarding time and naming no plan", () => {
         const fields = { accept: "3, 1", repair: "0", reason: "Owner restarted the game" };
-        expect(resolveInput(fields)).toEqual({
-            reason: "Owner restarted the game",
+        const at = "2026-10-22T09:00:00.000Z";
+        expect(resolveInput(fields, at)).toStrictEqual({
             slots: [{ slotIndex: 0, disposition: "repair" }, { slotIndex: 1, disposition: "accept" }, { slotIndex: 3, disposition: "accept" }],
+            reason: "Owner restarted the game",
+            expectedOnboardingUpdatedAt: at,
         });
-        expect(resolveInput({ ...fields, accept: "", repair: "" })).toEqual({ error: "List at least one kept slot to accept or repair." });
-        expect(resolveInput({ ...fields, repair: "1" })).toEqual({ error: "A slot can be accepted or repaired, not both." });
-        for (const accept of ["31", "1,1", "a", "1.5"]) expect(resolveInput({ ...fields, accept })).toHaveProperty("error");
-        expect(resolveInput({ ...fields, reason: "no" })).toHaveProperty("error");
+        expect(resolveInput({ ...fields, accept: "", repair: "" }, at)).toEqual({ error: "List at least one kept slot to accept or repair." });
+        expect(resolveInput({ ...fields, repair: "1" }, at)).toEqual({ error: "A slot can be accepted or repaired, not both." });
+        for (const accept of ["31", "1,1", "a", "1.5", "01", "00", "-1"]) expect(resolveInput({ ...fields, accept }, at)).toHaveProperty("error");
+        expect(resolveInput({ ...fields, accept: "0 10, 30", repair: "" }, at)).toMatchObject({ slots: [{ slotIndex: 0 }, { slotIndex: 10 }, { slotIndex: 30 }] });
+        expect(resolveInput({ ...fields, reason: "no" }, at)).toHaveProperty("error");
+        // The control plane's own timestamp form only: a time it would refuse is not sent.
+        for (const time of ["2026-10-22T09:00:00Z", "2026-10-22T09:00:00.000+00:00", ""]) {
+            expect(resolveInput(fields, time)).toEqual({ error: expect.stringMatching(/Refresh the VPS list/u) });
+        }
+    });
+
+    it("recognises a decommission job the switch paused", () => {
+        const paused = { ...ONBOARDING, state: "retry-wait", progressStage: "slot-decommission-paused", errorCode: "slot_decommission_disabled" } as never;
+        expect(slotDecommissionPaused(paused)).toBe(true);
+        expect(slotDecommissionPaused({ ...ONBOARDING, state: "failed", errorCode: "slot_decommission_kept_game_newly_failed" } as never)).toBe(false);
+        expect(slotDecommissionPaused(ONBOARDING as never)).toBe(false);
+        expect(slotDecommissionPaused(null)).toBe(false);
     });
 });
 
@@ -262,6 +280,7 @@ describe("decommission refusals", () => {
         ["vps_slot_decommission_slot_not_kept", /not one this decommission keeps/u],
         ["vps_slot_decommission_assignment_changed", /Do not accept it; open an incident/u],
         ["vps_slot_decommission_resolutions_full", /as many resolutions as it can hold/u],
+        ["vps_slot_decommission_onboarding_changed", /^The runner state changed since this page loaded. Refresh and review the current failure before resolving.$/u],
         ["vps_slot_decommission_plan_open", /checks a fresh plan only/u],
         ["vps_slot_decommission_preflight_failed", /preflight could not read the VPS/u],
         ["slot_catalog_decommission_in_progress", /only a raise revives them/u],

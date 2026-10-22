@@ -435,12 +435,26 @@ this VPS" instead of the controls.
   `slot_decommission_kept_unobservable` call for a cancel, and
   `slot_decommission_kept_health_unavailable` for a retry. The form names the slot
   the check failed on from the onboarding's `slot-decommission-kept-slot-<k>` stage
-  ("Slot 2 (index 1)") and what failed. It sends
-  `resolve-vps-slot-decommission-kept-slots` with the row's `provider` and service
-  name, `slots` (each kept slot's zero-based index with `disposition` `accept` or
-  `repair`) and a reason. It names no `token` or `expectedEvidenceVersion` (both
-  optional, and given together or not at all), so the control plane resolves the
+  ("Slot 2 (index 1)") and what failed. After a confirmation that names that slot,
+  its code and the onboarding time it answers, it sends
+  `resolve-vps-slot-decommission-kept-slots` with exactly the row's `provider` and
+  service name, `slots` (each kept slot's zero-based index, without a leading zero,
+  with `disposition` `accept` or `repair`), a reason and
+  `expectedOnboardingUpdatedAt`. It names no `token` or `expectedEvidenceVersion`
+  (both optional, and given together or not at all), so the control plane resolves the
   VPS's open retired plan at its stored evidence version.
+  `expectedOnboardingUpdatedAt` is the row's `runnerOnboarding.updatedAt` exactly as
+  the VPS read returned it for the failure the form shows, which the form also names;
+  the page reads nothing again at submit. If the onboarding moved on since (a requeue,
+  or a later failure), the control plane refuses with
+  `vps_slot_decommission_onboarding_changed`, shown as "The runner state changed since
+  this page loaded. Refresh and review the current failure before resolving."
+
+A decommission job the switch paused waits in `retry-wait` with error code
+`slot_decommission_disabled` and stage `slot-decommission-paused`, spending no
+attempt. The Runner column shows it as a waiting state, not an error: "Decommission
+paused: the dynamic slot capacity switch is off. The host takes no new servers until it
+is switched on again."
 
 Like the raise, every request carries a fresh `requestId`, which the control plane
 uses as the decommission's correlation id; the inputs carry no correlation id. A

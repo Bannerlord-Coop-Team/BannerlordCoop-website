@@ -103,3 +103,29 @@ it("uses the parent live refresh after a mutation and leaves polling to it", asy
         vi.useRealTimers();
     }
 });
+
+it.each([true, false])("shows a decommission paused by the switch as a waiting state, not an error: compact=%s", async (compact) => {
+    await act(async () => root.render(<RunnerOnboardingStatus
+        compact={compact} onRefresh={vi.fn()}
+        provider="ovhcloud-vps" serviceName="host-a" runningServers={0} targetSourceCommit={null}
+        onboarding={{ state: "retry-wait", progressStage: "slot-decommission-paused", errorCode: "slot_decommission_disabled", sourceCommit: null, updatedAt: "2026-10-22T09:00:00.000Z" }}
+        update={null}
+    />));
+    const meaning = "Decommission paused: the dynamic slot capacity switch is off. The host takes no new servers until it is switched on again.";
+    expect(container.textContent).toContain("Slot Decommission Paused");
+    expect(container.textContent).toContain(meaning);
+    expect(container.querySelector(".text-red-200")).toBeNull();
+    expect(container.querySelector('[title="slot_decommission_disabled"]')?.textContent).toBe(meaning);
+    expect(container.querySelector("span[title]")?.getAttribute("title")).toBe(meaning);
+});
+
+it("still shows any other onboarding error code as an error", async () => {
+    await act(async () => root.render(<RunnerOnboardingStatus
+        compact onRefresh={vi.fn()}
+        provider="ovhcloud-vps" serviceName="host-a" runningServers={0} targetSourceCommit={null}
+        onboarding={{ state: "failed", progressStage: "slot-decommission-kept-slot-1", errorCode: "slot_decommission_kept_game_newly_failed", sourceCommit: null, updatedAt: "2026-10-22T09:00:00.000Z" }}
+        update={null}
+    />));
+    expect([...container.querySelectorAll("p.text-red-200")].map((line) => line.textContent)).toEqual(["slot_decommission_kept_game_newly_failed"]);
+    expect(container.textContent).not.toContain("Decommission paused");
+});

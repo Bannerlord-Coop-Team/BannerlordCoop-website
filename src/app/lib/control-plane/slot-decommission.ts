@@ -23,6 +23,12 @@ const RESOLVE_KEYS = ["outcome", "provider", "serviceName", "evidenceVersion", "
 const DECOMMISSION_OUTCOMES: readonly string[] = ["draining", "queued", "unchanged", "completed", "cancelled", "superseded"];
 const CANCEL_OUTCOMES: readonly string[] = ["cancelled", "unchanged"];
 const CONTROL_OR_FORMAT = /[\p{Cc}\p{Cf}]/u;
+/** The control plane's own timestamp form, which a resolution's `expectedOnboardingUpdatedAt` must take. */
+const EXACT_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
+/** The onboarding error code of a decommission job the switch paused (stage `slot-decommission-paused`): a retry-wait, not a failure. */
+export const SLOT_DECOMMISSION_PAUSED_CODE = "slot_decommission_disabled";
+/** What a paused decommission job means, wherever the VPS view shows its onboarding. */
+export const SLOT_DECOMMISSION_PAUSED = "Decommission paused: the dynamic slot capacity switch is off. The host takes no new servers until it is switched on again.";
 
 /**
  * Answers that mean this control plane cannot decommission at all yet. They are shown as a calm note, not an alert:
@@ -69,6 +75,7 @@ const REFUSAL_MESSAGES: Record<string, string> = {
     vps_slot_decommission_slot_not_kept: "A listed slot is not one this decommission keeps. Only slots below the slot count it lowers the VPS to can be accepted or repaired.",
     vps_slot_decommission_assignment_changed: "A slot to accept holds another server than the decommission recorded, with no delete or move since its slots retired. Do not accept it; open an incident.",
     vps_slot_decommission_resolutions_full: "This decommission has recorded as many resolutions as it can hold. Open an incident.",
+    vps_slot_decommission_onboarding_changed: "The runner state changed since this page loaded. Refresh and review the current failure before resolving.",
     vps_slot_decommission_plan_open: "This VPS has an unsettled slot decommission, so the preflight, which checks a fresh plan only, did not run.",
     vps_slot_decommission_preflight_failed: "The slot decommission preflight could not read the VPS. Try again shortly, or check its runner.",
     // An onboarding job's code rather than a request's refusal, listed so every decommission code reads the same way.
@@ -148,14 +155,21 @@ export function slotDecommissionAvailable(host: Pick<HostingAdminVpsHost, "runne
     return host.runnerOnboarding !== null && !onboardingPending(host.runnerOnboarding.state) && host.totalSlots > 1;
 }
 
+/** A kept-slot failure as the VPS row shows it, which a resolution answers. */
+export type SlotDecommissionKeptFailure = {
+    code: string;
+    description: string;
+    /** The zero-based slot the failure's stage names, or null when it names none. */
+    slotIndex: number | null;
+    /** The onboarding's `updatedAt` exactly as the VPS read returned it: the resolution is bound to this failure. */
+    onboardingUpdatedAt: string;
+};
+
 /**
  * The kept-slot failure the VPS row's onboarding asks an administrator to resolve, or null: it failed with exactly one
- * of the codes a resolution answers, after the decommission's teardown. `slotIndex` is the zero-based slot its stage
- * names, or null when the stage names none.
+ * of the codes a resolution answers, after the decommission's teardown.
  */
-export function slotDecommissionKeptFailure(
-    host: Pick<HostingAdminVpsHost, "runnerOnboarding">,
-): { code: string; description: string; slotIndex: number | null } | null {
+export function slotDecommissionKeptFailure(host: Pick<HostingAdminVpsHost, "runnerOnboarding">): SlotDecommissionKeptFailure | null {
     const onboarding = host.runnerOnboarding;
     if (onboarding?.state !== "failed" || onboarding.errorCode === null || !Object.hasOwn(RESOLVABLE_FAILURES, onboarding.errorCode)) return null;
     const stage = KEPT_FAILURE_STAGE.exec(onboarding.progressStage);
@@ -164,7 +178,16 @@ export function slotDecommissionKeptFailure(
         code: onboarding.errorCode,
         description: RESOLVABLE_FAILURES[onboarding.errorCode]!,
         slotIndex: slotIndex !== null && slotIndex < MAXIMUM_DECOMMISSIONED_SLOT_CAPACITY ? slotIndex : null,
+        onboardingUpdatedAt: onboarding.updatedAt,
     };
+}
+
+/**
+ * Whether the VPS row's onboarding is a decommission job the switch paused (`slot_decommission_disabled`, stage
+ * `slot-decommission-paused`): it waits, costing no attempt, until the switch is on again.
+ */
+export function slotDecommissionPaused(onboarding: HostingAdminVpsHost["runnerOnboarding"]) {
+    return onboarding !== null && onboarding.errorCode === SLOT_DECOMMISSION_PAUSED_CODE;
 }
 
 /** Whether the VPS row's failed onboarding asks for the kept slots to be resolved. */
@@ -174,12 +197,14 @@ export function slotDecommissionResolvable(host: Pick<HostingAdminVpsHost, "runn
 
 /**
  * Reads the resolution form: the kept slots to accept and to repair (zero-based indexes, as the decommission's
- * evidence and its failed stage name them) and a reason. It names no plan or evidence version: the control plane then
- * resolves the VPS's open retired plan at its stored version.
+ * evidence and its failed stage name them) and a reason, bound to the failure the form shows by its onboarding's
+ * `updatedAt`. It names no plan or evidence version: the control plane then resolves the VPS's open retired plan at
+ * its stored version, and refuses the resolution if the onboarding moved on since that time.
  */
-export function resolveInput(fields: { accept: string; repair: string; reason: string }):
-    | { reason: string; slots: Array<{ slotIndex: number; disposition: "accept" | "repair" }> }
+export function resolveInput(fields: { accept: string; repair: string; reason: string }, onboardingUpdatedAt: string):
+    | { slots: Array<{ slotIndex: number; disposition: "accept" | "repair" }>; reason: string; expectedOnboardingUpdatedAt: string }
     | { error: string } {
+    if (!EXACT_TIMESTAMP.test(onboardingUpdatedAt)) return { error: "The VPS list gave a runner time this page cannot bind the resolution to. Refresh the VPS list." };
     const accept = slotIndexes(fields.accept);
     const repair = slotIndexes(fields.repair);
     if (accept === null || repair === null) {
@@ -193,7 +218,7 @@ export function resolveInput(fields: { accept: string; repair: string; reason: s
         ...accept.map((slotIndex) => ({ slotIndex, disposition: "accept" as const })),
         ...repair.map((slotIndex) => ({ slotIndex, disposition: "repair" as const })),
     ].sort((left, right) => left.slotIndex - right.slotIndex);
-    return { reason: reason.reason, slots };
+    return { slots, reason: reason.reason, expectedOnboardingUpdatedAt: onboardingUpdatedAt };
 }
 
 /**
@@ -314,7 +339,7 @@ function slotIndexes(value: string): number[] | null {
     const entries = value.split(/[\s,]+/u).filter(Boolean);
     const indexes: number[] = [];
     for (const entry of entries) {
-        if (!/^\d{1,2}$/u.test(entry)) return null;
+        if (!/^(?:0|[1-9]\d?)$/u.test(entry)) return null;
         const index = Number(entry);
         if (index > MAXIMUM_DECOMMISSIONED_SLOT_CAPACITY - 1 || indexes.includes(index)) return null;
         indexes.push(index);

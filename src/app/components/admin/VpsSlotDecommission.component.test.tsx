@@ -20,6 +20,7 @@ const SUCCEEDED: NonNullable<HostingAdminVpsHost["runnerOnboarding"]> = {
 };
 const KEPT_FAILED: NonNullable<HostingAdminVpsHost["runnerOnboarding"]> = {
     ...SUCCEEDED, state: "failed", progressStage: "slot-decommission-kept-slot-1", errorCode: "slot_decommission_kept_game_newly_failed",
+    updatedAt: "2026-10-22T09:15:42.123Z",
 };
 
 let container: HTMLDivElement;
@@ -231,6 +232,8 @@ it("offers the kept-slot resolution only after a failed kept-slot check", async 
     // The control plane resolves the open plan at its stored version, so the form asks for neither.
     expect([...resolution.querySelectorAll("label")].map((label) => label.textContent)).toEqual(["Accept slot indexes", "Repair slot indexes", "Resolution reason"]);
     expect(field("Accept slot indexes").placeholder).toBe("e.g. 1");
+    // It names the onboarding time it is bound to, exactly as the VPS read gave it.
+    expect(resolution.textContent).toContain("answers the runner state reported at 2026-10-22T09:15:42.123Z (UTC)");
     expect(button("Resolve / accept")).toBeDefined();
     await render({ runnerOnboarding: { ...KEPT_FAILED, progressStage: "slot-decommission-continuity" } });
     expect(form(`Resolve the kept slots of ${SERVICE_NAME}`)?.textContent).toContain("kept-slot check failed after retiring its slots: its game newly failed");
@@ -249,17 +252,20 @@ it("confirms, then sends the resolution and reports the requeued job", async () 
     await enter("Resolution reason", "Owner restarted slot 2 during the job");
     await submit(`Resolve the kept slots of ${SERVICE_NAME}`);
 
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("index 0 (Slot 1): repair; index 1 (Slot 2): accept"));
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(
+        "This answers its kept-slot failure on Slot 2 (index 1), slot_decommission_kept_game_newly_failed, as the runner reported it at 2026-10-22T09:15:42.123Z (UTC); if the runner state has changed since, the control plane refuses it. index 0 (Slot 1): repair; index 1 (Slot 2): accept."));
     expect(mocks.request).toHaveBeenCalledExactlyOnceWith({
         accessToken: "test-token",
         requestId: expect.stringMatching(/^[0-9a-f-]{36}$/u),
         operation: "resolve-vps-slot-decommission-kept-slots",
         input: {
             provider: "ovhcloud-vps", serviceName: SERVICE_NAME,
-            reason: "Owner restarted slot 2 during the job",
             slots: [{ slotIndex: 0, disposition: "repair" }, { slotIndex: 1, disposition: "accept" }],
+            reason: "Owner restarted slot 2 during the job",
+            expectedOnboardingUpdatedAt: "2026-10-22T09:15:42.123Z",
         },
     });
+    expect(Object.keys(mocks.request.mock.calls[0][0].input).sort()).toEqual(["expectedOnboardingUpdatedAt", "provider", "reason", "serviceName", "slots"]);
     expect(status()?.textContent).toMatch(/evidence version 1 and requeued the decommission job/u);
     expect(refresh).toHaveBeenCalledTimes(1);
 });
@@ -280,4 +286,19 @@ it("shows a VPS outside OVHcloud as unsupported, with no controls", async () => 
     expect(container.querySelector("form")).toBeNull();
     expect(container.querySelector("button")).toBeNull();
     expect(container.textContent).toBe("Slot decommissioning is not supported on this VPS: the control plane decommissions slots on OVHcloud VPSs only.");
+});
+
+it("binds the resolution to the failure the form shows, and reports a runner state that moved on as an alert", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mocks.request.mockRejectedValue(new ControlPlaneAdminError("vps_slot_decommission_onboarding_changed",
+        "This VPS's runner onboarding changed since it was shown; review its current failure before resolving.", false));
+    await render({ runnerOnboarding: KEPT_FAILED });
+    // A later read of the same failed state, now at a newer time, rebinds the form to what it shows.
+    await render({ runnerOnboarding: { ...KEPT_FAILED, progressStage: "slot-decommission-kept-slot-0", updatedAt: "2026-10-22T09:20:00.000Z" } });
+    await enter("Repair slot indexes", "0");
+    await enter("Resolution reason", "Repair the failed slot");
+    await submit(`Resolve the kept slots of ${SERVICE_NAME}`);
+    expect(mocks.request.mock.calls[0][0].input).toMatchObject({ expectedOnboardingUpdatedAt: "2026-10-22T09:20:00.000Z" });
+    expect(alert()?.textContent).toBe("The runner state changed since this page loaded. Refresh and review the current failure before resolving.");
+    expect(status()).toBeNull();
 });
