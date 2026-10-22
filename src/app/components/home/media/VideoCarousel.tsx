@@ -177,7 +177,7 @@ function VideoCard({ video, isCarousel }: VideoCardProps) {
                             "(max-height: 700px) and (orientation: landscape) calc(100vw - 3rem - 2px)",
                             "calc(100vw - 2rem - 2px)",
                         ].join(", ")}
-                        className="object-cover opacity-80 transition-[opacity,transform] duration-500 group-hover:scale-[1.03] group-hover:opacity-100"
+                        className="object-cover opacity-80 transition-[opacity,transform] duration-500 motion-safe:group-hover:scale-[1.03] group-hover:opacity-100"
                     />
                     <div
                         aria-hidden="true"
