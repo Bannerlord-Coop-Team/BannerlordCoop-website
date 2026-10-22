@@ -26,6 +26,7 @@ const REFUSAL_MESSAGES: Record<string, string> = {
     vps_slot_capacity_runner_update_active: "This VPS has a runner update in progress or awaiting recovery. Raise its slot capacity once it resolves.",
     vps_slot_capacity_slots_unsettled: "Every slot of this VPS must be ready or assigned before its slot capacity is raised.",
     vps_slot_capacity_relocation_active: "A server on this VPS is being relocated. Raise its slot capacity once the move settles.",
+    vps_slot_capacity_decommission_planned: "This VPS has an unsettled slot decommission. Cancel its decommission plan, or let a decommission that already retired slots finish, before raising its slot capacity.",
     // A control plane from before the raise rejects the operation it does not know.
     unsupported_operation: "This control plane cannot raise a slot capacity yet. Deploy a control plane with slot capacity raises first.",
     // The form only sends a whole number up to 32, so an invalid request is most likely an older control plane.
@@ -65,7 +66,7 @@ export function parseRaiseVpsSlotCapacityResult(
         || !wholeNumber(previousSlotCapacity, Math.max(1, Math.floor(vCpu / 2)), slotCapacity)
         || (outcome === "unchanged") !== (previousSlotCapacity === slotCapacity)) return null;
     // Only an unchanged host that was never onboarded has no onboarding; a raise always queues one.
-    if (runnerOnboarding === null ? outcome !== "unchanged" : !onboarding(runnerOnboarding)) return null;
+    if (runnerOnboarding === null ? outcome !== "unchanged" : !isSlotCapacityOnboarding(runnerOnboarding)) return null;
     return {
         outcome, provider: request.provider, serviceName: request.serviceName, vCpu, previousSlotCapacity,
         slotCapacity: request.slotCapacity,
@@ -89,7 +90,8 @@ function wholeNumber(value: unknown, minimum: number, maximum: number): value is
     return Number.isSafeInteger(value) && (value as number) >= minimum && (value as number) <= maximum;
 }
 
-function onboarding(value: unknown): value is NonNullable<HostingRaiseVpsSlotCapacityResult["runnerOnboarding"]> {
+/** Whether a value is exactly a host's runner onboarding as the VPS inventory and the slot capacity results show it. */
+export function isSlotCapacityOnboarding(value: unknown): value is NonNullable<HostingRaiseVpsSlotCapacityResult["runnerOnboarding"]> {
     return isRecord(value) && hasExactKeys(value, ONBOARDING_KEYS)
         && typeof value.state === "string" && ONBOARDING_STATES.includes(value.state)
         && typeof value.progressStage === "string" && value.progressStage.length >= 1 && value.progressStage.length <= 128

@@ -2,6 +2,7 @@
 
 import { LoaderCircle, RefreshCw } from "lucide-react";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
+import { SLOT_DECOMMISSION_PAUSED, slotDecommissionPaused } from "@/app/lib/control-plane/slot-decommission";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -115,16 +116,20 @@ export function RunnerOnboardingStatus({
     }
     const good = onboarding.state === "succeeded";
     const bad = onboarding.state === "failed";
+    // A decommission job the switch paused waits without spending an attempt: a state, not an error.
+    const paused = slotDecommissionPaused(onboarding);
     return (
         <div aria-live={pending ? "polite" : undefined}>
             <span
-                title={runnerStateExplanation(onboarding.state)}
+                title={paused ? SLOT_DECOMMISSION_PAUSED : runnerStateExplanation(onboarding.state)}
                 className={`inline-flex cursor-help border px-2 py-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] ${good ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : bad ? "border-crimson/30 bg-crimson/10 text-red-200" : "border-gold/25 bg-gold/8 text-gold"}`}
             >
                 {onboarding.state}
             </span>
             {(!compact || !good) && <p className="mt-2 max-w-56 text-[0.65rem] text-foreground-muted">{humanize(onboarding.progressStage)}</p>}
-            {onboarding.errorCode && <p className="mt-1 max-w-56 font-mono text-[0.6rem] text-red-200">{onboarding.errorCode}</p>}
+            {paused
+                ? <p className="mt-1 max-w-56 text-[0.6rem] text-gold/80" title={onboarding.errorCode ?? undefined}>{SLOT_DECOMMISSION_PAUSED}</p>
+                : onboarding.errorCode && <p className="mt-1 max-w-56 font-mono text-[0.6rem] text-red-200">{onboarding.errorCode}</p>}
             {!compact && onboarding.sourceCommit && <p className="mt-1 font-mono text-[0.6rem] text-foreground-dim" title={onboarding.sourceCommit}>{onboarding.sourceCommit.slice(0, 12)}</p>}
             {!compact && targetSourceCommit && !current && <p className="mt-1 font-mono text-[0.58rem] text-gold/75" title={`Available runner target ${targetSourceCommit}`}>Target {targetSourceCommit.slice(0, 12)}</p>}
             {!compact && update && (

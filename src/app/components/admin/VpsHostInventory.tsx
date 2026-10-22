@@ -3,6 +3,7 @@
 import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
 import { VpsSlotCapacityRaise } from "@/app/components/admin/VpsSlotCapacityRaise";
+import { VpsSlotDecommission } from "@/app/components/admin/VpsSlotDecommission";
 import { formatAccountOwner, hostPlacementLabel } from "@/app/lib/control-plane/presentation";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import { vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
@@ -204,6 +205,7 @@ function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit, pending
                         </div>
                     </div> : <p className="px-6 py-4 text-xs text-foreground-muted">No occupied slots.</p>}
                     <VpsSlotCapacityRaise host={host} onRefresh={onRefresh} />
+                    <VpsSlotDecommission host={host} onRefresh={onRefresh} />
                     <HostDetailFooter host={host} runnerTargetSourceCommit={runnerTargetSourceCommit} />
                 </div>
             </div>

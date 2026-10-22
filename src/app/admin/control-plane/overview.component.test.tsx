@@ -242,6 +242,15 @@ it.each(["revoked", "member", "mismatched"])("aborts and does not render early d
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
+it("never renders the VPS view, where the slot decommission controls live, for a member", async () => {
+    mocks.request.mockRejectedValue(new Error("Oracle did not confirm authority"));
+    mocks.auth.mockResolvedValue({ user: { id: "admin", app_metadata: { role: "Member" } }, accessToken: "test-admin-token" });
+    await expect(ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "vps" }) })).rejects.toThrow();
+    // Only the view's reads start, and each is cancelled; no slot decommission request is ever sent.
+    expect(mocks.request.mock.calls.map(([request]) => request.operation).sort()).toEqual(["hosting-regions", "vps-hosts"]);
+    for (const [request] of mocks.request.mock.calls) expect(request.signal.aborted).toBe(true);
+});
+
 it("consumes early read failures and preserves the ordinary error UI after authentication", async () => {
     mocks.request.mockRejectedValue(new Error("endpoint unavailable"));
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "overview" }) }));

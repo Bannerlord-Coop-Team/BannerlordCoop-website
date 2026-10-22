@@ -12,6 +12,11 @@ vi.mock("@/app/components/admin/VpsSlotCapacityRaise", () => ({
         <form aria-label={`Raise the slot capacity of ${host.name}`} data-total-slots={host.totalSlots} data-refresh={onRefresh ? "parent" : "router"} />
     ),
 }));
+vi.mock("@/app/components/admin/VpsSlotDecommission", () => ({
+    VpsSlotDecommission: ({ host, onRefresh }: { host: { name: string }; onRefresh?: () => void }) => (
+        <form aria-label={`Decommission slots of ${host.name}`} data-refresh={onRefresh ? "parent" : "router"} />
+    ),
+}));
 
 const ACCOUNT_ID = "44444444-4444-4444-8444-444444444444";
 
@@ -68,9 +73,11 @@ describe("compact VPS host inventory", () => {
         const firstToggle = container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-a"]')!;
         await act(async () => firstToggle.click());
         expect(firstToggle.getAttribute("aria-expanded")).toBe("true");
-        // The slot capacity raise sits in the open host's details only.
+        // The slot capacity raise, and the slot decommission controls beside it, sit in the open host's details only.
         expect([...container.querySelectorAll("form")].map((form) => form.getAttribute("aria-label")))
-            .toEqual(["Raise the slot capacity of host-a"]);
+            .toEqual(["Raise the slot capacity of host-a", "Decommission slots of host-a"]);
+        expect(container.querySelector('form[aria-label="Decommission slots of host-a"]')?.getAttribute("data-refresh")).toBe("router");
+        expect(container.querySelector('[role="region"][aria-label="Details for host-a"] form[aria-label="Decommission slots of host-a"]')).not.toBeNull();
         expect(container.textContent).toContain("Slot 1 · UDP 4200");
         expect(container.textContent).toContain("owner@example.com");
         expect(container.textContent).toContain("Player / Server");
