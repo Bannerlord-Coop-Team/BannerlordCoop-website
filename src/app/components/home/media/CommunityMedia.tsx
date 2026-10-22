@@ -12,7 +12,6 @@ import { getYouTubeChannelIds, orderCreators } from "@/app/lib/featured-creators
 // Approved creators in display order. YouTube profiles are fetched from the YouTube Data API;
 // creators on platforms without an API integration carry their profile here.
 const contentCreators: ContentCreator[] = [
-    { channelId: "UC9sy-WPppdluS2q3crOaFpA" }, // Bannerlord Coop
     { channelId: "UCNjxbL33FhDGeIOp3vd3ndg" }, // @JackieFishHD
     { channelId: "UCi3M2mzQBc9sjfl1TzWCWgQ" }, // @ResonantRTS
     {
@@ -26,6 +25,7 @@ const contentCreators: ContentCreator[] = [
     },
     { channelId: "UC5gsrZTtWG_AqDFmuq81Q-w" }, // @RimmyDownunder
     { channelId: "UC45a_j76kNDwJvbc2ufOkJg" }, // @PixelatedApollo
+    { channelId: "UC9sy-WPppdluS2q3crOaFpA" }, // Bannerlord Coop
 ];
 
 // Renders the media section: localized videos with keyed editorial fields, and the featured creators in configured order.
@@ -131,13 +131,16 @@ export async function CommunityMedia() {
                                         className="group flex h-full flex-col items-start gap-4 rounded-sm border border-white/10 bg-surface-raised p-5 transition-colors duration-300 hover:border-gold/40 hover:bg-white/2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-surface min-[420px]:flex-row min-[420px]:items-center sm:p-6"
                                     >
                                         {creator.avatar ? (
-                                            <Image
-                                                src={creator.avatar}
-                                                alt={t("media.avatar", { name: creator.name })}
-                                                width={72}
-                                                height={72}
-                                                className="size-16 shrink-0 rounded-full border border-white/10 object-cover grayscale transition-[filter,border-color] duration-300 group-hover:border-gold/40 group-hover:grayscale-0 sm:size-18"
-                                            />
+                                            // The frame stays fixed while the portrait zooms, matching the video thumbnails.
+                                            <span className="size-16 shrink-0 overflow-hidden rounded-full border border-white/10 transition-colors duration-300 group-hover:border-gold/40 sm:size-18">
+                                                <Image
+                                                    src={creator.avatar}
+                                                    alt={t("media.avatar", { name: creator.name })}
+                                                    width={72}
+                                                    height={72}
+                                                    className="size-full object-cover transition-transform duration-500 motion-safe:group-hover:scale-110"
+                                                />
+                                            </span>
                                         ) : (
                                             <span
                                                 aria-hidden="true"
