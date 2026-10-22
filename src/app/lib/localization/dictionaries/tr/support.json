@@ -1,8 +1,8 @@
 {
   "metadata.title": "Projeyi destekleyin",
-  "metadata.description": "Bannerlord Coop'un arkasındaki gönüllü ekibi Patreon, Buy Me a Coffee, PayPal, Afdian veya Boosty üzerinden destekleyin.",
+  "metadata.description": "Bannerlord Co-op'un arkasındaki gönüllü ekibi Patreon, Buy Me a Coffee, PayPal, Afdian veya Boosty üzerinden destekleyin.",
   "hero.eyebrow": "Projeyi destekleyin",
-  "hero.heading": "Bannerlord Coop'u destekleyin",
+  "hero.heading": "Bannerlord Co-op'u destekleyin",
   "options.patreon.description": "Aylık destekçimiz olun",
   "options.buyMeACoffee.description": "Tek seferlik katkı gönderin",
   "options.paypal.description": "Doğrudan bağış yapın",
@@ -10,7 +10,7 @@
   "options.boosty.description": "Ek uluslararası destek seçeneği",
   "options.newTab": "(yeni sekmede açılır)",
   "hero.promise": "Gönüllüler tarafından geliştirildi. Her zaman ücretsiz.",
-  "hero.description": "Bannerlord Coop, gönüllü bir ekip tarafından geliştirilmektedir ve her zaman ücretsiz olarak erişilebilir olacaktır. Katkılar, ortak seferin arkasındaki çalışmayı sürdürmemize yardımcı olur; ona erişimi asla kısıtlamaz.",
+  "hero.description": "Bannerlord Co-op, gönüllü bir ekip tarafından geliştirilmektedir ve her zaman ücretsiz olarak erişilebilir olacaktır. Katkılar, ortak seferin arkasındaki çalışmayı sürdürmemize yardımcı olur; ona erişimi asla kısıtlamaz.",
   "community.eyebrow": "Toplulukla ayakta",
   "community.description": "Her katkı, ekibe geliştirmek için daha fazla alan tanır.",
   "expenses.eyebrow": "Destekler nereye gidiyor",
@@ -28,10 +28,10 @@
   "expenses.other.detail": "Gönüllü ekibin yoluna devam etmesine yardımcı olan pratik proje maliyetleri.",
   "otherSupport.eyebrow": "Her türlü destek önemlidir",
   "otherSupport.heading": "Maddi destek tamamen isteğe bağlıdır.",
-  "otherSupport.description": "Modu oynamak, hataları bildirmek, içerik üretmek ve Bannerlord Coop'u paylaşmak da projeye büyük katkı sağlar.",
+  "otherSupport.description": "Modu oynamak, hataları bildirmek, içerik üretmek ve Bannerlord Co-op'u paylaşmak da projeye büyük katkı sağlar.",
   "otherSupport.play": "Modu oynayın",
   "otherSupport.report": "Hataları bildirin",
   "otherSupport.create": "İçerik üretin",
-  "otherSupport.share": "Bannerlord Coop'u paylaşın",
-  "otherSupport.thanks": "Bannerlord Coop'u desteklediğiniz için teşekkür ederiz!"
+  "otherSupport.share": "Bannerlord Co-op'u paylaşın",
+  "otherSupport.thanks": "Bannerlord Co-op'u desteklediğiniz için teşekkür ederiz!"
 }

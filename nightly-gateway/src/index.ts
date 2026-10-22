@@ -1108,7 +1108,7 @@ function html(body: string, status = 200): Response {
 }
 
 export function page(title: string, eyebrow: string, content: string, pageClass = ""): string {
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#070806"><title>${escapeHtml(title)} | Bannerlord Coop</title><style>${GATEWAY_CSS}</style></head><body><div class="backdrop" style="--hero:url('${SITE_HERO_IMAGE}')" aria-hidden="true"></div><header class="site-header"><a class="brand" href="/" aria-label="Bannerlord Coop Nightly Access home"><span class="brand-mark" aria-hidden="true"><i></i><b></b></span><span>Bannerlord Coop</span></a><span class="product-label">Nightly Access</span></header><main class="shell ${escapeHtml(pageClass)}"><section class="card"><div class="card-accent" aria-hidden="true"></div><p class="eyebrow">${escapeHtml(eyebrow)}</p>${content}</section></main><footer><span>Bannerlord Coop</span><span class="footer-rule"></span><span>Private nightly gateway</span></footer></body></html>`;
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#070806"><title>${escapeHtml(title)} | Bannerlord Co-op</title><style>${GATEWAY_CSS}</style></head><body><div class="backdrop" style="--hero:url('${SITE_HERO_IMAGE}')" aria-hidden="true"></div><header class="site-header"><a class="brand" href="/" aria-label="Bannerlord Co-op Nightly Access home"><span class="brand-mark" aria-hidden="true"><i></i><b></b></span><span>Bannerlord Co-op</span></a><span class="product-label">Nightly Access</span></header><main class="shell ${escapeHtml(pageClass)}"><section class="card"><div class="card-accent" aria-hidden="true"></div><p class="eyebrow">${escapeHtml(eyebrow)}</p>${content}</section></main><footer><span>Bannerlord Co-op</span><span class="footer-rule"></span><span>Private nightly gateway</span></footer></body></html>`;
 }
 
 function successPage(title: string, message: string, extra = ""): string {
@@ -1116,7 +1116,7 @@ function successPage(title: string, message: string, extra = ""): string {
 }
 
 function errorPage(message: string, extra = ""): string {
-    return page("Access unavailable", "Nightly access", `<div class="status-icon error" aria-hidden="true"><span>!</span></div><h1>Access <span>unavailable.</span></h1><p class="lede">${escapeHtml(message)}</p>${extra}<div class="support-note"><strong>Need a hand?</strong><span><a href="https://discord.gg/bannerlordcoop">Ask in the Bannerlord Coop Discord</a> and include the message shown above.</span></div>`, "status-page");
+    return page("Access unavailable", "Nightly access", `<div class="status-icon error" aria-hidden="true"><span>!</span></div><h1>Access <span>unavailable.</span></h1><p class="lede">${escapeHtml(message)}</p>${extra}<div class="support-note"><strong>Need a hand?</strong><span><a href="https://discord.gg/bannerlordcoop">Ask in the Bannerlord Co-op Discord</a> and include the message shown above.</span></div>`, "status-page");
 }
 
 function prefersHtmlError(request: Request): boolean {
@@ -1145,7 +1145,7 @@ function gatewayErrorMessage(code: string): string {
     if (code === "pin_mint_unavailable") {
         return "Create-build installer links are not configured on this gateway.";
     }
-    return "Access could not be verified. Run the installer again or ask in the Bannerlord Coop Discord.";
+    return "Access could not be verified. Run the installer again or ask in the Bannerlord Co-op Discord.";
 }
 
 function previousSponsorAccessRevokedHelp(): string {
@@ -1161,7 +1161,7 @@ function sponsorClaimPage(deviceId: string, username: string, extra = ""): strin
 }
 
 export function nightlyAccessPage(): string {
-    return page("Nightly Access", "Staff, Supporter & Tester builds", `<h1>Test tomorrow&rsquo;s battles <span>today.</span></h1><p class="lede">Install or update the Bannerlord Coop client, Windows dedicated server, or both. Nightly builds are available to Staff, Testers, and Patreon, Boosty, and Afdian supporters, plus their sponsored friends.</p><div class="access-grid"><div><span class="step-number">01</span><strong>Download and run</strong><p>Save the Windows or Linux installer launcher, then run it. The window stays open so you can see every prompt or error.</p></div><div><span class="step-number">02</span><strong>Choose and verify</strong><p>Select the client, dedicated server, or both. Discord access is checked at install and update time.</p></div></div><div class="actions"><a class="button" href="/install.cmd" download="BannerlordCoop-Nightly-Installer.cmd">Download Windows installer <span aria-hidden="true">&darr;</span></a><a class="button" href="/install.sh" download="BannerlordCoop-Nightly-Installer.sh">Download Linux installer <span aria-hidden="true">&darr;</span></a><a class="button secondary" href="/sponsor">Manage sponsored accounts</a><a class="quiet-link" href="https://discord.gg/bannerlordcoop">Join the Discord</a></div>`, "landing-page");
+    return page("Nightly Access", "Staff, Supporter & Tester builds", `<h1>Test tomorrow&rsquo;s battles <span>today.</span></h1><p class="lede">Install or update the Bannerlord Co-op client, Windows dedicated server, or both. Nightly builds are available to Staff, Testers, and Patreon, Boosty, and Afdian supporters, plus their sponsored friends.</p><div class="access-grid"><div><span class="step-number">01</span><strong>Download and run</strong><p>Save the Windows or Linux installer launcher, then run it. The window stays open so you can see every prompt or error.</p></div><div><span class="step-number">02</span><strong>Choose and verify</strong><p>Select the client, dedicated server, or both. Discord access is checked at install and update time.</p></div></div><div class="actions"><a class="button" href="/install.cmd" download="BannerlordCoop-Nightly-Installer.cmd">Download Windows installer <span aria-hidden="true">&darr;</span></a><a class="button" href="/install.sh" download="BannerlordCoop-Nightly-Installer.sh">Download Linux installer <span aria-hidden="true">&darr;</span></a><a class="button secondary" href="/sponsor">Manage sponsored accounts</a><a class="quiet-link" href="https://discord.gg/bannerlordcoop">Join the Discord</a></div>`, "landing-page");
 }
 
 const GATEWAY_CSS = `

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Official Bannerlord Coop nightly installer for Linux.
+# Line 2 is the marker install.sh launchers validate; keep it byte-identical.
 # Same gateway, Discord check, Windows client/server artifacts, and update
 # policy as install.ps1. Linux only changes how Steam, 7-Zip, and files work.
 
@@ -29,7 +30,7 @@ pause_at_end() {
 die() {
     printf '\nInstallation failed: %s\n' "$1" >&2
     [ -n "${2:-}" ] && printf '%s\n' "$2" >&2
-    printf 'If you need help, copy this message and ask in the Bannerlord Coop Discord.\n' >&2
+    printf 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.\n' >&2
     pause_at_end
     exit 1
 }

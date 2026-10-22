@@ -77,7 +77,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                         />
                     </span>
                     <span className="font-display text-lg font-semibold uppercase tracking-[0.12em]">
-                        Bannerlord Coop
+                        Bannerlord Co-op
                     </span>
                 </Link>
 
@@ -118,7 +118,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                             strokeWidth={2.5}
                         />
                         <span className="font-display text-sm font-semibold uppercase tracking-[0.1em]">
-                            Bannerlord Coop
+                            Bannerlord Co-op
                         </span>
                     </Link>
                     <Link

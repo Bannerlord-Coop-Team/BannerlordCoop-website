@@ -65,7 +65,7 @@ it("composes managed, shared and cheats dictionaries without changing page acces
     const result = await ServerPage({ params: Promise.resolve({ serverId: managedId }), searchParams: Promise.resolve({}) });
     expect(result.props.locale).toBe("en");
     expect(result.props.messages).toMatchObject(serverTestMessages);
-    expect(await generateMetadata()).toEqual({ title: "Manage Server", description: "Manage a Bannerlord Coop server." });
+    expect(await generateMetadata()).toEqual({ title: "Manage Server", description: "Manage a Bannerlord Co-op server." });
 });
 
 // Invoke the real server page with a fixed requested identity.

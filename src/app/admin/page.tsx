@@ -18,7 +18,7 @@ import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
     title: "Member Administration",
-    description: "Manage Bannerlord Coop member roles.",
+    description: "Manage Bannerlord Co-op member roles.",
 };
 
 export const dynamic = "force-dynamic";

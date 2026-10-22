@@ -49,7 +49,7 @@
   "action.regionNotOffered": "Diese Region wird nicht mehr angeboten, daher wurde nichts erstellt oder angefragt. Aktualisiere und wähle eine andere Region.",
   "action.unconfirmed": "Das Ergebnis der Übermittlung ist unbestätigt. Warte bei einer Ratenbegrenzung und wiederhole dann dieselbe ausstehende Anfrage, um Duplikate zu vermeiden.",
   "metadata.title": "Server",
-  "metadata.description": "Durchsuche Bannerlord Coop-Server und tritt ihnen bei.",
+  "metadata.description": "Durchsuche Bannerlord Co-op-Server und tritt ihnen bei.",
   "page.heading": "Server",
   "page.eyebrow": "Kampagnenverzeichnis",
   "page.myEyebrow": "Deine Kampagnen",

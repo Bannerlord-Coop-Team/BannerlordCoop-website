@@ -5,7 +5,7 @@ import { sendSmtpMail, type SmtpMessage } from "./smtp.ts";
 
 const REQUEST_ID = "11111111-1111-4111-8111-111111111111";
 const NOTIFIED_AT = "2026-10-10T12:00:00.000Z";
-const SENDER = { from: "admin@bannerlordcoop.com", fromName: "Bannerlord Coop" };
+const SENDER = { from: "admin@bannerlordcoop.com", fromName: "Bannerlord Co-op" };
 const OPTIONS = { ...SENDER, siteUrl: "https://bannerlordcoop.com" };
 
 // Answers claim and release calls with the given claim result and records every call.
@@ -31,7 +31,7 @@ test("emails the requester the region label and the servers page", () => {
     assert.equal(message.subject, "[BannerlordCoop] Server capacity available: United Kingdom");
     assert.match(message.text, /available in United Kingdom/u);
     assert.match(message.text, /https:\/\/bannerlordcoop\.com\/servers/u);
-    assert.equal(message.fromName, "Bannerlord Coop");
+    assert.equal(message.fromName, "Bannerlord Co-op");
 });
 
 test("sends exactly one email after a successful claim", async () => {

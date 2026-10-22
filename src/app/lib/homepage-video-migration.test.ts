@@ -35,7 +35,8 @@ for (const edited of [false, true]) {
                 for (const [field, suffix] of [["description", "description"], ["thumbnail_alt", "thumbnailAlt"], ["category", "category"]]) {
                     const key = row[`${field}_translation_key`];
                     assert.equal(key, mapped ? `media.captainfracas-twitch.${suffix}` : null);
-                    if (mapped) assert.equal(dictionary[String(key)], row[field]);
+                    // Seed text predates the "Bannerlord Co-op" rebrand; the dictionary carries the new spelling.
+                    if (mapped) assert.equal(dictionary[String(key)], String(row[field]).replace("Bannerlord Coop", "Bannerlord Co-op"));
                 }
             }
             await db.exec("insert into homepage_videos (source, href, title, thumbnail, thumbnail_alt) values ('custom', 'https://example.com/new-custom', 'New title', 'https://example.com/image.jpg', 'New alternative');");

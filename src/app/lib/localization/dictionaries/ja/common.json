@@ -1,6 +1,6 @@
 {
   "metadata.description": "Mount & Blade II: Bannerlordのキャンペーンを、共有のマルチプレイ世界でフレンドとともに楽しみましょう。",
-  "nav.homeLabel": "Bannerlord Coopのホーム",
+  "nav.homeLabel": "Bannerlord Co-opのホーム",
   "nav.primary": "メインナビゲーション",
   "nav.mobile": "モバイルナビゲーション",
   "nav.home": "ホーム",
@@ -24,10 +24,10 @@
   "footer.features": "特徴",
   "footer.videos": "動画",
   "footer.about": "プロジェクトについて",
-  "footer.copyright": "© {year} Bannerlord Coop. すべての権利を留保します。",
+  "footer.copyright": "© {year} Bannerlord Co-op. すべての権利を留保します。",
   "footer.disclaimer": "独立したコミュニティプロジェクトです。TaleWorlds Entertainmentとの提携関係はなく、同社の公認も受けていません。",
   "loading.page": "ページを読み込み中…",
-  "loading.site": "Bannerlord Coopを読み込み中…",
+  "loading.site": "Bannerlord Co-opを読み込み中…",
   "locale.label": "言語",
   "locale.saving": "言語を保存中…",
   "locale.error": "言語を保存できませんでした。もう一度お試しください。",
@@ -44,7 +44,7 @@
   "download.steam.name": "Steam Workshop",
   "download.steam.description": "サブスクライブして、Steam経由で更新を受け取りましょう。",
   "download.nexus.name": "Nexus Mods",
-  "download.nexus.description": "Nexus ModsからBannerlord Coopをダウンロードできます。",
+  "download.nexus.description": "Nexus ModsからBannerlord Co-opをダウンロードできます。",
   "download.moddb.name": "ModDB",
   "download.moddb.description": "ModDBでリリースとプロジェクトの最新情報をご覧いただけます。"
 }

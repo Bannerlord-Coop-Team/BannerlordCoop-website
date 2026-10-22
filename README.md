@@ -1,4 +1,4 @@
-# Bannerlord Coop Website
+# Bannerlord Co-op Website
 
 > Nightly builds are restricted to Testers and current Patreon, Boosty, and
 > Afdian supporters, plus up to ten sponsored Discord accounts per eligible
@@ -6,7 +6,7 @@
 > that entitlement on every run. See [nightly-gateway/README.md](nightly-gateway/README.md)
 > for the security boundary and rollout order.
 
-The official website for [Bannerlord Coop](https://github.com/Bannerlord-Coop-Team/BannerlordCoop), a module that brings cooperative multiplayer to the Mount & Blade II: Bannerlord campaign.
+The official website for [Bannerlord Co-op](https://github.com/Bannerlord-Coop-Team/BannerlordCoop), a module that brings cooperative multiplayer to the Mount & Blade II: Bannerlord campaign.
 
 ## Contributing
 
@@ -259,11 +259,11 @@ src/app/
 - [Patreon account linking](docs/patreon-account-linking.md)
 - [Patreon Standard Server role sync and activation](docs/patreon-website-roles.md)
 
-- [Bannerlord Coop repository](https://github.com/Bannerlord-Coop-Team/BannerlordCoop)
+- [Bannerlord Co-op repository](https://github.com/Bannerlord-Coop-Team/BannerlordCoop)
 - [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3770450698)
 - [Discord](https://discord.gg/bannerlordcoop)
 - [ModDB](https://www.moddb.com/mods/bannerlord-coop)
 
 ## Disclaimer
 
-Bannerlord Coop is an independent community project and is not affiliated with or endorsed by TaleWorlds Entertainment.
+Bannerlord Co-op is an independent community project and is not affiliated with or endorsed by TaleWorlds Entertainment.

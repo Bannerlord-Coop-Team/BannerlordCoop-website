@@ -1,6 +1,6 @@
 {
   "metadata.description": "与好友在共享的多人世界中，一同畅玩 Mount & Blade II: Bannerlord 战役。",
-  "nav.homeLabel": "Bannerlord Coop 首页",
+  "nav.homeLabel": "Bannerlord Co-op 首页",
   "nav.primary": "主导航",
   "nav.mobile": "移动端导航",
   "nav.home": "首页",
@@ -24,10 +24,10 @@
   "footer.features": "特色功能",
   "footer.videos": "视频",
   "footer.about": "关于",
-  "footer.copyright": "© {year} Bannerlord Coop。保留所有权利。",
+  "footer.copyright": "© {year} Bannerlord Co-op。保留所有权利。",
   "footer.disclaimer": "本项目是独立的社区项目，与 TaleWorlds Entertainment 无隶属关系，也未获其认可。",
   "loading.page": "正在加载页面……",
-  "loading.site": "正在加载 Bannerlord Coop……",
+  "loading.site": "正在加载 Bannerlord Co-op……",
   "locale.label": "语言",
   "locale.saving": "正在保存语言设置……",
   "locale.error": "无法保存语言设置，请重试。",
@@ -44,7 +44,7 @@
   "download.steam.name": "Steam Workshop",
   "download.steam.description": "通过 Steam 订阅并接收更新。",
   "download.nexus.name": "Nexus Mods",
-  "download.nexus.description": "从 Nexus Mods 下载 Bannerlord Coop。",
+  "download.nexus.description": "从 Nexus Mods 下载 Bannerlord Co-op。",
   "download.moddb.name": "ModDB",
   "download.moddb.description": "在 ModDB 上查看版本和项目动态。"
 }

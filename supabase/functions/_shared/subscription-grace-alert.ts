@@ -40,7 +40,7 @@ export function subscriptionGraceMessage(alert: SubscriptionGraceAlert & { email
         to: [alert.email],
         subject: `[BannerlordCoop] Your server "${alert.serverName}" has been stopped and will be removed after ${deadline}`,
         text: [
-            `Your Bannerlord Coop server "${alert.serverName}" has been stopped because the Patreon membership`
+            `Your Bannerlord Co-op server "${alert.serverName}" has been stopped because the Patreon membership`
                 + " funding it has ended or is no longer linked to your account. Players were warned and the campaign was saved.",
             "",
             `It is locked and scheduled for removal after ${deadline}.`,

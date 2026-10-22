@@ -452,17 +452,17 @@ if ($invalidSupport.Count -ne 2 -or $invalidSupport[0] -notmatch 'open its verif
 $supportLines = @(Get-InstallationSupportLines)
 if ($supportLines.Count -ne 2 -or
     $supportLines[0] -cne 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.' -or
-    $supportLines[1] -cne 'If you need help, copy this message and ask in the Bannerlord Coop Discord.') {
+    $supportLines[1] -cne 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.') {
     throw 'Installer failure help omitted the GoodbyeDPI or Discord guidance.'
 }
 $diagnosedSupport = @(Get-InstallationSupportLines 'GoodbyeDPI is running and is blocking nightly authorization. Turn off GoodbyeDPI, or enable Cloudflare WARP, then run the installer again.')
 if ($diagnosedSupport.Count -ne 1 -or
-    $diagnosedSupport[0] -cne 'If you need help, copy this message and ask in the Bannerlord Coop Discord.') {
+    $diagnosedSupport[0] -cne 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.') {
     throw 'A diagnosed authorization failure still repeated the generic DNS advice.'
 }
 $unpublishedSupport = @(Get-InstallationSupportLines (Get-UnpublishedNightlyMessage))
 if ($unpublishedSupport.Count -ne 1 -or
-    $unpublishedSupport[0] -cne 'If you need help, copy this message and ask in the Bannerlord Coop Discord.') {
+    $unpublishedSupport[0] -cne 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.') {
     throw 'An unpublished nightly still repeated the generic DNS advice.'
 }
 
@@ -570,7 +570,7 @@ if ($serverError.Code -cne 'internal_error' -or $serverError.Message -notmatch '
     throw 'A gateway internal_error was still blamed on GoodbyeDPI.'
 }
 $serverSupport = @(Get-InstallationSupportLines $serverError.Message)
-if ($serverSupport.Count -ne 1 -or $serverSupport[0] -notmatch 'Bannerlord Coop Discord') {
+if ($serverSupport.Count -ne 1 -or $serverSupport[0] -notmatch 'Bannerlord Co-op Discord') {
     throw 'A gateway internal_error still repeated the generic DNS advice.'
 }
 

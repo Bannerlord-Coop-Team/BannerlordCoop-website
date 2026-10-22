@@ -18,12 +18,12 @@ describe("homepage generated media labels", () => {
     it("preserves API titles/descriptions/categories, even a title identical to the default fallback", async () => {
         vi.stubEnv("YOUTUBE_API_KEY", "test-key");
         const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [{
-            id: "Au-oT5KKj0w", snippet: { title: "Bannerlord Coop Video", description: "External description", channelTitle: "External category", thumbnails: { high: { url: "https://example.com/thumbnail" } } }, contentDetails: { duration: "PT2M3S" },
+            id: "Au-oT5KKj0w", snippet: { title: "Bannerlord Co-op Video", description: "External description", channelTitle: "External category", thumbnails: { high: { url: "https://example.com/thumbnail" } } }, contentDetails: { duration: "PT2M3S" },
         }] }) });
         vi.stubGlobal("fetch", fetcher);
         expect(await getYouTubeVideos([href], labels)).toEqual([{
-            id: "Au-oT5KKj0w", title: "Bannerlord Coop Video", description: "External description", category: "External category", duration: "2:03", href,
-            thumbnail: "https://example.com/thumbnail", thumbnailAlt: "Localized video: Bannerlord Coop Video",
+            id: "Au-oT5KKj0w", title: "Bannerlord Co-op Video", description: "External description", category: "External category", duration: "2:03", href,
+            thumbnail: "https://example.com/thumbnail", thumbnailAlt: "Localized video: Bannerlord Co-op Video",
         }]);
         expect(fetcher).toHaveBeenCalledTimes(1);
         expect(fetcher.mock.calls[0][1]).toEqual({ next: { revalidate: 86400 } });
@@ -45,8 +45,8 @@ describe("homepage generated media labels", () => {
         const [english] = await getYouTubeVideos([href]);
         expect(localized.title).toBe("Localized fallback");
         expect(localized.thumbnailAlt).toBe("Localized fallback: Localized fallback");
-        expect(english.title).toBe("Bannerlord Coop Video");
-        expect(english.thumbnailAlt).toBe("Bannerlord Coop Video thumbnail");
+        expect(english.title).toBe("Bannerlord Co-op Video");
+        expect(english.thumbnailAlt).toBe("Bannerlord Co-op Video thumbnail");
         expect(localized.href).toBe(href);
     });
 

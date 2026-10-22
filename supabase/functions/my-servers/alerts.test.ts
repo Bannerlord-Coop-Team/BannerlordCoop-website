@@ -9,6 +9,6 @@ test("committed region request alert settings are valid and need only the SMTP_P
     assert.ok(config !== null);
     assert.deepEqual(config.recipients, ["garrett.luskey@gmail.com"]);
     assert.equal(config.from, "admin@bannerlordcoop.com");
-    assert.equal(config.fromName, "Bannerlord Coop");
+    assert.equal(config.fromName, "Bannerlord Co-op");
     assert.deepEqual(config.smtp, { hostname: "smtp.resend.com", port: 465, tls: "implicit", username: "resend", password: "re_test_key" });
 });

@@ -1,6 +1,6 @@
 {
   "metadata.description": "Mount & Blade II: Bannerlord seferini arkadaşlarınızla ortak bir çok oyunculu dünyada oynayın.",
-  "nav.homeLabel": "Bannerlord Coop ana sayfası",
+  "nav.homeLabel": "Bannerlord Co-op ana sayfası",
   "nav.primary": "Ana gezinme",
   "nav.mobile": "Mobil gezinme",
   "nav.home": "Ana sayfa",
@@ -24,10 +24,10 @@
   "footer.features": "Özellikler",
   "footer.videos": "Videolar",
   "footer.about": "Hakkında",
-  "footer.copyright": "© {year} Bannerlord Coop. Tüm hakları saklıdır.",
+  "footer.copyright": "© {year} Bannerlord Co-op. Tüm hakları saklıdır.",
   "footer.disclaimer": "Bağımsız bir topluluk projesidir. TaleWorlds Entertainment ile bağlantılı değildir ve onun tarafından onaylanmamıştır.",
   "loading.page": "Sayfa yükleniyor…",
-  "loading.site": "Bannerlord Coop yükleniyor…",
+  "loading.site": "Bannerlord Co-op yükleniyor…",
   "locale.label": "Dil",
   "locale.saving": "Dil kaydediliyor…",
   "locale.error": "Dil tercihiniz kaydedilemedi. Lütfen tekrar deneyin.",
@@ -44,7 +44,7 @@
   "download.steam.name": "Steam Workshop",
   "download.steam.description": "Abone olun ve güncellemeleri Steam üzerinden alın.",
   "download.nexus.name": "Nexus Mods",
-  "download.nexus.description": "Bannerlord Coop'u Nexus Mods üzerinden indirin.",
+  "download.nexus.description": "Bannerlord Co-op'u Nexus Mods üzerinden indirin.",
   "download.moddb.name": "ModDB",
   "download.moddb.description": "Sürümleri ve proje güncellemelerini ModDB'de görüntüleyin."
 }

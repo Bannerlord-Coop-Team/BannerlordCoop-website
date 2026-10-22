@@ -1,8 +1,8 @@
 {
   "metadata.title": "Apoie o projeto",
-  "metadata.description": "Apoie a equipe voluntária por trás do Bannerlord Coop pelo Patreon, Buy Me a Coffee, PayPal, Afdian ou Boosty.",
+  "metadata.description": "Apoie a equipe voluntária por trás do Bannerlord Co-op pelo Patreon, Buy Me a Coffee, PayPal, Afdian ou Boosty.",
   "hero.eyebrow": "Apoie o projeto",
-  "hero.heading": "Apoie o Bannerlord Coop",
+  "hero.heading": "Apoie o Bannerlord Co-op",
   "options.patreon.description": "Torne-se um apoiador mensal",
   "options.buyMeACoffee.description": "Faça uma contribuição única",
   "options.paypal.description": "Doe diretamente",
@@ -10,7 +10,7 @@
   "options.boosty.description": "Mais uma opção de apoio internacional",
   "options.newTab": "(abre em uma nova aba)",
   "hero.promise": "Feito por voluntários. Sempre gratuito.",
-  "hero.description": "O Bannerlord Coop é desenvolvido por uma equipe voluntária e sempre estará disponível gratuitamente. As contribuições ajudam a manter o trabalho por trás da campanha compartilhada, mas nunca serão uma condição para acessá-la.",
+  "hero.description": "O Bannerlord Co-op é desenvolvido por uma equipe voluntária e sempre estará disponível gratuitamente. As contribuições ajudam a manter o trabalho por trás da campanha compartilhada, mas nunca serão uma condição para acessá-la.",
   "community.eyebrow": "Mantido pela comunidade",
   "community.description": "Cada contribuição dá à equipe mais condições de desenvolver o projeto.",
   "expenses.eyebrow": "Como seu apoio é usado",
@@ -28,10 +28,10 @@
   "expenses.other.detail": "Custos do dia a dia do projeto que ajudam a equipe voluntária a seguir em frente.",
   "otherSupport.eyebrow": "Toda forma de apoio importa",
   "otherSupport.heading": "O apoio financeiro é totalmente opcional.",
-  "otherSupport.description": "Jogar o mod, relatar bugs, criar conteúdo e compartilhar o Bannerlord Coop também ajudam muito o projeto.",
+  "otherSupport.description": "Jogar o mod, relatar bugs, criar conteúdo e compartilhar o Bannerlord Co-op também ajudam muito o projeto.",
   "otherSupport.play": "Jogue o mod",
   "otherSupport.report": "Relate bugs",
   "otherSupport.create": "Crie conteúdo",
-  "otherSupport.share": "Compartilhe o Bannerlord Coop",
-  "otherSupport.thanks": "Obrigado por apoiar o Bannerlord Coop!"
+  "otherSupport.share": "Compartilhe o Bannerlord Co-op",
+  "otherSupport.thanks": "Obrigado por apoiar o Bannerlord Co-op!"
 }

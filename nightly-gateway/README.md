@@ -6,7 +6,7 @@ opens Discord OAuth in the user's browser, and receives a short-lived bearer
 token only after the gateway verifies one of these conditions:
 
 - the signed-in Discord member currently has one of the fixed Staff, Tester,
-  Competition Winner, Patreon, Boosty, or Afdian roles in the Bannerlord Coop guild; or
+  Competition Winner, Patreon, Boosty, or Afdian roles in the Bannerlord Co-op guild; or
 - the signed-in Discord account occupies one of a current eligible member's ten
   sponsored-account seats.
 
@@ -79,7 +79,7 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
    redirect and enable the `identify guilds.members.read` scopes.
 5. Set `DISCORD_CLIENT_SECRET` with `wrangler secret put`.
 6. Set `DISCORD_BOT_TOKEN` to Bot_UP's existing Discord bot token with
-   `wrangler secret put`. That bot is already in the Bannerlord Coop guild and
+   `wrangler secret put`. That bot is already in the Bannerlord Co-op guild and
    can look up one member's current roles without Server Members Intent. Do not
    create or invite a second bot for this. The installer OAuth app stays
    separate; only the role check uses Bot_UP.

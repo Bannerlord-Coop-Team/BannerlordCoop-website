@@ -7,7 +7,7 @@ import {
 
 const syncSecret = "scheduler-secret-for-fixtures";
 const now = new Date("2026-10-11T14:00:00.000Z");
-const envelope = { from: "admin@bannerlordcoop.com", fromName: "Bannerlord Coop", recipients: ["ops@example.com"] };
+const envelope = { from: "admin@bannerlordcoop.com", fromName: "Bannerlord Co-op", recipients: ["ops@example.com"] };
 const footer = "No action was taken automatically. Cancelling, renewing or resizing a VPS is a manual OVHcloud operation.";
 
 // A fresh, idle, registered auto-renewing VPS renewing in three days unless overridden.
@@ -69,7 +69,7 @@ test("the email lists each idle VPS with time left, renewal mode and registratio
     const message = vpsRenewalAlertMessage(check, now, envelope);
     assert.equal(message.subject, "[BannerlordCoop] 5 unused VPS(es) renew within 5 days");
     assert.deepEqual(message.to, ["ops@example.com"]);
-    assert.equal(message.fromName, "Bannerlord Coop");
+    assert.equal(message.fromName, "Bannerlord Co-op");
     assert.equal(message.text, [
         "These VPSes have no slots assigned to a server and renew within 5 days:",
         "",

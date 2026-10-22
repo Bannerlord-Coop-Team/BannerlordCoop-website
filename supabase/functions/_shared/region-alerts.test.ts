@@ -38,7 +38,7 @@ test("alert configuration validates committed settings and is disabled only by a
         recipients: ["admin@example.test", "second@example.test"], from: "alerts@example.test",
         smtp: { hostname: "smtp.example.test", port: 465, tls: "implicit", username: "alerts@example.test", password: "hunter2" },
     });
-    assert.equal(resolveRegionAlertConfig(withSmtp({}, { fromName: " Bannerlord Coop " }), secret("x"))?.fromName, "Bannerlord Coop");
+    assert.equal(resolveRegionAlertConfig(withSmtp({}, { fromName: " Bannerlord Co-op " }), secret("x"))?.fromName, "Bannerlord Co-op");
     assert.equal(resolveRegionAlertConfig(withSmtp({ port: 2525 }), secret("x"))?.smtp.tls, "starttls");
     assert.equal(resolveRegionAlertConfig(withSmtp({ port: 2525, tls: "implicit" }), secret("x"))?.smtp.tls, "implicit");
     for (const [invalid, pattern] of [
@@ -65,9 +65,9 @@ test("requester identity is read from verified JWT claims only when well-formed"
 });
 
 test("alert message names the region, requester and durable request", () => {
-    const message = regionRequestAlertMessage(event, { from: "alerts@example.test", fromName: "Bannerlord Coop", recipients: ["admin@example.test"] });
+    const message = regionRequestAlertMessage(event, { from: "alerts@example.test", fromName: "Bannerlord Co-op", recipients: ["admin@example.test"] });
     assert.equal(message.from, "alerts@example.test");
-    assert.equal(message.fromName, "Bannerlord Coop");
+    assert.equal(message.fromName, "Bannerlord Co-op");
     assert.equal("fromName" in regionRequestAlertMessage(event, { from: "alerts@example.test", recipients: ["admin@example.test"] }), false);
     assert.deepEqual(message.to, ["admin@example.test"]);
     assert.equal(message.subject, "[BannerlordCoop] Server region request: France");

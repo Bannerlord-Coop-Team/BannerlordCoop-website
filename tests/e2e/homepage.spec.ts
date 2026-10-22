@@ -4,7 +4,7 @@ test.describe("homepage display", () => {
     test("displays the main homepage sections", async ({ page }) => {
         await page.goto("/");
 
-        await expect(page).toHaveTitle(/Bannerlord Coop/);
+        await expect(page).toHaveTitle(/Bannerlord Co-op/);
         await expect(page.getByRole("heading", {level: 1, name: /Forge Alliances Wage War Shared Calradia/i,}),).toBeVisible();
 
         await expect(page.getByRole("banner")).toBeVisible();

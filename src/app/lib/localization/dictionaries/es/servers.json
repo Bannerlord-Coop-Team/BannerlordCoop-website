@@ -49,7 +49,7 @@
   "action.regionNotOffered": "Esa región ya no se ofrece, así que no se creó ni se solicitó nada. Actualiza y elige otra región.",
   "action.unconfirmed": "El resultado del envío no está confirmado. Espera si se ha limitado la frecuencia de solicitudes y luego vuelve a intentar la misma solicitud pendiente para evitar duplicados.",
   "metadata.title": "Servidores",
-  "metadata.description": "Explora los servidores de Bannerlord Coop y únete a ellos.",
+  "metadata.description": "Explora los servidores de Bannerlord Co-op y únete a ellos.",
   "page.heading": "Servidores",
   "page.eyebrow": "Directorio de campañas",
   "page.myEyebrow": "Tus campañas",

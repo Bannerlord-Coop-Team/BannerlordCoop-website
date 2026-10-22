@@ -571,7 +571,7 @@ function Get-NightlyPhoneVerificationHtml {
     $safeUri = [Net.WebUtility]::HtmlEncode($VerificationUri)
     return @"
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Bannerlord Coop verification</title>
+<html lang="en"><head><meta charset="utf-8"><title>Bannerlord Co-op verification</title>
 <style>
 body { margin: 0; font: 16px/1.4 Segoe UI, sans-serif; background: #111; color: #eee; text-align: center; padding: 24px; }
 svg { width: min(72vw, 72vh); height: auto; background: #fff; }
@@ -2161,7 +2161,7 @@ function Get-InstallationSupportLines {
     } elseif ($FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged|internal_error|HTTP 50|not available yet|#nightly-releases|could not validate') {
         $lines += 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.'
     }
-    $lines += 'If you need help, copy this message and ask in the Bannerlord Coop Discord.'
+    $lines += 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.'
     return $lines
 }
 

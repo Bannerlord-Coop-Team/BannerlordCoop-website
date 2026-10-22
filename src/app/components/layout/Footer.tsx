@@ -64,7 +64,7 @@ export async function Footer() {
                             </span>
 
                             <span className="font-display text-xl font-semibold uppercase tracking-[0.04em] sm:text-2xl">
-                                Bannerlord Coop
+                                Bannerlord Co-op
                             </span>
                         </Link>
 

@@ -8,7 +8,7 @@ export type YouTubeLabels = {
 };
 
 const defaultLabels: YouTubeLabels = {
-    fallbackTitle: "Bannerlord Coop Video",
+    fallbackTitle: "Bannerlord Co-op Video",
     // Describes an externally titled video's generated thumbnail.
     videoThumbnail: (title) => `${title} video thumbnail`,
     // Describes the generated thumbnail used when video details are unavailable.

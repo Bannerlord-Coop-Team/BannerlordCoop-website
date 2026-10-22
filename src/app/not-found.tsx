@@ -31,7 +31,7 @@ export default async function NotFound() {
                     <header className="flex min-h-20 items-center sm:min-h-24">
                         <Link
                             href="/"
-                            aria-label={t("links.brandHome", { brand: "Bannerlord Coop" })}
+                            aria-label={t("links.brandHome", { brand: "Bannerlord Co-op" })}
                             className="inline-flex items-center gap-3 text-foreground transition-colors hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-4 focus-visible:ring-offset-background"
                         >
                             <span className="flex items-center justify-center rounded-full bg-background/60 text-gold backdrop-blur-sm">
@@ -43,7 +43,7 @@ export default async function NotFound() {
                             </span>
 
                             <span className="font-display font-semibold uppercase tracking-[0.12em] sm:text-lg">
-                                Bannerlord Coop
+                                Bannerlord Co-op
                             </span>
                         </Link>
                     </header>

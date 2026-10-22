@@ -1,8 +1,8 @@
 {
   "metadata.title": "プロジェクトへの支援",
-  "metadata.description": "Patreon、Buy Me a Coffee、PayPal、Afdian、Boostyを通じて、Bannerlord Coopのボランティアチームをご支援いただけます。",
+  "metadata.description": "Patreon、Buy Me a Coffee、PayPal、Afdian、Boostyを通じて、Bannerlord Co-opのボランティアチームをご支援いただけます。",
   "hero.eyebrow": "プロジェクトへの支援",
-  "hero.heading": "Bannerlord Coopを支援する",
+  "hero.heading": "Bannerlord Co-opを支援する",
   "options.patreon.description": "毎月の継続支援をする",
   "options.buyMeACoffee.description": "単発で支援する",
   "options.paypal.description": "直接寄付する",
@@ -10,7 +10,7 @@
   "options.boosty.description": "海外からの支援に使えるもう一つの方法",
   "options.newTab": "（新しいタブで開きます）",
   "hero.promise": "ボランティアが開発。これからもずっと無料。",
-  "hero.description": "Bannerlord Coopはボランティアチームが開発しており、これからも無料でご利用いただけます。ご支援は、みんなで遊べるキャンペーンの開発を継続するために役立てられます。支援の有無でプレイが制限されることはありません。",
+  "hero.description": "Bannerlord Co-opはボランティアチームが開発しており、これからも無料でご利用いただけます。ご支援は、みんなで遊べるキャンペーンの開発を継続するために役立てられます。支援の有無でプレイが制限されることはありません。",
   "community.eyebrow": "コミュニティに支えられて",
   "community.description": "一つひとつのご支援が、チームの開発の力になります。",
   "expenses.eyebrow": "ご支援の使い道",
@@ -28,10 +28,10 @@
   "expenses.other.detail": "ボランティアチームが活動を続けるために必要な、プロジェクトの諸経費です。",
   "otherSupport.eyebrow": "どんな形の支援も力になります",
   "otherSupport.heading": "金銭的な支援は完全に任意です。",
-  "otherSupport.description": "MODをプレイすること、バグの報告、コンテンツの制作、Bannerlord Coopの紹介も、プロジェクトの大きな支えになります。",
+  "otherSupport.description": "MODをプレイすること、バグの報告、コンテンツの制作、Bannerlord Co-opの紹介も、プロジェクトの大きな支えになります。",
   "otherSupport.play": "MODをプレイする",
   "otherSupport.report": "バグを報告する",
   "otherSupport.create": "コンテンツを制作する",
-  "otherSupport.share": "Bannerlord Coopを紹介する",
-  "otherSupport.thanks": "Bannerlord Coopへのご支援、ありがとうございます！"
+  "otherSupport.share": "Bannerlord Co-opを紹介する",
+  "otherSupport.thanks": "Bannerlord Co-opへのご支援、ありがとうございます！"
 }
