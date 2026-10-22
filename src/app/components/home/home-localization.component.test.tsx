@@ -21,6 +21,7 @@ vi.mock("@/app/components/motion/ScrollReveal", () => ({ ScrollReveal: ({ childr
 vi.mock("@/app/lib/network-stats", () => ({ getNetworkStats: async () => ({ playersOnline: 12345, dedicatedServersCount: null, battlesFoughtTotal: 12, totalDownloads: 45678 }) }));
 vi.mock("@/app/lib/roadmap", () => ({ getRoadmap: async () => [] }));
 vi.mock("@/app/lib/homepage-videos", () => ({ getHomepageVideos: vi.fn(async () => [{ id: "video", title: "Source video", description: "Source description", category: "Source category", thumbnail: "/images/banner.png", thumbnailAlt: "Source alternative", href: "https://example.com/video", duration: "1:23" }]) }));
+vi.mock("@/app/lib/featured-creators", () => ({ getYouTubeChannelIds: () => [], orderCreators: (_creators: unknown, youTubeCreators: unknown) => youTubeCreators }));
 vi.mock("@/app/lib/youtube", () => ({ getYouTubeCreators: async () => [{ id: "creator", name: "Source creator", description: "Source creator description", avatar: "/images/banner.png", href: "https://example.com/creator" }] }));
 
 afterEach(() => { request.value = undefined; vi.restoreAllMocks(); vi.unstubAllGlobals(); });

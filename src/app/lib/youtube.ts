@@ -1,5 +1,5 @@
 import "server-only";
-import type {YouTubeCreator, YouTubeVideo} from "@/app/components/utils/types/media.types";
+import type {CreatorProfile, YouTubeVideo} from "@/app/components/utils/types/media.types";
 
 export type YouTubeLabels = {
     fallbackTitle: string;
@@ -62,9 +62,10 @@ type YouTubeOEmbedResponse = {
     thumbnail_url?: string;
 };
 
+// Fetches YouTube channel profiles, returning none when the API key is missing or the request fails.
 export async function getYouTubeCreators(
     channelIds: string[],
-): Promise<YouTubeCreator[]> {
+): Promise<CreatorProfile[]> {
     const apiKey = process.env.YOUTUBE_API_KEY;
     const uniqueChannelIds = [...new Set(channelIds.filter(Boolean))];
 

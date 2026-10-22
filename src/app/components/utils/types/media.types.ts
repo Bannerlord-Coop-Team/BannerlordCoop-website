@@ -15,11 +15,11 @@ export type MediaVideo = {
 
 export type YouTubeVideo = MediaVideo;
 
-export type ContentCreator = {
-    channelId: string;
-};
+export type ContentCreator =
+    | { channelId: string; profile?: never }
+    | { profile: CreatorProfile; channelId?: never };
 
-export type YouTubeCreator = {
+export type CreatorProfile = {
     id: string;
     name: string;
     description: string;
