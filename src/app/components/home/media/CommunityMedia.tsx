@@ -28,7 +28,7 @@ const contentCreators: ContentCreator[] = [
     { channelId: "UC45a_j76kNDwJvbc2ufOkJg" }, // @PixelatedApollo
 ];
 
-// Localizes media labels and explicitly keyed editorial fields, preserving external content.
+// Renders the media section: localized videos with keyed editorial fields, and the featured creators in configured order.
 export async function CommunityMedia() {
     const { t } = await getTranslations("home");
     const [videos, youTubeCreators] = await Promise.all([
