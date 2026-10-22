@@ -49,7 +49,7 @@
   "action.regionNotOffered": "That region is no longer offered, so nothing was created or requested. Refresh and choose another region.",
   "action.unconfirmed": "The submission outcome is unconfirmed. Wait if rate limited, then retry the same pending request to avoid duplicates.",
   "metadata.title": "Servers",
-  "metadata.description": "Browse and join Bannerlord Coop servers.",
+  "metadata.description": "Browse and join Bannerlord Co-op servers.",
   "page.heading": "Servers",
   "page.eyebrow": "Campaign directory",
   "page.myEyebrow": "Your campaigns",

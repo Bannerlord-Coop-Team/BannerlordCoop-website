@@ -2,13 +2,13 @@
 
 ## Our Community
 
-Bannerlord Coop is an **open-source community project** dedicated to bringing a cooperative campaign experience to Mount & Blade II: Bannerlord.
+Bannerlord Co-op is an **open-source community project** dedicated to bringing a cooperative campaign experience to Mount & Blade II: Bannerlord.
 
 The project is developed through contributions from developers, testers, designers, translators, players, and other community members. Anyone interested in improving the project is welcome to participate, regardless of experience level.
 
 Open-source collaboration depends on people being able to discuss ideas, review each other's work, disagree constructively, and contribute without unnecessary hostility. We therefore want our development and community spaces to remain welcoming, productive, and respectful.
 
-Participation in the Bannerlord Coop project or its official community spaces means agreeing to follow this Code of Conduct.
+Participation in the Bannerlord Co-op project or its official community spaces means agreeing to follow this Code of Conduct.
 
 ## Expected Behavior
 
@@ -28,7 +28,7 @@ Technical disagreements are normal in an open-source project. Debate, alternativ
 
 ## Open-Source Collaboration
 
-Bannerlord Coop is developed publicly and relies on voluntary contributions from the community.
+Bannerlord Co-op is developed publicly and relies on voluntary contributions from the community.
 
 Contributing code, documentation, testing, bug reports, translations, designs, suggestions, or other work does not guarantee that a contribution will be accepted or merged.
 
@@ -53,7 +53,7 @@ Constructive disagreement about the direction of the project is welcome. Harassm
 
 ## Unacceptable Behavior
 
-The following behavior is not acceptable within Bannerlord Coop community spaces:
+The following behavior is not acceptable within Bannerlord Co-op community spaces:
 
 * Harassment, intimidation, bullying, or targeted abuse.
 * Personal insults or repeated hostile behavior.
@@ -88,7 +88,7 @@ Maintainers may close, lock, hide, or remove discussions that are no longer prod
 
 ## Scope
 
-This Code of Conduct applies to official Bannerlord Coop spaces, including:
+This Code of Conduct applies to official Bannerlord Co-op spaces, including:
 
 * GitHub repositories
 * Issues and pull requests
@@ -96,13 +96,13 @@ This Code of Conduct applies to official Bannerlord Coop spaces, including:
 * Official Discord channels
 * Testing and playtesting environments
 * Project-managed servers and services
-* Other official Bannerlord Coop community spaces
+* Other official Bannerlord Co-op community spaces
 
-It may also apply when someone is publicly representing Bannerlord Coop or acting on behalf of the project.
+It may also apply when someone is publicly representing Bannerlord Co-op or acting on behalf of the project.
 
 ## Reporting Problems
 
-If you experience or witness behavior that violates this Code of Conduct, report it privately by opening a ticket through the ticket system in the [official Bannerlord Coop Discord server](https://discord.gg/bannerlordcoop).
+If you experience or witness behavior that violates this Code of Conduct, report it privately by opening a ticket through the ticket system in the [official Bannerlord Co-op Discord server](https://discord.gg/bannerlordcoop).
 
 When possible, include relevant information such as:
 
@@ -133,7 +133,7 @@ Depending on the circumstances and severity of the behavior, actions may include
    Temporary removal from discussions, development spaces, Discord, testing environments, or other project services.
 
 4. **Permanent Removal**
-   Permanent removal from Bannerlord Coop community or development spaces.
+   Permanent removal from Bannerlord Co-op community or development spaces.
 
 Severe behavior may result in immediate removal without prior warning.
 
@@ -159,8 +159,8 @@ At the same time, repeated behavior may become unacceptable even when individual
 
 ## Final Note
 
-Bannerlord Coop exists because people voluntarily contribute their time, knowledge, and effort to an open-source project.
+Bannerlord Co-op exists because people voluntarily contribute their time, knowledge, and effort to an open-source project.
 
 Code, testing, bug reports, documentation, translations, design work, suggestions, and community support all contribute to the project's development.
 
-Respect the people behind those contributions, respect the community, and help keep Bannerlord Coop a project where people want to participate.
+Respect the people behind those contributions, respect the community, and help keep Bannerlord Co-op a project where people want to participate.

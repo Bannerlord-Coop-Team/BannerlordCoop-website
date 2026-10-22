@@ -48,7 +48,7 @@
   "action.regionNotOffered": "해당 지역은 더 이상 제공되지 않으므로 아무것도 생성되거나 요청되지 않았습니다. 새로 고친 뒤 다른 지역을 선택하세요.",
   "action.unconfirmed": "제출 결과가 확인되지 않았습니다. 요청 횟수가 제한된 경우 잠시 기다린 후, 중복을 방지하기 위해 대기 중인 동일한 요청을 재시도하세요.",
   "metadata.title": "서버",
-  "metadata.description": "Bannerlord Coop 서버를 찾아보고 참여하세요.",
+  "metadata.description": "Bannerlord Co-op 서버를 찾아보고 참여하세요.",
   "page.heading": "서버",
   "page.eyebrow": "캠페인 목록",
   "page.myEyebrow": "내 캠페인",

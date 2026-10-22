@@ -25,7 +25,7 @@ const contentCreators: ContentCreator[] = [
     },
     { channelId: "UC5gsrZTtWG_AqDFmuq81Q-w" }, // @RimmyDownunder
     { channelId: "UC45a_j76kNDwJvbc2ufOkJg" }, // @PixelatedApollo
-    { channelId: "UC9sy-WPppdluS2q3crOaFpA" }, // Bannerlord Coop
+    { channelId: "UC9sy-WPppdluS2q3crOaFpA" }, // Bannerlord Co-op
 ];
 
 // Renders the media section: localized videos with keyed editorial fields, and the featured creators in configured order.

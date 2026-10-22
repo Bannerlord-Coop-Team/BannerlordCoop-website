@@ -1,8 +1,8 @@
 {
   "metadata.title": "프로젝트 후원",
-  "metadata.description": "Patreon, Buy Me a Coffee, PayPal, Afdian 또는 Boosty를 통해 Bannerlord Coop을 만드는 자원봉사 개발팀을 후원하세요.",
+  "metadata.description": "Patreon, Buy Me a Coffee, PayPal, Afdian 또는 Boosty를 통해 Bannerlord Co-op을 만드는 자원봉사 개발팀을 후원하세요.",
   "hero.eyebrow": "프로젝트 후원",
-  "hero.heading": "Bannerlord Coop 후원",
+  "hero.heading": "Bannerlord Co-op 후원",
   "options.patreon.description": "매월 정기 후원하기",
   "options.buyMeACoffee.description": "일회성 후원하기",
   "options.paypal.description": "직접 후원하기",
@@ -10,7 +10,7 @@
   "options.boosty.description": "해외에서 이용할 수 있는 또 다른 후원 방법",
   "options.newTab": "(새 탭에서 열립니다)",
   "hero.promise": "자원봉사로 만듭니다. 언제나 무료입니다.",
-  "hero.description": "Bannerlord Coop은 자원봉사 개발팀이 만들며, 앞으로도 언제나 무료로 이용할 수 있습니다. 후원은 함께 즐기는 캠페인을 계속 개발하는 데 힘이 되지만, 후원 여부에 따라 이용을 제한하지는 않습니다.",
+  "hero.description": "Bannerlord Co-op은 자원봉사 개발팀이 만들며, 앞으로도 언제나 무료로 이용할 수 있습니다. 후원은 함께 즐기는 캠페인을 계속 개발하는 데 힘이 되지만, 후원 여부에 따라 이용을 제한하지는 않습니다.",
   "community.eyebrow": "커뮤니티의 힘으로 이어갑니다",
   "community.description": "모든 후원은 개발팀이 개발에 더 집중할 수 있는 여유를 만들어 줍니다.",
   "expenses.eyebrow": "후원금 사용처",
@@ -28,10 +28,10 @@
   "expenses.other.detail": "자원봉사 개발팀이 계속 활동하는 데 필요한 실무적인 프로젝트 비용입니다.",
   "otherSupport.eyebrow": "어떤 형태의 응원이든 소중합니다",
   "otherSupport.heading": "금전적 후원은 전적으로 선택 사항입니다.",
-  "otherSupport.description": "모드를 플레이하고, 버그를 신고하고, 콘텐츠를 만들고, Bannerlord Coop을 알리는 것도 프로젝트에 큰 힘이 됩니다.",
+  "otherSupport.description": "모드를 플레이하고, 버그를 신고하고, 콘텐츠를 만들고, Bannerlord Co-op을 알리는 것도 프로젝트에 큰 힘이 됩니다.",
   "otherSupport.play": "모드 플레이하기",
   "otherSupport.report": "버그 신고하기",
   "otherSupport.create": "콘텐츠 만들기",
-  "otherSupport.share": "Bannerlord Coop 알리기",
-  "otherSupport.thanks": "Bannerlord Coop을 응원해 주셔서 감사합니다!"
+  "otherSupport.share": "Bannerlord Co-op 알리기",
+  "otherSupport.thanks": "Bannerlord Co-op을 응원해 주셔서 감사합니다!"
 }

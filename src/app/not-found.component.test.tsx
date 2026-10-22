@@ -52,8 +52,8 @@ describe("NotFound localization", () => {
         expect(document.querySelector("footer")?.textContent).toBe("No banner rises without friends");
         const links = [...document.querySelectorAll("a")];
         expect(links.map((link) => link.getAttribute("href"))).toEqual(["/", "/", "/servers"]);
-        expect(links[0].getAttribute("aria-label")).toBe("Bannerlord Coop home");
-        expect(links[0].textContent).toBe("Bannerlord Coop");
+        expect(links[0].getAttribute("aria-label")).toBe("Bannerlord Co-op home");
+        expect(links[0].textContent).toBe("Bannerlord Co-op");
         expect(links[1].textContent).toBe("Return home");
         expect(links[2].textContent).toBe("Browse servers");
         expect(document.querySelector("img")?.getAttribute("alt")).toBe("");
@@ -80,8 +80,8 @@ describe("NotFound localization", () => {
             expect(document.querySelector("footer")?.textContent).toBe(translated["footer.motto"]);
             const links = [...document.querySelectorAll("a")];
             expect(links.map((link) => link.getAttribute("href"))).toEqual(["/", "/", "/servers"]);
-            expect(links[0].getAttribute("aria-label")).toBe("Inicio de Bannerlord Coop");
-            expect(links[0].textContent).toBe("Bannerlord Coop");
+            expect(links[0].getAttribute("aria-label")).toBe("Inicio de Bannerlord Co-op");
+            expect(links[0].textContent).toBe("Bannerlord Co-op");
             expect(links[1].textContent).toBe(translated["links.home"]);
             expect(links[2].textContent).toBe(translated["links.servers"]);
             expect(renderToStaticMarkup(

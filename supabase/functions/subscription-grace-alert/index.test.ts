@@ -7,7 +7,7 @@ import {
 import type { SmtpMessage } from "../_shared/smtp.ts";
 
 const syncSecret = "scheduler-secret-for-fixtures";
-const sender = { from: "admin@bannerlordcoop.com", fromName: "Bannerlord Coop" };
+const sender = { from: "admin@bannerlordcoop.com", fromName: "Bannerlord Co-op" };
 const siteUrl = "https://bannerlordcoop.com";
 const claimedAt = "2026-10-12T15:20:00.000Z";
 
@@ -74,7 +74,7 @@ test("the owner email names the server, the UTC deadline and how to keep it", ()
     const message = subscriptionGraceMessage({ ...alert(), email: "owner@example.com" }, siteUrl, sender);
     assert.deepEqual(message.to, ["owner@example.com"]);
     assert.equal(message.from, "admin@bannerlordcoop.com");
-    assert.equal(message.fromName, "Bannerlord Coop");
+    assert.equal(message.fromName, "Bannerlord Co-op");
     assert.equal(message.subject, "[BannerlordCoop] Your server \"GSR\" has been stopped and will be removed after 2026-10-15 15:00 UTC");
     assert.match(message.text, /has been stopped because the Patreon membership/u);
     assert.match(message.text, /locked and scheduled for removal after 2026-10-15 15:00 UTC\./u);

@@ -28,7 +28,7 @@ export function regionCapacityMessage(claim: Pick<Claim, "region" | "requesterEm
             "",
             `Head to ${siteUrl}/servers to set up your server.`,
             "",
-            "You are receiving this because you requested a managed server region on Bannerlord Coop.",
+            "You are receiving this because you requested a managed server region on Bannerlord Co-op.",
         ].join("\n"),
     };
 }

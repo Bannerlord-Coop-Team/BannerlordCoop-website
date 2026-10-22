@@ -80,7 +80,7 @@ it("filters the settings controls by their labels and shows an empty state when 
 
 it("offers owner manager access through exact email entry without rendering an account directory", async () => {
     await render();
-    expect(container.textContent).toContain("Bannerlord Coop account email");
+    expect(container.textContent).toContain("Bannerlord Co-op account email");
     expect(container.querySelector("datalist")).toBeNull();
     expect(container.querySelectorAll('input[type="email"]')).toHaveLength(1);
     await change("#manager-account-email", "friend@example.com");

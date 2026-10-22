@@ -33,7 +33,7 @@ describe("support page localization", () => {
         }
         expect(await generateMetadata()).toEqual({
             title: "Support The Project",
-            description: "Support the volunteer team behind Bannerlord Coop through Patreon, Buy Me a Coffee, PayPal, Afdian, or Boosty.",
+            description: "Support the volunteer team behind Bannerlord Co-op through Patreon, Buy Me a Coffee, PayPal, Afdian, or Boosty.",
         });
         expect(container.querySelectorAll(".sr-only")).toHaveLength(5);
         for (const section of container.querySelectorAll("section")) {

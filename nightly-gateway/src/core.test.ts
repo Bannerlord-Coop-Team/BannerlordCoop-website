@@ -213,7 +213,7 @@ test("the sponsor portal directs code recipients to the installer redemption flo
         assert.match(markup, /Codes are redeemed through the installer/);
         assert.match(markup, /href="\/install\.cmd"/);
         assert.match(markup, /download="BannerlordCoop-Nightly-Installer\.cmd"/);
-        assert.match(markup, /href="https:\/\/discord\.gg\/bannerlordcoop">Ask in the Bannerlord Coop Discord<\/a>/);
+        assert.match(markup, /href="https:\/\/discord\.gg\/bannerlordcoop">Ask in the Bannerlord Co-op Discord<\/a>/);
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -360,11 +360,11 @@ test("gateway pages use the site brand without weakening page security", () => {
         `claim-page`,
     );
 
-    assert.match(markup, /Bannerlord Coop/);
+    assert.match(markup, /Bannerlord Co-op/);
     assert.match(markup, /Nightly Access/);
     assert.match(markup, /--crimson:#8f1d23/);
     assert.match(markup, /singleleader\.png/);
-    assert.match(markup, /<title>Nightly &lt;access&gt; \| Bannerlord Coop<\/title>/);
+    assert.match(markup, /<title>Nightly &lt;access&gt; \| Bannerlord Co-op<\/title>/);
     assert.match(markup, /Supporter &quot;builds&quot;/);
     assert.match(markup, /class="shell claim-page"/);
     assert.doesNotMatch(markup, /<script/i);

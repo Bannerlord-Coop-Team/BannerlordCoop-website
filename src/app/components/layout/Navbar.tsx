@@ -36,7 +36,7 @@ export async function Navbar({ viewer }: { viewer?: Promise<{ user: User | null 
                     <Link href="/" className="flex shrink-0 items-center gap-2 sm:gap-3" aria-label={t("nav.homeLabel")}>
                         <Swords aria-hidden="true" className="size-6 text-gold" strokeWidth={3}/>
                         <span className="font-display text-sm font-black uppercase tracking-[0.06em] text-foreground transition-colors duration-300 hover:text-gold min-[380px]:text-base min-[380px]:tracking-[0.08em] sm:text-lg sm:tracking-[0.14em]">
-                        Bannerlord Coop
+                        Bannerlord Co-op
                     </span>
                     </Link>
 

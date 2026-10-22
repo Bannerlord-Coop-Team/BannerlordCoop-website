@@ -1,8 +1,8 @@
 {
   "metadata.title": "支持项目",
-  "metadata.description": "通过 Patreon、Buy Me a Coffee、PayPal、Afdian 或 Boosty，支持 Bannerlord Coop 背后的志愿者团队。",
+  "metadata.description": "通过 Patreon、Buy Me a Coffee、PayPal、Afdian 或 Boosty，支持 Bannerlord Co-op 背后的志愿者团队。",
   "hero.eyebrow": "支持项目",
-  "hero.heading": "支持 Bannerlord Coop",
+  "hero.heading": "支持 Bannerlord Co-op",
   "options.patreon.description": "每月定期支持",
   "options.buyMeACoffee.description": "提供一次性赞助",
   "options.paypal.description": "直接捐赠",
@@ -10,7 +10,7 @@
   "options.boosty.description": "另一种国际支持渠道",
   "options.newTab": "（在新标签页中打开）",
   "hero.promise": "志愿者打造，永久免费。",
-  "hero.description": "Bannerlord Coop 由志愿者团队开发，并将永久免费。赞助有助于我们持续开发联机战役，但游玩绝不以赞助为前提。",
+  "hero.description": "Bannerlord Co-op 由志愿者团队开发，并将永久免费。赞助有助于我们持续开发联机战役，但游玩绝不以赞助为前提。",
   "community.eyebrow": "社区支持，共同维系",
   "community.description": "每一份支持，都让团队有更多余力投入开发。",
   "expenses.eyebrow": "赞助用途",
@@ -28,10 +28,10 @@
   "expenses.other.detail": "支持志愿者团队持续推进项目的日常开支。",
   "otherSupport.eyebrow": "每一种支持都很重要",
   "otherSupport.heading": "资金支持完全自愿。",
-  "otherSupport.description": "游玩模组、反馈问题、创作内容，以及向他人分享 Bannerlord Coop，也都能为项目带来极大的帮助。",
+  "otherSupport.description": "游玩模组、反馈问题、创作内容，以及向他人分享 Bannerlord Co-op，也都能为项目带来极大的帮助。",
   "otherSupport.play": "游玩模组",
   "otherSupport.report": "反馈问题",
   "otherSupport.create": "创作内容",
-  "otherSupport.share": "分享 Bannerlord Coop",
-  "otherSupport.thanks": "感谢你支持 Bannerlord Coop！"
+  "otherSupport.share": "分享 Bannerlord Co-op",
+  "otherSupport.thanks": "感谢你支持 Bannerlord Co-op！"
 }

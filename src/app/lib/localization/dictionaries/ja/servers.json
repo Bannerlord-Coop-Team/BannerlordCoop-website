@@ -48,7 +48,7 @@
   "action.regionNotOffered": "このリージョンは提供されなくなったため、何も作成・リクエストされていません。更新して別のリージョンを選んでください。",
   "action.unconfirmed": "送信結果は未確認です。レート制限がかかっている場合はしばらく待ってから、重複を避けるため、同じ保留中のリクエストを再試行してください。",
   "metadata.title": "サーバー",
-  "metadata.description": "Bannerlord Coop のサーバーを探して参加しましょう。",
+  "metadata.description": "Bannerlord Co-op のサーバーを探して参加しましょう。",
   "page.heading": "サーバー",
   "page.eyebrow": "キャンペーン一覧",
   "page.myEyebrow": "自分のキャンペーン",

@@ -188,7 +188,7 @@ test("rejects invalid addresses before opening a connection", async () => {
 test("formats the sender display name as a quoted string or encoded word", () => {
     const meta = { date: new Date("2026-10-01T00:00:00.000Z"), messageId: "id@example.test" };
     const base = { from: "a@example.test", to: ["b@example.test"], subject: "Hi", text: "x" };
-    assert.ok(encodeMessage({ ...base, fromName: "Bannerlord Coop" }, meta).startsWith(`From: "Bannerlord Coop" <a@example.test>\r\n`));
+    assert.ok(encodeMessage({ ...base, fromName: "Bannerlord Co-op" }, meta).startsWith(`From: "Bannerlord Co-op" <a@example.test>\r\n`));
     assert.ok(encodeMessage({ ...base, fromName: " " }, meta).startsWith("From: <a@example.test>\r\n"));
     assert.ok(encodeMessage({ ...base, fromName: `Coop "Team"` }, meta).startsWith(`From: =?utf-8?B?${base64(`Coop "Team"`)}?= <a@example.test>\r\n`));
     assert.ok(encodeMessage({ ...base, fromName: "Équipe" }, meta).startsWith(`From: =?utf-8?B?${base64("Équipe")}?= <a@example.test>\r\n`));

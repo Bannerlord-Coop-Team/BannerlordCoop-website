@@ -93,7 +93,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
     title: "Control Plane",
-    description: "Operate the Bannerlord Coop managed-hosting control plane.",
+    description: "Operate the Bannerlord Co-op managed-hosting control plane.",
 };
 
 type View = ControlPlaneView;

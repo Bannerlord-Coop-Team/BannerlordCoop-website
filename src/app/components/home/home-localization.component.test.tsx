@@ -63,7 +63,7 @@ describe("home localization", () => {
         expect(heroDownload?.textContent).toBe(`${common["download.trigger"]}${home["download.platforms"]}`);
         expect(root.querySelector("section[aria-labelledby='hero-heading'] a[href='/servers']")?.textContent).toContain(home["hero.rentServer"]);
         expect(root.querySelector("section[aria-labelledby='hero-heading'] a[href='https://discord.gg/bannerlordcoop']")?.getAttribute("aria-label")).toBe(home["hero.discord"]);
-        expect(await generateMetadata()).toMatchObject({ description: home["metadata.description"], alternates: { canonical: "/" }, openGraph: { locale: "en_US", title: "Bannerlord Coop", description: home["metadata.description"] }, twitter: { description: home["metadata.description"] } });
+        expect(await generateMetadata()).toMatchObject({ description: home["metadata.description"], alternates: { canonical: "/" }, openGraph: { locale: "en_US", title: "Bannerlord Co-op", description: home["metadata.description"] }, twitter: { description: home["metadata.description"] } });
     });
 
     it("renders all available homepage prose from activated data and preserves external media", async () => {
@@ -104,7 +104,7 @@ describe("home localization", () => {
         request.value = "ru";
         const source = {
             id: "twitch-seed",
-            title: "Bannerlord Coop — L'empire contre-attaque!",
+            title: "Bannerlord Co-op — L'empire contre-attaque!",
             description: home["media.captainfracas-twitch.description"],
             thumbnail: "https://example.com/source-thumbnail.jpg",
             thumbnailAlt: home["media.captainfracas-twitch.thumbnailAlt"],

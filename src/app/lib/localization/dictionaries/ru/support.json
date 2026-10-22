@@ -1,8 +1,8 @@
 {
   "metadata.title": "Поддержать проект",
-  "metadata.description": "Поддержите команду добровольцев, которая создаёт Bannerlord Coop, через Patreon, Buy Me a Coffee, PayPal, Afdian или Boosty.",
+  "metadata.description": "Поддержите команду добровольцев, которая создаёт Bannerlord Co-op, через Patreon, Buy Me a Coffee, PayPal, Afdian или Boosty.",
   "hero.eyebrow": "Поддержать проект",
-  "hero.heading": "Поддержите Bannerlord Coop",
+  "hero.heading": "Поддержите Bannerlord Co-op",
   "options.patreon.description": "Поддерживайте нас ежемесячно",
   "options.buyMeACoffee.description": "Сделайте разовое пожертвование",
   "options.paypal.description": "Пожертвуйте напрямую",
@@ -10,7 +10,7 @@
   "options.boosty.description": "Ещё один способ поддержать нас из разных стран",
   "options.newTab": "(откроется в новой вкладке)",
   "hero.promise": "Создаётся добровольцами. Всегда бесплатно.",
-  "hero.description": "Bannerlord Coop разрабатывается командой добровольцев и всегда будет доступен бесплатно. Пожертвования помогают нам продолжать работу над совместной кампанией, но доступ к ней никогда не будет зависеть от оплаты.",
+  "hero.description": "Bannerlord Co-op разрабатывается командой добровольцев и всегда будет доступен бесплатно. Пожертвования помогают нам продолжать работу над совместной кампанией, но доступ к ней никогда не будет зависеть от оплаты.",
   "community.eyebrow": "Благодаря сообществу",
   "community.description": "Каждое пожертвование даёт команде больше возможностей для разработки.",
   "expenses.eyebrow": "На что идёт поддержка",
@@ -28,10 +28,10 @@
   "expenses.other.detail": "Текущие расходы проекта, которые помогают команде добровольцев продолжать работу.",
   "otherSupport.eyebrow": "Любая поддержка важна",
   "otherSupport.heading": "Финансовая поддержка — исключительно по желанию.",
-  "otherSupport.description": "Играя в мод, сообщая об ошибках, создавая материалы и рассказывая о Bannerlord Coop, вы тоже очень помогаете проекту.",
+  "otherSupport.description": "Играя в мод, сообщая об ошибках, создавая материалы и рассказывая о Bannerlord Co-op, вы тоже очень помогаете проекту.",
   "otherSupport.play": "Играйте в мод",
   "otherSupport.report": "Сообщайте об ошибках",
   "otherSupport.create": "Создавайте материалы",
-  "otherSupport.share": "Рассказывайте о Bannerlord Coop",
-  "otherSupport.thanks": "Спасибо за поддержку Bannerlord Coop!"
+  "otherSupport.share": "Рассказывайте о Bannerlord Co-op",
+  "otherSupport.thanks": "Спасибо за поддержку Bannerlord Co-op!"
 }

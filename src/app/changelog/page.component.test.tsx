@@ -30,9 +30,9 @@ const release: GitHubRelease = {
 // Complete test-only locale data verifies that page behavior does not need locale-specific code.
 const spanish: Dictionary = {
     "metadata.title": "Cambios",
-    "metadata.description": "Versiones de Bannerlord Coop.",
+    "metadata.description": "Versiones de Bannerlord Co-op.",
     "hero.eyebrow": "Actualizaciones",
-    "hero.title": "Cambios de Bannerlord Coop",
+    "hero.title": "Cambios de Bannerlord Co-op",
     "hero.description": "Mejoras del equipo de desarrollo.",
     "links.githubReleases": "Ver versiones en GitHub",
     "links.fullRelease": "Ver versión completa",
@@ -86,7 +86,7 @@ it.each([undefined, "invalid-locale", "es"])("keeps metadata and page English fo
     expect(Object.keys(page.props.messages)).toEqual(["changelog"]);
     expect(page.props.messages.changelog).toEqual(english);
     expect(await generateMetadata()).toEqual({ title: "Changelog", description: english["metadata.description"] });
-    expect(container.querySelector("h1")?.textContent).toBe("Bannerlord Coop Changelog");
+    expect(container.querySelector("h1")?.textContent).toBe("Bannerlord Co-op Changelog");
     expect(container.textContent).toContain("Showing 1 release");
     expect(container.querySelector("time")?.textContent).toBe("Published September 30, 2026");
     expect(container.querySelector("time")?.getAttribute("datetime")).toBe(release.publishedAt);

@@ -44,7 +44,7 @@ For later language PRs there is one worker for each of the ten page entries. The
 
 ## Immutable values
 
-Do not translate Bannerlord Coop, Mount & Blade II: Bannerlord, product/brand names, command names/identifiers, argument names or executable syntax, URLs, IDs, user/server names, server logs, save/file payloads, or user-authored values. Checked-in website prose and command explanatory prose are translated. Live externally authored release bodies, video titles, and community content remain source content; localize surrounding labels and date/number formatting. Keep rich token names and interpolation placeholders exact. Preserve operation codes, form field values, authorization checks, error codes, and all authentication/payment/server-operation behavior.
+Do not translate Bannerlord Co-op, Mount & Blade II: Bannerlord, product/brand names, command names/identifiers, argument names or executable syntax, URLs, IDs, user/server names, server logs, save/file payloads, or user-authored values. Checked-in website prose and command explanatory prose are translated. Live externally authored release bodies, video titles, and community content remain source content; localize surrounding labels and date/number formatting. Keep rich token names and interpolation placeholders exact. Preserve operation codes, form field values, authorization checks, error codes, and all authentication/payment/server-operation behavior.
 
 ## Focused behavior matrix
 

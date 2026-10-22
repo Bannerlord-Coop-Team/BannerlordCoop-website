@@ -26,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
             type: "website",
             locale: await getOpenGraphLocale(),
             url: "/",
-            title: "Bannerlord Coop",
+            title: "Bannerlord Co-op",
             description:
                 t("metadata.description"),
             images: [
@@ -34,14 +34,14 @@ export async function generateMetadata(): Promise<Metadata> {
                     url: "/images/banner.png",
                     width: 1200,
                     height: 630,
-                    alt: "Bannerlord Coop",
+                    alt: "Bannerlord Co-op",
                 },
             ],
         },
 
         twitter: {
             card: "summary_large_image",
-            title: "Bannerlord Coop",
+            title: "Bannerlord Co-op",
             description:
                 t("metadata.description"),
             images: ["/images/banner.png"],

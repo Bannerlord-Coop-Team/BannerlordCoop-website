@@ -34,8 +34,8 @@ export async function generateMetadata(): Promise<Metadata> {
   metadataBase: new URL("https://bannerlordcoop.com"),
 
   title: {
-    default: "Bannerlord Coop",
-    template: "%s | Bannerlord Coop",
+    default: "Bannerlord Co-op",
+    template: "%s | Bannerlord Co-op",
   },
 
   description: t("metadata.description"),
@@ -43,22 +43,22 @@ export async function generateMetadata(): Promise<Metadata> {
   openGraph: {
     type: "website",
     locale: await getOpenGraphLocale(),
-    siteName: "Bannerlord Coop",
-    title: "Bannerlord Coop",
+    siteName: "Bannerlord Co-op",
+    title: "Bannerlord Co-op",
     description: t("metadata.description"),
     images: [
       {
         url: "/images/banner.png",
         width: 1200,
         height: 630,
-        alt: "Bannerlord Coop",
+        alt: "Bannerlord Co-op",
       },
     ],
   },
 
   twitter: {
     card: "summary_large_image",
-    title: "Bannerlord Coop",
+    title: "Bannerlord Co-op",
     description: t("metadata.description"),
     images: ["/images/banner.png"],
   }

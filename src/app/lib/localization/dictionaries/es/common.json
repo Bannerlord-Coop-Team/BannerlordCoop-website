@@ -1,6 +1,6 @@
 {
   "metadata.description": "Juega a la campaña de Mount & Blade II: Bannerlord con amigos en un mundo multijugador compartido.",
-  "nav.homeLabel": "Inicio de Bannerlord Coop",
+  "nav.homeLabel": "Inicio de Bannerlord Co-op",
   "nav.primary": "Navegación principal",
   "nav.mobile": "Navegación móvil",
   "nav.home": "Inicio",
@@ -24,10 +24,10 @@
   "footer.features": "Características",
   "footer.videos": "Videos",
   "footer.about": "Acerca del proyecto",
-  "footer.copyright": "© {year} Bannerlord Coop. Todos los derechos reservados.",
+  "footer.copyright": "© {year} Bannerlord Co-op. Todos los derechos reservados.",
   "footer.disclaimer": "Un proyecto comunitario independiente. No está afiliado a TaleWorlds Entertainment ni cuenta con su respaldo.",
   "loading.page": "Cargando página…",
-  "loading.site": "Cargando Bannerlord Coop…",
+  "loading.site": "Cargando Bannerlord Co-op…",
   "locale.label": "Idioma",
   "locale.saving": "Guardando idioma…",
   "locale.error": "No se pudo guardar tu idioma. Inténtalo de nuevo.",
@@ -44,7 +44,7 @@
   "download.steam.name": "Steam Workshop",
   "download.steam.description": "Suscríbete y recibe actualizaciones a través de Steam.",
   "download.nexus.name": "Nexus Mods",
-  "download.nexus.description": "Descarga Bannerlord Coop desde Nexus Mods.",
+  "download.nexus.description": "Descarga Bannerlord Co-op desde Nexus Mods.",
   "download.moddb.name": "ModDB",
   "download.moddb.description": "Consulta las versiones y las novedades del proyecto en ModDB."
 }

@@ -120,7 +120,7 @@ export function MobileNavigation({
                     >
                         <div className="border-b border-white/10 pb-5 pr-12">
                             <p className="font-display text-xl font-semibold uppercase tracking-[0.08em] text-foreground">
-                                Bannerlord Coop
+                                Bannerlord Co-op
                             </p>
                         </div>
 

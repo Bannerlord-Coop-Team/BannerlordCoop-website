@@ -14,7 +14,7 @@ the website's side of it.
   when the tab is first opened. Support and administrator roles see that only owners
   and managers can view and change mods; the website sends no request for them.
 - Native, SandBoxCore and SandBox are pinned at the top and DedicatedServer.Linux at
-  the bottom. Bannerlord Coop can be moved but stays enabled. Owner mods can be
+  the bottom. Bannerlord Co-op can be moved but stays enabled. Owner mods can be
   dragged by their handle or moved with the arrow keys, and toggled with the gold
   switch. Each change saves itself: a toggle saves at once, a drag when it ends,
   and arrow-key moves 600 ms after the last key (or at once if the owner leaves

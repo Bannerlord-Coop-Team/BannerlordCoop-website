@@ -18,7 +18,7 @@ export type MailConfig = { from: string; fromName?: string; smtp: SmtpOptions };
 // username is the literal "resend"; the API key is the password and stays in the SMTP_PASS function secret.
 export const SITE_MAIL: MailSettings = {
     from: "admin@bannerlordcoop.com",
-    fromName: "Bannerlord Coop",
+    fromName: "Bannerlord Co-op",
     smtp: { hostname: "smtp.resend.com", port: 465, username: "resend" },
 };
 

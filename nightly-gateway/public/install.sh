@@ -49,6 +49,7 @@ validate_installer() {
     first=$(head -n 1 "$TEMP_INSTALLER")
     [ "$first" = '#!/usr/bin/env bash' ] || return 1
     marker=$(sed -n '2p' "$TEMP_INSTALLER")
+    # Already-downloaded launchers pin this exact line; never reword it.
     [ "$marker" = '# Official Bannerlord Coop nightly installer for Linux.' ] || return 1
 }
 

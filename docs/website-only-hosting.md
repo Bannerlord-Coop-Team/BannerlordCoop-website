@@ -12,7 +12,7 @@ warned restart. No password or secret reference is returned; refresh current
 status after an uncertain response instead of automatically resubmitting.
 
 The owner-only **Manager access** panel lives in the server's **Settings** tab.
-It accepts one manually entered Bannerlord Coop account email and never renders
+It accepts one manually entered Bannerlord Co-op account email and never renders
 an account directory or autocomplete list. The website resolves that exact email
 server-side, then the control plane rechecks current ownership and the displayed
 server generation before granting the manager ACL. Managers can view, operate and
