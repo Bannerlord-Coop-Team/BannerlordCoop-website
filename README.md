@@ -231,7 +231,13 @@ YouTube creators require only a channel ID:
 
 The server-side YouTube utility retrieves the remaining metadata.
 
-Creators on other platforms, such as Twitch, are listed in `linkedCreators` with their full profile, because the site has no API integration for those platforms. Their avatar host must be allowed in `next.config.ts`.
+Creators on other platforms, such as Twitch, carry their full profile instead, because the site has no API integration for those platforms. Their avatar host must be allowed in `next.config.ts`:
+
+```ts
+{ profile: { id: "twitch:name", name: "Name", description: "", avatar: "https://...", href: "https://www.twitch.tv/name" } }
+```
+
+Creators appear in the order they are listed.
 
 ## Project Structure
 

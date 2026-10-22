@@ -8,25 +8,38 @@ import type { ContentCreator, CreatorProfile } from "@/app/components/utils/type
 import { getYouTubeCreators } from "@/app/lib/youtube";
 import { getHomepageVideos } from "@/app/lib/homepage-videos";
 
-// Approved YouTube creators; their profiles are fetched from the YouTube Data API.
+// Approved creators in display order. YouTube profiles are fetched from the YouTube Data API;
+// creators on platforms without an API integration carry their profile here.
 const contentCreators: ContentCreator[] = [
     { channelId: "UC9sy-WPppdluS2q3crOaFpA" }, // Bannerlord Coop
     { channelId: "UCNjxbL33FhDGeIOp3vd3ndg" }, // @JackieFishHD
     { channelId: "UCi3M2mzQBc9sjfl1TzWCWgQ" }, // @ResonantRTS
+    {
+        profile: {
+            id: "twitch:captainfracas",
+            name: "CaptainFRACAS",
+            description: "",
+            avatar: "https://static-cdn.jtvnw.net/jtv_user_pictures/7fb66af7-a0be-437b-9cb0-6332fa5b9a92-profile_image-300x300.png",
+            href: "https://www.twitch.tv/captainfracas",
+        },
+    },
     { channelId: "UC5gsrZTtWG_AqDFmuq81Q-w" }, // @RimmyDownunder
     { channelId: "UC45a_j76kNDwJvbc2ufOkJg" }, // @PixelatedApollo
 ];
 
-// Approved creators on platforms without an API integration; their profiles are maintained here.
-const linkedCreators: CreatorProfile[] = [
-    {
-        id: "twitch:captainfracas",
-        name: "CaptainFRACAS",
-        description: "",
-        avatar: "https://static-cdn.jtvnw.net/jtv_user_pictures/7fb66af7-a0be-437b-9cb0-6332fa5b9a92-profile_image-300x300.png",
-        href: "https://www.twitch.tv/captainfracas",
-    },
-];
+// Lists the configured creators in order, dropping YouTube channels whose profiles were not fetched.
+function orderCreators(creators: ContentCreator[], youTubeCreators: CreatorProfile[]): CreatorProfile[] {
+    const youTubeCreatorsById = new Map(youTubeCreators.map((creator) => [creator.id, creator]));
+
+    return creators.flatMap((creator) => {
+        if ("profile" in creator) {
+            return [creator.profile];
+        }
+
+        const profile = youTubeCreatorsById.get(creator.channelId);
+        return profile ? [profile] : [];
+    });
+}
 
 // Localizes media labels and explicitly keyed editorial fields, preserving external content.
 export async function CommunityMedia() {
@@ -40,10 +53,10 @@ export async function CommunityMedia() {
             fallbackThumbnail: (title) => t("media.fallbackThumbnail", { title }),
         }),
         getYouTubeCreators(
-            contentCreators.map((creator) => creator.channelId),
+            contentCreators.flatMap((creator) => "channelId" in creator ? [creator.channelId] : []),
         ),
     ]);
-    const creators = [...youTubeCreators, ...linkedCreators];
+    const creators = orderCreators(contentCreators, youTubeCreators);
     // Resolve only assigned editorial keys; new and unmapped rows retain their source prose.
     const carouselVideos = videos.map((video) => ({
         ...video,

@@ -21,7 +21,7 @@ vi.mock("@/app/components/motion/ScrollReveal", () => ({ ScrollReveal: ({ childr
 vi.mock("@/app/lib/network-stats", () => ({ getNetworkStats: async () => ({ playersOnline: 12345, dedicatedServersCount: null, battlesFoughtTotal: 12, totalDownloads: 45678 }) }));
 vi.mock("@/app/lib/roadmap", () => ({ getRoadmap: async () => [] }));
 vi.mock("@/app/lib/homepage-videos", () => ({ getHomepageVideos: vi.fn(async () => [{ id: "video", title: "Source video", description: "Source description", category: "Source category", thumbnail: "/images/banner.png", thumbnailAlt: "Source alternative", href: "https://example.com/video", duration: "1:23" }]) }));
-vi.mock("@/app/lib/youtube", () => ({ getYouTubeCreators: async () => [{ id: "creator", name: "Source creator", description: "Source creator description", avatar: "/images/banner.png", href: "https://example.com/creator" }] }));
+vi.mock("@/app/lib/youtube", () => ({ getYouTubeCreators: async () => [{ id: "UC9sy-WPppdluS2q3crOaFpA", name: "Source creator", description: "Source creator description", avatar: "/images/banner.png", href: "https://example.com/creator" }] }));
 
 afterEach(() => { request.value = undefined; vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -131,7 +131,11 @@ describe("home localization", () => {
                 expect(decodeURIComponent(card.querySelector("img")!.src)).toContain(source.thumbnail);
             }
             expect(root.textContent).toContain("Source creator");
-            expect(root.querySelector('a[href="https://example.com/creator"]')).not.toBeNull();
+            const youTubeCreator = root.querySelector('a[href="https://example.com/creator"]');
+            const twitchCreator = root.querySelector('a[href="https://www.twitch.tv/captainfracas"]');
+            expect(youTubeCreator).not.toBeNull();
+            expect(twitchCreator?.textContent).toContain("CaptainFRACAS");
+            expect(youTubeCreator!.compareDocumentPosition(twitchCreator!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         } finally { localeDefinitions.ru = original; }
     });
 
