@@ -39,6 +39,20 @@ test("explains reconciliation and VPS assignment boundaries", () => {
         auditActionExplanation("hosting.admin.ovhcloud_vps_slot_capacity_raised"));
 });
 
+test("labels slot decommission operations and their audit actions", () => {
+    assert.match(operationExplanation("decommission-vps-slots"), /never moving a server/iu);
+    assert.match(operationExplanation("decommission-vps-slots"), /HOSTING_DYNAMIC_SLOT_CAPACITY/u);
+    assert.match(operationExplanation("decommission-vps-slots"), /floor\(vCPU \/ 2\)/u);
+    assert.match(operationExplanation("cancel-vps-slot-decommission"), /rolls forward/iu);
+    assert.match(operationExplanation("resolve-vps-slot-decommission-kept-slots"), /accepted as it is now or repaired/iu);
+    assert.match(auditActionExplanation("hosting.placement.ovhcloud_vps_slot_target_changed"), /decommission plan set or cleared it/u);
+    assert.match(auditActionExplanation("hosting.runner.ovhcloud_vps_slot_capacity_lowered"), /slot capacity was lowered/u);
+    assert.equal(auditActionExplanation("hosting.placement.manual_vps_slot_target_changed"),
+        auditActionExplanation("hosting.placement.ovhcloud_vps_slot_target_changed"));
+    assert.equal(auditActionExplanation("hosting.runner.manual_vps_slot_capacity_lowered"),
+        auditActionExplanation("hosting.runner.ovhcloud_vps_slot_capacity_lowered"));
+});
+
 test("gives destructive cards a concrete warning", () => {
     assert.match(destructiveExplanation("suspend-server"), /blocks owner operations/iu);
     assert.match(destructiveExplanation("relocate-server"), /address and game port/iu);
