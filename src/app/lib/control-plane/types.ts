@@ -288,6 +288,45 @@ export type HostingRaiseVpsSlotCapacityResult = {
     runnerOnboarding: HostingAdminVpsHost["runnerOnboarding"];
 };
 
+/**
+ * The control plane's result of `decommission-vps-slots` for one VPS: `draining` (planned, its tail still holds
+ * servers), `queued`, `unchanged`, or a replay of a settled request (`completed`, `cancelled`, `superseded`).
+ */
+export type HostingDecommissionVpsSlotsResult = {
+    outcome: "draining" | "queued" | "unchanged" | "completed" | "cancelled" | "superseded";
+    provider: VpsProviderId;
+    serviceName: string;
+    vCpu: number;
+    /** The VPS's stored slot capacity now, which drops only when the decommission completes. */
+    slotCapacity: number;
+    /** The VPS's slot target now; a decommission plan sets it to the capacity the VPS is lowered to. */
+    targetSlots: number | null;
+    /** The zero-based slots of the decommissioned tail that still hold, or are reserved for, a server. */
+    occupiedSlotIndexes: number[];
+    /** As the VPS table shows it; null only for a VPS that was never onboarded. */
+    runnerOnboarding: HostingAdminVpsHost["runnerOnboarding"];
+};
+
+/** The control plane's result of `cancel-vps-slot-decommission`: `cancelled` the open plan, or `unchanged` with none. */
+export type HostingCancelVpsSlotDecommissionResult = {
+    outcome: "cancelled" | "unchanged";
+    provider: VpsProviderId;
+    serviceName: string;
+    slotCapacity: number;
+    /** As the VPS table shows it; null only for an unchanged VPS that was never onboarded. */
+    runnerOnboarding: HostingAdminVpsHost["runnerOnboarding"];
+};
+
+/** The control plane's result of `resolve-vps-slot-decommission-kept-slots`: the decommission job was requeued. */
+export type HostingResolveVpsSlotDecommissionResult = {
+    outcome: "requeued";
+    provider: VpsProviderId;
+    serviceName: string;
+    /** The kept-slot evidence version the resolution was recorded against. */
+    evidenceVersion: number;
+    runnerOnboarding: NonNullable<HostingAdminVpsHost["runnerOnboarding"]>;
+};
+
 export type HostingAdminVpsInventory = {
     liveDataIncluded?: boolean;
     controlPlaneHost: HostingAdminHostResources | null;
