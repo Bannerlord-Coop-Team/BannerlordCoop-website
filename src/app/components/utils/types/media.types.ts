@@ -19,10 +19,12 @@ export type ContentCreator = {
     channelId: string;
 };
 
-export type YouTubeCreator = {
+export type CreatorProfile = {
     id: string;
     name: string;
     description: string;
     avatar: string | null;
     href: string;
 };
+
+export type YouTubeCreator = CreatorProfile;

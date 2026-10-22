@@ -4,21 +4,34 @@ import Image from "next/image";
 import Link from "next/link";
 import { ScrollReveal } from "@/app/components/motion/ScrollReveal";
 import { VideoCarousel } from "@/app/components/home/media/VideoCarousel";
-import type { ContentCreator } from "@/app/components/utils/types/media.types";
+import type { ContentCreator, CreatorProfile } from "@/app/components/utils/types/media.types";
 import { getYouTubeCreators } from "@/app/lib/youtube";
 import { getHomepageVideos } from "@/app/lib/homepage-videos";
 
-// Add approved content creators here.
+// Approved YouTube creators; their profiles are fetched from the YouTube Data API.
 const contentCreators: ContentCreator[] = [
+    { channelId: "UC9sy-WPppdluS2q3crOaFpA" }, // Bannerlord Coop
+    { channelId: "UCNjxbL33FhDGeIOp3vd3ndg" }, // @JackieFishHD
+    { channelId: "UCi3M2mzQBc9sjfl1TzWCWgQ" }, // @ResonantRTS
+    { channelId: "UC5gsrZTtWG_AqDFmuq81Q-w" }, // @RimmyDownunder
+    { channelId: "UC45a_j76kNDwJvbc2ufOkJg" }, // @PixelatedApollo
+];
+
+// Approved creators on platforms without an API integration; their profiles are maintained here.
+const linkedCreators: CreatorProfile[] = [
     {
-        channelId: "UC9sy-WPppdluS2q3crOaFpA",
+        id: "twitch:captainfracas",
+        name: "CaptainFRACAS",
+        description: "",
+        avatar: "https://static-cdn.jtvnw.net/jtv_user_pictures/7fb66af7-a0be-437b-9cb0-6332fa5b9a92-profile_image-300x300.png",
+        href: "https://www.twitch.tv/captainfracas",
     },
 ];
 
 // Localizes media labels and explicitly keyed editorial fields, preserving external content.
 export async function CommunityMedia() {
     const { t } = await getTranslations("home");
-    const [videos, creators] = await Promise.all([
+    const [videos, youTubeCreators] = await Promise.all([
         getHomepageVideos({
             fallbackTitle: t("media.fallbackTitle"),
             // Labels generated thumbnails without translating external video titles.
@@ -30,6 +43,7 @@ export async function CommunityMedia() {
             contentCreators.map((creator) => creator.channelId),
         ),
     ]);
+    const creators = [...youTubeCreators, ...linkedCreators];
     // Resolve only assigned editorial keys; new and unmapped rows retain their source prose.
     const carouselVideos = videos.map((video) => ({
         ...video,

@@ -223,13 +223,15 @@ Videos require only a YouTube URL:
 { href: "https://www.youtube.com/watch?v=VIDEO_ID" }
 ```
 
-Creators require only a channel ID:
+YouTube creators require only a channel ID:
 
 ```ts
 { channelId: "UC_CHANNEL_ID" }
 ```
 
 The server-side YouTube utility retrieves the remaining metadata.
+
+Creators on other platforms, such as Twitch, are listed in `linkedCreators` with their full profile, because the site has no API integration for those platforms. Their avatar host must be allowed in `next.config.ts`.
 
 ## Project Structure
 
