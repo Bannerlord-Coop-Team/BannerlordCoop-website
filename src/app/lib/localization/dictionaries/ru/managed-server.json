@@ -762,6 +762,7 @@
   "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
   "configEditor.loadingSkeleton": "Loading configuration fields",
   "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.saveStillLoaded": "Эта кампания всё ещё загружена на сервере. Запустите выбранную кампанию, затем остановите её, прежде чем удалять эту.",
   "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
   "campaigns.deleted": "Campaign deletion queued.",
   "transfers.rejection.storage-unavailable": "Приватное хранилище временно недоступно. Задание передачи не было запущено. Попробуйте новую передачу позже.",

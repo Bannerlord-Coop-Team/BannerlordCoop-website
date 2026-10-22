@@ -267,3 +267,10 @@ src/app/
 ## Disclaimer
 
 Bannerlord Co-op is an independent community project and is not affiliated with or endorsed by TaleWorlds Entertainment.
+
+
+Campaign deletion maps the control plane's `save_still_loaded` admission error to
+localized guidance in all shipped locales: start the selected campaign, then stop
+it before deleting the previously loaded campaign. Unknown codes keep the generic
+failure message. The existing error and enqueue envelopes are unchanged. Durable
+owner-visible delete-job outcomes remain tracked in ControlPlane #581.

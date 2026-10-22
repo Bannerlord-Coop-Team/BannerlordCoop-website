@@ -56,5 +56,8 @@ export async function deleteManagedServerSave(value: unknown, expectedUserId: st
         await deleteMyServerSave(await accessToken(expectedUserId), deletion as Required<Omit<SaveActionInput, "requestId">>, requestId);
         revalidatePath(`/servers/${input.serverId}`);
         return { ok: true, message: t("campaigns.deleted") };
-    } catch { return { ok: false, message: t("campaigns.deleteFailed") }; }
+    } catch (error) {
+        return { ok: false, message: t(error instanceof MyServersApiError && error.code === "save_still_loaded"
+            ? "campaigns.saveStillLoaded" : "campaigns.deleteFailed") };
+    }
 }

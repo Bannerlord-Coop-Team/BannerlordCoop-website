@@ -759,6 +759,7 @@
   "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
   "configEditor.loadingSkeleton": "Loading configuration fields",
   "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.saveStillLoaded": "이 캠페인이 아직 서버에 로드되어 있습니다. 선택한 캠페인을 시작한 다음 중지한 후에 이 캠페인을 삭제하세요.",
   "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
   "campaigns.deleted": "Campaign deletion queued.",
   "transfers.rejection.storage-unavailable": "비공개 저장소를 일시적으로 사용할 수 없습니다. 전송 작업은 시작되지 않았습니다. 나중에 새 전송을 시도하세요.",

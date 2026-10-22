@@ -759,6 +759,7 @@
   "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
   "configEditor.loadingSkeleton": "Loading configuration fields",
   "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.saveStillLoaded": "此战役仍加载在服务器上。请先启动所选战役，然后停止它，再删除此战役。",
   "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
   "campaigns.deleted": "Campaign deletion queued.",
   "transfers.rejection.storage-unavailable": "私有存储暂时不可用。未启动传输任务。请稍后重新发起传输。",
