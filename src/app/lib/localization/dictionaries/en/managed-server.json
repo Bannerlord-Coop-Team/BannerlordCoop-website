@@ -253,6 +253,7 @@
   "campaigns.selectionFailed": "The campaign selection could not be confirmed. Refresh the page and try again.",
   "campaigns.selectionUnavailable": "Campaign selection is available to the owner or manager while the server is stopped.",
   "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.saveStillLoaded": "This campaign is still loaded on the server. Start the selected campaign, then stop it before deleting this one.",
   "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
   "campaigns.deleted": "Campaign deletion queued.",
   "files.saveConfig": "Save & config",

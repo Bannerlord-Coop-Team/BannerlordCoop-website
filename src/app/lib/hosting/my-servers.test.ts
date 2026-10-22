@@ -3,6 +3,7 @@ import test from "node:test";
 import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
 import { connectionAddress } from "./connection-address";
 import {
+    deleteMyServerSave,
     dismissServerNotice,
     getMyServerBackupStatus,
     getMyServerDeletionStatus,
@@ -820,5 +821,36 @@ test("dismisses one notice across the Edge as a closed owner request and accepts
         }
         await assert.rejects(dismissServerNotice(TOKEN, input, "request"), { code: "invalid_request" });
         assert.equal(requests.length, sent);
+    } finally { restoreEnvironment(); }
+});
+
+
+test("delete-save preserves the exact enqueue and admission-error envelopes through Edge and website", async () => {
+    configureEnvironment();
+    const requestId = "aaaaaaaa-1111-4111-8111-111111111111";
+    const deletion = { serverId: FIRST_SERVER.serverId, saveId: requestId, expectedUpdatedAt: FIRST_SERVER.updatedAt, confirmationText: "Campaign" };
+    const queued = { action: "delete-save", jobId: requestId, outcome: "enqueued" };
+    const refusal = { code: "save_still_loaded", message: "This campaign is still loaded on the server.", retryable: false };
+    let response: unknown = queued;
+    let rejected = false;
+    const edge = createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test",
+        waitUntil: () => undefined, fetchImplementation: async () => Response.json(rejected
+            ? { version: 1, requestId, ok: false, error: response }
+            : { version: 1, requestId, ok: true, result: response }, { status: rejected ? 409 : 200 }) });
+    globalThis.fetch = async (url, init) => edge(new Request(url, init));
+    try {
+        assert.deepEqual(await deleteMyServerSave(TOKEN, deletion, requestId), queued);
+        rejected = true; response = refusal;
+        await assert.rejects(deleteMyServerSave(TOKEN, deletion, requestId),
+            (error: unknown) => error instanceof MyServersApiError && error.code === "save_still_loaded" && error.retryable === false);
+        // Extra keys remain forbidden on both old envelopes; no new result/status contract is needed.
+        for (const value of [{ ...refusal, saveId: requestId }, { ...refusal, code: "x".repeat(65) }]) {
+            response = value;
+            await assert.rejects(deleteMyServerSave(TOKEN, deletion, requestId),
+                (error: unknown) => error instanceof MyServersApiError && error.code !== "save_still_loaded");
+        }
+        rejected = false; response = { ...queued, errorCode: "save_still_loaded" };
+        await assert.rejects(deleteMyServerSave(TOKEN, deletion, requestId),
+            (error: unknown) => error instanceof MyServersApiError);
     } finally { restoreEnvironment(); }
 });

@@ -760,6 +760,7 @@
   "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
   "configEditor.loadingSkeleton": "Loading configuration fields",
   "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.saveStillLoaded": "Bu sefer hâlâ sunucuda yüklü. Bunu silmeden önce seçili seferi başlatın ve ardından durdurun.",
   "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
   "campaigns.deleted": "Campaign deletion queued.",
   "transfers.rejection.storage-unavailable": "Özel depolama geçici olarak kullanılamıyor. Aktarım işi başlatılmadı. Daha sonra yeni bir aktarım deneyin.",

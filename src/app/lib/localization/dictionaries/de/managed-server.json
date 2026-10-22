@@ -760,6 +760,7 @@
   "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
   "configEditor.loadingSkeleton": "Loading configuration fields",
   "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.saveStillLoaded": "Diese Kampagne ist noch auf dem Server geladen. Starte die ausgewählte Kampagne und stoppe sie anschließend, bevor du diese hier löschst.",
   "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
   "campaigns.deleted": "Campaign deletion queued.",
   "transfers.rejection.storage-unavailable": "Der private Speicher ist vorübergehend nicht verfügbar. Es wurde kein Übertragungsauftrag gestartet. Versuche später eine neue Übertragung.",

@@ -759,6 +759,7 @@
   "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
   "configEditor.loadingSkeleton": "Loading configuration fields",
   "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.saveStillLoaded": "このキャンペーンはまだサーバーに読み込まれています。選択したキャンペーンを起動してから停止し、その後でこのキャンペーンを削除してください。",
   "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
   "campaigns.deleted": "Campaign deletion queued.",
   "transfers.rejection.storage-unavailable": "プライベートストレージは一時的に利用できません。転送ジョブは開始されていません。しばらくしてから新しい転送を試してください。",

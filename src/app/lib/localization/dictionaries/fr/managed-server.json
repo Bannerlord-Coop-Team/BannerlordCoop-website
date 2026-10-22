@@ -760,6 +760,7 @@
   "controls.connectWithIpAddress": "Connect with the IP address on the top right of this webpage.",
   "configEditor.loadingSkeleton": "Loading configuration fields",
   "campaigns.deleteConfirmationMismatch": "The campaign name did not match, so nothing was deleted.",
+  "campaigns.saveStillLoaded": "Cette campagne est toujours chargée sur le serveur. Démarrez la campagne sélectionnée, puis arrêtez-la avant de supprimer celle-ci.",
   "campaigns.deleteFailed": "The campaign could not be deleted. Refresh and try again.",
   "campaigns.deleted": "Campaign deletion queued.",
   "transfers.rejection.storage-unavailable": "Le stockage privé est temporairement indisponible. Aucune tâche de transfert n’a été lancée. Réessayez un nouveau transfert plus tard.",
