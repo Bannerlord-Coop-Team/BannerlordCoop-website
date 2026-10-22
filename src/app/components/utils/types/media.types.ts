@@ -16,8 +16,8 @@ export type MediaVideo = {
 export type YouTubeVideo = MediaVideo;
 
 export type ContentCreator =
-    | { channelId: string }
-    | { profile: CreatorProfile };
+    | { channelId: string; profile?: never }
+    | { profile: CreatorProfile; channelId?: never };
 
 export type CreatorProfile = {
     id: string;

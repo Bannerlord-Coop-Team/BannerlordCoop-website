@@ -4,9 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { ScrollReveal } from "@/app/components/motion/ScrollReveal";
 import { VideoCarousel } from "@/app/components/home/media/VideoCarousel";
-import type { ContentCreator, CreatorProfile } from "@/app/components/utils/types/media.types";
+import type { ContentCreator } from "@/app/components/utils/types/media.types";
 import { getYouTubeCreators } from "@/app/lib/youtube";
 import { getHomepageVideos } from "@/app/lib/homepage-videos";
+import { getYouTubeChannelIds, orderCreators } from "@/app/lib/featured-creators";
 
 // Approved creators in display order. YouTube profiles are fetched from the YouTube Data API;
 // creators on platforms without an API integration carry their profile here.
@@ -27,20 +28,6 @@ const contentCreators: ContentCreator[] = [
     { channelId: "UC45a_j76kNDwJvbc2ufOkJg" }, // @PixelatedApollo
 ];
 
-// Lists the configured creators in order, dropping YouTube channels whose profiles were not fetched.
-function orderCreators(creators: ContentCreator[], youTubeCreators: CreatorProfile[]): CreatorProfile[] {
-    const youTubeCreatorsById = new Map(youTubeCreators.map((creator) => [creator.id, creator]));
-
-    return creators.flatMap((creator) => {
-        if ("profile" in creator) {
-            return [creator.profile];
-        }
-
-        const profile = youTubeCreatorsById.get(creator.channelId);
-        return profile ? [profile] : [];
-    });
-}
-
 // Localizes media labels and explicitly keyed editorial fields, preserving external content.
 export async function CommunityMedia() {
     const { t } = await getTranslations("home");
@@ -52,9 +39,7 @@ export async function CommunityMedia() {
             // Labels fallback thumbnails when remote metadata cannot be retrieved.
             fallbackThumbnail: (title) => t("media.fallbackThumbnail", { title }),
         }),
-        getYouTubeCreators(
-            contentCreators.flatMap((creator) => "channelId" in creator ? [creator.channelId] : []),
-        ),
+        getYouTubeCreators(getYouTubeChannelIds(contentCreators)),
     ]);
     const creators = orderCreators(contentCreators, youTubeCreators);
     // Resolve only assigned editorial keys; new and unmapped rows retain their source prose.

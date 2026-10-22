@@ -62,6 +62,7 @@ type YouTubeOEmbedResponse = {
     thumbnail_url?: string;
 };
 
+// Fetches YouTube channel profiles, returning none when the API key is missing or the request fails.
 export async function getYouTubeCreators(
     channelIds: string[],
 ): Promise<CreatorProfile[]> {
