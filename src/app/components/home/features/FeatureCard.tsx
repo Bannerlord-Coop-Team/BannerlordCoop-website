@@ -29,7 +29,7 @@ export function FeatureCard({ feature, animationDelay = 0 }: FeatureCardProps) {
                                     ? "(min-width: 1280px) 55vw, 100vw"
                                     : "(min-width: 1280px) 35vw, 100vw"
                             }
-                            className="absolute -z-30 object-cover grayscale transition-transform duration-700 ease-out group-hover:scale-[1.025] group-hover:grayscale-0"
+                            className="absolute -z-30 object-cover transition-transform duration-700 ease-out group-hover:scale-[1.025]"
                         />
 
                         <div
