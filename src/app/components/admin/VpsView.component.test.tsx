@@ -9,6 +9,7 @@ vi.mock("@/app/lib/control-plane/client", () => ({ requestControlPlaneAdmin: moc
 vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({ auth: { getSession: mocks.session } }) }));
 vi.mock("./RunnerOnboardingStatus", () => ({ RunnerOnboardingStatus: () => <span>Runner current</span> }));
 vi.mock("./VpsSlotCapacityRaise", () => ({ VpsSlotCapacityRaise: () => <span>Raise slots</span> }));
+vi.mock("./VpsSlotDecommission", () => ({ VpsSlotDecommission: () => <span>Decommission slots</span> }));
 let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
