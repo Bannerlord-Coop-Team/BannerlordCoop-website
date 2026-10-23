@@ -536,7 +536,7 @@ it("shows a stopped server's retained mod diagnosis on reload without sending St
         expect(container.textContent).toContain("Mod CoopSycn needs Harmony (0Harmony.dll). Upload Bannerlord.Harmony including its bin folder");
         expect(request).not.toHaveBeenCalled();
         expect(startStatus).not.toHaveBeenCalled();
-        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="running" runtimeInsight={{ ...insight, modLoadFailure: undefined }} /></TestLocalization>));
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="running" runtimeInsight={insight} /></TestLocalization>));
         expect(container.textContent).not.toContain("0Harmony.dll");
     } finally { await act(async () => root.unmount()); }
 });
