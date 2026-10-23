@@ -1,4 +1,5 @@
 import { parseReleaseMutation, parseReleaseStatus, type ReleaseMutation } from "../../../../supabase/functions/_shared/server-release-contract";
+import { parseSaveDeletionStatus } from "../../../../supabase/functions/_shared/server-save-deletion-contract";
 import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSettingsMutation } from "../../../../supabase/functions/_shared/server-settings-contract";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "../../../../supabase/functions/_shared/server-visibility-contract";
 import { parseSaveGenerationList, parseSaveGenerationRestoreMutation, parseSaveGenerationRestoreResult, type RestorableSaveGeneration } from "../../../../supabase/functions/_shared/server-save-generation-contract";
@@ -194,6 +195,16 @@ export async function deleteMyServerSave(accessToken: string, input: { serverId:
     const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify({ action: "delete-save", ...input }), requestId });
     if (!isRecord(result) || !hasExactKeys(result, ["action", "jobId", "outcome"]) || result.action !== "delete-save" || typeof result.jobId !== "string" || !RESOURCE_ID.test(result.jobId) || (result.outcome !== "enqueued" && result.outcome !== "existing")) throw invalidResponse();
     return result as { outcome: "enqueued" | "existing"; jobId: string; action: "delete-save" };
+}
+
+export async function getMyServerSaveDeletionStatus(accessToken: string, serverId: string, jobId: string) {
+    if (!RESOURCE_ID.test(serverId) || !RESOURCE_ID.test(jobId)) throw new MyServersApiError("invalid_request", "Invalid deletion status request.");
+    const result = await requestMyServersApi(accessToken, { method: "GET", configureEndpoint(endpoint) {
+        endpoint.searchParams.set("resource", "delete-save-status");
+        endpoint.searchParams.set("serverId", serverId);
+        endpoint.searchParams.set("jobId", jobId);
+    } });
+    try { return parseSaveDeletionStatus(result, serverId, jobId); } catch { throw invalidResponse(); }
 }
 
 /** Reads the active campaign's current save and earlier autosaves; the response must name the same server and save. */

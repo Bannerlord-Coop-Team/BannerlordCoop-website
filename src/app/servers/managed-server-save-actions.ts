@@ -2,7 +2,8 @@
 
 import { getTranslations } from "@/app/lib/localization/server";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
-import { deleteMyServerSave, MyServersApiError, selectMyServerSave } from "@/app/lib/hosting/my-servers";
+import { deleteMyServerSave, getMyServerSaveDeletionStatus, MyServersApiError, selectMyServerSave } from "@/app/lib/hosting/my-servers";
+import type { SaveDeletionStatus } from "../../../supabase/functions/_shared/server-save-deletion-contract";
 import { hasExactKeys, isRecord } from "../../../supabase/functions/_shared/dto-validation";
 import { requireFileTimestamp, requireUuid } from "../../../supabase/functions/_shared/server-file-contract";
 import { revalidatePath } from "next/cache";
@@ -47,17 +48,38 @@ export async function selectManagedServerSave(value: unknown, expectedUserId: st
     }
 }
 
-export async function deleteManagedServerSave(value: unknown, expectedUserId: string): Promise<SaveActionResult> {
+export async function deleteManagedServerSave(value: unknown, expectedUserId: string): Promise<
+    { ok: true; jobId: string; message: string } | { ok: false; message: string; notSubmitted: boolean }
+> {
     const { t } = await getTranslations("managed-server");
     let input: SaveActionInput;
-    try { input = parseInput(value, true); } catch { return { ok: false, message: t("campaigns.deleteFailed") }; }
+    try { input = parseInput(value, true); } catch { return { ok: false, message: t("campaigns.deleteFailed"), notSubmitted: true }; }
     try {
         const { requestId, ...deletion } = input;
-        await deleteMyServerSave(await accessToken(expectedUserId), deletion as Required<Omit<SaveActionInput, "requestId">>, requestId);
+        const result = await deleteMyServerSave(await accessToken(expectedUserId), deletion as Required<Omit<SaveActionInput, "requestId">>, requestId);
         revalidatePath(`/servers/${input.serverId}`);
-        return { ok: true, message: t("campaigns.deleted") };
+        return { ok: true, jobId: result.jobId, message: t("campaigns.deleted") };
     } catch (error) {
-        return { ok: false, message: t(error instanceof MyServersApiError && error.code === "save_still_loaded"
+        return { ok: false, notSubmitted: error instanceof MyServersApiError && ["save_not_found", "server_suspended", "save_still_loaded", "safe_stop_required", "confirmation_mismatch", "active_save_delete_forbidden", "packaged_save_delete_forbidden", "stale_interaction", "invalid_request", "unauthorized", "forbidden"].includes(error.code), message: t(error instanceof MyServersApiError && error.code === "save_still_loaded"
             ? "campaigns.saveStillLoaded" : "campaigns.deleteFailed") };
+    }
+}
+
+export async function readManagedServerSaveDeletion(serverId: string, jobId: string, expectedUserId: string): Promise<
+    { ok: true; status: SaveDeletionStatus; message: string } | { ok: false; message: string }
+> {
+    const { t } = await getTranslations("managed-server");
+    try {
+        requireUuid(serverId); requireUuid(jobId);
+        const status = await getMyServerSaveDeletionStatus(await accessToken(expectedUserId), serverId, jobId);
+        const key = status.state === "succeeded" ? "campaigns.deleteSucceeded"
+            : status.state === "queued" ? "campaigns.deleted"
+            : status.state === "running" ? "campaigns.deleteRunning"
+            : status.state === "retry-wait" ? "campaigns.deletePending"
+            : status.errorCode === "save_still_loaded" ? "campaigns.saveStillLoaded"
+            : status.errorCode === "queue_timeout" ? "campaigns.deleteQueueTimeout" : "campaigns.deleteOutcomeFailed";
+        return { ok: true, status, message: t(key) };
+    } catch {
+        return { ok: false, message: t("campaigns.deleteStatusUnavailable") };
     }
 }
