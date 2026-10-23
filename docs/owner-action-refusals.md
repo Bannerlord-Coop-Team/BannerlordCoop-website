@@ -90,6 +90,32 @@ are covered too, with no new public keys. The controls renderer also normalizes
 the raw direct CP fixture through Edge before rendering. These establish
 compatibility with the separate CP follow-up, not deployment of that follow-up.
 
+The narrowed CP follow-up exposes typed refusal only for initial direct
+Start/Stop/Restart admission and config GET. Config POST remains masked because
+a reusable request ID alone does not prove there was no prior dispatch.
+`direct-refusal-render.component.test.tsx` renders all four typed-refusal paths
+after real Edge normalization and parsing; the compatibility suite retains
+config POST's masked baseline.
+
+## Known limitations
+
+Round 2 review identified two latent cases that the current CP contract does not
+trigger. They are retained without widening this change's runtime scope:
+
+- Mods retries: if a network failure loses a first complete/order/delete attempt
+  and a same-request resend later returns a typed `server_suspended`, the catalog
+  treats that later reply as definitive. CP currently returns retryable
+  `mods_unavailable`, so it does not exercise this path. Exact described fixture:
+  `complete: [refused("network_unavailable", true), refused("server_suspended")]`.
+- Transfer status: if a retained transfer's status read were to return a typed
+  suspension, the shared failure presentation could say the request was refused
+  without changes despite possible earlier acceptance. CP status currently checks
+  authorization without that suspension refusal; the UI retains the receipt.
+
+These limitations do not authorize interpreting generic availability codes as
+suspension. Any future CP contract expansion for these paths must preserve
+earlier unknown outcomes and distinguish mutation admission from receipt reads.
+
 ## Receipt safety
 
 Website #375 / ControlPlane issue #581 retain a campaign deletion's confirmed

@@ -41,6 +41,14 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
         return queued(result.jobId, input.serverId);
     } catch (error) {
         const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
+        const messages: Record<string, string> = {
+            stale_interaction: t("server-release.theServerChangedRefreshBeforeSavingTheReleaseChannelAgain"),
+            nightly_unavailable: t("server-release.nightlyReleasesAreCurrentlyUnavailable"),
+            validated_build_unavailable: t("server-release.noValidatedBuildIsAvailableForThatChannel"),
+            release_compatibility_unknown: t("server-release.campaignCompatibilityIsNotValidatedForThisReleaseContactHosting"),
+            release_compatibility_unsafe: t("server-release.thatReleaseCannotSafelyReadThisCampaignTheChannelWas"),
+            settings_unchanged: t("server-release.thisChannelIsAlreadySelected"),
+        };
         // A revision conflict from an unrelated write is retried once, only while the channel is still the one shown.
         if ((code === "request_conflict" || code === "stale_interaction") && token !== null && input !== null && previousChannel !== null) {
             try {
@@ -54,18 +62,11 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
                 }
             } catch (retryError) {
                 const refusal = ownerRefusalMessage(retryError, t);
-                if (refusal !== null) return { ok: false, rejected: true, message: refusal };
+                if (refusal !== null) return { ok: false, rejected: true,
+                    message: retryError instanceof MyServersApiError ? messages[retryError.code] ?? refusal : refusal };
                 // Fall through to the ordinary explanation below.
             }
         }
-        const messages: Record<string, string> = {
-            stale_interaction: t("server-release.theServerChangedRefreshBeforeSavingTheReleaseChannelAgain"),
-            nightly_unavailable: t("server-release.nightlyReleasesAreCurrentlyUnavailable"),
-            validated_build_unavailable: t("server-release.noValidatedBuildIsAvailableForThatChannel"),
-            release_compatibility_unknown: t("server-release.campaignCompatibilityIsNotValidatedForThisReleaseContactHosting"),
-            release_compatibility_unsafe: t("server-release.thatReleaseCannotSafelyReadThisCampaignTheChannelWas"),
-            settings_unchanged: t("server-release.thisChannelIsAlreadySelected"),
-        };
         const refusal = !Object.hasOwn(messages, code) ? ownerRefusalMessage(error, t) : null;
         if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         return { ok: false, rejected: Object.hasOwn(messages, code), message: messages[code] ?? t("server-release.theReleaseChangeCouldNotBeConfirmedCheckProgressOr") };

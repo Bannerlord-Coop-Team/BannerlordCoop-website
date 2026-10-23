@@ -181,6 +181,20 @@ it.each(["safe_stop_required", "save_not_found"])("keeps the campaign refresh fo
     expect(await changeManagedServerCampaign({ ...receipt, action: "reset-campaign" }, "owner"))
         .toMatchObject({ ok: false, notSubmitted: true, refresh: true });
 });
+
+it.each(["nightly_unavailable", "validated_build_unavailable", "release_compatibility_unknown", "release_compatibility_unsafe"])("keeps German release copy after the fresh-revision retry: %s", async code => {
+    mocks.locale = "de";
+    const input = { ...receipt, releaseChannel: "nightly", previousChannel: "stable" };
+    mocks.call.mockRejectedValueOnce(await envelopeError(code));
+    const existing = await changeServerRelease(input);
+    const summary = await import("@/app/lib/hosting/my-servers-server");
+    vi.spyOn(summary, "getMyServerSummary").mockResolvedValueOnce({ accessRole: "owner", releaseChannel: "stable", updatedAt: "2026-10-01T00:00:01.000Z" } as never);
+    mocks.call.mockRejectedValueOnce(new MyServersApiError("stale_interaction", "Stale"))
+        .mockRejectedValueOnce(await envelopeError(code));
+    expect(await changeServerRelease(input)).toEqual(existing);
+    expect(existing.message).not.toBe("The request was refused.");
+    expect(mocks.call).toHaveBeenCalledTimes(3);
+});
 it.each(readdirSync("src/app/lib/localization/dictionaries"))("ships suspension copy in %s", locale => {
     const dictionary = JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${locale}/managed-server.json`, "utf8"));
     expect(dictionary["action.refusal.serverSuspended"]).toBeTypeOf("string");
