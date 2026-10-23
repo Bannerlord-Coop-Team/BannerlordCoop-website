@@ -79,8 +79,6 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         return { ok: true, message: t("controls.restartingPlayersCanRejoinOnceTheCampaignFinishesLoadingUsually") };
     } catch (error) {
         revalidatePath("/servers");
-        const refusal = ownerRefusalMessage(error, t);
-        if (refusal !== null) return { ok: false, message: refusal };
         const code = error instanceof MyServersApiError ? error.code : "operation_failed";
         if (code === "server_not_found") {
             return { ok: false, message: t("action.actions.thisServerIsUnavailableOrYourAccessWasRemoved") };
@@ -122,6 +120,8 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
                 return { ok: false, message: t("action.actions.noValidatedReleaseIsCurrentlyAvailableForThisServer") };
             }
         }
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, message: refusal };
         if (parsed.action === "stop") return { ok: false, checkStatus: true, message: t("controls.checkingWhetherYourServerHasStopped") };
         return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThatYourOperationRequestWentThrough", { operation: operationLabel(parsed.action, t) }) };
     }

@@ -28,8 +28,6 @@ export async function deleteManagedServer(value: unknown): Promise<ServerDeletio
         revalidatePath(`/servers/${intent.serverId}`);
         return { ok: true, jobId: result.jobId, message: t("deletion.queued") };
     } catch (error) {
-        const refusal = ownerRefusalMessage(error, t);
-        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         const code = error instanceof MyServersApiError ? error.code : "unknown";
         const busy = code === "operation_in_progress";
         // The control plane has definitely refused the request when another
@@ -37,6 +35,8 @@ export async function deleteManagedServer(value: unknown): Promise<ServerDeletio
         // ambiguous retry path; the owner must refresh and confirm again
         // after that operation settles.
         const rejected = busy || ["stale_interaction", "confirmation_mismatch", "forbidden", "server_not_found", "invalid_request", "request_conflict", "hosting_conflict", "operation_conflict"].includes(code);
+        const refusal = !rejected ? ownerRefusalMessage(error, t) : null;
+        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         return { ok: false, rejected, message: t(busy ? "deletion.busy" : rejected ? "deletion.rejected" : "deletion.unknown") };
     }
 }

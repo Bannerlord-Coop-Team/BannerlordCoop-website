@@ -19,9 +19,10 @@ import { deleteManagedServer } from "./server-deletion-actions";
 import { setServerManager, removeServerManager } from "./server-manager-actions";
 import { dismissManagedServerNotice } from "./server-notice-actions";
 
-const mocks = vi.hoisted(() => ({ call: vi.fn() }));
+const mocks = vi.hoisted(() => ({ call: vi.fn(), locale: "en" }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/app/lib/localization/server", () => ({ getTranslations: async () => createTranslator("en", messages) }));
+vi.mock("@/app/lib/localization/server", () => ({ getTranslations: async () => createTranslator("en",
+    JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${mocks.locale}/managed-server.json`, "utf8"))) }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: async () => ({ auth: {
     getUser: async () => ({ data: { user: { id: "owner" } } }),
     getSession: async () => ({ data: { session: { user: { id: "owner" }, access_token: "synthetic" } } }),
@@ -99,7 +100,7 @@ async function envelopeError(code: string, retryable = false, operationId?: stri
     } catch (error) { return error; }
     throw new Error("Expected refusal");
 }
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => { vi.clearAllMocks(); mocks.locale = "en"; });
 
 for (const [name, run, settlement] of handlers) {
     it(`${name}: renders a parsed 409 suspension and settles only the refused request`, async () => {
@@ -112,7 +113,10 @@ for (const [name, run, settlement] of handlers) {
     });
     it(`${name}: shows another known admission refusal`, async () => {
         mocks.call.mockRejectedValue(await envelopeError("operation_unavailable"));
-        expect(await run()).toMatchObject({ ok: false, message: "The request was refused." });
+        const translated = name === "console" ? messages["action.console.theServerIsnTRunningSoTheCommandCanT"]
+            : ["backup", "restore-backup", "restore-autosave"].includes(name) ? messages["action.backup.thatBackupOperationIsNotAvailableInTheServerS"]
+            : name.startsWith("campaign-") ? "Campaign changes are not available for this server right now." : "The request was refused.";
+        expect(await run()).toMatchObject({ ok: false, message: translated });
         expect(mocks.call).toHaveBeenCalledOnce();
     });
     it(`${name}: keeps retryable suspension failures on the existing recovery path`, async () => {
@@ -147,6 +151,35 @@ it("does not classify retryable, accepted-job, local, future or pre-replay autho
         await envelopeError("server_not_found"), await envelopeError("future_error"),
         new MyServersApiError("server_suspended", "Local error"), new Error("Network"),
     ]) expect(ownerRefusalMessage(error, t)).toBeNull();
+});
+
+it.each(["import-config", "import-save", "export-save"])("retains the exact %s request after a parsed same-ID operation_in_progress", async action => {
+    mocks.call.mockRejectedValue(await envelopeError("operation_in_progress"));
+    expect(await transfer(action)).toMatchObject({ ok: false, rejected: false, notSubmitted: false,
+        message: messages["action.file.theTransferOutcomeCouldNotBeConfirmedCheckItsStatus"] });
+    expect(mocks.call).toHaveBeenCalledOnce();
+});
+
+it.each([
+    ["update", "no_update_available"], ["update", "validated_build_unavailable"], ["update", "operation_in_progress"],
+    ["backup", "safe_stop_required"], ["backup", "operation_in_progress"], ["backup", "backup_build_mismatch"],
+    ["import-save", "safe_stop_required"], ["console", "operation_unavailable"], ["save-delete", "save_still_loaded"],
+    ["release", "nightly_unavailable"], ["release", "validated_build_unavailable"],
+    ["settings", "operation_in_progress"], ["delete", "operation_in_progress"], ["dismiss-notice", "impersonation_read_only"],
+])("preserves existing German copy and action flags for %s / %s", async (name, code) => {
+    mocks.locale = "de";
+    const run = handlers.find(([handler]) => handler === name)![1];
+    mocks.call.mockRejectedValue(new MyServersApiError(code, "The request was refused."));
+    const existing = await run();
+    mocks.call.mockRejectedValue(await envelopeError(code));
+    expect(await run()).toEqual(existing);
+    expect(existing.message).not.toBe("The request was refused.");
+});
+
+it.each(["safe_stop_required", "save_not_found"])("keeps the campaign refresh for definitive %s", async code => {
+    mocks.call.mockRejectedValue(await envelopeError(code));
+    expect(await changeManagedServerCampaign({ ...receipt, action: "reset-campaign" }, "owner"))
+        .toMatchObject({ ok: false, notSubmitted: true, refresh: true });
 });
 it.each(readdirSync("src/app/lib/localization/dictionaries"))("ships suspension copy in %s", locale => {
     const dictionary = JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${locale}/managed-server.json`, "utf8"));

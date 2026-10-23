@@ -21,8 +21,6 @@ async function currentToken(expectedUserId: string) {
 // Localizes existing action-specific failure codes without exposing internal errors.
 async function failure(error: unknown, notSubmitted = false) {
     const { t } = await getTranslations("managed-server");
-    const refusal = !notSubmitted ? ownerRefusalMessage(error, t) : null;
-    if (refusal !== null) return { ok: false as const, notSubmitted: false, rejected: true, stale: false, message: refusal };
     const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
     const messages: Record<string, string> = {
         stale_interaction: t("action.file.theServerChangedRefreshBeforeStartingANewTransfer"),
@@ -33,6 +31,8 @@ async function failure(error: unknown, notSubmitted = false) {
         export_not_ready: t("action.file.theSaveExportIsStillBeingPrepared"),
         export_unavailable: t("action.file.theExportIsUnavailableCheckItsStatusAndTryAgain"),
     };
+    const refusal = !notSubmitted && !Object.hasOwn(messages, code) ? ownerRefusalMessage(error, t) : null;
+    if (refusal !== null) return { ok: false as const, notSubmitted: false, rejected: true, stale: false, message: refusal };
     return { ok: false as const, notSubmitted,
         rejected: !notSubmitted && ["stale_interaction", "safe_stop_required", "operation_unavailable"].includes(code),
         stale: !notSubmitted && code === "stale_interaction",

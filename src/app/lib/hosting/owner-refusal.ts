@@ -4,7 +4,7 @@ import type { Translator } from "@/app/lib/localization/types";
 // Only known admission refusals can settle a retained request. Transport errors, authorization
 // before replay lookup, conflicts with an older UUID, and errors naming accepted jobs cannot.
 const REFUSAL_CODES = new Set([
-    "server_suspended", "safe_stop_required", "operation_unavailable", "operation_in_progress",
+    "server_suspended", "safe_stop_required", "operation_unavailable",
     "save_not_found", "save_still_loaded", "confirmation_mismatch", "active_save_delete_forbidden",
     "packaged_save_delete_forbidden", "backup_not_found", "backup_expired", "backup_unavailable",
     "backup_build_mismatch", "no_update_available", "validated_build_unavailable", "nightly_unavailable",

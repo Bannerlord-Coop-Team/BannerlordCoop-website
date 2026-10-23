@@ -21,7 +21,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerStartStatus: startStatus, getMyServerSummary: summary, getMyServerDeletionStatus: deletionStatus }));
 afterEach(() => vi.useRealTimers());
 
-it.each(["refused", "unknown", "success"])("renders the CP envelope path for %s with zero console errors", async outcome => {
+it.each(["refused", "unknown", "masked", "success"])("renders the supported owner envelope for %s with zero console errors", async outcome => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     const consoleError = vi.spyOn(console, "error");
     const serverId = "22222222-2222-4222-8222-222222222222";
@@ -30,7 +30,8 @@ it.each(["refused", "unknown", "success"])("renders the CP envelope path for %s 
         ? new Response("Gateway timeout", { status: 504 })
         : Response.json(outcome === "refused"
             ? { version: 1, requestId: serverId, ok: false, error: { code: "server_suspended", message: "The server is suspended.", retryable: false } }
-            : { version: 1, requestId: serverId, ok: true, result: { exitCode: 0 } }, { status: outcome === "refused" ? 409 : 200 }), serverId));
+            : outcome === "masked" ? { version: 1, requestId: serverId, ok: false, error: { code: "container_command_unavailable", message: "The container command could not be confirmed.", retryable: false } }
+                : { version: 1, requestId: serverId, ok: true, result: { exitCode: 0 } }, { status: ["refused", "masked"].includes(outcome) ? 409 : 200 }), serverId));
     const container = document.createElement("div");
     const root = createRoot(container);
     try {
@@ -41,8 +42,9 @@ it.each(["refused", "unknown", "success"])("renders the CP envelope path for %s 
             expect(container.textContent).toContain("This server is suspended. The request was refused and no change was made.");
             expect(container.textContent).not.toMatch(/couldn.t confirm/u);
             expect(beginPolling).not.toHaveBeenCalled();
-        } else if (outcome === "unknown") {
+        } else if (outcome === "unknown" || outcome === "masked") {
             expect(container.textContent).toMatch(/couldn.t confirm/u);
+            expect(container.textContent).not.toContain("This server is suspended");
         } else expect(container.textContent).toContain("Server started and game readiness confirmed");
         expect(request).toHaveBeenCalledOnce();
         expect(consoleError).not.toHaveBeenCalled();

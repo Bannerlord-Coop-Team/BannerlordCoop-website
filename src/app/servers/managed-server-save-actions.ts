@@ -63,6 +63,9 @@ export async function deleteManagedServerSave(value: unknown, expectedUserId: st
         revalidatePath(`/servers/${input.serverId}`);
         return { ok: true, jobId: result.jobId, message: t("campaigns.deleted") };
     } catch (error) {
+        if (error instanceof MyServersApiError && error.code === "save_still_loaded") {
+            return { ok: false, notSubmitted: !error.retryable && error.operationId === undefined, message: t("campaigns.saveStillLoaded") };
+        }
         const refusal = ownerRefusalMessage(error, t);
         if (refusal !== null) return { ok: false, notSubmitted: true, message: refusal };
         return { ok: false, notSubmitted: error instanceof MyServersApiError && !error.retryable && error.operationId === undefined && ["save_not_found", "server_suspended", "save_still_loaded", "safe_stop_required", "confirmation_mismatch", "active_save_delete_forbidden", "packaged_save_delete_forbidden", "stale_interaction", "invalid_request", "unauthorized", "forbidden"].includes(error.code), message: t(error instanceof MyServersApiError && error.code === "save_still_loaded"

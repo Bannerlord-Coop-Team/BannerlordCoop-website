@@ -20,8 +20,6 @@ async function currentToken(expectedUserId: string) {
 /** Distinguishes local rejection from uncertain submissions without exposing internal errors. */
 async function failure(error: unknown, notSubmitted = false) {
     const { t } = await getTranslations("managed-server");
-    const refusal = !notSubmitted ? ownerRefusalMessage(error, t) : null;
-    if (refusal !== null) return { ok: false as const, message: refusal, notSubmitted: false, uncertain: false, refresh: false };
     const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
     const messages: Record<string, string> = {
         server_not_found: t("action.console.thisServerIsUnavailableOrYourAccessChanged"),
@@ -36,6 +34,8 @@ async function failure(error: unknown, notSubmitted = false) {
     };
     const known = Object.hasOwn(messages, code)
         && !(error instanceof MyServersApiError && error.operationId !== undefined);
+    const refusal = !notSubmitted && !known ? ownerRefusalMessage(error, t) : null;
+    if (refusal !== null) return { ok: false as const, message: refusal, notSubmitted: false, uncertain: false, refresh: false };
     return {
         ok: false as const,
         notSubmitted,

@@ -10,6 +10,15 @@ jobs, timeouts and malformed responses keep their existing recovery paths.
 
 ## Handler audit
 
+This table records website handling **when a typed refusal reaches the action**;
+it does not establish that every deployed CP route exposes suspension that way.
+The CP #611 / `97cc88e9` per-route source-and-test audit is a separate deployment
+input. Masked `container_command_unavailable`, successful `kind: "rejected"`
+transfer results, retryable `mods_unavailable`, and configuration conflicts retain
+their existing handling. Never infer suspension from those generic shapes.
+The direct-controls typed-suspension regression is contract coverage, not proof
+that a live direct route produces that envelope.
+
 | Owner/manager action | Definitive admission refusal | Retryable refusal | Unknown outcome (network, timeout, unenveloped 5xx, malformed reply) |
 | --- | --- | --- | --- |
 | Start, Stop, Restart, Update now | Refusal copy; no status-confirmation prompt | Existing code-specific guidance or status following | Existing status following/unconfirmed copy |

@@ -36,12 +36,12 @@ export async function dismissManagedServerNotice(value: unknown): Promise<Dismis
         await dismissServerNotice(accessToken, input, crypto.randomUUID());
         return { ok: true };
     } catch (error) {
-        const refusal = ownerRefusalMessage(error, t);
-        if (refusal !== null) return { ok: false, message: refusal };
         const code = error instanceof MyServersApiError ? error.code : "notice_dismissal_failed";
         // The notice does not target this server (or no longer exists), so there is nothing left to show.
         if (code === "notice_not_found") return { ok: true };
         if (code === "impersonation_read_only") return { ok: false, message: t("notices.dismissReadOnly") };
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, message: refusal };
         console.error("Server notice dismissal failed", { code });
         return { ok: false, message: t("notices.dismissFailed") };
     }

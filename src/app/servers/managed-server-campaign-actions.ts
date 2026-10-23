@@ -72,8 +72,9 @@ export async function changeManagedServerCampaign(input: unknown, expectedUserId
         if (!submitted) return { ok: false, notSubmitted: true, refresh: false, message: "The campaign request was not sent. Refresh the page and try again." };
         const { t } = await getTranslations("managed-server");
         const refusal = ownerRefusalMessage(error, t);
-        if (refusal !== null) return { ok: false, notSubmitted: true, refresh: false, message: refusal };
         const described = message(error);
+        if (refusal !== null) return { ok: false, notSubmitted: true, refresh: REFRESH_CODES.has(described.code),
+            message: REFRESH_CODES.has(described.code) || described.code === "operation_unavailable" || described.code === "first_start_required" ? described.message : refusal };
         return { ok: false, notSubmitted: false, refresh: REFRESH_CODES.has(described.code), message: described.message };
     }
 }

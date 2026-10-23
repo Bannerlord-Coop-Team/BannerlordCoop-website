@@ -45,8 +45,6 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
         // The control plane rechecks current ownership; no actor or role is supplied by the browser.
         return acknowledged((await requestServerVisibility(accessToken, input, requestId)).updatedAt);
     } catch (error) {
-        const refusal = ownerRefusalMessage(error, t);
-        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         const code = error instanceof MyServersApiError ? error.code : "visibility_update_failed";
         if (code === "request_conflict" || code === "stale_interaction") {
             try {
@@ -60,6 +58,8 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
             }
             return { ok: false, rejected: true, message: t("server-visibility.theServerChangedRefreshAndTryAgain") };
         }
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         console.error("Server visibility update failed", { code });
         return { ok: false, rejected: ["server_not_found", "invalid_request"].includes(code), message: t("server-visibility.visibilityCouldNotBeUpdatedOnlyTheCurrentOwnerCan") };
     }

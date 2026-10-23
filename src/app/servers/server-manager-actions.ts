@@ -71,9 +71,9 @@ async function asOwner(t: Translate, serverId: string, change: (owner: OwnerSess
         revalidatePath(`/servers/${serverId}`);
         return result;
     } catch (error) {
+        if (error instanceof MyServersApiError && error.code === "unauthenticated") return { ok: false, message: t("managerAccess.signInAgain") };
         const refusal = ownerRefusalMessage(error, t);
         if (refusal !== null) return { ok: false, message: refusal };
-        if (error instanceof MyServersApiError && error.code === "unauthenticated") return { ok: false, message: t("managerAccess.signInAgain") };
         return { ok: false, message: t("managerAccess.requestCouldNotBeConfirmed") };
     }
 }

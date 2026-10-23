@@ -78,8 +78,6 @@ export async function manageServerBackup(input: unknown, expectedPageUserId: unk
             jobId: result.jobId,
         };
     } catch (error) {
-        const refusal = ownerRefusalMessage(error, t);
-        if (refusal !== null) return rejected(refusal);
         const code = error instanceof MyServersApiError ? error.code : "operation_failed";
         console.error("Managed server backup operation failed", { code });
         if (backupRequestOutcomeIsUncertain(error)) {
@@ -125,6 +123,8 @@ export async function manageServerBackup(input: unknown, expectedPageUserId: unk
             return uncertain(t("action.backup.tooManyRequestsWereSubmittedPleaseWaitAndRetryThe"));
         }
         // Unknown/authentication rejections may happen before idempotency lookup.
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return rejected(refusal);
         return uncertain(t("action.backup.theBackupOperationCouldNotBeConfirmedRightNowRetry"));
     }
 }

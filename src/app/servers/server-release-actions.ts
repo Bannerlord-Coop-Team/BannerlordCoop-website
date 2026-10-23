@@ -40,8 +40,6 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
         const result = await requestMyServerRelease(token, input, value.requestId);
         return queued(result.jobId, input.serverId);
     } catch (error) {
-        const refusal = ownerRefusalMessage(error, t);
-        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
         // A revision conflict from an unrelated write is retried once, only while the channel is still the one shown.
         if ((code === "request_conflict" || code === "stale_interaction") && token !== null && input !== null && previousChannel !== null) {
@@ -68,6 +66,8 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
             release_compatibility_unsafe: t("server-release.thatReleaseCannotSafelyReadThisCampaignTheChannelWas"),
             settings_unchanged: t("server-release.thisChannelIsAlreadySelected"),
         };
+        const refusal = !Object.hasOwn(messages, code) ? ownerRefusalMessage(error, t) : null;
+        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         return { ok: false, rejected: Object.hasOwn(messages, code), message: messages[code] ?? t("server-release.theReleaseChangeCouldNotBeConfirmedCheckProgressOr") };
     }
 }

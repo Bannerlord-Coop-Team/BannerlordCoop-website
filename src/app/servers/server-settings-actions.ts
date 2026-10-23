@@ -56,8 +56,6 @@ export async function saveServerSettings(value: unknown): Promise<{ ok: boolean;
     try {
         return saved((await requestMyServerSettings(accessToken, input, requestId)).updatedAt);
     } catch (error) {
-        const refusal = ownerRefusalMessage(error, t);
-        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
         if ((code === "request_conflict" || code === "stale_interaction") && previous !== null) {
             try {
@@ -78,6 +76,8 @@ export async function saveServerSettings(value: unknown): Promise<{ ok: boolean;
             invalid_request: t("server-settings.theServerSettingsAreInvalid"),
             request_conflict: t("server-settings.thisSettingsRequestWasAlreadyUsedForDifferentChangesRefresh"),
         };
+        const refusal = !Object.hasOwn(messages, code) ? ownerRefusalMessage(error, t) : null;
+        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         return { ok: false, rejected: Object.hasOwn(messages, code), message: messages[code] ?? t("server-settings.theSettingsUpdateCouldNotBeConfirmedRetryOrRefresh") };
     }
 }
