@@ -958,6 +958,6 @@
   "controls.modLoadFailedMissingAssembly": "{modId} modu {assembly} gerektiriyor. Bağımlılığı yükleyin veya bu modu Modlar bölümünde devre dışı bırakıp yeniden başlatın.",
   "controls.modLoadFailedMissingDll": "{modId} modunun SubModule.xml dosyasında belirtilen bir DLL eksik. Modu bin klasörü dahil tamamen yükleyin veya Modlar bölümünde devre dışı bırakıp yeniden başlatın.",
   "controls.modLoadFailed": "{modId} modu yüklenemedi. Sunucu sürümü ve bağımlılıklarıyla uyumlu bir sürüm yükleyin veya Modlar bölümünde devre dışı bırakıp yeniden başlatın.",
-  "controls.modLoadFailedHarmony": "{modId} modu Harmony (0Harmony.dll) gerektiriyor. Bannerlord.Harmony modunu bin klasörüyle yükleyin veya bu modu Modlar bölümünde devre dışı bırakın. Sonra yeniden başlatın.",
+  "controls.modLoadFailedHarmony": "{modId} modu, sunucunun sağladığı Harmony (0Harmony.dll) bileşenini yükleyemedi. Bu bir barındırma sorunudur; Bannerlord.Harmony modunu yeniden yüklemek sorunu çözmez. Destekle iletişime geçin veya yeniden başlatmadan önce Modlar bölümünde bu modu ve ona bağlı modları devre dışı bırakın.",
   "controls.modLoadFailedUnknown": "Bir özel mod yüklenemedi. Yüklediğiniz modları ve bağımlılıklarını kontrol edin veya son etkinleştirdiğiniz modları devre dışı bırakıp yeniden başlatın."
 }

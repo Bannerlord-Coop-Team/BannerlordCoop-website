@@ -957,6 +957,6 @@
   "controls.modLoadFailedMissingAssembly": "Mod {modId}には{assembly}が必要です。依存Modをアップロードするか、「Mods」でこのModを無効にしてから再起動してください。",
   "controls.modLoadFailedMissingDll": "Mod {modId}のSubModule.xmlに記載されたDLLがありません。binフォルダーを含む完全なModをアップロードするか、「Mods」で無効にしてから再起動してください。",
   "controls.modLoadFailed": "Mod {modId}を読み込めませんでした。このサーバーバージョンと依存関係に対応するバージョンをアップロードするか、「Mods」で無効にしてから再起動してください。",
-  "controls.modLoadFailedHarmony": "Mod {modId}にはHarmony（0Harmony.dll）が必要です。binフォルダーを含むBannerlord.Harmonyをアップロードするか、「Mods」でこのModを無効にしてから再起動してください。",
+  "controls.modLoadFailedHarmony": "Mod {modId}はサーバーが提供するHarmony（0Harmony.dll）を読み込めませんでした。ホスティング側の問題のため、Bannerlord.Harmonyを再アップロードしても解決しません。サポートに連絡するか、「Mods」でこのModと依存するModを無効にしてから再起動してください。",
   "controls.modLoadFailedUnknown": "カスタムModを読み込めませんでした。アップロードしたModと依存関係を確認するか、最近有効にしたModを無効にしてから再起動してください。"
 }
