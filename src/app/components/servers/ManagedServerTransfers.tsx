@@ -68,7 +68,7 @@ function saveDownload(bytes: BlobPart, fileName: string) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
-type TransferProps = { userId: string; serverId: string; serverName?: string; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean };
+type TransferProps = { userId: string; serverId: string; serverName?: string; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean; subscriptionRescue?: boolean };
 
 // Keys transfer state to the current account and server.
 export function ManagedServerTransfers(props: TransferProps) {
@@ -76,7 +76,7 @@ export function ManagedServerTransfers(props: TransferProps) {
 }
 
 // Presents file imports and durable transfer progress with localized diagnostics.
-function TransferSession({ userId, serverId, serverName, status, canImportConfig, canEditConfig = false, canExportSave }: TransferProps) {
+function TransferSession({ userId, serverId, serverName, status, canImportConfig, canEditConfig = false, canExportSave, subscriptionRescue = false }: TransferProps) {
     const { t, rich, number, locale } = useTranslations("managed-server");
     const router = useRouter();
     const storageKey = `managed-file-transfer:v1:${userId}:${serverId}`;
@@ -389,7 +389,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
             configuration={status?.managedConfig}
             configAccess={canEditConfig ? { serverId, userId, canEdit: true } : undefined}
             saveActions={<>
-                <button className={buttonClass} disabled={blocked || !canExportSave || !status?.activeSave || !["running", "stopped", "awaiting-save"].includes(status.operationState)} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />{t("transfers.exportSave")}</button>
+                <button className={buttonClass} disabled={blocked || !canExportSave || !status?.activeSave || !(["running", "stopped", "awaiting-save"].includes(status.operationState) || subscriptionRescue && status.operationState === "suspended" && status.observedGameState === "stopped")} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />{t("transfers.exportSave")}</button>
                 <DisabledControlHint disabled={importSaveDisabled} message={importSaveHint}>
                     <button className={buttonClass} disabled={importSaveDisabled} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />{t("transfers.importSave")}</button>
                 </DisabledControlHint>

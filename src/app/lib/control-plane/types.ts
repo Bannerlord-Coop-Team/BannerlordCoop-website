@@ -42,6 +42,7 @@ export type MyServerSummary = Pick<
     | "releaseChannel"
     | "updatedAt"
 > & {
+    subscriptionHold?: { state: "held" | "removal-pending"; reason: "subscription-funding-lapsed"; removalDueAt: string; canExportSave: boolean } | null;
     runtimeInsight?: import("../hosting/owner-runtime-insight").OwnerRuntimeInsight;
     accessRole: "owner" | "manager" | "support" | "admin";
     // Missing visibility is treated as private during the control-plane rollout.

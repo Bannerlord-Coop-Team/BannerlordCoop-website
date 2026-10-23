@@ -492,3 +492,14 @@ vi.mock("@/app/lib/localization/server", () => ({
     getMessages: async () => serverTestMessages,
     getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
 }));
+
+
+it.each([true, false])("offers only export during a subscription hold when rescue is %s", async subscriptionRescue => {
+    const held = { ...status, operationState: "suspended" };
+    await act(async () => root.render(<TestLocalization><ManagedServerTransfers userId="owner" serverId={held.serverId}
+        status={held} canImportConfig={false} canEditConfig={false} canExportSave={true} subscriptionRescue={subscriptionRescue} /></TestLocalization>));
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(button("Export save").disabled).toBe(!subscriptionRescue);
+    expect(button("Import save").disabled).toBe(true);
+    expect(button("Import config").disabled).toBe(true);
+});

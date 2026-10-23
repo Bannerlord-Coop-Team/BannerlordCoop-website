@@ -30,6 +30,7 @@ import {
 import { getMyServerDeletionStatus, getMyServerMoveStatus, getMyServerNotices, getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
 import { listServerManagers } from "@/app/lib/hosting/server-managers";
 import { isMoveInProgress } from "@/app/lib/hosting/server-move";
+import { SubscriptionHoldNotice } from "@/app/components/servers/SubscriptionHoldNotice";
 import { ManagedServerNoticeBanner } from "@/app/components/servers/ManagedServerNoticeBanner";
 import { ManagedServerMoveProvider, ManagedServerMoveStatus } from "@/app/components/servers/ManagedServerMoveStatus";
 import { getServerForRole } from "@/app/lib/hosting/servers";
@@ -163,7 +164,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
 
     return <ManagedServerMoveProvider serverId={server.serverId} initialMove={move} headerAddress={address}><ServerManagementWorkspace
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.displayName}</h1>}
-        banner={managedBanner(server.serverId, notices)}
+        banner={server.subscriptionHold ? <><SubscriptionHoldNotice hold={server.subscriptionHold} isOwner={server.accessRole === "owner"} />{managedBanner(server.serverId, notices)}</> : managedBanner(server.serverId, notices)}
         initialSection={initializing ? "Console" : initialSection}
         interactionLocked={initializing}
         address={address}

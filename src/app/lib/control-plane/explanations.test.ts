@@ -10,7 +10,7 @@ import {
 
 test("distinguishes stopped and suspended server states", () => {
     assert.match(stateExplanation("stopped"), /can start/iu);
-    assert.match(stateExplanation("suspended"), /administrator/iu);
+    assert.match(stateExplanation("suspended"), /subscription or administrator/iu);
     assert.notEqual(stateExplanation("stopped"), stateExplanation("suspended"));
 });
 
