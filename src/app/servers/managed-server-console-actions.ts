@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
@@ -33,6 +34,8 @@ async function failure(error: unknown, notSubmitted = false) {
     };
     const known = Object.hasOwn(messages, code)
         && !(error instanceof MyServersApiError && error.operationId !== undefined);
+    const refusal = !notSubmitted && !known ? ownerRefusalMessage(error, t) : null;
+    if (refusal !== null) return { ok: false as const, message: refusal, notSubmitted: false, uncertain: false, refresh: false };
     return {
         ok: false as const,
         notSubmitted,

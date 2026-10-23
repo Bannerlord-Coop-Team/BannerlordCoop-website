@@ -50,6 +50,7 @@ export function describeModIssue(issue: string, t: Translate): string {
 
 /** Explains a refused or unconfirmed catalog call; `modId` names the module the refusal concerns. */
 export function modsErrorMessage(error: ServerModsError, t: Translate): string {
+    if (error.code === "server_suspended" && !error.retryable) return t("action.refusal.serverSuspended");
     const id = error.modId ?? "";
     if (error.code === "upload_rejected") {
         if (error.detail === "mod_reserved_id") return t("mods.error.reservedId", { id });
@@ -57,6 +58,7 @@ export function modsErrorMessage(error: ServerModsError, t: Translate): string {
     }
     if (error.code === "upload_failed") return t("mods.error.uploadFailed", { id });
     if (error.code === "upload_unconfirmed") return t("mods.error.uploadUnconfirmed", { id });
+    if (error.code === "upload_status_unavailable") return t("mods.error.uploadStatusUnavailable", { id });
     if (error.code === "mod_reserved_id") return t("mods.error.reservedId", { id });
     if (error.code === "mod_order_invalid") return error.modId ? t("mods.error.orderInvalidMod", { id }) : t("mods.error.orderInvalid");
     if (error.code === "mod_dependency_unsatisfied") return error.modId ? t("mods.error.dependencyUnsatisfiedMod", { id }) : t("mods.error.dependencyUnsatisfied");

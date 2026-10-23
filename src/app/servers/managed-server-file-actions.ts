@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { getMyServerFiles, getMyServerFileResult, submitMyServerFile, downloadMyServerSave } from "@/app/lib/hosting/server-files";
@@ -30,6 +31,8 @@ async function failure(error: unknown, notSubmitted = false) {
         export_not_ready: t("action.file.theSaveExportIsStillBeingPrepared"),
         export_unavailable: t("action.file.theExportIsUnavailableCheckItsStatusAndTryAgain"),
     };
+    const refusal = !notSubmitted && !Object.hasOwn(messages, code) ? ownerRefusalMessage(error, t) : null;
+    if (refusal !== null) return { ok: false as const, notSubmitted: false, rejected: true, stale: false, message: refusal };
     return { ok: false as const, notSubmitted,
         rejected: !notSubmitted && ["stale_interaction", "safe_stop_required", "operation_unavailable"].includes(code),
         stale: !notSubmitted && code === "stale_interaction",

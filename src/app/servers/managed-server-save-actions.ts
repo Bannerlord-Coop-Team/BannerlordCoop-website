@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { deleteMyServerSave, getMyServerSaveDeletionStatus, MyServersApiError, selectMyServerSave } from "@/app/lib/hosting/my-servers";
 import type { SaveDeletionStatus } from "../../../supabase/functions/_shared/server-save-deletion-contract";
@@ -42,6 +43,8 @@ export async function selectManagedServerSave(value: unknown, expectedUserId: st
         revalidatePath(`/servers/${input.serverId}`);
         return { ok: true, message: t("campaigns.selected") };
     } catch (error) {
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, message: refusal };
         return error instanceof MyServersApiError && error.code === "invalid_request"
             ? { ok: false, message: t("campaigns.selectionFailed") }
             : await failure();
@@ -60,7 +63,12 @@ export async function deleteManagedServerSave(value: unknown, expectedUserId: st
         revalidatePath(`/servers/${input.serverId}`);
         return { ok: true, jobId: result.jobId, message: t("campaigns.deleted") };
     } catch (error) {
-        return { ok: false, notSubmitted: error instanceof MyServersApiError && ["save_not_found", "server_suspended", "save_still_loaded", "safe_stop_required", "confirmation_mismatch", "active_save_delete_forbidden", "packaged_save_delete_forbidden", "stale_interaction", "invalid_request", "unauthorized", "forbidden"].includes(error.code), message: t(error instanceof MyServersApiError && error.code === "save_still_loaded"
+        if (error instanceof MyServersApiError && error.code === "save_still_loaded") {
+            return { ok: false, notSubmitted: !error.retryable && error.operationId === undefined, message: t("campaigns.saveStillLoaded") };
+        }
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, notSubmitted: true, message: refusal };
+        return { ok: false, notSubmitted: error instanceof MyServersApiError && !error.retryable && error.operationId === undefined && ["save_not_found", "server_suspended", "save_still_loaded", "safe_stop_required", "confirmation_mismatch", "active_save_delete_forbidden", "packaged_save_delete_forbidden", "stale_interaction", "invalid_request", "unauthorized", "forbidden"].includes(error.code), message: t(error instanceof MyServersApiError && error.code === "save_still_loaded"
             ? "campaigns.saveStillLoaded" : "campaigns.deleteFailed") };
     }
 }

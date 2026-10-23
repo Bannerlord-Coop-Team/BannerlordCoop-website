@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 import type { Translator } from "@/app/lib/localization/types";
 import { modLoadFailureMessage } from "@/app/components/servers/server-mods-messages";
 
@@ -119,6 +120,8 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
                 return { ok: false, message: t("action.actions.noValidatedReleaseIsCurrentlyAvailableForThisServer") };
             }
         }
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, message: refusal };
         if (parsed.action === "stop") return { ok: false, checkStatus: true, message: t("controls.checkingWhetherYourServerHasStopped") };
         return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThatYourOperationRequestWentThrough", { operation: operationLabel(parsed.action, t) }) };
     }
@@ -194,7 +197,9 @@ export async function setManagedServerPassword(input: { serverId: string; expect
         const result = await requestMyServerPassword(session.access_token, input, crypto.randomUUID());
         revalidatePath(`/servers/${input.serverId}`);
         return { ok: true, message: result.restartQueued ? t("action.actions.passwordChangedARestartIsQueuedWithAPlayerWarning") : t("action.actions.passwordChangedUseItWhenJoiningYourServer") };
-    } catch {
+    } catch (error) {
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, message: refusal };
         return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThePasswordChangeSoWeRefreshed") };
     }
 }

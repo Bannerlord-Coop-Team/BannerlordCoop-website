@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import {
     MyServersApiError,
@@ -122,6 +123,8 @@ export async function manageServerBackup(input: unknown, expectedPageUserId: unk
             return uncertain(t("action.backup.tooManyRequestsWereSubmittedPleaseWaitAndRetryThe"));
         }
         // Unknown/authentication rejections may happen before idempotency lookup.
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return rejected(refusal);
         return uncertain(t("action.backup.theBackupOperationCouldNotBeConfirmedRightNowRetry"));
     }
 }

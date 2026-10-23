@@ -8,7 +8,8 @@ import { ManagedServerBackups, type ManagedServerAutosaves } from "@/app/compone
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import { managedServerBackupIntentKey } from "@/app/servers/managed-server-backup-intent";
 import { manageServerBackup } from "@/app/servers/managed-server-backup-actions";
-import { MyServersApiError } from "@/app/lib/hosting/my-servers";
+import * as backupActions from "@/app/servers/managed-server-backup-actions";
+import { MyServersApiError, readMyServersResponse } from "@/app/lib/hosting/my-servers";
 import type { MyServerBackupStatus, MyServerBackupSummary, MyServerSummary } from "@/app/lib/control-plane/types";
 
 const { request, authenticate, router, revalidatePath } = vi.hoisted(() => ({
@@ -119,6 +120,35 @@ async function click(label: string) {
     await act(async () => target.click());
     await advance(0);
 }
+
+it.each(["refused", "unknown", "success"])("renders the CP #611 backup envelope for %s with zero browser console errors", async outcome => {
+    // CP 97cc88e9: hosting-api/owner-files.test.ts:80-89 asserts the held create-backup envelope.
+    const requestId = "44444444-4444-4444-8444-444444444444";
+    request.mockImplementationOnce(async () => readMyServersResponse(outcome === "unknown"
+        ? new Response("Gateway timeout", { status: 504 })
+        : Response.json(outcome === "refused"
+            ? { version: 1, requestId, ok: false, error: { code: "server_suspended", message: "The server is suspended.", retryable: false } }
+            : { version: 1, requestId, ok: true, result: { outcome: "enqueued", action: "backup", jobId: activeStatus.job!.jobId } },
+        { status: outcome === "refused" ? 409 : 200 }), requestId));
+    const result = await manageServerBackup({ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, requestId, action: "create-backup" }, "user");
+    expect(request).toHaveBeenCalledOnce();
+    // Server-action logging is server output; capture browser rendering after that boundary.
+    vi.mocked(console.error).mockClear();
+    vi.spyOn(backupActions, "manageServerBackup").mockResolvedValueOnce(result);
+    await render(); await click("Create backup");
+    if (outcome === "refused") {
+        expect(container.textContent).toContain("This server is suspended. The request was refused and no change was made.");
+        expect(container.textContent).not.toContain("Retry pending request");
+        expect(sessionStorage.getItem(managedServerBackupIntentKey("user", server.serverId))).toBeNull();
+    } else if (outcome === "unknown") {
+        expect(container.textContent).toContain("The submission outcome could not be confirmed");
+        expect(sessionStorage.getItem(managedServerBackupIntentKey("user", server.serverId))).not.toBeNull();
+    } else {
+        expect(container.textContent).toContain("Backup request accepted");
+        expect(sessionStorage.getItem(managedServerBackupIntentKey("user", server.serverId))).toBeNull();
+    }
+    expect(console.error).not.toHaveBeenCalled();
+});
 
 describe("ManagedServerBackups action reconciliation", () => {
     it.each([

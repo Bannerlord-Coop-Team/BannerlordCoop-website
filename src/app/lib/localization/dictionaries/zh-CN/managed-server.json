@@ -1,4 +1,6 @@
 {
+  "mods.error.uploadStatusUnavailable": "由于服务器已被暂停使用，无法确认 {id} 的安装结果。访问恢复后，请刷新模组列表以查看结果。",
+  "action.refusal.serverSuspended": "此服务器已被暂停使用。请求已被拒绝，未进行任何更改。",
   "controls.stoppedAwaitingServerCheck": "上次检查时游戏已停止。服务器检查确认就绪后，启动和恢复工具将可用。",
   "controls.restartCancelled": "重启已取消",
   "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "无法确认服务器状态。未发送更新请求。请刷新页面后重试。",

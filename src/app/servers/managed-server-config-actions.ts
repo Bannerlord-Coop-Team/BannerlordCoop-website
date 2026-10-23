@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { getMyServerConfiguration, saveMyServerConfiguration } from "@/app/lib/hosting/server-configuration";
@@ -62,6 +63,8 @@ async function failure(error: unknown, notSubmitted = false): Promise<ManagedSer
         server_api_unavailable: t("action.config.theHostingServiceCouldNotBeReachedTryAgain"),
         invalid_request: t("action.config.theSettingsWereRejectedCheckTheValuesAndTryAgain"),
     };
+    const refusal = !notSubmitted && !Object.hasOwn(messages, code) ? ownerRefusalMessage(error, t) : null;
+    if (refusal !== null) return { ok: false, message: refusal, reload: false, notSubmitted: true };
     return { ok: false, notSubmitted, reload: !notSubmitted && RELOAD_CODES.has(code),
         message: notSubmitted ? t("action.config.theSettingsWereNotSentCheckTheValuesAndTry")
             : messages[code] ?? t("action.config.theChangeCouldNotBeConfirmedReloadTheSettingsTo") };

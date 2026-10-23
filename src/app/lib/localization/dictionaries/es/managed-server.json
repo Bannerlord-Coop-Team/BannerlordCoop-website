@@ -1,4 +1,6 @@
 {
+  "mods.error.uploadStatusUnavailable": "No se pudo confirmar la instalación de {id} porque el servidor está suspendido. Actualiza la lista de mods cuando se restablezca el acceso para comprobar el resultado.",
+  "action.refusal.serverSuspended": "Este servidor está suspendido. La solicitud se rechazó y no se realizó ningún cambio.",
   "controls.stoppedAwaitingServerCheck": "La última comprobación indicó que el juego estaba detenido. El inicio y las herramientas de recuperación se habilitarán cuando las comprobaciones del servidor confirmen que está listo.",
   "controls.restartCancelled": "Reinicio cancelado",
   "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "No pudimos confirmar el estado del servidor. No se envió ninguna actualización. Actualiza la página e inténtalo de nuevo.",

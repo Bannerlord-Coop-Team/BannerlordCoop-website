@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import { dismissServerNotice, MyServersApiError } from "@/app/lib/hosting/my-servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -39,6 +40,8 @@ export async function dismissManagedServerNotice(value: unknown): Promise<Dismis
         // The notice does not target this server (or no longer exists), so there is nothing left to show.
         if (code === "notice_not_found") return { ok: true };
         if (code === "impersonation_read_only") return { ok: false, message: t("notices.dismissReadOnly") };
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, message: refusal };
         console.error("Server notice dismissal failed", { code });
         return { ok: false, message: t("notices.dismissFailed") };
     }

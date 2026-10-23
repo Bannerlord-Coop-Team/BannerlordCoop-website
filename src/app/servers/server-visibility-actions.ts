@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import { MyServersApiError, requestServerVisibility } from "@/app/lib/hosting/my-servers";
 import { getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
@@ -50,11 +51,15 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
                 const retried = await retryAtCurrentRevision(accessToken, input);
                 if (retried !== null) return acknowledged(retried);
             } catch (retryError) {
+                const refusal = ownerRefusalMessage(retryError, t);
+                if (refusal !== null) return { ok: false, rejected: true, message: refusal };
                 const retryCode = retryError instanceof MyServersApiError ? retryError.code : "visibility_update_failed";
                 console.error("Server visibility retry failed", { code: retryCode });
             }
             return { ok: false, rejected: true, message: t("server-visibility.theServerChangedRefreshAndTryAgain") };
         }
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         console.error("Server visibility update failed", { code });
         return { ok: false, rejected: ["server_not_found", "invalid_request"].includes(code), message: t("server-visibility.visibilityCouldNotBeUpdatedOnlyTheCurrentOwnerCan") };
     }

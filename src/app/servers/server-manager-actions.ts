@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 import { MyServersApiError, requestMyServerManager } from "@/app/lib/hosting/my-servers";
 import { getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
 import { findWebsiteAccountByEmail } from "@/app/lib/supabase/users";
@@ -71,6 +72,8 @@ async function asOwner(t: Translate, serverId: string, change: (owner: OwnerSess
         return result;
     } catch (error) {
         if (error instanceof MyServersApiError && error.code === "unauthenticated") return { ok: false, message: t("managerAccess.signInAgain") };
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, message: refusal };
         return { ok: false, message: t("managerAccess.requestCouldNotBeConfirmed") };
     }
 }

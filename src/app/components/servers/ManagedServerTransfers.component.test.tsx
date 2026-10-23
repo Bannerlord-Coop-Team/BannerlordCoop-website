@@ -66,6 +66,38 @@ it("retains uncertain request identity across retries and page remounts", async 
     expect(button("Download save export").disabled).toBe(false);
     await click("Dismiss completed transfer"); expect(sessionStorage.getItem(key)).toBeNull();
 });
+
+it("settles a suspended refusal and never erases a newer transfer receipt", async () => {
+    const message = serverTestMessages["managed-server"]["action.refusal.serverSuspended"];
+    mocks.submit.mockResolvedValueOnce({ ok: false, rejected: true, notSubmitted: false, stale: false, message });
+    await render(); await click("Export save");
+    expect(container.textContent).toContain(message);
+    expect(container.textContent).not.toContain("Retry same request");
+    expect(sessionStorage.getItem(key)).toBeNull();
+    mocks.submit.mockImplementationOnce(async (form: FormData) => {
+        const newer = { requestId: "44444444-4444-4444-8444-444444444444", serverId: status.serverId,
+            action: "export-save", expectedUpdatedAt: status.updatedAt, fingerprints: [], displayName: "", saveId: status.activeSave!.saveId };
+        expect(form.get("requestId")).not.toBe(newer.requestId);
+        sessionStorage.setItem(key, JSON.stringify(newer));
+        return { ok: false, rejected: true, message };
+    });
+    await click("Export save");
+    expect(JSON.parse(sessionStorage.getItem(key)!).requestId).toBe("44444444-4444-4444-8444-444444444444");
+});
+
+it("retains a same-ID transfer reported still in progress, including after remount", async () => {
+    mocks.submit.mockResolvedValue({ ok: false, notSubmitted: false, rejected: false, stale: false,
+        message: serverTestMessages["managed-server"]["action.file.theTransferOutcomeCouldNotBeConfirmedCheckItsStatus"] });
+    await render(); await click("Export save");
+    const receipt = sessionStorage.getItem(key);
+    await click("Retry same request");
+    expect(sessionStorage.getItem(key)).toBe(receipt);
+    expect(mocks.submit.mock.calls[1][0].get("requestId")).toBe(JSON.parse(receipt!).requestId);
+    await act(async () => root.unmount()); root = createRoot(container);
+    await render();
+    expect(sessionStorage.getItem(key)).toBe(receipt);
+    expect(container.textContent).toContain("Check status");
+});
 it("keeps one pending dispatch and bounds polling after network loss", async () => {
     mocks.submit.mockResolvedValue({ ok: true, result: job });
     mocks.check.mockRejectedValue(new Error("Lost connection"));

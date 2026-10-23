@@ -117,7 +117,16 @@ export function createServerModCatalog(dependencies: ServerModCatalogDependencie
 
     /** Treats `list` as authoritative: installed exactly when the id is present with the uploaded archive's digest. */
     async function reconcile(serverId: string, archive: ServerModArchive, sha256: string): Promise<ServerModsState> {
-        const state = await list(serverId, true);
+        let state: ServerModsState;
+        try {
+            state = await list(serverId, true);
+        } catch (error) {
+            // A refused read cannot establish whether an earlier completion installed the mod.
+            if (error instanceof ServerModsError && error.code === "server_suspended") {
+                throw new ServerModsError("upload_status_unavailable", false, archive.manifest.id);
+            }
+            throw error;
+        }
         if (state.mods.some(mod => mod.id === archive.manifest.id && mod.sha256 === sha256)) return state;
         throw new ServerModsError("upload_unconfirmed", false, archive.manifest.id);
     }

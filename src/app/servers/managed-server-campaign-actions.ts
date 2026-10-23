@@ -1,5 +1,8 @@
 "use server";
 
+import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
+
 import { revalidatePath } from "next/cache";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
@@ -67,7 +70,11 @@ export async function changeManagedServerCampaign(input: unknown, expectedUserId
         return { ok: true, ...result };
     } catch (error) {
         if (!submitted) return { ok: false, notSubmitted: true, refresh: false, message: "The campaign request was not sent. Refresh the page and try again." };
+        const { t } = await getTranslations("managed-server");
+        const refusal = ownerRefusalMessage(error, t);
         const described = message(error);
+        if (refusal !== null) return { ok: false, notSubmitted: true, refresh: REFRESH_CODES.has(described.code),
+            message: REFRESH_CODES.has(described.code) || described.code === "operation_unavailable" || described.code === "first_start_required" ? described.message : refusal };
         return { ok: false, notSubmitted: false, refresh: REFRESH_CODES.has(described.code), message: described.message };
     }
 }

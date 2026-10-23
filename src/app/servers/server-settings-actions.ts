@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import { MyServersApiError, requestMyServerSettings } from "@/app/lib/hosting/my-servers";
 import { getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
@@ -62,7 +63,9 @@ export async function saveServerSettings(value: unknown): Promise<{ ok: boolean;
                 if (retried.outcome === "saved") return saved(retried.updatedAt);
                 if (retried.outcome === "changed") return { ok: false, rejected: true, field: retried.field,
                     message: t("server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen") };
-            } catch {
+            } catch (retryError) {
+                const refusal = ownerRefusalMessage(retryError, t);
+                if (refusal !== null) return { ok: false, rejected: true, message: refusal };
                 // Fall through to the ordinary explanation; the page refreshes before the next attempt.
             }
         }
@@ -73,6 +76,8 @@ export async function saveServerSettings(value: unknown): Promise<{ ok: boolean;
             invalid_request: t("server-settings.theServerSettingsAreInvalid"),
             request_conflict: t("server-settings.thisSettingsRequestWasAlreadyUsedForDifferentChangesRefresh"),
         };
+        const refusal = !Object.hasOwn(messages, code) ? ownerRefusalMessage(error, t) : null;
+        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         return { ok: false, rejected: Object.hasOwn(messages, code), message: messages[code] ?? t("server-settings.theSettingsUpdateCouldNotBeConfirmedRetryOrRefresh") };
     }
 }
