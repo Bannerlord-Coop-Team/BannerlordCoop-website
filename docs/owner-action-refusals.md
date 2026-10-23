@@ -82,6 +82,14 @@ The backup renderer regression uses the source/test-confirmed typed envelope and
 checks refused, unknown and successful outcomes. Browser console capture starts
 after the server-action boundary; existing server diagnostics are separate output.
 
+`direct-refusal-compatibility.component.test.tsx` exercises the proposed paired CP
+contract through the real Edge handler, website transport/parser, and server
+actions: unversioned direct Start/Stop/Restart `server_suspended` errors and
+versioned/correlated config GET/POST errors. Masked replies and normal successes
+are covered too, with no new public keys. The controls renderer also normalizes
+the raw direct CP fixture through Edge before rendering. These establish
+compatibility with the separate CP follow-up, not deployment of that follow-up.
+
 ## Receipt safety
 
 Website #375 / ControlPlane issue #581 retain a campaign deletion's confirmed

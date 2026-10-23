@@ -7,6 +7,7 @@ import * as serverActions from "@/app/servers/managed-server-actions";
 import { ManagedServerControls, ManagedServerPassword } from "./ManagedServerControls";
 import { ManagedServerMoveProvider, ManagedServerMoveStatus } from "./ManagedServerMoveStatus";
 import { MyServersApiError, readMyServersResponse } from "@/app/lib/hosting/my-servers";
+import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
 import type { MyServerMove } from "@/app/lib/control-plane/types";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
 
@@ -26,12 +27,18 @@ it.each(["refused", "unknown", "masked", "success"])("renders the supported owne
     const consoleError = vi.spyOn(console, "error");
     const serverId = "22222222-2222-4222-8222-222222222222";
     request.mockReset(); beginPolling.mockClear();
-    request.mockImplementationOnce(async () => readMyServersResponse(outcome === "unknown"
-        ? new Response("Gateway timeout", { status: 504 })
-        : Response.json(outcome === "refused"
-            ? { version: 1, requestId: serverId, ok: false, error: { code: "server_suspended", message: "The server is suspended.", retryable: false } }
-            : outcome === "masked" ? { version: 1, requestId: serverId, ok: false, error: { code: "container_command_unavailable", message: "The container command could not be confirmed.", retryable: false } }
-                : { version: 1, requestId: serverId, ok: true, result: { exitCode: 0 } }, { status: ["refused", "masked"].includes(outcome) ? 409 : 200 }), serverId));
+    request.mockImplementationOnce(async () => {
+        const edge = createMyServersHandler({ allowedOrigins: ["https://bannerlordcoop.com"], controlPlaneUrl: "https://control-plane.example.test", waitUntil: () => {},
+            fetchImplementation: async () => outcome === "unknown" ? new Response("Gateway timeout", { status: 504 })
+                : Response.json(outcome === "refused"
+                    ? { ok: false, error: { code: "server_suspended", message: "This server is suspended. Contact the hosting team for help.", retryable: false } }
+                    : outcome === "masked" ? { ok: false, error: { code: "container_command_unavailable", message: "The container command could not be confirmed.", retryable: false } }
+                        : { ok: true, result: { exitCode: 0 } }, { status: ["refused", "masked"].includes(outcome) ? 409 : 200 }) });
+        const response = await edge(new Request("https://function.example.test", { method: "POST", headers: {
+            authorization: "Bearer synthetic-access-token-with-enough-characters", "content-type": "application/json", "x-request-id": serverId,
+        }, body: JSON.stringify({ serverId, action: "start" }) }));
+        return readMyServersResponse(response, serverId);
+    });
     const container = document.createElement("div");
     const root = createRoot(container);
     try {
