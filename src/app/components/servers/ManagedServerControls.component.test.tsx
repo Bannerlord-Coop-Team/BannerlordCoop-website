@@ -570,7 +570,7 @@ it("shows a stopped server's retained mod diagnosis on reload without sending St
     const container = document.createElement("div"); const root = createRoot(container);
     try {
         await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" runtimeInsight={insight} /></TestLocalization>));
-        expect(container.textContent).toContain("Mod CoopSycn needs Harmony (0Harmony.dll). Upload Bannerlord.Harmony including its bin folder");
+        expect(container.textContent).toContain("Mod CoopSycn could not load the server-provided Harmony (0Harmony.dll). This is a hosting problem; re-uploading Bannerlord.Harmony will not fix it.");
         expect(request).not.toHaveBeenCalled();
         expect(startStatus).not.toHaveBeenCalled();
         await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="running" runtimeInsight={insight} /></TestLocalization>));

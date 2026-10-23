@@ -958,6 +958,6 @@
   "controls.modLoadFailedMissingAssembly": "El mod {modId} necesita {assembly}. Sube la dependencia o desactiva este mod en Mods. Luego inicia de nuevo.",
   "controls.modLoadFailedMissingDll": "Al mod {modId} le falta una DLL indicada en SubModule.xml. Sube el mod completo con su carpeta bin o desactívalo en Mods. Luego inicia de nuevo.",
   "controls.modLoadFailed": "El mod {modId} no se pudo cargar. Sube una versión compatible con esta versión del servidor y sus dependencias o desactívalo en Mods. Luego inicia de nuevo.",
-  "controls.modLoadFailedHarmony": "El mod {modId} necesita Harmony (0Harmony.dll). Sube Bannerlord.Harmony con su carpeta bin o desactiva este mod en Mods. Luego inicia de nuevo.",
+  "controls.modLoadFailedHarmony": "El mod {modId} no pudo cargar Harmony (0Harmony.dll), proporcionado por el servidor. Es un problema del alojamiento; volver a subir Bannerlord.Harmony no lo resolverá. Contacta con soporte o desactiva este mod y los que dependen de él en Mods antes de iniciar de nuevo.",
   "controls.modLoadFailedUnknown": "Un mod personalizado no se pudo cargar. Revisa los mods subidos y sus dependencias o desactiva los últimos mods activados antes de iniciar de nuevo."
 }

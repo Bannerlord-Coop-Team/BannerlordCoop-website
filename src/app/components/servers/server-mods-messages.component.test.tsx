@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { createTranslator } from "@/app/lib/localization/translator";
 import { serverTestMessages } from "./ManagedServerLocalization.test-utils";
@@ -10,7 +11,7 @@ const insight = { desiredState: "stopped", observedAt: null, allowedActions: ["s
     failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: null };
 
 it.each([
-    [{ modId: "CoopSycn", reason: "missing-assembly", assembly: "0Harmony" }, ["CoopSycn", "Harmony (0Harmony.dll)", "Bannerlord.Harmony", "bin folder"]],
+    [{ modId: "CoopSycn", reason: "missing-assembly", assembly: "0Harmony" }, ["CoopSycn", "Harmony (0Harmony.dll)", "Bannerlord.Harmony", "hosting problem", "re-uploading", "will not fix it", "Contact support"]],
     [{ modId: "Other", reason: "missing-assembly", assembly: "Dependency" }, ["Other", "Dependency", "Upload the dependency"]],
     [{ modId: "Other", reason: "missing-dll" }, ["Other", "SubModule.xml", "complete mod", "bin folder"]],
     [{ modId: "Other", reason: "load-error" }, ["Other", "version compatible", "dependencies"]],
@@ -31,4 +32,14 @@ it("accepts legacy and diagnosed summaries but rejects malformed or unknown deta
         expect(isModLoadFailure(modLoadFailure)).toBe(false);
         expect(isOwnerRuntimeInsight({ ...insight, modLoadFailure })).toBe(false);
     }
+});
+
+it.each(["en", "de", "es", "fr", "ja", "ko", "pt-BR", "pt-PT", "ru", "tr", "zh-CN"])("keeps the hosting diagnosis localized in %s", locale => {
+    const messages = JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${locale}/managed-server.json`, "utf8"));
+    const message = modLoadFailureMessage({ modId: "CoopSycn", reason: "missing-assembly", assembly: "0Harmony" }, createTranslator(locale as "en", messages).t);
+    expect(message).toContain("CoopSycn");
+    expect(message).toContain("0Harmony.dll");
+    expect(message).toContain("Bannerlord.Harmony");
+    expect(message).not.toContain("{modId}");
+    expect(message).toBe(messages["controls.modLoadFailedHarmony"].replace("{modId}", "CoopSycn"));
 });

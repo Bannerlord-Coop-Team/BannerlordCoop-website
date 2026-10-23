@@ -957,6 +957,6 @@
   "controls.modLoadFailedMissingAssembly": "模组 {modId} 需要 {assembly}。请上传依赖项或在“模组”中禁用此模组，然后重新启动。",
   "controls.modLoadFailedMissingDll": "模组 {modId} 缺少 SubModule.xml 中列出的 DLL。请上传包含 bin 文件夹的完整模组，或在“模组”中禁用它，然后重新启动。",
   "controls.modLoadFailed": "模组 {modId} 无法加载。请上传与此服务器版本及其依赖项兼容的版本，或在“模组”中禁用它，然后重新启动。",
-  "controls.modLoadFailedHarmony": "模组 {modId} 需要 Harmony（0Harmony.dll）。请上传包含 bin 文件夹的 Bannerlord.Harmony，或在“模组”中禁用此模组，然后重新启动。",
+  "controls.modLoadFailedHarmony": "模组 {modId} 无法加载服务器提供的 Harmony（0Harmony.dll）。这是托管服务的问题，重新上传 Bannerlord.Harmony 无法解决。请联系支持，或在“模组”中禁用此模组及依赖它的模组，然后重新启动。",
   "controls.modLoadFailedUnknown": "自定义模组无法加载。请检查上传的模组及其依赖项，或禁用最近启用的模组后再重新启动。"
 }
