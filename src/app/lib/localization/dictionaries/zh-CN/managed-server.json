@@ -954,7 +954,7 @@
   "mods.archive.invalidPath": "无法上传 {path}：路径过长、层级过深，或包含不支持的字符。",
   "mods.archive.duplicatePath": "{path} 与另一个文件仅在大小写或重音上不同。",
   "mods.archive.compressionRatio": "该文件夹的压缩比超过 100:1，服务器会拒绝。",
-  "controls.modLoadFailedMissingAssembly": "模组 {modId} 需要 {assembly}。请上传依赖项或在“模组”中禁用此模组，然后重新启动。",
+  "controls.modLoadFailedMissingAssembly": "模组 {modId} 加载失败：缺少程序集 {assembly}。请禁用此模组及依赖它的模组，然后重新启动。",
   "controls.modLoadFailedMissingDll": "模组 {modId} 缺少 SubModule.xml 中列出的 DLL。请上传包含 bin 文件夹的完整模组，或在“模组”中禁用它，然后重新启动。",
   "controls.modLoadFailed": "模组 {modId} 无法加载。请上传与此服务器版本及其依赖项兼容的版本，或在“模组”中禁用它，然后重新启动。",
   "controls.modLoadFailedHarmony": "模组 {modId} 无法加载服务器提供的 Harmony（0Harmony.dll）。这是托管服务的问题，重新上传 Bannerlord.Harmony 无法解决。请联系支持，或在“模组”中禁用此模组及依赖它的模组，然后重新启动。",

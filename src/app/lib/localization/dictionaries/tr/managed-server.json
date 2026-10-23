@@ -955,7 +955,7 @@
   "mods.archive.invalidPath": "{path} yüklenemiyor: yolu çok uzun, çok derin veya desteklenmeyen karakterler içeriyor.",
   "mods.archive.duplicatePath": "{path}, başka bir dosyadan yalnızca harf büyüklüğü veya aksanlarla ayrılıyor.",
   "mods.archive.compressionRatio": "Klasör 100:1'den fazla sıkışıyor; sunucu bunu reddeder.",
-  "controls.modLoadFailedMissingAssembly": "{modId} modu {assembly} gerektiriyor. Bağımlılığı yükleyin veya bu modu Modlar bölümünde devre dışı bırakıp yeniden başlatın.",
+  "controls.modLoadFailedMissingAssembly": "{modId} modu yüklenemedi: {assembly} derlemesi eksik. Bu modu ve ona bağımlı modları devre dışı bırakıp sunucuyu yeniden başlatın.",
   "controls.modLoadFailedMissingDll": "{modId} modunun SubModule.xml dosyasında belirtilen bir DLL eksik. Modu bin klasörü dahil tamamen yükleyin veya Modlar bölümünde devre dışı bırakıp yeniden başlatın.",
   "controls.modLoadFailed": "{modId} modu yüklenemedi. Sunucu sürümü ve bağımlılıklarıyla uyumlu bir sürüm yükleyin veya Modlar bölümünde devre dışı bırakıp yeniden başlatın.",
   "controls.modLoadFailedHarmony": "{modId} modu, sunucunun sağladığı Harmony (0Harmony.dll) bileşenini yükleyemedi. Bu bir barındırma sorunudur; Bannerlord.Harmony modunu yeniden yüklemek sorunu çözmez. Destekle iletişime geçin veya yeniden başlatmadan önce Modlar bölümünde bu modu ve ona bağlı modları devre dışı bırakın.",

@@ -955,7 +955,7 @@
   "mods.archive.invalidPath": "{path} ne peut pas être téléversé : son chemin est trop long, trop profond ou contient des caractères non pris en charge.",
   "mods.archive.duplicatePath": "{path} ne diffère d'un autre fichier que par la casse ou les accents.",
   "mods.archive.compressionRatio": "Le dossier se compresse à plus de 100:1, ce que le serveur refuse.",
-  "controls.modLoadFailedMissingAssembly": "Le mod {modId} nécessite {assembly}. Importez la dépendance ou désactivez ce mod dans Mods, puis relancez le serveur.",
+  "controls.modLoadFailedMissingAssembly": "Impossible de charger le mod {modId} : assembly {assembly} manquant. Désactivez-le ainsi que les mods qui en dépendent, puis redémarrez.",
   "controls.modLoadFailedMissingDll": "Il manque au mod {modId} une DLL indiquée dans SubModule.xml. Importez le mod complet avec son dossier bin, ou désactivez-le dans Mods, puis relancez le serveur.",
   "controls.modLoadFailed": "Le mod {modId} ne peut pas être chargé. Importez une version compatible avec cette version du serveur et ses dépendances, ou désactivez-le dans Mods, puis relancez le serveur.",
   "controls.modLoadFailedHarmony": "Le mod {modId} ne peut pas charger Harmony (0Harmony.dll), fourni par le serveur. Il s’agit d’un problème d’hébergement ; réimporter Bannerlord.Harmony ne le résoudra pas. Contactez le support ou désactivez ce mod et ceux qui en dépendent dans Mods avant de relancer le serveur.",
