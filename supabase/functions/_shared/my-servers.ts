@@ -9,6 +9,7 @@ import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, require
 import { MAXIMUM_CAMPAIGN_LIMIT, parseCampaignMutation, parseCampaignPage, parseCampaignResetResult, parseCampaignSelection } from "./server-campaign-contract.ts";
 import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
 import { hasExactKeys, isRecord } from "./dto-validation.ts";
+import { parseSaveDeletionStatus } from "./server-save-deletion-contract.ts";
 import { errorResponse, isControlPlaneEnvelope, readBoundedText, RequestTooLargeError, type ControlPlaneEnvelope } from "./edge-http.ts";
 import { createModsForwarder, isModsEdgeRequest } from "./my-servers-mods.ts";
 
@@ -44,6 +45,7 @@ export type MyServersHandlerOptions = {
 };
 
 type UpstreamRequest =
+    | { operation: "delete-save-status"; input: { serverId: string; jobId: string } }
     | { operation: "save-server-settings"; input: OwnerSettingsMutation }
     | { operation: "console-command"; input: ConsoleSubmission }
     | { operation: "console-command-result" | "acknowledge-console-command"; input: ConsoleReference }
@@ -283,6 +285,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "delete-server") parseServerDeletionResult(envelope.result);
                 if (upstreamRequest.operation === "set-password" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["changed", "restartQueued"]) || envelope.result.changed !== true || typeof envelope.result.restartQueued !== "boolean")) throw new Error("Invalid password response");
                 if (upstreamRequest.operation === "server-update-status") parseReleaseStatus(envelope.result, upstreamRequest.input.serverId);
+                if (upstreamRequest.operation === "delete-save-status") parseSaveDeletionStatus(envelope.result, upstreamRequest.input.serverId, upstreamRequest.input.jobId);
                 if (upstreamRequest.operation === "server-deletion-status") parseServerDeletionStatus(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "save-server-settings") parseOwnerSettingsResult(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
@@ -418,6 +421,13 @@ function listRequest(request: Request): UpstreamRequest {
     if (resource === "update-status") {
         assertQueryParameters(url, ["resource", "serverId"]);
         return { operation: "server-update-status", input: { serverId: readServerId(url) } };
+    }
+
+    if (resource === "delete-save-status") {
+        assertQueryParameters(url, ["resource", "serverId", "jobId"]);
+        const jobId = url.searchParams.get("jobId");
+        requireUuid(jobId);
+        return { operation: "delete-save-status", input: { serverId: readServerId(url), jobId } };
     }
 
     if (resource === "backup-status") {

@@ -263,6 +263,11 @@ export type HostingAdminVpsHost = {
         errorCode: string | null;
         sourceCommit: string | null;
         updatedAt: string;
+        /** Present once the control plane reports them; absent from older control planes. */
+        attemptCount?: number;
+        maximumAttempts?: number;
+        timeoutAt?: string;
+        startedByAutomaticSizing?: boolean;
     } | null;
     runnerUpdate?: {
         state: "queued" | "running" | "retry-wait" | "succeeded" | "failed";
@@ -1078,6 +1083,8 @@ export type FleetSummary = {
         recentProviderApiErrors: number;
         recentBackupFailures: number;
         overdueBackups: number | null;
+        /** VPS runner onboardings that keep their host out of admission; absent from older control planes. */
+        vpsOnboarding?: { active: number; failed: number; stuck: number };
     };
 };
 

@@ -449,7 +449,7 @@ function ViewTabs({ active }: { active: View }) {
 
 function OverviewView({ overview }: { overview: OverviewSummary }) {
     const { fleet, controls } = overview;
-    const stats = [
+    const baseStats = [
         { label: "Running", value: fleet.running, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("running") },
         { label: "Stopped", value: fleet.stopped, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("stopped") },
         { label: "Suspended", value: fleet.suspended, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("suspended") },
@@ -461,6 +461,12 @@ function OverviewView({ overview }: { overview: OverviewSummary }) {
         { label: "Backup failures", value: fleet.backupFailures, href: "/admin/control-plane?view=jobs&state=failed&action=backup&alert=unacknowledged", destination: "failed backup jobs", help: "Unacknowledged failed backup jobs that need administrator review." },
         { label: "Failed jobs", value: fleet.observability.recentJobFailures, href: "/admin/control-plane?view=jobs&state=failed&alert=unacknowledged", destination: "failed jobs", help: "Failed jobs in the current observability window that have not been acknowledged by an administrator." },
     ] as const;
+    // Older control planes report no onboarding counts, so the tile appears only once they do.
+    const vpsOnboarding = fleet.observability.vpsOnboarding;
+    const stats = vpsOnboarding == null ? baseStats : [...baseStats, {
+        label: "VPS out of admission", value: vpsOnboarding.active + vpsOnboarding.failed, href: "/admin/control-plane?view=vps", destination: "VPS hosts",
+        help: `VPS hosts whose runner onboarding has not succeeded take no new or moved servers: ${String(vpsOnboarding.failed)} failed, ${String(vpsOnboarding.stuck)} stuck waiting to retry.`,
+    }];
     const statRows = chunk(stats, 4);
     return (
         <div className="mt-8 space-y-8">

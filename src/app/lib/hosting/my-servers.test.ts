@@ -4,6 +4,7 @@ import { createMyServersHandler } from "../../../../supabase/functions/_shared/m
 import { connectionAddress } from "./connection-address";
 import {
     deleteMyServerSave,
+    getMyServerSaveDeletionStatus,
     dismissServerNotice,
     getMyServerBackupStatus,
     getMyServerDeletionStatus,
@@ -852,5 +853,28 @@ test("delete-save preserves the exact enqueue and admission-error envelopes thro
         rejected = false; response = { ...queued, errorCode: "save_still_loaded" };
         await assert.rejects(deleteMyServerSave(TOKEN, deletion, requestId),
             (error: unknown) => error instanceof MyServersApiError);
+    } finally { restoreEnvironment(); }
+});
+
+test("website delete status binds server and job and rejects extra keys even without Edge validation", async () => {
+    configureEnvironment();
+    const jobId = "aaaaaaaa-1111-4111-8111-111111111111";
+    const base = { serverId: FIRST_SERVER.serverId, jobId, saveId: jobId, state: "failed", errorCode: "future_code" };
+    let result: unknown = base;
+    globalThis.fetch = async (url, init) => {
+        const endpoint = new URL(String(url));
+        assert.equal(init?.method, "GET");
+        assert.equal(endpoint.searchParams.get("resource"), "delete-save-status");
+        assert.equal(endpoint.searchParams.get("serverId"), base.serverId);
+        assert.equal(endpoint.searchParams.get("jobId"), jobId);
+        const requestId = new Headers(init?.headers).get("x-request-id");
+        return Response.json({ version: 1, requestId, ok: true, result });
+    };
+    try {
+        assert.deepEqual(await getMyServerSaveDeletionStatus(TOKEN, base.serverId, jobId), base);
+        for (result of [{ ...base, jobId: base.serverId }, { ...base, serverId: jobId },
+            { ...base, diagnostic: "private" }, { ...base, errorCode: "x".repeat(65) }, { ...base, state: ["succeeded"] }, { ...base, state: "claimed" }]) {
+            await assert.rejects(getMyServerSaveDeletionStatus(TOKEN, base.serverId, jobId), MyServersApiError);
+        }
     } finally { restoreEnvironment(); }
 });
