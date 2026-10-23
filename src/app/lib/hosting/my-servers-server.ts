@@ -33,7 +33,9 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
     }
     if (!isRecord(value) || !hasExactKeys(value, ["serverId", "displayName", "accessRole", "friendlyRegion", "operationState",
         "observedGameState", "releaseChannel", "maintenanceSlot", "timezone", "visibility", "connectionIp", "gamePorts", "updatedAt",
+        ...(Object.hasOwn(value, "subscriptionHold") ? ["subscriptionHold"] : []),
         ...(Object.hasOwn(value, "runtimeInsight") ? ["runtimeInsight"] : [])])
+        || (Object.hasOwn(value, "subscriptionHold") && !isSubscriptionHold(value.subscriptionHold))
         || (Object.hasOwn(value, "runtimeInsight") && !isOwnerRuntimeInsight(value.runtimeInsight))
         || value.serverId !== serverId || !timestamp(value.updatedAt)
         || typeof value.displayName !== "string" || value.displayName.length < 1 || value.displayName.length > 48 || /[\p{Cc}]/u.test(value.displayName)
@@ -51,6 +53,14 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
         throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid summary.", true);
     }
     return value as MyServerSummary;
+}
+
+/** Accepts old responses without the field; present hold data must match the closed contract. */
+function isSubscriptionHold(value: unknown) {
+    return value === null || (isRecord(value) && hasExactKeys(value, ["state", "reason", "removalDueAt", "canExportSave"])
+        && ["held", "removal-pending"].includes(value.state as string)
+        && value.reason === "subscription-funding-lapsed" && timestamp(value.removalDueAt)
+        && typeof value.canExportSave === "boolean" && (value.state !== "removal-pending" || value.canExportSave === false));
 }
 
 /** Called after website account synchronization; eligibility and capacity are freshly checked by Oracle. */

@@ -25,7 +25,7 @@ const STATE_EXPLANATIONS: Record<string, string> = {
     stopped: "The game container is intentionally off. The owner or an administrator can start it.",
     stopping: "A graceful stop is in progress and the final stopped state has not yet been confirmed.",
     succeeded: "The durable job completed and committed its terminal evidence.",
-    suspended: "An administrator placed the server on hold. Owner operations are blocked until it is reactivated.",
+    suspended: "This server is on hold. Check its subscription or administrator notice for the reason and available actions.",
     unavailable: "Current evidence says this resource or dependency cannot be used.",
     unknown: "The control plane does not yet have current, trustworthy evidence for this state.",
     validated: "The immutable build receipt passed validation and the build is eligible for installation.",

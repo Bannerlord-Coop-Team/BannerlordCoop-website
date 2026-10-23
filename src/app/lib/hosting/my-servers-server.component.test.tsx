@@ -570,3 +570,19 @@ it.each([
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
     await expect(getMyServerManagers(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
 });
+
+
+it("accepts an absent or null subscription hold and validates every supplied field", async () => {
+    const hold = { state: "held", reason: "subscription-funding-lapsed", removalDueAt: "2026-10-25T00:50:42.044Z", canExportSave: true };
+    for (const subscriptionHold of [undefined, null, hold, { ...hold, state: "removal-pending", canExportSave: false }]) {
+        const value = { ...summary, ...(subscriptionHold === undefined ? {} : { subscriptionHold }) };
+        vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), value));
+        expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(value);
+    }
+    for (const subscriptionHold of [{ ...hold, state: "unknown" }, { ...hold, removalDueAt: "tomorrow" },
+        { ...hold, reason: "administrator" }, { ...hold, privateIdentity: "unexpected" }, { ...hold, canExportSave: "yes" },
+        { ...hold, state: "removal-pending" }, { state: "held" }]) {
+        vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, subscriptionHold }));
+        await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
+    }
+});
