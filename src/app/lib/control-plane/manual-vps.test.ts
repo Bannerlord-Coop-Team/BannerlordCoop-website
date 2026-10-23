@@ -5,6 +5,7 @@ import {
     emptyManualVpsForm,
     manualEntryProviders,
     manualVpsCountryChoices,
+    manualVpsExamples,
     manualVpsLocationChoices,
     manualVpsLoginAddress,
     manualVpsRegion,
@@ -78,6 +79,14 @@ test("a region narrows country and location choices, defaulting each only when i
     const usEast = selectManualVpsRegion(usWest, REGIONS, "us-east");
     assert.deepEqual([usEast.countryCode, usEast.locationId], ["US", ""]);
     assert.equal(usEast.serviceName, "hosthatch-ams-1");
+});
+
+test("placeholder facts follow the chosen provider and stay neutral without one of their own", () => {
+    assert.deepEqual(manualVpsExamples("hosthatch-vps"), { serviceName: "hosthatch-ams-1", locationId: "ams", datacenter: "Amsterdam" });
+    assert.deepEqual(manualVpsExamples("vpstc-vps"), { serviceName: "vpstc-ist-1", locationId: "ist", datacenter: "Istanbul" });
+    for (const provider of ["", "ovhcloud-vps", "future-vps"]) {
+        assert.deepEqual(manualVpsExamples(provider), { serviceName: "vps-ams-1", locationId: "ams", datacenter: "Amsterdam" }, provider);
+    }
 });
 
 test("the slot count is one per two vCPUs within 2–64 whole vCPUs", () => {

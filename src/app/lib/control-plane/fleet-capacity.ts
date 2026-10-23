@@ -2,7 +2,7 @@ import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/d
 import { hostingRegionLabel, MAXIMUM_REGIONS } from "../../../../supabase/functions/_shared/hosting-regions";
 import { ControlPlaneAdminError } from "./client";
 import { shortServiceName } from "./placement-live-moves";
-import { vpsProviderLabel } from "./vps-providers";
+import { isVpsProviderId, vpsProviderLabel } from "./vps-providers";
 import type {
     HostingAdminFleetCapacity,
     HostingFleetCapacityConcurrentSource,
@@ -12,7 +12,6 @@ import type {
     HostingFleetCapacityHost,
     HostingFleetCapacityInstanceType,
     HostingFleetCapacityMemoryBytes,
-    HostingFleetCapacityProviderId,
     HostingFleetCapacityStat,
     HostingFleetCapacityVerdict,
 } from "./types";
@@ -22,15 +21,9 @@ export const FLEET_CAPACITY_HOURS = 168;
 /**
  * The most of each list a read may hold, so a malformed response cannot make the tab draw thousands of rows of
  * 336 cells. Each is well above the control plane's own bounds (64 VPSs and 512 placed servers today), which may
- * rise. Providers need no cap: each appears once and is one of `FLEET_CAPACITY_PROVIDERS`.
+ * rise. Providers need no cap: each appears once and is one of `VPS_PROVIDERS`.
  */
 export const FLEET_CAPACITY_LIMITS = { hosts: 256, occupantsPerHost: 64, instanceTypes: 256, regionsPerHost: MAXIMUM_REGIONS } as const;
-
-/**
- * Exactly the control plane's closed `VPS_PROVIDER_IDS` (`src/hosting/providers/vps-provider-ids.ts`). A provider
- * it adds makes the read unexpected until this list, and its label, are updated, so the website updates first.
- */
-export const FLEET_CAPACITY_PROVIDERS = ["ovhcloud-vps", "contabo-vps", "hosthatch-vps"] as const satisfies readonly HostingFleetCapacityProviderId[];
 
 const HOUR_MILLISECONDS = 3_600_000;
 const GIB = 1024 ** 3;
@@ -157,10 +150,6 @@ function stat(maximum: number, typical: boolean) {
 const percentStat = (typical: boolean) => stat(100, typical);
 const coresStat = (typical: boolean) => stat(Number.MAX_SAFE_INTEGER, typical);
 
-function providerId(value: unknown) {
-    return (FLEET_CAPACITY_PROVIDERS as readonly unknown[]).includes(value);
-}
-
 function demandSource(sources: readonly HostingFleetCapacityDemandSource[]) {
     return (value: unknown) => sources.includes(value as HostingFleetCapacityDemandSource);
 }
@@ -205,7 +194,7 @@ function model(value: unknown, shape: Shape) {
 
 function provider(value: unknown, typical: boolean) {
     return isRecord(value) && hasExactKeys(value, PROVIDER_KEYS)
-        && providerId(value.provider) && count(value.hosts) && count(value.servers) && demand(value.demand)
+        && isVpsProviderId(value.provider) && count(value.hosts) && count(value.servers) && demand(value.demand)
         && nullable(value.steal, percentStat(typical)) && nullable(value.busyCores, coresStat(typical));
 }
 
@@ -242,7 +231,7 @@ function capped(value: unknown, cap: number) {
 
 function instanceType(value: unknown, typical: boolean, rule: HostingAdminFleetCapacity["model"]) {
     if (!isRecord(value) || !hasExactKeys(value, typical ? TYPICAL_INSTANCE_TYPE_KEYS : INSTANCE_TYPE_KEYS)) return false;
-    const valid = typeKey(value.key) && providerId(value.provider) && count(value.vCpu, 1)
+    const valid = typeKey(value.key) && isVpsProviderId(value.provider) && count(value.vCpu, 1)
         && nullable(value.memoryBytes, positiveBytes) && nullable(value.cpuModel, text) && nullable(value.cpuMhz, mhz)
         && count(value.hosts) && count(value.servers) && demand(value.demand)
         && nullable(value.steal, percentStat(typical))
@@ -277,7 +266,7 @@ function host(value: unknown, shape: Shape, rule: HostingAdminFleetCapacity["mod
     const typical = shape === "typical";
     if (!isRecord(value) || !hasExactKeys(value, typical ? TYPICAL_HOST_KEYS : memoryBurst ? HOST_KEYS : PERCENTILE_MEMORY_HOST_KEYS)) return false;
     const valid = (!memoryBurst || nullable(value.peakMemoryBytes, (bytes) => count(bytes)))
-        && text(value.serviceName) && providerId(value.provider)
+        && text(value.serviceName) && isVpsProviderId(value.provider)
         && within(value.regionKeys, FLEET_CAPACITY_LIMITS.regionsPerHost) && value.regionKeys.every((key) => text(key))
         && count(value.vCpu, 1) && nullable(value.memoryBytes, positiveBytes)
         && nullable(value.cpuModel, text) && nullable(value.cpuMhz, mhz) && nullable(value.instanceTypeKey, typeKey)
@@ -869,11 +858,6 @@ export function busyStripSummary(serviceName: string, values: readonly (number |
     return `${name}: highest ${values[peak]}% at ${hourLabels[peak]}; mean ${Math.round(mean)}% over ${measured} of ${FLEET_CAPACITY_HOURS} hours measured`;
 }
 
-/** HostHatch is not in the website's own provider list yet, so its label lives here. */
-export function fleetCapacityProviderLabel(provider: HostingFleetCapacityProviderId) {
-    return provider === "hosthatch-vps" ? "HostHatch" : vpsProviderLabel(provider);
-}
-
 /**
  * An instance type as people read it, "OVHcloud · 6 vCPU · 11.68 GiB · Intel Core Processor (Haswell, no TSX) ·
  * 2,400 MHz": the parts of its key without the raw provider id. RAM uses `formatGiB`, as the row's RAM cell does,
@@ -882,7 +866,7 @@ export function fleetCapacityProviderLabel(provider: HostingFleetCapacityProvide
 export function fleetCapacityTypeLabel(entry: Pick<HostingFleetCapacityInstanceType, "provider" | "vCpu" | "memoryBytes" | "cpuModel" | "cpuMhz">) {
     const mhzKnown = knownMhz(entry.cpuMhz);
     return [
-        fleetCapacityProviderLabel(entry.provider),
+        vpsProviderLabel(entry.provider),
         `${entry.vCpu} vCPU`,
         entry.memoryBytes === null ? "RAM unknown" : formatGiB(entry.memoryBytes),
         entry.cpuModel ?? "CPU model unknown",
@@ -899,7 +883,7 @@ export type FleetCapacityHostGroup = { label: string; hosts: HostingFleetCapacit
 export function fleetCapacityHostGroups(hosts: readonly HostingFleetCapacityHost[]): FleetCapacityHostGroup[] {
     const groups = new Map<string, { provider: string; region: string; hosts: HostingFleetCapacityHost[] }>();
     for (const entry of hosts) {
-        const provider = fleetCapacityProviderLabel(entry.provider);
+        const provider = vpsProviderLabel(entry.provider);
         const region = entry.regionKeys.length === 0 ? "" : entry.regionKeys.map(hostingRegionLabel).join(", ");
         const key = `${provider}\u0000${region}`;
         const group = groups.get(key) ?? { provider, region, hosts: [] };

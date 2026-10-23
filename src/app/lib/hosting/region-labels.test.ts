@@ -24,5 +24,6 @@ test("region labels translate catalog keys and fall back to a readable label for
     assert.equal(localizedRegionLabel(t, "europe-automatic"), "Europe Automatic");
     assert.equal(localizedRegionLabel(t, "japan"), "Japan");
     assert.equal(localizedRegionLabel(t, "hong-kong"), "Hong Kong");
+    assert.equal(localizedRegionLabel(t, "turkiye"), "Türkiye");
     assert.equal(localizedContinentLabel(t, "oceania"), english["continent.oceania"]);
 });

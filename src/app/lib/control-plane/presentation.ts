@@ -1,6 +1,7 @@
 import type { HostingAdminRegionEntry, HostingAdminVpsHost, ReleaseBuild } from "@/app/lib/control-plane/types";
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE } from "../../../../supabase/functions/_shared/server-settings-contract";
 import { hostingRegionLabel, type HostingRegionPayload, type HostingRegionPlacementPayload } from "../../../../supabase/functions/_shared/hosting-regions";
+import { VPS_PROVIDERS, vpsProviderLabel } from "./vps-providers";
 
 export const MAINTENANCE_TIME_ZONE = HOSTING_TIME_ZONE;
 
@@ -55,6 +56,12 @@ export function formatAccountOwner(
 /** Stored-catalog regions the control plane reports as having a free admissible slot, in stored order (advisory). */
 export function createServerRegionOptions(regions: readonly Pick<HostingAdminRegionEntry, "region" | "available">[]) {
     return regions.filter((entry) => entry.available).map(({ region }) => ({ value: region, label: hostingRegionLabel(region) }));
+}
+
+/** Providers holding at least one registered VPS, in catalog order: the only ones a Create server pin can use. */
+export function createServerProviderOptions(hosts: readonly { readonly provider: string }[] | undefined) {
+    const registered = new Set((Array.isArray(hosts) ? hosts : []).map((host) => host.provider));
+    return VPS_PROVIDERS.filter((provider) => registered.has(provider)).map((provider) => ({ value: provider, label: vpsProviderLabel(provider) }));
 }
 
 export function maintenanceSlotOptions() {

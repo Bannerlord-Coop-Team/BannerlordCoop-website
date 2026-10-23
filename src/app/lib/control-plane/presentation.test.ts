@@ -5,6 +5,7 @@ import type { ReleaseBuild } from "./types";
 import {
     adminActionOptionValue,
     applyControlPlaneOperationDefaults,
+    createServerProviderOptions,
     createServerRegionOptions,
     fieldRequirementLabel,
     formatAccountOwner,
@@ -45,6 +46,13 @@ test("administrator create sends only the region key; other operations get no de
     const maintenance: Record<string, unknown> = { reason: "Roll the fleet" };
     applyControlPlaneOperationDefaults("batch-maintenance", maintenance);
     assert.deepEqual(maintenance, { reason: "Roll the fleet" });
+});
+
+test("Create server offers to pin only providers holding a registered VPS, named and in catalog order", () => {
+    const hosts = [{ provider: "vpstc-vps" }, { provider: "ovhcloud-vps" }, { provider: "vpstc-vps" }, { provider: "retired-vps" }];
+    assert.deepEqual(createServerProviderOptions(hosts), [{ value: "ovhcloud-vps", label: "OVHcloud" }, { value: "vpstc-vps", label: "VPS.TC" }]);
+    assert.deepEqual(createServerProviderOptions([]), []);
+    assert.deepEqual(createServerProviderOptions(undefined), []);
 });
 
 test("hosts are labelled with every stored region they serve, else their legacy region or none", () => {

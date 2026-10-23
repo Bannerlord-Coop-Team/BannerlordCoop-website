@@ -1,6 +1,7 @@
 import { LocalDateTime } from "./LocalDateTime";
 import { slotDecommissionPaused } from "@/app/lib/control-plane/slot-decommission";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
+import { vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
 
 type Onboarding = NonNullable<HostingAdminVpsHost["runnerOnboarding"]>;
 type OutOfAdmissionHost = Pick<HostingAdminVpsHost, "provider" | "name"> & { runnerOnboarding: Onboarding };
@@ -49,7 +50,7 @@ function HostLine({ host }: { host: OutOfAdmissionHost }) {
         ? `, attempt ${String(onboarding.attemptCount)} of ${String(onboarding.maximumAttempts)}` : "";
     return (
         <li>
-            <span className="font-semibold">{host.name}</span> ({host.provider}): {status} at <code>{onboarding.progressStage}</code>
+            <span className="font-semibold">{host.name}</span> ({vpsProviderLabel(host.provider)}): {status} at <code>{onboarding.progressStage}</code>
             {onboarding.errorCode !== null && <> with <code>{onboarding.errorCode}</code></>}
             {attempts}, since <LocalDateTime value={onboarding.updatedAt} />
             {onboarding.state !== "failed" && onboarding.timeoutAt != null && <>; times out <LocalDateTime value={onboarding.timeoutAt} /></>}

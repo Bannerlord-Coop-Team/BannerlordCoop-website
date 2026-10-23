@@ -4,6 +4,7 @@ import {
     LOCATION_ID_PATTERN,
     type HostingRegionPayload,
 } from "../../../../supabase/functions/_shared/hosting-regions";
+import { isVpsProviderId, type VpsProviderId } from "./vps-providers";
 
 /** The administrator operation that registers and onboards a VPS typed in by hand. */
 export const MANUAL_VPS_OPERATION = "onboard-manual-vps-host";
@@ -42,6 +43,9 @@ export type ManualVpsInput = {
 /** The catalog-backed choices the form validates against. */
 export type ManualVpsChoices = { providers: readonly ManualEntryProvider[]; regions: readonly HostingRegionPayload[] };
 
+/** Placeholder host facts in one provider's own style, so the form's hints never name another vendor. */
+export type ManualVpsExamples = { serviceName: string; locationId: string; datacenter: string };
+
 export type ManualVpsValidation =
     | { ok: true; input: ManualVpsInput }
     | { ok: false; errors: Partial<Record<ManualVpsField, string>> };
@@ -57,6 +61,18 @@ const HOSTNAME_LABEL_PATTERN = /^[A-Za-z\d](?:[A-Za-z\d-]{0,61}[A-Za-z\d])?$/u;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/u;
 // The control plane's provider datacenter-name grammar; the label is audit evidence only.
 const DATACENTER_PATTERN = /^[A-Za-z\d][A-Za-z\d ._:()-]{0,63}$/u;
+
+// Keyed by provider id; a provider without its own, or no provider yet, shows the neutral example.
+const MANUAL_VPS_EXAMPLES: Readonly<Partial<Record<VpsProviderId, ManualVpsExamples>>> = {
+    "hosthatch-vps": { serviceName: "hosthatch-ams-1", locationId: "ams", datacenter: "Amsterdam" },
+    "vpstc-vps": { serviceName: "vpstc-ist-1", locationId: "ist", datacenter: "Istanbul" },
+};
+const NEUTRAL_EXAMPLES: ManualVpsExamples = { serviceName: "vps-ams-1", locationId: "ams", datacenter: "Amsterdam" };
+
+/** The placeholder facts for the chosen provider, or the neutral ones when it has none of its own. */
+export function manualVpsExamples(provider: string): ManualVpsExamples {
+    return (isVpsProviderId(provider) ? MANUAL_VPS_EXAMPLES[provider] : undefined) ?? NEUTRAL_EXAMPLES;
+}
 
 /** An empty form, with the provider preselected when there is exactly one. */
 export function emptyManualVpsForm(providers: readonly ManualEntryProvider[]): ManualVpsFormValues {

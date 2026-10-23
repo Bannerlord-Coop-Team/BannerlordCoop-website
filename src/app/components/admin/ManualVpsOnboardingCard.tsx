@@ -11,6 +11,7 @@ import {
     MANUAL_VPS_MINIMUM_VCPU,
     MANUAL_VPS_OPERATION,
     manualVpsCountryChoices,
+    manualVpsExamples,
     manualVpsLocationChoices,
     manualVpsLoginAddress,
     manualVpsRegion,
@@ -130,6 +131,7 @@ function ManualVpsFields({ values, errors, providers, regions, onChange }: {
     const countries = manualVpsCountryChoices(region);
     const locations = manualVpsLocationChoices(region);
     const slots = manualVpsSlotCount(values.vCpu);
+    const examples = manualVpsExamples(values.provider);
     const bind = (field: ManualVpsField) => ({ name: field, value: values[field], onChange: (event: { target: { value: string } }) => onChange(field, event.target.value) });
     return <>
         <FormField label="Provider" required error={errors.provider} help="Only providers the control plane accepts by manual entry are listed.">
@@ -138,8 +140,8 @@ function ManualVpsFields({ values, errors, providers, regions, onChange }: {
                 {providers.map((entry) => <option key={entry.provider} value={entry.provider}>{entry.displayName}</option>)}
             </select>}
         </FormField>
-        <FormField label="Server name" required error={errors.serviceName} help="A unique, permanent host name, such as the HostHatch panel server ID or hosthatch-ams-1. It cannot be changed later.">
-            {(control) => <input {...control} {...bind("serviceName")} autoComplete="off" spellCheck={false} placeholder="hosthatch-ams-1" maxLength={64} className={INPUT_CLASS} />}
+        <FormField label="Server name" required error={errors.serviceName} help={`A unique, permanent host name, such as the server ID in the provider's panel or ${examples.serviceName}. It cannot be changed later.`}>
+            {(control) => <input {...control} {...bind("serviceName")} autoComplete="off" spellCheck={false} placeholder={examples.serviceName} maxLength={64} className={INPUT_CLASS} />}
         </FormField>
         <FormField label="SSH login" required error={errors.sshLogin} help="root@ and the VPS's public IPv4 address. Only root is accepted.">
             {(control) => <input {...control} {...bind("sshLogin")} autoComplete="off" spellCheck={false} placeholder="root@203.0.113.10" className={INPUT_CLASS} />}
@@ -160,9 +162,9 @@ function ManualVpsFields({ values, errors, providers, regions, onChange }: {
                 {countries.map((code) => <option key={code} value={code}>{code}</option>)}
             </select>}
         </FormField>
-        <FormField label="Location" required error={errors.locationId} help={locations === null ? "A short provider location code, such as ams." : "Limited to the chosen region's reviewed locations."}>
+        <FormField label="Location" required error={errors.locationId} help={locations === null ? `A short provider location code, such as ${examples.locationId}.` : "Limited to the chosen region's reviewed locations."}>
             {(control) => locations === null
-                ? <input {...control} {...bind("locationId")} disabled={region === undefined} autoComplete="off" spellCheck={false} placeholder="ams" maxLength={128} className={INPUT_CLASS} />
+                ? <input {...control} {...bind("locationId")} disabled={region === undefined} autoComplete="off" spellCheck={false} placeholder={examples.locationId} maxLength={128} className={INPUT_CLASS} />
                 : <select {...control} {...bind("locationId")} className={INPUT_CLASS}>
                     <option value="" disabled>Select…</option>
                     {locations.map((location) => <option key={location} value={location}>{location}</option>)}
@@ -172,7 +174,7 @@ function ManualVpsFields({ values, errors, providers, regions, onChange }: {
             {(control) => <input {...control} {...bind("publicHostname")} autoComplete="off" spellCheck={false} placeholder="play.example.com" maxLength={253} className={INPUT_CLASS} />}
         </FormField>
         <FormField label="Datacenter" required={false} error={errors.datacenter} help="Display label recorded only in the audit event.">
-            {(control) => <input {...control} {...bind("datacenter")} autoComplete="off" placeholder="Amsterdam" maxLength={64} className={INPUT_CLASS} />}
+            {(control) => <input {...control} {...bind("datacenter")} autoComplete="off" placeholder={examples.datacenter} maxLength={64} className={INPUT_CLASS} />}
         </FormField>
     </>;
 }

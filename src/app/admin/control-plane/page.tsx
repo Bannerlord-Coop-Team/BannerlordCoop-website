@@ -24,7 +24,7 @@ import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
 import { readOperationsVpsInventory } from "@/app/lib/control-plane/operations-inventory";
 import { readHostingRegionCatalog } from "@/app/lib/control-plane/hosting-region-catalog";
 import { recordReleaseFirstObservations } from "@/app/lib/control-plane/release-observations";
-import { vpsHostSelectionValue } from "@/app/lib/control-plane/vps-providers";
+import { vpsHostSelectionValue, vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
 import { MANUAL_VPS_OPERATION, manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
 import {
     destructiveExplanation,
@@ -33,6 +33,7 @@ import {
 } from "@/app/lib/control-plane/explanations";
 import {
     adminActionOptionValue,
+    createServerProviderOptions,
     createServerRegionOptions,
     formatAccountOwner,
     installableBuilds,
@@ -521,7 +522,7 @@ function ServersView({ page, query, accounts }: { page: HostingPage<ManagedServe
                             <td className="p-4"><State value={server.operationState} /></td>
                             <td className="p-4"><RuntimeObservation server={server} /></td>
                             <td className="p-4 text-xs text-foreground-muted">{releaseChannelLabel(server.releaseChannel)}<br />{shortId(server.installedBuildId)}</td>
-                            <td className="p-4 text-xs text-foreground-muted">{server.provider}<br />{shortId(server.providerResourceId)}</td>
+                            <td className="p-4 text-xs text-foreground-muted">{vpsProviderLabel(server.provider)}<br />{shortId(server.providerResourceId)}</td>
                             <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={server.updatedAt} /></td>
                         </ClickableTableRow>
                     ))}</tbody>
@@ -634,6 +635,7 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     const availableVpsOptions: AdminActionOption[] = (Array.isArray(inventory.availableHosts) ? inventory.availableHosts : []).map((host) => ({ label: host.label, value: vpsHostSelectionValue(host) }));
     // Region choices come from the stored catalog, so without it Create server is offered as unavailable with the read error.
     const createRegionOptions: AdminActionOption[] = hostingRegions.regions === null ? [] : createServerRegionOptions(hostingRegions.regions);
+    const createProviderOptions: AdminActionOption[] = createServerProviderOptions(inventory.hosts);
     const createUnavailable = hostingRegions.regions === null ? { unavailableReason: `Regions are unavailable: ${hostingRegions.error}` } : {};
     const maintenanceOptions: AdminActionOption[] = maintenanceSlotOptions();
     const accountField = (name: string, label: string): AdminActionField => ({ name, label, kind: "account", required: true, options: accountOptions, help: "Choose a website account by its email or account ID." });
@@ -654,6 +656,7 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
             fields: [
             accountField("ownerDiscordUserId", "Owner account"),
             { name: "displayName", label: "Display name", required: true }, { name: "friendlyRegion", label: "Region", kind: "select", required: true, options: createRegionOptions, help: "Only stored-catalog regions the control plane reports as having a free admissible slot are shown. Only the region key is sent: the control plane revalidates capacity when you submit; no VPS is purchased automatically." },
+            { name: "provider", label: "Provider", kind: "select", required: false, emptyLabel: "Any provider", options: createProviderOptions, help: "Optional. Pins the server to one provider's VPSs, for example to verify a newly onboarded provider end to end; the region must have a free slot on that provider. Any provider tries the enabled providers in their configured order." },
             { name: "maintenanceSlot", label: "Maintenance slot", kind: "select", required: true, options: maintenanceOptions, help: `All maintenance windows use ${MAINTENANCE_TIME_ZONE} (Central Time and its daylight-saving changes).` },
         ] },
         { group: "Fleet", operation: "set-global-controls", title: "Global controls", description: `Replace all four live pause switches as one audited update.${overview.controls.reason ? ` Last recorded reason: ${overview.controls.reason}` : " No override reason is recorded."}`, fields: [

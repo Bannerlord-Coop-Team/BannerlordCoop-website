@@ -19,8 +19,6 @@ import {
     fleetCapacityErrorMessage,
     fleetCapacityHostGroups,
     FLEET_CAPACITY_LIMITS,
-    FLEET_CAPACITY_PROVIDERS,
-    fleetCapacityProviderLabel,
     fleetCapacityTypeLabel,
     formatCoresExact,
     formatGiB,
@@ -37,6 +35,7 @@ import {
     staticSlots,
     stealBand,
 } from "./fleet-capacity";
+import { VPS_PROVIDERS } from "./vps-providers";
 
 /** A copy of a record without one key. */
 function without<T extends object>(value: T, key: keyof T) {
@@ -396,11 +395,6 @@ it("caps each list well above the control plane's own bounds", () => {
     expect(FLEET_CAPACITY_LIMITS).toEqual({ hosts: 256, occupantsPerHost: 64, instanceTypes: 256, regionsPerHost: 32 });
 });
 
-it("knows exactly the control plane's VPS providers, each with a readable name", () => {
-    expect(FLEET_CAPACITY_PROVIDERS).toEqual(["ovhcloud-vps", "contabo-vps", "hosthatch-vps"]);
-    expect(FLEET_CAPACITY_PROVIDERS.map(fleetCapacityProviderLabel)).toEqual(["OVHcloud", "Contabo", "HostHatch"]);
-});
-
 it("describes an instance type in words, never by its raw key", () => {
     // A real 12 GB VPS's MemTotal is not a whole GiB: the description shows it as the RAM cell does.
     const memoryBytes = Math.round(11.68 * GIB);
@@ -408,15 +402,16 @@ it("describes an instance type in words, never by its raw key", () => {
     expect(fleetCapacityTypeLabel({ ...instanceType, memoryBytes }).split(" · ")[2]).toBe(formatGiB(memoryBytes));
     expect(fleetCapacityTypeLabel(instanceType)).toBe("OVHcloud · 6 vCPU · 12.00 GiB · Intel Core Processor (Haswell, no TSX) · 2,400 MHz");
     expect(fleetCapacityTypeLabel({ ...instanceType, provider: "hosthatch-vps", memoryBytes: null, cpuModel: null, cpuMhz: 0 })).toBe("HostHatch · 6 vCPU · RAM unknown · CPU model unknown · MHz unknown");
+    expect(fleetCapacityTypeLabel({ ...instanceType, provider: "vpstc-vps", vCpu: 2 })).toBe("VPS.TC · 2 vCPU · 12.00 GiB · Intel Core Processor (Haswell, no TSX) · 2,400 MHz");
     expect(fleetCapacityTypeLabel({ ...instanceType, provider: "contabo-vps", cpuMhz: null })).toBe("Contabo · 6 vCPU · 12.00 GiB · Intel Core Processor (Haswell, no TSX) · MHz unknown");
 });
 
-it.each(FLEET_CAPACITY_PROVIDERS)("accepts %s as a provider, an instance type's and a VPS's", (id) => {
+it.each(VPS_PROVIDERS)("accepts %s as a provider, an instance type's and a VPS's", (id) => {
     expect(parseFleetCapacity({ ...capacity, providers: [{ ...provider, provider: id }] })).not.toBeNull();
     expect(parseFleetCapacity({ ...capacity, instanceTypes: [{ ...instanceType, provider: id }] })).not.toBeNull();
     expect(parseFleetCapacity(withHost({ provider: id }))).not.toBeNull();
-    // All three providers in one read.
-    expect(parseFleetCapacity({ ...capacity, providers: FLEET_CAPACITY_PROVIDERS.map((each) => ({ ...provider, provider: each })) })).not.toBeNull();
+    // Every provider in one read.
+    expect(parseFleetCapacity({ ...capacity, providers: VPS_PROVIDERS.map((each) => ({ ...provider, provider: each })) })).not.toBeNull();
 });
 
 it.each([

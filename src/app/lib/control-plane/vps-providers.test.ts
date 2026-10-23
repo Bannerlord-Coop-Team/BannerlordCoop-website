@@ -1,17 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { failedVpsProviderReadsMessage, isVpsProviderId, parseVpsHostSelection, vpsHostSelectionValue, vpsProviderLabel } from "./vps-providers";
+import { failedVpsProviderReadsMessage, isVpsProviderId, parseVpsHostSelection, VPS_PROVIDERS, vpsHostSelectionValue, vpsProviderLabel } from "./vps-providers";
 
 test("a host selection round-trips its provider with its service name", () => {
     const value = vpsHostSelectionValue({ provider: "contabo-vps", serviceName: "203779521" });
     assert.deepEqual(parseVpsHostSelection(value), { provider: "contabo-vps", serviceName: "203779521" });
 });
 
-test("only the manual VPS providers are accepted", () => {
-    assert.equal(isVpsProviderId("ovhcloud-vps"), true);
-    assert.equal(isVpsProviderId("contabo-vps"), true);
+test("the catalog is exactly the control plane's VPS providers, in its order", () => {
+    assert.deepEqual(VPS_PROVIDERS, ["ovhcloud-vps", "contabo-vps", "hosthatch-vps", "vpstc-vps"]);
+});
+
+test("only the control plane's VPS providers are accepted", () => {
+    for (const id of VPS_PROVIDERS) assert.equal(isVpsProviderId(id), true, id);
     assert.equal(isVpsProviderId("ionos-cloud"), false);
+    assert.equal(isVpsProviderId("VPSTC-VPS"), false);
     assert.equal(isVpsProviderId("experiment-host"), false);
+});
+
+test("a manual-entry host's selection round-trips too", () => {
+    const value = vpsHostSelectionValue({ provider: "vpstc-vps", serviceName: "vpstc-ist-1" });
+    assert.deepEqual(parseVpsHostSelection(value), { provider: "vpstc-vps", serviceName: "vpstc-ist-1" });
 });
 
 test("a selection without a known provider is rejected instead of guessed", () => {
@@ -23,8 +32,7 @@ test("a selection without a known provider is rejected instead of guessed", () =
 });
 
 test("provider labels name the catalog providers and show retired ids verbatim", () => {
-    assert.equal(vpsProviderLabel("ovhcloud-vps"), "OVHcloud");
-    assert.equal(vpsProviderLabel("contabo-vps"), "Contabo");
+    assert.deepEqual(VPS_PROVIDERS.map(vpsProviderLabel), ["OVHcloud", "Contabo", "HostHatch", "VPS.TC"]);
     assert.equal(vpsProviderLabel("experiment-host"), "experiment-host");
 });
 

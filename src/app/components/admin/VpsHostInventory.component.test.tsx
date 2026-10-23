@@ -143,6 +143,14 @@ describe("compact VPS host inventory", () => {
         expect(container.textContent).toContain("Regions unavailable · US · os-us-east-va-2");
     });
 
+    it("names a manual-entry provider in the host's placement label", async () => {
+        const stored = [{ region: "turkiye", placement: { countryCodes: ["TR"] } }];
+        const istanbul: HostingAdminVpsHost = { ...host("vpstc-ist-1", resources(60, 40), 0), provider: "vpstc-vps", countryCode: "TR", locationId: "ist" };
+        await act(async () => root.render(<VpsHostInventory hosts={[istanbul]} ownerLabels={{}} runnerTargetSourceCommit={null} regionCatalog={stored} />));
+        expect(container.textContent).toContain("VPS.TC · Türkiye · TR · ist");
+        expect(container.textContent).not.toContain("vpstc-vps");
+    });
+
     it("surfaces disk warning state in a collapsed row", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-warning", resources(82, 18), 0)]}

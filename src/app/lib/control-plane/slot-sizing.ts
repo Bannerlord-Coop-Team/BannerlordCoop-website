@@ -1,10 +1,10 @@
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
 import { hostingRegionLabel, MAXIMUM_REGIONS } from "../../../../supabase/functions/_shared/hosting-regions";
 import { ControlPlaneAdminError } from "./client";
-import { FLEET_CAPACITY_LIMITS, FLEET_CAPACITY_PROVIDERS, fleetCapacityProviderLabel, formatGiB } from "./fleet-capacity";
+import { FLEET_CAPACITY_LIMITS, formatGiB } from "./fleet-capacity";
+import { vpsProviderLabel } from "./vps-providers";
 import type {
     HostingAdminSlotSizing,
-    HostingFleetCapacityProviderId,
     HostingSlotSizingCapacitySource,
     HostingSlotSizingHost,
     HostingSlotSizingReason,
@@ -290,20 +290,13 @@ export function slotSizingErrorMessage(error: unknown) {
     return error instanceof Error ? error.message : "Slot sizing could not be loaded.";
 }
 
-/** A provider's readable name, or its id as the read gives it for a provider the website does not know. */
-export function slotSizingProviderLabel(provider: string) {
-    return (FLEET_CAPACITY_PROVIDERS as readonly string[]).includes(provider)
-        ? fleetCapacityProviderLabel(provider as HostingFleetCapacityProviderId)
-        : provider;
-}
-
 export type SlotSizingHostGroup = { label: string; hosts: HostingSlotSizingHost[] };
 
 /** The VPSs grouped by provider, then region, as the VPS table groups them: alphabetical, without a region last, read order within. */
 export function slotSizingHostGroups(hosts: readonly HostingSlotSizingHost[]): SlotSizingHostGroup[] {
     const groups = new Map<string, { provider: string; region: string; hosts: HostingSlotSizingHost[] }>();
     for (const entry of hosts) {
-        const provider = slotSizingProviderLabel(entry.provider);
+        const provider = vpsProviderLabel(entry.provider);
         const region = entry.regionKeys.length === 0 ? "" : entry.regionKeys.map(hostingRegionLabel).join(", ");
         const key = `${provider}\u0000${region}`;
         const group = groups.get(key) ?? { provider, region, hosts: [] };
