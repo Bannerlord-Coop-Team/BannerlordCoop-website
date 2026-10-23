@@ -781,7 +781,6 @@
   "settingsPanel.searchSettings": "Search settings",
   "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
   "settingsPanel.noSettingsMatchSearch": "No settings match your search.",
-
   "managerAccess.granting": "Granting access...",
   "managerAccess.description": "Add someone as a manager for this server. Enter their exact Bannerlord Co-op account email. No account directory is shown.",
   "managerAccess.ownerOnly": "Only the server owner can change manager access.",
@@ -806,7 +805,6 @@
   "managerAccess.accessRemoved": "Manager access removed. The account can no longer manage this server.",
   "managerAccess.accessAlreadyRemoved": "That account no longer has manager access.",
   "managerAccess.confirmRemove": "Remove manager access for {name}? They will no longer be able to manage this server.",
-
   "autosaves.recentAutosaves": "Salvamentos automáticos recentes",
   "autosaves.recentAutosavesCampaign": "Salvamentos automáticos recentes · {campaign}",
   "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "O servidor mantém os dois últimos salvamentos automáticos junto ao jogo salvo atual. Eles são substituídos sempre que o servidor salva.",
@@ -955,7 +953,9 @@
   "mods.archive.invalidPath": "Não é possível enviar {path}: o caminho é longo ou profundo demais, ou usa caracteres não aceitos.",
   "mods.archive.duplicatePath": "{path} difere de outro arquivo apenas por maiúsculas, minúsculas ou acentos.",
   "mods.archive.compressionRatio": "A pasta compacta mais de 100:1, o que o servidor recusa.",
-  "controls.modLoadFailedMissingAssembly": "O mod {modId} não carregou (falta o assembly {assembly}). Desative-o em Mods e inicie novamente.",
-  "controls.modLoadFailedMissingDll": "O mod {modId} não carregou (falta uma DLL listada no SubModule.xml). Desative-o em Mods e inicie novamente.",
-  "controls.modLoadFailed": "O mod {modId} não carregou. Desative-o em Mods e inicie novamente."
+  "controls.modLoadFailedMissingAssembly": "O mod {modId} precisa de {assembly}. Envie a dependência ou desative este mod em Mods. Depois inicie novamente.",
+  "controls.modLoadFailedMissingDll": "Falta ao mod {modId} uma DLL listada em SubModule.xml. Envie o mod completo com a pasta bin ou desative-o em Mods. Depois inicie novamente.",
+  "controls.modLoadFailed": "O mod {modId} não carregou. Envie uma versão compatível com esta versão do servidor e suas dependências ou desative-o em Mods. Depois inicie novamente.",
+  "controls.modLoadFailedHarmony": "O mod {modId} precisa do Harmony (0Harmony.dll). Envie o Bannerlord.Harmony com a pasta bin ou desative este mod em Mods. Depois inicie novamente.",
+  "controls.modLoadFailedUnknown": "Um mod personalizado não carregou. Confira os mods enviados e suas dependências ou desative os últimos mods ativados antes de iniciar novamente."
 }

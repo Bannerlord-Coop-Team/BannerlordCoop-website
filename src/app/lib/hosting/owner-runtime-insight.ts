@@ -1,5 +1,6 @@
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
 import { timestamp } from "../../../../supabase/functions/_shared/server-visibility-contract";
+import { isModLoadFailure, type ModLoadFailure } from "./mod-load-failure";
 
 export type OwnerFailureCode = "game_crashed_during_load" | "game_unavailable" | "crash_loop_cooldown" | "mod_load_failed" | "operation_failed";
 type Recommendation = "review-backups" | "check-console" | "wait" | "contact-support";
@@ -17,6 +18,7 @@ export type OwnerStartInsight = {
     recommendedAction: Recommendation | null;
 };
 export type OwnerRuntimeInsight = {
+    modLoadFailure?: ModLoadFailure;
     desiredState: "running" | "stopped" | "deleted";
     observedAt: string | null;
     allowedActions: ("start" | "stop" | "restart-game")[];
@@ -57,7 +59,9 @@ export function isOwnerStartInsight(value: unknown): value is OwnerStartInsight 
 
 /** Legacy summaries omit the insight entirely; a present insight must be complete. */
 export function isOwnerRuntimeInsight(value: unknown): value is OwnerRuntimeInsight {
-    if (!isRecord(value) || !hasExactKeys(value, RUNTIME_KEYS)) return false;
+    if (!isRecord(value) || !hasExactKeys(value, [...RUNTIME_KEYS, ...(Object.hasOwn(value, "modLoadFailure") ? ["modLoadFailure"] : [])])) return false;
+    if (Object.hasOwn(value, "modLoadFailure") && (!isModLoadFailure(value.modLoadFailure)
+        || value.desiredState === "deleted" || (isRecord(value.start) && ["queued", "running", "retry-wait", "succeeded"].includes(value.start.state as string)))) return false;
     return ["running", "stopped", "deleted"].includes(value.desiredState as string)
         && (value.observedAt === null || timestamp(value.observedAt))
         && Array.isArray(value.allowedActions) && value.allowedActions.length <= 3

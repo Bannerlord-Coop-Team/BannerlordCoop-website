@@ -780,7 +780,6 @@
   "settingsPanel.searchSettings": "Search settings",
   "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
   "settingsPanel.noSettingsMatchSearch": "No settings match your search.",
-
   "managerAccess.granting": "Granting access...",
   "managerAccess.description": "Add someone as a manager for this server. Enter their exact Bannerlord Co-op account email. No account directory is shown.",
   "managerAccess.ownerOnly": "Only the server owner can change manager access.",
@@ -805,7 +804,6 @@
   "managerAccess.accessRemoved": "Manager access removed. The account can no longer manage this server.",
   "managerAccess.accessAlreadyRemoved": "That account no longer has manager access.",
   "managerAccess.confirmRemove": "Remove manager access for {name}? They will no longer be able to manage this server.",
-
   "autosaves.recentAutosaves": "最近の自動セーブ",
   "autosaves.recentAutosavesCampaign": "最近の自動セーブ · {campaign}",
   "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "サーバーは現在のセーブデータとは別に、直近2回分の自動セーブを保持します。保存のたびに置き換えられます。",
@@ -954,7 +952,9 @@
   "mods.archive.invalidPath": "{path}はアップロードできません。パスが長すぎるか、階層が深すぎるか、使用できない文字が含まれています。",
   "mods.archive.duplicatePath": "{path}は、大文字・小文字やアクセントの違いだけで別のファイルと重複しています。",
   "mods.archive.compressionRatio": "フォルダーの圧縮率が100:1を超えているため、サーバーが受け付けません。",
-  "controls.modLoadFailedMissingAssembly": "MOD {modId}を読み込めませんでした（アセンブリ{assembly}がありません）。「MOD」で無効にしてから、もう一度起動してください。",
-  "controls.modLoadFailedMissingDll": "MOD {modId}を読み込めませんでした（SubModule.xmlに記載されたDLLがありません）。「MOD」で無効にしてから、もう一度起動してください。",
-  "controls.modLoadFailed": "MOD {modId}を読み込めませんでした。「MOD」で無効にしてから、もう一度起動してください。"
+  "controls.modLoadFailedMissingAssembly": "Mod {modId}には{assembly}が必要です。依存Modをアップロードするか、「Mods」でこのModを無効にしてから再起動してください。",
+  "controls.modLoadFailedMissingDll": "Mod {modId}のSubModule.xmlに記載されたDLLがありません。binフォルダーを含む完全なModをアップロードするか、「Mods」で無効にしてから再起動してください。",
+  "controls.modLoadFailed": "Mod {modId}を読み込めませんでした。このサーバーバージョンと依存関係に対応するバージョンをアップロードするか、「Mods」で無効にしてから再起動してください。",
+  "controls.modLoadFailedHarmony": "Mod {modId}にはHarmony（0Harmony.dll）が必要です。binフォルダーを含むBannerlord.Harmonyをアップロードするか、「Mods」でこのModを無効にしてから再起動してください。",
+  "controls.modLoadFailedUnknown": "カスタムModを読み込めませんでした。アップロードしたModと依存関係を確認するか、最近有効にしたModを無効にしてから再起動してください。"
 }

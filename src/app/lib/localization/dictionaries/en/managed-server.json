@@ -781,7 +781,6 @@
   "settingsPanel.searchSettings": "Search settings",
   "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
   "settingsPanel.noSettingsMatchSearch": "No settings match your search.",
-
   "managerAccess.granting": "Granting access...",
   "managerAccess.description": "Add someone as a manager for this server. Enter their exact Bannerlord Co-op account email. No account directory is shown.",
   "managerAccess.ownerOnly": "Only the server owner can change manager access.",
@@ -806,7 +805,6 @@
   "managerAccess.accessRemoved": "Manager access removed. The account can no longer manage this server.",
   "managerAccess.accessAlreadyRemoved": "That account no longer has manager access.",
   "managerAccess.confirmRemove": "Remove manager access for {name}? They will no longer be able to manage this server.",
-
   "autosaves.recentAutosaves": "Recent autosaves",
   "autosaves.recentAutosavesCampaign": "Recent autosaves · {campaign}",
   "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "The server keeps the last two autosaves next to the current save. They are replaced every time it saves.",
@@ -955,7 +953,9 @@
   "mods.archive.invalidPath": "{path} cannot be uploaded: its path is too long, too deep, or uses unsupported characters.",
   "mods.archive.duplicatePath": "{path} differs from another file only by letter case or accents.",
   "mods.archive.compressionRatio": "The folder compresses more than 100:1, which the server refuses.",
-  "controls.modLoadFailedMissingAssembly": "Mod {modId} failed to load (missing assembly {assembly}). Disable it in Mods and start again.",
-  "controls.modLoadFailedMissingDll": "Mod {modId} failed to load (a DLL its SubModule.xml lists is missing). Disable it in Mods and start again.",
-  "controls.modLoadFailed": "Mod {modId} failed to load. Disable it in Mods and start again."
+  "controls.modLoadFailedMissingAssembly": "Mod {modId} needs {assembly}. Upload the dependency or disable this mod in Mods. Then start again.",
+  "controls.modLoadFailedMissingDll": "Mod {modId} is missing a DLL listed in SubModule.xml. Upload the complete mod including its bin folder, or disable it in Mods. Then start again.",
+  "controls.modLoadFailed": "Mod {modId} could not load. Upload a version compatible with this server build and its dependencies, or disable it in Mods. Then start again.",
+  "controls.modLoadFailedHarmony": "Mod {modId} needs Harmony (0Harmony.dll). Upload Bannerlord.Harmony including its bin folder, or disable this mod in Mods. Then start again.",
+  "controls.modLoadFailedUnknown": "A custom mod failed to load. Check your uploaded mods and their dependencies, or disable recently enabled mods before starting again."
 }

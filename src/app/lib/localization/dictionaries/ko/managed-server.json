@@ -780,7 +780,6 @@
   "settingsPanel.searchSettings": "Search settings",
   "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
   "settingsPanel.noSettingsMatchSearch": "No settings match your search.",
-
   "managerAccess.granting": "Granting access...",
   "managerAccess.description": "Add someone as a manager for this server. Enter their exact Bannerlord Co-op account email. No account directory is shown.",
   "managerAccess.ownerOnly": "Only the server owner can change manager access.",
@@ -805,7 +804,6 @@
   "managerAccess.accessRemoved": "Manager access removed. The account can no longer manage this server.",
   "managerAccess.accessAlreadyRemoved": "That account no longer has manager access.",
   "managerAccess.confirmRemove": "Remove manager access for {name}? They will no longer be able to manage this server.",
-
   "autosaves.recentAutosaves": "최근 자동 저장",
   "autosaves.recentAutosavesCampaign": "최근 자동 저장 · {campaign}",
   "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "서버는 현재 저장 파일과 함께 최근 자동 저장 2개를 보관합니다. 저장할 때마다 교체됩니다.",
@@ -954,7 +952,9 @@
   "mods.archive.invalidPath": "{path}은(는) 업로드할 수 없습니다. 경로가 너무 길거나 깊거나 지원하지 않는 문자를 사용합니다.",
   "mods.archive.duplicatePath": "{path}은(는) 대소문자나 악센트만 다른 파일이 이미 있습니다.",
   "mods.archive.compressionRatio": "폴더 압축률이 100:1을 넘어 서버가 거부합니다.",
-  "controls.modLoadFailedMissingAssembly": "모드 {modId}을(를) 로드하지 못했습니다(어셈블리 {assembly} 없음). 모드 탭에서 비활성화한 뒤 다시 시작하세요.",
-  "controls.modLoadFailedMissingDll": "모드 {modId}을(를) 로드하지 못했습니다(SubModule.xml에 나열된 DLL 없음). 모드 탭에서 비활성화한 뒤 다시 시작하세요.",
-  "controls.modLoadFailed": "모드 {modId}을(를) 로드하지 못했습니다. 모드 탭에서 비활성화한 뒤 다시 시작하세요."
+  "controls.modLoadFailedMissingAssembly": "모드 {modId}에 {assembly}이(가) 필요합니다. 종속 모드를 업로드하거나 Mods에서 이 모드를 비활성화한 뒤 다시 시작하세요.",
+  "controls.modLoadFailedMissingDll": "모드 {modId}의 SubModule.xml에 나열된 DLL이 없습니다. bin 폴더를 포함한 전체 모드를 업로드하거나 Mods에서 비활성화한 뒤 다시 시작하세요.",
+  "controls.modLoadFailed": "모드 {modId}을(를) 로드할 수 없습니다. 이 서버 버전 및 종속성과 호환되는 버전을 업로드하거나 Mods에서 비활성화한 뒤 다시 시작하세요.",
+  "controls.modLoadFailedHarmony": "모드 {modId}에 Harmony(0Harmony.dll)가 필요합니다. bin 폴더를 포함한 Bannerlord.Harmony를 업로드하거나 Mods에서 이 모드를 비활성화한 뒤 다시 시작하세요.",
+  "controls.modLoadFailedUnknown": "사용자 모드를 로드할 수 없습니다. 업로드한 모드와 종속성을 확인하거나 최근 활성화한 모드를 비활성화한 뒤 다시 시작하세요."
 }

@@ -89,8 +89,10 @@ export function archiveProblemMessage(error: ModArchiveError, t: Translate): str
 /** Explains a Start that failed because an enabled mod did not load, naming the mod and any missing assembly. */
 export function modLoadFailureMessage(failure: ModLoadFailure, t: Translate): string {
     if (failure.reason === "missing-assembly" && failure.assembly !== undefined) {
+        if (failure.assembly === "0Harmony") return t("controls.modLoadFailedHarmony", { modId: failure.modId });
         return t("controls.modLoadFailedMissingAssembly", { modId: failure.modId, assembly: failure.assembly });
     }
     if (failure.reason === "missing-dll") return t("controls.modLoadFailedMissingDll", { modId: failure.modId });
-    return t("controls.modLoadFailed", { modId: failure.modId });
+    if (failure.reason === "load-error") return t("controls.modLoadFailed", { modId: failure.modId });
+    return t("controls.modLoadFailedUnknown");
 }
