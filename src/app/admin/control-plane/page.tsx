@@ -463,7 +463,7 @@ function OverviewView({ overview }: { overview: OverviewSummary }) {
     ] as const;
     // Older control planes report no onboarding counts, so the tile appears only once they do.
     const vpsOnboarding = fleet.observability.vpsOnboarding;
-    const stats = vpsOnboarding === undefined ? baseStats : [...baseStats, {
+    const stats = vpsOnboarding == null ? baseStats : [...baseStats, {
         label: "VPS out of admission", value: vpsOnboarding.active + vpsOnboarding.failed, href: "/admin/control-plane?view=vps", destination: "VPS hosts",
         help: `VPS hosts whose runner onboarding has not succeeded take no new or moved servers: ${String(vpsOnboarding.failed)} failed, ${String(vpsOnboarding.stuck)} stuck waiting to retry.`,
     }];

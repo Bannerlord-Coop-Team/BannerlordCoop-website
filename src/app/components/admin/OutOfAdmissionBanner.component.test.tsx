@@ -36,6 +36,7 @@ it("alerts on a failed onboarding with its stage, error and since time, and asks
     expect(alert?.textContent).toContain("1 VPS host is out of admission: onboarding failed");
     expect(alert?.textContent).toContain("vps-d1d531f9 (ovhcloud-vps): Failed at slot-3-agent-activating with runner_onboarding_isolation_failed");
     expect(alert?.textContent).toContain("Retry onboarding");
+    expect(alert?.querySelector("time")?.getAttribute("datetime")).toBe("2026-10-23T00:53:36.115Z");
     expect(alert?.textContent).not.toContain("vps-ok");
     expect(container.querySelector('[role="status"]')).toBeNull();
 });

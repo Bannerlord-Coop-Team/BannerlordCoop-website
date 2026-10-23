@@ -43,7 +43,8 @@ function HostLine({ host }: { host: OutOfAdmissionHost }) {
     const status = onboarding.state === "failed" ? "Failed"
         : slotDecommissionPaused(onboarding) ? "Decommission paused"
             : onboarding.state === "retry-wait" ? "Waiting to retry"
-                : onboarding.state === "running" ? "Running" : "Queued";
+                : onboarding.state === "running" ? "Running"
+                    : onboarding.state === "queued" ? "Queued" : `State ${String(onboarding.state)}`;
     const attempts = onboarding.attemptCount !== undefined && onboarding.maximumAttempts !== undefined
         ? `, attempt ${String(onboarding.attemptCount)} of ${String(onboarding.maximumAttempts)}` : "";
     return (

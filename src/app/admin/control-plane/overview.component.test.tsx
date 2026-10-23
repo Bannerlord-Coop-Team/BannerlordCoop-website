@@ -69,8 +69,11 @@ it.each([true, false])("shows the VPS out-of-admission tile only when the contro
     const html = await new Response(stream).text();
     expect(html.includes("VPS out of admission")).toBe(reported);
     if (reported) {
-        expect(html).toContain("1 failed, 1 stuck waiting to retry");
-        expect(html).toContain("/admin/control-plane?view=vps");
+        // The tile itself: active + failed hosts, linking to the VPS tab.
+        const tile = /<a [^>]*aria-label="VPS out of admission: [^"]*"[^>]*>/.exec(html)?.[0] ?? "";
+        expect(tile).toContain('aria-label="VPS out of admission: 3. ');
+        expect(tile).toContain("1 failed, 1 stuck waiting to retry. Open VPS hosts.");
+        expect(tile).toContain('href="/admin/control-plane?view=vps"');
     }
 });
 
