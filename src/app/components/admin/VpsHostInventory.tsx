@@ -93,7 +93,12 @@ export function VpsHostInventory({
                                     <div role="cell" data-label="Host" className={SUMMARY_LABEL}><HostIdentity host={host} regionCatalog={regionCatalog} /></div>
                                     <div role="cell" data-label="Capacity" className={SUMMARY_LABEL}><CapacitySummary host={host} /></div>
                                     <div role="cell" data-label="Slots" className={SUMMARY_LABEL}><SlotSummary host={host} ownerLabels={ownerLabels} /></div>
-                                    <div role="cell" data-label="System" className={SUMMARY_LABEL}><SystemSummary resources={host.resources} pending={liveDataPending} /></div>
+                                    <div role="cell" data-label="System" className={SUMMARY_LABEL}>
+                                        <SystemSummary resources={host.resources} pending={liveDataPending} />
+                                        {host.liveData?.status === "unavailable" && <p className="mt-1 text-xs text-amber-300">
+                                            {host.liveData.reason === "timeout" ? "Live readings timed out." : "Some live readings are unavailable."}
+                                        </p>}
+                                    </div>
                                     <div role="cell" data-label="Billing" className={SUMMARY_LABEL}>
                                         <p className="text-xs font-semibold text-foreground">{billingPending ? "Loading…" : billingUnavailable ? "Unavailable" : formatVpsCost(host.cost)}</p>
                                         {!billingPending && !billingUnavailable && <p className="mt-1 text-xs text-foreground-muted">{formatVpsRenewal(host)}</p>}
