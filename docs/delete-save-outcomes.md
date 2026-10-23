@@ -28,3 +28,15 @@ reads fresh authorized status rather than trusting a cached result. A pending or
 unreadable receipt blocks a new deletion. Polling backs off on unavailable reads,
 pauses in hidden tabs and stops on a terminal result. Local storage must work to
 submit a deletion; another browser/device does not inherit this browser's receipt.
+Previously confirmed terminal receipts keep a terminal marker so pruned history
+does not lock the controls, but cached outcomes are never displayed as fresh reads.
+
+Unknown or corrupt receipts never automatically replay. **Check campaigns to
+recover** requires owner confirmation and reads the complete current campaign
+list. If a known target is absent it reports deleted; if still present it offers
+**Try again**, with another exact-name confirmation and a fresh request UUID.
+The control plane still refuses an incompatible active job. For a wholly corrupt
+receipt there is no trustworthy target: successful list recovery clears the local
+reference and asks the owner to choose a current campaign explicitly. Failed
+authorized reads leave the receipt intact. Unavailable deletion status does not
+disable campaign-list refresh or selection.

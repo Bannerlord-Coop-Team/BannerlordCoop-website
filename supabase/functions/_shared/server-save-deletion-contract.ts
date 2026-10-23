@@ -18,8 +18,8 @@ export function parseSaveDeletionInput(value: unknown): SaveDeletionInput {
 export function parseSaveDeletionStatus(value: unknown, serverId: string, jobId: string): SaveDeletionStatus {
     if (!isRecord(value) || !hasExactKeys(value, ["serverId", "jobId", "saveId", "state", "errorCode"])) throw new Error("Invalid deletion status");
     requireUuid(value.serverId); requireUuid(value.jobId); requireUuid(value.saveId);
-    if (value.serverId !== serverId || value.jobId !== jobId
-        || !["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"].includes(String(value.state))) throw new Error("Invalid deletion identity or state");
+    if (value.serverId !== serverId || value.jobId !== jobId || typeof value.state !== "string"
+        || !["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"].includes(value.state)) throw new Error("Invalid deletion identity or state");
     const failed = value.state === "failed" || value.state === "cancelled";
     if (failed ? typeof value.errorCode !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(value.errorCode) : value.errorCode !== null) throw new Error("Invalid deletion error code");
     return value as SaveDeletionStatus;

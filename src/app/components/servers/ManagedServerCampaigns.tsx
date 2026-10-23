@@ -99,7 +99,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
 
     function remove(campaign: Campaigns["items"][number]) {
         const page = campaigns;
-        if (!canDelete || campaign.importedBy !== "owner" || !stopped || busy || !page) return;
+        if (!canDelete || campaign.importedBy !== "owner" || !stopped || busy || deletion.blocksDeletion || !page) return;
         if (!window.confirm(`Delete campaign "${campaign.displayName}"? Type the exact campaign name in the next prompt to confirm.`)) return;
         const confirmationText = window.prompt(`Type the exact campaign name to delete "${campaign.displayName}".`);
         if (confirmationText !== campaign.displayName) {
@@ -144,8 +144,8 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
                         {!active && <DisabledControlHint disabled={busy || !stopped} message={busy ? "Finish the current campaign operation first." : "Stop the server before switching campaigns."}>
                             <button type="button" className={fileButtonClass} disabled={busy || !stopped} onClick={() => change({ action: "select-save", saveId: campaign.saveId })}>Use this campaign</button>
                         </DisabledControlHint>}
-                        {canDelete && campaign.importedBy === "owner" && <DisabledControlHint disabled={busy || !stopped || active} message={active ? "Select another campaign before deleting this one." : busy ? "Finish the current campaign operation first." : "Stop the server before deleting a campaign."}>
-                            <button type="button" aria-label={`Delete ${campaign.displayName}`} className="inline-flex size-10 items-center justify-center rounded-md border border-crimson/50 text-xl text-red-200 hover:border-crimson disabled:opacity-50" disabled={busy || !stopped || active} onClick={() => remove(campaign)}>×</button>
+                        {canDelete && campaign.importedBy === "owner" && <DisabledControlHint disabled={busy || deletion.blocksDeletion || !stopped || active} message={active ? "Select another campaign before deleting this one." : busy || deletion.blocksDeletion ? "Finish the current campaign operation first." : "Stop the server before deleting a campaign."}>
+                            <button type="button" aria-label={`Delete ${campaign.displayName}`} className="inline-flex size-10 items-center justify-center rounded-md border border-crimson/50 text-xl text-red-200 hover:border-crimson disabled:opacity-50" disabled={busy || deletion.blocksDeletion || !stopped || active} onClick={() => remove(campaign)}>×</button>
                         </DisabledControlHint>}
                     </div>
                 </li>;
@@ -154,6 +154,8 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
         {message && <p role="status" className="mt-3 text-sm text-foreground-muted">{message}</p>}
         {deletion.message && <p role="status" className="mt-3 text-sm text-foreground-muted">{deletion.message}</p>}
         {deletion.canRecover && canDelete && <button type="button" className={fileButtonClass} onClick={deletion.recover}>Recover deletion request</button>}
+        {deletion.statusUnknown && canDelete && <button type="button" className={fileButtonClass} onClick={() => void deletion.checkUnknown()}>Check campaigns to recover</button>}
+        {deletion.canRetryUnknown && canDelete && <button type="button" className={fileButtonClass} onClick={deletion.retryUnknown}>Try again</button>}
         <dialog ref={dialogRef} aria-labelledby="new-campaign-heading" onClose={() => setConfirming(false)} className="w-full max-w-md rounded-lg border border-white/10 bg-surface p-5 text-foreground backdrop:bg-black/60">
             <h3 id="new-campaign-heading" className="text-base font-semibold">Start a new campaign?</h3>
             <p className="mt-2 text-sm leading-6 text-foreground-muted">This deletes every campaign on this server and creates a fresh one. Export your save first if you want to keep it. The server stays stopped until you start it.</p>

@@ -873,7 +873,7 @@ test("website delete status binds server and job and rejects extra keys even wit
     try {
         assert.deepEqual(await getMyServerSaveDeletionStatus(TOKEN, base.serverId, jobId), base);
         for (result of [{ ...base, jobId: base.serverId }, { ...base, serverId: jobId },
-            { ...base, diagnostic: "private" }, { ...base, errorCode: "x".repeat(65) }, { ...base, state: "claimed" }]) {
+            { ...base, diagnostic: "private" }, { ...base, errorCode: "x".repeat(65) }, { ...base, state: ["succeeded"] }, { ...base, state: "claimed" }]) {
             await assert.rejects(getMyServerSaveDeletionStatus(TOKEN, base.serverId, jobId), MyServersApiError);
         }
     } finally { restoreEnvironment(); }

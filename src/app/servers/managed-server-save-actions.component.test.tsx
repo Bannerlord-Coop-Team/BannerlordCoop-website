@@ -38,6 +38,11 @@ it("retains the queued result and forwards the exact deletion request", async ()
     expect(mocks.remove).toHaveBeenCalledWith("token", deletion, requestId);
 });
 
+it.each(["save_not_found", "server_suspended"])("releases the request after definitive admission refusal %s", async code => {
+    mocks.remove.mockRejectedValueOnce(new MyServersApiError(code, "Private details"));
+    expect(await deleteManagedServerSave(input, "owner")).toMatchObject({ ok: false, notSubmitted: true });
+});
+
 it.each(locales)("translates durable outcomes and uses generic copy for unknown codes in %s", async locale => {
     mocks.locale = locale;
     const dictionary = JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${locale}/managed-server.json`, "utf8"));

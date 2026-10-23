@@ -27,7 +27,7 @@ test("delete-save-status validates exact keys, identities, states and bounded co
         assert.deepEqual((await response.json()).result, result);
     }
     for (const result of [{ ...base, serverId: saveId }, { ...base, jobId: saveId }, { ...base, saveId: "bad" },
-        { ...base, payload: "secret" }, { ...base, state: "claimed" }, { ...base, errorCode: "oops" },
+        { ...base, payload: "secret" }, { ...base, state: ["succeeded"] }, { ...base, state: ["queued"] }, { ...base, state: "claimed" }, { ...base, errorCode: "oops" },
         { ...base, state: "failed", errorCode: null }, { ...base, state: "failed", errorCode: "x".repeat(65) },
         { ...base, state: "failed", errorCode: "private/path" }]) {
         assert.equal((await handler(async () => Response.json({ version: 1, requestId, ok: true, result }))(get(query))).status, 502);

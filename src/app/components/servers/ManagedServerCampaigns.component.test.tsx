@@ -181,6 +181,100 @@ it("keeps an unavailable status pending and discards late responses after switch
     expect(container.textContent).not.toContain("Private old outcome");
     await render(stopped, true);
     expect(container.textContent).toContain("Deletion status unavailable.");
-    expect(button("New campaign").disabled).toBe(true);
+    expect(button("New campaign").disabled).toBe(false);
+    expect((container.querySelector('[aria-label="Delete Imported Campaign"]') as HTMLButtonElement).disabled).toBe(true);
     expect(mocks.deleteSave).not.toHaveBeenCalled();
+});
+
+it("does not block campaign controls or new deletion after a previously confirmed terminal job is pruned", async () => {
+    localStorage.setItem(deletionKey, JSON.stringify({ input: retainedInput, jobId: freshId, terminal: true }));
+    await render(stopped, true);
+    expect(container.textContent).toContain("Deletion status unavailable.");
+    expect(button("New campaign").disabled).toBe(false);
+    expect((container.querySelector('[aria-label="Delete Imported Campaign"]') as HTMLButtonElement).disabled).toBe(false);
+    expect(mocks.deleteSave).not.toHaveBeenCalled();
+});
+
+it("keeps corrupted storage fail closed for deletion without blocking refresh or selection", async () => {
+    localStorage.setItem(deletionKey, "{broken");
+    await render(stopped, true);
+    expect(button("Refresh list").disabled).toBe(false);
+    expect(button("Use this campaign").disabled).toBe(false);
+    expect((container.querySelector('[aria-label="Delete Imported Campaign"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(mocks.deleteSave).not.toHaveBeenCalled();
+});
+
+it("recovers a corrupt receipt only after confirmation and a fresh list, then completes an explicitly chosen deletion", async () => {
+    localStorage.setItem(deletionKey, "{broken");
+    vi.stubGlobal("confirm", vi.fn(() => true)); vi.stubGlobal("prompt", vi.fn(() => "Imported Campaign"));
+    await render(stopped, true);
+    const readsBefore = mocks.list.mock.calls.length;
+    expect(container.textContent).toContain("Status unknown");
+    await act(async () => button("Check campaigns to recover").click());
+    expect(mocks.list.mock.calls.length).toBeGreaterThan(readsBefore);
+    expect(mocks.deleteSave).not.toHaveBeenCalled();
+    expect(localStorage.getItem(deletionKey)).toBeNull();
+    mocks.deleteSave.mockResolvedValueOnce({ ok: true, jobId: freshId, message: "Queued" });
+    mocks.deletionStatus.mockResolvedValueOnce(statusResult("succeeded", "Campaign deleted."));
+    await act(async () => (container.querySelector('[aria-label="Delete Imported Campaign"]') as HTMLButtonElement).click());
+    expect(container.textContent).toContain("Campaign deleted.");
+    expect(mocks.deleteSave).toHaveBeenCalledTimes(1);
+});
+
+it("resolves an unknown receipt as deleted only when its save is absent from a fresh authorized list", async () => {
+    localStorage.setItem(deletionKey, JSON.stringify({ input: retainedInput, jobId: freshId }));
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    await render(stopped, true);
+    mocks.list.mockResolvedValue({ ok: true, campaigns: { ...campaigns, items: [campaigns.items[0]] } });
+    await act(async () => button("Check campaigns to recover").click());
+    expect(container.textContent).toContain("Campaign deleted. It is no longer in the current campaign list.");
+    expect(mocks.deleteSave).not.toHaveBeenCalled();
+});
+
+it("offers a fresh UUID only for an owner-confirmed retry after checking that the unknown save still exists", async () => {
+    localStorage.setItem(deletionKey, JSON.stringify({ input: retainedInput, jobId: freshId }));
+    vi.stubGlobal("confirm", vi.fn(() => true)); vi.stubGlobal("prompt", vi.fn(() => "Imported Campaign"));
+    await render(stopped, true);
+    await act(async () => button("Check campaigns to recover").click());
+    expect(mocks.deleteSave).not.toHaveBeenCalled();
+    mocks.deleteSave.mockResolvedValueOnce({ ok: false, notSubmitted: false, message: "An operation is already active." });
+    await act(async () => button("Try again").click());
+    expect(mocks.deleteSave).toHaveBeenCalledTimes(1);
+    expect(mocks.deleteSave.mock.calls[0]![0]).toMatchObject({ ...retainedInput, requestId: expect.any(String) });
+    expect(mocks.deleteSave.mock.calls[0]![0].requestId).not.toBe(retainedInput.requestId);
+    expect(container.textContent).toContain("An operation is already active.");
+});
+
+it("keeps an unknown receipt when fresh access is denied and never resubmits automatically", async () => {
+    localStorage.setItem(deletionKey, "{broken");
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    await render(stopped, true);
+    mocks.list.mockResolvedValueOnce({ ok: false, message: "Access denied" });
+    await act(async () => button("Check campaigns to recover").click());
+    expect(localStorage.getItem(deletionKey)).toBe("{broken");
+    expect(container.textContent).toContain("Status unknown");
+    expect(mocks.deleteSave).not.toHaveBeenCalled();
+});
+
+it("clears a definite pre-admission refusal so another campaign request can be sent", async () => {
+    vi.stubGlobal("confirm", vi.fn(() => true)); vi.stubGlobal("prompt", vi.fn(() => "Imported Campaign"));
+    mocks.deleteSave.mockResolvedValueOnce({ ok: false, notSubmitted: true, message: "Campaign no longer exists." });
+    await render(stopped, true);
+    await act(async () => (container.querySelector('[aria-label="Delete Imported Campaign"]') as HTMLButtonElement).click());
+    expect(localStorage.getItem(deletionKey)).toBeNull();
+    expect((container.querySelector('[aria-label="Delete Imported Campaign"]') as HTMLButtonElement).disabled).toBe(false);
+});
+
+it("adopts a newer cross-tab receipt instead of repeatedly recovering an overwritten request", async () => {
+    localStorage.setItem(deletionKey, JSON.stringify({ input: retainedInput, jobId: null }));
+    mocks.deleteSave.mockImplementationOnce(async () => {
+        localStorage.setItem(deletionKey, JSON.stringify({ input: { ...retainedInput, requestId: defaultId }, jobId: freshId }));
+        return { ok: true, jobId: importedId, message: "Queued" };
+    });
+    mocks.deletionStatus.mockResolvedValueOnce(statusResult("running", "Checking newer job"));
+    await render(stopped, true);
+    await act(async () => button("Recover deletion request").click());
+    expect(container.textContent).toContain("Checking newer job");
+    expect(mocks.deleteSave).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(localStorage.getItem(deletionKey)!).input.requestId).toBe(defaultId);
 });
