@@ -14,6 +14,35 @@ function handler(fetchImplementation: typeof fetch) { return createMyServersHand
 function get(query: string) { return new Request(`https://edge.test/my-servers?${query}`, { headers: { authorization: `Bearer ${token}`, "x-request-id": requestId } }); }
 function post(body: unknown, id = true) { return new Request("https://edge.test/my-servers", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}`, ...(id ? { "x-request-id": requestId } : {}) }, body: JSON.stringify(body) }); }
 
+test("delete-save-status validates exact keys, identities, states and bounded codes without changing deletion admission", async () => {
+    const query = `resource=delete-save-status&serverId=${serverId}&jobId=${requestId}`;
+    const base = { serverId, jobId: requestId, saveId, state: "queued", errorCode: null };
+    for (const state of ["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"]) {
+        const result = { ...base, state, errorCode: ["failed", "cancelled"].includes(state) ? "future_safe_code" : null };
+        const response = await handler(async (_url, init) => {
+            assert.deepEqual(JSON.parse(String(init?.body)), { version: 1, requestId, operation: "delete-save-status", input: { serverId, jobId: requestId } });
+            return Response.json({ version: 1, requestId, ok: true, result });
+        })(get(query));
+        assert.equal(response.status, 200);
+        assert.deepEqual((await response.json()).result, result);
+    }
+    for (const result of [{ ...base, serverId: saveId }, { ...base, jobId: saveId }, { ...base, saveId: "bad" },
+        { ...base, payload: "secret" }, { ...base, state: "claimed" }, { ...base, errorCode: "oops" },
+        { ...base, state: "failed", errorCode: null }, { ...base, state: "failed", errorCode: "x".repeat(65) },
+        { ...base, state: "failed", errorCode: "private/path" }]) {
+        assert.equal((await handler(async () => Response.json({ version: 1, requestId, ok: true, result }))(get(query))).status, 502);
+    }
+    for (const invalid of [`resource=delete-save-status&serverId=${serverId}`, query + "&extra=true", query + "&jobId=" + requestId]) {
+        assert.equal((await handler(async () => { throw Error("Unexpected upstream"); })(get(invalid))).status, 400);
+    }
+    for (const [status, code] of [[400, "invalid_request"], [404, "forbidden"]] as const) {
+        const response = await handler(async () => Response.json({ version: 1, requestId, ok: false,
+            error: { code, message: "Unavailable", retryable: false } }, { status }))(get(query));
+        assert.equal(response.status, status);
+        assert.equal((await response.json()).error.code, code);
+    }
+});
+
 test("campaign listing forwards a bounded page request and only accepts the server's own summaries", async () => {
     const response = await handler(async (url, init) => {
         assert.equal(String(url), "https://cp.test/v1/user/control-plane");

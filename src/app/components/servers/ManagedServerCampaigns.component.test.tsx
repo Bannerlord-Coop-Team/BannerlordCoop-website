@@ -5,10 +5,10 @@ import { ManagedServerCampaigns } from "./ManagedServerCampaigns";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), change: vi.fn(), deleteSave: vi.fn(), refresh: vi.fn() }));
+const mocks = vi.hoisted(() => ({ list: vi.fn(), change: vi.fn(), deleteSave: vi.fn(), deletionStatus: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/app/servers/managed-server-campaign-actions", () => ({ listManagedServerCampaigns: mocks.list, changeManagedServerCampaign: mocks.change }));
-vi.mock("@/app/servers/managed-server-save-actions", () => ({ deleteManagedServerSave: mocks.deleteSave }));
+vi.mock("@/app/servers/managed-server-save-actions", () => ({ deleteManagedServerSave: mocks.deleteSave, readManagedServerSaveDeletion: mocks.deletionStatus }));
 
 const serverId = "11111111-1111-4111-8111-111111111111";
 const defaultId = "22222222-2222-4222-8222-222222222222";
@@ -24,6 +24,8 @@ let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
     vi.useFakeTimers(); vi.resetAllMocks();
+    localStorage.clear();
+    mocks.deletionStatus.mockResolvedValue({ ok: false, message: "Deletion status unavailable." });
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value() { this.open = true; } });
     Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
@@ -110,7 +112,7 @@ it("shows load failures without hiding the controls and refuses changes before s
 });
 
 it("deletes only an inactive imported campaign after exact-name confirmation", async () => {
-    mocks.deleteSave.mockResolvedValue({ ok: true, message: "Campaign deletion queued." });
+    mocks.deleteSave.mockResolvedValue({ ok: true, jobId: freshId, message: "Campaign deletion queued." });
     vi.stubGlobal("confirm", vi.fn(() => true));
     vi.stubGlobal("prompt", vi.fn(() => "Imported Campaign"));
     await render(stopped, true);
@@ -119,4 +121,66 @@ it("deletes only an inactive imported campaign after exact-name confirmation", a
     expect((container.querySelector('[aria-label="Delete Default New Game"]') as HTMLButtonElement | null)).toBeNull();
     await act(async () => deleteButton.click());
     expect(mocks.deleteSave).toHaveBeenCalledWith({ serverId, saveId: importedId, expectedUpdatedAt: stopped.updatedAt, confirmationText: "Imported Campaign", requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) }, "owner");
+});
+
+const deletionKey = `campaign-deletion:v1:owner:${serverId}`;
+const retainedInput = { serverId, saveId: importedId, expectedUpdatedAt: stopped.updatedAt, confirmationText: "Imported Campaign", requestId: freshId };
+function statusResult(state: string, message: string) {
+    return { ok: true, status: { serverId, jobId: freshId, saveId: importedId, state, errorCode: state === "failed" ? "save_still_loaded" : null }, message };
+}
+
+it("reattaches after refresh and shows queued, running, retry-wait and a terminal failure without another mutation", async () => {
+    localStorage.setItem(deletionKey, JSON.stringify({ input: retainedInput, jobId: freshId }));
+    mocks.deletionStatus.mockResolvedValueOnce(statusResult("queued", "Queued"))
+        .mockResolvedValueOnce(statusResult("running", "Running"))
+        .mockResolvedValueOnce(statusResult("retry-wait", "Waiting to retry"))
+        .mockResolvedValueOnce(statusResult("failed", "This campaign is still loaded."));
+    await render(stopped, true);
+    expect(container.textContent).toContain("Queued");
+    for (const message of ["Running", "Waiting to retry", "This campaign is still loaded."]) {
+        await act(async () => vi.advanceTimersByTimeAsync(5_000));
+        expect(container.textContent).toContain(message);
+    }
+    expect(mocks.deleteSave).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(mocks.deletionStatus).toHaveBeenCalledTimes(4);
+    expect(JSON.parse(localStorage.getItem(deletionKey)!).jobId).toBe(freshId);
+});
+
+it("recovers a lost reply using the exact persisted request across a refresh", async () => {
+    vi.stubGlobal("confirm", vi.fn(() => true)); vi.stubGlobal("prompt", vi.fn(() => "Imported Campaign"));
+    mocks.deleteSave.mockImplementationOnce(async (input) => {
+        expect(JSON.parse(localStorage.getItem(deletionKey)!).input).toEqual(input);
+        throw new Error("lost reply");
+    });
+    await render(stopped, true);
+    await act(async () => (container.querySelector('[aria-label="Delete Imported Campaign"]') as HTMLButtonElement).click());
+    const original = mocks.deleteSave.mock.calls[0]![0];
+    await act(async () => root.unmount()); root = createRoot(container);
+    await render(stopped, true);
+    expect(mocks.deleteSave).toHaveBeenCalledTimes(1);
+    mocks.deleteSave.mockResolvedValueOnce({ ok: true, jobId: freshId, message: "Queued" });
+    mocks.deletionStatus.mockResolvedValueOnce(statusResult("succeeded", "Campaign deleted."));
+    await act(async () => button("Recover deletion request").click());
+    expect(mocks.deleteSave.mock.calls[1]![0]).toEqual(original);
+    expect(container.textContent).toContain("Campaign deleted.");
+    await act(async () => root.unmount()); root = createRoot(container);
+    mocks.deletionStatus.mockResolvedValueOnce(statusResult("succeeded", "Campaign deleted."));
+    await render(stopped, true);
+    expect(container.textContent).toContain("Campaign deleted.");
+    expect(mocks.deleteSave).toHaveBeenCalledTimes(2);
+});
+
+it("keeps an unavailable status pending and discards late responses after switching identity", async () => {
+    localStorage.setItem(deletionKey, JSON.stringify({ input: retainedInput, jobId: freshId }));
+    let finish!: (result: unknown) => void;
+    mocks.deletionStatus.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    await render(stopped, true);
+    await act(async () => root.render(<ManagedServerCampaigns userId="other" serverId={serverId} status={stopped} canDelete />));
+    await act(async () => finish(statusResult("succeeded", "Private old outcome")));
+    expect(container.textContent).not.toContain("Private old outcome");
+    await render(stopped, true);
+    expect(container.textContent).toContain("Deletion status unavailable.");
+    expect(button("New campaign").disabled).toBe(true);
+    expect(mocks.deleteSave).not.toHaveBeenCalled();
 });

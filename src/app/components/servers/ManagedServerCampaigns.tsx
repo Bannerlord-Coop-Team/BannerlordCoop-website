@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Sparkles } from "lucide-react";
 import { changeManagedServerCampaign, listManagedServerCampaigns } from "@/app/servers/managed-server-campaign-actions";
-import { deleteManagedServerSave } from "@/app/servers/managed-server-save-actions";
+import { useSaveDeletion } from "./use-save-deletion";
 import { DisabledControlHint } from "./DisabledControlHint";
 import { fileButtonClass, filePrimaryButtonClass } from "./server-file-styles";
 import type { CampaignPage } from "../../../../supabase/functions/_shared/server-campaign-contract";
@@ -22,6 +22,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
     const [resetting, setResetting] = useState<{ previousSaveId: string | null; since: number } | null>(null);
     const resettingRef = useRef<{ previousSaveId: string | null; since: number } | null>(null);
     const [version, setVersion] = useState(0);
+    const deletion = useSaveDeletion(userId, serverId, () => { setVersion(value => value + 1); router.refresh(); });
     const dialogRef = useRef<HTMLDialogElement>(null);
     // Retries reuse the request so the control plane replays instead of queueing twice.
     const requests = useRef<{ key: string; requestId: string } | null>(null);
@@ -106,20 +107,10 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             return;
         }
         setMessage("");
-        startTransition(async () => {
-            try {
-                const result = await deleteManagedServerSave({ serverId, saveId: campaign.saveId, expectedUpdatedAt: page.updatedAt, confirmationText, requestId: crypto.randomUUID() }, userId);
-                if (!result.ok) throw new Error(result.message);
-                setMessage("Campaign deletion queued.");
-                setVersion((value) => value + 1);
-                router.refresh();
-            } catch (error) {
-                setMessage(error instanceof Error ? error.message : "The campaign could not be deleted. Refresh and try again.");
-            }
-        });
+        deletion.begin({ serverId, saveId: campaign.saveId, expectedUpdatedAt: page.updatedAt, confirmationText, requestId: crypto.randomUUID() });
     }
 
-    const busy = pending || resetting !== null;
+    const busy = pending || resetting !== null || deletion.busy;
     const stopHint = status === null ? "Campaign changes are unavailable until the server status loads." : stopped ? null : "Stop the server to switch campaigns or start a new one.";
     // A server that never started has no campaign yet; the control plane refuses a reset until its first Start creates one.
     const noCampaignYet = campaigns !== null && campaigns.items.length === 0;
@@ -161,6 +152,8 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             })}
         </ul>}
         {message && <p role="status" className="mt-3 text-sm text-foreground-muted">{message}</p>}
+        {deletion.message && <p role="status" className="mt-3 text-sm text-foreground-muted">{deletion.message}</p>}
+        {deletion.canRecover && canDelete && <button type="button" className={fileButtonClass} onClick={deletion.recover}>Recover deletion request</button>}
         <dialog ref={dialogRef} aria-labelledby="new-campaign-heading" onClose={() => setConfirming(false)} className="w-full max-w-md rounded-lg border border-white/10 bg-surface p-5 text-foreground backdrop:bg-black/60">
             <h3 id="new-campaign-heading" className="text-base font-semibold">Start a new campaign?</h3>
             <p className="mt-2 text-sm leading-6 text-foreground-muted">This deletes every campaign on this server and creates a fresh one. Export your save first if you want to keep it. The server stays stopped until you start it.</p>
