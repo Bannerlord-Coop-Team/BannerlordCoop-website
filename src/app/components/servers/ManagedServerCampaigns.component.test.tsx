@@ -243,6 +243,43 @@ it("offers a fresh UUID only for an owner-confirmed retry after checking that th
     expect(mocks.deleteSave.mock.calls[0]![0]).toMatchObject({ ...retainedInput, requestId: expect.any(String) });
     expect(mocks.deleteSave.mock.calls[0]![0].requestId).not.toBe(retainedInput.requestId);
     expect(container.textContent).toContain("An operation is already active.");
+    expect(JSON.parse(localStorage.getItem(deletionKey)!).previous).toMatchObject({ input: retainedInput, jobId: freshId });
+    // An ambiguous refusal retains both identities across refresh. A later definitive
+    // refusal restores the accepted job instead of losing its durable outcome.
+    await act(async () => root.unmount()); root = createRoot(container);
+    await render(stopped, true);
+    const retryInput = mocks.deleteSave.mock.calls[0]![0];
+    mocks.deleteSave.mockResolvedValueOnce({ ok: false, notSubmitted: true, message: "Safe stop required." });
+    mocks.deletionStatus.mockResolvedValueOnce(statusResult("succeeded", "Original campaign deleted."));
+    await act(async () => button("Recover deletion request").click());
+    expect(mocks.deleteSave.mock.calls[1]![0]).toEqual(retryInput);
+    expect(JSON.parse(localStorage.getItem(deletionKey)!).jobId).toBe(freshId);
+    expect(container.textContent).toContain("Original campaign deleted.");
+});
+
+it("restores the accepted receipt when a fresh retry is definitively refused", async () => {
+    localStorage.setItem(deletionKey, JSON.stringify({ input: retainedInput, jobId: freshId }));
+    vi.stubGlobal("confirm", vi.fn(() => true)); vi.stubGlobal("prompt", vi.fn(() => "Imported Campaign"));
+    await render(stopped, true);
+    await act(async () => button("Check campaigns to recover").click());
+    mocks.deleteSave.mockResolvedValueOnce({ ok: false, notSubmitted: true, message: "Safe stop required." });
+    await act(async () => button("Try again").click());
+    expect(JSON.parse(localStorage.getItem(deletionKey)!)).toMatchObject({ input: retainedInput, jobId: freshId });
+    expect(mocks.deletionStatus).toHaveBeenLastCalledWith(serverId, freshId, "owner");
+});
+
+it.each(["corrupt", "old target absent"])("adopts a valid receipt saved before recovery begins (%s)", async (initial) => {
+    localStorage.setItem(deletionKey, initial === "corrupt" ? "{broken" : JSON.stringify({ input: { ...retainedInput, saveId: freshId }, jobId: freshId }));
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    await render(stopped, true);
+    const newer = { input: { ...retainedInput, requestId: defaultId }, jobId: importedId };
+    localStorage.setItem(deletionKey, JSON.stringify(newer));
+    mocks.deletionStatus.mockResolvedValueOnce({ ...statusResult("running", "Newer deletion running"), status: { ...statusResult("running", "").status, jobId: importedId } });
+    await act(async () => button("Check campaigns to recover").click());
+    expect(JSON.parse(localStorage.getItem(deletionKey)!)).toEqual(newer);
+    expect(mocks.deletionStatus).toHaveBeenLastCalledWith(serverId, importedId, "owner");
+    expect(container.textContent).toContain("Newer deletion running");
+    expect(mocks.deleteSave).not.toHaveBeenCalled();
 });
 
 it("keeps an unknown receipt when fresh access is denied and never resubmits automatically", async () => {

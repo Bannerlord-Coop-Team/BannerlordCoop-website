@@ -40,3 +40,9 @@ receipt there is no trustworthy target: successful list recovery clears the loca
 reference and asks the owner to choose a current campaign explicitly. Failed
 authorized reads leave the receipt intact. Unavailable deletion status does not
 disable campaign-list refresh or selection.
+
+Recovery adopts a newer valid receipt from another tab before inspecting its
+target. A confirmed fresh retry retains one previous accepted receipt until its
+admission is known. A lost reply or ambiguous refusal keeps both request identities
+across refresh; a definitive refusal restores the original accepted job for fresh
+status reads. No chain of previous receipts is retained.

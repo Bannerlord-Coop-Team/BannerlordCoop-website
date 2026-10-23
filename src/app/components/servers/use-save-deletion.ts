@@ -7,18 +7,23 @@ import { parseSaveDeletionInput, type SaveDeletionInput } from "../../../../supa
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
 import { requireUuid } from "../../../../supabase/functions/_shared/server-file-contract";
 
-type Retained = { input: SaveDeletionInput; jobId: string | null; terminal?: boolean };
+type Receipt = { input: SaveDeletionInput; jobId: string | null; terminal?: boolean };
+type Retained = Receipt & { previous?: Receipt };
 function read(key: string, serverId: string): Retained | null {
     const raw = localStorage.getItem(key);
     if (raw === null) return null;
-    if (raw.length > 2_048) throw new Error("Invalid retained deletion");
-    const value: unknown = JSON.parse(raw);
-    if (!isRecord(value) || !(hasExactKeys(value, ["input", "jobId"]) || hasExactKeys(value, ["input", "jobId", "terminal"]))
+    if (raw.length > 4_096) throw new Error("Invalid retained deletion");
+    return parseReceipt(JSON.parse(raw), serverId);
+}
+function parseReceipt(value: unknown, serverId: string, allowPrevious = true): Retained {
+    if (!isRecord(value) || !hasExactKeys(value, ["input", "jobId", ...("terminal" in value ? ["terminal"] : []), ...(allowPrevious && "previous" in value ? ["previous"] : [])])
         || ("terminal" in value && typeof value.terminal !== "boolean")) throw new Error("Invalid retained deletion");
     const input = parseSaveDeletionInput(value.input);
     if (input.serverId !== serverId) throw new Error("Invalid retained server");
     if (value.jobId !== null) requireUuid(value.jobId);
-    return { input, jobId: value.jobId as string | null, terminal: value.terminal === true && value.jobId !== null };
+    const previous = "previous" in value ? parseReceipt(value.previous, serverId, false) : undefined;
+    if (previous && (!previous.jobId || previous.input.saveId !== input.saveId)) throw new Error("Invalid previous deletion");
+    return { input, jobId: value.jobId as string | null, terminal: value.terminal === true && value.jobId !== null, ...(previous ? { previous } : {}) };
 }
 
 export function useSaveDeletion(userId: string, serverId: string, onCompleted: () => void) {
@@ -106,13 +111,19 @@ export function useSaveDeletion(userId: string, serverId: string, onCompleted: (
             }
             if (result.ok) {
                 requireUuid(result.jobId);
-                const accepted = { ...saved, jobId: result.jobId };
+                const accepted = { input: saved.input, jobId: result.jobId };
                 localStorage.setItem(key, JSON.stringify(accepted));
                 setRetained(accepted); setMessage(result.message); setUnknown(false);
             } else {
                 setMessage(result.message);
                 setUnknown(!result.notSubmitted);
-                if (result.notSubmitted) { localStorage.removeItem(key); setRetained(null); }
+                if (result.notSubmitted) {
+                    if (saved.previous) {
+                        localStorage.setItem(key, JSON.stringify(saved.previous));
+                        setRetained(saved.previous); setSettled(saved.previous.terminal === true); setUnknown(true);
+                        setMessage("The retry was refused. Checking the original deletion request.");
+                    } else { localStorage.removeItem(key); setRetained(null); }
+                }
             }
         } catch {
             if (generation.current === currentGeneration) {
@@ -130,18 +141,26 @@ export function useSaveDeletion(userId: string, serverId: string, onCompleted: (
         setSending(true);
         try {
             const before = localStorage.getItem(key);
+            let snapshot: Retained | null = null;
+            try { snapshot = read(key, serverId); } catch { /* corrupt data has no trusted target */ }
+            if (snapshot && JSON.stringify(snapshot) !== JSON.stringify(retained)) {
+                setRetained(snapshot); setLoadedKey(key); setSettled(snapshot.terminal === true);
+                setUnknown(snapshot.jobId === null); setRetryCandidate(null); setActive(false);
+                setMessage("Another deletion request is now saved in this browser. Checking that request.");
+                return;
+            }
             const result = await listManagedServerCampaigns(serverId, userId);
             if (generation.current !== currentGeneration) return;
             if (!result.ok || result.campaigns.serverId !== serverId) throw new Error("Campaign list unavailable");
             if (localStorage.getItem(key) !== before) throw new Error("Saved request changed");
-            const campaign = retained && result.campaigns.items.find(item => item.saveId === retained.input.saveId);
-            if (retained && campaign) {
+            const campaign = snapshot && result.campaigns.items.find(item => item.saveId === snapshot.input.saveId);
+            if (snapshot && campaign) {
                 setRetryCandidate({ serverId, saveId: campaign.saveId, expectedUpdatedAt: result.campaigns.updatedAt, confirmationText: campaign.displayName });
                 setMessage("Status unknown. This campaign is still present. You can try again; the server will refuse a duplicate active deletion.");
             } else {
                 // Explicit recovery after a fresh authorized list; never infer a target from corrupt bytes.
                 localStorage.removeItem(key); setRetained(null); setSettled(false); setLoadedKey(key); setUnknown(false);
-                setMessage(retained ? "Campaign deleted. It is no longer in the current campaign list."
+                setMessage(snapshot ? "Campaign deleted. It is no longer in the current campaign list."
                     : "The unreadable request was cleared after checking the campaign list. Choose a campaign below if you want to try again.");
                 completed.current();
             }
@@ -159,7 +178,9 @@ export function useSaveDeletion(userId: string, serverId: string, onCompleted: (
         try {
             const current = read(key, serverId);
             if (current?.input.requestId !== retained?.input.requestId) throw new Error("Saved request changed");
-            const saved = { input: { ...retryCandidate, requestId: crypto.randomUUID() }, jobId: null };
+            // Keep the accepted receipt through ambiguous retries and refreshes, without growing a chain.
+            const previous = current?.previous ?? (current?.jobId ? current : undefined);
+            const saved = { input: { ...retryCandidate, requestId: crypto.randomUUID() }, jobId: null, ...(previous ? { previous } : {}) };
             localStorage.setItem(key, JSON.stringify(saved));
             setRetained(saved); setSettled(false); setUnknown(false); setRetryCandidate(null);
             void submit(saved);
