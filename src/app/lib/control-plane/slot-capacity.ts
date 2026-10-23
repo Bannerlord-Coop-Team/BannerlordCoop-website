@@ -90,7 +90,7 @@ function wholeNumber(value: unknown, minimum: number, maximum: number): value is
     return Number.isSafeInteger(value) && (value as number) >= minimum && (value as number) <= maximum;
 }
 
-/** Whether a value is exactly a host's runner onboarding as the VPS inventory and the slot capacity results show it. */
+/** Whether a value is exactly the five-key runner onboarding the slot capacity results carry; the VPS inventory may add optional details the results never include. */
 export function isSlotCapacityOnboarding(value: unknown): value is NonNullable<HostingRaiseVpsSlotCapacityResult["runnerOnboarding"]> {
     return isRecord(value) && hasExactKeys(value, ONBOARDING_KEYS)
         && typeof value.state === "string" && ONBOARDING_STATES.includes(value.state)

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { LocalDateTime } from "./LocalDateTime";
+import { OutOfAdmissionBanner } from "./OutOfAdmissionBanner";
 import { VpsInventoryBrowser } from "./VpsInventoryBrowser";
 import { VpsSlotSummary } from "./VpsSlotSummary";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
@@ -47,6 +48,7 @@ export function VpsView({ inventory: initialInventory, regionCatalog, accounts }
             {billing.pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading billing readings…</p>}
             {!billing.error && failedProviderReads && <p role="status" className="mt-3 text-xs text-amber-200">{failedProviderReads}</p>}
             {billing.error && <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {billing.error} {billing.result ? "Showing the last billing readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={billing.refreshReadings}>Retry billing</button></p>}
+            <OutOfAdmissionBanner hosts={hosts} />
             <VpsSlotSummary hosts={hosts} regionCatalog={regionCatalog} />
             <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
                 <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased VPS, from a provider account (OVHcloud, Contabo) or by manual entry for a provider without an account API. The durable workflow verifies the host, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
