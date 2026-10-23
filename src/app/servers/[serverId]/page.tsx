@@ -164,7 +164,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
 
     return <ManagedServerMoveProvider serverId={server.serverId} initialMove={move} headerAddress={address}><ServerManagementWorkspace
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.displayName}</h1>}
-        banner={server.subscriptionHold ? <><SubscriptionHoldNotice hold={server.subscriptionHold} />{managedBanner(server.serverId, notices)}</> : managedBanner(server.serverId, notices)}
+        banner={server.subscriptionHold ? <><SubscriptionHoldNotice hold={server.subscriptionHold} isOwner={server.accessRole === "owner"} />{managedBanner(server.serverId, notices)}</> : managedBanner(server.serverId, notices)}
         initialSection={initializing ? "Console" : initialSection}
         interactionLocked={initializing}
         address={address}
