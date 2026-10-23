@@ -227,6 +227,8 @@ export type HostingServerResources = {
 };
 
 export type HostingAdminVpsHost = {
+    /** Absent from older control planes and from complete live reads. */
+    liveData?: { status: "unavailable"; reason: "timeout" | "unavailable" };
     /** The provider that owns this host; host-scoped admin requests send it back unchanged. */
     provider: VpsProviderId;
     name: string;

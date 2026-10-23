@@ -36,6 +36,18 @@ afterEach(async () => {
 });
 
 describe("compact VPS host inventory", () => {
+    it("renders healthy hosts beside a timed-out host and retains its inventory", async () => {
+        const timedOut: HostingAdminVpsHost = { ...host("host-frozen", resources(60, 40), 1),
+            resources: null, liveData: { status: "unavailable", reason: "timeout" } };
+        await act(async () => root.render(<VpsHostInventory hosts={[host("host-healthy", resources(60, 40), 0), timedOut]}
+            ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        expect(container.textContent).toContain("host-healthy");
+        expect(container.textContent).toContain("host-frozen");
+        expect(container.textContent).toContain("Live readings timed out.");
+        expect(container.querySelectorAll('[data-label="Capacity"]')).toHaveLength(2);
+        expect(container.querySelectorAll('[data-label="System"]')[0]?.textContent).toContain("CPU");
+        expect(container.textContent).not.toContain("Loading");
+    });
     it.each([
         { autoRenew: true, expirationDate: "2026-11-01T00:00:00.000Z", status: "Renews 11/01/2026" },
         { autoRenew: false, expirationDate: "2026-11-01T00:00:00.000Z", status: "Won't Renew" },

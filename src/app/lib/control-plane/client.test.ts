@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     CONTROL_PLANE_ADMIN_BROWSER_TIMEOUT_MILLISECONDS,
+    decodeControlPlaneAdminResponse,
     requestControlPlaneAdmin,
 } from "./client";
 
@@ -9,6 +10,15 @@ const REQUEST_ID = "11111111-1111-4111-8111-111111111111";
 const ORIGINAL_FETCH = globalThis.fetch;
 const ORIGINAL_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ORIGINAL_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+test("accepts per-host unavailable telemetry in a successful VPS read", () => {
+    const result = { liveDataIncluded: true, hosts: [
+        { name: "healthy", resources: { cpuPercent: 12.5 } },
+        { name: "frozen", resources: null, liveData: { status: "unavailable", reason: "timeout" } },
+    ] };
+    assert.deepEqual(decodeControlPlaneAdminResponse(JSON.stringify({ version: 1, requestId: REQUEST_ID, ok: true, result }),
+        REQUEST_ID, true), result);
+});
 
 test("calls the Supabase Edge Function with the current access token", async () => {
     assert.equal(CONTROL_PLANE_ADMIN_BROWSER_TIMEOUT_MILLISECONDS, 90_000);
