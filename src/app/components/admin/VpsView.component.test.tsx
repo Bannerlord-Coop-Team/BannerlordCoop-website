@@ -477,3 +477,15 @@ function resources(used: number, free: number): HostingAdminHostResources {
         diskTotalBytes: 100 * 1024,
     };
 }
+
+it("opens with the out-of-admission banner when a host's onboarding failed", async () => {
+    mocks.resources.mockReturnValue(new Promise(() => {}));
+    mocks.billing.mockReturnValue(new Promise(() => {}));
+    const initial = inventory();
+    const failed = { ...initial, hosts: initial.hosts.map(item => ({ ...item, runnerOnboarding: {
+        state: "failed" as const, progressStage: "slot-3-isolated-apply", errorCode: "runner_onboarding_isolation_failed",
+        sourceCommit: "target-source", updatedAt: "2026-10-23T00:53:36.115Z" } })) };
+    await act(async () => root.render(<VpsView regionCatalog={[]} inventory={failed} accounts={[]} />));
+    const alert = container.querySelector('[role="alert"][aria-label="VPS hosts with a failed onboarding"]');
+    expect(alert?.textContent).toContain("host-a (ovhcloud-vps): Failed at slot-3-isolated-apply with runner_onboarding_isolation_failed");
+});

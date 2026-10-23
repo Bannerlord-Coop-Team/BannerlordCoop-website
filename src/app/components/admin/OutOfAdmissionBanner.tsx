@@ -25,7 +25,7 @@ export function OutOfAdmissionBanner({ hosts }: { hosts: readonly Pick<HostingAd
                 <section role="alert" aria-label="VPS hosts with a failed onboarding" className="border-l-2 border-red-400/70 bg-red-950/30 p-4 text-xs leading-5 text-red-100">
                     <p className="font-semibold">{failed.length} VPS {failed.length === 1 ? "host is" : "hosts are"} out of admission: onboarding failed</p>
                     <ul className="mt-2 space-y-1">{failed.map(host => <HostLine key={`${host.provider}:${host.name}`} host={host} />)}</ul>
-                    <p className="mt-2 text-red-200/80">No new or moved server lands on these hosts until onboarding succeeds. Use Retry onboarding on the host below; failed hosts are listed first.</p>
+                    <p className="mt-2 text-red-200/80">No new or moved server lands on these hosts until onboarding succeeds. Use the actions on each host row in the inventory below (failed hosts are listed first): retry the onboarding, or resolve or cancel a failed slot decommission.</p>
                 </section>
             )}
             {pending.length > 0 && (
@@ -45,14 +45,14 @@ function HostLine({ host }: { host: OutOfAdmissionHost }) {
             : onboarding.state === "retry-wait" ? "Waiting to retry"
                 : onboarding.state === "running" ? "Running"
                     : onboarding.state === "queued" ? "Queued" : `State ${String(onboarding.state)}`;
-    const attempts = onboarding.attemptCount !== undefined && onboarding.maximumAttempts !== undefined
+    const attempts = onboarding.attemptCount != null && onboarding.maximumAttempts != null
         ? `, attempt ${String(onboarding.attemptCount)} of ${String(onboarding.maximumAttempts)}` : "";
     return (
         <li>
             <span className="font-semibold">{host.name}</span> ({host.provider}): {status} at <code>{onboarding.progressStage}</code>
             {onboarding.errorCode !== null && <> with <code>{onboarding.errorCode}</code></>}
             {attempts}, since <LocalDateTime value={onboarding.updatedAt} />
-            {onboarding.state !== "failed" && onboarding.timeoutAt !== undefined && <>; times out <LocalDateTime value={onboarding.timeoutAt} /></>}
+            {onboarding.state !== "failed" && onboarding.timeoutAt != null && <>; times out <LocalDateTime value={onboarding.timeoutAt} /></>}
             {onboarding.startedByAutomaticSizing === true && <>; started by automatic slot sizing</>}.
         </li>
     );

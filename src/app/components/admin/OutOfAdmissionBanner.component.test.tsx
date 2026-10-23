@@ -35,7 +35,7 @@ it("alerts on a failed onboarding with its stage, error and since time, and asks
     expect(alert?.getAttribute("aria-label")).toBe("VPS hosts with a failed onboarding");
     expect(alert?.textContent).toContain("1 VPS host is out of admission: onboarding failed");
     expect(alert?.textContent).toContain("vps-d1d531f9 (ovhcloud-vps): Failed at slot-3-agent-activating with runner_onboarding_isolation_failed");
-    expect(alert?.textContent).toContain("Retry onboarding");
+    expect(alert?.textContent).toContain("retry the onboarding, or resolve or cancel a failed slot decommission");
     expect(alert?.querySelector("time")?.getAttribute("datetime")).toBe("2026-10-23T00:53:36.115Z");
     expect(alert?.textContent).not.toContain("vps-ok");
     expect(container.querySelector('[role="status"]')).toBeNull();
@@ -65,4 +65,23 @@ it("omits the optional details an older control plane does not report", async ()
     expect(text).not.toContain("attempt");
     expect(text).not.toContain("times out");
     expect(text).not.toContain("automatic slot sizing");
+});
+
+it("splits failed and pending hosts, never shows a failed host's timeout, and skips null optional details", async () => {
+    await render([
+        host("vps-f", { state: "failed", progressStage: "slot-3-isolated-apply", errorCode: "runner_onboarding_isolation_failed",
+            timeoutAt: "2026-10-23T06:52:00.000Z", attemptCount: 3, maximumAttempts: 3 }),
+        host("vps-w", { state: "retry-wait", progressStage: "slot-3-host-delivering", errorCode: "agent_transport_unavailable",
+            timeoutAt: null as unknown as string, attemptCount: null as unknown as number, maximumAttempts: 3 }),
+    ]);
+    const alert = container.querySelector('[role="alert"]')?.textContent ?? "";
+    const status = container.querySelector('[role="status"]')?.textContent ?? "";
+    expect(alert).toContain("vps-f (ovhcloud-vps): Failed at slot-3-isolated-apply with runner_onboarding_isolation_failed, attempt 3 of 3");
+    expect(alert).not.toContain("times out");
+    expect(alert).not.toContain("vps-w");
+    expect(status).toContain("1 VPS host is out of admission while onboarding runs");
+    expect(status).toContain("vps-w (ovhcloud-vps): Waiting to retry at slot-3-host-delivering with agent_transport_unavailable, since");
+    expect(status).not.toContain("attempt");
+    expect(status).not.toContain("times out");
+    expect(status).not.toContain("vps-f");
 });
