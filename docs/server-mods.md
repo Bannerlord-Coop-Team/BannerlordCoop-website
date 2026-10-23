@@ -1,5 +1,15 @@
 # Server mods
 
+The owner summary accepts optional `runtimeInsight.modLoadFailure` with the same
+bounded diagnosis as Start status (`modId`, closed `reason`, and `assembly` only
+for `missing-assembly`). Deploy this website compatibility change before the
+control plane adds the field. It keeps the latest failed Start's diagnosis visible
+after Stop, until a newer Start replaces it, only while the game is stopped or
+failed. Immediate failures, polled status and returning owners receive localized
+repair guidance: upload the dependency (Bannerlord.Harmony with its bin folder
+and `0Harmony.dll` for Harmony), upload a complete/compatible mod, or disable the
+affected mod in Mods. Unknown diagnoses use generic copy; raw logs are never shown.
+
 The managed server page's **Mods** tab lists, orders, enables, uploads and deletes
 custom Bannerlord modules through the control plane's custom-mods API. The
 control-plane repository's `docs/managed-hosting/custom-mods.md` (section 7 and its

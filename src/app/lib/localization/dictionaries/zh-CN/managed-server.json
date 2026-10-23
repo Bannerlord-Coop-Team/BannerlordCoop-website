@@ -774,7 +774,6 @@
   "settingsPanel.searchSettings": "Search settings",
   "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
   "settingsPanel.noSettingsMatchSearch": "No settings match your search.",
-
   "managerAccess.granting": "Granting access...",
   "managerAccess.description": "Add someone as a manager for this server. Enter their exact Bannerlord Co-op account email. No account directory is shown.",
   "managerAccess.ownerOnly": "Only the server owner can change manager access.",
@@ -799,7 +798,6 @@
   "managerAccess.accessRemoved": "Manager access removed. The account can no longer manage this server.",
   "managerAccess.accessAlreadyRemoved": "That account no longer has manager access.",
   "managerAccess.confirmRemove": "Remove manager access for {name}? They will no longer be able to manage this server.",
-
   "autosaves.recentAutosaves": "最近的自动存档",
   "autosaves.recentAutosavesCampaign": "最近的自动存档 · {campaign}",
   "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "服务器会在当前存档之外保留最近两个自动存档。每次保存时都会替换它们。",
@@ -948,7 +946,9 @@
   "mods.archive.invalidPath": "无法上传 {path}：路径过长、层级过深，或包含不支持的字符。",
   "mods.archive.duplicatePath": "{path} 与另一个文件仅在大小写或重音上不同。",
   "mods.archive.compressionRatio": "该文件夹的压缩比超过 100:1，服务器会拒绝。",
-  "controls.modLoadFailedMissingAssembly": "模组 {modId} 加载失败（缺少程序集 {assembly}）。请在“模组”中禁用它，然后重新启动。",
-  "controls.modLoadFailedMissingDll": "模组 {modId} 加载失败（缺少其 SubModule.xml 中列出的 DLL）。请在“模组”中禁用它，然后重新启动。",
-  "controls.modLoadFailed": "模组 {modId} 加载失败。请在“模组”中禁用它，然后重新启动。"
+  "controls.modLoadFailedMissingAssembly": "模组 {modId} 需要 {assembly}。请上传依赖项或在“模组”中禁用此模组，然后重新启动。",
+  "controls.modLoadFailedMissingDll": "模组 {modId} 缺少 SubModule.xml 中列出的 DLL。请上传包含 bin 文件夹的完整模组，或在“模组”中禁用它，然后重新启动。",
+  "controls.modLoadFailed": "模组 {modId} 无法加载。请上传与此服务器版本及其依赖项兼容的版本，或在“模组”中禁用它，然后重新启动。",
+  "controls.modLoadFailedHarmony": "模组 {modId} 需要 Harmony（0Harmony.dll）。请上传包含 bin 文件夹的 Bannerlord.Harmony，或在“模组”中禁用此模组，然后重新启动。",
+  "controls.modLoadFailedUnknown": "自定义模组无法加载。请检查上传的模组及其依赖项，或禁用最近启用的模组后再重新启动。"
 }

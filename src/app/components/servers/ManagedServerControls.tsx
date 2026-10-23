@@ -323,8 +323,10 @@ export function ManagedServerControls({
 
     const trackingStart = startJobId !== null && !["succeeded", "failed", "cancelled"].includes(startStatus?.state ?? "");
     const insightPanel = runtimeInsight && <div className="max-w-xl space-y-2 text-sm leading-6 text-foreground-muted">
-        {runtimeInsight.failureMessage && pendingOperation === null && !trackingStart && !trackingStop && !trackingRestart && <p className="text-red-200">{runtimeInsight.failureMessage}</p>}
-        {runtimeInsight.recommendation && pendingOperation === null && !trackingStart && !trackingStop && !trackingRestart && <p>{runtimeInsight.recommendation}</p>}
+        {pendingOperation === null && !trackingStart && !trackingStop && !trackingRestart && (runtimeInsight.modLoadFailure && ["stopped", "failed"].includes(observedGameState)
+            ? <p className="text-red-200">{modLoadFailureMessage(runtimeInsight.modLoadFailure, t)}</p>
+            : <>{runtimeInsight.failureMessage && <p className="text-red-200">{runtimeInsight.failureMessage}</p>}
+                {runtimeInsight.recommendation && <p>{runtimeInsight.recommendation}</p>}</>)}
         {runtimeInsight.failureCode && <button type="button" className="min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold" onClick={() => startTransition(() => router.refresh())} disabled={isPending}>{t("controls.checkNow")}</button>}
     </div>;
 

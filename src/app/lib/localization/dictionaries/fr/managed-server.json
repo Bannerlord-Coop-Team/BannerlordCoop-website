@@ -775,7 +775,6 @@
   "settingsPanel.searchSettings": "Search settings",
   "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
   "settingsPanel.noSettingsMatchSearch": "No settings match your search.",
-
   "managerAccess.granting": "Granting access...",
   "managerAccess.description": "Add someone as a manager for this server. Enter their exact Bannerlord Co-op account email. No account directory is shown.",
   "managerAccess.ownerOnly": "Only the server owner can change manager access.",
@@ -800,7 +799,6 @@
   "managerAccess.accessRemoved": "Manager access removed. The account can no longer manage this server.",
   "managerAccess.accessAlreadyRemoved": "That account no longer has manager access.",
   "managerAccess.confirmRemove": "Remove manager access for {name}? They will no longer be able to manage this server.",
-
   "autosaves.recentAutosaves": "Sauvegardes automatiques récentes",
   "autosaves.recentAutosavesCampaign": "Sauvegardes automatiques récentes · {campaign}",
   "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "Le serveur conserve les deux dernières sauvegardes automatiques à côté de la sauvegarde actuelle. Elles sont remplacées à chaque enregistrement.",
@@ -949,7 +947,9 @@
   "mods.archive.invalidPath": "{path} ne peut pas être téléversé : son chemin est trop long, trop profond ou contient des caractères non pris en charge.",
   "mods.archive.duplicatePath": "{path} ne diffère d'un autre fichier que par la casse ou les accents.",
   "mods.archive.compressionRatio": "Le dossier se compresse à plus de 100:1, ce que le serveur refuse.",
-  "controls.modLoadFailedMissingAssembly": "Le mod {modId} n'a pas pu être chargé (assembly {assembly} manquant). Désactivez-le dans Mods, puis redémarrez.",
-  "controls.modLoadFailedMissingDll": "Le mod {modId} n'a pas pu être chargé (une DLL indiquée dans son SubModule.xml est manquante). Désactivez-le dans Mods, puis redémarrez.",
-  "controls.modLoadFailed": "Le mod {modId} n'a pas pu être chargé. Désactivez-le dans Mods, puis redémarrez."
+  "controls.modLoadFailedMissingAssembly": "Le mod {modId} nécessite {assembly}. Importez la dépendance ou désactivez ce mod dans Mods, puis relancez le serveur.",
+  "controls.modLoadFailedMissingDll": "Il manque au mod {modId} une DLL indiquée dans SubModule.xml. Importez le mod complet avec son dossier bin, ou désactivez-le dans Mods, puis relancez le serveur.",
+  "controls.modLoadFailed": "Le mod {modId} ne peut pas être chargé. Importez une version compatible avec cette version du serveur et ses dépendances, ou désactivez-le dans Mods, puis relancez le serveur.",
+  "controls.modLoadFailedHarmony": "Le mod {modId} nécessite Harmony (0Harmony.dll). Importez Bannerlord.Harmony avec son dossier bin, ou désactivez ce mod dans Mods. Relancez ensuite le serveur.",
+  "controls.modLoadFailedUnknown": "Un mod personnalisé ne peut pas être chargé. Vérifiez les mods importés et leurs dépendances, ou désactivez les derniers mods activés avant de relancer le serveur."
 }

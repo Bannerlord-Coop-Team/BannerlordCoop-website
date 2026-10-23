@@ -775,7 +775,6 @@
   "settingsPanel.searchSettings": "Search settings",
   "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
   "settingsPanel.noSettingsMatchSearch": "No settings match your search.",
-
   "managerAccess.granting": "Granting access...",
   "managerAccess.description": "Add someone as a manager for this server. Enter their exact Bannerlord Co-op account email. No account directory is shown.",
   "managerAccess.ownerOnly": "Only the server owner can change manager access.",
@@ -800,7 +799,6 @@
   "managerAccess.accessRemoved": "Manager access removed. The account can no longer manage this server.",
   "managerAccess.accessAlreadyRemoved": "That account no longer has manager access.",
   "managerAccess.confirmRemove": "Remove manager access for {name}? They will no longer be able to manage this server.",
-
   "autosaves.recentAutosaves": "Son otomatik kayıtlar",
   "autosaves.recentAutosavesCampaign": "Son otomatik kayıtlar · {campaign}",
   "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "Sunucu, geçerli kayıt dosyasının yanında son iki otomatik kaydı saklar. Bunlar her kayıtta değiştirilir.",
@@ -949,7 +947,9 @@
   "mods.archive.invalidPath": "{path} yüklenemiyor: yolu çok uzun, çok derin veya desteklenmeyen karakterler içeriyor.",
   "mods.archive.duplicatePath": "{path}, başka bir dosyadan yalnızca harf büyüklüğü veya aksanlarla ayrılıyor.",
   "mods.archive.compressionRatio": "Klasör 100:1'den fazla sıkışıyor; sunucu bunu reddeder.",
-  "controls.modLoadFailedMissingAssembly": "{modId} modu yüklenemedi ({assembly} derlemesi eksik). Modlar bölümünden devre dışı bırakıp yeniden başlatın.",
-  "controls.modLoadFailedMissingDll": "{modId} modu yüklenemedi (SubModule.xml dosyasında listelenen bir DLL eksik). Modlar bölümünden devre dışı bırakıp yeniden başlatın.",
-  "controls.modLoadFailed": "{modId} modu yüklenemedi. Modlar bölümünden devre dışı bırakıp yeniden başlatın."
+  "controls.modLoadFailedMissingAssembly": "{modId} modu {assembly} gerektiriyor. Bağımlılığı yükleyin veya bu modu Modlar bölümünde devre dışı bırakıp yeniden başlatın.",
+  "controls.modLoadFailedMissingDll": "{modId} modunun SubModule.xml dosyasında belirtilen bir DLL eksik. Modu bin klasörü dahil tamamen yükleyin veya Modlar bölümünde devre dışı bırakıp yeniden başlatın.",
+  "controls.modLoadFailed": "{modId} modu yüklenemedi. Sunucu sürümü ve bağımlılıklarıyla uyumlu bir sürüm yükleyin veya Modlar bölümünde devre dışı bırakıp yeniden başlatın.",
+  "controls.modLoadFailedHarmony": "{modId} modu Harmony (0Harmony.dll) gerektiriyor. Bannerlord.Harmony modunu bin klasörüyle yükleyin veya bu modu Modlar bölümünde devre dışı bırakın. Sonra yeniden başlatın.",
+  "controls.modLoadFailedUnknown": "Bir özel mod yüklenemedi. Yüklediğiniz modları ve bağımlılıklarını kontrol edin veya son etkinleştirdiğiniz modları devre dışı bırakıp yeniden başlatın."
 }

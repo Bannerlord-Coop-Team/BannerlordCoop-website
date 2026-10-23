@@ -777,7 +777,6 @@
   "settingsPanel.searchSettings": "Search settings",
   "settingsPanel.searchSettingsPlaceholder": "Search by setting name or description...",
   "settingsPanel.noSettingsMatchSearch": "No settings match your search.",
-
   "managerAccess.granting": "Granting access...",
   "managerAccess.description": "Add someone as a manager for this server. Enter their exact Bannerlord Co-op account email. No account directory is shown.",
   "managerAccess.ownerOnly": "Only the server owner can change manager access.",
@@ -802,7 +801,6 @@
   "managerAccess.accessRemoved": "Manager access removed. The account can no longer manage this server.",
   "managerAccess.accessAlreadyRemoved": "That account no longer has manager access.",
   "managerAccess.confirmRemove": "Remove manager access for {name}? They will no longer be able to manage this server.",
-
   "autosaves.recentAutosaves": "Недавние автосохранения",
   "autosaves.recentAutosavesCampaign": "Недавние автосохранения · {campaign}",
   "autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave": "Сервер хранит два последних автосохранения рядом с текущим сохранением. Они заменяются при каждом сохранении.",
@@ -951,7 +949,9 @@
   "mods.archive.invalidPath": "{path} нельзя загрузить: путь слишком длинный, слишком глубокий или содержит неподдерживаемые символы.",
   "mods.archive.duplicatePath": "{path} отличается от другого файла только регистром букв или диакритикой.",
   "mods.archive.compressionRatio": "Папка сжимается сильнее чем 100:1, а сервер такое отклоняет.",
-  "controls.modLoadFailedMissingAssembly": "Мод {modId} не загрузился (отсутствует сборка {assembly}). Отключите его в разделе «Моды» и запустите сервер снова.",
-  "controls.modLoadFailedMissingDll": "Мод {modId} не загрузился (отсутствует DLL, указанная в его SubModule.xml). Отключите его в разделе «Моды» и запустите сервер снова.",
-  "controls.modLoadFailed": "Мод {modId} не загрузился. Отключите его в разделе «Моды» и запустите сервер снова."
+  "controls.modLoadFailedMissingAssembly": "Моду {modId} нужна сборка {assembly}. Загрузите зависимость или отключите этот мод в разделе «Моды». Затем запустите сервер снова.",
+  "controls.modLoadFailedMissingDll": "У мода {modId} отсутствует DLL из SubModule.xml. Загрузите мод целиком с папкой bin или отключите его в разделе «Моды». Затем запустите сервер снова.",
+  "controls.modLoadFailed": "Мод {modId} не загрузился. Загрузите версию, совместимую с этой версией сервера и её зависимостями, или отключите его в разделе «Моды». Затем запустите сервер снова.",
+  "controls.modLoadFailedHarmony": "Моду {modId} нужен Harmony (0Harmony.dll). Загрузите Bannerlord.Harmony вместе с папкой bin или отключите этот мод в разделе «Моды». Затем запустите сервер снова.",
+  "controls.modLoadFailedUnknown": "Не удалось загрузить пользовательский мод. Проверьте загруженные моды и их зависимости или отключите недавно включённые моды перед повторным запуском."
 }

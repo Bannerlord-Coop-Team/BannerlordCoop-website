@@ -525,6 +525,22 @@ it("clears local failed progress when a newer summary confirms recovery and clea
     } finally { await act(async () => root.unmount()); }
 });
 
+it("shows a stopped server's retained mod diagnosis on reload without sending Start", async () => {
+    request.mockClear(); startStatus.mockClear();
+    const insight: OwnerRuntimeInsight = { desiredState: "stopped", observedAt: null, allowedActions: ["start"], crashLoopDetected: false,
+        failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: null,
+        modLoadFailure: { modId: "CoopSycn", reason: "missing-assembly", assembly: "0Harmony" } };
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" runtimeInsight={insight} /></TestLocalization>));
+        expect(container.textContent).toContain("Mod CoopSycn needs Harmony (0Harmony.dll). Upload Bannerlord.Harmony including its bin folder");
+        expect(request).not.toHaveBeenCalled();
+        expect(startStatus).not.toHaveBeenCalled();
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="running" runtimeInsight={{ ...insight, modLoadFailure: undefined }} /></TestLocalization>));
+        expect(container.textContent).not.toContain("0Harmony.dll");
+    } finally { await act(async () => root.unmount()); }
+});
+
 it("names the mod a failed Start could not load, from its recorded diagnosis", async () => {
     vi.useFakeTimers();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -536,13 +552,13 @@ it("names the mod a failed Start could not load, from its recorded diagnosis", a
         await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="stopped" {...progressProps} />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain("Server could not start");
-        expect(container.textContent).toContain("Mod OffTheClock.RichMerchants failed to load (missing assembly TaleWorlds.CampaignSystem.ViewModelCollection). Disable it in Mods and start again.");
+        expect(container.textContent).toContain("Mod OffTheClock.RichMerchants needs TaleWorlds.CampaignSystem.ViewModelCollection. Upload the dependency or disable this mod in Mods. Then start again.");
         expect(container.textContent).not.toContain("You can press Start to try again.");
     } finally { await act(async () => root.unmount()); }
 });
 
 it.each([
-    ["mod_load_failed", { modId: "Broken.Mod", reason: "missing-dll" }, "Mod Broken.Mod failed to load (a DLL its SubModule.xml lists is missing). Disable it in Mods and start again."],
+    ["mod_load_failed", { modId: "Broken.Mod", reason: "missing-dll" }, "Mod Broken.Mod is missing a DLL listed in SubModule.xml. Upload the complete mod including its bin folder, or disable it in Mods. Then start again."],
     ["mod_load_failed", null, "A custom mod failed to load. Disable recently enabled mods and start again."],
     ["crash_loop_cooldown", null, "The server crashed repeatedly while starting, so Start is paused for about 25 minutes. Changing its enabled mods ends the pause now."],
 ])("shows a terminal %s Start refusal without following status", async (code, diagnosis, message) => {
