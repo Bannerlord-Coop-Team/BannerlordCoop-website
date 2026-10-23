@@ -122,6 +122,14 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
         } catch { setStorageError(true); return false; }
     }
 
+    // A late reply settles only its own request, including when another tab replaces the receipt.
+    function stillCurrent(requestId: string) {
+        const current = readFileIntent(sessionStorage.getItem(storageKey), serverId);
+        if (current?.requestId === requestId) return true;
+        intentRef.current = current; setIntent(current);
+        return false;
+    }
+
     useEffect(() => {
         const timer = window.setTimeout(() => {
             try {
@@ -267,6 +275,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
                 if (!remember(next)) return;
                 setResult(null); setDownloadLink(null); setFeedback(null);
                 let response = await submitManagedServerFile(transferForm(next), userId);
+                if (!stillCurrent(next.requestId)) return;
                 if (!response.ok && response.stale && action === "export-save" && previous === null) {
                     // Export never changes the server, so a stale page is refreshed and the export retried once.
                     // The stale rejection is definitive, so the retry safely uses a new request identity.
@@ -281,6 +290,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
                         const retry: Intent = { ...next, requestId: crypto.randomUUID(), expectedUpdatedAt: fresh.status.updatedAt, saveId: activeSave.saveId };
                         if (!remember(retry)) return;
                         response = await submitManagedServerFile(transferForm(retry), userId);
+                        if (!stillCurrent(retry.requestId)) return;
                         if (!response.ok && response.stale) response = { ...response, message: t("transfers.theServerIsStillChangingWaitAMomentAndTryExportSaveAgain") };
                     }
                 }

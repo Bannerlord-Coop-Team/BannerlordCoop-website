@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import { MyServersApiError, requestMyServerSettings } from "@/app/lib/hosting/my-servers";
 import { getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
@@ -55,6 +56,8 @@ export async function saveServerSettings(value: unknown): Promise<{ ok: boolean;
     try {
         return saved((await requestMyServerSettings(accessToken, input, requestId)).updatedAt);
     } catch (error) {
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
         if ((code === "request_conflict" || code === "stale_interaction") && previous !== null) {
             try {
@@ -62,7 +65,9 @@ export async function saveServerSettings(value: unknown): Promise<{ ok: boolean;
                 if (retried.outcome === "saved") return saved(retried.updatedAt);
                 if (retried.outcome === "changed") return { ok: false, rejected: true, field: retried.field,
                     message: t("server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen") };
-            } catch {
+            } catch (retryError) {
+                const refusal = ownerRefusalMessage(retryError, t);
+                if (refusal !== null) return { ok: false, rejected: true, message: refusal };
                 // Fall through to the ordinary explanation; the page refreshes before the next attempt.
             }
         }

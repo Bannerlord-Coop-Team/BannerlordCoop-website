@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { getMyServerConfiguration, saveMyServerConfiguration } from "@/app/lib/hosting/server-configuration";
@@ -31,6 +32,8 @@ const RELOAD_CODES = new Set(["request_conflict", "configuration_unavailable", "
 // Localizes existing action-specific failure codes without exposing internal errors.
 async function failure(error: unknown, notSubmitted = false): Promise<ManagedServerConfigResult> {
     const { t } = await getTranslations("managed-server");
+    const refusal = !notSubmitted ? ownerRefusalMessage(error, t) : null;
+    if (refusal !== null) return { ok: false, message: refusal, reload: false, notSubmitted: true };
     const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
     const runnerUnavailable = t("action.config.runnerUnavailable");
     const runnerRejected = t("action.config.runnerRejected");

@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import * as serverActions from "@/app/servers/managed-server-actions";
 import { ManagedServerControls, ManagedServerPassword } from "./ManagedServerControls";
 import { ManagedServerMoveProvider, ManagedServerMoveStatus } from "./ManagedServerMoveStatus";
-import { MyServersApiError } from "@/app/lib/hosting/my-servers";
+import { MyServersApiError, readMyServersResponse } from "@/app/lib/hosting/my-servers";
 import type { MyServerMove } from "@/app/lib/control-plane/types";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
 
@@ -20,6 +20,34 @@ const { request, requestUpdate, requestPassword, beginPolling, startStatus, summ
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerStartStatus: startStatus, getMyServerSummary: summary, getMyServerDeletionStatus: deletionStatus }));
 afterEach(() => vi.useRealTimers());
+
+it.each(["refused", "unknown", "success"])("renders the CP envelope path for %s with zero console errors", async outcome => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const consoleError = vi.spyOn(console, "error");
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    request.mockReset(); beginPolling.mockClear();
+    request.mockImplementationOnce(async () => readMyServersResponse(outcome === "unknown"
+        ? new Response("Gateway timeout", { status: 504 })
+        : Response.json(outcome === "refused"
+            ? { version: 1, requestId: serverId, ok: false, error: { code: "server_suspended", message: "The server is suspended.", retryable: false } }
+            : { version: 1, requestId: serverId, ok: true, result: { exitCode: 0 } }, { status: outcome === "refused" ? 409 : 200 }), serverId));
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls observedGameState="stopped" serverId={serverId} displayName="Campaign"
+            accessRole="owner" operationState="stopped" expectedUpdatedAt="2026-09-20T12:00:00.000Z" /></TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        if (outcome === "refused") {
+            expect(container.textContent).toContain("This server is suspended. The request was refused and no change was made.");
+            expect(container.textContent).not.toMatch(/couldn.t confirm/u);
+            expect(beginPolling).not.toHaveBeenCalled();
+        } else if (outcome === "unknown") {
+            expect(container.textContent).toMatch(/couldn.t confirm/u);
+        } else expect(container.textContent).toContain("Server started and game readiness confirmed");
+        expect(request).toHaveBeenCalledOnce();
+        expect(consoleError).not.toHaveBeenCalled();
+    } finally { await act(async () => root.unmount()); consoleError.mockRestore(); }
+});
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({
     getSupabaseServerClient: async () => ({ auth: {

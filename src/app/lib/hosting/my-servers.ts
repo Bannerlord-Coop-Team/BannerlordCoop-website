@@ -102,6 +102,7 @@ export class MyServersApiError extends Error {
         message: string,
         readonly retryable = false,
         readonly operationId?: string,
+        readonly parsedEnvelope = false,
     ) {
         super(message);
         this.name = "MyServersApiError";
@@ -531,7 +532,7 @@ export async function readMyServersResponse(
     if (operationId !== undefined && typeof operationId !== "string") throw invalidResponse();
     if (operationId !== undefined && !REQUEST_ID.test(operationId)) throw invalidResponse();
 
-    throw new MyServersApiError(code, message, retryable, operationId);
+    throw new MyServersApiError(code, message, retryable, operationId, true);
 }
 
 // Resolves the configured endpoint with optional website presentation, preserving URL/security checks.

@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import {
     MyServersApiError,
@@ -77,6 +78,8 @@ export async function manageServerBackup(input: unknown, expectedPageUserId: unk
             jobId: result.jobId,
         };
     } catch (error) {
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return rejected(refusal);
         const code = error instanceof MyServersApiError ? error.code : "operation_failed";
         console.error("Managed server backup operation failed", { code });
         if (backupRequestOutcomeIsUncertain(error)) {

@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { getMyServerFiles, getMyServerFileResult, submitMyServerFile, downloadMyServerSave } from "@/app/lib/hosting/server-files";
@@ -20,6 +21,8 @@ async function currentToken(expectedUserId: string) {
 // Localizes existing action-specific failure codes without exposing internal errors.
 async function failure(error: unknown, notSubmitted = false) {
     const { t } = await getTranslations("managed-server");
+    const refusal = !notSubmitted ? ownerRefusalMessage(error, t) : null;
+    if (refusal !== null) return { ok: false as const, notSubmitted: false, rejected: true, stale: false, message: refusal };
     const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
     const messages: Record<string, string> = {
         stale_interaction: t("action.file.theServerChangedRefreshBeforeStartingANewTransfer"),

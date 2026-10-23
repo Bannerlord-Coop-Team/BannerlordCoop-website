@@ -23,7 +23,7 @@ const CANCELLED = "cancelled";
 /** Keyboard moves wait this long after the last arrow key so a run of steps saves once. */
 const KEYBOARD_SAVE_DELAY_MS = 600;
 /** Refusals that leave the saved list unchanged, so the panel can show it again without a reload. */
-const PLAIN_REFUSALS = ["mod_order_invalid", "mod_dependency_unsatisfied", "mod_reserved_id", "upload_busy", "unauthenticated", "server_not_found", "runner_unsupported"];
+const PLAIN_REFUSALS = ["server_suspended", "mod_order_invalid", "mod_dependency_unsatisfied", "mod_reserved_id", "upload_busy", "unauthenticated", "server_not_found", "runner_unsupported"];
 
 type Busy = null | "loading" | "deleting" | "preparing" | "uploading";
 type Notice = { tone: "info" | "error"; text: string };

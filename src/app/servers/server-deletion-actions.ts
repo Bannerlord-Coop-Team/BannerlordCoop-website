@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { MyServersApiError, requestMyServerDeletion } from "@/app/lib/hosting/my-servers";
 import { parseServerDeletionIntent, type ServerDeletionIntent } from "../../../supabase/functions/_shared/server-deletion-contract";
@@ -27,6 +28,8 @@ export async function deleteManagedServer(value: unknown): Promise<ServerDeletio
         revalidatePath(`/servers/${intent.serverId}`);
         return { ok: true, jobId: result.jobId, message: t("deletion.queued") };
     } catch (error) {
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         const code = error instanceof MyServersApiError ? error.code : "unknown";
         const busy = code === "operation_in_progress";
         // The control plane has definitely refused the request when another

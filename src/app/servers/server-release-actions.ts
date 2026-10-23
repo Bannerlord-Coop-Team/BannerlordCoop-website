@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import { getMyServerUpdateStatus, MyServersApiError, requestMyServerRelease } from "@/app/lib/hosting/my-servers";
 import { getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
@@ -39,6 +40,8 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
         const result = await requestMyServerRelease(token, input, value.requestId);
         return queued(result.jobId, input.serverId);
     } catch (error) {
+        const refusal = ownerRefusalMessage(error, t);
+        if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
         // A revision conflict from an unrelated write is retried once, only while the channel is still the one shown.
         if ((code === "request_conflict" || code === "stale_interaction") && token !== null && input !== null && previousChannel !== null) {
@@ -51,7 +54,9 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
                     const result = await requestMyServerRelease(token, { ...input, expectedUpdatedAt: server.updatedAt }, crypto.randomUUID());
                     return queued(result.jobId, input.serverId);
                 }
-            } catch {
+            } catch (retryError) {
+                const refusal = ownerRefusalMessage(retryError, t);
+                if (refusal !== null) return { ok: false, rejected: true, message: refusal };
                 // Fall through to the ordinary explanation below.
             }
         }

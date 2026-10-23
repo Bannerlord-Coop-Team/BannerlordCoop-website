@@ -307,6 +307,19 @@ it("restores the accepted receipt when a fresh retry is definitively refused", a
     expect(mocks.deletionStatus).toHaveBeenLastCalledWith(serverId, freshId, "owner");
 });
 
+it("preserves a newer deletion receipt when an older request receives a suspended refusal", async () => {
+    localStorage.setItem(deletionKey, JSON.stringify({ input: retainedInput, jobId: null }));
+    const newer = { input: { ...retainedInput, requestId: defaultId }, jobId: importedId };
+    mocks.deleteSave.mockImplementationOnce(async () => {
+        localStorage.setItem(deletionKey, JSON.stringify(newer));
+        return { ok: false, notSubmitted: true, message: "This server is suspended. The request was refused and no change was made." };
+    });
+    await render(stopped, true);
+    await act(async () => button("Recover deletion request").click());
+    expect(JSON.parse(localStorage.getItem(deletionKey)!)).toEqual(newer);
+    expect(mocks.deleteSave).toHaveBeenCalledOnce();
+});
+
 it.each(["corrupt", "old target absent"])("adopts a valid receipt saved before recovery begins (%s)", async (initial) => {
     localStorage.setItem(deletionKey, initial === "corrupt" ? "{broken" : JSON.stringify({ input: { ...retainedInput, saveId: freshId }, jobId: freshId }));
     vi.stubGlobal("confirm", vi.fn(() => true));

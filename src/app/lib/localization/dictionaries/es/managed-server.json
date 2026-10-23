@@ -1,4 +1,5 @@
 {
+  "action.refusal.serverSuspended": "Este servidor está suspendido. La solicitud se rechazó y no se realizó ningún cambio.",
   "controls.stoppedAwaitingServerCheck": "La última comprobación indicó que el juego estaba detenido. El inicio y las herramientas de recuperación se habilitarán cuando las comprobaciones del servidor confirmen que está listo.",
   "controls.restartCancelled": "Reinicio cancelado",
   "action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent": "No pudimos confirmar el estado del servidor. No se envió ninguna actualización. Actualiza la página e inténtalo de nuevo.",

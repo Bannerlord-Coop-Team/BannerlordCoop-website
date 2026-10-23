@@ -50,6 +50,7 @@ export function describeModIssue(issue: string, t: Translate): string {
 
 /** Explains a refused or unconfirmed catalog call; `modId` names the module the refusal concerns. */
 export function modsErrorMessage(error: ServerModsError, t: Translate): string {
+    if (error.code === "server_suspended" && !error.retryable) return t("action.refusal.serverSuspended");
     const id = error.modId ?? "";
     if (error.code === "upload_rejected") {
         if (error.detail === "mod_reserved_id") return t("mods.error.reservedId", { id });

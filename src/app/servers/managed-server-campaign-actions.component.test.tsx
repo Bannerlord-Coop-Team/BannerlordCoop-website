@@ -1,4 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import { createTranslator } from "@/app/lib/localization/translator";
+import messages from "@/app/lib/localization/dictionaries/en/managed-server.json";
+vi.mock("@/app/lib/localization/server", () => ({ getTranslations: async () => createTranslator("en", messages) }));
 import { changeManagedServerCampaign, listManagedServerCampaigns } from "./managed-server-campaign-actions";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), select: vi.fn(), reset: vi.fn() }));

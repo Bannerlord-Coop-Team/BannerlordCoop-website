@@ -25,6 +25,19 @@ function mods() {
     ]);
 }
 
+it("shows a suspended refusal and restores the saved order without replaying the mutation", async () => {
+    const catalog = createMockServerModCatalog(mods());
+    await render(catalog);
+    const list = vi.spyOn(catalog, "listServerMods");
+    const save = vi.spyOn(catalog, "saveServerModOrder").mockRejectedValueOnce(new ServerModsError("server_suspended", false));
+    await click(checkbox("Beta"));
+    expect(container.textContent).toContain("This server is suspended. The request was refused and no change was made.");
+    expect(container.textContent).not.toContain("retry the same request");
+    expect(checkbox("Beta").checked).toBe(false);
+    expect(save).toHaveBeenCalledOnce();
+    expect(list).not.toHaveBeenCalled();
+});
+
 /** Renders the panel and waits for its first load. */
 async function render(catalog: ServerModCatalog, props: { canEdit?: boolean; active?: boolean } = {}) {
     await act(async () => root.render(<TestLocalization><ServerModsPanel serverId={SERVER_ID} catalog={catalog} canEdit={props.canEdit ?? true} active={props.active ?? true} /></TestLocalization>));

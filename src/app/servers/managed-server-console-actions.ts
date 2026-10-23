@@ -1,6 +1,7 @@
 "use server";
 
 import { getTranslations } from "@/app/lib/localization/server";
+import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
@@ -19,6 +20,8 @@ async function currentToken(expectedUserId: string) {
 /** Distinguishes local rejection from uncertain submissions without exposing internal errors. */
 async function failure(error: unknown, notSubmitted = false) {
     const { t } = await getTranslations("managed-server");
+    const refusal = !notSubmitted ? ownerRefusalMessage(error, t) : null;
+    if (refusal !== null) return { ok: false as const, message: refusal, notSubmitted: false, uncertain: false, refresh: false };
     const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
     const messages: Record<string, string> = {
         server_not_found: t("action.console.thisServerIsUnavailableOrYourAccessChanged"),
