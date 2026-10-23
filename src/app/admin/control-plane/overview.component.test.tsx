@@ -57,6 +57,23 @@ it("renders Overview from its compact current response without fetching account 
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
+it.each([true, false])("shows the VPS out-of-admission tile only when the control plane reports onboarding counts: reported=%s", async reported => {
+    const base = await mocks.request.getMockImplementation()!({ onAuthenticated: () => undefined });
+    mocks.request.mockImplementation(async request => {
+        request.onAuthenticated();
+        return { ...base, fleet: { ...base.fleet, observability: { recentJobFailures: 2,
+            ...(reported ? { vpsOnboarding: { active: 2, failed: 1, stuck: 1 } } : {}) } } };
+    });
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "overview" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    expect(html.includes("VPS out of admission")).toBe(reported);
+    if (reported) {
+        expect(html).toContain("1 failed, 1 stuck waiting to retry");
+        expect(html).toContain("/admin/control-plane?view=vps");
+    }
+});
+
 it.each([true, false])("server detail resolves only its displayed account, with an ID fallback: available=%s", async available => {
     const ownerAccountId = "11111111-1111-4111-8111-111111111111";
     mocks.request.mockImplementation(async request => {
