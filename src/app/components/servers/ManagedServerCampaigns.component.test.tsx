@@ -257,6 +257,19 @@ it("offers a fresh UUID only for an owner-confirmed retry after checking that th
     expect(container.textContent).toContain("Original campaign deleted.");
 });
 
+it("checks campaigns on the first recovery click after an accepted deletion in this tab", async () => {
+    vi.stubGlobal("confirm", vi.fn(() => true)); vi.stubGlobal("prompt", vi.fn(() => "Imported Campaign"));
+    mocks.deleteSave.mockResolvedValueOnce({ ok: true, jobId: freshId, message: "Queued" });
+    await render(stopped, true);
+    await act(async () => (container.querySelector('[aria-label="Delete Imported Campaign"]') as HTMLButtonElement).click());
+    const readsBefore = mocks.list.mock.calls.length;
+    await act(async () => button("Check campaigns to recover").click());
+    expect(mocks.list.mock.calls.length).toBeGreaterThan(readsBefore);
+    expect(button("Try again")).toBeTruthy();
+    expect(container.textContent).not.toContain("Another deletion request");
+    expect(mocks.deleteSave).toHaveBeenCalledTimes(1);
+});
+
 it("restores the accepted receipt when a fresh retry is definitively refused", async () => {
     localStorage.setItem(deletionKey, JSON.stringify({ input: retainedInput, jobId: freshId }));
     vi.stubGlobal("confirm", vi.fn(() => true)); vi.stubGlobal("prompt", vi.fn(() => "Imported Campaign"));

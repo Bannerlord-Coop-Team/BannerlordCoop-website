@@ -143,7 +143,7 @@ export function useSaveDeletion(userId: string, serverId: string, onCompleted: (
             const before = localStorage.getItem(key);
             let snapshot: Retained | null = null;
             try { snapshot = read(key, serverId); } catch { /* corrupt data has no trusted target */ }
-            if (snapshot && JSON.stringify(snapshot) !== JSON.stringify(retained)) {
+            if (snapshot && (snapshot.input.requestId !== retained?.input.requestId || snapshot.jobId !== retained?.jobId)) {
                 setRetained(snapshot); setLoadedKey(key); setSettled(snapshot.terminal === true);
                 setUnknown(snapshot.jobId === null); setRetryCandidate(null); setActive(false);
                 setMessage("Another deletion request is now saved in this browser. Checking that request.");
