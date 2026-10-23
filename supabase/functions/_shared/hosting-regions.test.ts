@@ -39,6 +39,9 @@ test("the published catalog carries every region and placement in website order,
     const usWest = hostingRegionCatalogPayload().find((entry) => entry.region === "us-west");
     assert.deepEqual(usWest, { region: "us-west", placement: { countryCodes: ["US"], locationIds: ["os-us-west-or-2", "us-west-or"] } });
     assert.deepEqual(hostingRegionCatalogPayload().find((entry) => entry.region === "france"), { region: "france", placement: { countryCodes: ["FR"] } });
+    assert.deepEqual(hostingRegionCatalogPayload().find((entry) => entry.region === "us-east"),
+        { region: "us-east", placement: { countryCodes: ["US"], locationIds: ["os-us-east-va-2", "us-east-va", "nyc"] } });
+    assert.deepEqual(hostingRegionCatalogPayload().find((entry) => entry.region === "turkiye"), { region: "turkiye", placement: { countryCodes: ["TR"] } });
     assert.deepEqual(hostingRegionCatalogPayload().find((entry) => entry.region === "australia-sydney"),
         { region: "australia-sydney", placement: { countryCodes: ["AU"], locationIds: ["syd"] } });
     // Mutating the payload never changes the catalog.

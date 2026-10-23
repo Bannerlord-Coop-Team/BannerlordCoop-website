@@ -44,12 +44,14 @@ const REGION_KEY_PATTERN = /^[a-z][a-z0-9-]{1,47}$/u;
 export const HOSTING_REGIONS = [
     { key: "us-west", label: "US-West", continent: "north-america",
         placement: { countryCodes: ["US"], locationIds: ["os-us-west-or-2", "us-west-or"] } },
+    // Virginia (OVHcloud, Contabo) and New York (`nyc`, as HostHatch and VPS.TC name it).
     { key: "us-east", label: "US-East", continent: "north-america",
-        placement: { countryCodes: ["US"], locationIds: ["os-us-east-va-2", "us-east-va"] } },
+        placement: { countryCodes: ["US"], locationIds: ["os-us-east-va-2", "us-east-va", "nyc"] } },
     { key: "france", label: "France", continent: "europe", placement: { countryCodes: ["FR"] } },
     { key: "germany", label: "Germany", continent: "europe", placement: { countryCodes: ["DE"] } },
     { key: "united-kingdom", label: "United Kingdom", continent: "europe", placement: { countryCodes: ["GB"] } },
     { key: "poland", label: "Poland", continent: "europe", placement: { countryCodes: ["PL"] } },
+    { key: "turkiye", label: "Türkiye", continent: "europe", placement: { countryCodes: ["TR"] } },
     { key: "hong-kong", label: "Hong Kong", continent: "asia", placement: { countryCodes: ["HK"] } },
     { key: "singapore", label: "Singapore", continent: "asia", placement: { countryCodes: ["SG"] } },
     { key: "japan", label: "Japan", continent: "asia", placement: { countryCodes: ["JP"] } },
