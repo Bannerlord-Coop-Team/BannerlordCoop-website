@@ -152,5 +152,7 @@ it.each(readdirSync("src/app/lib/localization/dictionaries"))("ships suspension 
     const dictionary = JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${locale}/managed-server.json`, "utf8"));
     expect(dictionary["action.refusal.serverSuspended"]).toBeTypeOf("string");
     expect(dictionary["action.refusal.serverSuspended"].length).toBeGreaterThan(20);
+    expect(dictionary["mods.error.uploadStatusUnavailable"]).toBeTypeOf("string");
+    expect(dictionary["mods.error.uploadStatusUnavailable"]).toContain("{id}");
 });
 

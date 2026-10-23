@@ -88,6 +88,20 @@ test("lists and saves the complete load order under one request ID", async () =>
     assert.deepEqual(sent[1], { route: "load-order", refreshSession: false, body: { requestId: "00000000-0000-4000-8000-000000000001", serverId: SERVER_ID, expectedRevision: REVISION, mods: order } });
 });
 
+for (const accepted of [true, false]) {
+    test(`keeps upload unknown when ${accepted ? "accepted" : "uncertain"} completion is followed by a suspended reconciliation read`, async () => {
+        const { catalog, sent } = harness({
+            uploads: [session(1)],
+            complete: [accepted ? ok({}) : refused("network_unavailable", true)],
+            status: [refused("server_suspended")],
+            list: [refused("server_suspended")],
+        });
+        await rejectsWith(catalog.uploadServerMod(SERVER_ID, REVISION, archive(5)), "upload_status_unavailable");
+        assert.equal(sent.filter(call => call.route === "uploads").length, 1);
+        assert.equal(sent.filter(call => call.route === "list").length, 1);
+    });
+}
+
 test("retries rate limits and busy refusals with backoff, resending the identical request", async () => {
     const { catalog, sent, sleeps } = harness({ delete: [refused("rate_limited", true), refused("busy", true), refused("mods_unavailable", true), ok(state())] });
     await catalog.deleteServerMod(SERVER_ID, REVISION, "SomeMod");

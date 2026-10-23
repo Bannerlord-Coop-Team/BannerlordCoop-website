@@ -38,6 +38,18 @@ it("shows a suspended refusal and restores the saved order without replaying the
     expect(list).not.toHaveBeenCalled();
 });
 
+it("keeps an upload unknown when a suspended reconciliation read cannot confirm it", async () => {
+    const catalog = createMockServerModCatalog(mods());
+    await render(catalog);
+    vi.spyOn(catalog, "uploadServerMod").mockRejectedValueOnce(new ServerModsError("upload_status_unavailable", false, "NewMod"));
+    vi.spyOn(catalog, "listServerMods").mockRejectedValueOnce(new ServerModsError("server_suspended", false));
+    await chooseFolder({ "NewMod/SubModule.xml": submodule("NewMod", "New Mod", "v1") });
+    expect(container.textContent).toContain("The install of NewMod could not be confirmed because the server is suspended.");
+    expect(container.textContent).toContain("Refresh the mod list when access is restored");
+    expect(container.textContent).not.toContain("no change was made");
+    expect(container.textContent).not.toContain("not in the mod list");
+});
+
 /** Renders the panel and waits for its first load. */
 async function render(catalog: ServerModCatalog, props: { canEdit?: boolean; active?: boolean } = {}) {
     await act(async () => root.render(<TestLocalization><ServerModsPanel serverId={SERVER_ID} catalog={catalog} canEdit={props.canEdit ?? true} active={props.active ?? true} /></TestLocalization>));

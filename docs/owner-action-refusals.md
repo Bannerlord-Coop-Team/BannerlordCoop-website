@@ -33,6 +33,11 @@ Onboarding creates a new server rather than mutating a suspended one. Log,
 inventory, progress and status downloads are reads; their existing failure paths
 do not describe acceptance of a mutation. No Edge contract changes are required.
 
+After a mod upload completion is accepted or becomes uncertain, a suspended
+reconciliation read reports `upload_status_unavailable`: that read cannot establish
+whether the earlier upload installed. Suspension copy applies to the mutation's
+admission refusal, not to recovery of its accepted or uncertain completion.
+
 ## Receipt safety
 
 Website #375 / ControlPlane issue #581 retain a campaign deletion's confirmed

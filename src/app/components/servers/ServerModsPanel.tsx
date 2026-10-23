@@ -97,7 +97,8 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         try {
             apply(await catalog.listServerMods(serverId));
         } catch (error) {
-            setLoadFailed(error instanceof ServerModsError ? modsErrorMessage(error, t) : t("mods.error.other"));
+            setLoadFailed(error instanceof ServerModsError && error.code === "server_suspended" ? t("state.suspended")
+                : error instanceof ServerModsError ? modsErrorMessage(error, t) : t("mods.error.other"));
             if (loadedRef.current) updateDraft(loadedRef.current.mods);
         } finally {
             setBusy(null);

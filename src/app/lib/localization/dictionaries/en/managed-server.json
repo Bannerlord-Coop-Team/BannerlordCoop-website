@@ -1,4 +1,5 @@
 {
+  "mods.error.uploadStatusUnavailable": "The install of {id} could not be confirmed because the server is suspended. Refresh the mod list when access is restored to check its outcome.",
   "action.refusal.serverSuspended": "This server is suspended. The request was refused and no change was made.",
   "controls.stoppedAwaitingServerCheck": "The game was last observed stopped. Start and recovery tools unlock after server checks confirm readiness.",
   "controls.restartCancelled": "Restart cancelled",

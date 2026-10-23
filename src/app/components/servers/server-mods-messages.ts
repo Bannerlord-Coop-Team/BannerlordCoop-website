@@ -58,6 +58,7 @@ export function modsErrorMessage(error: ServerModsError, t: Translate): string {
     }
     if (error.code === "upload_failed") return t("mods.error.uploadFailed", { id });
     if (error.code === "upload_unconfirmed") return t("mods.error.uploadUnconfirmed", { id });
+    if (error.code === "upload_status_unavailable") return t("mods.error.uploadStatusUnavailable", { id });
     if (error.code === "mod_reserved_id") return t("mods.error.reservedId", { id });
     if (error.code === "mod_order_invalid") return error.modId ? t("mods.error.orderInvalidMod", { id }) : t("mods.error.orderInvalid");
     if (error.code === "mod_dependency_unsatisfied") return error.modId ? t("mods.error.dependencyUnsatisfiedMod", { id }) : t("mods.error.dependencyUnsatisfied");
