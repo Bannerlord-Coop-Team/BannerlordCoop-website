@@ -231,6 +231,32 @@ it("resolves an unknown receipt as deleted only when its save is absent from a f
     expect(mocks.deleteSave).not.toHaveBeenCalled();
 });
 
+it("removes the retry offer when a second recovery confirms the campaign is gone", async () => {
+    localStorage.setItem(deletionKey, JSON.stringify({ input: retainedInput, jobId: freshId }));
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    await render(stopped, true);
+    await act(async () => button("Check campaigns to recover").click());
+    expect(button("Try again")).toBeTruthy();
+    mocks.list.mockResolvedValue({ ok: true, campaigns: { ...campaigns, items: [campaigns.items[0]] } });
+    await act(async () => button("Check campaigns to recover").click());
+    expect(container.textContent).toContain("Campaign deleted.");
+    expect(container.textContent).not.toContain("Try again");
+    expect(mocks.deleteSave).not.toHaveBeenCalled();
+});
+
+it("clears an earlier retry candidate when beginning a new deletion", async () => {
+    localStorage.setItem(deletionKey, JSON.stringify({ input: retainedInput, jobId: freshId, terminal: true }));
+    vi.stubGlobal("confirm", vi.fn(() => true)); vi.stubGlobal("prompt", vi.fn(() => "Imported Campaign"));
+    await render(stopped, true);
+    await act(async () => button("Check campaigns to recover").click());
+    expect(button("Try again")).toBeTruthy();
+    mocks.deleteSave.mockResolvedValueOnce({ ok: true, jobId: defaultId, message: "Queued" });
+    await act(async () => (container.querySelector('[aria-label="Delete Imported Campaign"]') as HTMLButtonElement).click());
+    expect(mocks.deleteSave).toHaveBeenCalledTimes(1);
+    expect(container.textContent).not.toContain("Try again");
+    expect(JSON.parse(localStorage.getItem(deletionKey)!).jobId).toBe(defaultId);
+});
+
 it("offers a fresh UUID only for an owner-confirmed retry after checking that the unknown save still exists", async () => {
     localStorage.setItem(deletionKey, JSON.stringify({ input: retainedInput, jobId: freshId }));
     vi.stubGlobal("confirm", vi.fn(() => true)); vi.stubGlobal("prompt", vi.fn(() => "Imported Campaign"));

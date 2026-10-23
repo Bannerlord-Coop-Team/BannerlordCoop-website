@@ -99,7 +99,7 @@ export function useSaveDeletion(userId: string, serverId: string, onCompleted: (
 
     async function submit(saved: Retained) {
         const currentGeneration = generation.current;
-        setSending(true);
+        setSending(true); setRetryCandidate(null);
         try {
             const result = await deleteManagedServerSave(saved.input, userId);
             if (generation.current !== currentGeneration) return;
@@ -159,7 +159,7 @@ export function useSaveDeletion(userId: string, serverId: string, onCompleted: (
                 setMessage("Status unknown. This campaign is still present. You can try again; the server will refuse a duplicate active deletion.");
             } else {
                 // Explicit recovery after a fresh authorized list; never infer a target from corrupt bytes.
-                localStorage.removeItem(key); setRetained(null); setSettled(false); setLoadedKey(key); setUnknown(false);
+                localStorage.removeItem(key); setRetained(null); setSettled(false); setLoadedKey(key); setUnknown(false); setRetryCandidate(null);
                 setMessage(snapshot ? "Campaign deleted. It is no longer in the current campaign list."
                     : "The unreadable request was cleared after checking the campaign list. Choose a campaign below if you want to try again.");
                 completed.current();
