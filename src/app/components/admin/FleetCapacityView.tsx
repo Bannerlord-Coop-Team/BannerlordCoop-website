@@ -26,7 +26,6 @@ import {
     fleetCapacityHints,
     fleetCapacityHostGroups,
     fleetCapacityHostNote,
-    fleetCapacityProviderLabel,
     fleetCapacityTypeLabel,
     fleetCapacityTypical,
     formatCores,
@@ -51,6 +50,7 @@ import {
     stealStripSummary,
     type FleetCapacityHints,
 } from "@/app/lib/control-plane/fleet-capacity";
+import { vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
 import { overlapDayAxisLabel, overlapDays } from "@/app/lib/control-plane/placement-measured-overlap";
 import { shortServiceName } from "@/app/lib/control-plane/placement-live-moves";
 import type {
@@ -255,7 +255,7 @@ function ProvidersPane({ capacity, hints }: { capacity: HostingAdminFleetCapacit
                         <tbody className="divide-y divide-white/10 text-foreground">
                             {capacity.providers.map((entry) => (
                                 <tr key={entry.provider}>
-                                    <th scope="row" className="p-3 font-medium">{fleetCapacityProviderLabel(entry.provider)}</th>
+                                    <th scope="row" className="p-3 font-medium">{vpsProviderLabel(entry.provider)}</th>
                                     <td className="p-3 text-right font-mono">{entry.hosts}</td>
                                     <td className="p-3 text-right font-mono">{entry.servers}</td>
                                     <StealCells steal={entry.steal} typical={typical} />
@@ -340,7 +340,7 @@ function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCap
                             {capacity.instanceTypes.map((entry) => (
                                 <tr key={entry.key}>
                                     {/* The type in words, never its raw key with the provider id. */}
-                                    <th scope="row" title={fleetCapacityTypeLabel(entry)} className="p-3 align-top font-medium">{fleetCapacityProviderLabel(entry.provider)}</th>
+                                    <th scope="row" title={fleetCapacityTypeLabel(entry)} className="p-3 align-top font-medium">{vpsProviderLabel(entry.provider)}</th>
                                     <td className="p-3 text-right align-top font-mono">{entry.vCpu}<TypeEffectiveVcpu entry={entry} /></td>
                                     <td className="p-3 text-right align-top font-mono">{figure(entry.memoryBytes, formatGiB)}</td>
                                     <td className="max-w-56 p-3 align-top break-words">{entry.cpuModel ?? <NoData />}</td>

@@ -103,6 +103,20 @@ it("narrows country to the region and switches location between free text and th
     expect(control("locationId").value).toBe("us-west-or");
 });
 
+it("matches its placeholders and server-name hint to the chosen provider", async () => {
+    await render([...PROVIDERS, { provider: "vpstc-vps", displayName: "VPS.TC VPS" }]);
+    const placeholders = () => ["serviceName", "locationId", "datacenter"].map((name) => control(name).placeholder);
+    const nameHelp = () => container.querySelector<SVGElement>('[aria-label^="Server name: "]')!.getAttribute("aria-label")!;
+    expect(control("provider").value).toBe("");
+    expect(placeholders()).toEqual(["vps-ams-1", "ams", "Amsterdam"]);
+    await enter("provider", "vpstc-vps");
+    expect(placeholders()).toEqual(["vpstc-ist-1", "ist", "Istanbul"]);
+    expect(nameHelp()).toBe("Server name: A unique, permanent host name, such as the server ID in the provider's panel or vpstc-ist-1. It cannot be changed later.");
+    await enter("provider", "hosthatch-vps");
+    expect(placeholders()).toEqual(["hosthatch-ams-1", "ams", "Amsterdam"]);
+    expect(nameHelp()).not.toContain("vpstc");
+});
+
 it("shows the slot count for the entered vCPUs", async () => {
     await render();
     await enter("vCpu", "7");

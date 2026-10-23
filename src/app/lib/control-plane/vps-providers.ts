@@ -1,5 +1,9 @@
-/** The closed list of VPS provider ids the control plane accepts on host-scoped admin requests. */
-export const VPS_PROVIDERS = ["ovhcloud-vps", "contabo-vps"] as const;
+/**
+ * Exactly the control plane's closed `VPS_PROVIDER_IDS` (`src/hosting/providers/vps-provider-ids.ts`), in its order.
+ * Until a provider it adds is listed here, the fleet capacity read rejects it, the Onboard provider-account VPS card
+ * refuses its hosts and other views show its raw id, so the website updates first.
+ */
+export const VPS_PROVIDERS = ["ovhcloud-vps", "contabo-vps", "hosthatch-vps", "vpstc-vps"] as const;
 export type VpsProviderId = (typeof VPS_PROVIDERS)[number];
 
 /** One VPS host an admin request targets: the provider that owns it and its vendor service name. */
@@ -33,7 +37,12 @@ export function parseVpsHostSelection(value: unknown): VpsHostTarget {
     return { provider, serviceName };
 }
 
-const VPS_PROVIDER_LABELS: Record<VpsProviderId, string> = { "ovhcloud-vps": "OVHcloud", "contabo-vps": "Contabo" };
+const VPS_PROVIDER_LABELS: Record<VpsProviderId, string> = {
+    "ovhcloud-vps": "OVHcloud",
+    "contabo-vps": "Contabo",
+    "hosthatch-vps": "HostHatch",
+    "vpstc-vps": "VPS.TC",
+};
 
 /** Names a provider for display; a retired or unknown id from a historical row is shown verbatim. */
 export function vpsProviderLabel(provider: string): string {

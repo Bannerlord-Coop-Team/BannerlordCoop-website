@@ -7,6 +7,7 @@ import { formatAccountOwner, releaseChannelLabel } from "@/app/lib/control-plane
 import type { ServerDashboardResult, ServerProgress } from "@/app/lib/control-plane/types";
 import { serverProgressView, type ServerProgressView } from "@/app/lib/control-plane/server-progress";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
+import { vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
 import { ControlPlaneProgress, isActiveJob, useControlPlaneProgress } from "./ControlPlaneProgress";
 import { Panel, Definition, State, RecordedRelease, SectionHeading, BackupsTable, AuditTable } from "./ControlPlanePresentation";
 
@@ -60,7 +61,7 @@ export function ControlPlaneServerView({ initial, accounts }: { initial: ServerP
                 </section>
             )}
             <section className="grid gap-6 lg:grid-cols-3">
-                <Panel title="Ownership"><Definition label="Owner account" value={formatAccountOwner(server, ownerLabels)} /><Definition label="Region" value={hostingRegionLabel(server.friendlyRegion)} /><Definition label="Provider" value={server.provider} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
+                <Panel title="Ownership"><Definition label="Owner account" value={formatAccountOwner(server, ownerLabels)} /><Definition label="Region" value={hostingRegionLabel(server.friendlyRegion)} /><Definition label="Provider" value={vpsProviderLabel(server.provider)} /><Definition label="Resource" value={server.providerResourceId ?? "Unassigned"} /></Panel>
                 <Panel title="Desired / observed"><Definition label="Desired" value={server.desiredState} /><Definition label="VM" value={server.observedVmState} /><Definition label="Game" value={server.observedGameState} /><Definition label="Agent" value={result.dashboard.runtime?.agentHealthy ? "Healthy" : "Unavailable"} tone={result.dashboard.runtime?.agentHealthy ? "ok" : "warning"} /></Panel>
                 <Panel title="Composition"><Definition label="Channel" value={releaseChannelLabel(server.releaseChannel)} /><Definition label="Installed version" value={<RecordedRelease build={result.dashboard.installedBuild} buildId={server.installedBuildId} />} /><Definition label="Desired version" value={<RecordedRelease build={result.dashboard.desiredBuild} buildId={server.desiredBuildId} />} /><Definition label="Update policy" value={server.pinnedBuildId ? "Pinned version" : `Follow ${releaseChannelLabel(server.releaseChannel)} channel`} />{server.pinnedBuildId && <Definition label="Pinned version" value={<RecordedRelease build={pinnedBuild} buildId={server.pinnedBuildId} />} />}<Definition label="Save" value={result.dashboard.activeSave?.displayName ?? "Default bootstrap pending"} /></Panel>
             </section>

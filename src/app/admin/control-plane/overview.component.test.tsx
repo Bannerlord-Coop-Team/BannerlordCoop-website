@@ -131,7 +131,8 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
         if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
         if (request.operation === "vps-hosts") return {
             availableHosts: [{ provider: "ovhcloud-vps", serviceName: "vps-available.vps.ovh.us", label: "OVHcloud VPS · vps-available.vps.ovh.us" }],
-            hosts: [{ locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }] };
+            hosts: [{ provider: "vpstc-vps", locationId: "nyc", countryCode: "US", region: null, availableServers: 1, totalSlots: 1 },
+                { provider: "ovhcloud-vps", locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }] };
         // Only US-East has a free slot in the stored catalog, so it is the only Create region offered.
         if (request.operation === "hosting-regions") return { revision: 4, updatedAt: "2026-10-09T12:00:00.000Z", updatedBy: "supabase:admin",
             regions: hostingRegionCatalogPayload()
@@ -151,6 +152,8 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     const createCard = cardHtml(html, "create-server");
     expect(createCard.match(/<option value="us-east">US-East<\/option>/gu) ?? []).toHaveLength(1);
     expect(createCard).not.toContain('value="us-west"');
+    // Only providers holding a registered VPS can be pinned, named, in catalog order, after the empty "any" choice.
+    expect(createCard).toContain('<option value="" selected="">Any provider</option><option value="ovhcloud-vps">OVHcloud</option><option value="vpstc-vps">VPS.TC</option></select>');
     // This older inventory has no manualEntryProviders, so the manual card explains why it is unavailable.
     const manualCard = cardHtml(html, "onboard-manual-vps-host");
     expect(manualCard).toContain("Add manual VPS");

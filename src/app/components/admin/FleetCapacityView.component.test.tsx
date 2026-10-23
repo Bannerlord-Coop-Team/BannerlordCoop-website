@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 import { fleetCapacityHints } from "@/app/lib/control-plane/fleet-capacity";
+import { VPS_PROVIDERS } from "@/app/lib/control-plane/vps-providers";
 import type {
     HostingAdminFleetCapacity,
     HostingAdminSlotSizing,
@@ -364,23 +365,28 @@ it("says which VPSs lack host metrics, with a header note, even when the fleet h
     expect(pane("VPSs").textContent).not.toContain("Host metrics not measured yet");
 });
 
-it("names every provider the control plane knows, HostHatch included", async () => {
+it("names every provider the control plane knows, the manual-entry ones included", async () => {
     const hosthatch: HostingFleetCapacityHost = { ...matching, serviceName: "hh-ams-1", provider: "hosthatch-vps", regionKeys: ["netherlands"], instanceTypeKey: null,
         occupants: [{ serverId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", displayName: "Dutch Courage", demand: demandOf(0.8, GIB) }] };
+    const vpstc: HostingFleetCapacityHost = { ...matching, serviceName: "vpstc-ist-1", provider: "vpstc-vps", regionKeys: ["turkiye"], instanceTypeKey: null,
+        occupants: [{ serverId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", displayName: "Bosphorus", demand: demandOf(0.8, GIB) }] };
     mocks.request.mockResolvedValueOnce({
         ...capacity,
-        providers: [...capacity.providers, { ...capacity.providers[0]!, provider: "hosthatch-vps", hosts: 1, servers: 1 }],
-        instanceTypes: [...capacity.instanceTypes, { ...ovhFour, key: `hosthatch-vps|4|8|${HASWELL}|2400`, provider: "hosthatch-vps" }],
-        hosts: [...capacity.hosts, hosthatch],
+        providers: [...capacity.providers, ...(["hosthatch-vps", "vpstc-vps"] as const).map((provider) => ({ ...capacity.providers[0]!, provider, hosts: 1, servers: 1 }))],
+        instanceTypes: [...capacity.instanceTypes, ...(["hosthatch-vps", "vpstc-vps"] as const).map((provider) => ({ ...ovhFour, key: `${provider}|4|8|${HASWELL}|2400`, provider }))],
+        hosts: [...capacity.hosts, hosthatch, vpstc],
     });
     await open();
-    expect([...pane("Providers").querySelectorAll('tbody th[scope="row"]')].map((name) => name.textContent)).toEqual(["OVHcloud", "Contabo", "HostHatch"]);
+    expect([...pane("Providers").querySelectorAll('tbody th[scope="row"]')].map((name) => name.textContent)).toEqual(["OVHcloud", "Contabo", "HostHatch", "VPS.TC"]);
     expect(typeRow(`HostHatch · 4 vCPU · 3.82 GiB · ${HASWELL} · 2,400 MHz`).querySelector("th")!.textContent).toBe("HostHatch");
-    expect([...pane("VPSs").querySelectorAll('th[scope="rowgroup"]')].map((heading) => heading.textContent)).toContain("HostHatch · Netherlands");
+    expect(typeRow(`VPS.TC · 4 vCPU · 3.82 GiB · ${HASWELL} · 2,400 MHz`).querySelector("th")!.textContent).toBe("VPS.TC");
+    const groups = [...pane("VPSs").querySelectorAll('th[scope="rowgroup"]')].map((heading) => heading.textContent);
+    expect(groups).toContain("HostHatch · Netherlands");
+    expect(groups).toContain("VPS.TC · Türkiye");
     // No raw provider id anywhere on the tab: not in its text, nor in any title or ARIA attribute, hints included.
     const attributes = describingAttributes();
     expect(attributes.length).toBeGreaterThan(1000);
-    for (const id of ["ovhcloud-vps", "contabo-vps", "hosthatch-vps"]) {
+    for (const id of VPS_PROVIDERS) {
         expect(container.textContent).not.toContain(id);
         expect(attributes.filter((value) => value.includes(id))).toEqual([]);
     }

@@ -36,6 +36,8 @@ export type AdminActionField = {
     options?: AdminActionOption[];
     valueType?: "string" | "number" | "boolean" | "csv" | "nullable";
     help?: string;
+    /** An optional select's empty choice, which sends nothing; "None" when absent. */
+    emptyLabel?: string;
 };
 
 /** One administrator operation form: collects its fields, submits the typed request and shows the outcome. */
@@ -271,7 +273,7 @@ function ActionField({ field }: { field: AdminActionField }) {
                 <select name={field.name} required={field.required} {...(field.kind === "server" || field.kind === "job"
                     ? { value: currentTargetValue(field, targetValue), onChange: (event: React.ChangeEvent<HTMLSelectElement>) => setTargetValue(event.target.value) }
                     : { defaultValue: String(field.defaultValue ?? "") })} className={className}>
-                    {field.required ? <option value="" disabled>{field.options?.length ? "Select…" : "No options available"}</option> : <option value="">None</option>}
+                    {field.required ? <option value="" disabled>{field.options?.length ? "Select…" : "No options available"}</option> : <option value="">{field.emptyLabel ?? "None"}</option>}
                     {field.options?.map((option) => (
                         <option
                             key={`${option.value}:${option.updatedAt ?? ""}`}

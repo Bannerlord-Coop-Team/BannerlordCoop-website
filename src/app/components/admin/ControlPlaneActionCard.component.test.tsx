@@ -160,3 +160,17 @@ it("onboards the selected VPS with the provider the inventory listed it under", 
     expect(request.mock.calls[0]?.[0].input).not.toHaveProperty("host");
     expect(push).toHaveBeenCalledWith("/admin/control-plane?view=vps");
 });
+
+it("names an optional select's empty choice and sends a provider pin only when one is chosen", async () => {
+    request.mockResolvedValue({ outcome: "created" });
+    await act(async () => root.render(<ControlPlaneActionCard operation="create-server" title="Create" description="Create"
+        fields={[{ name: "displayName", label: "Display name", required: true, defaultValue: "Istanbul test" },
+            { name: "provider", label: "Provider", kind: "select", emptyLabel: "Any provider", options: [{ label: "VPS.TC", value: "vpstc-vps" }] }]} />));
+    const options = [...container.querySelector<HTMLSelectElement>('select[name="provider"]')!.options].map((option) => [option.value, option.textContent]);
+    expect(options).toEqual([["", "Any provider"], ["vpstc-vps", "VPS.TC"]]);
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(request.mock.calls[0]?.[0].input).not.toHaveProperty("provider");
+    await select("provider", 1);
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(request.mock.calls[1]?.[0].input).toMatchObject({ displayName: "Istanbul test", provider: "vpstc-vps" });
+});

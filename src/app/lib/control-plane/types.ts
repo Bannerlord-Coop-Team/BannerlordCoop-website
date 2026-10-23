@@ -602,19 +602,13 @@ export type HostingFleetCapacityVerdict = { kind: "at-risk" | "headroom" | "matc
 export type HostingFleetCapacityConcurrentSource = "measured" | "worst-case-occupants" | "slots";
 
 /**
- * A VPS provider as the fleet capacity read reports it: exactly the control plane's closed `VPS_PROVIDER_IDS`,
- * which include providers whose hosts the website does not manage yet.
- */
-export type HostingFleetCapacityProviderId = "ovhcloud-vps" | "contabo-vps" | "hosthatch-vps";
-
-/**
  * Whose per-server demand a VPS is modelled with: the servers that ran on the VPS itself, its instance type's, the
  * fleet's, or none yet. An instance type's is never `vps`.
  */
 export type HostingFleetCapacityDemandSource = "vps" | "type" | "fleet" | "none";
 
 export type HostingFleetCapacityProvider = {
-    provider: HostingFleetCapacityProviderId;
+    provider: VpsProviderId;
     hosts: number;
     servers: number;
     demand: HostingFleetCapacityDemand;
@@ -626,7 +620,7 @@ export type HostingFleetCapacityProvider = {
 export type HostingFleetCapacityInstanceType = {
     /** `provider|vCpu|GiB|cpu model|MHz rounded to 100`, such as `ovhcloud-vps|6|12|Intel Core Processor (Haswell, no TSX)|2400`. */
     key: string;
-    provider: HostingFleetCapacityProviderId;
+    provider: VpsProviderId;
     vCpu: number;
     memoryBytes: number | null;
     cpuModel: string | null;
@@ -657,7 +651,7 @@ export type HostingFleetCapacityOccupant = {
 
 export type HostingFleetCapacityHost = {
     serviceName: string;
-    provider: HostingFleetCapacityProviderId;
+    provider: VpsProviderId;
     regionKeys: string[];
     vCpu: number;
     /** From the VPS's latest host sample in the window; null without one. */

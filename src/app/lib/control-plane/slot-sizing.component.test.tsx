@@ -15,7 +15,6 @@ import {
     slotSizingHints,
     slotSizingHostGroups,
     slotSizingOverBudget,
-    slotSizingProviderLabel,
     slotSizingReasonDescription,
     slotSizingReasonLabel,
     slotSizingTypicalServer,
@@ -507,7 +506,6 @@ it("names each usable figure's source, the figures it knows, providers and figur
     expect([slotSizingCapacitySources(coresOnly), slotSizingCapacityFigures(coresOnly)]).toEqual(["Cores measured · memory unknown", "1.500 cores usable"]);
     const memoryOnly = { ...unmeasured, usableMemoryBytes: GIB, memorySource: "provider-vcpu" } as const;
     expect([slotSizingCapacitySources(memoryOnly), slotSizingCapacityFigures(memoryOnly)]).toEqual(["Cores unknown · memory borrowed (provider and vCPU)", "1.00 GiB usable"]);
-    expect(["ovhcloud-vps", "contabo-vps", "hosthatch-vps", "hetzner-cloud"].map(slotSizingProviderLabel)).toEqual(["OVHcloud", "Contabo", "HostHatch", "hetzner-cloud"]);
     expect(formatCoreHours(0.072)).toBe("0.072 core-h");
     expect(formatCoreHours(0)).toBe("0.000 core-h");
     expect(formatOverflowShare(0.0087)).toBe("0.87%");

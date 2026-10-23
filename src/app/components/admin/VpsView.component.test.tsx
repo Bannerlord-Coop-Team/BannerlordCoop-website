@@ -487,5 +487,5 @@ it("opens with the out-of-admission banner when a host's onboarding failed", asy
         sourceCommit: "target-source", updatedAt: "2026-10-23T00:53:36.115Z" } })) };
     await act(async () => root.render(<VpsView regionCatalog={[]} inventory={failed} accounts={[]} />));
     const alert = container.querySelector('[role="alert"][aria-label="VPS hosts with a failed onboarding"]');
-    expect(alert?.textContent).toContain("host-a (ovhcloud-vps): Failed at slot-3-isolated-apply with runner_onboarding_isolation_failed");
+    expect(alert?.textContent).toContain("host-a (OVHcloud): Failed at slot-3-isolated-apply with runner_onboarding_isolation_failed");
 });
