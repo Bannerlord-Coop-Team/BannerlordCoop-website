@@ -61,11 +61,15 @@ the website's side of it.
   - A mod installed players only because a SubModule's class or DLL is missing
     (`submodule-class-missing:<Class>`, `submodule-dll-missing:<File>`) cannot be
     switched to the server; the option is disabled and the note says why. A refused
-    switch (`mod_order_invalid` naming the mod) says the same.
+    switch says the same only when the control plane's refusal names that issue
+    (` Issue: <issue>.` after the module); otherwise, such as a dependency order the
+    same save broke, the ordinary load-rule message is shown.
   - When the server's runner lacks players-only support, the control plane reports
     every mod locked; the row shows the value it applies and that the server needs
-    a runner update first. A change refused with `runner_unsupported` says so.
-  - A list without `runsOn` (a control plane that predates it) shows no choice.
+    a runner update first. A change refused with `runner_unsupported` says so and
+    reloads the list, so those locks appear at once.
+  - A list without `runsOn` (a control plane that predates it) shows no choice. This
+    fallback goes once the control plane's writer gate is on for good (see Rollout).
 - **Mods players need**, below the list, names every enabled owner mod with its Id
   and exact version, players-only mods included (labelled "Players only: not run
   on the server"), and says that players need exactly these mods at these versions
@@ -199,15 +203,29 @@ The tab depends on, in order:
    **Deploy Supabase hosting APIs**), after probing that the deployed function accepts
    an 8 MiB `PUT` body and recording one full chunk's end-to-end time.
 
-Players-only mods (contract C3) roll out website first: this website accepts entries
-with or without the `runsOn`/`runsOnLocked` pair (one without the other is
-malformed), the new notes and `mod_assembly_conflict`, so it deploys before the
-control plane emits them.
-
 Until all three are in place the tab is visible but its requests fail (a missing
 proxy route reads as "The hosting service could not be reached"). Local tests use
 synthetic fixtures; they do not prove the Supabase body limit, chunk latency through
 Oracle, or that real mods load on the Linux server.
+
+### Players-only mods (contract C3)
+
+The website rolls out first. Both website deployments validate mod lists with the
+shared contract and reject fields they do not know, so **both** must be live before
+the control plane turns on its runs-on writer gate:
+
+- the Next app (its mods route handlers and browser client), and
+- the `my-servers` Edge Function, deployed by **Deploy Supabase hosting APIs**.
+
+If only the Next app is updated, the Edge Function rejects every list that carries
+`runsOn` and the Mods tab fails with `invalid_response` for every owner. Both accept
+entries with or without the `runsOn`/`runsOnLocked` pair (one without the other is
+malformed), the new notes, the F17 issues, typed refusals that end in
+` Issue: <issue>.`, and `mod_assembly_conflict`.
+
+The "without the pair" case exists only for a control plane below the writer gate.
+Remove it, and make the fields required, once the gate is on in production and a
+rollback below it is ruled out; a tracking issue is opened with the pull request.
 
 ## Run locally against the hosting sandbox
 
