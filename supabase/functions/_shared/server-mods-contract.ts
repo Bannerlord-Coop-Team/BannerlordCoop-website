@@ -84,7 +84,7 @@ const LOCK_REASON = /^[a-z][a-z-]{0,47}$/u;
 // Wire names of the players-only fields (contract C3). Control planes that predate players-only mods send
 // none of them, so each shape accepts them as an optional group; a rename changes these lines and the types below.
 // Remove the "none" case (and make the fields required) once the control plane's runs-on writer gate is on
-// in production and a rollback below it is ruled out; a tracking issue is opened with the pull request.
+// in production and a rollback below it is ruled out (BannerlordCoop-website#384).
 const ENTRY_KEYS = ["id", "name", "version", "enabled", "pinned", "required", "sizeBytes", "sha256", "dependsOn", "issues"] as const;
 const ENTRY_RUNS_ON_KEYS = ["runsOn", "runsOnDefault", "runsOnLocked"] as const;
 const ENTRY_LOCK_REASON_KEY = "runsOnLockReason";

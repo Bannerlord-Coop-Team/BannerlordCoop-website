@@ -235,7 +235,7 @@ malformed), the new notes, the F17 issues, typed refusals that end in
 
 The "none of them" case exists only for a control plane below the writer gate.
 Remove it, and make the fields required, once the gate is on in production and a
-rollback below it is ruled out; a tracking issue is opened with the pull request.
+rollback below it is ruled out (tracked in #384).
 
 ## Run locally against the hosting sandbox
 
