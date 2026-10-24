@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 import { ServerModsPanel } from "./ServerModsPanel";
 import {
-    moveServerMod, sameServerModOrder, serverModLoadOrder, ServerModsError, setServerModRunsOn, toggleServerMod, type ServerMod, type ServerModCatalog,
+    changedServerModRunsOn, moveServerMod, sameServerModOrder, serverModLoadOrder, ServerModsError, setServerModRunsOn, toggleServerMod, type ServerMod, type ServerModCatalog,
 } from "@/app/lib/hosting/server-mods";
 import { createMockServerModCatalog, sampleOwnerMod, sampleServerMods } from "./ServerModsPanel.test-utils";
 
@@ -490,13 +490,24 @@ it("keeps a mod whose SubModule class is missing players only and explains why",
     expect(row("Gamma").textContent).not.toContain("The server won't run this mod's code");
 });
 
-it("explains a refused switch to the server and shows the saved list again", async () => {
+it("explains a refused switch to the server by the control plane's issue and shows the saved list again", async () => {
     const catalog = createMockServerModCatalog(runsOnMods({ Delta: { runsOn: "players" } }));
-    vi.spyOn(catalog, "saveServerModOrder").mockRejectedValueOnce(new ServerModsError("mod_order_invalid", false, "Delta"));
+    vi.spyOn(catalog, "saveServerModOrder")
+        .mockRejectedValueOnce(new ServerModsError("mod_order_invalid", false, "Delta", "submodule-class-missing:Delta.SubModule"))
+        .mockRejectedValueOnce(new ServerModsError("mod_order_invalid", false, "Delta"));
     await render(catalog);
     await chooseRunsOn("Delta", "server");
     expect(container.textContent).toContain("Delta can't run on the server because a SubModule class or DLL it names is missing.");
     expect(row("Delta").querySelector("select")!.value).toBe("players");
+    await chooseRunsOn("Delta", "server");
+    expect(container.textContent).toContain("This order breaks a load rule for Delta.");
+    expect(container.textContent).not.toContain("can't run on the server");
+});
+
+it("lets the control plane refuse a switch to the server that its F17 rule forbids", async () => {
+    const catalog = createMockServerModCatalog(runsOnMods({ Delta: { runsOn: "players", issues: ["submodule-dll-missing:Delta.dll"] } }));
+    await expect(catalog.saveServerModOrder(SERVER_ID, catalog.state.revision, catalog.state.mods.map(({ id, enabled }) => id === "Delta" ? { id, enabled, runsOn: "server" } : { id, enabled })))
+        .rejects.toMatchObject({ code: "mod_order_invalid", modId: "Delta", detail: "submodule-dll-missing:Delta.dll" });
 });
 
 it("says the runner needs an update when it refuses a runs-on change or reports every mod locked", async () => {
@@ -504,9 +515,14 @@ it("says the runner needs an update when it refuses a runs-on change or reports 
     vi.spyOn(catalog, "saveServerModOrder").mockRejectedValueOnce(new ServerModsError("runner_unsupported"));
     vi.spyOn(window, "confirm").mockReturnValue(true);
     await render(catalog);
+    // The runner was rolled back after the list loaded: the refusal reloads the list, which now reports every mod locked.
+    const locked = runsOnMods({ "Bannerlord.Harmony": { runsOn: "server" }, ItemQualityIndicator: { runsOnLocked: true }, Gamma: { runsOnLocked: true }, Delta: { runsOnLocked: true } });
+    const list = vi.spyOn(catalog, "listServerMods").mockResolvedValueOnce({ ...catalog.state, mods: locked });
     await chooseRunsOn("Gamma", "players");
+    expect(list).toHaveBeenCalledOnce();
     expect(container.textContent).toContain("This server's runner doesn't support players-only mods yet, so nothing was changed.");
-    expect(row("Gamma").querySelector("select")!.value).toBe("server");
+    expect(row("Gamma").querySelector("select")).toBeNull();
+    expect(row("Gamma").textContent).toContain("This server needs a runner update before this can be changed.");
 
     await act(async () => root.unmount());
     root = createRoot(container);
@@ -527,9 +543,21 @@ it("changes runs-on only where the owner may and names it in the order only wher
     expect(runsOn(setServerModRunsOn(base, "Delta", "server"), "Delta")).toBe("players");
     const changed = setServerModRunsOn(base, "Gamma", "players");
     expect(sameServerModOrder(changed, base)).toBe(false);
-    expect(serverModLoadOrder(changed, base).filter(entry => "runsOn" in entry)).toEqual([{ id: "Gamma", enabled: true, runsOn: "players" }]);
-    expect(serverModLoadOrder(base, base).some(entry => "runsOn" in entry)).toBe(false);
+    expect(changedServerModRunsOn(changed, base).map(mod => mod.id)).toEqual(["Gamma"]);
+    expect(serverModLoadOrder(changed, changedServerModRunsOn(changed, base)).filter(entry => "runsOn" in entry)).toEqual([{ id: "Gamma", enabled: true, runsOn: "players" }]);
+    expect(changedServerModRunsOn(base, base)).toEqual([]);
     const legacy = mods();
     expect(setServerModRunsOn(legacy, "Alpha", "players")).toEqual(legacy);
-    expect(serverModLoadOrder(legacy, legacy)).toEqual(legacy.map(({ id, enabled }) => ({ id, enabled })));
+    expect(changedServerModRunsOn(legacy, legacy)).toEqual([]);
+    expect(serverModLoadOrder(legacy, [])).toEqual(legacy.map(({ id, enabled }) => ({ id, enabled })));
+});
+
+it("installs uploads with the control plane's runs-on defaults", async () => {
+    const catalog = createMockServerModCatalog(runsOnMods());
+    await render(catalog);
+    await chooseFolder({ "Bannerlord.FamilyTree/SubModule.xml": submodule("Bannerlord.FamilyTree", "Family Tree", "v1.0.0") });
+    await chooseFolder({ "NewGameplay/SubModule.xml": submodule("NewGameplay", "New Gameplay", "v1.0.0") });
+    expect(row("Family Tree").querySelector("select")!.value).toBe("players");
+    expect(row("Family Tree").textContent).not.toContain("The server won't run this mod's code");
+    expect(row("New Gameplay").querySelector("select")!.value).toBe("server");
 });

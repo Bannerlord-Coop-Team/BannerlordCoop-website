@@ -10,7 +10,8 @@ export type ServerModsState = ModsState;
 export type ServerModOrderEntry = ModOrderEntry;
 export type ServerModRunsOn = ModRunsOn;
 
-/** Mods that only change players' interface or visuals, so players-only is their default (contract C3); compared folded. */
+/** Mods that only change players' interface or visuals, so players-only is their default (contract C3); compared folded.
+ * A copy of the control plane's `CURATED_PLAYERS_IDS` (`src/hosting/mods/mod-runs-on.ts` there); change both together. */
 const CURATED_PLAYERS_ONLY_MOD_IDS: ReadonlySet<string> = new Set(["itemqualityindicator", "bannerlord.familytree", "familyappearanceeditor"]);
 /** The server provides Harmony, so this owner mod always runs players-only. */
 const HARMONY_MOD_ID = "bannerlord.harmony";
@@ -38,7 +39,7 @@ export interface ServerModCatalog {
 
 /** A refused or unconfirmed catalog call: the closed code, whether retrying may help, and any module it names. */
 export class ServerModsError extends Error {
-    /** Records the code, retryability, a named module and (for a rejected upload) the rejection code. */
+    /** Records the code, retryability, a named module and a detail: a rejected upload's code, or the issue a refusal names. */
     constructor(readonly code: string, readonly retryable = false, readonly modId: string | null = null, readonly detail: string | null = null) {
         super(code);
         this.name = "ServerModsError";
@@ -68,9 +69,9 @@ export function toggleServerMod(mods: readonly ServerMod[], id: string): ServerM
     return mods.map(mod => mod.id !== id || !isOwnerMod(mod) ? mod : { ...mod, enabled: !mod.enabled });
 }
 
-/** Returns the complete requested order the load-order route takes, naming `runsOn` only where it differs from `base`. */
-export function serverModLoadOrder(mods: readonly ServerMod[], base: readonly ServerMod[]): ServerModOrderEntry[] {
-    const changed = new Set(changedServerModRunsOn(mods, base).map(mod => mod.id));
+/** Returns the complete requested order the load-order route takes, naming `runsOn` only for the `changedRunsOn` mods. */
+export function serverModLoadOrder(mods: readonly ServerMod[], changedRunsOn: readonly ServerMod[]): ServerModOrderEntry[] {
+    const changed = new Set(changedRunsOn.map(mod => mod.id));
     return mods.map(({ id, enabled, runsOn }) => runsOn !== undefined && changed.has(id) ? { id, enabled, runsOn } : { id, enabled });
 }
 
@@ -90,9 +91,14 @@ export function canChooseServerModRunsOn(mod: ServerMod): boolean {
     return isOwnerMod(mod) && mod.runsOn !== undefined && mod.runsOnLocked === false;
 }
 
+/** Whether an issue says a SubModule's class or DLL is missing, so the mod's code cannot run on the server. */
+export function isServerCodeUnavailableIssue(issue: string): boolean {
+    return SERVER_CODE_UNAVAILABLE_ISSUE_KINDS.some(kind => issue.startsWith(kind));
+}
+
 /** Whether the server can run this mod's code; a mod whose SubModule class or DLL is missing must stay players-only. */
 export function canRunServerModOnServer(mod: ServerMod): boolean {
-    return !mod.issues.some(issue => SERVER_CODE_UNAVAILABLE_ISSUE_KINDS.some(kind => issue.startsWith(kind)));
+    return !mod.issues.some(isServerCodeUnavailableIssue);
 }
 
 /** Sets where an owner mod runs; locked mods, mods without the field and an impossible server choice stay unchanged. */

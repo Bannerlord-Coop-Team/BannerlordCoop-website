@@ -6,7 +6,7 @@ import {
     isOwnerModId,
     modChunkCount,
     modChunkLength,
-    modIdFromErrorMessage,
+    modRefusalFromErrorMessage,
     parseModChunkDigest,
     parseModChunkQuery,
     parseModChunkReceipt,
@@ -133,8 +133,11 @@ test("validates upload results against the request that produced them", () => {
 test("recognizes reserved ids and reads the module named in typed error messages", () => {
     for (const id of ["Native", "coop", "CoopNightly", "DedicatedServer.Linux", "dedicatedserver.Other", "..", "StoryMode"]) assert.equal(isOwnerModId(id), false);
     assert.equal(isOwnerModId("Bannerlord.ButterLib"), true);
-    assert.equal(modIdFromErrorMessage("The requested module order is invalid. Module: Bannerlord.Harmony."), "Bannerlord.Harmony");
-    assert.equal(modIdFromErrorMessage("The requested module order is invalid."), null);
-    assert.equal(modIdFromErrorMessage("The requested module order is invalid. Module: FamilyAppearanceEditor. Issue: submodule-class-missing:FamilyAppearanceEditor.SubModule."), "FamilyAppearanceEditor");
-    assert.equal(modIdFromErrorMessage("The requested module order is invalid. Module: Some.Mod. Issue: <script>."), null);
+    assert.deepEqual(modRefusalFromErrorMessage("The requested module order is invalid. Module: Bannerlord.Harmony."), { modId: "Bannerlord.Harmony", issue: null });
+    assert.equal(modRefusalFromErrorMessage("The requested module order is invalid."), null);
+    assert.deepEqual(modRefusalFromErrorMessage("The requested module order is invalid. Module: FamilyAppearanceEditor. Issue: submodule-class-missing:FamilyAppearanceEditor.SubModule."),
+        { modId: "FamilyAppearanceEditor", issue: "submodule-class-missing:FamilyAppearanceEditor.SubModule" });
+    assert.deepEqual(modRefusalFromErrorMessage("The requested module order is invalid. Module: Fae. Issue: submodule-dll-missing:Fae Core.dll."), { modId: "Fae", issue: "submodule-dll-missing:Fae Core.dll" });
+    assert.equal(modRefusalFromErrorMessage("The requested module order is invalid. Module: Some.Mod. Issue: <script>."), null);
+    assert.equal(modRefusalFromErrorMessage("Invalid. Module: ../etc."), null);
 });

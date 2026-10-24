@@ -1,9 +1,15 @@
-import {
-    ServerModsError, canChooseServerModRunsOn, canRunServerModOnServer, findServerMod, isOwnerMod, type ServerMod, type ServerModCatalog, type ServerModOrderEntry, type ServerModsState,
-} from "@/app/lib/hosting/server-mods";
+import { ServerModsError, findServerMod, isOwnerMod, type ServerMod, type ServerModCatalog, type ServerModOrderEntry, type ServerModsState } from "@/app/lib/hosting/server-mods";
 
 // An in-memory ServerModCatalog for the Mods panel's component tests, imitating the control plane's observable
-// rules (revision checks, pinned and required modules, dependency refusals, in-place replacement).
+// rules (revision checks, pinned and required modules, dependency refusals, in-place replacement, runs-on rules).
+// Its runs-on rules are written out from contract C3 rather than taken from the website's helpers, so a wrong
+// website predicate is refused here as the control plane would refuse it.
+
+/** C3 section 3: uploads with these ids (case-insensitive) default to players-only; Harmony is also locked. */
+const CP_PLAYERS_DEFAULT_IDS: ReadonlySet<string> = new Set(["bannerlord.harmony", "itemqualityindicator", "bannerlord.familytree", "familyappearanceeditor"]);
+const CP_HARMONY_ID = "bannerlord.harmony";
+/** C3 F17: these issues forbid switching a mod to the server. */
+const CP_SERVER_BLOCKING_ISSUE_PREFIXES = ["submodule-class-missing:", "submodule-dll-missing:"];
 
 /** Builds an image module entry; `runsOn` adds the locked server pair a players-only control plane reports. */
 function imageModule(id: string, kind: "pinned" | "required", runsOn: boolean): ServerMod {
@@ -28,13 +34,22 @@ function revisionOf(generation: number): string {
     return generation.toString(16).padStart(64, "0");
 }
 
-/** Applies a requested `runsOn` as the control plane does: unchanged values pass, locked or impossible changes are refused. */
+/** Applies a requested `runsOn` as C3 section 2 says: image modules and Harmony refuse a change, an unsupported runner refuses any, F17 mods refuse the server. */
 function applyRunsOn(mod: ServerMod, entry: ServerModOrderEntry): ServerMod {
     if (entry.runsOn === undefined || entry.runsOn === mod.runsOn) return mod;
     if (mod.runsOn === undefined) throw new ServerModsError("invalid_request");
-    if (mod.runsOnLocked) throw new ServerModsError(isOwnerMod(mod) ? "runner_unsupported" : "mod_order_invalid", false, isOwnerMod(mod) ? null : mod.id);
-    if (!canChooseServerModRunsOn(mod) || (entry.runsOn === "server" && !canRunServerModOnServer(mod))) throw new ServerModsError("mod_order_invalid", false, mod.id);
+    if (mod.pinned || mod.required || mod.id.toLowerCase() === CP_HARMONY_ID) throw new ServerModsError("mod_order_invalid", false, mod.id);
+    if (mod.runsOnLocked) throw new ServerModsError("runner_unsupported");
+    const blocking = entry.runsOn === "server" ? mod.issues.find(issue => CP_SERVER_BLOCKING_ISSUE_PREFIXES.some(prefix => issue.startsWith(prefix))) : undefined;
+    if (blocking !== undefined) throw new ServerModsError("mod_order_invalid", false, mod.id, blocking);
     return { ...mod, runsOn: entry.runsOn };
+}
+
+/** Returns a new upload's runs-on pair as C3 section 3 defaults it, or nothing when the list does not report runs-on. */
+function uploadRunsOn(id: string, reportsRunsOn: boolean): Partial<ServerMod> {
+    if (!reportsRunsOn) return {};
+    const folded = id.toLowerCase();
+    return { runsOn: CP_PLAYERS_DEFAULT_IDS.has(folded) ? "players" : "server", runsOnLocked: folded === CP_HARMONY_ID };
 }
 
 export type MockServerModCatalog = ServerModCatalog & { readonly state: ServerModsState };
@@ -84,7 +99,7 @@ export function createMockServerModCatalog(mods: ServerMod[] = sampleServerMods(
             onProgress({ phase: "creating", sentBytes: 0, totalBytes });
             onProgress({ phase: "uploading", sentBytes: totalBytes, totalBytes });
             onProgress({ phase: "installing", sentBytes: totalBytes, totalBytes });
-            const runsOn = state.mods.some(mod => mod.runsOn !== undefined) ? { runsOn: "server" as const, runsOnLocked: false } : {};
+            const runsOn = uploadRunsOn(archive.manifest.id, state.mods.some(mod => mod.runsOn !== undefined));
             const installed = sampleOwnerMod(archive.manifest.id, { name: archive.manifest.name, version: archive.manifest.version, sizeBytes: archive.uncompressedBytes, ...runsOn });
             const existing = findServerMod(state.mods, archive.manifest.id);
             if (existing) return commit(state.mods.map(mod => mod === existing ? { ...installed, enabled: existing.enabled, ...(existing.runsOn === undefined ? {} : { runsOn: existing.runsOn }) } : mod));

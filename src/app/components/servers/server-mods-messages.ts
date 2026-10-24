@@ -1,6 +1,6 @@
 import type { Translator } from "@/app/lib/localization/types";
 import type { ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
-import type { ServerMod, ServerModsError } from "@/app/lib/hosting/server-mods";
+import { isServerCodeUnavailableIssue, type ServerMod, type ServerModsError } from "@/app/lib/hosting/server-mods";
 import type { ModLoadFailure } from "@/app/lib/hosting/my-servers-server";
 
 // Owner-facing copy for the Mods tab: installed-mod notes, API refusals and folder problems, each from a
@@ -58,8 +58,10 @@ export function describeModIssue(issue: string, t: Translate): string {
     return key === undefined ? t("mods.issue.other", { issue }) : t(key, { value: issue.slice(separator + 1) });
 }
 
-/** Explains a refused or unconfirmed catalog call; `modId` names the module the refusal concerns. */
-export function modsErrorMessage(error: ServerModsError, t: Translate): string {
+/** Explains a refused or unconfirmed catalog call; `changedRunsOn` are the mods whose runs-on the refused save changed. */
+export function modsErrorMessage(error: ServerModsError, t: Translate, changedRunsOn: readonly ServerMod[] = []): string {
+    const runsOn = runsOnRefusalMessage(error, changedRunsOn, t);
+    if (runsOn !== null) return runsOn;
     if (error.code === "server_suspended" && !error.retryable) return t("action.refusal.serverSuspended");
     const id = error.modId ?? "";
     if (error.code === "upload_rejected") {
@@ -77,12 +79,14 @@ export function modsErrorMessage(error: ServerModsError, t: Translate): string {
     return key === undefined ? t("mods.error.other") : t(key);
 }
 
-/** Explains a refused save that changed where mods run, or returns null when the refusal concerns something else. */
-export function runsOnSaveErrorMessage(error: ServerModsError, changedRunsOn: readonly ServerMod[], t: Translate): string | null {
+/** Explains a refusal caused by a runs-on change (an unsupported runner, or server code the mod lacks); null for any other refusal. */
+function runsOnRefusalMessage(error: ServerModsError, changedRunsOn: readonly ServerMod[], t: Translate): string | null {
     if (changedRunsOn.length === 0) return null;
     if (error.code === "runner_unsupported") return t("mods.runsOn.runnerUnsupported");
+    // Only the control plane's named issue tells a missing SubModule apart from, say, a dependency order the same save broke.
+    if (error.code !== "mod_order_invalid" || error.detail === null || !isServerCodeUnavailableIssue(error.detail)) return null;
     const named = error.modId?.toLowerCase();
-    const refused = error.code === "mod_order_invalid" ? changedRunsOn.find(mod => mod.runsOn === "server" && mod.id.toLowerCase() === named) : undefined;
+    const refused = changedRunsOn.find(mod => mod.runsOn === "server" && mod.id.toLowerCase() === named);
     return refused === undefined ? null : t("mods.runsOn.serverRefused", { id: refused.id });
 }
 

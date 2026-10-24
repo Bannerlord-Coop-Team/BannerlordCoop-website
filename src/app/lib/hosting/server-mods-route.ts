@@ -10,7 +10,7 @@ import {
     MOD_UPLOAD_CHUNK_BYTES,
     isModJsonRoute,
     isModUuid,
-    modIdFromErrorMessage,
+    modRefusalFromErrorMessage,
     parseModChunkDigest,
     parseModChunkQuery,
     parseModsRequest,
@@ -30,7 +30,8 @@ const ERROR_STATUS: Readonly<Record<string, number>> = {
 };
 
 /** The browser-facing failure: a closed code, whether an identical resend may succeed, and a module the refusal names. */
-export type ServerModsRouteError = { code: string; retryable: boolean; modId: string | null };
+/** A refusal in the browser envelope; `issue` appears only when the control plane named one (a refused runs-on switch). */
+export type ServerModsRouteError = { code: string; retryable: boolean; modId: string | null; issue?: string };
 
 export type ServerModsRouteDependencies = Readonly<{
     getAuthClient: () => Promise<Pick<SupabaseClient, "auth">>;
@@ -132,15 +133,16 @@ async function relay(call: () => Promise<unknown>): Promise<Response> {
         return Response.json({ ok: true, result: await call() }, { headers: { "cache-control": "private, no-store" } });
     } catch (error) {
         if (error instanceof MyServersApiError) {
-            return failure(error.code, error.retryable, modIdFromErrorMessage(error.message));
+            const refusal = modRefusalFromErrorMessage(error.message);
+            return failure(error.code, error.retryable, refusal?.modId ?? null, refusal?.issue ?? null);
         }
         // A result that broke the contract is an unknown outcome; an identical resend replays safely.
         return failure("invalid_response", true);
     }
 }
 
-/** Answers one failure in the browser envelope. */
-function failure(code: string, retryable: boolean, modId: string | null = null): Response {
-    const error: ServerModsRouteError = { code, retryable, modId };
+/** Answers one failure in the browser envelope, naming the issue only when there is one. */
+function failure(code: string, retryable: boolean, modId: string | null = null, issue: string | null = null): Response {
+    const error: ServerModsRouteError = issue === null ? { code, retryable, modId } : { code, retryable, modId, issue };
     return Response.json({ ok: false, error }, { status: ERROR_STATUS[code] ?? 409, headers: { "cache-control": "private, no-store" } });
 }

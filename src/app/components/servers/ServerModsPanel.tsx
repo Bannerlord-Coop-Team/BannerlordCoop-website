@@ -14,7 +14,7 @@ import {
 import { createBrowserServerModCatalog } from "@/app/lib/hosting/server-mods-transport";
 import { MOD_MAXIMUM_ENABLED_OWNER_MODS } from "../../../../supabase/functions/_shared/server-mods-contract";
 import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
-import { archiveProblemMessage, describeModIssue, modsErrorMessage, runsOnSaveErrorMessage } from "./server-mods-messages";
+import { archiveProblemMessage, describeModIssue, modsErrorMessage } from "./server-mods-messages";
 import { fileButtonClass } from "./server-file-styles";
 
 const iconButtonClass = "inline-flex size-10 shrink-0 items-center justify-center rounded-md text-foreground-muted hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
@@ -134,9 +134,11 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         }
     }
 
-    /** Shows the saved list again after a failure: plain refusals reuse it, stale edits and unknown outcomes reload it. */
-    async function reconcile(error: unknown) {
-        const unchanged = error instanceof ServerModsError && !error.retryable && PLAIN_REFUSALS.includes(error.code);
+    /** Shows the saved list again after a failure: plain refusals reuse it; stale edits, unknown outcomes and a runner that refused a runs-on change reload it. */
+    async function reconcile(error: unknown, changedRunsOn = false) {
+        // A runner without players-only support means the list is out of date: a reload shows every mod locked.
+        const staleRunner = changedRunsOn && error instanceof ServerModsError && error.code === "runner_unsupported";
+        const unchanged = error instanceof ServerModsError && !error.retryable && PLAIN_REFUSALS.includes(error.code) && !staleRunner;
         if (unchanged && loadedRef.current) {
             updateDraft(loadedRef.current.mods);
             return;
@@ -156,15 +158,14 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
             for (let base = loadedRef.current; base && !editingOrder() && !sameServerModOrder(draftRef.current, base.mods); base = loadedRef.current) {
                 const sent = draftRef.current;
                 changedRunsOn = changedServerModRunsOn(sent, base.mods);
-                const state = await catalog.saveServerModOrder(serverId, base.revision, serverModLoadOrder(sent, base.mods));
+                const state = await catalog.saveServerModOrder(serverId, base.revision, serverModLoadOrder(sent, changedRunsOn));
                 recordConfirmed(state);
                 if (draftRef.current === sent) updateDraft(state.mods);
             }
             setNotice({ tone: "info", text: t("mods.saved") });
         } catch (error) {
-            const runsOnMessage = error instanceof ServerModsError ? runsOnSaveErrorMessage(error, changedRunsOn, t) : null;
-            setNotice({ tone: "error", text: runsOnMessage ?? (error instanceof ServerModsError ? modsErrorMessage(error, t) : t("mods.error.other")) });
-            await reconcile(error);
+            setNotice({ tone: "error", text: error instanceof ServerModsError ? modsErrorMessage(error, t, changedRunsOn) : t("mods.error.other") });
+            await reconcile(error, changedRunsOn.length > 0);
         } finally {
             savingRef.current = false;
             setSaving(false);
@@ -367,8 +368,7 @@ function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragSta
 function ModRunsOnChoice({ mod, id, editable, onChange }: { mod: ServerMod; id: string; editable: boolean; onChange: (runsOn: ServerModRunsOn) => void }) {
     const { t } = useTranslations("managed-server");
     if (!canChooseServerModRunsOn(mod)) {
-        const fixed = isServerProvidedMod(mod) ? "mods.runsOn.serverProvided" : mod.runsOn === "players" ? "mods.runsOn.fixedPlayers" : "mods.runsOn.fixedServer";
-        return <p className="mt-1 flex items-center gap-1.5 text-xs text-foreground-muted"><Lock className="size-3 shrink-0" aria-hidden="true" />{t(fixed)}</p>;
+        return <p className="mt-1 flex items-center gap-1.5 text-xs text-foreground-muted"><Lock className="size-3 shrink-0" aria-hidden="true" />{t(lockedRunsOnKey(mod))}</p>;
     }
     const serverAllowed = canRunServerModOnServer(mod);
     return <div className="mt-1 text-xs">
@@ -382,6 +382,13 @@ function ModRunsOnChoice({ mod, id, editable, onChange }: { mod: ServerMod; id: 
         </span>
         {isUncuratedPlayersOnlyMod(mod) && <p className="mt-1 text-amber-200">{t("mods.runsOn.uncuratedWarning")}</p>}
     </div>;
+}
+
+/** Picks the copy for a runs-on value the owner cannot change. */
+function lockedRunsOnKey(mod: ServerMod): string {
+    if (isServerProvidedMod(mod)) return "mods.runsOn.serverProvided";
+    if (mod.runsOn === "players") return "mods.runsOn.fixedPlayers";
+    return "mods.runsOn.fixedServer";
 }
 
 /** Lists the mods every player must install, at their exact versions, from the saved list. */

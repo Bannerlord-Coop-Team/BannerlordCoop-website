@@ -195,6 +195,8 @@ test("maps Edge failures to closed codes, keeps retryability and names the refus
     const cases: [Error, number, unknown][] = [
         [new MyServersApiError("rate_limited", "Too many.", true), 429, { code: "rate_limited", retryable: true, modId: null }],
         [new MyServersApiError("mod_order_invalid", "The requested module order is invalid. Module: Bannerlord.Harmony.", false), 400, { code: "mod_order_invalid", retryable: false, modId: "Bannerlord.Harmony" }],
+        [new MyServersApiError("mod_order_invalid", "The requested module order is invalid. Module: Fae. Issue: submodule-class-missing:Fae.SubModule.", false), 400,
+            { code: "mod_order_invalid", retryable: false, modId: "Fae", issue: "submodule-class-missing:Fae.SubModule" }],
         [new MyServersApiError("revision_conflict", "Changed.", false), 409, { code: "revision_conflict", retryable: false, modId: null }],
         [new MyServersApiError("invalid_response", "Bad.", true), 502, { code: "invalid_response", retryable: true, modId: null }],
         [new Error("Result belongs to another upload"), 502, { code: "invalid_response", retryable: true, modId: null }],

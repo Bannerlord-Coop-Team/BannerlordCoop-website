@@ -56,13 +56,18 @@ export const MOD_CHUNK_PATH = "/api/v1/mods/uploads/chunk";
 /** Routes that carry a caller-generated `requestId` and replay on resend. */
 const MUTATION_ROUTES: ReadonlySet<ModJsonRoute> = new Set(["load-order", "uploads", "complete", "delete"]);
 
-const MOD_ID_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/u;
+// Unanchored grammars shared by the field validators and the typed error-message parser, so they cannot drift.
+const MOD_ID_BODY = String.raw`[A-Za-z0-9_.-]{1,64}`;
+const ISSUE_BODY = String.raw`[a-z][a-z-]{0,47}(?::[A-Za-z0-9 _.+-]{1,128})?`;
+const MOD_ID_PATTERN = new RegExp(`^${MOD_ID_BODY}$`, "u");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const CALLER_SHA256 = /^[A-Fa-f0-9]{64}$/u;
 const VERSION = /^[A-Za-z0-9._+-]{1,64}$/u;
 const NAME = /^[^\p{C}]+$/u;
-const ISSUE = /^[a-z][a-z-]{0,47}(?::[A-Za-z0-9 _.+-]{1,128})?$/u;
+const ISSUE = new RegExp(`^${ISSUE_BODY}$`, "u");
+/** The suffix the control plane appends to a typed error message: ` Module: <Id>.`, optionally then ` Issue: <issue>.`. */
+const REFUSAL_SUFFIX = new RegExp(String.raw` Module: (${MOD_ID_BODY})\.(?: Issue: (${ISSUE_BODY})\.)?$`, "u");
 const STATUS = /^[a-z][a-z-]{0,31}$/u;
 const ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/u;
 const CHUNK_INDEX = /^(?:0|[1-9][0-9]{0,2})$/u;
@@ -74,6 +79,8 @@ export type ModRunsOn = "server" | "players";
 const RUNS_ON_VALUES: ReadonlySet<unknown> = new Set<ModRunsOn>(["server", "players"]);
 // Wire names of the players-only fields (contract C3). Control planes that predate players-only mods send
 // neither, so each shape accepts them as an optional group; a rename changes these lines and the types below.
+// Remove the "neither" case (and make the fields required) once the control plane's runs-on writer gate is on
+// in production and a rollback below it is ruled out; a tracking issue is opened with the pull request.
 const ENTRY_KEYS = ["id", "name", "version", "enabled", "pinned", "required", "sizeBytes", "sha256", "dependsOn", "issues"] as const;
 const ENTRY_RUNS_ON_KEYS = ["runsOn", "runsOnLocked"] as const;
 const ORDER_KEYS = ["id", "enabled"] as const;
@@ -311,13 +318,18 @@ export function parseModUploadStatus(value: unknown, uploadId?: string): ModUplo
     return { uploadId: id, status: value.status };
 }
 
-/** Returns the module id the control plane appends to a typed error message (` Module: <Id>.`, optionally then ` Issue: <issue>.`), or null. */
-export function modIdFromErrorMessage(message: string): string | null {
-    const match = / Module: ([A-Za-z0-9_.-]{1,64})\.(?: Issue: [a-z][a-z-]{0,47}(?::[A-Za-z0-9 _.+-]{1,128})?\.)?$/u.exec(message);
-    return match === null ? null : match[1];
+/** Returns the module and any issue the control plane appends to a typed error message, or null when it names no module. */
+export function modRefusalFromErrorMessage(message: string): { modId: string; issue: string | null } | null {
+    const match = REFUSAL_SUFFIX.exec(message);
+    return match === null ? null : { modId: match[1], issue: match[2] ?? null };
 }
 
-/** Validates one API mod entry; pinned and required are exclusive and image modules carry no digest. */
+/** Whether a value has the installed-mod issue shape (`kind` or `kind:value`). */
+export function isModIssue(value: unknown): value is string {
+    return typeof value === "string" && ISSUE.test(value);
+}
+
+/** Validates one API mod entry and its optional runs-on pair; pinned and required are exclusive and image modules carry no digest. */
 function parseModEntry(value: unknown): ModEntry {
     if (!isRecord(value)) throw new Error("Invalid mod entry");
     const reportsRunsOn = ENTRY_RUNS_ON_KEYS.some((key) => Object.hasOwn(value, key));
@@ -330,7 +342,7 @@ function parseModEntry(value: unknown): ModEntry {
     if (!boundedInteger(value.sizeBytes, MOD_ARCHIVE_MAXIMUM_UNCOMPRESSED_BYTES)) throw new Error("Invalid mod size");
     if (value.sha256 !== null && !isSha256(value.sha256)) throw new Error("Invalid mod digest");
     if (!Array.isArray(value.dependsOn) || value.dependsOn.length > 64 || !value.dependsOn.every(isModId)) throw new Error("Invalid mod dependencies");
-    if (!Array.isArray(value.issues) || value.issues.length > 64 || !value.issues.every((issue) => typeof issue === "string" && ISSUE.test(issue))) throw new Error("Invalid mod issues");
+    if (!Array.isArray(value.issues) || value.issues.length > 64 || !value.issues.every(isModIssue)) throw new Error("Invalid mod issues");
     const entry: ModEntry = {
         id: value.id, name: value.name as string, version: value.version as string, enabled: value.enabled, pinned: value.pinned, required: value.required,
         sizeBytes: value.sizeBytes as number, sha256: value.sha256 as string | null, dependsOn: [...value.dependsOn], issues: [...value.issues as string[]],
@@ -345,7 +357,7 @@ function parseRunsOnFields(value: Record<string, unknown>): Required<Pick<ModEnt
 }
 
 /** Whether a value names where a mod's code runs. */
-export function isModRunsOn(value: unknown): value is ModRunsOn {
+function isModRunsOn(value: unknown): value is ModRunsOn {
     return RUNS_ON_VALUES.has(value);
 }
 

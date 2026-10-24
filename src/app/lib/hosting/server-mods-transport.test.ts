@@ -36,9 +36,12 @@ test("retries a reply without the route envelope only for gateway, deadline and 
 test("passes a typed refusal through and treats a malformed one as no envelope", async () => {
     const refusal = { ok: false, error: { code: "mod_order_invalid", retryable: false, modId: "Beta" } };
     assert.deepEqual(await transport(() => Response.json(refusal, { status: 400 })).http.send(SERVER_ID, LIST, { refreshSession: false }), refusal);
-    const malformed = { ok: false, error: { code: "mod_order_invalid", retryable: false, modId: "../Beta" } };
-    assert.deepEqual(await transport(() => Response.json(malformed, { status: 400 })).http.send(SERVER_ID, LIST, { refreshSession: false }),
-        { ok: false, error: { code: "invalid_response", retryable: false, modId: null } });
+    const named = { ok: false, error: { code: "mod_order_invalid", retryable: false, modId: "Beta", issue: "submodule-dll-missing:Beta.dll" } };
+    assert.deepEqual(await transport(() => Response.json(named, { status: 400 })).http.send(SERVER_ID, LIST, { refreshSession: false }), named);
+    for (const error of [{ code: "mod_order_invalid", retryable: false, modId: "../Beta" }, { code: "mod_order_invalid", retryable: false, modId: "Beta", issue: "<b>" }]) {
+        assert.deepEqual(await transport(() => Response.json({ ok: false, error }, { status: 400 })).http.send(SERVER_ID, LIST, { refreshSession: false }),
+            { ok: false, error: { code: "invalid_response", retryable: false, modId: null } });
+    }
 });
 
 test("asks the route to refresh the session only when told to, and reports network loss as retryable", async () => {

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { createTranslator } from "@/app/lib/localization/translator";
 import { serverTestMessages } from "./ManagedServerLocalization.test-utils";
-import { describeModIssue, modLoadFailureMessage, modsErrorMessage, runsOnSaveErrorMessage } from "./server-mods-messages";
+import { describeModIssue, modLoadFailureMessage, modsErrorMessage } from "./server-mods-messages";
 import { ServerModsError, type ServerMod } from "@/app/lib/hosting/server-mods";
 import { isModLoadFailure, type ModLoadFailure } from "@/app/lib/hosting/mod-load-failure";
 import { isOwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
@@ -62,11 +62,15 @@ it("explains the assembly-conflict and SubModule rejections", () => {
     expect(modsErrorMessage(new ServerModsError("upload_rejected", false, "Fae", "mod_submodule_invalid"), t)).toContain("names a SubModule class or DLL the mod doesn't contain");
 });
 
-it("explains refused runs-on changes only when the save changed them", () => {
+it("blames a refused save on its runs-on change only when the control plane's issue says so", () => {
     const changed = [{ id: "Fae", runsOn: "server" } as ServerMod];
-    expect(runsOnSaveErrorMessage(new ServerModsError("runner_unsupported"), changed, t)).toContain("doesn't support players-only mods yet");
-    expect(runsOnSaveErrorMessage(new ServerModsError("mod_order_invalid", false, "fae"), changed, t)).toContain("Fae can't run on the server");
-    expect(runsOnSaveErrorMessage(new ServerModsError("mod_order_invalid", false, "Other"), changed, t)).toBeNull();
-    expect(runsOnSaveErrorMessage(new ServerModsError("mod_order_invalid", false, "Fae"), [{ id: "Fae", runsOn: "players" } as ServerMod], t)).toBeNull();
-    expect(runsOnSaveErrorMessage(new ServerModsError("runner_unsupported"), [], t)).toBeNull();
+    const missing = "submodule-class-missing:Fae.SubModule";
+    expect(modsErrorMessage(new ServerModsError("runner_unsupported"), t, changed)).toContain("doesn't support players-only mods yet");
+    expect(modsErrorMessage(new ServerModsError("mod_order_invalid", false, "fae", missing), t, changed)).toContain("Fae can't run on the server");
+    expect(modsErrorMessage(new ServerModsError("mod_order_invalid", false, "Fae", "submodule-dll-missing:Fae.dll"), t, changed)).toContain("Fae can't run on the server");
+    // The same save may also break a dependency order for the same mod; without the issue that is the reason shown.
+    expect(modsErrorMessage(new ServerModsError("mod_order_invalid", false, "Fae"), t, changed)).toBe("This order breaks a load rule for Fae. Check that its dependencies are enabled and load before it.");
+    expect(modsErrorMessage(new ServerModsError("mod_order_invalid", false, "Other", missing), t, changed)).toContain("load rule for Other");
+    expect(modsErrorMessage(new ServerModsError("mod_order_invalid", false, "Fae", missing), t, [{ id: "Fae", runsOn: "players" } as ServerMod])).toContain("load rule for Fae");
+    expect(modsErrorMessage(new ServerModsError("runner_unsupported"), t)).toBe("This server's host does not support custom mods yet.");
 });
