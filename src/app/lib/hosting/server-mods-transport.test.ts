@@ -34,6 +34,8 @@ test("retries a reply without the route envelope only for gateway, deadline and 
 });
 
 test("passes a typed refusal through and treats a malformed one as no envelope", async () => {
+    const updating = { ok: false, error: { code: "server_updating", retryable: true, modId: null } };
+    assert.deepEqual(await transport(() => Response.json(updating, { status: 409 })).http.send(SERVER_ID, LIST, { refreshSession: false }), updating);
     const refusal = { ok: false, error: { code: "mod_order_invalid", retryable: false, modId: "Beta" } };
     assert.deepEqual(await transport(() => Response.json(refusal, { status: 400 })).http.send(SERVER_ID, LIST, { refreshSession: false }), refusal);
     const named = { ok: false, error: { code: "mod_order_invalid", retryable: false, modId: "Beta", issue: "submodule-dll-missing:Beta.dll" } };

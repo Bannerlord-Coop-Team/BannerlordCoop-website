@@ -23,6 +23,7 @@ async function failure(error: unknown, notSubmitted = false) {
     const { t } = await getTranslations("managed-server");
     const code = error instanceof MyServersApiError ? error.code : "unconfirmed";
     const messages: Record<string, string> = {
+        server_updating: t("action.serverUpdating"),
         stale_interaction: t("action.file.theServerChangedRefreshBeforeStartingANewTransfer"),
         safe_stop_required: t("action.file.stopTheServerBeforeAddingAnImportedCampaignExportDoes"),
         server_not_found: t("action.file.thisServerIsUnavailableOrYourAccessChanged"),

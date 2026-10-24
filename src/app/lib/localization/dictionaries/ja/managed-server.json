@@ -1,4 +1,5 @@
 {
+  "action.serverUpdating": "サーバーを更新しています。1分ほど待ってからもう一度お試しください。",
   "mods.error.uploadStatusUnavailable": "サーバーが停止措置中のため、{id} のインストール結果を確認できませんでした。アクセスが復旧したら Mod 一覧を更新して結果を確認してください。",
   "action.refusal.serverSuspended": "このサーバーは停止措置中です。リクエストは拒否され、変更は行われませんでした。",
   "controls.stoppedAwaitingServerCheck": "最後の確認時、ゲームは停止していました。サーバーの確認で準備完了が確認されると、起動と復旧ツールが利用できるようになります。",

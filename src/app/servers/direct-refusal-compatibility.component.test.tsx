@@ -24,7 +24,7 @@ const mutation = { serverId, configPart: "server", expectedRevision: file.revisi
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
 for (const route of ["start", "stop", "restart-game", "config-get", "config-post"] as const) {
-    for (const outcome of ["refused", "masked", "success"] as const) {
+    for (const outcome of ["refused", "masked", "updating", "success"] as const) {
         it(`${route}: preserves ${outcome} through real Edge normalization, website parser and action`, async () => {
             vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://project.supabase.co");
             vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "synthetic-publishable-key-long-enough");
@@ -39,7 +39,8 @@ for (const route of ["start", "stop", "restart-game", "config-get", "config-post
                     const cpRequestId = request.headers.get("x-request-id");
                     if (outcome === "success") return Response.json(configuration
                         ? { ok: true, requestId: cpRequestId, result: file } : { ok: true, result: { exitCode: 0 } });
-                    const error = outcome === "refused" ? refusal : { code: configuration ? "configuration_unavailable" : "container_command_unavailable",
+                    const error = outcome === "updating" ? { code: "server_updating", message: "Your server is updating. Try again in a minute.", retryable: true }
+                        : outcome === "refused" ? refusal : { code: configuration ? "configuration_unavailable" : "container_command_unavailable",
                         message: configuration ? "The runner configuration operation could not be confirmed." : "The container command could not be confirmed.", retryable: false };
                     // Exact proposed direct CP shapes: commands unversioned; config versioned/correlated.
                     return Response.json(configuration ? { version: 1, requestId: cpRequestId, ok: false, error }
@@ -64,6 +65,11 @@ for (const route of ["start", "stop", "restart-game", "config-get", "config-post
                 expect(result).toMatchObject({ ok: false, message: messages["action.refusal.serverSuspended"] });
                 if (route === "config-post") expect(result).toMatchObject({ notSubmitted: true, reload: false });
                 if (!configuration) expect(result).not.toHaveProperty("checkStatus");
+            } else if (outcome === "updating") {
+                await expect(readMyServersResponse(normalized!, websiteRequestId)).rejects.toMatchObject({ code: "server_updating", retryable: true, parsedEnvelope: true });
+                expect(result).toMatchObject({ ok: false, message: messages["action.serverUpdating"] });
+                if (configuration) expect(result).toMatchObject({ notSubmitted: false, reload: false });
+                else expect(result).not.toHaveProperty("checkStatus");
             } else if (outcome === "masked") {
                 expect(result.ok).toBe(false);
                 expect("message" in result && result.message).not.toBe(messages["action.refusal.serverSuspended"]);

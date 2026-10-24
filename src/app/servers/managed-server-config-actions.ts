@@ -36,6 +36,7 @@ async function failure(error: unknown, notSubmitted = false): Promise<ManagedSer
     const runnerUnavailable = t("action.config.runnerUnavailable");
     const runnerRejected = t("action.config.runnerRejected");
     const messages: Record<string, string> = {
+        server_updating: t("action.serverUpdating"),
         server_not_found: t("action.config.thisServerIsUnavailableOrYourAccessChanged"),
         identity_unavailable: t("action.config.linkYourDiscordAccountBeforeChangingConfiguration"),
         request_conflict: t("action.config.theConfigurationChangedOrAnotherServerOperationIsInProgress"),

@@ -11,6 +11,7 @@ type Translate = Translator["t"];
 
 const UNAVAILABLE_CODES = new Set(["identity_unavailable", "server_api_unavailable", "control_plane_unavailable", "network_unavailable", "invalid_response", "server_api_not_configured"]);
 const SIMPLE_ERROR_KEYS: Readonly<Record<string, string>> = {
+    server_updating: "action.serverUpdating",
     revision_conflict: "mods.error.revisionConflict",
     request_conflict: "mods.error.requestConflict",
     upload_busy: "mods.error.uploadBusy",

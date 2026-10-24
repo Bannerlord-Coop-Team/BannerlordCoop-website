@@ -1,4 +1,5 @@
 {
+  "action.serverUpdating": "Dein Server wird aktualisiert. Versuche es in einer Minute erneut.",
   "mods.error.uploadStatusUnavailable": "Die Installation von {id} konnte nicht bestätigt werden, da der Server gesperrt ist. Aktualisiere die Mod-Liste, sobald der Zugriff wieder möglich ist, um das Ergebnis zu prüfen.",
   "action.refusal.serverSuspended": "Dieser Server ist gesperrt. Die Anfrage wurde abgelehnt und es wurde nichts geändert.",
   "controls.stoppedAwaitingServerCheck": "Das Spiel wurde zuletzt als gestoppt gemeldet. Start und Wiederherstellungsfunktionen werden freigegeben, sobald die Serverprüfungen die Bereitschaft bestätigen.",
