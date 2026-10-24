@@ -8,7 +8,7 @@ import { ServerModsError, findServerMod, isOwnerMod, type ServerMod, type Server
 /** C3 section 3: uploads with these ids (case-insensitive) default to players-only; Harmony is also locked. */
 const CP_PLAYERS_DEFAULT_IDS: ReadonlySet<string> = new Set(["bannerlord.harmony", "itemqualityindicator", "bannerlord.familytree", "familyappearanceeditor"]);
 const CP_HARMONY_ID = "bannerlord.harmony";
-/** C3 F17: the issue a `submodule-invalid` lock names when the owner tries the server anyway. */
+/** C3 F17: issues that make the server an invalid value; the refusal names the issue. */
 const CP_F17_ISSUE_PREFIXES = ["submodule-class-missing:", "submodule-dll-missing:", "submodule-dll-unreadable:"];
 
 /** Builds an image module entry; `runsOn` adds the locked core-module fields a players-only control plane reports. */
@@ -34,14 +34,23 @@ function revisionOf(generation: number): string {
     return generation.toString(16).padStart(64, "0");
 }
 
-/** Applies a requested `runsOn` as C3 section 2 says, by the entry's lock reason: core and server-provided refuse, an old runner refuses any change, F17 names its issue. */
+/** Applies a requested `runsOn` in C3 section 2's order: an echo is a no-op, then static validity (400), then runner capability (409). */
 function applyRunsOn(mod: ServerMod, entry: ServerModOrderEntry): ServerMod {
     if (entry.runsOn === undefined || entry.runsOn === mod.runsOn) return mod;
     if (mod.runsOn === undefined) throw new ServerModsError("invalid_request");
-    if (!mod.runsOnLocked) return { ...mod, runsOn: entry.runsOn };
+    const invalid = staticRunsOnRefusal(mod, entry.runsOn);
+    if (invalid !== null) throw invalid;
     if (mod.runsOnLockReason === "runner-unsupported") throw new ServerModsError("runner_unsupported");
-    const f17 = mod.runsOnLockReason === "submodule-invalid" ? mod.issues.find(issue => CP_F17_ISSUE_PREFIXES.some(prefix => issue.startsWith(prefix))) : undefined;
-    throw new ServerModsError("mod_order_invalid", false, mod.id, f17 ?? null);
+    if (mod.runsOnLocked) throw new ServerModsError("mod_order_invalid", false, mod.id);
+    return { ...mod, runsOn: entry.runsOn };
+}
+
+/** Refuses a value invalid for the entry type on any runner: players on an image module, server on Harmony or on an F17 mod (naming its issue). */
+function staticRunsOnRefusal(mod: ServerMod, runsOn: "server" | "players"): ServerModsError | null {
+    if ((mod.pinned || mod.required) && runsOn !== "server") return new ServerModsError("mod_order_invalid", false, mod.id);
+    if (mod.id.toLowerCase() === CP_HARMONY_ID && runsOn !== "players") return new ServerModsError("mod_order_invalid", false, mod.id);
+    const f17 = runsOn === "server" ? mod.issues.find(issue => CP_F17_ISSUE_PREFIXES.some(prefix => issue.startsWith(prefix))) : undefined;
+    return f17 === undefined ? null : new ServerModsError("mod_order_invalid", false, mod.id, f17);
 }
 
 /** Returns a new upload's runs-on fields as C3 section 3 defaults them, or nothing when the list does not report runs-on. */

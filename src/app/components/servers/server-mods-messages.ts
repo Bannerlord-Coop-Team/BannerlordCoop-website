@@ -96,7 +96,8 @@ function runsOnRefusalMessage(error: ServerModsError, changedRunsOn: readonly Se
 const LOCKED_RUNS_ON_COPY: Readonly<Record<ModRunsOnLockReason, (players: boolean, t: Translate) => string>> = {
     // Core modules and Coop show no runs-on line, so this generic copy only covers an unexpected shape.
     "core-module": genericLockedRunsOn,
-    "server-provided": (players, t) => t(players ? "mods.runsOn.serverProvided" : "mods.runsOn.fixedServer"),
+    // C3 gives this reason only where Harmony runs players-only; an old runner reports runner-unsupported instead.
+    "server-provided": (_players, t) => t("mods.runsOn.serverProvided"),
     "runner-unsupported": (players, t) => t(players ? "mods.runsOn.fixedPlayers" : "mods.runsOn.fixedServer"),
     "submodule-invalid": (_players, t) => t("mods.runsOn.lockedSubmodule"),
 };

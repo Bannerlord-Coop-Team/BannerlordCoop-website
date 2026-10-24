@@ -519,7 +519,8 @@ it.each([
 
 it("shows each lock reason's copy, and generic copy for a reason it does not know", async () => {
     await render(createMockServerModCatalog(runsOnMods({
-        "Bannerlord.Harmony": { runsOn: "server" },
+        // On a runner without players-only support Harmony runs on the server, so C3 reports it as runner-unsupported.
+        "Bannerlord.Harmony": { runsOn: "server", ...locked("runner-unsupported") },
         ClientUi: locked("runner-unsupported"),
         Gamma: locked("core-module"),
         Delta: { runsOn: "players", ...locked("future-reason") },
@@ -565,13 +566,31 @@ it("says the runner needs an update when it refuses a runs-on change, and reload
     vi.spyOn(window, "confirm").mockReturnValue(true);
     await render(catalog);
     // The runner was rolled back after the list loaded: the refusal reloads the list, which now reports every owner mod locked.
-    const stale = runsOnMods({ "Bannerlord.Harmony": { runsOn: "server" }, ClientUi: locked("runner-unsupported"), Gamma: locked("runner-unsupported"), Delta: locked("runner-unsupported") });
+    const stale = runsOnMods({ "Bannerlord.Harmony": { runsOn: "server", ...locked("runner-unsupported") }, ClientUi: locked("runner-unsupported"), Gamma: locked("runner-unsupported"), Delta: locked("runner-unsupported") });
     const list = vi.spyOn(catalog, "listServerMods").mockResolvedValueOnce({ ...catalog.state, mods: stale });
     await chooseRunsOn("Gamma", "players");
     expect(list).toHaveBeenCalledOnce();
     expect(container.textContent).toContain("This server's runner doesn't support players-only mods yet, so nothing was changed.");
     expect(row("Gamma").querySelector("select")).toBeNull();
     expect(row("Gamma").textContent).toContain("This server needs a runner update before this can be changed.");
+    expect(row("Harmony").textContent).toContain("Runs on the server and in players' games. This server needs a runner update before this can be changed.");
+});
+
+it("evaluates runs-on changes in the test control plane in C3's order: echo, then static validity, then the runner", async () => {
+    const all = locked("runner-unsupported");
+    const catalog = createMockServerModCatalog(runsOnMods({
+        "Bannerlord.Harmony": { runsOn: "server", ...all }, ClientUi: all, Gamma: all,
+        Delta: { runsOn: "players", ...all, issues: ["submodule-class-missing:Delta.SubModule"] },
+    }));
+    const revision = catalog.state.revision;
+    await expect(catalog.saveServerModOrder(SERVER_ID, revision, orderWith(catalog, "Coop", "players"))).rejects.toMatchObject({ code: "mod_order_invalid", modId: "Coop" });
+    await expect(catalog.saveServerModOrder(SERVER_ID, revision, orderWith(catalog, "Delta", "server")))
+        .rejects.toMatchObject({ code: "mod_order_invalid", modId: "Delta", detail: "submodule-class-missing:Delta.SubModule" });
+    await expect(catalog.saveServerModOrder(SERVER_ID, revision, orderWith(catalog, "Bannerlord.Harmony", "players"))).rejects.toMatchObject({ code: "runner_unsupported" });
+    await expect(catalog.saveServerModOrder(SERVER_ID, revision, orderWith(catalog, "Gamma", "players"))).rejects.toMatchObject({ code: "runner_unsupported" });
+    expect(catalog.state.revision).toBe(revision);
+    // Echoing every reported value, Harmony's "server" included, is accepted on this runner.
+    await expect(catalog.saveServerModOrder(SERVER_ID, revision, orderWith(catalog, "Bannerlord.Harmony", "server"))).resolves.toMatchObject({ mods: catalog.state.mods });
 });
 
 it("changes runs-on only where the owner may and names it in the order only where it changed", () => {
