@@ -86,6 +86,31 @@ test("validates mod lists strictly", () => {
     assert.doesNotThrow(() => parseModsState(state([entry({ issues: ["image-module-not-loaded:StoryMode", "future-issue"] })])));
 });
 
+test("accepts entries with or without the players-only pair, but never half of it", () => {
+    assert.equal(parseModsState(state()).mods[1].runsOn, undefined);
+    assert.equal(Object.hasOwn(parseModsState(state()).mods[1], "runsOnLocked"), false);
+    const players = parseModsState(state([entry({ runsOn: "players", runsOnLocked: false })])).mods[1];
+    assert.deepEqual([players.runsOn, players.runsOnLocked], ["players", false]);
+    const harmony = parseModsState(state([entry({ id: "Bannerlord.Harmony", runsOn: "players", runsOnLocked: true })])).mods[1];
+    assert.deepEqual([harmony.runsOn, harmony.runsOnLocked], ["players", true]);
+    for (const invalid of [{ runsOn: "server" }, { runsOnLocked: false }, { runsOn: "both", runsOnLocked: false }, { runsOn: "server", runsOnLocked: "no" },
+        { runsOn: null, runsOnLocked: false }, { runsOn: "server", runsOnLocked: false, runsOnReason: "x" }]) {
+        assert.throws(() => parseModsState(state([entry(invalid)])), Error, JSON.stringify(invalid));
+    }
+    assert.doesNotThrow(() => parseModsState(state([entry({ issues: ["no-server-submodule", "no-render-tag-removed", "headless-server-unsupported", "dedicated-server-tag-removed"] })])));
+    assert.doesNotThrow(() => parseModsState(state([entry({ runsOn: "players", runsOnLocked: false, issues: ["submodule-class-missing:FamilyAppearanceEditor.SubModule+Inner"] })])));
+    assert.doesNotThrow(() => parseModsState(state([entry({ runsOn: "players", runsOnLocked: false, issues: ["submodule-dll-missing:My Mod.Core.dll"] })])));
+});
+
+test("accepts a load-order entry's runsOn only when it is a known value", () => {
+    const order = (mods: unknown[]) => ({ requestId: REQUEST, serverId: SERVER, expectedRevision: REVISION, mods });
+    const changed = order([{ id: "Native", enabled: true }, { id: "SomeMod", enabled: true, runsOn: "players" }]);
+    assert.deepEqual(parseModsRequest("load-order", changed).body, changed);
+    assert.equal(Object.hasOwn((parseModsRequest("load-order", order([{ id: "SomeMod", enabled: true }])).body as { mods: object[] }).mods[0], "runsOn"), false);
+    for (const runsOn of ["both", "", null, true]) assert.throws(() => parseModsRequest("load-order", order([{ id: "SomeMod", enabled: true, runsOn }])));
+    assert.throws(() => parseModsRequest("load-order", order([{ id: "SomeMod", enabled: true, runsOnLocked: false }])));
+});
+
 test("validates upload results against the request that produced them", () => {
     const session = { uploadId: UPLOAD, chunkBytes: MOD_UPLOAD_CHUNK_BYTES, chunkCount: 2, expiresAt: "2026-10-19T12:00:00.000Z", replaces: false };
     assert.deepEqual(parseModUploadSession(session, MOD_UPLOAD_CHUNK_BYTES + 5), session);
@@ -110,4 +135,6 @@ test("recognizes reserved ids and reads the module named in typed error messages
     assert.equal(isOwnerModId("Bannerlord.ButterLib"), true);
     assert.equal(modIdFromErrorMessage("The requested module order is invalid. Module: Bannerlord.Harmony."), "Bannerlord.Harmony");
     assert.equal(modIdFromErrorMessage("The requested module order is invalid."), null);
+    assert.equal(modIdFromErrorMessage("The requested module order is invalid. Module: FamilyAppearanceEditor. Issue: submodule-class-missing:FamilyAppearanceEditor.SubModule."), "FamilyAppearanceEditor");
+    assert.equal(modIdFromErrorMessage("The requested module order is invalid. Module: Some.Mod. Issue: <script>."), null);
 });

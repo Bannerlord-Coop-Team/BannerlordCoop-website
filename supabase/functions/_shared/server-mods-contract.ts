@@ -69,6 +69,16 @@ const CHUNK_INDEX = /^(?:0|[1-9][0-9]{0,2})$/u;
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/u;
 const RESERVED_IDS = new Set(["native", "sandboxcore", "sandbox", "storymode", "custombattle", "multiplayer", "birthanddeath", "navaldlc", "coop", "coopnightly"]);
 
+/** Where a mod's code runs: `server` on the server and in players' games, `players` only in players' games. */
+export type ModRunsOn = "server" | "players";
+const RUNS_ON_VALUES: ReadonlySet<unknown> = new Set<ModRunsOn>(["server", "players"]);
+// Wire names of the players-only fields (contract C3). Control planes that predate players-only mods send
+// neither, so each shape accepts them as an optional group; a rename changes these lines and the types below.
+const ENTRY_KEYS = ["id", "name", "version", "enabled", "pinned", "required", "sizeBytes", "sha256", "dependsOn", "issues"] as const;
+const ENTRY_RUNS_ON_KEYS = ["runsOn", "runsOnLocked"] as const;
+const ORDER_KEYS = ["id", "enabled"] as const;
+const ORDER_RUNS_ON_KEY = "runsOn";
+
 /** One installed module as the API reports it; pinned and required modules report an empty version. */
 export type ModEntry = {
     id: string;
@@ -81,10 +91,15 @@ export type ModEntry = {
     sha256: string | null;
     dependsOn: string[];
     issues: string[];
+    /** Absent from control planes that predate players-only mods; then the website offers no choice. */
+    runsOn?: ModRunsOn;
+    /** True when the owner cannot change `runsOn` (Bannerlord.Harmony, which the server provides). */
+    runsOnLocked?: boolean;
 };
 /** `{ revision, restartRequired, mods }`, returned by list and every synchronous mutation. */
 export type ModsState = { revision: string; restartRequired: boolean; mods: ModEntry[] };
-export type ModOrderEntry = { id: string; enabled: boolean };
+/** One requested position; an omitted `runsOn` keeps the mod's current value, so it is sent only when the owner changed it. */
+export type ModOrderEntry = { id: string; enabled: boolean; runsOn?: ModRunsOn };
 export type ModUploadManifest = { id: string; name: string; version: string };
 export type ModUploadSession = { uploadId: string; chunkBytes: number; chunkCount: number; expiresAt: string; replaces: boolean };
 export type ModChunkReceipt = { receivedChunks: number; receivedBytes: number };
@@ -296,16 +311,17 @@ export function parseModUploadStatus(value: unknown, uploadId?: string): ModUplo
     return { uploadId: id, status: value.status };
 }
 
-/** Returns the module id the control plane appends to a typed error message (` Module: <Id>.`), or null. */
+/** Returns the module id the control plane appends to a typed error message (` Module: <Id>.`, optionally then ` Issue: <issue>.`), or null. */
 export function modIdFromErrorMessage(message: string): string | null {
-    const match = / Module: ([A-Za-z0-9_.-]{1,64})\.$/u.exec(message);
+    const match = / Module: ([A-Za-z0-9_.-]{1,64})\.(?: Issue: [a-z][a-z-]{0,47}(?::[A-Za-z0-9 _.+-]{1,128})?\.)?$/u.exec(message);
     return match === null ? null : match[1];
 }
 
 /** Validates one API mod entry; pinned and required are exclusive and image modules carry no digest. */
 function parseModEntry(value: unknown): ModEntry {
     if (!isRecord(value)) throw new Error("Invalid mod entry");
-    exact(value, ["id", "name", "version", "enabled", "pinned", "required", "sizeBytes", "sha256", "dependsOn", "issues"]);
+    const reportsRunsOn = ENTRY_RUNS_ON_KEYS.some((key) => Object.hasOwn(value, key));
+    exact(value, reportsRunsOn ? [...ENTRY_KEYS, ...ENTRY_RUNS_ON_KEYS] : ENTRY_KEYS);
     if (!isModId(value.id) || !(isModName(value.name) || isModId(value.name))) throw new Error("Invalid mod identity");
     if (value.version !== "" && !isModVersion(value.version)) throw new Error("Invalid mod version");
     if (typeof value.enabled !== "boolean" || typeof value.pinned !== "boolean" || typeof value.required !== "boolean" || (value.pinned && value.required)) {
@@ -315,23 +331,41 @@ function parseModEntry(value: unknown): ModEntry {
     if (value.sha256 !== null && !isSha256(value.sha256)) throw new Error("Invalid mod digest");
     if (!Array.isArray(value.dependsOn) || value.dependsOn.length > 64 || !value.dependsOn.every(isModId)) throw new Error("Invalid mod dependencies");
     if (!Array.isArray(value.issues) || value.issues.length > 64 || !value.issues.every((issue) => typeof issue === "string" && ISSUE.test(issue))) throw new Error("Invalid mod issues");
-    return {
+    const entry: ModEntry = {
         id: value.id, name: value.name as string, version: value.version as string, enabled: value.enabled, pinned: value.pinned, required: value.required,
         sizeBytes: value.sizeBytes as number, sha256: value.sha256 as string | null, dependsOn: [...value.dependsOn], issues: [...value.issues as string[]],
     };
+    return reportsRunsOn ? { ...entry, ...parseRunsOnFields(value) } : entry;
 }
 
-/** Validates a complete requested order: bounded, unique ids, each with its enabled flag. */
+/** Validates the players-only pair of an entry that reports it: a known `runsOn` and a boolean lock. */
+function parseRunsOnFields(value: Record<string, unknown>): Required<Pick<ModEntry, "runsOn" | "runsOnLocked">> {
+    if (!isModRunsOn(value.runsOn) || typeof value.runsOnLocked !== "boolean") throw new Error("Invalid mod runs-on");
+    return { runsOn: value.runsOn, runsOnLocked: value.runsOnLocked };
+}
+
+/** Whether a value names where a mod's code runs. */
+export function isModRunsOn(value: unknown): value is ModRunsOn {
+    return RUNS_ON_VALUES.has(value);
+}
+
+/** Validates a complete requested order: bounded, unique ids, each with its enabled flag and an optional `runsOn` change. */
 function parseLoadOrder(value: unknown): ModOrderEntry[] {
     if (!Array.isArray(value) || value.length < 1 || value.length > MOD_MAXIMUM_LIST_ENTRIES) throw new Error("Invalid load order");
-    const order = value.map((entry) => {
-        if (!isRecord(entry)) throw new Error("Invalid load-order entry");
-        exact(entry, ["id", "enabled"]);
-        if (!isModId(entry.id) || typeof entry.enabled !== "boolean") throw new Error("Invalid load-order entry");
-        return { id: entry.id, enabled: entry.enabled };
-    });
+    const order = value.map(parseLoadOrderEntry);
     if (new Set(order.map((entry) => entry.id.toLowerCase())).size !== order.length) throw new Error("Duplicate load-order entry");
     return order;
+}
+
+/** Validates one requested position; `runsOn` appears only when the owner changed it. */
+function parseLoadOrderEntry(entry: unknown): ModOrderEntry {
+    if (!isRecord(entry)) throw new Error("Invalid load-order entry");
+    const changesRunsOn = Object.hasOwn(entry, ORDER_RUNS_ON_KEY);
+    exact(entry, changesRunsOn ? [...ORDER_KEYS, ORDER_RUNS_ON_KEY] : ORDER_KEYS);
+    if (!isModId(entry.id) || typeof entry.enabled !== "boolean") throw new Error("Invalid load-order entry");
+    if (!changesRunsOn) return { id: entry.id, enabled: entry.enabled };
+    if (!isModRunsOn(entry.runsOn)) throw new Error("Invalid load-order entry");
+    return { id: entry.id, enabled: entry.enabled, runsOn: entry.runsOn };
 }
 
 /** Validates the upload manifest read from `SubModule.xml`. */
