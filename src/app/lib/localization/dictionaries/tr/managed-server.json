@@ -955,6 +955,7 @@
   "mods.playersNeed.heading": "Oyuncuların ihtiyaç duyduğu modlar",
   "mods.playersNeed.exact": "Katılmak için oyuncuların tam olarak bu modlara, tam olarak bu sürümlerde ihtiyacı var ve Bannerlord Co-op dışında başka topluluk modu olmamalı.",
   "mods.playersNeed.none": "Oyuncuların katılmak için Bannerlord Co-op dışında topluluk moduna ihtiyacı yok.",
+  "mods.playersNeed.noDlc": "Oyuncuların War Sails gibi resmî DLC'leri de devre dışı bırakması gerekir.",
   "mods.playersNeed.playersOnly": "Yalnızca oyuncular: sunucuda çalışmaz",
   "mods.issue.noServerSubmodule": "Bu modun hiçbir kodu sunucuda çalışmıyor. Çalışması gerekiyorsa yeniden yükleyin.",
   "mods.issue.noRenderTagRemoved": "Sunucunun tüm kodunu yüklemesi için yalnızca arayüze özel etiketleri kaldırıldı.",

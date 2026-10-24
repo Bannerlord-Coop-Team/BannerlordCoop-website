@@ -955,6 +955,7 @@
   "mods.playersNeed.heading": "Mods players need",
   "mods.playersNeed.exact": "To join, players need exactly these mods at exactly these versions, and no other community mods besides Bannerlord Co-op.",
   "mods.playersNeed.none": "Players need no community mods besides Bannerlord Co-op to join.",
+  "mods.playersNeed.noDlc": "Players must also disable any official DLC, such as War Sails.",
   "mods.playersNeed.playersOnly": "Players only: not run on the server",
   "mods.issue.noServerSubmodule": "None of this mod's code runs on the server. If it should, upload it again.",
   "mods.issue.noRenderTagRemoved": "Its interface-only tags were removed so the server loads all of its code.",

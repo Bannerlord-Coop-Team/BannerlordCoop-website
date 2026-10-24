@@ -955,6 +955,7 @@
   "mods.playersNeed.heading": "Mods de que os jogadores precisam",
   "mods.playersNeed.exact": "Para entrar, os jogadores precisam exatamente destes mods, exatamente nestas versões, e de nenhum outro mod da comunidade além do Bannerlord Co-op.",
   "mods.playersNeed.none": "Os jogadores não precisam de mods da comunidade além do Bannerlord Co-op para entrar.",
+  "mods.playersNeed.noDlc": "Os jogadores também têm de desativar qualquer DLC oficial, como War Sails.",
   "mods.playersNeed.playersOnly": "Apenas jogadores: não é executado no servidor",
   "mods.issue.noServerSubmodule": "Nenhuma parte do código deste mod é executada no servidor. Se devia ser, carregue-o novamente.",
   "mods.issue.noRenderTagRemoved": "As etiquetas exclusivas da interface foram removidas para que o servidor carregue todo o respetivo código.",

@@ -954,6 +954,7 @@
   "mods.playersNeed.heading": "玩家需要的模组",
   "mods.playersNeed.exact": "要加入，玩家需要完全相同的这些模组和完全相同的版本，并且除 Bannerlord Co-op 外不能有其他社区模组。",
   "mods.playersNeed.none": "除 Bannerlord Co-op 外，玩家加入无需任何社区模组。",
+  "mods.playersNeed.noDlc": "玩家还必须禁用所有官方 DLC，例如 War Sails。",
   "mods.playersNeed.playersOnly": "仅玩家：不在服务器上运行",
   "mods.issue.noServerSubmodule": "此模组的代码都不会在服务器上运行。如果应该运行，请重新上传。",
   "mods.issue.noRenderTagRemoved": "已移除其仅限界面的标签，以便服务器加载它的全部代码。",

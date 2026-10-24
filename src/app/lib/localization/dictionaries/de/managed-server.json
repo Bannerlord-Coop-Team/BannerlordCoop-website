@@ -955,6 +955,7 @@
   "mods.playersNeed.heading": "Mods, die Spieler brauchen",
   "mods.playersNeed.exact": "Zum Beitreten brauchen Spieler genau diese Mods in genau diesen Versionen und außer Bannerlord Co-op keine anderen Community-Mods.",
   "mods.playersNeed.none": "Spieler brauchen zum Beitreten außer Bannerlord Co-op keine Community-Mods.",
+  "mods.playersNeed.noDlc": "Spieler müssen außerdem jeden offiziellen DLC deaktivieren, etwa War Sails.",
   "mods.playersNeed.playersOnly": "Nur Spieler: läuft nicht auf dem Server",
   "mods.issue.noServerSubmodule": "Kein Code dieser Mod läuft auf dem Server. Falls er das soll, lade sie erneut hoch.",
   "mods.issue.noRenderTagRemoved": "Ihre Nur-Oberfläche-Tags wurden entfernt, damit der Server ihren gesamten Code lädt.",

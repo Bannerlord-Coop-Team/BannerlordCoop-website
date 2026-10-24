@@ -74,7 +74,9 @@ the website's side of it.
   and exact version, players-only mods included (labelled "Players only: not run
   on the server"), and says that players need exactly these mods at these versions
   and no other community mods besides Bannerlord Co-op, because Coop's join check
-  compares community modules both ways. Disabled mods are left out. It reads the
+  compares community modules both ways. It also says players must disable any
+  official DLC (such as War Sails), which Coop's join check refuses. Disabled mods
+  are left out. It reads the
   saved list, so it changes once an edit is saved.
 - When the running game uses an older list (`restartRequired`), the tab says that a
   restart applies the changes. Nothing restarts the server automatically.

@@ -415,12 +415,14 @@ it("offers no runs-on choice when the control plane does not report it, and stil
     expect(container.textContent).not.toContain("Runs on");
     expect(playersNeed()).toEqual(["AlphaAlpha v1.0.0", "GammaGamma v1.0.0"]);
     expect(container.textContent).toContain("players need exactly these mods at exactly these versions, and no other community mods besides Bannerlord Co-op.");
+    expect(container.textContent).toContain("Players must also disable any official DLC, such as War Sails.");
 });
 
 it("says players need no community mods when no owner mod is enabled", async () => {
     await render(createMockServerModCatalog(sampleServerMods([sampleOwnerMod("Off", { enabled: false })])));
     expect(playersNeed()).toEqual([]);
     expect(container.textContent).toContain("Players need no community mods besides Bannerlord Co-op to join.");
+    expect(container.textContent).toContain("Players must also disable any official DLC, such as War Sails.");
 });
 
 it("shows where each owner mod runs, locks Harmony, and lists players-only mods as needed by players", async () => {

@@ -398,6 +398,7 @@ function ModsPlayersNeed({ mods, idPrefix }: { mods: readonly ServerMod[]; idPre
     return <section aria-labelledby={`${idPrefix}-players-need`} className="border-t border-white/10 p-5">
         <h3 id={`${idPrefix}-players-need`} className="text-sm font-semibold">{t("mods.playersNeed.heading")}</h3>
         <p className="mt-1 text-sm leading-6 text-foreground-muted">{needed.length === 0 ? t("mods.playersNeed.none") : t("mods.playersNeed.exact")}</p>
+        <p className="text-sm leading-6 text-foreground-muted">{t("mods.playersNeed.noDlc")}</p>
         {needed.length > 0 && <ul className="mt-3 space-y-1.5 text-sm">
             {needed.map(mod => <li key={mod.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span className="font-medium text-foreground">{mod.name}</span>
