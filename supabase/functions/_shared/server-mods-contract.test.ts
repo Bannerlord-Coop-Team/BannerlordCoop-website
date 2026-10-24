@@ -6,7 +6,7 @@ import {
     isOwnerModId,
     modChunkCount,
     modChunkLength,
-    modIdFromErrorMessage,
+    modRefusalFromErrorMessage,
     parseModChunkDigest,
     parseModChunkQuery,
     parseModChunkReceipt,
@@ -27,6 +27,11 @@ const REVISION = "a".repeat(64);
 function entry(overrides: Record<string, unknown> = {}) {
     return { id: "SomeMod", name: "Some Mod", version: "v1.2.0", enabled: true, pinned: false, required: false,
         sizeBytes: 1_234, sha256: "b".repeat(64), dependsOn: ["Native"], issues: ["stripped:0Harmony.dll"], ...overrides };
+}
+
+/** Returns an entry's runs-on fields that are present. */
+function pick(mod: Record<string, unknown>) {
+    return Object.fromEntries(["runsOn", "runsOnDefault", "runsOnLocked", "runsOnLockReason"].filter((key) => Object.hasOwn(mod, key)).map((key) => [key, mod[key]]));
 }
 
 /** Builds a minimal valid mod list. */
@@ -86,6 +91,37 @@ test("validates mod lists strictly", () => {
     assert.doesNotThrow(() => parseModsState(state([entry({ issues: ["image-module-not-loaded:StoryMode", "future-issue"] })])));
 });
 
+test("accepts entries with the whole runs-on set or none of it, the lock reason exactly when locked", () => {
+    const parsed = parseModsState(state()).mods[1];
+    for (const key of ["runsOn", "runsOnDefault", "runsOnLocked", "runsOnLockReason"]) assert.equal(Object.hasOwn(parsed, key), false, key);
+    const open = { runsOn: "players", runsOnDefault: "server", runsOnLocked: false };
+    assert.deepEqual(pick(parseModsState(state([entry(open)])).mods[1]), open);
+    const harmony = { runsOn: "players", runsOnDefault: "players", runsOnLocked: true, runsOnLockReason: "server-provided" };
+    assert.deepEqual(pick(parseModsState(state([entry({ id: "Bannerlord.Harmony", ...harmony })])).mods[1]), harmony);
+    // A reason a newer control plane adds is kept, so the website can show it as locked rather than reject the list.
+    assert.equal(parseModsState(state([entry({ ...harmony, runsOnLockReason: "future-reason" })])).mods[1].runsOnLockReason, "future-reason");
+    for (const invalid of [{ runsOn: "server" }, { runsOnLocked: false }, { runsOn: "server", runsOnLocked: false }, { runsOnDefault: "server" },
+        { ...open, runsOn: "both" }, { ...open, runsOnDefault: null }, { ...open, runsOnLocked: "no" }, { ...open, runsOnLockReason: "core-module" },
+        { ...harmony, runsOnLockReason: undefined }, { runsOn: "players", runsOnDefault: "players", runsOnLocked: true }, { ...harmony, runsOnLockReason: "Bad Reason" },
+        { ...harmony, runsOnLockReason: 1 }, { ...open, runsOnReason: "x" }, { runsOnLockReason: "core-module" }]) {
+        assert.throws(() => parseModsState(state([entry(invalid)])), Error, JSON.stringify(invalid));
+    }
+    assert.doesNotThrow(() => parseModsState(state([entry({ issues: ["no-server-submodule", "no-render-tag-removed", "headless-server-unsupported", "dedicated-server-tag-removed"] })])));
+    const f17 = { runsOn: "players", runsOnDefault: "server", runsOnLocked: true, runsOnLockReason: "submodule-invalid" };
+    for (const issue of ["submodule-class-missing:FamilyAppearanceEditor.SubModule+Inner", "submodule-dll-missing:My Mod.Core.dll", "submodule-dll-unreadable:Native.Interop.dll"]) {
+        assert.doesNotThrow(() => parseModsState(state([entry({ ...f17, issues: [issue] })])), issue);
+    }
+});
+
+test("accepts a load-order entry's runsOn only when it is a known value", () => {
+    const order = (mods: unknown[]) => ({ requestId: REQUEST, serverId: SERVER, expectedRevision: REVISION, mods });
+    const changed = order([{ id: "Native", enabled: true }, { id: "SomeMod", enabled: true, runsOn: "players" }]);
+    assert.deepEqual(parseModsRequest("load-order", changed).body, changed);
+    assert.equal(Object.hasOwn((parseModsRequest("load-order", order([{ id: "SomeMod", enabled: true }])).body as { mods: object[] }).mods[0], "runsOn"), false);
+    for (const runsOn of ["both", "", null, true]) assert.throws(() => parseModsRequest("load-order", order([{ id: "SomeMod", enabled: true, runsOn }])));
+    assert.throws(() => parseModsRequest("load-order", order([{ id: "SomeMod", enabled: true, runsOnLocked: false }])));
+});
+
 test("validates upload results against the request that produced them", () => {
     const session = { uploadId: UPLOAD, chunkBytes: MOD_UPLOAD_CHUNK_BYTES, chunkCount: 2, expiresAt: "2026-10-19T12:00:00.000Z", replaces: false };
     assert.deepEqual(parseModUploadSession(session, MOD_UPLOAD_CHUNK_BYTES + 5), session);
@@ -108,6 +144,11 @@ test("validates upload results against the request that produced them", () => {
 test("recognizes reserved ids and reads the module named in typed error messages", () => {
     for (const id of ["Native", "coop", "CoopNightly", "DedicatedServer.Linux", "dedicatedserver.Other", "..", "StoryMode"]) assert.equal(isOwnerModId(id), false);
     assert.equal(isOwnerModId("Bannerlord.ButterLib"), true);
-    assert.equal(modIdFromErrorMessage("The requested module order is invalid. Module: Bannerlord.Harmony."), "Bannerlord.Harmony");
-    assert.equal(modIdFromErrorMessage("The requested module order is invalid."), null);
+    assert.deepEqual(modRefusalFromErrorMessage("The requested module order is invalid. Module: Bannerlord.Harmony."), { modId: "Bannerlord.Harmony", issue: null });
+    assert.equal(modRefusalFromErrorMessage("The requested module order is invalid."), null);
+    assert.deepEqual(modRefusalFromErrorMessage("The requested module order is invalid. Module: FamilyAppearanceEditor. Issue: submodule-class-missing:FamilyAppearanceEditor.SubModule."),
+        { modId: "FamilyAppearanceEditor", issue: "submodule-class-missing:FamilyAppearanceEditor.SubModule" });
+    assert.deepEqual(modRefusalFromErrorMessage("The requested module order is invalid. Module: Fae. Issue: submodule-dll-missing:Fae Core.dll."), { modId: "Fae", issue: "submodule-dll-missing:Fae Core.dll" });
+    assert.equal(modRefusalFromErrorMessage("The requested module order is invalid. Module: Some.Mod. Issue: <script>."), null);
+    assert.equal(modRefusalFromErrorMessage("Invalid. Module: ../etc."), null);
 });

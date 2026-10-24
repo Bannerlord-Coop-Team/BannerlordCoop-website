@@ -15,8 +15,8 @@ type SentChunk = { index: number; sha256: string; length: number; refreshSession
 type Reply = ServerModsCallResult<unknown>;
 
 /** A failure reply. */
-function refused(code: string, retryable = false, modId: string | null = null): Reply {
-    return { ok: false, error: { code, retryable, modId } };
+function refused(code: string, retryable = false, modId: string | null = null, issue?: string): Reply {
+    return { ok: false, error: issue === undefined ? { code, retryable, modId } : { code, retryable, modId, issue } };
 }
 
 /** A success reply. */
@@ -117,7 +117,11 @@ test("stops at a stale revision, a refusal, or the end of the retry window", asy
 
     const dependency = harness({ delete: [refused("mod_dependency_unsatisfied", false, "Dependent.Mod")] });
     await assert.rejects(dependency.catalog.deleteServerMod(SERVER_ID, REVISION, "SomeMod"),
-        (error: unknown) => error instanceof ServerModsError && error.code === "mod_dependency_unsatisfied" && error.modId === "Dependent.Mod");
+        (error: unknown) => error instanceof ServerModsError && error.code === "mod_dependency_unsatisfied" && error.modId === "Dependent.Mod" && error.detail === null);
+
+    const missing = harness({ "load-order": [refused("mod_order_invalid", false, "Fae", "submodule-class-missing:Fae.SubModule")] });
+    await assert.rejects(missing.catalog.saveServerModOrder(SERVER_ID, REVISION, []),
+        (error: unknown) => error instanceof ServerModsError && error.modId === "Fae" && error.detail === "submodule-class-missing:Fae.SubModule");
 
     const unavailable = harness({ "load-order": [refused("mods_unavailable", true)] });
     await rejectsWith(unavailable.catalog.saveServerModOrder(SERVER_ID, REVISION, []), "mods_unavailable");

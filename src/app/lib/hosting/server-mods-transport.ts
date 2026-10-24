@@ -1,6 +1,7 @@
 import {
     isModErrorCode,
     isModId,
+    isModIssue,
     parseModChunkReceipt,
     parseModsResult,
     type ModsRequest,
@@ -69,8 +70,10 @@ async function readResult<T>(response: Response, parse: (value: unknown) => T): 
         }
     }
     if (isRecord(body) && body.ok === false && isRecord(body.error) && isModErrorCode(body.error.code)
-        && typeof body.error.retryable === "boolean" && (body.error.modId === null || isModId(body.error.modId))) {
-        return { ok: false, error: { code: body.error.code, retryable: body.error.retryable, modId: body.error.modId } };
+        && typeof body.error.retryable === "boolean" && (body.error.modId === null || isModId(body.error.modId))
+        && (body.error.issue === undefined || isModIssue(body.error.issue))) {
+        const { code, retryable, modId, issue } = body.error;
+        return { ok: false, error: issue === undefined ? { code, retryable, modId } : { code, retryable, modId, issue } };
     }
     return { ok: false, error: unenvelopedFailure(response) };
 }

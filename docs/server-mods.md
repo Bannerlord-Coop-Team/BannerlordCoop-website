@@ -43,8 +43,48 @@ the website's side of it.
   enabled limit leaves it disabled; the panel says which happened.
 - Deleting asks for confirmation. Pinned modules and Coop have no delete button.
 - Each mod shows its notes (stripped assemblies, missing or misordered
-  dependencies, removed dedicated-server tags). The tab shows no other help text;
-  the reorder handles carry a screen-reader-only arrow-key hint.
+  dependencies, removed dedicated-server or no-render tags, a mod known not to run
+  headless, no code that runs on the server, a SubModule class or DLL the mod does
+  not contain or cannot read). The reorder handles carry a screen-reader-only
+  arrow-key hint.
+- **Runs on** (control-plane contract C3, mod runtime v1). When the list reports
+  `runsOn`, each owner mod shows where its code runs: **Server and players**, or
+  **Players only**, where the module stays in the server's launch list (so Coop's
+  join check still matches it) but none of its code runs on the server. The choice
+  is separate from the enabled switch, saves like a toggle, and the save names
+  `runsOn` only for the mods whose value changed, so an unchanged list sends what
+  it always did.
+  - The control plane owns the policy; the website keeps no list of mod ids. Each
+    entry reports its `runsOnDefault` (what a new upload of that id gets) and, when
+    the owner cannot change it, `runsOnLocked` with a `runsOnLockReason`.
+  - Choosing players only for a mod whose `runsOnDefault` is `server` asks for
+    confirmation and keeps a warning on its row: the server won't run its code, so
+    a gameplay mod can make players' games disagree with the server or stop them
+    joining. A mod that defaults to players only (today ItemQualityIndicator,
+    Bannerlord.FamilyTree and FamilyAppearanceEditor) gets no warning.
+  - A locked mod shows its value and the reason, without a choice:
+    `server-provided` ("the server provides Harmony"), `submodule-invalid` (its
+    server code is missing or unreadable; the note names the
+    `submodule-class-missing:<Class>`, `submodule-dll-missing:<File>` or
+    `submodule-dll-unreadable:<File>` issue), `runner-unsupported` (the server needs
+    a runner update first) and `core-module` (core modules and Coop, which show no
+    runs-on line). A reason the website does not know is shown as locked with
+    generic copy rather than failing the list.
+  - A refused switch to the server explains the control plane's issue only when
+    the refusal names one (` Issue: <issue>.` after the module); otherwise, such as
+    a dependency order the same save broke, the ordinary load-rule message is shown.
+  - A change refused with `runner_unsupported` says so and reloads the list, so the
+    runner-update locks appear at once.
+  - A list without `runsOn` (a control plane that predates it) shows no choice. This
+    fallback goes once the control plane's writer gate is on for good (see Rollout).
+- **Mods players need**, below the list, names every enabled owner mod with its Id
+  and exact version, players-only mods included (labelled "Players only: not run
+  on the server"), and says that players need exactly these mods at these versions
+  and no other community mods besides Bannerlord Co-op, because Coop's join check
+  compares community modules both ways. It also says players must disable any
+  official DLC (such as War Sails), which Coop's join check refuses. Disabled mods
+  are left out. It reads the
+  saved list, so it changes once an edit is saved.
 - When the running game uses an older list (`restartRequired`), the tab says that a
   restart applies the changes. Nothing restarts the server automatically.
 - Saving changes nothing in a running game, so it needs no confirmation; the
@@ -145,9 +185,8 @@ clearer feedback; the runner remains authoritative.
   instead; an archive above 16 MiB that still exceeds 100:1 overall is refused.
 - A fixed timestamp makes the same folder produce the same archive and sha256.
 
-Mods that use Harmony cannot run yet, and mods that need client-only assemblies fail
-the boot (custom-mods.md "Known limitations"). The tab does not say so; it shows no
-help text (see above).
+Which mods run headless is the control plane's and the dedicated server's concern
+(custom-mods.md "Known limitations"); the tab only shows the notes the list carries.
 
 ## Start failures caused by mods
 
@@ -177,6 +216,26 @@ Until all three are in place the tab is visible but its requests fail (a missing
 proxy route reads as "The hosting service could not be reached"). Local tests use
 synthetic fixtures; they do not prove the Supabase body limit, chunk latency through
 Oracle, or that real mods load on the Linux server.
+
+### Players-only mods (contract C3)
+
+The website rolls out first. Both website deployments validate mod lists with the
+shared contract and reject fields they do not know, so **both** must be live before
+the control plane turns on its runs-on writer gate:
+
+- the Next app (its mods route handlers and browser client), and
+- the `my-servers` Edge Function, deployed by **Deploy Supabase hosting APIs**.
+
+If only the Next app is updated, the Edge Function rejects every list that carries
+`runsOn` and the Mods tab fails with `invalid_response` for every owner. Both accept
+entries with all of `runsOn`, `runsOnDefault` and `runsOnLocked` (plus
+`runsOnLockReason` exactly when locked) or with none of them (anything in between is
+malformed), the new notes, the F17 issues, typed refusals that end in
+` Issue: <issue>.`, and `mod_assembly_conflict`.
+
+The "none of them" case exists only for a control plane below the writer gate.
+Remove it, and make the fields required, once the gate is on in production and a
+rollback below it is ruled out (tracked in #384).
 
 ## Run locally against the hosting sandbox
 

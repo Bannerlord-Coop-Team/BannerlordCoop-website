@@ -1,6 +1,7 @@
 import type { Translator } from "@/app/lib/localization/types";
 import type { ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
-import type { ServerModsError } from "@/app/lib/hosting/server-mods";
+import type { ServerMod, ServerModsError } from "@/app/lib/hosting/server-mods";
+import type { ModRunsOnLockReason } from "../../../../supabase/functions/_shared/server-mods-contract";
 import type { ModLoadFailure } from "@/app/lib/hosting/my-servers-server";
 
 // Owner-facing copy for the Mods tab: installed-mod notes, API refusals and folder problems, each from a
@@ -31,25 +32,38 @@ const REJECTION_KEYS: Readonly<Record<string, string>> = {
     mod_archive_invalid: "mods.rejected.archiveInvalid",
     mod_manifest_mismatch: "mods.rejected.manifestMismatch",
     mod_submodule_invalid: "mods.rejected.submoduleInvalid",
+    mod_assembly_conflict: "mods.rejected.assemblyConflict",
+};
+const PLAIN_ISSUE_KEYS: Readonly<Record<string, string>> = {
+    "enabled-limit": "mods.issue.enabledLimit",
+    "dedicated-server-tag-removed": "mods.issue.dedicatedServerTagRemoved",
+    "no-render-tag-removed": "mods.issue.noRenderTagRemoved",
+    "no-server-submodule": "mods.issue.noServerSubmodule",
+    "headless-server-unsupported": "mods.issue.headlessServerUnsupported",
 };
 const ISSUE_KEYS: Readonly<Record<string, string>> = {
     "missing-dependency": "mods.issue.missingDependency",
     "dependency-order": "mods.issue.dependencyOrder",
     stripped: "mods.issue.stripped",
     "image-module-not-loaded": "mods.issue.imageModuleNotLoaded",
+    "submodule-class-missing": "mods.issue.submoduleClassMissing",
+    "submodule-dll-missing": "mods.issue.submoduleDllMissing",
+    "submodule-dll-unreadable": "mods.issue.submoduleDllUnreadable",
 };
 
 /** Describes one installed-mod note (`kind` or `kind:value`) in owner language. */
 export function describeModIssue(issue: string, t: Translate): string {
-    if (issue === "enabled-limit") return t("mods.issue.enabledLimit");
-    if (issue === "dedicated-server-tag-removed") return t("mods.issue.dedicatedServerTagRemoved");
+    const plain = PLAIN_ISSUE_KEYS[issue];
+    if (plain !== undefined) return t(plain);
     const separator = issue.indexOf(":");
     const key = separator < 0 ? undefined : ISSUE_KEYS[issue.slice(0, separator)];
     return key === undefined ? t("mods.issue.other", { issue }) : t(key, { value: issue.slice(separator + 1) });
 }
 
-/** Explains a refused or unconfirmed catalog call; `modId` names the module the refusal concerns. */
-export function modsErrorMessage(error: ServerModsError, t: Translate): string {
+/** Explains a refused or unconfirmed catalog call; `changedRunsOn` are the mods whose runs-on the refused save changed. */
+export function modsErrorMessage(error: ServerModsError, t: Translate, changedRunsOn: readonly ServerMod[] = []): string {
+    const runsOn = runsOnRefusalMessage(error, changedRunsOn, t);
+    if (runsOn !== null) return runsOn;
     if (error.code === "server_suspended" && !error.retryable) return t("action.refusal.serverSuspended");
     const id = error.modId ?? "";
     if (error.code === "upload_rejected") {
@@ -65,6 +79,39 @@ export function modsErrorMessage(error: ServerModsError, t: Translate): string {
     if (UNAVAILABLE_CODES.has(error.code)) return t("mods.error.unavailable");
     const key = SIMPLE_ERROR_KEYS[error.code];
     return key === undefined ? t("mods.error.other") : t(key);
+}
+
+/** Explains a refusal caused by a runs-on change (an unsupported runner, or server code the mod lacks); null for any other refusal. */
+function runsOnRefusalMessage(error: ServerModsError, changedRunsOn: readonly ServerMod[], t: Translate): string | null {
+    if (changedRunsOn.length === 0) return null;
+    if (error.code === "runner_unsupported") return t("mods.runsOn.runnerUnsupported");
+    // The control plane names an issue only when the switch itself was refused; a dependency order the same save broke names none.
+    if (error.code !== "mod_order_invalid" || error.detail === null) return null;
+    const named = error.modId?.toLowerCase();
+    const refused = changedRunsOn.find(mod => mod.runsOn === "server" && mod.id.toLowerCase() === named);
+    return refused === undefined ? null : t("mods.runsOn.serverRefused", { id: refused.id, reason: describeModIssue(error.detail, t) });
+}
+
+/** Copy for each known lock reason; a reason added to the contract's union does not compile until it has an entry here. */
+const LOCKED_RUNS_ON_COPY: Readonly<Record<ModRunsOnLockReason, (players: boolean, t: Translate) => string>> = {
+    // Core modules and Coop show no runs-on line, so this generic copy only covers an unexpected shape.
+    "core-module": genericLockedRunsOn,
+    // C3 gives this reason only where Harmony runs players-only; an old runner reports runner-unsupported instead.
+    "server-provided": (_players, t) => t("mods.runsOn.serverProvided"),
+    "runner-unsupported": (players, t) => t(players ? "mods.runsOn.fixedPlayers" : "mods.runsOn.fixedServer"),
+    "submodule-invalid": (_players, t) => t("mods.runsOn.lockedSubmodule"),
+};
+
+/** Explains a runs-on value the owner cannot change from the control plane's lock reason; an unknown reason gets generic copy. */
+export function lockedRunsOnMessage(mod: ServerMod, t: Translate): string {
+    const reason = mod.runsOnLockReason;
+    const copy = reason !== undefined && Object.hasOwn(LOCKED_RUNS_ON_COPY, reason) ? LOCKED_RUNS_ON_COPY[reason as ModRunsOnLockReason] : genericLockedRunsOn;
+    return copy(mod.runsOn === "players", t);
+}
+
+/** Names the fixed runs-on value without a reason. */
+function genericLockedRunsOn(players: boolean, t: Translate): string {
+    return t("mods.runsOn.lockedOther", { value: t(players ? "mods.runsOn.players" : "mods.runsOn.server") });
 }
 
 /** Explains why a picked folder cannot be uploaded. */

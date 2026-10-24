@@ -15,8 +15,8 @@ import { ServerModsError, type ServerModArchive, type ServerModCatalog, type Ser
 // for at least two minutes, one session refresh after a 401, gentle status polling, and `list` as the
 // authority whenever an outcome is unknown.
 
-/** A browser-facing failure from the website's mods routes. */
-export type ServerModsCallFailure = { code: string; retryable: boolean; modId: string | null };
+/** A browser-facing failure from the website's mods routes; `issue` is the control plane's reason for a refused runs-on switch. */
+export type ServerModsCallFailure = { code: string; retryable: boolean; modId: string | null; issue?: string };
 export type ServerModsCallResult<T> = { ok: true; result: T } | { ok: false; error: ServerModsCallFailure };
 
 /** Sends one mods call to the website's routes; `refreshSession` asks the route to refresh the session first. */
@@ -57,12 +57,12 @@ export function createServerModCatalog(dependencies: ServerModCatalogDependencie
             const outcome = await send(refreshNext);
             refreshNext = false;
             if (outcome.ok) return outcome.result;
-            const { code, retryable, modId } = outcome.error;
+            const { code, retryable, modId, issue } = outcome.error;
             if (code === "unauthenticated" && !refreshed) {
                 refreshed = refreshNext = true;
                 continue;
             }
-            if (!retryable || now() - started >= windowMilliseconds) throw new ServerModsError(code, retryable, modId);
+            if (!retryable || now() - started >= windowMilliseconds) throw new ServerModsError(code, retryable, modId, issue ?? null);
             await sleep(RETRY_DELAYS_MILLISECONDS[Math.min(attempt, RETRY_DELAYS_MILLISECONDS.length - 1)]);
         }
     }
