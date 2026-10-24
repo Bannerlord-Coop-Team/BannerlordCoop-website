@@ -43,8 +43,35 @@ the website's side of it.
   enabled limit leaves it disabled; the panel says which happened.
 - Deleting asks for confirmation. Pinned modules and Coop have no delete button.
 - Each mod shows its notes (stripped assemblies, missing or misordered
-  dependencies, removed dedicated-server tags). The tab shows no other help text;
-  the reorder handles carry a screen-reader-only arrow-key hint.
+  dependencies, removed dedicated-server or no-render tags, a mod known not to run
+  headless, no code that runs on the server, a SubModule class or DLL the mod does
+  not contain). The reorder handles carry a screen-reader-only arrow-key hint.
+- **Runs on** (control-plane contract C3, mod runtime v1). When the list reports
+  `runsOn`, each owner mod shows where its code runs: **Server and players**, or
+  **Players only**, where the module stays in the server's launch list (so Coop's
+  join check still matches it) but none of its code runs on the server. The choice
+  is separate from the enabled switch, saves like a toggle, and the save names
+  `runsOn` only for the mods whose value changed, so an unchanged list sends what
+  it always did.
+  - Bannerlord.Harmony is locked to players only ("the server provides Harmony").
+  - ItemQualityIndicator, Bannerlord.FamilyTree and FamilyAppearanceEditor default
+    to players only. Choosing players only for any other mod asks for confirmation
+    and keeps a warning on its row: the server won't run its code, so a gameplay
+    mod can make players' games disagree with the server or stop them joining.
+  - A mod installed players only because a SubModule's class or DLL is missing
+    (`submodule-class-missing:<Class>`, `submodule-dll-missing:<File>`) cannot be
+    switched to the server; the option is disabled and the note says why. A refused
+    switch (`mod_order_invalid` naming the mod) says the same.
+  - When the server's runner lacks players-only support, the control plane reports
+    every mod locked; the row shows the value it applies and that the server needs
+    a runner update first. A change refused with `runner_unsupported` says so.
+  - A list without `runsOn` (a control plane that predates it) shows no choice.
+- **Mods players need**, below the list, names every enabled owner mod with its Id
+  and exact version, players-only mods included (labelled "Players only: not run
+  on the server"), and says that players need exactly these mods at these versions
+  and no other community mods besides Bannerlord Co-op, because Coop's join check
+  compares community modules both ways. Disabled mods are left out. It reads the
+  saved list, so it changes once an edit is saved.
 - When the running game uses an older list (`restartRequired`), the tab says that a
   restart applies the changes. Nothing restarts the server automatically.
 - Saving changes nothing in a running game, so it needs no confirmation; the
@@ -145,9 +172,8 @@ clearer feedback; the runner remains authoritative.
   instead; an archive above 16 MiB that still exceeds 100:1 overall is refused.
 - A fixed timestamp makes the same folder produce the same archive and sha256.
 
-Mods that use Harmony cannot run yet, and mods that need client-only assemblies fail
-the boot (custom-mods.md "Known limitations"). The tab does not say so; it shows no
-help text (see above).
+Which mods run headless is the control plane's and the dedicated server's concern
+(custom-mods.md "Known limitations"); the tab only shows the notes the list carries.
 
 ## Start failures caused by mods
 
@@ -172,6 +198,11 @@ The tab depends on, in order:
 3. this website's `my-servers` Edge Function (deployed from main by
    **Deploy Supabase hosting APIs**), after probing that the deployed function accepts
    an 8 MiB `PUT` body and recording one full chunk's end-to-end time.
+
+Players-only mods (contract C3) roll out website first: this website accepts entries
+with or without the `runsOn`/`runsOnLocked` pair (one without the other is
+malformed), the new notes and `mod_assembly_conflict`, so it deploys before the
+control plane emits them.
 
 Until all three are in place the tab is visible but its requests fail (a missing
 proxy route reads as "The hosting service could not be reached"). Local tests use
