@@ -31,7 +31,9 @@ import {
     retainManagedServerBackupIntent,
     storeManagedServerBackupIntent,
 } from "@/app/servers/managed-server-backup-intent";
-import { Archive, ChevronDown, LoaderCircle, RotateCcw } from "lucide-react";
+import { Archive, ChevronDown, Database, LoaderCircle, RotateCcw } from "lucide-react";
+import { fileButtonClass, fileDangerButtonClass, filePrimaryButtonClass } from "./server-file-styles";
+import { WorkspaceCard, workspaceEmptyClass, workspaceListClass, workspaceNoticeClass, workspaceSubheadingClass } from "./server-workspace-ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
 
@@ -135,6 +137,7 @@ function ManagedServerBackupsSession({
     const now = useCurrentMinute();
     const expiredListId = useId();
     const autosaveHeadingId = useId();
+    const backupListHeadingId = useId();
     const restoreMessages = { expired: t("backupReason.expired"), inProgress: t("backupReason.inProgress"), installedBuildUnknown: t("backupReason.installedBuildUnknown"), backupBuildUnknown: t("backupReason.backupBuildUnknown"), buildMismatch: t("backupReason.buildMismatch"), unknown: t("backupReason.unknown") };
     const [intentReady, setIntentReady] = useState(false);
     const [storageError, setStorageError] = useState(false);
@@ -445,7 +448,7 @@ function ManagedServerBackupsSession({
     // Formats an autosave's save time, age and size on one line.
     function renderAutosaveDetails(item: MyServerSaveGenerationSummary) {
         return (
-            <p className="mt-2 text-sm text-foreground-muted">
+            <p className="mt-1 text-sm text-foreground-muted">
                 <time dateTime={item.lastModifiedAt}>{formatTime(item.lastModifiedAt)}</time>
                 {now !== null && <>
                     <span aria-hidden="true"> · </span>
@@ -462,9 +465,9 @@ function ManagedServerBackupsSession({
         const target = autosaveTarget(item.generation);
         const isRestoring = pendingBackupId === target;
         return (
-            <li key={item.generation} className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <li key={item.generation} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                    <p className="font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
+                    <p className="text-sm font-medium text-foreground">
                         {item.generation === "backup1" ? t("autosaves.earlierAutosave1") : t("autosaves.earlierAutosave2")}
                     </p>
                     {renderAutosaveDetails(item)}
@@ -487,9 +490,9 @@ function ManagedServerBackupsSession({
                         title={retainedIntent !== null
                             ? t("backups.reconcileThePendingBackupRequestFirst")
                             : serverIsStopped ? undefined : autosaveStopHint}
-                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 border border-red-400/40 bg-red-500/[0.06] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-red-200 transition-colors hover:border-red-300/60 hover:bg-red-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
+                        className={`${fileDangerButtonClass} shrink-0`}
                     >
-                        <RotateCcw aria-hidden="true" className={`size-3.5 ${isRestoring ? "animate-pulse" : ""}`} />
+                        <RotateCcw aria-hidden="true" className={`size-4 ${isRestoring ? "animate-pulse" : ""}`} />
                         {isRestoring ? t("backups.submitting") : t("autosaves.loadAutosave")}
                     </button>
                 )}
@@ -503,21 +506,20 @@ function ManagedServerBackupsSession({
         const isRestoring = pendingBackupId === backup.backupId;
         const reason = restoreDisabledReason(backup, restoreMessages);
         return (
-            <li key={backup.backupId} className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <li key={backup.backupId} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
+                        <p className="text-sm font-medium text-foreground">
                             {formatBackupType(backup.backupType, t)}
                         </p>
                         <BackupState state={backup.restoreState} />
                     </div>
-                    <p className="mt-2 text-sm text-foreground-muted">
+                    <p className="mt-1 text-sm text-foreground-muted">
                         <time dateTime={backup.createdAt}>{formatTime(backup.createdAt)}</time>
                         <span aria-hidden="true"> · </span>
                         {formatByteCount(backup.byteSize, number, t)}
-                    </p>
-                    <p className="mt-1 text-xs text-foreground-dim">
-                        {t("backups.retainedUntilDate", { date: formatTime(backup.retentionExpiresAt) })}
+                        <span aria-hidden="true"> · </span>
+                        <span className="text-foreground-dim">{t("backups.retainedUntilDate", { date: formatTime(backup.retentionExpiresAt) })}</span>
                     </p>
                     {backup.restoredAt !== null && (
                         <p className="mt-1 text-xs text-foreground-dim">
@@ -547,9 +549,9 @@ function ManagedServerBackupsSession({
                         title={retainedIntent !== null
                             ? t("backups.reconcileThePendingBackupRequestFirst")
                             : reason}
-                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 border border-red-400/40 bg-red-500/[0.06] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-red-200 transition-colors hover:border-red-300/60 hover:bg-red-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
+                        className={`${fileDangerButtonClass} shrink-0`}
                     >
-                        <RotateCcw aria-hidden="true" className={`size-3.5 ${isRestoring ? "animate-pulse" : ""}`} />
+                        <RotateCcw aria-hidden="true" className={`size-4 ${isRestoring ? "animate-pulse" : ""}`} />
                         {isRestoring ? t("backups.submitting") : t("backups.restoreSave")}
                     </button>
                 )}
@@ -557,155 +559,152 @@ function ManagedServerBackupsSession({
         );
     }
 
-    return (
-        <div className="mt-5 space-y-4">
-            {storageError && (
-                <p role="alert" className="border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
-                    {t("backups.backupRequestRecoveryStorageIsUnavailableOrInvalidMutationsAre")}</p>
-            )}
-            {loadError && (
-                <p role="status" className="border-l-2 border-gold/50 bg-gold/5 px-4 py-3 text-sm text-foreground-muted">
-                    {loadError}
-                </p>
-            )}
+    const createAction = canManage ? (
+        <button
+            type="button"
+            disabled={
+                busy
+                || Boolean(loadError)
+                || retainedIntent !== null
+            }
+            onClick={submitCreateBackup}
+            className={filePrimaryButtonClass}
+        >
+            <Archive aria-hidden="true" className={`size-4 ${pendingBackupId === "create" ? "animate-pulse" : ""}`} />
+            {pendingBackupId === "create" ? t("backups.submitting") : t("backups.createBackup")}
+        </button>
+    ) : (
+        <span className="text-sm text-foreground-muted">{t("backups.readOnlyAccess")}</span>
+    );
 
-            {shownJob !== null
-                ? <BackupJobStatus job={shownJob} interruptsPlayers={interruptingJobIds.has(shownJob.jobId) || serverIsRunning} />
-                : lastBackupAt !== null && !loadError && (
-                    <p className="text-sm text-foreground-muted">{t("backups.lastBackupDate", { date: formatTime(lastBackupAt) })}</p>
+    return (
+        <WorkspaceCard id="server-backups" headingId="server-backups-heading" title={t("files.backupsAndRestore")} icon={Database} actions={createAction}
+            description={shownJob === null && lastBackupAt !== null && !loadError ? t("backups.lastBackupDate", { date: formatTime(lastBackupAt) }) : undefined}>
+            <div className="space-y-5">
+                {storageError && (
+                    <p role="alert" className="rounded-md border border-crimson/50 bg-crimson/10 px-3 py-2 text-sm text-red-200">
+                        {t("backups.backupRequestRecoveryStorageIsUnavailableOrInvalidMutationsAre")}</p>
+                )}
+                {loadError && (
+                    <p role="status" className={workspaceNoticeClass}>
+                        {loadError}
+                    </p>
                 )}
 
-            {statusIsStale && (
-                <div className="flex flex-wrap items-center gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-xs text-foreground-muted">
-                    <p role="status">{t("backups.automaticStatusUpdatesHavePausedTheOperationMayStillBeRunning")}</p>
-                    <button
-                        type="button"
-                        onClick={() => beginPolling(server.serverId, currentServer.updatedAt, activeJob?.jobId, "backup")}
-                        className="min-h-9 border border-gold/35 px-3 text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                    >
-                        {t("backups.refreshStatusAndResumeUpdates")}</button>
-                </div>
-            )}
+                {shownJob !== null && <BackupJobStatus job={shownJob} interruptsPlayers={interruptingJobIds.has(shownJob.jobId) || serverIsRunning} />}
 
-            {(autosaves || autosaveLoadError) && (
-                <section aria-labelledby={autosaveHeadingId}>
-                    <h3 id={autosaveHeadingId} className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gold">
-                        {autosaves?.campaignName
-                            ? t("autosaves.recentAutosavesCampaign", { campaign: autosaves.campaignName })
-                            : t("autosaves.recentAutosaves")}
-                    </h3>
-                    <p className="mt-1 text-xs text-foreground-dim">{t("autosaves.theServerKeepsTheLastTwoAutosavesNextToTheCurrentSave")}</p>
-                    {autosaveLoadError && (
-                        <p role="status" className="mt-3 border-l-2 border-gold/50 bg-gold/5 px-4 py-3 text-sm text-foreground-muted">
-                            {autosaveLoadError}
-                        </p>
-                    )}
-                    {(currentAutosave !== null || earlierAutosaves.length > 0) && (
-                        <ul className="mt-3 divide-y divide-white/10 border border-white/10" aria-label={t("autosaves.recentAutosaves")}>
-                            {currentAutosave !== null && (
-                                <li className="p-4">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <p className="font-label text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
-                                            {t("autosaves.currentSave")}
-                                        </p>
-                                        <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-emerald-200">
-                                            {t("autosaves.inUse")}
-                                        </span>
-                                    </div>
-                                    {renderAutosaveDetails(currentAutosave)}
-                                </li>
-                            )}
-                            {earlierAutosaves.map(renderEarlierAutosave)}
-                        </ul>
-                    )}
-                    {autosaves && earlierAutosaves.length === 0 && (
-                        <div className="mt-3 border border-dashed border-white/10 px-4 py-6 text-center text-sm text-foreground-muted">
-                            {t("autosaves.noEarlierAutosavesYet")}
-                        </div>
-                    )}
-                    {canManage && earlierAutosaves.length > 0 && !serverIsStopped && (
-                        <p className="mt-2 text-xs text-foreground-dim">{autosaveStopHint}</p>
-                    )}
-                </section>
-            )}
-
-            <div>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    {canManage ? (
+                {statusIsStale && (
+                    <div className={`flex flex-wrap items-center justify-between gap-3 ${workspaceNoticeClass}`}>
+                        <p role="status">{t("backups.automaticStatusUpdatesHavePausedTheOperationMayStillBeRunning")}</p>
                         <button
                             type="button"
-                            disabled={
-                                busy
-                                || Boolean(loadError)
-                                || retainedIntent !== null
-                            }
-                            onClick={submitCreateBackup}
-                            className="inline-flex min-h-10 items-center justify-center gap-2 border border-gold/35 bg-gold/[0.07] px-3 font-label text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-foreground-dim"
+                            onClick={() => beginPolling(server.serverId, currentServer.updatedAt, activeJob?.jobId, "backup")}
+                            className={fileButtonClass}
                         >
-                            <Archive aria-hidden="true" className={`size-3.5 ${pendingBackupId === "create" ? "animate-pulse" : ""}`} />
-                            {pendingBackupId === "create" ? t("backups.submitting") : t("backups.createBackup")}
-                        </button>
-                    ) : (
-                        <span className="font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-foreground-dim">
-                            {t("backups.readOnlyAccess")}</span>
-                    )}
-                </div>
-                <div aria-live="polite" className="max-w-2xl">
+                            {t("backups.refreshStatusAndResumeUpdates")}</button>
+                    </div>
+                )}
+
+                <div aria-live="polite" className="empty:hidden">
                     {showRetainedNotice && retainedIntent !== null ? (
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-xs leading-5 text-foreground-muted">
+                        <div className={`flex flex-wrap items-center justify-between gap-3 ${workspaceNoticeClass}`}>
                             <div className="min-w-0 flex-1 space-y-1">
                                 <p>{retainedIntent.action === "create-backup"
                                     ? t("backups.wereConfirmingYourBackupRequest")
                                     : t("backups.wereConfirmingYourRestoreRequest")}</p>
-                                {controlFeedback && <p className="text-foreground">{controlFeedback.text}</p>}
+                                {controlFeedback && <p className="text-foreground-muted">{controlFeedback.text}</p>}
                             </div>
                             <button
                                 type="button"
                                 disabled={isPending || !intentReady || storageError || !canManage || Boolean(loadError)}
                                 onClick={retryPendingRequest}
-                                className="inline-flex min-h-9 items-center justify-center border border-gold/35 bg-gold/[0.07] px-3 font-label text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-gold transition-colors hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:border-white/10 disabled:text-foreground-dim"
+                                className={fileButtonClass}
                             >
                                 {pending?.retry ? t("backups.reconciling") : t("backups.retryPendingRequest")}
                             </button>
                         </div>
                     ) : controlFeedback && (
-                        <p className="mt-3 text-xs leading-5 text-foreground">{controlFeedback.text}</p>
+                        <p className="text-sm leading-6 text-foreground">{controlFeedback.text}</p>
                     )}
                 </div>
-            </div>
 
-            {!loadError && (backups.length === 0 ? (
-                <div className="border border-dashed border-white/10 px-4 py-8 text-center text-sm text-foreground-muted">
-                    {t("backups.noRetainedBackupsAreAvailableYet")}</div>
-            ) : (
-                <>
-                    {currentBackups.length > 0 && (
-                        <ul className="divide-y divide-white/10 border border-white/10" aria-label={t("backups.retainedSaveBackups")}>
-                            {currentBackups.map(renderBackup)}
-                        </ul>
-                    )}
-                    {expiredBackups.length > 0 && (
-                        <div>
-                            <button
-                                type="button"
-                                aria-expanded={showExpired}
-                                aria-controls={expiredListId}
-                                onClick={() => setShowExpired(!showExpired)}
-                                className="inline-flex min-h-10 items-center gap-2 text-sm text-foreground-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold"
-                            >
-                                <ChevronDown aria-hidden="true" className={`size-4 transition-transform ${showExpired ? "rotate-180" : ""}`} />
-                                {showExpired
-                                    ? t("backups.hideExpiredBackups")
-                                    : t("backups.showCountExpiredBackups", { count: expiredBackups.length })}
-                            </button>
-                            <ul id={expiredListId} hidden={!showExpired} className="mt-3 divide-y divide-white/10 border border-white/10" aria-label={t("backups.expiredBackups")}>
-                                {showExpired && expiredBackups.map(renderBackup)}
+                {(autosaves || autosaveLoadError) && (
+                    <section aria-labelledby={autosaveHeadingId} className="space-y-3">
+                        <h3 id={autosaveHeadingId} className={workspaceSubheadingClass}>
+                            {autosaves?.campaignName
+                                ? t("autosaves.recentAutosavesCampaign", { campaign: autosaves.campaignName })
+                                : t("autosaves.recentAutosaves")}
+                        </h3>
+                        {autosaveLoadError && (
+                            <p role="status" className={workspaceNoticeClass}>
+                                {autosaveLoadError}
+                            </p>
+                        )}
+                        {(currentAutosave !== null || earlierAutosaves.length > 0) && (
+                            <ul className={workspaceListClass} aria-label={t("autosaves.recentAutosaves")}>
+                                {currentAutosave !== null && (
+                                    <li className="px-4 py-3">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <p className="text-sm font-medium text-foreground">
+                                                {t("autosaves.currentSave")}
+                                            </p>
+                                            <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-200">
+                                                {t("autosaves.inUse")}
+                                            </span>
+                                        </div>
+                                        {renderAutosaveDetails(currentAutosave)}
+                                    </li>
+                                )}
+                                {earlierAutosaves.map(renderEarlierAutosave)}
                             </ul>
-                        </div>
+                        )}
+                        {autosaves && earlierAutosaves.length === 0 && (
+                            <div className={workspaceEmptyClass}>
+                                {t("autosaves.noEarlierAutosavesYet")}
+                            </div>
+                        )}
+                        {canManage && earlierAutosaves.length > 0 && !serverIsStopped && (
+                            <p className="text-xs text-foreground-muted">{autosaveStopHint}</p>
+                        )}
+                    </section>
+                )}
+
+                {!loadError && <section aria-labelledby={backupListHeadingId} className="space-y-3">
+                    <h3 id={backupListHeadingId} className={workspaceSubheadingClass}>{t("backups.retainedSaveBackups")}</h3>
+                    {backups.length === 0 ? (
+                        <div className={workspaceEmptyClass}>
+                            {t("backups.noRetainedBackupsAreAvailableYet")}</div>
+                    ) : (
+                        <>
+                            {currentBackups.length > 0 && (
+                                <ul className={workspaceListClass} aria-label={t("backups.retainedSaveBackups")}>
+                                    {currentBackups.map(renderBackup)}
+                                </ul>
+                            )}
+                            {expiredBackups.length > 0 && (
+                                <div>
+                                    <button
+                                        type="button"
+                                        aria-expanded={showExpired}
+                                        aria-controls={expiredListId}
+                                        onClick={() => setShowExpired(!showExpired)}
+                                        className="inline-flex min-h-10 items-center gap-2 text-sm text-foreground-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold"
+                                    >
+                                        <ChevronDown aria-hidden="true" className={`size-4 transition-transform ${showExpired ? "rotate-180" : ""}`} />
+                                        {showExpired
+                                            ? t("backups.hideExpiredBackups")
+                                            : t("backups.showCountExpiredBackups", { count: expiredBackups.length })}
+                                    </button>
+                                    <ul id={expiredListId} hidden={!showExpired} className={`mt-2 ${workspaceListClass}`} aria-label={t("backups.expiredBackups")}>
+                                        {showExpired && expiredBackups.map(renderBackup)}
+                                    </ul>
+                                </div>
+                            )}
+                        </>
                     )}
-                </>
-            ))}
-        </div>
+                </section>}
+            </div>
+        </WorkspaceCard>
     );
 }
 
@@ -740,7 +739,7 @@ function BackupJobStatus({ job, interruptsPlayers }: { job: MyServerBackupJob; i
     return (
         <div
             role={failed ? "alert" : "status"}
-            className={`flex items-start gap-2 border-l-2 px-4 py-3 text-sm ${failed ? "border-crimson bg-crimson/10 text-red-200" : "border-gold bg-gold/[0.07] text-foreground-muted"}`}
+            className={`flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${failed ? "border-crimson/50 bg-crimson/10 text-red-200" : "border-gold/30 bg-gold/[0.06] text-foreground"}`}
         >
             {active && <LoaderCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 animate-spin text-gold" />}
             <span>
@@ -759,7 +758,7 @@ function BackupState({ state }: { state: string }) {
     const positive = state === "available" || state === "restored";
     const negative = state === "failed" || state === "expired";
     return (
-        <span className={`rounded-full border px-2 py-0.5 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em] ${
+        <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
             positive
                 ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-200"
                 : negative

@@ -14,7 +14,6 @@
   "managementWorkspace.browseCommands": "명령어 찾아보기",
   "managementWorkspace.searchConsoleCommands": "콘솔 명령어 검색",
   "managementWorkspace.searchCommands": "명령어 검색…",
-  "managementWorkspace.selectToInsertThenEditAnyLtArgumentsGtBefore": "명령어를 선택해 입력한 후, 전송하기 전에 <arguments>를 수정하세요. 사용 가능한 명령어는 설치된 빌드에 따라 다릅니다.",
   "managementWorkspace.noCommandsMatchYourSearch": "검색 조건에 맞는 명령어가 없습니다.",
   "managementWorkspace.idLookups": "ID 조회",
   "managementWorkspace.returnsIds": "반환",

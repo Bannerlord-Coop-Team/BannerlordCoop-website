@@ -9,6 +9,8 @@ import { useEffect, useRef, useState, useTransition, type ReactNode } from "reac
 import { CircleAlert, LoaderCircle, RefreshCw } from "lucide-react";
 import { readManagedServerConfigFiles, saveManagedServerConfig } from "@/app/servers/managed-server-config-actions";
 import { fileButtonClass, filePrimaryButtonClass } from "./server-file-styles";
+import { segmentedButtonClass, segmentedGroupClass } from "./segmented-controls";
+import { workspaceNoticeClass } from "./server-workspace-ui";
 import {
     MANAGED_DIFFICULTY_LEVELS, MANAGED_GOLD_FOOD_CHANGE_MODES, MANAGED_LORD_DEFECTION_RETRY_MODES,
     parseManagedServerConfiguration, type ManagedServerConfiguration,
@@ -65,7 +67,6 @@ function ConfigLoadingSkeleton({ groups, label }: { groups: readonly { title: st
     return <div role="status" aria-label={label} className="space-y-6" data-config-loading-skeleton>
         {groups.map(({ title, fields }) => <section key={title} aria-hidden="true" className="space-y-3">
             <div className="h-4 w-36 animate-pulse rounded bg-white/10" />
-            <div className="h-3 w-72 max-w-full animate-pulse rounded bg-white/[0.06]" />
             <div className="grid gap-4 sm:grid-cols-2">
                 {fields.map((field) => <div key={field.key} className="space-y-2">
                     <div className="h-3 w-32 animate-pulse rounded bg-white/10" />
@@ -147,10 +148,10 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         { key: "enableHeroExecutions", label: t("configuration.field.enableHeroExecutions"), kind: "boolean" },
         { key: "enablePlayerClanMemberExecutions", label: t("configuration.field.enablePlayerClanMemberExecutions"), kind: "boolean" },
     ];
-    const GROUPS: { group: Group; title: string; description: string; fields: Field[] }[] = [
-        { group: "serverConfig", title: t("configEditor.serverSettings"), description: t("configEditor.savedToServerConfigJsonPasswordsPortsAndCampaignSelection"), fields: SERVER_FIELDS },
-        { group: "difficulty", title: t("configEditor.difficulty"), description: t("configEditor.savedToModConfigJson"), fields: DIFFICULTY_FIELDS },
-        { group: "modOptions", title: t("configEditor.gameplayOptions"), description: t("configEditor.savedToModConfigJson"), fields: MOD_OPTION_FIELDS },
+    const GROUPS: { group: Group; title: string; fields: Field[] }[] = [
+        { group: "serverConfig", title: t("configEditor.serverSettings"), fields: SERVER_FIELDS },
+        { group: "difficulty", title: t("configEditor.difficulty"), fields: DIFFICULTY_FIELDS },
+        { group: "modOptions", title: t("configEditor.gameplayOptions"), fields: MOD_OPTION_FIELDS },
     ];
     const stored: Settings | null = configuration ? { serverConfig: configuration.serverConfig, modConfig: configuration.modConfig } : null;
     const [mode, setMode] = useState<"form" | "json">("form");
@@ -270,17 +271,43 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     const status = !access ? (stored ? t("configEditor.onlyTheServerOwnerCanEditConfigurationThisIsThe") : t("configEditor.configurationIsUnavailableForThisServer"))
         : loadState === "loading" ? t("configEditor.loadingTheServerSCurrentConfiguration")
         : loadState === "failed" ? loadMessage
-        : access.canEdit ? t("configEditor.editingTheFilesOnTheServerSRunner") : t("configEditor.onlyTheServerOwnerCanEditConfiguration");
+        : access.canEdit ? null : t("configEditor.onlyTheServerOwnerCanEditConfiguration");
+
+    // Renders one configuration field as a checkbox, choice or number input bound to the draft.
+    function renderField(group: Group, field: Field) {
+        if (!draft) return null;
+        const id = `config-${group}-${field.key}`;
+        const value = groupValues(draft, group)[field.key];
+        const update = (next: unknown) => { setDraft(withValue(draft, group, field.key, next)); setMessage(""); };
+        if (field.kind === "boolean") return <label key={field.key} htmlFor={id} className="flex items-start gap-3 text-sm">
+            <input id={id} type="checkbox" className="mt-1 accent-gold" checked={value === true} onChange={(event) => update(event.target.checked)} />
+            <span>{field.label}{field.help && <span className="mt-1 block text-xs text-foreground-muted">{field.help}</span>}</span>
+        </label>;
+        if (field.kind === "choice") return <div key={field.key}>
+            <label htmlFor={id} className="text-sm">{field.label}</label>
+            <select id={id} className={inputClass} value={typeof value === "string" ? value : ""} onChange={(event) => update(event.target.value)}>
+                {field.options.map((option) => <option key={option} value={option}>{configurationChoiceLabel(option, t)}</option>)}
+            </select>
+        </div>;
+        const problem = numberProblem(field, value, t, number);
+        return <div key={field.key}>
+            <label htmlFor={id} className="text-sm">{field.label}</label>
+            <input id={id} type="number" inputMode={field.kind === "integer" ? "numeric" : "decimal"} min={field.min} max={field.max} step={field.kind === "integer" ? 1 : field.step}
+                className={inputClass} value={typeof value === "number" && !Number.isNaN(value) ? value : ""} aria-invalid={problem ? true : undefined} aria-describedby={problem || field.help ? `${id}-help` : undefined}
+                onChange={(event) => update(event.target.value === "" ? Number.NaN : Number(event.target.value))} />
+            {(problem || field.help) && <p id={`${id}-help`} className={`mt-1 text-xs ${problem ? "text-red-200" : "text-foreground-muted"}`}>{problem ?? field.help}</p>}
+        </div>;
+    }
 
     return <div className="p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex gap-2" role="group" aria-label={t("configEditor.configEditorMode")}>
-                <button type="button" disabled={!draft} aria-pressed={mode === "form"} className={mode === "form" ? filePrimaryButtonClass : fileButtonClass} onClick={() => switchMode("form")}>{t("configEditor.form")}</button>
-                <button type="button" disabled={!draft} aria-pressed={mode === "json"} className={mode === "json" ? filePrimaryButtonClass : fileButtonClass} onClick={() => switchMode("json")}>{t("configEditor.json")}</button>
+            <div className={segmentedGroupClass} role="group" aria-label={t("configEditor.configEditorMode")}>
+                <button type="button" disabled={!draft} aria-pressed={mode === "form"} className={segmentedButtonClass} onClick={() => switchMode("form")}>{t("configEditor.form")}</button>
+                <button type="button" disabled={!draft} aria-pressed={mode === "json"} className={segmentedButtonClass} onClick={() => switchMode("json")}>{t("configEditor.json")}</button>
             </div>
             {access && <button type="button" className={fileButtonClass} disabled={loadState === "loading" || pending} onClick={reload}><RefreshCw aria-hidden className="size-4" />{t("configEditor.reloadSettings")}</button>}
         </div>
-        <p id="config-help" role={loadState === "failed" ? "alert" : undefined} className="mb-4 flex items-start gap-2 text-xs leading-5 text-foreground-muted">
+        <p id="config-help" role={loadState === "failed" ? "alert" : undefined} className="mb-4 flex items-start gap-2 text-xs leading-5 text-foreground-muted empty:hidden">
             {loadState === "loading" && <LoaderCircle aria-hidden className="mt-0.5 size-3.5 shrink-0 animate-spin" />}{status}
         </p>
         {loadState === "loading" ? <ConfigLoadingSkeleton groups={GROUPS} label={t("configEditor.loadingSkeleton")} /> : draft && mode === "json" && <>
@@ -289,38 +316,14 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
             {jsonError && <p id="config-json-error" role="alert" className="mt-2 text-sm text-red-200">{jsonError}</p>}
         </>}
         {loadState !== "loading" && draft && mode === "form" && <div className="space-y-6">
-            {GROUPS.map(({ group, title, description, fields }) => <fieldset key={group} disabled={!editable} className="min-w-0">
+            {GROUPS.map(({ group, title, fields }) => <fieldset key={group} disabled={!editable} className="min-w-0">
                 <legend className="text-sm font-semibold">{title}</legend>
-                <p className="mt-1 text-xs leading-5 text-foreground-muted">{description}</p>
-                <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                    {fields.map((field) => {
-                        const id = `config-${group}-${field.key}`;
-                        const value = groupValues(draft, group)[field.key];
-                        const update = (next: unknown) => { setDraft(withValue(draft, group, field.key, next)); setMessage(""); };
-                        if (field.kind === "boolean") return <label key={field.key} htmlFor={id} className="flex items-start gap-3 text-sm">
-                            <input id={id} type="checkbox" className="mt-1 accent-gold" checked={value === true} onChange={(event) => update(event.target.checked)} />
-                            <span>{field.label}{field.help && <span className="mt-1 block text-xs text-foreground-muted">{field.help}</span>}</span>
-                        </label>;
-                        if (field.kind === "choice") return <div key={field.key}>
-                            <label htmlFor={id} className="text-sm">{field.label}</label>
-                            <select id={id} className={inputClass} value={typeof value === "string" ? value : ""} onChange={(event) => update(event.target.value)}>
-                                {field.options.map((option) => <option key={option} value={option}>{configurationChoiceLabel(option, t)}</option>)}
-                            </select>
-                        </div>;
-                        const problem = numberProblem(field, value, t, number);
-                        return <div key={field.key}>
-                            <label htmlFor={id} className="text-sm">{field.label}</label>
-                            <input id={id} type="number" inputMode={field.kind === "integer" ? "numeric" : "decimal"} min={field.min} max={field.max} step={field.kind === "integer" ? 1 : field.step}
-                                className={inputClass} value={typeof value === "number" && !Number.isNaN(value) ? value : ""} aria-invalid={problem ? true : undefined} aria-describedby={problem || field.help ? `${id}-help` : undefined}
-                                onChange={(event) => update(event.target.value === "" ? Number.NaN : Number(event.target.value))} />
-                            {(problem || field.help) && <p id={`${id}-help`} className={`mt-1 text-xs ${problem ? "text-red-200" : "text-foreground-muted"}`}>{problem ?? field.help}</p>}
-                        </div>;
-                    })}
-                </div>
+                <div className="mt-3 grid gap-4 sm:grid-cols-2">{fields.filter((field) => field.kind !== "boolean").map((field) => renderField(group, field))}</div>
+                {fields.some((field) => field.kind === "boolean") && <div className="mt-4 grid gap-x-6 gap-y-3 rounded-md border border-white/10 bg-white/[0.02] p-4 sm:grid-cols-2">{fields.filter((field) => field.kind === "boolean").map((field) => renderField(group, field))}</div>}
             </fieldset>)}
         </div>}
         {notice}
-        {message && <p role="status" className="mt-4 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-sm text-foreground-muted">{pending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{message}{stale && <> <button type="button" className="underline" onClick={reload}>{t("configEditor.reloadSettings")}</button></>}</p>}
+        {message && <p role="status" className={`mt-4 ${workspaceNoticeClass}`}>{pending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{message}{stale && <> <button type="button" className="underline" onClick={reload}>{t("configEditor.reloadSettings")}</button></>}</p>}
         {/* Root overflow clipping defeats position: sticky, so unsaved changes pin the bar to the viewport instead. */}
         {dirty && <div aria-hidden="true" className="h-20" />}
         <div data-unsaved-bar={dirty ? "pinned" : undefined} className={dirty ? "fixed inset-x-0 bottom-0 z-30 border-t border-gold/60 bg-surface shadow-[0_-12px_32px_rgba(0,0,0,0.45)]" : "-mx-5 -mb-5 mt-5 rounded-b-lg border-t border-white/10 bg-surface"}>

@@ -14,7 +14,6 @@
   "managementWorkspace.browseCommands": "Ver comandos",
   "managementWorkspace.searchConsoleCommands": "Pesquisar comandos do console",
   "managementWorkspace.searchCommands": "Pesquisar comandos…",
-  "managementWorkspace.selectToInsertThenEditAnyLtArgumentsGtBefore": "Selecione para inserir e edite os <arguments> antes de enviar. Os comandos disponíveis dependem da versão instalada.",
   "managementWorkspace.noCommandsMatchYourSearch": "Nenhum comando corresponde à sua pesquisa.",
   "managementWorkspace.idLookups": "Consultas de ID",
   "managementWorkspace.returnsIds": "Retorna",

@@ -305,7 +305,8 @@ it("keeps lifecycle progress in its own row below the toolbar, hidden while empt
     await mount();
     const heading = container.querySelector("h2")!;
     const toolbar = heading.parentElement!;
-    const statusRow = toolbar.nextElementSibling!;
+    // The status row now closes the in-game controls bar that follows the header, instead of being the header's own sibling.
+    const statusRow = toolbar.nextElementSibling!.lastElementChild!;
     expect(statusRow.className).toContain("empty:hidden");
     expect(statusRow.childElementCount).toBe(0);
     expect(toolbar.contains(statusRow)).toBe(false);

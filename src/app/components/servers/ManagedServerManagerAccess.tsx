@@ -4,9 +4,11 @@ import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "@/app/lib/localization/client";
 import { removeServerManager, setServerManager } from "@/app/servers/server-manager-actions";
 import type { ServerManager } from "@/app/lib/hosting/server-managers";
+import { Users } from "lucide-react";
+import { fileDangerButtonClass, filePrimaryButtonClass } from "./server-file-styles";
+import { WorkspaceCard, workspaceListClass } from "./server-workspace-ui";
 
-const button = "inline-flex min-h-10 items-center justify-center rounded-md border border-gold/50 bg-gold/10 px-4 py-2 text-sm font-semibold text-gold hover:bg-gold/15 focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
-const removeButton = "inline-flex min-h-9 shrink-0 items-center justify-center rounded-md border border-crimson/50 px-3 py-1.5 text-sm font-semibold text-red-200 hover:border-crimson hover:bg-crimson/15 focus-visible:outline-2 focus-visible:outline-crimson disabled:cursor-not-allowed disabled:opacity-40";
+const removeButton = `${fileDangerButtonClass} shrink-0`;
 const LIST_HEADING_ID = "managed-server-manager-list-heading";
 
 /** Lets the owner list, grant and remove manager access; `managers` is null when the list could not be read. */
@@ -61,15 +63,14 @@ export function ManagedServerManagerAccess({ serverId, expectedUpdatedAt, canEdi
         });
     }
 
-    return <section aria-labelledby="managed-server-manager-heading" className="rounded-lg border border-white/10 bg-surface p-5 sm:p-6">
-        <h2 id="managed-server-manager-heading" className="text-base font-semibold">{t("managerAccess.heading")}</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground-muted">{t("managerAccess.description")}</p>
-        <div className="mt-5 max-w-xl">
+    return <WorkspaceCard headingId="managed-server-manager-heading" title={t("managerAccess.heading")} icon={Users}>
+        <div className="max-w-xl">
             <h3 ref={listHeading} id={LIST_HEADING_ID} tabIndex={-1} className="text-sm font-medium outline-none">{t("managerAccess.currentManagers")}</h3>
             <ManagerList managers={managers} disabled={isPending} removingId={isPending ? pendingAction : null} onRemove={remove} />
         </div>
-        <form className="mt-5 max-w-xl space-y-3" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+        <form className="mt-5 max-w-xl" onSubmit={(event) => { event.preventDefault(); submit(); }}>
             <label htmlFor="manager-account-email" className="block text-sm font-medium">{t("managerAccess.emailLabel")}</label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
             <input
                 ref={emailInput}
                 id="manager-account-email"
@@ -83,13 +84,14 @@ export function ManagedServerManagerAccess({ serverId, expectedUpdatedAt, canEdi
                 onChange={(event) => { setEmail(event.target.value); setMessage(""); }}
                 placeholder={t("managerAccess.emailPlaceholder")}
                 aria-describedby="manager-account-email-help"
-                className="w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-gold focus:ring-1 focus:ring-gold"
+                className="min-h-10 w-full min-w-0 flex-1 rounded-md border border-white/15 bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-gold focus:ring-1 focus:ring-gold"
             />
-            <p id="manager-account-email-help" className="text-xs leading-5 text-foreground-muted">{t("managerAccess.emailHelp")}</p>
-            <button type="submit" disabled={isPending || email.trim().length === 0} className={button}>{isPending && pendingAction === "grant" ? t("managerAccess.granting") : t("managerAccess.grant")}</button>
+            <button type="submit" disabled={isPending || email.trim().length === 0} className={`${filePrimaryButtonClass} shrink-0`}>{isPending && pendingAction === "grant" ? t("managerAccess.granting") : t("managerAccess.grant")}</button>
+            </div>
+            <p id="manager-account-email-help" className="mt-2 text-xs leading-5 text-foreground-muted">{t("managerAccess.emailHelp")}</p>
         </form>
         <p role="status" className={message ? "mt-3 max-w-xl text-sm leading-6 text-foreground-muted" : "sr-only"}>{message}</p>
-    </section>;
+    </WorkspaceCard>;
 }
 
 /** Shows the current managers, or why there are none to show, with a Remove button for each website account. */
@@ -100,11 +102,11 @@ function ManagerList({ managers, disabled, removingId, onRemove }: {
     const { t } = useTranslations("managed-server");
     if (managers === null) return <p className="mt-2 text-sm leading-6 text-foreground-muted">{t("managerAccess.managersUnavailable")}</p>;
     if (managers.length === 0) return <p className="mt-2 text-sm leading-6 text-foreground-muted">{t("managerAccess.noManagers")}</p>;
-    return <ul aria-labelledby={LIST_HEADING_ID} className="mt-2 divide-y divide-white/10 rounded-md border border-white/10">
+    return <ul aria-labelledby={LIST_HEADING_ID} className={`mt-2 ${workspaceListClass}`}>
         {managers.map(manager => {
             // Unresolved accounts keep a short ID so two of them can still be told apart.
             const label = manager.label ?? t("managerAccess.unknownAccount", { id: manager.accountId.slice(0, 8) });
-            return <li key={manager.accountId} className="flex items-center justify-between gap-3 px-3 py-2">
+            return <li key={manager.accountId} className="flex items-center justify-between gap-3 px-4 py-2.5">
                 <span className="min-w-0 break-all text-sm">{label}</span>
                 {manager.removable && <button
                     type="button"

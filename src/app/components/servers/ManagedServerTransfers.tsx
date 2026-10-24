@@ -8,8 +8,9 @@ import type { Translator } from "@/app/lib/localization/types";
 import { ServerSaveConfigPanels, fileButtonClass } from "./ServerSaveConfigPanels";
 import { DisabledControlHint } from "./DisabledControlHint";
 import { strToU8, zipSync } from "fflate";
-import { Download, Upload, Info, X, LoaderCircle } from "lucide-react";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { Download, Upload, X, LoaderCircle } from "lucide-react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { workspaceNoticeClass } from "./server-workspace-ui";
 import { useRouter } from "next/navigation";
 import { checkManagedServerFile, downloadManagedServerSave, exportManagedServerConfig, readManagedServerFileStatus, submitManagedServerFile } from "@/app/servers/managed-server-file-actions";
 import { readConfigurationFile, applyConfigurationImport, type ConfigurationPart } from "../../../../supabase/functions/_shared/configuration-file-import";
@@ -68,7 +69,7 @@ function saveDownload(bytes: BlobPart, fileName: string) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
-type TransferProps = { userId: string; serverId: string; serverName?: string; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean; subscriptionRescue?: boolean };
+type TransferProps = { userId: string; serverId: string; serverName?: string; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean; subscriptionRescue?: boolean; campaigns?: ReactNode };
 
 // Keys transfer state to the current account and server.
 export function ManagedServerTransfers(props: TransferProps) {
@@ -76,7 +77,7 @@ export function ManagedServerTransfers(props: TransferProps) {
 }
 
 // Presents file imports and durable transfer progress with localized diagnostics.
-function TransferSession({ userId, serverId, serverName, status, canImportConfig, canEditConfig = false, canExportSave, subscriptionRescue = false }: TransferProps) {
+function TransferSession({ userId, serverId, serverName, status, canImportConfig, canEditConfig = false, canExportSave, subscriptionRescue = false, campaigns }: TransferProps) {
     const { t, rich, number, locale } = useTranslations("managed-server");
     const router = useRouter();
     const storageKey = `managed-file-transfer:v1:${userId}:${serverId}`;
@@ -376,7 +377,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
         return <>
             {intent !== null && ready && intentScope !== scope && <p className="mt-3 text-xs leading-5 text-foreground-muted">{t("transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt")}</p>}
             <div aria-live="polite">
-                {feedback?.scope === scope && <p className="mt-3 border-l-2 border-gold bg-gold/[0.07] px-4 py-3 text-sm text-foreground-muted">{isPending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{feedback.text}</p>}
+                {feedback?.scope === scope && <p className={`mt-3 ${workspaceNoticeClass}`}>{isPending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{feedback.text}</p>}
             </div>
             {intent && intentScope === scope && result?.kind === "job" && result.state === "failed" && <p className="mt-2 text-xs text-foreground-muted">{t("transfers.failedRequest", { requestId: intent.requestId })}</p>}
             {intent && intentScope === scope && <div className="mt-3 flex flex-wrap gap-3">
@@ -396,6 +397,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
         {storageError && <p role="alert" className="mb-3 text-sm text-red-200">{t("transfers.pendingTransfersCouldNotBeSavedOrRecoveredInThis")}</p>}
         <ServerSaveConfigPanels
             saveName={status ? status.activeSave?.displayName ?? t("transfers.noActiveCampaignSave") : undefined}
+            campaigns={campaigns}
             configuration={status?.managedConfig}
             configAccess={canEditConfig ? { serverId, userId, canEdit: true } : undefined}
             saveActions={<>
@@ -404,21 +406,14 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
                     <button className={buttonClass} disabled={importSaveDisabled} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />{t("transfers.importSave")}</button>
                 </DisabledControlHint>
             </>}
-            saveNotice={<>
-                <p className="mt-3 text-xs leading-5 text-foreground-muted">{t("transfers.onlyTheServerOwnerCanExportSavesExportDownloadsThe")}</p>
-                {transferFeedback("save")}
-            </>}
+            saveNotice={transferFeedback("save")}
             configActions={<>
                 <button className={buttonClass} disabled={blocked || !canImportConfig} onClick={() => openImport("import-config")}><Upload aria-hidden className="size-4" />{t("transfers.importConfig")}</button>
                 <button className={buttonClass} disabled={blocked} onClick={exportConfig}><Download aria-hidden className="size-4" />{t("transfers.exportConfig")}</button>
             </>}
             configStatus={transferFeedback("config")}
-            configNotice={<>
-                <p className="mt-3 text-xs leading-5 text-foreground-muted">{t("transfers.exportDownloadsAZipContainingServerConfigJsonAndMod")}</p>
-                {!canImportConfig && <p className="mt-2 text-xs leading-5 text-foreground-muted">{t("transfers.onlyTheServerOwnerCanImportOrEditConfigurationSettings")}</p>}
-            </>}
+            configNotice={!canImportConfig && <p className="mt-4 text-xs leading-5 text-foreground-muted">{t("transfers.onlyTheServerOwnerCanImportOrEditConfigurationSettings")}</p>}
         />
-        <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-foreground-muted"><Info aria-hidden className="mt-0.5 size-3.5 shrink-0" />{t("transfers.reviewEachImportBeforeConfirmingAnyChanges")}</p>
         <dialog ref={dialogRef} onCancel={(event) => { if (isPending) event.preventDefault(); else setDialogKind(null); }} aria-labelledby="file-import-title"
             className="fixed inset-0 m-auto max-h-[90svh] w-[calc(100%-2rem)] max-w-xl overflow-y-auto border border-gold/30 bg-surface-raised p-5 text-foreground shadow-2xl backdrop:bg-black/70 sm:p-6">
             <div className="flex items-start justify-between gap-4">

@@ -762,7 +762,8 @@ it("renders lifecycle progress in the console toolbar's status row when one is p
     const container = document.createElement("div"); const root = createRoot(container);
     try {
         await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="stopped" {...progressProps} />} </TestLocalization>));
-        expect(slot.childElementCount).toBe(0);
+        // The stopped-server guidance now shares the status row with progress, so assert on progress rather than emptiness.
+        expect(slot.querySelector("ol")).toBeNull();
         await act(async () => { container.querySelector("button")!.click(); });
         expect(slot.textContent).toContain("Starting your server");
         expect(slot.querySelector("ol")).not.toBeNull();
