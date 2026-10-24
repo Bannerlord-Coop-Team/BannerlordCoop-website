@@ -1,6 +1,6 @@
 import type { Translator } from "@/app/lib/localization/types";
 import type { ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
-import type { ServerModsError } from "@/app/lib/hosting/server-mods";
+import type { ServerMod, ServerModsError } from "@/app/lib/hosting/server-mods";
 import type { ModLoadFailure } from "@/app/lib/hosting/my-servers-server";
 
 // Owner-facing copy for the Mods tab: installed-mod notes, API refusals and folder problems, each from a
@@ -75,6 +75,15 @@ export function modsErrorMessage(error: ServerModsError, t: Translate): string {
     if (UNAVAILABLE_CODES.has(error.code)) return t("mods.error.unavailable");
     const key = SIMPLE_ERROR_KEYS[error.code];
     return key === undefined ? t("mods.error.other") : t(key);
+}
+
+/** Explains a refused save that changed where mods run, or returns null when the refusal concerns something else. */
+export function runsOnSaveErrorMessage(error: ServerModsError, changedRunsOn: readonly ServerMod[], t: Translate): string | null {
+    if (changedRunsOn.length === 0) return null;
+    if (error.code === "runner_unsupported") return t("mods.runsOn.runnerUnsupported");
+    const named = error.modId?.toLowerCase();
+    const refused = error.code === "mod_order_invalid" ? changedRunsOn.find(mod => mod.runsOn === "server" && mod.id.toLowerCase() === named) : undefined;
+    return refused === undefined ? null : t("mods.runsOn.serverRefused", { id: refused.id });
 }
 
 /** Explains why a picked folder cannot be uploaded. */

@@ -1,4 +1,4 @@
-import type { ModEntry, ModOrderEntry, ModsState, ModUploadManifest } from "../../../../supabase/functions/_shared/server-mods-contract";
+import type { ModEntry, ModOrderEntry, ModRunsOn, ModsState, ModUploadManifest } from "../../../../supabase/functions/_shared/server-mods-contract";
 
 // The Mods tab's domain: installed mods as the control plane lists them, the catalog the panel depends
 // on (the API-backed catalog implements it; panel tests use an in-memory one), and pure load-order edits.
@@ -8,6 +8,16 @@ export type ServerMod = ModEntry;
 /** The installed list, its revision for stale-edit protection, and whether a restart would change the running game. */
 export type ServerModsState = ModsState;
 export type ServerModOrderEntry = ModOrderEntry;
+export type ServerModRunsOn = ModRunsOn;
+
+/** Mods that only change players' interface or visuals, so players-only is their default (contract C3); compared folded. */
+const CURATED_PLAYERS_ONLY_MOD_IDS: ReadonlySet<string> = new Set(["itemqualityindicator", "bannerlord.familytree", "familyappearanceeditor"]);
+/** The server provides Harmony, so this owner mod always runs players-only. */
+const HARMONY_MOD_ID = "bannerlord.harmony";
+/** Issue kinds (`kind:<name>`) of a mod installed players-only because a SubModule's class or DLL is missing, so it cannot run on the server. */
+const SERVER_CODE_UNAVAILABLE_ISSUE_KINDS = ["submodule-class-missing:", "submodule-dll-missing:"];
+/** Shown by the runs-on line instead: on a players-only mod no server code is the intended state. */
+const NO_SERVER_SUBMODULE_ISSUE = "no-server-submodule";
 
 /** A zipped module folder ready to upload, with the identity read from its `SubModule.xml`. */
 export type ServerModArchive = { manifest: ModUploadManifest; bytes: Uint8Array<ArrayBuffer>; fileCount: number; uncompressedBytes: number };
@@ -58,14 +68,56 @@ export function toggleServerMod(mods: readonly ServerMod[], id: string): ServerM
     return mods.map(mod => mod.id !== id || !isOwnerMod(mod) ? mod : { ...mod, enabled: !mod.enabled });
 }
 
-/** Returns the complete requested order the load-order route takes. */
-export function serverModLoadOrder(mods: readonly ServerMod[]): ServerModOrderEntry[] {
-    return mods.map(({ id, enabled }) => ({ id, enabled }));
+/** Returns the complete requested order the load-order route takes, naming `runsOn` only where it differs from `base`. */
+export function serverModLoadOrder(mods: readonly ServerMod[], base: readonly ServerMod[]): ServerModOrderEntry[] {
+    const changed = new Set(changedServerModRunsOn(mods, base).map(mod => mod.id));
+    return mods.map(({ id, enabled, runsOn }) => runsOn !== undefined && changed.has(id) ? { id, enabled, runsOn } : { id, enabled });
 }
 
-/** Whether two lists request the same order and enabled flags. */
+/** Returns the mods whose `runsOn` differs from the same mod in `base`; a list without the field changes nothing. */
+export function changedServerModRunsOn(mods: readonly ServerMod[], base: readonly ServerMod[]): ServerMod[] {
+    const before = new Map(base.map(mod => [mod.id, mod.runsOn]));
+    return mods.filter(mod => mod.runsOn !== undefined && before.get(mod.id) !== undefined && before.get(mod.id) !== mod.runsOn);
+}
+
+/** Whether two lists request the same order, enabled flags and runs-on choices. */
 export function sameServerModOrder(left: readonly ServerMod[], right: readonly ServerMod[]): boolean {
-    return left.length === right.length && left.every((mod, index) => mod.id === right[index].id && mod.enabled === right[index].enabled);
+    return left.length === right.length && left.every((mod, index) => mod.id === right[index].id && mod.enabled === right[index].enabled && mod.runsOn === right[index].runsOn);
+}
+
+/** Whether the owner may choose where this mod runs: an owner mod whose control plane reports an unlocked `runsOn`. */
+export function canChooseServerModRunsOn(mod: ServerMod): boolean {
+    return isOwnerMod(mod) && mod.runsOn !== undefined && mod.runsOnLocked === false;
+}
+
+/** Whether the server can run this mod's code; a mod whose SubModule class or DLL is missing must stay players-only. */
+export function canRunServerModOnServer(mod: ServerMod): boolean {
+    return !mod.issues.some(issue => SERVER_CODE_UNAVAILABLE_ISSUE_KINDS.some(kind => issue.startsWith(kind)));
+}
+
+/** Sets where an owner mod runs; locked mods, mods without the field and an impossible server choice stay unchanged. */
+export function setServerModRunsOn(mods: readonly ServerMod[], id: string, runsOn: ServerModRunsOn): ServerMod[] {
+    return mods.map(mod => mod.id !== id || !canChooseServerModRunsOn(mod) || (runsOn === "server" && !canRunServerModOnServer(mod)) ? mod : { ...mod, runsOn });
+}
+
+/** Whether the server provides this mod and keeps it players-only (Bannerlord.Harmony on a runner with players-only support). */
+export function isServerProvidedMod(mod: ServerMod): boolean {
+    return mod.id.toLowerCase() === HARMONY_MOD_ID && mod.runsOn === "players";
+}
+
+/** Whether the owner's players-only choice warrants a warning: the mod could run on the server and is not a curated client-side mod. */
+export function isUncuratedPlayersOnlyMod(mod: ServerMod): boolean {
+    return mod.runsOn === "players" && canChooseServerModRunsOn(mod) && canRunServerModOnServer(mod) && !CURATED_PLAYERS_ONLY_MOD_IDS.has(mod.id.toLowerCase());
+}
+
+/** Returns the notes worth showing; a players-only mod's lack of server code is already said by its runs-on line. */
+export function visibleServerModIssues(mod: ServerMod): string[] {
+    return mod.runsOn === "players" ? mod.issues.filter(issue => issue !== NO_SERVER_SUBMODULE_ISSUE) : mod.issues;
+}
+
+/** Returns the mods every player must install to join: each enabled owner mod, players-only ones included, in load order. */
+export function serverModsPlayersNeed(mods: readonly ServerMod[]): ServerMod[] {
+    return mods.filter(mod => isOwnerMod(mod) && mod.enabled);
 }
 
 /** Counts enabled owner mods, which the control plane caps at 32. */

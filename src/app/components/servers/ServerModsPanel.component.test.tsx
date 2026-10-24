@@ -4,7 +4,9 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 import { ServerModsPanel } from "./ServerModsPanel";
-import { moveServerMod, ServerModsError, toggleServerMod, type ServerModCatalog } from "@/app/lib/hosting/server-mods";
+import {
+    moveServerMod, sameServerModOrder, serverModLoadOrder, ServerModsError, setServerModRunsOn, toggleServerMod, type ServerMod, type ServerModCatalog,
+} from "@/app/lib/hosting/server-mods";
 import { createMockServerModCatalog, sampleOwnerMod, sampleServerMods } from "./ServerModsPanel.test-utils";
 
 const SERVER_ID = "22222222-2222-4222-8222-222222222222";
@@ -377,4 +379,157 @@ it("is read-only without mod access and never loads the list", async () => {
     expect(container.textContent).toContain("Mod support is experimental and may have bugs.");
     expect(button("Upload mod folder")).toBeUndefined();
     expect(container.querySelector("ol")).toBeNull();
+});
+
+/** A list from a control plane that reports runs-on: Harmony (locked), a curated players-only mod, a server mod and a disabled one. */
+function runsOnMods(overrides: Partial<Record<string, Partial<ServerMod>>> = {}) {
+    const mod = (id: string, values: Partial<ServerMod>) => sampleOwnerMod(id, { runsOn: "server", runsOnLocked: false, ...values, ...overrides[id] });
+    return sampleServerMods([
+        mod("Bannerlord.Harmony", { name: "Harmony", version: "v2.4.2.225", runsOn: "players", runsOnLocked: true }),
+        mod("ItemQualityIndicator", { name: "Item Quality Indicator", version: "v1.0.3", runsOn: "players" }),
+        mod("Gamma", { version: "v3.1.0", issues: ["no-render-tag-removed"] }),
+        mod("Delta", { enabled: false }),
+    ]);
+}
+
+/** Finds a mod's load-order row by its shown name. */
+function row(name: string) {
+    return [...container.querySelectorAll("ol > li")].find(item => item.querySelector("label span")?.textContent === name)!;
+}
+
+/** Picks a runs-on value in a mod's row. */
+async function chooseRunsOn(name: string, value: "server" | "players") {
+    const select = row(name).querySelector("select")!;
+    await act(async () => { select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); });
+}
+
+/** Reads the "Mods players need" list as text lines. */
+function playersNeed() {
+    const heading = [...container.querySelectorAll("h3")].find(item => item.textContent === "Mods players need")!;
+    return [...heading.parentElement!.querySelectorAll("li")].map(item => item.textContent);
+}
+
+it("offers no runs-on choice when the control plane does not report it, and still lists the mods players need", async () => {
+    await render(createMockServerModCatalog(mods()));
+    expect(container.querySelector("ol select")).toBeNull();
+    expect(container.textContent).not.toContain("Runs on");
+    expect(playersNeed()).toEqual(["AlphaAlpha v1.0.0", "GammaGamma v1.0.0"]);
+    expect(container.textContent).toContain("players need exactly these mods at exactly these versions, and no other community mods besides Bannerlord Co-op.");
+});
+
+it("says players need no community mods when no owner mod is enabled", async () => {
+    await render(createMockServerModCatalog(sampleServerMods([sampleOwnerMod("Off", { enabled: false })])));
+    expect(playersNeed()).toEqual([]);
+    expect(container.textContent).toContain("Players need no community mods besides Bannerlord Co-op to join.");
+});
+
+it("shows where each owner mod runs, locks Harmony, and lists players-only mods as needed by players", async () => {
+    await render(createMockServerModCatalog(runsOnMods()));
+    expect(row("Harmony").querySelector("select")).toBeNull();
+    expect(row("Harmony").textContent).toContain("Runs only in players' games: the server provides Harmony.");
+    expect(row("Item Quality Indicator").querySelector("select")!.value).toBe("players");
+    expect(row("Item Quality Indicator").textContent).not.toContain("The server won't run this mod's code");
+    expect(row("Gamma").querySelector("select")!.value).toBe("server");
+    expect(row("Gamma").textContent).toContain("interface-only tags were removed");
+    expect(row("Delta").querySelector("select")!.value).toBe("server");
+    for (const name of ["Native", "Coop", "DedicatedServer.Linux"]) expect(row(name).textContent).not.toContain("Runs");
+    expect(playersNeed()).toEqual([
+        "HarmonyBannerlord.Harmony v2.4.2.225Players only: not run on the server",
+        "Item Quality IndicatorItemQualityIndicator v1.0.3Players only: not run on the server",
+        "GammaGamma v3.1.0",
+    ]);
+});
+
+it("warns before making an uncurated mod players only and sends runsOn only for that mod", async () => {
+    const catalog = createMockServerModCatalog(runsOnMods());
+    const save = vi.spyOn(catalog, "saveServerModOrder");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    await render(catalog);
+    await chooseRunsOn("Gamma", "players");
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Run Gamma in players' games only? The server won't run its code."));
+    expect(save).not.toHaveBeenCalled();
+    expect(row("Gamma").querySelector("select")!.value).toBe("server");
+
+    await chooseRunsOn("Gamma", "players");
+    expect(save).toHaveBeenCalledOnce();
+    const sent = save.mock.calls[0][2];
+    expect(sent.filter(entry => "runsOn" in entry)).toEqual([{ id: "Gamma", enabled: true, runsOn: "players" }]);
+    expect(sent).toHaveLength(9);
+    expect(catalog.state.mods.find(mod => mod.id === "Gamma")?.runsOn).toBe("players");
+    expect(row("Gamma").textContent).toContain("A gameplay mod set to players only can make players' games disagree with the server or stop them joining.");
+    expect(playersNeed()).toContain("GammaGamma v3.1.0Players only: not run on the server");
+    expect(checkbox("Gamma").checked).toBe(true);
+});
+
+it("changes a curated mod's runs-on without a warning, independently of its enabled switch", async () => {
+    const catalog = createMockServerModCatalog(runsOnMods());
+    const confirm = vi.spyOn(window, "confirm");
+    const save = vi.spyOn(catalog, "saveServerModOrder");
+    await render(catalog);
+    await chooseRunsOn("Item Quality Indicator", "server");
+    await chooseRunsOn("Item Quality Indicator", "players");
+    expect(confirm).not.toHaveBeenCalled();
+    expect(save.mock.calls.map(call => call[2].filter(entry => "runsOn" in entry))).toEqual([
+        [{ id: "ItemQualityIndicator", enabled: true, runsOn: "server" }],
+        [{ id: "ItemQualityIndicator", enabled: true, runsOn: "players" }],
+    ]);
+    await click(checkbox("Delta"));
+    expect(save.mock.calls.at(-1)![2].filter(entry => "runsOn" in entry)).toEqual([]);
+    expect(checkbox("Delta").checked).toBe(true);
+    expect(row("Delta").querySelector("select")!.value).toBe("server");
+});
+
+it("keeps a mod whose SubModule class is missing players only and explains why", async () => {
+    await render(createMockServerModCatalog(runsOnMods({
+        Gamma: { runsOn: "players", issues: ["submodule-class-missing:FamilyAppearanceEditor.SubModule", "no-server-submodule"] },
+    })));
+    const option = row("Gamma").querySelector<HTMLOptionElement>('option[value="server"]')!;
+    expect(option.disabled).toBe(true);
+    expect(row("Gamma").textContent).toContain("names a SubModule class (FamilyAppearanceEditor.SubModule) that its DLL doesn't contain");
+    expect(row("Gamma").textContent).not.toContain("None of this mod's code runs on the server");
+    expect(row("Gamma").textContent).not.toContain("The server won't run this mod's code");
+});
+
+it("explains a refused switch to the server and shows the saved list again", async () => {
+    const catalog = createMockServerModCatalog(runsOnMods({ Delta: { runsOn: "players" } }));
+    vi.spyOn(catalog, "saveServerModOrder").mockRejectedValueOnce(new ServerModsError("mod_order_invalid", false, "Delta"));
+    await render(catalog);
+    await chooseRunsOn("Delta", "server");
+    expect(container.textContent).toContain("Delta can't run on the server because a SubModule class or DLL it names is missing.");
+    expect(row("Delta").querySelector("select")!.value).toBe("players");
+});
+
+it("says the runner needs an update when it refuses a runs-on change or reports every mod locked", async () => {
+    const catalog = createMockServerModCatalog(runsOnMods());
+    vi.spyOn(catalog, "saveServerModOrder").mockRejectedValueOnce(new ServerModsError("runner_unsupported"));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await render(catalog);
+    await chooseRunsOn("Gamma", "players");
+    expect(container.textContent).toContain("This server's runner doesn't support players-only mods yet, so nothing was changed.");
+    expect(row("Gamma").querySelector("select")!.value).toBe("server");
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render(createMockServerModCatalog(runsOnMods({
+        "Bannerlord.Harmony": { runsOn: "server" }, ItemQualityIndicator: { runsOn: "server", runsOnLocked: true },
+        Gamma: { runsOnLocked: true }, Delta: { runsOnLocked: true },
+    })));
+    expect(container.querySelector("ol select")).toBeNull();
+    expect(row("Harmony").textContent).toContain("Runs on the server and in players' games. This server needs a runner update before this can be changed.");
+    expect(row("Gamma").textContent).toContain("This server needs a runner update before this can be changed.");
+});
+
+it("changes runs-on only where the owner may and names it in the order only where it changed", () => {
+    const base = runsOnMods({ Delta: { runsOn: "players", issues: ["submodule-dll-missing:Delta.dll"] } });
+    const runsOn = (list: ServerMod[], id: string) => list.find(mod => mod.id === id)?.runsOn;
+    expect(runsOn(setServerModRunsOn(base, "Bannerlord.Harmony", "server"), "Bannerlord.Harmony")).toBe("players");
+    expect(runsOn(setServerModRunsOn(base, "Coop", "players"), "Coop")).toBe("server");
+    expect(runsOn(setServerModRunsOn(base, "Delta", "server"), "Delta")).toBe("players");
+    const changed = setServerModRunsOn(base, "Gamma", "players");
+    expect(sameServerModOrder(changed, base)).toBe(false);
+    expect(serverModLoadOrder(changed, base).filter(entry => "runsOn" in entry)).toEqual([{ id: "Gamma", enabled: true, runsOn: "players" }]);
+    expect(serverModLoadOrder(base, base).some(entry => "runsOn" in entry)).toBe(false);
+    const legacy = mods();
+    expect(setServerModRunsOn(legacy, "Alpha", "players")).toEqual(legacy);
+    expect(serverModLoadOrder(legacy, legacy)).toEqual(legacy.map(({ id, enabled }) => ({ id, enabled })));
 });

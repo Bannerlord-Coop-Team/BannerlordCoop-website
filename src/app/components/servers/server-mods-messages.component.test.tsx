@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { createTranslator } from "@/app/lib/localization/translator";
 import { serverTestMessages } from "./ManagedServerLocalization.test-utils";
-import { describeModIssue, modLoadFailureMessage, modsErrorMessage } from "./server-mods-messages";
-import { ServerModsError } from "@/app/lib/hosting/server-mods";
+import { describeModIssue, modLoadFailureMessage, modsErrorMessage, runsOnSaveErrorMessage } from "./server-mods-messages";
+import { ServerModsError, type ServerMod } from "@/app/lib/hosting/server-mods";
 import { isModLoadFailure, type ModLoadFailure } from "@/app/lib/hosting/mod-load-failure";
 import { isOwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
 
@@ -62,3 +62,11 @@ it("explains the assembly-conflict and SubModule rejections", () => {
     expect(modsErrorMessage(new ServerModsError("upload_rejected", false, "Fae", "mod_submodule_invalid"), t)).toContain("names a SubModule class or DLL the mod doesn't contain");
 });
 
+it("explains refused runs-on changes only when the save changed them", () => {
+    const changed = [{ id: "Fae", runsOn: "server" } as ServerMod];
+    expect(runsOnSaveErrorMessage(new ServerModsError("runner_unsupported"), changed, t)).toContain("doesn't support players-only mods yet");
+    expect(runsOnSaveErrorMessage(new ServerModsError("mod_order_invalid", false, "fae"), changed, t)).toContain("Fae can't run on the server");
+    expect(runsOnSaveErrorMessage(new ServerModsError("mod_order_invalid", false, "Other"), changed, t)).toBeNull();
+    expect(runsOnSaveErrorMessage(new ServerModsError("mod_order_invalid", false, "Fae"), [{ id: "Fae", runsOn: "players" } as ServerMod], t)).toBeNull();
+    expect(runsOnSaveErrorMessage(new ServerModsError("runner_unsupported"), [], t)).toBeNull();
+});

@@ -6,13 +6,15 @@ import { FlaskConical, Lock, Menu, RefreshCw, Trash2, Upload } from "lucide-reac
 import { useTranslations } from "@/app/lib/localization/client";
 import { buildModArchive, ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
 import {
-    enabledOwnerModCount, findServerMod, isOwnerMod, moveServerMod, sameServerModOrder, serverModLoadOrder, ServerModsError, toggleServerMod,
-    type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModsState, type ServerModUploadProgress,
+    canChooseServerModRunsOn, canRunServerModOnServer, changedServerModRunsOn, enabledOwnerModCount, findServerMod, isOwnerMod, isServerProvidedMod,
+    isUncuratedPlayersOnlyMod, moveServerMod, sameServerModOrder, serverModLoadOrder, serverModsPlayersNeed, ServerModsError, setServerModRunsOn,
+    toggleServerMod, visibleServerModIssues,
+    type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModRunsOn, type ServerModsState, type ServerModUploadProgress,
 } from "@/app/lib/hosting/server-mods";
 import { createBrowserServerModCatalog } from "@/app/lib/hosting/server-mods-transport";
 import { MOD_MAXIMUM_ENABLED_OWNER_MODS } from "../../../../supabase/functions/_shared/server-mods-contract";
 import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
-import { archiveProblemMessage, describeModIssue, modsErrorMessage } from "./server-mods-messages";
+import { archiveProblemMessage, describeModIssue, modsErrorMessage, runsOnSaveErrorMessage } from "./server-mods-messages";
 import { fileButtonClass } from "./server-file-styles";
 
 const iconButtonClass = "inline-flex size-10 shrink-0 items-center justify-center rounded-md text-foreground-muted hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
@@ -142,23 +144,26 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         await load();
     }
 
-    /** Saves the shown order and enabled flags, then again for edits made mid-save; only one save runs at a time. */
+    /** Saves the shown order, enabled flags and runs-on choices, then again for edits made mid-save; only one save runs at a time. */
     async function persist() {
         if (savingRef.current || editingOrder() || !loadedRef.current || sameServerModOrder(draftRef.current, loadedRef.current.mods)) return;
         savingRef.current = true;
         setSaving(true);
         setNotice(null);
+        let changedRunsOn: ServerMod[] = [];
         try {
             // An unfinished drag or arrow-key run is left to the save its end starts.
             for (let base = loadedRef.current; base && !editingOrder() && !sameServerModOrder(draftRef.current, base.mods); base = loadedRef.current) {
                 const sent = draftRef.current;
-                const state = await catalog.saveServerModOrder(serverId, base.revision, serverModLoadOrder(sent));
+                changedRunsOn = changedServerModRunsOn(sent, base.mods);
+                const state = await catalog.saveServerModOrder(serverId, base.revision, serverModLoadOrder(sent, base.mods));
                 recordConfirmed(state);
                 if (draftRef.current === sent) updateDraft(state.mods);
             }
             setNotice({ tone: "info", text: t("mods.saved") });
         } catch (error) {
-            setNotice({ tone: "error", text: error instanceof ServerModsError ? modsErrorMessage(error, t) : t("mods.error.other") });
+            const runsOnMessage = error instanceof ServerModsError ? runsOnSaveErrorMessage(error, changedRunsOn, t) : null;
+            setNotice({ tone: "error", text: runsOnMessage ?? (error instanceof ServerModsError ? modsErrorMessage(error, t) : t("mods.error.other")) });
             await reconcile(error);
         } finally {
             savingRef.current = false;
@@ -243,6 +248,13 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         void persist();
     }
 
+    /** Sets where an owner mod runs and saves it; making a mod outside the curated list players-only asks first. */
+    function chooseRunsOn(mod: ServerMod, runsOn: ServerModRunsOn) {
+        if (isUncuratedPlayersOnlyMod({ ...mod, runsOn }) && !window.confirm(t("mods.runsOn.confirmPlayersOnly", { name: mod.name }))) return;
+        updateDraft(setServerModRunsOn(draftRef.current, mod.id, runsOn));
+        void persist();
+    }
+
     /** Deletes an owner mod after the owner confirms. */
     function remove(mod: ServerMod) {
         if (!loaded || !window.confirm(t("mods.confirmDelete", { name: mod.name }))) return;
@@ -310,24 +322,26 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
             <ol ref={listRef} aria-label={t("mods.loadOrder")} className="divide-y divide-white/10">
                 {draft.map((mod, index) => <ModRow key={mod.id} mod={mod} index={index} idPrefix={idPrefix} editable={canEdit && !busyNow} canDelete={settled} dragging={draggingId === mod.id}
                     onDragStart={event => startDrag(event, mod)} onDragEnd={endDrag} onDragOver={event => dragOver(event, index)}
-                    onKeyDown={event => handleKey(event, index)} onToggle={() => toggle(mod)} onDelete={() => remove(mod)} />)}
+                    onKeyDown={event => handleKey(event, index)} onToggle={() => toggle(mod)} onRunsOn={runsOn => chooseRunsOn(mod, runsOn)} onDelete={() => remove(mod)} />)}
             </ol>
             <p id={`${idPrefix}-reorder-help`} className="sr-only">{t("mods.reorderHelp")}</p>
+            <ModsPlayersNeed mods={loaded.mods} idPrefix={idPrefix} />
         </>}
         <p role="status" className="sr-only">{announcement}</p>
     </section>;
 }
 
-/** One load-order row: position, handle or lock, name and notes, badges, enabled switch and delete. */
-function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragStart, onDragEnd, onDragOver, onKeyDown, onToggle, onDelete }: {
+/** One load-order row: position, handle or lock, name, runs-on choice and notes, badges, enabled switch and delete. */
+function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragStart, onDragEnd, onDragOver, onKeyDown, onToggle, onRunsOn, onDelete }: {
     mod: ServerMod; index: number; idPrefix: string; editable: boolean; canDelete: boolean; dragging: boolean;
     onDragStart: (event: DragEvent<HTMLButtonElement>) => void; onDragEnd: () => void; onDragOver: (event: DragEvent<HTMLLIElement>) => void;
-    onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void; onToggle: () => void; onDelete: () => void;
+    onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void; onToggle: () => void; onRunsOn: (runsOn: ServerModRunsOn) => void; onDelete: () => void;
 }) {
     const { t } = useTranslations("managed-server");
     const checkboxId = `${idPrefix}-mod-${index}`;
     const movable = editable && !mod.pinned;
     const owner = isOwnerMod(mod);
+    const issues = visibleServerModIssues(mod);
     return <li onDragOver={onDragOver} onDrop={event => event.preventDefault()} className={`flex items-center gap-3 px-3 py-3 sm:px-5 ${dragging ? "bg-gold/10 opacity-60" : ""}`}>
         <span className="w-6 shrink-0 text-right font-mono text-xs text-foreground-muted">{index + 1}</span>
         {movable
@@ -338,7 +352,8 @@ function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragSta
                 <span className={`font-medium ${mod.enabled ? "text-foreground" : "text-foreground-muted"}`}>{mod.name}</span>
                 {mod.version && <span className="text-foreground-muted"> · {mod.version}</span>}
             </label>
-            {mod.issues.length > 0 && <ul className="mt-1 space-y-0.5 text-xs text-foreground-muted">{mod.issues.map(issue => <li key={issue}>{describeModIssue(issue, t)}</li>)}</ul>}
+            {owner && mod.runsOn !== undefined && <ModRunsOnChoice mod={mod} id={`${idPrefix}-runs-on-${index}`} editable={editable} onChange={onRunsOn} />}
+            {issues.length > 0 && <ul className="mt-1 space-y-0.5 text-xs text-foreground-muted">{issues.map(issue => <li key={issue}>{describeModIssue(issue, t)}</li>)}</ul>}
         </div>
         {mod.pinned ? <span className={badgeClass}>{t("mods.core")}</span> : mod.required && <span className={badgeClass}>{t("mods.required")}</span>}
         <ModSwitch id={checkboxId} checked={mod.enabled} disabled={!editable || !owner} onChange={onToggle} />
@@ -346,6 +361,44 @@ function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragSta
             ? <button type="button" disabled={!canDelete} aria-label={t("mods.delete", { name: mod.name })} onClick={onDelete} className={`${iconButtonClass} hover:!text-red-300`}><Trash2 className="size-4" aria-hidden="true" /></button>
             : <span className="size-10 shrink-0" aria-hidden="true" />}
     </li>;
+}
+
+/** Says where an owner mod's code runs: a choice when the owner may change it, otherwise the fixed value and why. */
+function ModRunsOnChoice({ mod, id, editable, onChange }: { mod: ServerMod; id: string; editable: boolean; onChange: (runsOn: ServerModRunsOn) => void }) {
+    const { t } = useTranslations("managed-server");
+    if (!canChooseServerModRunsOn(mod)) {
+        const fixed = isServerProvidedMod(mod) ? "mods.runsOn.serverProvided" : mod.runsOn === "players" ? "mods.runsOn.fixedPlayers" : "mods.runsOn.fixedServer";
+        return <p className="mt-1 flex items-center gap-1.5 text-xs text-foreground-muted"><Lock className="size-3 shrink-0" aria-hidden="true" />{t(fixed)}</p>;
+    }
+    const serverAllowed = canRunServerModOnServer(mod);
+    return <div className="mt-1 text-xs">
+        <span className="flex flex-wrap items-center gap-2">
+            <label htmlFor={id} className="text-foreground-muted">{t("mods.runsOn.label")}</label>
+            <select id={id} value={mod.runsOn} disabled={!editable} onChange={event => onChange(event.currentTarget.value as ServerModRunsOn)}
+                className="rounded-sm border border-white/15 bg-background px-1.5 py-0.5 text-xs text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-50">
+                <option value="server" disabled={!serverAllowed}>{t("mods.runsOn.server")}</option>
+                <option value="players">{t("mods.runsOn.players")}</option>
+            </select>
+        </span>
+        {isUncuratedPlayersOnlyMod(mod) && <p className="mt-1 text-amber-200">{t("mods.runsOn.uncuratedWarning")}</p>}
+    </div>;
+}
+
+/** Lists the mods every player must install, at their exact versions, from the saved list. */
+function ModsPlayersNeed({ mods, idPrefix }: { mods: readonly ServerMod[]; idPrefix: string }) {
+    const { t } = useTranslations("managed-server");
+    const needed = serverModsPlayersNeed(mods);
+    return <section aria-labelledby={`${idPrefix}-players-need`} className="border-t border-white/10 p-5">
+        <h3 id={`${idPrefix}-players-need`} className="text-sm font-semibold">{t("mods.playersNeed.heading")}</h3>
+        <p className="mt-1 text-sm leading-6 text-foreground-muted">{needed.length === 0 ? t("mods.playersNeed.none") : t("mods.playersNeed.exact")}</p>
+        {needed.length > 0 && <ul className="mt-3 space-y-1.5 text-sm">
+            {needed.map(mod => <li key={mod.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="font-medium text-foreground">{mod.name}</span>
+                <span className="font-mono text-xs text-foreground-muted">{mod.id} {mod.version}</span>
+                {mod.runsOn === "players" && <span className={badgeClass}>{t("mods.playersNeed.playersOnly")}</span>}
+            </li>)}
+        </ul>}
+    </section>;
 }
 
 /** Shows the current upload phase, with a percentage while chunks are sent. */
