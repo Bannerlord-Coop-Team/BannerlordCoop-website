@@ -149,7 +149,6 @@
   "backups.waitingToRetrySafelyProgress": "En attente d’une nouvelle tentative sécurisée. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Saisissez une seule commande coop.* (jusqu’à 4096 caractères), sans caractères de contrôle ni séparateurs de commandes.",
   "commands.gameConsole": "Console du jeu",
-  "commands.moreActions": "Plus d’actions",
   "commands.gameCommand": "Commande du jeu",
   "commands.enterOneCoopCommand": "Saisissez une seule commande coop.*",
   "commands.commandsRequireOwnerOrManagerAccessAndARunningHealthy": "Les commandes nécessitent un accès de propriétaire ou de gestionnaire et un serveur en cours d’exécution et en bon état.",
@@ -972,5 +971,10 @@
   "controls.modLoadFailedMissingDll": "Il manque au mod {modId} une DLL indiquée dans SubModule.xml. Importez le mod complet avec son dossier bin, ou désactivez-le dans Mods, puis relancez le serveur.",
   "controls.modLoadFailed": "Le mod {modId} ne peut pas être chargé. Importez une version compatible avec cette version du serveur et ses dépendances, ou désactivez-le dans Mods, puis relancez le serveur.",
   "controls.modLoadFailedHarmony": "Le mod {modId} ne peut pas charger Harmony (0Harmony.dll), fourni par le serveur. Il s’agit d’un problème d’hébergement ; réimporter Bannerlord.Harmony ne le résoudra pas. Contactez le support ou désactivez ce mod et ceux qui en dépendent dans Mods avant de relancer le serveur.",
-  "controls.modLoadFailedUnknown": "Un mod personnalisé ne peut pas être chargé. Vérifiez les mods importés et leurs dépendances, ou désactivez les derniers mods activés avant de relancer le serveur."
+  "controls.modLoadFailedUnknown": "Un mod personnalisé ne peut pas être chargé. Vérifiez les mods importés et leurs dépendances, ou désactivez les derniers mods activés avant de relancer le serveur.",
+  "maintenance.title": "Maintenance",
+  "maintenance.update": "Mise à jour du serveur de jeu",
+  "maintenance.updateDescription": "Installe maintenant la dernière version {channel}. Une sauvegarde est effectuée au préalable.",
+  "maintenance.log": "Journal du serveur",
+  "maintenance.logDescription": "Téléchargez le dernier fichier journal pour le dépannage ou un rapport de bogue."
 }

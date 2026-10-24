@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import * as serverActions from "@/app/servers/managed-server-actions";
 import { ManagedServerControls, ManagedServerPassword } from "./ManagedServerControls";
 import { ManagedServerMoveProvider, ManagedServerMoveStatus } from "./ManagedServerMoveStatus";
+import { ManagedServerMaintenance, ManagedServerMaintenanceProvider } from "./ManagedServerMaintenance";
 import { MyServersApiError, readMyServersResponse } from "@/app/lib/hosting/my-servers";
 import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
 import type { MyServerMove } from "@/app/lib/control-plane/types";
@@ -719,6 +720,32 @@ it("refreshes status automatically when Update now finds a changed server, witho
         expect(router.refresh).toHaveBeenCalledOnce();
         expect(requestUpdate).toHaveBeenCalledOnce();
         expect(container.querySelectorAll("button")[3].disabled).toBe(false);
+    } finally {
+        await act(async () => root.unmount());
+        confirm.mockRestore();
+    }
+});
+
+it("moves Update now and its feedback into the Maintenance card beside the log download", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    requestUpdate.mockReset().mockRejectedValue(new MyServersApiError("stale_interaction", "Stale"));
+    router.refresh.mockClear();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerMaintenanceProvider>
+            <div data-console><ManagedServerControls observedGameState="running" {...progressProps} operationState="running" /></div>
+            <ManagedServerMaintenance serverId={progressServerId} userId="owner" canUpdate releaseChannel="stable" />
+        </ManagedServerMaintenanceProvider></TestLocalization>));
+        const card = container.querySelector('section[aria-labelledby="server-maintenance-heading"]')!;
+        const consoleControls = container.querySelector("[data-console]")!;
+        const update = [...card.querySelectorAll("button")].find(button => button.textContent === "Update now")!;
+        expect(card.textContent).toContain("Installs the latest Stable release now.");
+        expect([...card.querySelectorAll("button")].map(button => button.textContent)).toEqual(["Update now", "Download logs"]);
+        expect([...consoleControls.querySelectorAll("button")].map(button => button.textContent)).toEqual(["Start", "Stop", "Restart"]);
+        await act(async () => update.click());
+        expect(card.textContent).toContain("Your server’s status changed, so we refreshed it. Press Update now again to continue.");
+        expect(consoleControls.textContent).not.toContain("Your server’s status changed");
     } finally {
         await act(async () => root.unmount());
         confirm.mockRestore();

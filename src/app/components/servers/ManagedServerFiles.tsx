@@ -9,6 +9,7 @@ import { ManagedServerTransfers } from "./ManagedServerTransfers";
 import { ManagedServerCampaigns } from "./ManagedServerCampaigns";
 import { ServerWorkspacePanel } from "./ServerManagementWorkspace";
 import { WorkspaceCard } from "./server-workspace-ui";
+import { ManagedServerMaintenance } from "./ManagedServerMaintenance";
 import type { MyServerBackupStatus, MyServerBackupSummary, MyServerSavePage, MyServerSummary } from "@/app/lib/control-plane/types";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 
@@ -30,6 +31,7 @@ export function ManagedServerFiles({ userId, server, files, saves, backups, stat
                         campaigns={<ManagedServerCampaigns userId={userId} serverId={server.serverId} status={files} canDelete={canManage} />} />
                     : <ServerSaveConfigPanels saveNotice={readOnly} configNotice={readOnly} />}
             </section>
+            <ManagedServerMaintenance serverId={server.serverId} userId={userId} canUpdate={canManage} releaseChannel={server.releaseChannel} />
         </ServerWorkspacePanel>
         <ServerWorkspacePanel section="Backups">
             {canManage

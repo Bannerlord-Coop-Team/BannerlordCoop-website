@@ -6,13 +6,10 @@ import { LoaderCircle, Terminal } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { ServerConsoleWorkspace, coopConsoleCommands } from "./ServerManagementWorkspace";
 import { ManagedServerConsole, createCommandOutputChannel } from "./ManagedServerConsole";
-import { DownloadServerLogButton } from "./DownloadServerLogButton";
 import { IDLE_HISTORY_CURSOR, appendConsoleHistory, consoleHistoryKey, readConsoleHistory, stepConsoleHistory, writeConsoleHistory, type ConsoleHistoryCursor } from "./console-history";
 import { ManagedServerResources } from "./ManagedServerResources";
 import { ManagedServerRuntimeControls, awaitSaveCommandResult } from "./ManagedServerRuntimeControls";
 import { ManagedServerStatusSlotContext, useManagedServerSaves } from "./ManagedServerPollingProvider";
-import { OverflowMenu, OverflowMenuSlotContext } from "./OverflowMenu";
-import { menuItemClass } from "./segmented-controls";
 import type { MyServerSummary } from "@/app/lib/control-plane/types";
 import { checkManagedConsoleCommand, submitManagedConsoleCommand } from "@/app/servers/managed-server-console-actions";
 import { MAXIMUM_CONSOLE_COMMAND_LENGTH, SAVE_CONSOLE_COMMAND, parseConsoleSubmission, type ConsoleReference, type ConsoleSubmission } from "../../../../supabase/functions/_shared/server-console-contract";
@@ -52,7 +49,6 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
     const [feedback, setFeedback] = useState<ComposerFeedback | null>(null);
     const [sending, setSending] = useState(0);
     const [statusSlot, setStatusSlot] = useState<HTMLDivElement | null>(null);
-    const [menuSlot, setMenuSlot] = useState<HTMLDivElement | null>(null);
     const [outputChannel] = useState(createCommandOutputChannel);
     const saves = useManagedServerSaves();
     const historyKey = consoleHistoryKey(userId, server.serverId);
@@ -214,32 +210,23 @@ export function ManagedServerCommands({ server, userId, controls }: { server: My
     return <ServerConsoleWorkspace coopCommandsOnly onSelectCommand={ready ? selectCommand : undefined}>
         <section className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-surface" aria-labelledby={`${id}-heading`}>
             <ManagedServerStatusSlotContext.Provider value={statusSlot}>
-                <OverflowMenuSlotContext.Provider value={menuSlot}>
-                    <div className="border-b border-white/10">
-                        {/* Heavy lifecycle actions: power on the right, rare housekeeping tucked into the menu beside it. */}
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-3 p-3 sm:px-4">
-                            <h2 id={`${id}-heading`} className="mr-auto flex items-center gap-2 text-sm font-semibold"><Terminal className="size-4 text-gold" aria-hidden="true" />{t("commands.gameConsole")}</h2>
-                            <div className="order-3 w-full sm:order-2 sm:w-auto">{controls}</div>
-                            <div className="order-2 sm:order-3">
-                                <OverflowMenu label={t("commands.moreActions")} panelRef={setMenuSlot}>
-                                    <div role="none" data-keep-open>
-                                        <DownloadServerLogButton role="menuitem" serverId={server.serverId} userId={userId} className={menuItemClass} />
-                                    </div>
-                                </OverflowMenu>
-                            </div>
-                        </div>
-                        {/* Frequent, light in-game controls sit directly above the log, with the resource readout. */}
-                        <div className="border-t border-white/10 bg-white/[0.02]">
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-3 p-3 sm:px-4">
-                                {canOperate && <div className="flex flex-wrap items-center gap-2"><ManagedServerRuntimeControls server={server} userId={userId} ready={ready} /></div>}
-                                <div className="min-w-0 flex-1 basis-72 empty:hidden sm:ml-auto sm:max-w-md [&>section]:p-0">
-                                    <ManagedServerResources serverId={server.serverId} running={server.operationState === "running" && server.observedGameState === "running"} />
-                                </div>
-                            </div>
-                            <div ref={setStatusSlot} className="flex flex-col items-start gap-2 px-3 pb-3 empty:hidden sm:px-4" />
-                        </div>
+                <div className="border-b border-white/10">
+                    {/* Heavy lifecycle actions sit on the right; rare housekeeping lives in the Save & config Maintenance card. */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-3 p-3 sm:px-4">
+                        <h2 id={`${id}-heading`} className="mr-auto flex items-center gap-2 text-sm font-semibold"><Terminal className="size-4 text-gold" aria-hidden="true" />{t("commands.gameConsole")}</h2>
+                        <div className="w-full sm:w-auto">{controls}</div>
                     </div>
-                </OverflowMenuSlotContext.Provider>
+                    {/* Frequent, light in-game controls sit directly above the log, with the resource readout. */}
+                    <div className="border-t border-white/10 bg-white/[0.02]">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 p-3 sm:px-4">
+                            {canOperate && <div className="flex flex-wrap items-center gap-2"><ManagedServerRuntimeControls server={server} userId={userId} ready={ready} /></div>}
+                            <div className="min-w-0 flex-1 basis-72 empty:hidden sm:ml-auto sm:max-w-md [&>section]:p-0">
+                                <ManagedServerResources serverId={server.serverId} running={server.operationState === "running" && server.observedGameState === "running"} />
+                            </div>
+                        </div>
+                        <div ref={setStatusSlot} className="flex flex-col items-start gap-2 px-3 pb-3 empty:hidden sm:px-4" />
+                    </div>
+                </div>
             </ManagedServerStatusSlotContext.Provider>
             <ManagedServerConsole serverId={server.serverId} operationState={server.operationState} observedGameState={server.observedGameState} outputChannel={outputChannel} />
             <div className="border-t border-white/10 px-5 py-4">

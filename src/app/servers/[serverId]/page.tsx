@@ -15,6 +15,7 @@ import { getMyServerFiles } from "@/app/lib/hosting/server-files";
 import { getMyServerSaveGenerations, listAllMyServerSaves } from "@/app/lib/hosting/my-servers";
 import { ManagedServerControls, ManagedServerPassword } from "@/app/components/servers/ManagedServerControls";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
+import { ManagedServerMaintenanceProvider } from "@/app/components/servers/ManagedServerMaintenance";
 import { ManagedServerDelete } from "@/app/components/servers/ManagedServerDelete";
 import { ManagedServerMods } from "@/app/components/servers/ServerModsPanel";
 import { readManagedServerStatusFingerprint } from "@/app/servers/managed-server-actions";
@@ -197,19 +198,21 @@ function ManagedServerSections({
 }) {
     return (
         <ManagedServerPollingProvider readStatus={readManagedServerStatusFingerprint} initialServer={{ serverId: server.serverId, updatedAt: server.updatedAt, operationState: server.operationState }}>
-            <ServerWorkspacePanel section="Console">
-                {server.accessRole === "owner" || server.accessRole === "manager"
-                    ? <ManagedServerCommands key={`${userId}:${server.serverId}`} server={server} userId={userId} controls={<ManagedServerLifecycleSection server={server} />} />
-                    : <ServerConsoleWorkspace><UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} logDownload={{ serverId: server.serverId, userId }} /></ServerConsoleWorkspace>}
-            </ServerWorkspacePanel>
-            <ServerWorkspacePanel section="Settings">
-                <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} managerAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner", managers }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
-                <ManagedServerPassword serverId={server.serverId} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} />
-                <ManagedServerDelete key={`${userId}:${server.serverId}`} serverId={server.serverId} displayName={server.displayName} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} deletionStatus={deletionStatus} />
-            </ServerWorkspacePanel>
-            <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
-                <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
-            </Suspense>
+            <ManagedServerMaintenanceProvider>
+                <ServerWorkspacePanel section="Console">
+                    {server.accessRole === "owner" || server.accessRole === "manager"
+                        ? <ManagedServerCommands key={`${userId}:${server.serverId}`} server={server} userId={userId} controls={<ManagedServerLifecycleSection server={server} />} />
+                        : <ServerConsoleWorkspace><UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} /></ServerConsoleWorkspace>}
+                </ServerWorkspacePanel>
+                <ServerWorkspacePanel section="Settings">
+                    <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} managerAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner", managers }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
+                    <ManagedServerPassword serverId={server.serverId} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} />
+                    <ManagedServerDelete key={`${userId}:${server.serverId}`} serverId={server.serverId} displayName={server.displayName} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} deletionStatus={deletionStatus} />
+                </ServerWorkspacePanel>
+                <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
+                    <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
+                </Suspense>
+            </ManagedServerMaintenanceProvider>
         </ManagedServerPollingProvider>
     );
 }

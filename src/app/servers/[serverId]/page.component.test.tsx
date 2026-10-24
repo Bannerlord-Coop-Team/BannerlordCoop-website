@@ -399,7 +399,9 @@ it("places managed password configuration in Settings rather than the Console wo
     const tree = await page(managedId);
     const sections = (await findServerElement(tree, "ManagedServerSections"))!;
     const renderSections = sections.type as (props: unknown) => ReactElement<{ children: ReactNode }>;
-    const panels = Children.toArray(renderSections(sections.props).props.children);
+    // The panels sit inside the maintenance provider that shares Update now with the Save & config tab.
+    const maintenance = renderSections(sections.props).props.children as ReactElement<{ children: ReactNode }>;
+    const panels = Children.toArray(maintenance.props.children);
     const settings = panels.find(child => isValidElement<{ section?: string }>(child) && child.props.section === "Settings");
     const consolePanel = panels.find(child => isValidElement<{ section?: string }>(child) && child.props.section === "Console");
     expect(await findServerElement(settings, "ManagedServerPassword")).toMatchObject({ props: { serverId: managedId, accessRole: "owner" } });

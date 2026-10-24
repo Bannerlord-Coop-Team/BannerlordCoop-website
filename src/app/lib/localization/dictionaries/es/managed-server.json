@@ -149,7 +149,6 @@
   "backups.waitingToRetrySafelyProgress": "Esperando para reintentar de forma segura. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Introduce un comando coop.* (hasta 4096 caracteres), sin caracteres de control ni separadores de comandos.",
   "commands.gameConsole": "Consola del juego",
-  "commands.moreActions": "Más acciones",
   "commands.gameCommand": "Comando del juego",
   "commands.enterOneCoopCommand": "Introduce un comando coop.*",
   "commands.commandsRequireOwnerOrManagerAccessAndARunningHealthy": "Los comandos requieren acceso de propietario o gestor y un servidor en ejecución que funcione correctamente.",
@@ -972,5 +971,10 @@
   "controls.modLoadFailedMissingDll": "Al mod {modId} le falta una DLL indicada en SubModule.xml. Sube el mod completo con su carpeta bin o desactívalo en Mods. Luego inicia de nuevo.",
   "controls.modLoadFailed": "El mod {modId} no se pudo cargar. Sube una versión compatible con esta versión del servidor y sus dependencias o desactívalo en Mods. Luego inicia de nuevo.",
   "controls.modLoadFailedHarmony": "El mod {modId} no pudo cargar Harmony (0Harmony.dll), proporcionado por el servidor. Es un problema del alojamiento; volver a subir Bannerlord.Harmony no lo resolverá. Contacta con soporte o desactiva este mod y los que dependen de él en Mods antes de iniciar de nuevo.",
-  "controls.modLoadFailedUnknown": "Un mod personalizado no se pudo cargar. Revisa los mods subidos y sus dependencias o desactiva los últimos mods activados antes de iniciar de nuevo."
+  "controls.modLoadFailedUnknown": "Un mod personalizado no se pudo cargar. Revisa los mods subidos y sus dependencias o desactiva los últimos mods activados antes de iniciar de nuevo.",
+  "maintenance.title": "Mantenimiento",
+  "maintenance.update": "Actualización del servidor de juego",
+  "maintenance.updateDescription": "Instala ahora la última versión {channel}. Antes se hace una copia de seguridad.",
+  "maintenance.log": "Registro del servidor",
+  "maintenance.logDescription": "Descarga el archivo de registro más reciente para solucionar problemas o informar de errores."
 }

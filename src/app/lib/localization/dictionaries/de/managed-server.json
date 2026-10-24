@@ -149,7 +149,6 @@
   "backups.waitingToRetrySafelyProgress": "Warte auf eine sichere Wiederholung. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Gib einen coop.*-Befehl ein (bis zu 4096 Zeichen), ohne Steuerzeichen oder Befehlstrennzeichen.",
   "commands.gameConsole": "Spielkonsole",
-  "commands.moreActions": "Weitere Aktionen",
   "commands.gameCommand": "Spielbefehl",
   "commands.enterOneCoopCommand": "Gib einen coop.*-Befehl ein",
   "commands.commandsRequireOwnerOrManagerAccessAndARunningHealthy": "Befehle erfordern Besitzer- oder Manager-Zugriff und einen laufenden, fehlerfreien Server.",
@@ -972,5 +971,10 @@
   "controls.modLoadFailedMissingDll": "Mod {modId} fehlt eine in SubModule.xml aufgeführte DLL. Lade den vollständigen Mod samt bin-Ordner hoch oder deaktiviere ihn unter Mods. Starte dann erneut.",
   "controls.modLoadFailed": "Mod {modId} konnte nicht geladen werden. Lade eine mit dieser Serverversion und ihren Abhängigkeiten kompatible Version hoch oder deaktiviere ihn unter Mods. Starte dann erneut.",
   "controls.modLoadFailedHarmony": "Mod {modId} konnte das vom Server bereitgestellte Harmony (0Harmony.dll) nicht laden. Dies ist ein Hostingproblem; ein erneuter Upload von Bannerlord.Harmony hilft nicht. Kontaktiere den Support oder deaktiviere diesen Mod und davon abhängige Mods unter Mods, bevor du erneut startest.",
-  "controls.modLoadFailedUnknown": "Ein eigener Mod konnte nicht geladen werden. Prüfe die hochgeladenen Mods und ihre Abhängigkeiten oder deaktiviere zuletzt aktivierte Mods vor dem erneuten Start."
+  "controls.modLoadFailedUnknown": "Ein eigener Mod konnte nicht geladen werden. Prüfe die hochgeladenen Mods und ihre Abhängigkeiten oder deaktiviere zuletzt aktivierte Mods vor dem erneuten Start.",
+  "maintenance.title": "Wartung",
+  "maintenance.update": "Spielserver-Update",
+  "maintenance.updateDescription": "Installiert jetzt die neueste {channel}-Version. Vorher wird ein Backup erstellt.",
+  "maintenance.log": "Serverprotokoll",
+  "maintenance.logDescription": "Lade die neueste Protokolldatei für die Fehlersuche oder einen Fehlerbericht herunter."
 }

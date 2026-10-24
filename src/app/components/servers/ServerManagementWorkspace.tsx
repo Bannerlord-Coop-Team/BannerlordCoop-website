@@ -10,8 +10,7 @@ import commandsData from "@/app/cheats/commands.json";
 import { isPublishedCheat } from "@/app/cheats/debugOnly";
 import { idLookupOutputs } from "@/app/cheats/idLookups";
 import { translateCheat } from "@/app/cheats/translation";
-import { DownloadServerLogButton } from "./DownloadServerLogButton";
-import { ghostButtonClass, segmentedButtonClass, segmentedGroupClass } from "./segmented-controls";
+import { segmentedButtonClass, segmentedGroupClass } from "./segmented-controls";
 import { SERVER_WORKSPACE_TAB_PARAMETER, serverWorkspaceSectionFromTab, serverWorkspaceTab, type ServerWorkspaceSection } from "./server-workspace-tabs";
 
 const sections = [
@@ -143,14 +142,13 @@ export function ServerConsoleWorkspace({ children, onSelectCommand, coopCommands
 }
 
 // Renders disconnected console controls without enabling unsupported actions.
-export function UnavailableServerConsole({ controls, logDownload }: { controls?: ReactNode; logDownload?: { serverId: string; userId: string } }) {
+export function UnavailableServerConsole({ controls }: { controls?: ReactNode }) {
     const { t } = useTranslations("server-common");
     return <section className="min-w-0 rounded-lg border border-white/10 bg-surface">
-        {/* Mirrors the live console header: title, lifecycle controls on the right, rare log download beside them. */}
+        {/* Mirrors the live console header: title with the lifecycle controls on the right. */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-3 border-b border-white/10 p-3 sm:px-4">
             <h2 className="mr-auto flex items-center gap-2 text-sm font-semibold"><Terminal className="size-4 text-gold" aria-hidden="true" />{t("managementWorkspace.console")}</h2>
-            <div className="order-3 w-full sm:order-2 sm:w-auto">{controls ?? <div role="group" aria-label={t("managementWorkspace.serverControls")} className={`${segmentedGroupClass} w-full sm:w-auto`}>{[{ label: t("managementWorkspace.start"), icon: Play }, { label: t("managementWorkspace.stop"), icon: Square }, { label: t("managementWorkspace.restart"), icon: RotateCw }].map(({ label, icon: Icon }) => <button key={label} disabled className={`${segmentedButtonClass} flex-1 sm:flex-none`}><Icon className="size-3.5 shrink-0" aria-hidden="true" />{label}</button>)}</div>}</div>
-            <div className="order-2 sm:order-3"><DownloadServerLogButton {...logDownload} className={ghostButtonClass} /></div>
+            <div className="w-full sm:w-auto">{controls ?? <div role="group" aria-label={t("managementWorkspace.serverControls")} className={`${segmentedGroupClass} w-full sm:w-auto`}>{[{ label: t("managementWorkspace.start"), icon: Play }, { label: t("managementWorkspace.stop"), icon: Square }, { label: t("managementWorkspace.restart"), icon: RotateCw }].map(({ label, icon: Icon }) => <button key={label} disabled className={`${segmentedButtonClass} flex-1 sm:flex-none`}><Icon className="size-3.5 shrink-0" aria-hidden="true" />{label}</button>)}</div>}</div>
         </div>
         <div role="log" aria-label={t("managementWorkspace.consoleOutput")} tabIndex={0} className="h-80 overflow-auto bg-surface-raised p-4 font-mono text-[13px] leading-7 text-foreground-muted outline-gold sm:h-96 sm:p-5 sm:text-sm">{t("managementWorkspace.consoleOutputIsNotConnectedForThisServer")}</div>
         <div className="flex gap-2 border-t border-white/10 p-5">
