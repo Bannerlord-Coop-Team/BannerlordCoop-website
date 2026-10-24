@@ -29,8 +29,7 @@ const ERROR_STATUS: Readonly<Record<string, number>> = {
     identity_unavailable: 503, server_api_unavailable: 503, control_plane_unavailable: 503, invalid_response: 502,
 };
 
-/** The browser-facing failure: a closed code, whether an identical resend may succeed, and a module the refusal names. */
-/** A refusal in the browser envelope; `issue` appears only when the control plane named one (a refused runs-on switch). */
+/** The browser-facing failure: a closed code, whether an identical resend may succeed, the module a refusal names, and its issue when the control plane named one. */
 export type ServerModsRouteError = { code: string; retryable: boolean; modId: string | null; issue?: string };
 
 export type ServerModsRouteDependencies = Readonly<{

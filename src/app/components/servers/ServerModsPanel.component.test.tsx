@@ -509,7 +509,7 @@ it.each([
     ["submodule-dll-missing:Gamma.dll", "names a DLL (Gamma.dll) that isn't in the mod"],
     ["submodule-dll-unreadable:Gamma.Native.dll", "DLL Gamma.Native.dll couldn't be read as a .NET assembly"],
 ])("keeps a mod with %s players only, locked, and explains why", async (issue, text) => {
-    await render(createMockServerModCatalog(runsOnMods({ Gamma: { runsOn: "players", ...locked("submodule-invalid"), issues: [issue, "no-server-submodule"] } })));
+    await render(createMockServerModCatalog(runsOnMods({ Gamma: { runsOn: "players", ...locked("submodule-invalid"), issues: [issue] } })));
     expect(row("Gamma").querySelector("select")).toBeNull();
     expect(row("Gamma").textContent).toContain("Runs only in players' games: its server code is missing or can't be read (see the note below).");
     expect(row("Gamma").textContent).toContain(text);
@@ -527,7 +527,7 @@ it("shows each lock reason's copy, and generic copy for a reason it does not kno
     expect(container.querySelector("ol select")).toBeNull();
     expect(row("Harmony").textContent).toContain("Runs on the server and in players' games. This server needs a runner update before this can be changed.");
     expect(row("Client UI").textContent).toContain("Runs only in players' games. This server needs a runner update before this can be changed.");
-    expect(row("Gamma").textContent).toContain("Runs on the server and in players' games, as every core module does.");
+    expect(row("Gamma").textContent).toContain("Runs on: Server and players. This can't be changed right now.");
     expect(row("Delta").textContent).toContain("Runs on: Players only. This can't be changed right now.");
 });
 

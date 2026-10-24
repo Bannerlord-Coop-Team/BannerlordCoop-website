@@ -950,7 +950,6 @@
   "mods.runsOn.playersOnlyWarning": "服务器不会运行此模组的代码，只有玩家的游戏会运行。仅对客户端模组（界面、视觉效果）使用此选项。将玩法模组设为仅玩家，可能导致玩家的游戏与服务器不一致或无法加入。",
   "mods.runsOn.confirmPlayersOnly": "仅在玩家的游戏中运行 {name}？服务器不会运行它的代码。仅对客户端模组（界面、视觉效果）使用此选项：将玩法模组设为仅玩家，可能导致玩家的游戏与服务器不一致或无法加入。",
   "mods.runsOn.runnerUnsupported": "此服务器的运行器尚不支持仅玩家模组，因此未做任何更改。",
-  "mods.runsOn.lockedCore": "与所有核心模块一样，在服务器和玩家的游戏中运行。",
   "mods.runsOn.lockedSubmodule": "仅在玩家的游戏中运行：其服务器代码缺失或无法读取（见下方说明）。",
   "mods.runsOn.lockedOther": "运行于：{value}。目前无法更改。",
   "mods.issue.submoduleDllUnreadable": "此模组的 DLL（{value}）无法作为 .NET 程序集读取，因此无法检查其服务器代码，只能在玩家的游戏中运行。上传修复后的版本即可在服务器上运行。",

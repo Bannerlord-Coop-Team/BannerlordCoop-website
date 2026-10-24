@@ -8,7 +8,7 @@ import { buildModArchive, ModArchiveError } from "@/app/lib/hosting/server-mod-a
 import {
     canChooseServerModRunsOn, changedServerModRunsOn, enabledOwnerModCount, findServerMod, isOwnerMod, isPlayersOnlyAgainstDefault,
     moveServerMod, sameServerModOrder, serverModLoadOrder, serverModsPlayersNeed, ServerModsError, setServerModRunsOn,
-    toggleServerMod, visibleServerModIssues,
+    toggleServerMod,
     type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModRunsOn, type ServerModsState, type ServerModUploadProgress,
 } from "@/app/lib/hosting/server-mods";
 import { createBrowserServerModCatalog } from "@/app/lib/hosting/server-mods-transport";
@@ -342,7 +342,6 @@ function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragSta
     const checkboxId = `${idPrefix}-mod-${index}`;
     const movable = editable && !mod.pinned;
     const owner = isOwnerMod(mod);
-    const issues = visibleServerModIssues(mod);
     return <li onDragOver={onDragOver} onDrop={event => event.preventDefault()} className={`flex items-center gap-3 px-3 py-3 sm:px-5 ${dragging ? "bg-gold/10 opacity-60" : ""}`}>
         <span className="w-6 shrink-0 text-right font-mono text-xs text-foreground-muted">{index + 1}</span>
         {movable
@@ -354,7 +353,7 @@ function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragSta
                 {mod.version && <span className="text-foreground-muted"> · {mod.version}</span>}
             </label>
             {owner && mod.runsOn !== undefined && <ModRunsOnChoice mod={mod} id={`${idPrefix}-runs-on-${index}`} editable={editable} onChange={onRunsOn} />}
-            {issues.length > 0 && <ul className="mt-1 space-y-0.5 text-xs text-foreground-muted">{issues.map(issue => <li key={issue}>{describeModIssue(issue, t)}</li>)}</ul>}
+            {mod.issues.length > 0 && <ul className="mt-1 space-y-0.5 text-xs text-foreground-muted">{mod.issues.map(issue => <li key={issue}>{describeModIssue(issue, t)}</li>)}</ul>}
         </div>
         {mod.pinned ? <span className={badgeClass}>{t("mods.core")}</span> : mod.required && <span className={badgeClass}>{t("mods.required")}</span>}
         <ModSwitch id={checkboxId} checked={mod.enabled} disabled={!editable || !owner} onChange={onToggle} />

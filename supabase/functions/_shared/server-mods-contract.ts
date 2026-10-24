@@ -110,7 +110,7 @@ export type ModEntry = {
     /** True when the owner cannot change `runsOn`. */
     runsOnLocked?: boolean;
     /** Present exactly when locked: a `ModRunsOnLockReason`, or a newer reason this website does not know. */
-    runsOnLockReason?: string;
+    runsOnLockReason?: ModRunsOnLockReason | (string & {});
 };
 /** `{ revision, restartRequired, mods }`, returned by list and every synchronous mutation. */
 export type ModsState = { revision: string; restartRequired: boolean; mods: ModEntry[] };
@@ -338,7 +338,7 @@ export function isModIssue(value: unknown): value is string {
     return typeof value === "string" && ISSUE.test(value);
 }
 
-/** Validates one API mod entry and its optional runs-on pair; pinned and required are exclusive and image modules carry no digest. */
+/** Validates one API mod entry and its optional runs-on set; pinned and required are exclusive and image modules carry no digest. */
 function parseModEntry(value: unknown): ModEntry {
     if (!isRecord(value)) throw new Error("Invalid mod entry");
     const reportsRunsOn = [...ENTRY_RUNS_ON_KEYS, ENTRY_LOCK_REASON_KEY].some((key) => Object.hasOwn(value, key));

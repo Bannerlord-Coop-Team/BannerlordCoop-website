@@ -951,7 +951,6 @@
   "mods.runsOn.playersOnlyWarning": "The server won't run this mod's code; only players' games will. Use this only for client-side mods (interface, visuals). A gameplay mod set to players only can make players' games disagree with the server or stop them joining.",
   "mods.runsOn.confirmPlayersOnly": "Run {name} in players' games only? The server won't run its code. Use this only for client-side mods (interface, visuals): a gameplay mod set to players only can make players' games disagree with the server or stop them joining.",
   "mods.runsOn.runnerUnsupported": "This server's runner doesn't support players-only mods yet, so nothing was changed.",
-  "mods.runsOn.lockedCore": "Runs on the server and in players' games, as every core module does.",
   "mods.runsOn.lockedSubmodule": "Runs only in players' games: its server code is missing or can't be read (see the note below).",
   "mods.runsOn.lockedOther": "Runs on: {value}. This can't be changed right now.",
   "mods.issue.submoduleDllUnreadable": "This mod's DLL {value} couldn't be read as a .NET assembly, so its server code can't be checked and it can only run in players' games. Upload a fixed build to run it on the server.",

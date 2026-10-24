@@ -951,7 +951,6 @@
   "mods.runsOn.playersOnlyWarning": "El servidor no ejecutará el código de este mod; solo lo harán los juegos de los jugadores. Úsalo solo para mods del lado del cliente (interfaz, apariencia). Un mod de jugabilidad configurado solo para jugadores puede hacer que sus juegos no coincidan con el servidor o impedir que se unan.",
   "mods.runsOn.confirmPlayersOnly": "¿Ejecutar {name} solo en los juegos de los jugadores? El servidor no ejecutará su código. Úsalo solo para mods del lado del cliente (interfaz, apariencia): un mod de jugabilidad configurado solo para jugadores puede hacer que sus juegos no coincidan con el servidor o impedir que se unan.",
   "mods.runsOn.runnerUnsupported": "El runner de este servidor todavía no admite mods solo para jugadores, así que no se cambió nada.",
-  "mods.runsOn.lockedCore": "Se ejecuta en el servidor y en los juegos de los jugadores, como todo módulo principal.",
   "mods.runsOn.lockedSubmodule": "Solo se ejecuta en los juegos de los jugadores: su código de servidor falta o no se puede leer (consulta la nota de abajo).",
   "mods.runsOn.lockedOther": "Se ejecuta en: {value}. Ahora mismo no se puede cambiar.",
   "mods.issue.submoduleDllUnreadable": "La DLL {value} de este mod no se pudo leer como ensamblado .NET, así que su código de servidor no se puede comprobar y solo puede ejecutarse en los juegos de los jugadores. Sube una versión corregida para ejecutarlo en el servidor.",

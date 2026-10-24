@@ -1,6 +1,7 @@
 import type { Translator } from "@/app/lib/localization/types";
 import type { ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
 import type { ServerMod, ServerModsError } from "@/app/lib/hosting/server-mods";
+import type { ModRunsOnLockReason } from "../../../../supabase/functions/_shared/server-mods-contract";
 import type { ModLoadFailure } from "@/app/lib/hosting/my-servers-server";
 
 // Owner-facing copy for the Mods tab: installed-mod notes, API refusals and folder problems, each from a
@@ -91,16 +92,25 @@ function runsOnRefusalMessage(error: ServerModsError, changedRunsOn: readonly Se
     return refused === undefined ? null : t("mods.runsOn.serverRefused", { id: refused.id, reason: describeModIssue(error.detail, t) });
 }
 
+/** Copy for each known lock reason; a reason added to the contract's union does not compile until it has an entry here. */
+const LOCKED_RUNS_ON_COPY: Readonly<Record<ModRunsOnLockReason, (players: boolean, t: Translate) => string>> = {
+    // Core modules and Coop show no runs-on line, so this generic copy only covers an unexpected shape.
+    "core-module": genericLockedRunsOn,
+    "server-provided": (players, t) => t(players ? "mods.runsOn.serverProvided" : "mods.runsOn.fixedServer"),
+    "runner-unsupported": (players, t) => t(players ? "mods.runsOn.fixedPlayers" : "mods.runsOn.fixedServer"),
+    "submodule-invalid": (_players, t) => t("mods.runsOn.lockedSubmodule"),
+};
+
 /** Explains a runs-on value the owner cannot change from the control plane's lock reason; an unknown reason gets generic copy. */
 export function lockedRunsOnMessage(mod: ServerMod, t: Translate): string {
-    const players = mod.runsOn === "players";
-    switch (mod.runsOnLockReason) {
-        case "core-module": return t("mods.runsOn.lockedCore");
-        case "server-provided": return t(players ? "mods.runsOn.serverProvided" : "mods.runsOn.fixedServer");
-        case "runner-unsupported": return t(players ? "mods.runsOn.fixedPlayers" : "mods.runsOn.fixedServer");
-        case "submodule-invalid": return t("mods.runsOn.lockedSubmodule");
-        default: return t("mods.runsOn.lockedOther", { value: t(players ? "mods.runsOn.players" : "mods.runsOn.server") });
-    }
+    const reason = mod.runsOnLockReason;
+    const copy = reason !== undefined && Object.hasOwn(LOCKED_RUNS_ON_COPY, reason) ? LOCKED_RUNS_ON_COPY[reason as ModRunsOnLockReason] : genericLockedRunsOn;
+    return copy(mod.runsOn === "players", t);
+}
+
+/** Names the fixed runs-on value without a reason. */
+function genericLockedRunsOn(players: boolean, t: Translate): string {
+    return t("mods.runsOn.lockedOther", { value: t(players ? "mods.runsOn.players" : "mods.runsOn.server") });
 }
 
 /** Explains why a picked folder cannot be uploaded. */

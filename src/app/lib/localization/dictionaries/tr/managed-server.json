@@ -951,7 +951,6 @@
   "mods.runsOn.playersOnlyWarning": "Sunucu bu modun kodunu çalıştırmaz; yalnızca oyuncuların oyunları çalıştırır. Bunu yalnızca istemci tarafı modlar (arayüz, görseller) için kullanın. Yalnızca oyunculara ayarlanan bir oynanış modu, oyuncuların oyunlarının sunucuyla uyuşmamasına veya katılamamalarına yol açabilir.",
   "mods.runsOn.confirmPlayersOnly": "{name} yalnızca oyuncuların oyunlarında çalıştırılsın mı? Sunucu kodunu çalıştırmaz. Bunu yalnızca istemci tarafı modlar (arayüz, görseller) için kullanın: Yalnızca oyunculara ayarlanan bir oynanış modu, oyuncuların oyunlarının sunucuyla uyuşmamasına veya katılamamalarına yol açabilir.",
   "mods.runsOn.runnerUnsupported": "Bu sunucunun runner'ı henüz yalnızca oyunculara özel modları desteklemiyor, bu yüzden hiçbir şey değiştirilmedi.",
-  "mods.runsOn.lockedCore": "Her çekirdek modül gibi sunucuda ve oyuncuların oyunlarında çalışır.",
   "mods.runsOn.lockedSubmodule": "Yalnızca oyuncuların oyunlarında çalışır: Sunucu kodu eksik veya okunamıyor (aşağıdaki nota bakın).",
   "mods.runsOn.lockedOther": "Çalıştığı yer: {value}. Bu şu anda değiştirilemez.",
   "mods.issue.submoduleDllUnreadable": "Bu modun {value} DLL'si bir .NET derlemesi olarak okunamadı; bu yüzden sunucu kodu denetlenemiyor ve yalnızca oyuncuların oyunlarında çalışabilir. Sunucuda çalıştırmak için düzeltilmiş bir sürüm yükleyin.",

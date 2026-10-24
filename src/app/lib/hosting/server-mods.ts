@@ -13,9 +13,6 @@ export type ServerModRunsOn = ModRunsOn;
 // Runs-on policy (defaults, locks and their reasons) comes from the control plane's entries (contract C3); the
 // website keeps no list of mod ids and infers no lock reason.
 
-/** Shown by the runs-on line instead: on a players-only mod no server code is the intended state. */
-const NO_SERVER_SUBMODULE_ISSUE = "no-server-submodule";
-
 /** A zipped module folder ready to upload, with the identity read from its `SubModule.xml`. */
 export type ServerModArchive = { manifest: ModUploadManifest; bytes: Uint8Array<ArrayBuffer>; fileCount: number; uncompressedBytes: number };
 
@@ -95,11 +92,6 @@ export function setServerModRunsOn(mods: readonly ServerMod[], id: string, runsO
 /** Whether the owner's players-only choice warrants a warning: the control plane's default for this mod is the server. */
 export function isPlayersOnlyAgainstDefault(mod: ServerMod): boolean {
     return mod.runsOn === "players" && mod.runsOnDefault === "server" && canChooseServerModRunsOn(mod);
-}
-
-/** Returns the notes worth showing; a players-only mod's lack of server code is already said by its runs-on line. */
-export function visibleServerModIssues(mod: ServerMod): string[] {
-    return mod.runsOn === "players" ? mod.issues.filter(issue => issue !== NO_SERVER_SUBMODULE_ISSUE) : mod.issues;
 }
 
 /** Returns the mods every player must install to join: each enabled owner mod, players-only ones included, in load order. */

@@ -951,7 +951,6 @@
   "mods.runsOn.playersOnlyWarning": "Der Server führt den Code dieser Mod nicht aus, nur die Spiele der Spieler. Nutze das nur für clientseitige Mods (Oberfläche, Grafik). Eine Gameplay-Mod, die nur bei Spielern läuft, kann dazu führen, dass die Spiele der Spieler vom Server abweichen oder sie nicht beitreten können.",
   "mods.runsOn.confirmPlayersOnly": "{name} nur in den Spielen der Spieler ausführen? Der Server führt ihren Code nicht aus. Nutze das nur für clientseitige Mods (Oberfläche, Grafik): Eine Gameplay-Mod, die nur bei Spielern läuft, kann dazu führen, dass die Spiele der Spieler vom Server abweichen oder sie nicht beitreten können.",
   "mods.runsOn.runnerUnsupported": "Der Runner dieses Servers unterstützt Mods nur für Spieler noch nicht, daher wurde nichts geändert.",
-  "mods.runsOn.lockedCore": "Läuft auf dem Server und in den Spielen der Spieler, wie jedes Kernmodul.",
   "mods.runsOn.lockedSubmodule": "Läuft nur in den Spielen der Spieler: Ihr Server-Code fehlt oder ist nicht lesbar (siehe Hinweis unten).",
   "mods.runsOn.lockedOther": "Läuft auf: {value}. Das lässt sich gerade nicht ändern.",
   "mods.issue.submoduleDllUnreadable": "Die DLL {value} dieser Mod konnte nicht als .NET-Assembly gelesen werden, daher lässt sich ihr Server-Code nicht prüfen und sie kann nur in den Spielen der Spieler laufen. Lade eine korrigierte Version hoch, um sie auf dem Server auszuführen.",
