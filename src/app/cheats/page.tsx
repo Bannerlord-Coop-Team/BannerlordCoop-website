@@ -2,6 +2,7 @@ import { type CheatCommand } from "@/app/cheats/CheatsDirectory";
 import { CheatsView } from "@/app/cheats/CheatsView";
 import commandsData from "@/app/cheats/commands.json";
 import { isPublishedCheat } from "@/app/cheats/debugOnly";
+import { HOSTING_OFFER_COOKIE, isHostingOfferHidden } from "@/app/cheats/hostingOfferCookie";
 import { getCheatsLocalization } from "@/app/cheats/localization";
 import { parseCheatsQuery } from "@/app/cheats/query";
 import { translateCheat } from "@/app/cheats/translation";
@@ -11,6 +12,7 @@ import { LocalizationProvider } from "@/app/lib/localization/client";
 import { getTranslations } from "@/app/lib/localization/server";
 import { getEnabledLocales } from "@/app/lib/localization/registry";
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 
 type CheatsPageProps = {
     searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -76,12 +78,14 @@ export default async function CheatsPage({ searchParams }: CheatsPageProps) {
             ].join(" "),
         };
     }) as CheatCommand[];
+    // Resolving dismissal on the server keeps the first client render identical, so the offer never flashes.
+    const showHostingOffer = !isHostingOfferHidden((await cookies()).get(HOSTING_OFFER_COOKIE)?.value);
 
     return (
         <>
             <Navbar />
             <LocalizationProvider locale={locale} messages={messages}>
-                <CheatsView commands={commands} initialQuery={parseCheatsQuery(params)} />
+                <CheatsView commands={commands} initialQuery={parseCheatsQuery(params)} showHostingOffer={showHostingOffer} />
             </LocalizationProvider>
             <Footer />
         </>
