@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { createTranslator } from "@/app/lib/localization/translator";
 import { serverTestMessages } from "./ManagedServerLocalization.test-utils";
-import { modLoadFailureMessage } from "./server-mods-messages";
+import { describeModIssue, modLoadFailureMessage, modsErrorMessage } from "./server-mods-messages";
+import { ServerModsError } from "@/app/lib/hosting/server-mods";
 import { isModLoadFailure, type ModLoadFailure } from "@/app/lib/hosting/mod-load-failure";
 import { isOwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
 
@@ -43,3 +44,21 @@ it.each(["en", "de", "es", "fr", "ja", "ko", "pt-BR", "pt-PT", "ru", "tr", "zh-C
     expect(message).not.toContain("{modId}");
     expect(message).toBe(messages["controls.modLoadFailedHarmony"].replace("{modId}", "CoopSycn"));
 });
+
+it.each([
+    ["no-server-submodule", "None of this mod's code runs on the server. If it should, upload it again."],
+    ["no-render-tag-removed", "interface-only tags were removed"],
+    ["headless-server-unsupported", "headless server"],
+    ["dedicated-server-tag-removed", "dedicated-server tags were removed"],
+    ["submodule-class-missing:FamilyAppearanceEditor.SubModule", "names a SubModule class (FamilyAppearanceEditor.SubModule) that its DLL doesn't contain"],
+    ["submodule-dll-missing:Missing.dll", "names a DLL (Missing.dll) that isn't in the mod"],
+])("explains the installed-mod note %s", (issue, text) => {
+    expect(describeModIssue(issue, t)).toContain(text);
+    expect(describeModIssue(issue, t)).not.toContain("Note:");
+});
+
+it("explains the assembly-conflict and SubModule rejections", () => {
+    expect(modsErrorMessage(new ServerModsError("upload_rejected", false, "Separatism", "mod_assembly_conflict"), t)).toContain("same name as one the server provides");
+    expect(modsErrorMessage(new ServerModsError("upload_rejected", false, "Fae", "mod_submodule_invalid"), t)).toContain("names a SubModule class or DLL the mod doesn't contain");
+});
+

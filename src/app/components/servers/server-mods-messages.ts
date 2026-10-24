@@ -31,18 +31,28 @@ const REJECTION_KEYS: Readonly<Record<string, string>> = {
     mod_archive_invalid: "mods.rejected.archiveInvalid",
     mod_manifest_mismatch: "mods.rejected.manifestMismatch",
     mod_submodule_invalid: "mods.rejected.submoduleInvalid",
+    mod_assembly_conflict: "mods.rejected.assemblyConflict",
+};
+const PLAIN_ISSUE_KEYS: Readonly<Record<string, string>> = {
+    "enabled-limit": "mods.issue.enabledLimit",
+    "dedicated-server-tag-removed": "mods.issue.dedicatedServerTagRemoved",
+    "no-render-tag-removed": "mods.issue.noRenderTagRemoved",
+    "no-server-submodule": "mods.issue.noServerSubmodule",
+    "headless-server-unsupported": "mods.issue.headlessServerUnsupported",
 };
 const ISSUE_KEYS: Readonly<Record<string, string>> = {
     "missing-dependency": "mods.issue.missingDependency",
     "dependency-order": "mods.issue.dependencyOrder",
     stripped: "mods.issue.stripped",
     "image-module-not-loaded": "mods.issue.imageModuleNotLoaded",
+    "submodule-class-missing": "mods.issue.submoduleClassMissing",
+    "submodule-dll-missing": "mods.issue.submoduleDllMissing",
 };
 
 /** Describes one installed-mod note (`kind` or `kind:value`) in owner language. */
 export function describeModIssue(issue: string, t: Translate): string {
-    if (issue === "enabled-limit") return t("mods.issue.enabledLimit");
-    if (issue === "dedicated-server-tag-removed") return t("mods.issue.dedicatedServerTagRemoved");
+    const plain = PLAIN_ISSUE_KEYS[issue];
+    if (plain !== undefined) return t(plain);
     const separator = issue.indexOf(":");
     const key = separator < 0 ? undefined : ISSUE_KEYS[issue.slice(0, separator)];
     return key === undefined ? t("mods.issue.other", { issue }) : t(key, { value: issue.slice(separator + 1) });
