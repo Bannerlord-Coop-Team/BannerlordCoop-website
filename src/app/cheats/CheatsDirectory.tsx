@@ -328,7 +328,7 @@ export function CheatsDirectory({
 
     return (
         <div className="grid min-w-0 grid-cols-1 gap-5 overflow-x-clip min-[800px]:grid-cols-[13rem_minmax(0,1fr)] min-[800px]:items-start min-[800px]:gap-6">
-            <aside className="min-w-0 border border-white/10 bg-surface min-[800px]:sticky min-[800px]:top-20">
+            <aside className="min-w-0 border border-white/10 bg-surface min-[800px]:sticky min-[800px]:top-20 min-[800px]:max-h-[calc(100svh-6rem)] min-[800px]:overflow-y-auto min-[800px]:overscroll-contain">
                 <div className="border-b border-white/10 px-4 py-3">
                     <p className={`${cheatsLabelClass("eyebrow")} text-[0.65rem]`}>
                         {t("ui.categories")}
